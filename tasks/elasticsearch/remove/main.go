@@ -105,13 +105,16 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 		errMsg := err.Error()
 		if isRespInTrouble(errMsg) {
 			log.Errorf("delete documents error for task %v, url %v: %v", task.Index, url, errMsg)
-			return
-		}
-
-		log.Debugf("http.RequestJSON got some innocent error: %v", errMsg)
-		resp = Resp{
-			Deleted: 0,
-			Total:   0,
+			resp = Resp{
+				Deleted: 0,
+				Total:   viper.GetInt("tasks.elasticsearch.batch"),
+			}
+		} else {
+			log.Debugf("http.RequestJSON got some innocent error: %v", errMsg)
+			resp = Resp{
+				Deleted: 0,
+				Total:   0,
+			}
 		}
 	}
 

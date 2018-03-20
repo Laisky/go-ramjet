@@ -28,11 +28,11 @@ var (
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 	defer wg.Done()
 	resp, err := httpClient.Get(url)
-	defer resp.Body.Close()
 	if err != nil {
 		log.Errorf("try to get es stats got error for url %v: %+v", url, err)
 		esStats = nil
 	}
+	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Errorf("try to read es stat body got error for url %v: %+v", url, err)
@@ -94,11 +94,11 @@ func pushMetricToES(metric interface{}) {
 		log.Debugf("push es metric %v", string(jsonBytes[:]))
 	} else {
 		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
-		defer resp.Body.Close()
 		if err != nil {
 			log.Error(err.Error())
 			return
 		}
+		defer resp.Body.Close()
 		if utils.FloorDivision(resp.StatusCode, 100) != 2 {
 			respBytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {

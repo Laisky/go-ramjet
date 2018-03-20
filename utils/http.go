@@ -18,7 +18,7 @@ var (
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: 20,
 		},
-		Timeout: time.Duration(5) * time.Second,
+		Timeout: time.Duration(30) * time.Second,
 	}
 )
 
@@ -54,10 +54,10 @@ func RequestJSONWithClient(httpClient *http.Client, method, url string, request 
 	}
 
 	r, err := httpClient.Do(req)
-	defer r.Body.Close()
 	if err != nil {
 		return errors.Wrap(err, "try to request url error")
 	} else if (r.StatusCode < 200) && (r.StatusCode >= 300) {
+		defer r.Body.Close()
 		respBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			return errors.Wrap(err, "try to read response data error")
