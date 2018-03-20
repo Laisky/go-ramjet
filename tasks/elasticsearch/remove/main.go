@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"pateo.com/go-ramjet/tasks/store"
+	"github.com/go-ramjet/tasks/store"
 
 	log "github.com/cihub/seelog"
+	"github.com/go-ramjet/utils"
 	"github.com/spf13/viper"
-	"pateo.com/go-ramjet/utils"
 )
 
 // Query json query to request elasticsearch

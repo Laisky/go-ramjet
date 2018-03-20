@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"pateo.com/go-ramjet/utils"
+	"github.com/go-ramjet/utils"
 )
 
 type IndexStor struct {

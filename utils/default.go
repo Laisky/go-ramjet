@@ -93,7 +93,7 @@ func SetupSettings() {
 	viper.SetConfigType("yaml")
 	viper.SetConfigName("settings") // name of config file (without extension)
 	viper.AddConfigPath("/etc/go-ramjet/settings/")
-	viper.AddConfigPath(os.Getenv("GOPATH") + "/src/pateo.com/go-ramjet/settings/")
+	viper.AddConfigPath(os.Getenv("GOPATH") + "/src/github.com/go-ramjet/settings/")
 	viper.AddConfigPath(".")
 
 	LoadSettings()

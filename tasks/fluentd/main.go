@@ -9,8 +9,8 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
-	"pateo.com/go-ramjet/tasks/store"
-	"pateo.com/go-ramjet/utils"
+	"github.com/go-ramjet/tasks/store"
+	"github.com/go-ramjet/utils"
 
 	"github.com/spf13/viper"
 )
@@ -99,11 +99,11 @@ func pushResultToES(metric *fluentdMonitorMetric) {
 		log.Debugf("push fluentd metric %+v", string(jsonBytes[:]))
 	} else {
 		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
+		defer resp.Body.Close()
 		if err != nil {
 			log.Error(err.Error())
 			return
 		}
-		defer resp.Body.Close()
 		if utils.FloorDivision(resp.StatusCode, 100) != 2 {
 			respBytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
