@@ -3,7 +3,7 @@ package monitor
 import (
 	"sync"
 
-	"pateo.com/go-ramjet/utils"
+	"github.com/go-ramjet/utils"
 )
 
 type FSMetric struct {

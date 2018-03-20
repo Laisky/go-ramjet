@@ -1,10 +1,10 @@
 package elasticsearch
 
 import (
+	"github.com/go-ramjet/tasks/elasticsearch/monitor"
+	"github.com/go-ramjet/tasks/elasticsearch/remove"
+	"github.com/go-ramjet/tasks/store"
 	"github.com/spf13/viper"
-	"pateo.com/go-ramjet/tasks/elasticsearch/monitor"
-	"pateo.com/go-ramjet/tasks/elasticsearch/remove"
-	"pateo.com/go-ramjet/tasks/store"
 )
 
 func setupTaskSettings() {

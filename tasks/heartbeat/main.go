@@ -5,9 +5,9 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
+	"github.com/go-ramjet/tasks/store"
+	"github.com/go-ramjet/utils"
 	"github.com/spf13/viper"
-	"pateo.com/go-ramjet/tasks/store"
-	"pateo.com/go-ramjet/utils"
 )
 
 func setNext(f func()) {

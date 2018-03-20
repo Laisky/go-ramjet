@@ -8,7 +8,7 @@ import (
 	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
 
-	"pateo.com/go-ramjet/utils"
+	"github.com/go-ramjet/utils"
 )
 
 type tasksStore struct {

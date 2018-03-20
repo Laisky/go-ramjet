@@ -3,15 +3,15 @@ package main
 import (
 	"fmt"
 
-	"pateo.com/go-ramjet/tasks/store"
+	"github.com/go-ramjet/tasks/store"
 
 	log "github.com/cihub/seelog"
+	_ "github.com/go-ramjet/tasks/elasticsearch"
+	_ "github.com/go-ramjet/tasks/fluentd"
+	_ "github.com/go-ramjet/tasks/heartbeat"
+	"github.com/go-ramjet/utils"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	_ "pateo.com/go-ramjet/tasks/elasticsearch"
-	_ "pateo.com/go-ramjet/tasks/fluentd"
-	_ "pateo.com/go-ramjet/tasks/heartbeat"
-	"pateo.com/go-ramjet/utils"
 )
 
 // setupSettings setup arguments restored in viper
