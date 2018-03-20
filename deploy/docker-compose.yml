@@ -1,0 +1,18 @@
+version: "2"
+services:
+
+  go-ramjet:
+    image: ppcelery/go-ramjet:pateo
+    restart: "no"
+    networks:
+      - go-ramjet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+    volumes:
+      - ../settings/settings.yml:/settings.yml
+
+networks:
+  go-ramjet:
+    driver: bridge

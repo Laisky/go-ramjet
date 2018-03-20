@@ -1,0 +1,78 @@
+tasks:
+  heartbeat:
+    interval: 60
+  fluentd:
+    interval: 60
+    configs:
+      sit:
+        ip: "172.16.5.20"
+        health-check: "http://172.16.5.20:24326/api/plugins.json"
+      uat:
+        ip: "172.16.5.21"
+        health-check: "http://172.16.5.21:24326/api/plugins.json"
+      perf:
+        ip: "172.16.5.22"
+        health-check: "http://172.16.5.22:24326/api/plugins.json"
+      prod-1:
+        ip: "172.16.4.85"
+        health-check: "http://172.16.4.85:24326/api/plugins.json"
+      prod-2:
+        ip: "172.16.4.86"
+        health-check: "http://172.16.4.86:24326/api/plugins.json"
+  elasticsearch:
+    url: "http://localhost:8999/1037308040/"
+    interval: 60  # seconds
+    batch: 10000  # number of documents will be deleted in each loop
+    configs:
+      # demo
+      # - index: sit-cp-logs
+      #   expire: 259200  # 3 days
+      #   term: '{"message": "test"}'
+      # ------------------------------
+      # cp & bot logs
+      - index: sit-cp-logs
+        expire: 259200  # 3 days
+      - index: uat-cp-logs
+        expire: 259200
+      - index: perf-cp-logs
+        expire: 259200
+      - index: prod-cp-logs
+        expire: 259200
+      # spring logs
+      - index: sit-spring-logs
+        expire: 2592000  # 30 days
+      - index: uat-spring-logs
+        expire: 2592000
+      - index: perf-spring-logs
+        expire: 2592000
+      - index: prod-spring-logs
+        expire: 2592000
+      # gateway logs
+      - index: sit-gateway-logs
+        expire: 259200  # 3 days
+      - index: uat-gateway-logs
+        expire: 259200
+      - index: perf-gateway-logs
+        expire: 259200
+      - index: prod-gateway-logs
+        expire: 259200
+      # spark logs
+      - index: sit-spark-logs
+        expire: 604800  # 7 days
+      - index: uat-spark-logs
+        expire: 604800
+      - index: perf-spark-logs
+        expire: 604800
+      - index: prod-spark-logs
+        expire: 604800
+      # geely logs
+      - index: sit-geely-logs
+        expire: 2592000
+      - index: perf-geely-logs
+        expire: 2592000
+      - index: prod-geely-logs
+        expire: 2592000
+      # monitor
+      - index: monitor-stats
+        expire: 2592000
+
