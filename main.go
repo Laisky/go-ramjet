@@ -6,12 +6,13 @@ import (
 	"github.com/go-ramjet/tasks/store"
 
 	log "github.com/cihub/seelog"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	_ "github.com/go-ramjet/tasks/elasticsearch"
 	_ "github.com/go-ramjet/tasks/fluentd"
 	_ "github.com/go-ramjet/tasks/heartbeat"
+	// _ "github.com/go-ramjet/tasks/logrotate/backup"
 	"github.com/go-ramjet/utils"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 // setupSettings setup arguments restored in viper

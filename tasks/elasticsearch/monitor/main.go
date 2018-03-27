@@ -11,18 +11,19 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
+	"github.com/spf13/viper"
 	"github.com/go-ramjet/tasks/store"
 	"github.com/go-ramjet/utils"
-	"github.com/spf13/viper"
 )
 
 var (
 	monitorLock = &sync.Mutex{}
 	httpClient  = http.Client{
-		Timeout: time.Second * 5,
+		Timeout: time.Second * 10,
 	}
 	esNodeStatAPI  string
 	esIndexStatAPI string
+	isFirstRun     = true
 )
 
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
@@ -31,17 +32,20 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 	if err != nil {
 		log.Errorf("try to get es stats got error for url %v: %+v", url, err)
 		esStats = nil
+		return
 	}
 	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Errorf("try to read es stat body got error for url %v: %+v", url, err)
 		esStats = nil
+		return
 	}
 	err = json.Unmarshal(respBytes, esStats)
 	if err != nil {
 		log.Errorf("try to parse es stat got error for url %v: %+v", url, err)
 		esStats = nil
+		return
 	}
 }
 
@@ -116,12 +120,6 @@ func pushMetricToES(metric interface{}) {
 	log.Infof("success to push es metric to elasticsearch for node %v", metric)
 }
 
-func setNext(f func()) {
-	time.AfterFunc(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, func() {
-		store.PutReadyTask(f)
-	})
-}
-
 // BindMonitorTask start monitor tasks
 func BindMonitorTask() {
 	defer log.Flush()
@@ -130,13 +128,12 @@ func BindMonitorTask() {
 	esNodeStatAPI = viper.GetString("tasks.elasticsearch.url") + "_nodes/stats"
 	esIndexStatAPI = viper.GetString("tasks.elasticsearch.url") + "_cat/indices/?h=index,store.size&bytes=m&format=json"
 
-	go setNext(runTask)
+	go store.RunThenTicker(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {
 	monitorLock.Lock()
 	defer monitorLock.Unlock()
-	go setNext(runTask)
 
 	var (
 		esStats      = make(map[string]interface{})
@@ -148,13 +145,27 @@ func runTask() {
 	go loadESStats(wg, esIndexStatAPI, &esIndexStats)
 	wg.Wait()
 
+	if len(esStats) == 0 {
+		return
+	}
+
 	// node metrics
+	// extract metric to compare without push
 	metrics := extractStatsToMetricForEachNode(esStats)
-	for _, metric := range metrics {
-		go pushMetricToES(metric)
+	if !isFirstRun {
+		for _, metric := range metrics {
+			go pushMetricToES(metric)
+		}
 	}
 
 	// index metrics
+	// extract metric to compare without push
 	indexMetric := extractStatsToMetricForEachIndex(esIndexStats)
-	go pushMetricToES(indexMetric)
+	if !isFirstRun {
+		go pushMetricToES(indexMetric)
+	}
+
+	if isFirstRun {
+		isFirstRun = false
+	}
 }

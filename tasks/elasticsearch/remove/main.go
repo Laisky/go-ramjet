@@ -12,8 +12,8 @@ import (
 	"github.com/go-ramjet/tasks/store"
 
 	log "github.com/cihub/seelog"
-	"github.com/go-ramjet/utils"
 	"github.com/spf13/viper"
+	"github.com/go-ramjet/utils"
 )
 
 // Query json query to request elasticsearch
@@ -128,33 +128,30 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 func BindRemoveCPLogs() {
 	defer log.Flush()
 	log.Info("bind remove CP Logs...")
-	go setNext(runTask)
+	go store.Ticker(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {
 	defer log.Flush()
 	// TOOD: reload settings before each loop
 	taskSettings := loadDeleteTaskSettings()
-	go setNext(runTask)
 	for _, taskConfig := range taskSettings {
 		go removeDocumentsByTaskSetting(taskConfig)
 	}
 }
 
-func setNext(f func()) {
-	time.AfterFunc(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, func() {
-		store.PutReadyTask(f)
-	})
-}
-
 // loadDeleteTaskSettings load config for each subtask
 func loadDeleteTaskSettings() (taskSettings []*MonitorTaskConfig) {
+	defer log.Flush()
+	log.Debug("loadDeleteTaskSettings...")
+
 	var (
 		config      map[interface{}]interface{}
 		indexConfig *MonitorTaskConfig
 		term        = new(map[string]interface{})
 	)
 	for _, configI := range viper.Get("tasks.elasticsearch.configs").([]interface{}) {
+		log.Debugf("load delete tasks settings: %+v", configI)
 		config = configI.(map[interface{}]interface{})
 		indexConfig = &MonitorTaskConfig{
 			Index: config["index"].(string),

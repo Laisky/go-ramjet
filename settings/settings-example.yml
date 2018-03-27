@@ -40,13 +40,13 @@ tasks:
         expire: 259200
       # spring logs
       - index: sit-spring-logs
-        expire: 2592000  # 30 days
+        expire: 1209600  # 15 days
       - index: uat-spring-logs
-        expire: 2592000
+        expire: 1209600
       - index: perf-spring-logs
-        expire: 2592000
+        expire: 1209600
       - index: prod-spring-logs
-        expire: 2592000
+        expire: 1209600
       # gateway logs
       - index: sit-gateway-logs
         expire: 259200  # 3 days
@@ -67,7 +67,7 @@ tasks:
         expire: 604800
       # geely logs
       - index: sit-geely-logs
-        expire: 2592000
+        expire: 2592000  # 30 days
       - index: perf-geely-logs
         expire: 2592000
       - index: prod-geely-logs

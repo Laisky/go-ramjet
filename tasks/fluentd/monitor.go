@@ -121,14 +121,7 @@ func pushResultToES(metric *fluentdMonitorMetric) {
 	log.Infof("success to push fluentd metric to elasticsearch for node %v", metric)
 }
 
-func setNext(f func()) {
-	time.AfterFunc(viper.GetDuration("tasks.fluentd.interval")*time.Second, func() {
-		store.PutReadyTask(f)
-	})
-}
-
 func runTask() {
-	go setNext(runTask)
 	var (
 		wg     = &sync.WaitGroup{}
 		metric = &fluentdMonitorMetric{
@@ -148,7 +141,7 @@ func bindTask() {
 	defer log.Flush()
 	log.Info("bind fluentd monitor...")
 	settings = loadFluentdSettings()
-	go setNext(runTask)
+	go store.Ticker(viper.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
 }
 
 func init() {

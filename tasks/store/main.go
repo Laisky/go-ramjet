@@ -71,3 +71,28 @@ func Run() {
 func PutReadyTask(f func()) {
 	store.runChan <- f
 }
+
+// Ticker put task into run queue
+func Ticker(interval time.Duration, f func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			PutReadyTask(f)
+		}
+	}
+}
+
+// RunThenTicker run task before start ticker
+func RunThenTicker(interval time.Duration, f func()) {
+	PutReadyTask(f)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			PutReadyTask(f)
+		}
+	}
+}

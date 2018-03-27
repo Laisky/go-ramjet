@@ -5,23 +5,15 @@ import (
 	"time"
 
 	"github.com/go-ramjet/tasks/store"
-	"github.com/go-ramjet/utils"
 )
 
 func bindTask() {
 	fmt.Println("bind task")
-}
-
-func setNext(f func()) {
-	utils.LoadSettings()
-	time.AfterFunc(1*time.Second, func() {
-		store.PutReadyTask(f)
-	})
+	go store.Ticker(1*time.Second, taskRunner)
 }
 
 func taskRunner() {
 	fmt.Println("running task")
-	setNext(taskRunner)
 }
 
 func Example() {
