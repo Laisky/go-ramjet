@@ -2,6 +2,7 @@ package monitor
 
 import "sync"
 
+// HTTPMetric is http metric for each node
 type HTTPMetric struct {
 	HTTPTotalAscend int `json:"os.net.http_conn.ascend.1m"`
 	HTTPOpen        int `json:"os.net.http_conn.now"`

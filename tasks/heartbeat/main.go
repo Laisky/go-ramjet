@@ -6,12 +6,11 @@ import (
 
 	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
-	"github.com/go-ramjet/tasks/store"
-	"github.com/go-ramjet/utils"
+	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/utils"
 )
 
 func runTask() {
-	defer log.Flush()
 	log.Infof("heartbeat with %v active goroutines", runtime.NumGoroutine())
 
 	// reload settings
@@ -20,7 +19,6 @@ func runTask() {
 
 // bindTask bind heartbeat task
 func bindTask() {
-	defer log.Flush()
 	log.Info("bind heartbeat task...")
 	if viper.GetBool("debug") {
 		viper.Set("tasks.heartbeat.interval", 1)
@@ -30,5 +28,5 @@ func bindTask() {
 }
 
 func init() {
-	store.Store(bindTask)
+	store.Store("heartbeat", bindTask)
 }

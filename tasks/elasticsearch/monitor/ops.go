@@ -2,22 +2,25 @@ package monitor
 
 import "sync"
 
-// OperatorsInfo  operators happening on ES
+// OperatorsMetric is the operations metric that happened on each node
 type OperatorsMetric struct {
 	*IndexingMetric
 	*GetMetric
 	*SearchMetric
 }
 
+// IndexingMetric indexing metric
 type IndexingMetric struct {
 	Index  int `json:"es.operator.index.1m"`
 	Delete int `json:"es.operator.delete.1m"`
 }
 
+// GetMetric get metric
 type GetMetric struct {
 	Get int `json:"es.operator.get.1m"`
 }
 
+// SearchMetric search metric
 type SearchMetric struct {
 	Query  int `json:"es.operator.query.1m"`
 	Fetch  int `json:"es.operator.fetch.1m"`

@@ -19,6 +19,16 @@ tasks:
       prod-2:
         ip: "172.16.4.86"
         health-check: "http://172.16.4.86:24326/api/plugins.json"
+  backups:
+    interval: 3600
+    configs:
+      # demo
+      # name:
+      #   path: dir path
+      #   regex: pattern to filter file
+      #   reserve: is reserve file after uploaded
+      #   mode: "rsync"
+      #   remote: rsync's argument
   elasticsearch:
     url: "http://localhost:8999/1037308040/"
     interval: 60  # seconds

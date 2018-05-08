@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/tasks/store"
 )
 
 func bindTask() {
@@ -18,7 +18,7 @@ func taskRunner() {
 
 func Example() {
 	// bind task binder
-	store.Store(bindTask)
+	store.Store("demo", bindTask)
 
 	// start task binder
 	store.Start()

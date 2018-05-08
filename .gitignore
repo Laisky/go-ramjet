@@ -107,3 +107,7 @@ tags
 vendor
 /go-ramjet
 /main
+
+# pprof
+memory.pprof
+cpu.pprof

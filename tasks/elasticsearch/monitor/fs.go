@@ -3,14 +3,16 @@ package monitor
 import (
 	"sync"
 
-	"github.com/go-ramjet/utils"
+	"github.com/Laisky/go-ramjet/utils"
 )
 
+// FSMetric is metric for fs
 type FSMetric struct {
 	UsageRate float64 `json:"os.fs.usage_rate"`
 	*IOStat
 }
 
+// IOStat is metric for IO
 type IOStat struct {
 	ReadKB  int `json:"os.fs.read_kb.1m"`
 	WriteKB int `json:"os.fs.write_kb.1m"`
@@ -43,7 +45,7 @@ func getFSMetric(nodeData map[string]interface{}) *FSMetric {
 	nodeName := nodeData["name"].(string)
 	fs := nodeData["fs"].(map[string]interface{})
 	newMetric := &FSMetric{
-		IOStat:    getIOStatMetric(fs),
+		IOStat:    utils.FallBack(func() interface{} { return getIOStatMetric(fs) }, &IOStat{}).(*IOStat),
 		UsageRate: getDevicesMetric(fs),
 	}
 	return getNodeFSStatChange(nodeName, newMetric)

@@ -2,49 +2,79 @@
 package store
 
 import (
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
 
-	"github.com/go-ramjet/utils"
+	"github.com/Laisky/go-ramjet/utils"
 )
 
 type tasksStore struct {
-	bindFuncs []func()
+	bindFuncs []*task
 	runChan   chan func()
+}
+
+type task struct {
+	f    func()
+	name string
 }
 
 var (
 	store = &tasksStore{
-		[]func(){},
+		[]*task{},
 		make(chan func(), 20),
 	}
 	once = sync.Once{}
 )
 
 // Store store binding func into tasksStore
-func Store(f func()) {
-	store.bindFuncs = append(store.bindFuncs, f)
+func Store(name string, f func()) {
+	store.bindFuncs = append(store.bindFuncs, &task{
+		f:    f,
+		name: name,
+	})
+}
+
+func isContians(s []string, n string) bool {
+	if len(s) == 0 { // not set -t
+		tse := os.Getenv("TASKS")
+		if len(tse) == 0 { // not set env `TASKS`
+			log.Debug("start to run all tasks...")
+			return true
+		}
+
+		s = strings.Split(tse, ",")
+	}
+
+	for _, v := range s {
+		if v == n {
+			return true
+		}
+	}
+	return false
 }
 
 // Start start to run task binding
 // only run once
 func Start() {
 	once.Do(func() {
-		for _, f := range store.bindFuncs {
-			if f == nil {
+		for _, t := range store.bindFuncs {
+			if t == nil || !isContians(viper.GetStringSlice("task"), t.name) {
 				continue
 			}
-			f()
+
+			log.Infof("start to running %v...", t.name)
+			t.f()
 		}
 	})
 }
 
 var runner = func(f func()) {
 	defer func() {
-		defer log.Flush()
 		if err := recover(); err != nil {
 			log.Errorf("running task error for %v: %+v", utils.GetFunctionName(f), err)
 			go time.AfterFunc(30*time.Second, func() {
@@ -84,8 +114,8 @@ func Ticker(interval time.Duration, f func()) {
 	}
 }
 
-// RunThenTicker run task before start ticker
-func RunThenTicker(interval time.Duration, f func()) {
+// TickerAfterRun run task before start ticker
+func TickerAfterRun(interval time.Duration, f func()) {
 	PutReadyTask(f)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

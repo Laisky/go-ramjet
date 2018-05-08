@@ -2,6 +2,7 @@ package monitor
 
 import "sync"
 
+// JVMMetric is JVM metric for each node
 type JVMMetric struct {
 	GCPauseTotal int `json:"es.jvm.gc.pause.total.1m"`
 	HeapUsage    int `json:"es.jvm.heap.usage.1m"`

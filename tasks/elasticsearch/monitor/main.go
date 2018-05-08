@@ -7,26 +7,53 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
-	"github.com/go-ramjet/tasks/store"
-	"github.com/go-ramjet/utils"
+	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/utils"
 )
 
 var (
-	monitorLock = &sync.Mutex{}
-	httpClient  = http.Client{
-		Timeout: time.Second * 10,
+	isIndicesFirstRun = sync.Map{}
+	httpClient        = http.Client{
+		Timeout: time.Second * 30,
 	}
-	esNodeStatAPI  string
-	esIndexStatAPI string
-	isFirstRun     = true
 )
 
+// ClusterSt settings for cluster
+type ClusterSt struct {
+	URL  string
+	Name string
+	Push string
+}
+
+// GetNodeStatAPI return the API to fetch node stats
+func (c *ClusterSt) GetNodeStatAPI() string {
+	return c.URL + "_nodes/stats"
+}
+
+// GetIdxStatAPI return the API to fetch index stats
+func (c *ClusterSt) GetIdxStatAPI() string {
+	return c.URL + "_cat/indices/?h=index,store.size&bytes=m&format=json"
+}
+
+// GetPushMetricAPI return the API to push metric data
+func (c *ClusterSt) GetPushMetricAPI() string {
+	return c.Push + "monitor-stats/stats/"
+}
+
+// St is monitor task settings
+type St struct {
+	Sts      []*ClusterSt
+	Interval int
+}
+
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
+	log.Debugf("load es stats for url %v", strings.Split(url, "@")[1])
 	defer wg.Done()
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -49,7 +76,9 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 	}
 }
 
-type MonitorMetric struct {
+// NodeMetric is the whole metric for each node
+type NodeMetric struct {
+	ClusterName string `json:"cluster_name"`
 	NodeName    string `json:"node_name"`
 	MonitorType string `json:"monitor_type"`
 	Timestamp   string `json:"@timestamp"`
@@ -61,10 +90,11 @@ type MonitorMetric struct {
 	*ThreadMetric
 }
 
-func extractStatsToMetricForEachNode(stats map[string]interface{}) (metrics []*MonitorMetric) {
+func extractStatsToMetricForEachNode(clusterName string, stats map[string]interface{}) (metrics []*NodeMetric) {
 	for _, nodeData := range stats["nodes"].(map[string]interface{}) {
 		data := nodeData.(map[string]interface{})
-		metrics = append(metrics, &MonitorMetric{
+		metrics = append(metrics, &NodeMetric{
+			ClusterName:     clusterName,
 			NodeName:        data["name"].(string),
 			MonitorType:     "node",
 			Timestamp:       utils.UTCNow().Format(time.RFC3339),
@@ -79,70 +109,74 @@ func extractStatsToMetricForEachNode(stats map[string]interface{}) (metrics []*M
 	return
 }
 
+// ESEvent wrap the node metric to push to ES
 type ESEvent struct {
-	Index  string         `json:"_index"`
-	Type   string         `json:"_type"`
-	Source *MonitorMetric `json:"_source"`
+	Index  string      `json:"_index"`
+	Type   string      `json:"_type"`
+	Source *NodeMetric `json:"_source"`
 }
 
-func pushMetricToES(metric interface{}) {
-	defer log.Flush()
-	url := viper.GetString("tasks.elasticsearch.url") + "monitor-stats/stats/"
+func pushMetricToES(c *ClusterSt, metric interface{}) {
+	log.Infof("push es metric to elasticsearch for node %v", c.Name)
 	jsonBytes, err := json.Marshal(metric)
 	if err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	if viper.GetBool("debug") {
-		log.Debugf("push es metric %v", string(jsonBytes[:]))
-	} else {
-		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
-		defer resp.Body.Close()
-		if utils.FloorDivision(resp.StatusCode, 100) != 2 {
-			respBytes, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Error(err.Error())
-				return
-			}
-			log.Error(string(respBytes[:]))
-			return
-		}
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
+	log.Debugf("push es metric %v", string(jsonBytes[:]))
+	if viper.GetBool("dry") {
+		return
 	}
-	log.Infof("success to push es metric to elasticsearch for node %v", metric)
+	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeader, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	err = utils.CheckResp(resp)
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	log.Debugf("success to push es metric to elasticsearch for node %v", metric)
 }
 
 // BindMonitorTask start monitor tasks
 func BindMonitorTask() {
-	defer log.Flush()
 	log.Info("bind ES monitors...")
 
-	esNodeStatAPI = viper.GetString("tasks.elasticsearch.url") + "_nodes/stats"
-	esIndexStatAPI = viper.GetString("tasks.elasticsearch.url") + "_cat/indices/?h=index,store.size&bytes=m&format=json"
+	st := LoadSettings()
+	interval := st.Interval
 
-	go store.RunThenTicker(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
+	if viper.GetBool("debug") { // set for debug
+		interval = 3
+	}
+
+	go store.TickerAfterRun(time.Duration(interval)*time.Second, runTask)
 }
 
 func runTask() {
-	monitorLock.Lock()
-	defer monitorLock.Unlock()
+	st := LoadSettings()
+	for _, cst := range st.Sts {
+		go RunClusterMonitorTask(cst)
+	}
+}
+
+// RunClusterMonitorTask run monitor task for each cluster
+func RunClusterMonitorTask(st *ClusterSt) {
+	log.Infof("run cluster monitor for %v...", st.Name)
 
 	var (
-		esStats      = make(map[string]interface{})
-		esIndexStats = []map[string]string{}
-		wg           = &sync.WaitGroup{}
+		esStats       = make(map[string]interface{})
+		esIndexStats  = []map[string]string{}
+		wg            = &sync.WaitGroup{}
+		isNotFirstRun bool
 	)
 	wg.Add(2)
-	go loadESStats(wg, esNodeStatAPI, &esStats)
-	go loadESStats(wg, esIndexStatAPI, &esIndexStats)
+	go loadESStats(wg, st.GetNodeStatAPI(), &esStats)
+	go loadESStats(wg, st.GetIdxStatAPI(), &esIndexStats)
 	wg.Wait()
 
 	if len(esStats) == 0 {
@@ -151,21 +185,65 @@ func runTask() {
 
 	// node metrics
 	// extract metric to compare without push
-	metrics := extractStatsToMetricForEachNode(esStats)
-	if !isFirstRun {
+	metrics := extractStatsToMetricForEachNode(st.Name, esStats)
+	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); isNotFirstRun {
 		for _, metric := range metrics {
-			go pushMetricToES(metric)
+			go pushMetricToES(st, metric)
 		}
 	}
 
 	// index metrics
 	// extract metric to compare without push
 	indexMetric := extractStatsToMetricForEachIndex(esIndexStats)
-	if !isFirstRun {
-		go pushMetricToES(indexMetric)
+	indexMetric["cluster_name"] = st.Name
+	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); isNotFirstRun {
+		go pushMetricToES(st, indexMetric)
 	}
 
-	if isFirstRun {
-		isFirstRun = false
+	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); !isNotFirstRun {
+		isIndicesFirstRun.Store(st.Name, 0)
 	}
+}
+
+// LoadSettings load task settings
+func LoadSettings() (monitorSt *St) {
+	var (
+		itemI interface{}
+		item  map[interface{}]interface{}
+	)
+	for _, itemI = range viper.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+		item = itemI.(map[interface{}]interface{})
+		switch item["action"].(string) {
+		case "monitor":
+			monitorSt = ParseMonitorSettings(item)
+		case "monitor-storage":
+			continue
+		}
+	}
+
+	return
+}
+
+// ParseMonitorSettings parse monitor task settings to struct
+func ParseMonitorSettings(item map[interface{}]interface{}) (monitorSt *St) {
+	var (
+		itemI  interface{}
+		cluStI map[interface{}]interface{}
+		name   string
+	)
+	monitorSt = &St{
+		Sts: []*ClusterSt{},
+	}
+	monitorSt.Interval = item["interval"].(int)
+	for _, itemI = range item["urls"].([]interface{}) {
+		cluStI = itemI.(map[interface{}]interface{})
+		name = cluStI["name"].(string)
+		monitorSt.Sts = append(monitorSt.Sts, &ClusterSt{
+			URL:  cluStI["url"].(string),
+			Push: cluStI["push"].(string),
+			Name: name,
+		})
+	}
+
+	return
 }

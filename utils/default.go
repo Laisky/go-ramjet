@@ -28,7 +28,6 @@ func GetFunctionName(i interface{}) string {
 
 // SetupLogger 初始化日志
 func SetupLogger(logLevel string) {
-	defer log.Flush()
 	args := struct {
 		LogLevel string
 	}{
@@ -44,7 +43,7 @@ func SetupLogger(logLevel string) {
 				<console/>  <!-- 输出到控制台 -->
 			</outputs>
 			<formats>
-				<format id="main" format="[%UTCDate(2006-01-02T15:04:05.000000Z) - %LEVEL - %RelFile - l%Line] %Msg%n"/>
+				<format id="main" format="[%UTCDate(2006-01-02T15:04:05.000000Z) - %LEVEL - %RelFile:%Line] %Msg%n"/>
 			</formats>
 		</seelog>
 	`
@@ -80,7 +79,6 @@ func GetRunmode() string {
 
 // LoadSettings load settings file
 func LoadSettings() {
-	defer log.Flush()
 	err := viper.ReadInConfig() // Find and read the config file
 	// log.Info("load settings")
 	if err != nil { // Handle errors reading the config file
@@ -88,12 +86,29 @@ func LoadSettings() {
 	}
 }
 
+// GetFuncName return the name of func
+func GetFuncName(f interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+}
+
+// FallBack return the fallback when orig got error
+func FallBack(orig func() interface{}, fallback interface{}) (ret interface{}) {
+	defer func() {
+		if recover() != nil {
+			ret = fallback
+		}
+	}()
+
+	ret = orig()
+	return ret
+}
+
 // SetupSettings load config file settings.yml
 func SetupSettings() {
 	viper.SetConfigType("yaml")
 	viper.SetConfigName("settings") // name of config file (without extension)
 	viper.AddConfigPath("/etc/go-ramjet/settings/")
-	viper.AddConfigPath(os.Getenv("GOPATH") + "/src/github.com/go-ramjet/settings/")
+	viper.AddConfigPath(os.Getenv("GOPATH") + "/src/github.com/Laisky/go-ramjet/settings/")
 	viper.AddConfigPath(".")
 
 	LoadSettings()

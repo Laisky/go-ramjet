@@ -26,7 +26,6 @@ func GenerateToken(payload map[string]interface{}) (string, error) {
 
 // ValidateToken 校验 token 是否合法
 func ValidateToken(tokenStr string, payload map[string]interface{}) (bool, error) {
-	defer log.Flush()
 	log.Debugf("ValidateToken for token %v", tokenStr)
 
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {

@@ -1,4 +1,4 @@
-package utils
+package utils_test
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+	"github.com/Laisky/go-ramjet/utils"
 )
 
 func TestViperSettings(t *testing.T) {
@@ -47,5 +48,5 @@ func TestStruct(t *testing.T) {
 }
 
 func init() {
-	SetupSettings() // load config
+	utils.SetupSettings() // load config
 }

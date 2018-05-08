@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Laisky/go-chaining"
+
 	log "github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
@@ -35,7 +37,6 @@ func RequestJSON(method, url string, request *RequestData, resp interface{}) (er
 
 // RequestJSONWithClient request JSON and return JSON with specific client
 func RequestJSONWithClient(httpClient *http.Client, method, url string, request *RequestData, resp interface{}) (err error) {
-	defer log.Flush()
 	log.Debugf("RequestJSON for method %v, url %v, data %+v", method, url, request)
 
 	var (
@@ -76,4 +77,39 @@ func RequestJSONWithClient(httpClient *http.Client, method, url string, request 
 	log.Debugf("RequestJSON return: %+v", string(respBytes[:]))
 
 	return nil
+}
+
+// CheckResp check HTTP response's status code and return the error with body message
+func CheckResp(resp *http.Response) error {
+	c := chaining.Flow(
+		checkRespStatus,
+		checkRespBody,
+	)(resp, nil)
+	return c.GetError()
+}
+
+func checkRespStatus(c *chaining.Chain) (r interface{}, err error) {
+	resp := c.GetVal()
+	code := resp.(*http.Response).StatusCode
+	if FloorDivision(code, 100) != 2 {
+		return resp, HTTPInvalidStatusError(code)
+	}
+
+	return resp, nil
+}
+
+func checkRespBody(c *chaining.Chain) (interface{}, error) {
+	upErr := c.GetError()
+	resp := c.GetVal().(*http.Response)
+	if upErr == nil {
+		return c.GetVal(), nil
+	}
+
+	defer resp.Body.Close()
+	respB, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return resp, errors.Wrapf(upErr, "read body got error: %v", err.Error())
+	}
+
+	return resp, errors.Wrapf(upErr, "got http body <%v>", string(respB[:]))
 }

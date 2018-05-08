@@ -3,14 +3,14 @@ package fluentd
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
 
 	log "github.com/cihub/seelog"
-	"github.com/go-ramjet/tasks/store"
-	"github.com/go-ramjet/utils"
+	"github.com/pkg/errors"
+	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/utils"
 
 	"github.com/spf13/viper"
 )
@@ -86,39 +86,29 @@ func checkFluentdHealth(wg *sync.WaitGroup, name, url string, metric *fluentdMon
 	}
 }
 
-func pushResultToES(metric *fluentdMonitorMetric) {
-	defer log.Flush()
+func pushResultToES(metric *fluentdMonitorMetric) (err error) {
 	url := viper.GetString("tasks.elasticsearch.url") + "monitor-stats/stats/"
 	jsonBytes, err := json.Marshal(metric)
 	if err != nil {
-		log.Error(err.Error())
-		return
+		return errors.Wrap(err, "parse json got error")
 	}
 
-	if viper.GetBool("debug") {
-		log.Debugf("push fluentd metric %+v", string(jsonBytes[:]))
-	} else {
-		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
-		defer resp.Body.Close()
-		if utils.FloorDivision(resp.StatusCode, 100) != 2 {
-			respBytes, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Error(err.Error())
-				return
-			}
-			log.Error(string(respBytes[:]))
-			return
-		}
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
+	log.Debugf("push fluentd metric %+v", string(jsonBytes[:]))
+	if viper.GetBool("dry") {
+		return nil
 	}
+
+	resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return errors.Wrap(err, "http post got error")
+	}
+	err = utils.CheckResp(resp)
+	if err != nil {
+		return err
+	}
+
 	log.Infof("success to push fluentd metric to elasticsearch for node %v", metric)
+	return nil
 }
 
 func runTask() {
@@ -134,16 +124,19 @@ func runTask() {
 		go checkFluentdHealth(wg, name, config.HealthCheckURL, metric)
 	}
 	wg.Wait()
-	pushResultToES(metric)
+
+	err := pushResultToES(metric)
+	if err != nil {
+		log.Errorf("push fluentd metric got error %+v", err)
+	}
 }
 
 func bindTask() {
-	defer log.Flush()
 	log.Info("bind fluentd monitor...")
 	settings = loadFluentdSettings()
 	go store.Ticker(viper.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
 }
 
 func init() {
-	store.Store(bindTask)
+	store.Store("fl-monitor", bindTask)
 }

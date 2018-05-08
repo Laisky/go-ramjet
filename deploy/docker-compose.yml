@@ -10,8 +10,11 @@ services:
       driver: "json-file"
       options:
         max-size: 10m
+    environment:
+      - TASKS=heartbeat,es-monitor,es-remove,fl-monitor,es-rollover
     volumes:
-      - ../settings/settings.yml:/settings.yml
+      - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
+      - /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml
 
 networks:
   go-ramjet:

@@ -3,7 +3,7 @@ package tasks_test
 import (
 	"time"
 
-	"github.com/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/tasks/store"
 )
 
 func runTask() {
@@ -17,5 +17,5 @@ func bindTask() {
 }
 
 func Example() {
-	store.Store(bindTask)
+	store.Store("es", bindTask)
 }

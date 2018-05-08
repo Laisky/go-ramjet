@@ -3,25 +3,33 @@ package remove
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-ramjet/tasks/store"
+	"github.com/Laisky/go-ramjet/tasks/store"
 
 	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
-	"github.com/go-ramjet/utils"
+	"golang.org/x/sync/semaphore"
+	"github.com/Laisky/go-ramjet/utils"
+)
+
+var (
+	sem       *semaphore.Weighted // concurrent to delete documents
+	ctx       = context.Background()
+	indexLock = map[string]*sync.Mutex{}
 )
 
 // Query json query to request elasticsearch
 type Query struct {
-	Range *Range                  `json:"query"`
-	Size  int                     `json:"size"`
-	Sort  []map[string]string     `json:"sort"`
-	Term  *map[string]interface{} `json:"term,omitempty"`
+	Range *Range `json:"query"`
+	Size  int    `json:"size"`
+	// Sort  []map[string]string     `json:"sort"`
+	Term *map[string]interface{} `json:"term,omitempty"`
 }
 
 // Range range query in Query
@@ -37,10 +45,22 @@ type Resp struct {
 
 // MonitorTaskConfig config for each ES index
 type MonitorTaskConfig struct {
-	sync.Mutex
+	l      *sync.Mutex
 	Index  string
 	Expire int
 	Term   *map[string]interface{}
+}
+
+func (c *MonitorTaskConfig) Lock() {
+	c.l.Lock()
+}
+
+func (c *MonitorTaskConfig) Unlock() {
+	c.l.Unlock()
+}
+
+func (c *MonitorTaskConfig) SetLock(l *sync.Mutex) {
+	c.l = l
 }
 
 func getDateStringSecondsAgo(seconds int) (dateString string) {
@@ -59,7 +79,6 @@ func getURLByIndexName(index string) (url string) {
 
 // isRespInTrouble check whether response is really in trouble when status!=200
 func isRespInTrouble(errMsg string) (isErr bool) {
-	defer log.Flush()
 	log.Debugf("isRespInTrouble for errMsg %v", errMsg)
 	isErr = true
 	if strings.Contains(errMsg, "No mapping found for [@timestamp]") {
@@ -70,9 +89,15 @@ func isRespInTrouble(errMsg string) (isErr bool) {
 }
 
 func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
-	defer log.Flush()
-	task.Lock()
+	task.Lock() // do not parallel to remove same index
 	defer task.Unlock()
+
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Errorf("Failed to acquire semaphore: %v", err)
+		return
+	}
+	defer sem.Release(1)
+
 	dateBefore := getDateStringSecondsAgo(task.Expire)
 	log.Infof("removeDocumentsByTaskSetting for task %v, before %v", task.Index, dateBefore)
 	requestBody := Query{
@@ -82,9 +107,9 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 			}},
 		},
 		Size: viper.GetInt("tasks.elasticsearch.batch"),
-		Sort: []map[string]string{
-			map[string]string{"@timestamp": "asc"},
-		},
+		// Sort: []map[string]string{
+		// 	map[string]string{"@timestamp": "asc"},
+		// },
 		Term: task.Term,
 	}
 
@@ -94,10 +119,10 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 		Data: &requestBody,
 	}
 
-	// debug
-	if viper.GetBool("debug") {
+	// dry
+	if viper.GetBool("dry") {
 		b, _ := json.Marshal(requestData)
-		log.Debugf("request %v", string(b[:]))
+		log.Infof("request %v", string(b[:]))
 		return
 	}
 
@@ -126,23 +151,30 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 
 // BindRemoveCPLogs Tasks to remove documents in ES
 func BindRemoveCPLogs() {
-	defer log.Flush()
-	log.Info("bind remove CP Logs...")
+	log.Info("bind remove ES Logs...")
+
+	if viper.GetBool("debug") { // set for debug
+		viper.Set("tasks.elasticsearch.interval", 1)
+		viper.Set("tasks.elasticsearch.batch", 1)
+	}
+
+	sem = semaphore.NewWeighted(viper.GetInt64("tasks.elasticsearch.concurrent"))
 	go store.Ticker(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {
-	defer log.Flush()
-	// TOOD: reload settings before each loop
 	taskSettings := loadDeleteTaskSettings()
 	for _, taskConfig := range taskSettings {
+		if _, ok := indexLock[taskConfig.Index]; !ok {
+			indexLock[taskConfig.Index] = &sync.Mutex{}
+		}
+		taskConfig.SetLock(indexLock[taskConfig.Index])
 		go removeDocumentsByTaskSetting(taskConfig)
 	}
 }
 
 // loadDeleteTaskSettings load config for each subtask
 func loadDeleteTaskSettings() (taskSettings []*MonitorTaskConfig) {
-	defer log.Flush()
 	log.Debug("loadDeleteTaskSettings...")
 
 	var (

@@ -6,6 +6,7 @@ type OSMetric struct {
 	*MemMetric
 }
 
+// CPUMetric is the cpu metric for each node
 type CPUMetric struct {
 	CPUPercent int     `json:"os.cpu.percent"`
 	CPULoad1M  float64 `json:"os.cpu.load.1m"`
@@ -13,6 +14,7 @@ type CPUMetric struct {
 	CPULoad15M float64 `json:"os.cpu.load.15m"`
 }
 
+// MemMetric is the memory metric for each node
 type MemMetric struct {
 	MemPercent int `json:"os.mem.percent"`
 }
