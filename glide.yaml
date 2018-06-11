@@ -15,4 +15,8 @@ import:
   subpackages:
   - semaphore
 - package: github.com/Laisky/go-chaining
-  version: ">= 0.1"
+  version: '>= 0.1'
+- package: github.com/spf13/pflag
+  version: ~1.0.1
+- package: github.com/Laisky/go-utils
+  version: ~0.0.1

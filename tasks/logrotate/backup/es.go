@@ -8,10 +8,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/cihub/seelog"
-
+	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"github.com/Laisky/go-ramjet/tasks/store"
 )
 
@@ -81,9 +79,9 @@ func (u *baseUploader) CleanFiles() {
 	}
 	for _, fpath := range u.successedFiles {
 		if err := os.Remove(fpath); err != nil {
-			log.Errorf("remove file got error: %+v", err)
+			utils.Logger.Errorf("remove file got error: %+v", err)
 		}
-		log.Infof("remove file: %v", fpath)
+		utils.Logger.Infof("remove file: %v", fpath)
 	}
 }
 
@@ -111,8 +109,8 @@ var (
 )
 
 func LoadSettings() (configs []*backupSetting) {
-	interval = viper.GetDuration("tasks.backups.interval") * time.Second
-	for name, ci := range viper.Get("tasks.backups.configs").(map[string]interface{}) {
+	interval = utils.Settings.GetDuration("tasks.backups.interval") * time.Second
+	for name, ci := range utils.Settings.Get("tasks.backups.configs").(map[string]interface{}) {
 		c := ci.(map[string]interface{})
 		configs = append(configs, &backupSetting{
 			Name:      name,
@@ -150,7 +148,7 @@ func IsFileReadyToUpload(regex, fname string, now time.Time) (ok bool, err error
 
 // ScanFiles return absolute file pathes that match regex
 func ScanFiles(dir, regex string) (files []string) {
-	log.Debugf("ScanFiles for dir %v, regex %v", dir, regex)
+	utils.Logger.Debugf("ScanFiles for dir %v, regex %v", dir, regex)
 
 	if err := filepath.Walk(dir, func(fname string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -173,7 +171,7 @@ func ScanFiles(dir, regex string) (files []string) {
 		files = append(files, absPath)
 		return nil
 	}); err != nil {
-		log.Errorf("scan files got error: %v", err)
+		utils.Logger.Errorf("scan files got error: %v", err)
 	}
 
 	return
@@ -183,7 +181,7 @@ func runTask() {
 	defer backupLock.Unlock()
 	backupLock.Lock()
 
-	log.Info("start backup elasticsearch logs...")
+	utils.Logger.Info("start backup elasticsearch logs...")
 	LoadSettings() // reload
 
 	var (
@@ -200,12 +198,12 @@ func runTask() {
 		case "bos":
 			loader = &bosUploader{}
 		default:
-			log.Errorf("got unknown upload mode: %v", st.Mode)
+			utils.Logger.Errorf("got unknown upload mode: %v", st.Mode)
 			continue
 		}
 		err = loader.New(st)
 		if err != nil {
-			log.Errorf("construct uploader error: %+v", err)
+			utils.Logger.Errorf("construct uploader error: %+v", err)
 			continue
 		}
 
@@ -223,9 +221,9 @@ func runTask() {
 }
 
 func bindTask() {
-	log.Info("bind backup es logs task...")
-	if viper.GetBool("debug") {
-		viper.Set("tasks.backups.interval", 1)
+	utils.Logger.Info("bind backup es logs task...")
+	if utils.Settings.GetBool("debug") {
+		utils.Settings.Set("tasks.backups.interval", 1)
 	}
 
 	LoadSettings()

@@ -6,11 +6,9 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/spf13/viper"
+	"github.com/Laisky/go-utils"
 	"golang.org/x/sync/semaphore"
-	"github.com/Laisky/go-ramjet/utils"
 
-	log "github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
 
@@ -28,7 +26,7 @@ func RunRolloverTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSettin
 
 	err = RolloverNewIndex(st.API, st)
 	if err != nil {
-		log.Errorf("rollover index %v got error %v", st.IdxAlias, err.Error())
+		utils.Logger.Errorf("rollover index %v got error %v", st.IdxAlias, err.Error())
 	}
 }
 
@@ -44,8 +42,8 @@ func init() {
 		},
 		"settings": {
 			"index": {
-				"number_of_shards": 3,
-				"number_of_replicas": 1,
+				"number_of_shards": {{.NShards}},
+				"number_of_replicas": {{.NRepls}},
 				"store.type": "niofs"
 			}
 		},
@@ -58,7 +56,7 @@ func init() {
 }
 
 func GetIdxRolloverReqBodyByIdxAlias(idxSt *IdxSetting) (jb *bytes.Buffer, err error) {
-	log.Debugf("get rollover json body for index %v", idxSt.IdxAlias)
+	utils.Logger.Debugf("get rollover json body for index %v", idxSt.IdxAlias)
 	jb = new(bytes.Buffer)
 	if err = idxRolloverReqBodyTpl.Execute(jb, idxSt); err != nil {
 		return nil, errors.Wrapf(err, "parse index rollover for %v got error", idxSt.IdxAlias)
@@ -68,7 +66,7 @@ func GetIdxRolloverReqBodyByIdxAlias(idxSt *IdxSetting) (jb *bytes.Buffer, err e
 }
 
 func RolloverNewIndex(api string, st *IdxSetting) (err error) {
-	log.Infof("rollover index for %v", st.IdxAlias)
+	utils.Logger.Infof("rollover index for %v", st.IdxAlias)
 	var (
 		url  = api + st.IdxWriteAlias + "/_rollover"
 		jb   *bytes.Buffer
@@ -86,8 +84,8 @@ func RolloverNewIndex(api string, st *IdxSetting) (err error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Debugf("request to rollover index %+v", jb.String())
-	if viper.GetBool("dry") {
+	utils.Logger.Debugf("request to rollover index %+v", jb.String())
+	if utils.Settings.GetBool("dry") {
 		return nil
 	}
 
@@ -101,6 +99,6 @@ func RolloverNewIndex(api string, st *IdxSetting) (err error) {
 		return errors.Wrap(err, "try to request rollover api got error")
 	}
 
-	log.Infof("suceess rollover index %v", st.IdxAlias)
+	utils.Logger.Infof("suceess rollover index %v", st.IdxAlias)
 	return nil
 }

@@ -14,13 +14,16 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/spf13/viper"
-
-	log "github.com/cihub/seelog"
+	"github.com/Laisky/go-utils"
 
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/pkg/errors"
+)
+
+var (
+	uploadChunkSize  int64 = 1000 * 1024 * 1024
+	uploadConcurrent int64 = 2
 )
 
 type BosArgs struct {
@@ -66,11 +69,11 @@ func (u *bosUploader) isFileExists(objName string) bool {
 }
 
 func (u *bosUploader) Upload(fpath string) {
-	log.Debugf("uploading file %v ...", fpath)
+	utils.Logger.Debugf("uploading file %v ...", fpath)
 	defer u.Done()
 
-	if viper.GetBool("dry") {
-		log.Debugf("upload %v", fpath)
+	if utils.Settings.GetBool("dry") {
+		utils.Logger.Debugf("upload %v", fpath)
 		return
 	}
 
@@ -82,14 +85,14 @@ func (u *bosUploader) Upload(fpath string) {
 	)
 
 	if fsize, err = u.CheckIsFileReady(fpath); err != nil {
-		log.Errorf("try to get file info error: %+v", err)
+		utils.Logger.Errorf("try to get file info error: %+v", err)
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	objName = u.getObjFname(fpath)
 	if u.isFileExists(objName) {
-		log.Errorf("file %v already exists", objName)
+		utils.Logger.Errorf("file %v already exists", objName)
 		u.AddFaiFile(fpath)
 		return
 	}
@@ -100,13 +103,13 @@ func (u *bosUploader) Upload(fpath string) {
 		err = u.cli.UploadSuperFile(u.args.Bucket, objName, fpath, "") // upload by multipart
 	}
 	if err != nil {
-		log.Errorf("upload file got error: %+v", err)
+		utils.Logger.Errorf("upload file got error: %+v", err)
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	u.AddSucFile(fpath)
-	log.Infof("success uploaded file %v: %v", fpath, r)
+	utils.Logger.Infof("success uploaded file %v: %v", fpath, r)
 }
 
 func (u *bosUploader) Clean() {
@@ -123,14 +126,14 @@ func (u *bosUploader) getObjFname(fpath string) string {
 }
 
 func Connect2bos(remote, accessKey, accessSecret string) (c *bos.Client, err error) {
-	log.Debugf("connect to bos for remote %v", remote)
+	utils.Logger.Debugf("connect to bos for remote %v", remote)
 
 	c, err = bos.NewClient(accessKey, accessSecret, remote)
 	if err != nil {
 		return nil, errors.Wrapf(err, "try to connect to bos %v error", remote)
 	}
-	c.MultipartSize = 1000 * 1024 * 1024
-	c.MaxParallel = 5
+	c.MultipartSize = uploadChunkSize
+	c.MaxParallel = uploadConcurrent
 
 	return c, nil
 }

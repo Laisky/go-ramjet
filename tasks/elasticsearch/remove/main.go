@@ -12,10 +12,8 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 
-	log "github.com/cihub/seelog"
-	"github.com/spf13/viper"
+	"github.com/Laisky/go-utils"
 	"golang.org/x/sync/semaphore"
-	"github.com/Laisky/go-ramjet/utils"
 )
 
 var (
@@ -70,7 +68,7 @@ func getDateStringSecondsAgo(seconds int) (dateString string) {
 
 func getURLByIndexName(index string) (url string) {
 	var baseURL bytes.Buffer
-	baseURL.WriteString(viper.GetString("tasks.elasticsearch.url"))
+	baseURL.WriteString(utils.Settings.GetString("tasks.elasticsearch.url"))
 	baseURL.WriteString(index)
 	baseURL.WriteString("/_delete_by_query?conflicts=proceed")
 	url = baseURL.String()
@@ -79,7 +77,7 @@ func getURLByIndexName(index string) (url string) {
 
 // isRespInTrouble check whether response is really in trouble when status!=200
 func isRespInTrouble(errMsg string) (isErr bool) {
-	log.Debugf("isRespInTrouble for errMsg %v", errMsg)
+	utils.Logger.Debugf("isRespInTrouble for errMsg %v", errMsg)
 	isErr = true
 	if strings.Contains(errMsg, "No mapping found for [@timestamp]") {
 		isErr = false
@@ -93,20 +91,20 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	defer task.Unlock()
 
 	if err := sem.Acquire(ctx, 1); err != nil {
-		log.Errorf("Failed to acquire semaphore: %v", err)
+		utils.Logger.Errorf("Failed to acquire semaphore: %v", err)
 		return
 	}
 	defer sem.Release(1)
 
 	dateBefore := getDateStringSecondsAgo(task.Expire)
-	log.Infof("removeDocumentsByTaskSetting for task %v, before %v", task.Index, dateBefore)
+	utils.Logger.Infof("removeDocumentsByTaskSetting for task %v, before %v", task.Index, dateBefore)
 	requestBody := Query{
 		Range: &Range{
 			Range: map[string]interface{}{"@timestamp": map[string]string{
 				"lte": dateBefore,
 			}},
 		},
-		Size: viper.GetInt("tasks.elasticsearch.batch"),
+		Size: utils.Settings.GetInt("tasks.elasticsearch.batch"),
 		// Sort: []map[string]string{
 		// 	map[string]string{"@timestamp": "asc"},
 		// },
@@ -120,22 +118,22 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	}
 
 	// dry
-	if viper.GetBool("dry") {
+	if utils.Settings.GetBool("dry") {
 		b, _ := json.Marshal(requestData)
-		log.Infof("request %v", string(b[:]))
+		utils.Logger.Infof("request %v", string(b[:]))
 		return
 	}
 
 	if err := utils.RequestJSON("post", url, &requestData, &resp); err != nil {
 		errMsg := err.Error()
 		if isRespInTrouble(errMsg) {
-			log.Errorf("delete documents error for task %v, url %v: %v", task.Index, url, errMsg)
+			utils.Logger.Errorf("delete documents error for task %v, url %v: %v", task.Index, url, errMsg)
 			resp = Resp{
 				Deleted: 0,
-				Total:   viper.GetInt("tasks.elasticsearch.batch"),
+				Total:   utils.Settings.GetInt("tasks.elasticsearch.batch"),
 			}
 		} else {
-			log.Debugf("http.RequestJSON got some innocent error: %v", errMsg)
+			utils.Logger.Debugf("http.RequestJSON got some innocent error: %v", errMsg)
 			resp = Resp{
 				Deleted: 0,
 				Total:   0,
@@ -143,23 +141,23 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 		}
 	}
 
-	log.Infof("deleted documents for %v: %v/%v", task.Index, resp.Deleted, resp.Total)
-	if resp.Total >= viper.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
+	utils.Logger.Infof("deleted documents for %v: %v/%v", task.Index, resp.Deleted, resp.Total)
+	if resp.Total >= utils.Settings.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
 		go removeDocumentsByTaskSetting(task)
 	}
 }
 
 // BindRemoveCPLogs Tasks to remove documents in ES
 func BindRemoveCPLogs() {
-	log.Info("bind remove ES Logs...")
+	utils.Logger.Info("bind remove ES Logs...")
 
-	if viper.GetBool("debug") { // set for debug
-		viper.Set("tasks.elasticsearch.interval", 1)
-		viper.Set("tasks.elasticsearch.batch", 1)
+	if utils.Settings.GetBool("debug") { // set for debug
+		utils.Settings.Set("tasks.elasticsearch.interval", 1)
+		utils.Settings.Set("tasks.elasticsearch.batch", 1)
 	}
 
-	sem = semaphore.NewWeighted(viper.GetInt64("tasks.elasticsearch.concurrent"))
-	go store.Ticker(viper.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
+	sem = semaphore.NewWeighted(utils.Settings.GetInt64("tasks.elasticsearch.concurrent"))
+	go store.Ticker(utils.Settings.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {
@@ -175,15 +173,15 @@ func runTask() {
 
 // loadDeleteTaskSettings load config for each subtask
 func loadDeleteTaskSettings() (taskSettings []*MonitorTaskConfig) {
-	log.Debug("loadDeleteTaskSettings...")
+	utils.Logger.Debug("loadDeleteTaskSettings...")
 
 	var (
 		config      map[interface{}]interface{}
 		indexConfig *MonitorTaskConfig
 		term        = new(map[string]interface{})
 	)
-	for _, configI := range viper.Get("tasks.elasticsearch.configs").([]interface{}) {
-		log.Debugf("load delete tasks settings: %+v", configI)
+	for _, configI := range utils.Settings.Get("tasks.elasticsearch.configs").([]interface{}) {
+		utils.Logger.Debugf("load delete tasks settings: %+v", configI)
 		config = configI.(map[interface{}]interface{})
 		indexConfig = &MonitorTaskConfig{
 			Index: config["index"].(string),

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Laisky/go-utils"
+
 	"golang.org/x/sync/semaphore"
 	"github.com/Laisky/go-ramjet/tasks/store"
 
-	log "github.com/cihub/seelog"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -30,6 +30,8 @@ type IdxSetting struct {
 	Rollover      string
 	Expires       float64
 	IdxAlias      string
+	NRepls        int
+	NShards       int
 	IdxWriteAlias string
 	Mapping       template.HTML
 	API           string
@@ -37,13 +39,13 @@ type IdxSetting struct {
 
 // BindRolloverIndices bind the task to rollover indices
 func BindRolloverIndices() {
-	log.Info("bind rollover indices...")
+	utils.Logger.Info("bind rollover indices...")
 
-	if viper.GetBool("debug") { // set for debug
-		viper.Set("tasks.elasticsearch-v2.interval", 1)
+	if utils.Settings.GetBool("debug") { // set for debug
+		utils.Settings.Set("tasks.elasticsearch-v2.interval", 1)
 	}
 
-	go store.Ticker(viper.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
+	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
 }
 
 func runTask() {
@@ -51,7 +53,7 @@ func runTask() {
 		taskSts []*IdxSetting
 		st      *IdxSetting
 		ctx     = context.Background()
-		sem     = semaphore.NewWeighted(viper.GetInt64("tasks.elasticsearch-v2.concurrent"))
+		sem     = semaphore.NewWeighted(utils.Settings.GetInt64("tasks.elasticsearch-v2.concurrent"))
 	)
 
 	taskSts = LoadSettings()
@@ -64,7 +66,7 @@ func runTask() {
 
 // LoadAllIndicesNames load all indices name by ES API
 func LoadAllIndicesNames(api string) (indices []string, err error) {
-	log.Infof("load indices by api %v", strings.Split(api, "@")[1])
+	utils.Logger.Infof("load indices by api %v", strings.Split(api, "@")[1])
 	var (
 		url     = api + "_cat/indices/?h=index&format=json"
 		idxList = []map[string]string{}
@@ -99,7 +101,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 		item   map[interface{}]interface{}
 		action string
 	)
-	for _, itemI = range viper.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+	for _, itemI = range utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
 		item = itemI.(map[interface{}]interface{})
 		if action = item["action"].(string); action != "rollover" {
 			continue
@@ -113,7 +115,10 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			Mapping:       Mappings[item["mapping"].(string)],
 			API:           item["api"].(string),
 			Rollover:      item["rollover"].(string),
+			NRepls:        utils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),
+			NShards:       utils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
 		}
+		utils.Logger.Debugf("load rollover setting %+v", idx)
 		idxSettings = append(idxSettings, idx)
 	}
 

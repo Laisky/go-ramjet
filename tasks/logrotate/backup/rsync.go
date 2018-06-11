@@ -10,9 +10,8 @@ import (
 	"os/exec"
 	"regexp"
 
-	log "github.com/cihub/seelog"
+	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 type rsyncArgs struct {
@@ -33,7 +32,7 @@ func (u *rsyncUploader) New(st *backupSetting) error {
 }
 
 func (u *rsyncUploader) Upload(fpath string) {
-	log.Debugf("uploading file %v ...", fpath)
+	utils.Logger.Debugf("uploading file %v ...", fpath)
 	defer u.Done()
 
 	var (
@@ -42,27 +41,27 @@ func (u *rsyncUploader) Upload(fpath string) {
 	)
 
 	if fsize, err = u.CheckIsFileReady(fpath); err != nil {
-		log.Errorf("try to get file info error: %+v", err)
+		utils.Logger.Errorf("try to get file info error: %+v", err)
 		u.AddFaiFile(fpath)
 		return
 	}
 
-	log.Debugf("try to upload file via rsync for %vB", fsize)
+	utils.Logger.Debugf("try to upload file via rsync for %vB", fsize)
 	out, err := RunSysCMD(GenRsyncCMD(fpath, u.args.Remote))
 	if err != nil {
-		log.Errorf("run upload cmd error: %+v", err)
+		utils.Logger.Errorf("run upload cmd error: %+v", err)
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	if matched, err := regexp.MatchString("", out); !matched || err != nil {
-		log.Errorf("upload got stderr: %+v", err)
+		utils.Logger.Errorf("upload got stderr: %+v", err)
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	u.AddSucFile(fpath)
-	log.Infof("success uploaded file: %v", fpath)
+	utils.Logger.Infof("success uploaded file: %v", fpath)
 }
 
 func (u *rsyncUploader) Clean() {
@@ -74,8 +73,8 @@ func GenRsyncCMD(fpath, remote string) (cmd []string) {
 }
 
 func RunSysCMD(cmd []string) (output string, err error) {
-	if viper.GetBool("debug") {
-		log.Debugf("run cmd: %v", cmd)
+	if utils.Settings.GetBool("debug") {
+		utils.Logger.Debugf("run cmd: %v", cmd)
 		return "", nil
 	}
 
@@ -90,6 +89,6 @@ func RunSysCMD(cmd []string) (output string, err error) {
 		return "", errors.Wrapf(err, "run cmd `%v` got error", cmd)
 	}
 
-	log.Debugf("success run cmd %v: got %v", cmd, string(out[:]))
+	utils.Logger.Debugf("success run cmd %v: got %v", cmd, string(out[:]))
 	return string(out[:]), nil
 }

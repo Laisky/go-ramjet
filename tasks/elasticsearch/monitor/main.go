@@ -11,10 +11,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/cihub/seelog"
-	"github.com/spf13/viper"
+	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/store"
-	"github.com/Laisky/go-ramjet/utils"
 )
 
 var (
@@ -53,24 +51,24 @@ type St struct {
 }
 
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
-	log.Debugf("load es stats for url %v", strings.Split(url, "@")[1])
+	utils.Logger.Debugf("load es stats for url %v", strings.Split(url, "@")[1])
 	defer wg.Done()
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		log.Errorf("try to get es stats got error for url %v: %+v", url, err)
+		utils.Logger.Errorf("try to get es stats got error for url %v: %+v", url, err)
 		esStats = nil
 		return
 	}
 	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Errorf("try to read es stat body got error for url %v: %+v", url, err)
+		utils.Logger.Errorf("try to read es stat body got error for url %v: %+v", url, err)
 		esStats = nil
 		return
 	}
 	err = json.Unmarshal(respBytes, esStats)
 	if err != nil {
-		log.Errorf("try to parse es stat got error for url %v: %+v", url, err)
+		utils.Logger.Errorf("try to parse es stat got error for url %v: %+v", url, err)
 		esStats = nil
 		return
 	}
@@ -91,7 +89,13 @@ type NodeMetric struct {
 }
 
 func extractStatsToMetricForEachNode(clusterName string, stats map[string]interface{}) (metrics []*NodeMetric) {
-	for _, nodeData := range stats["nodes"].(map[string]interface{}) {
+	metrics = []*NodeMetric{}
+	sv, ok := stats["nodes"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	for _, nodeData := range sv {
 		data := nodeData.(map[string]interface{})
 		metrics = append(metrics, &NodeMetric{
 			ClusterName:     clusterName,
@@ -117,40 +121,40 @@ type ESEvent struct {
 }
 
 func pushMetricToES(c *ClusterSt, metric interface{}) {
-	log.Infof("push es metric to elasticsearch for node %v", c.Name)
+	utils.Logger.Infof("push es metric to elasticsearch for node %v", c.Name)
 	jsonBytes, err := json.Marshal(metric)
 	if err != nil {
-		log.Error(err.Error())
+		utils.Logger.Error(err.Error())
 		return
 	}
 
-	log.Debugf("push es metric %v", string(jsonBytes[:]))
-	if viper.GetBool("dry") {
+	utils.Logger.Debugf("push es metric %v", string(jsonBytes[:]))
+	if utils.Settings.GetBool("dry") {
 		return
 	}
 	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeader, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		log.Error(err.Error())
+		utils.Logger.Error(err.Error())
 		return
 	}
 
 	err = utils.CheckResp(resp)
 	if err != nil {
-		log.Error(err.Error())
+		utils.Logger.Error(err.Error())
 		return
 	}
 
-	log.Debugf("success to push es metric to elasticsearch for node %v", metric)
+	utils.Logger.Debugf("success to push es metric to elasticsearch for node %v", metric)
 }
 
 // BindMonitorTask start monitor tasks
 func BindMonitorTask() {
-	log.Info("bind ES monitors...")
+	utils.Logger.Info("bind ES monitors...")
 
 	st := LoadSettings()
 	interval := st.Interval
 
-	if viper.GetBool("debug") { // set for debug
+	if utils.Settings.GetBool("debug") { // set for debug
 		interval = 3
 	}
 
@@ -166,7 +170,7 @@ func runTask() {
 
 // RunClusterMonitorTask run monitor task for each cluster
 func RunClusterMonitorTask(st *ClusterSt) {
-	log.Infof("run cluster monitor for %v...", st.Name)
+	utils.Logger.Infof("run cluster monitor for %v...", st.Name)
 
 	var (
 		esStats       = make(map[string]interface{})
@@ -211,7 +215,7 @@ func LoadSettings() (monitorSt *St) {
 		itemI interface{}
 		item  map[interface{}]interface{}
 	)
-	for _, itemI = range viper.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+	for _, itemI = range utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
 		item = itemI.(map[interface{}]interface{})
 		switch item["action"].(string) {
 		case "monitor":

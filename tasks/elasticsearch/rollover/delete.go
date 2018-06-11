@@ -5,55 +5,61 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"golang.org/x/sync/semaphore"
 
-	log "github.com/cihub/seelog"
+	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
-	"github.com/Laisky/go-ramjet/utils"
 )
 
+// RunDeleteTask start to delete indices
 func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting) {
 	sem.Acquire(ctx, 1)
 	defer sem.Release(1)
-	log.Debugf("start to running delete expired index for %v...", st.IdxAlias)
+	utils.Logger.Debugf("start to running delete expired index for %v...", st.IdxAlias)
 
 	var (
-		allIdx []string
-		err    error
+		allIdx        []string
+		tobeDeleteIdx []string
+		err           error
 	)
 
 	allIdx, err = LoadAllIndicesNames(st.API)
 	if err != nil {
-		log.Errorf("load indices got error %+v", err)
+		utils.Logger.Errorf("load indices got error %+v", err)
 	}
 
 	// Delete expired indices
-	tobeDeleteIdx, err := FilterToBeDeleteIndicies(allIdx, st)
+	tobeDeleteIdx, err = FilterToBeDeleteIndicies(allIdx, st)
 	if err != nil {
-		log.Errorf("try to filter delete indices got error %+v", err)
+		utils.Logger.Errorf("try to filter delete indices got error %+v", err)
 	}
 
+	// Do not delete write-alias
+	tobeDeleteIdx, err = FilterReadyToBeDeleteIndices(GetAliasURL(st), tobeDeleteIdx)
+	if err != nil {
+		utils.Logger.Errorf("try to filter indices aliases got error %+v", err)
+	}
+
+	utils.Logger.Infof("try to delete indices %+v", tobeDeleteIdx)
 	for _, idx := range tobeDeleteIdx {
 		err = RemoveIndexByName(st.API, idx)
 		if err != nil {
-			log.Errorf("try to delete index %v got error %+v", idx, err)
+			utils.Logger.Errorf("try to delete index %v got error %+v", idx, err)
 		}
 	}
 }
 
 // RemoveIndexByName delete index by elasticsearch RESTful API
 func RemoveIndexByName(api, index string) (err error) {
-	log.Infof("remove es index %v", index)
+	utils.Logger.Infof("remove es index %v", index)
 	url := api + index
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return errors.Wrap(err, "make request error")
 	}
 
-	log.Debugf("remove index %v", index)
-	if viper.GetBool("dry") {
+	utils.Logger.Debugf("remove index %v", index)
+	if utils.Settings.GetBool("dry") {
 		return nil
 	}
 
@@ -66,14 +72,14 @@ func RemoveIndexByName(api, index string) (err error) {
 		return errors.Wrap(err, "remove index got error")
 	}
 
-	log.Infof("success delete index %v", index)
+	utils.Logger.Infof("success delete index %v", index)
 	return nil
 }
 
 // IsIdxShouldDelete check whether a index is should tobe deleted
 // dateStr like `2016.10.31`, treated as +0800
 func IsIdxShouldDelete(now time.Time, dateStr string, expires float64) (bool, error) {
-	log.Debugf("check is index %v-%v should be deleted", dateStr, now)
+	utils.Logger.Debugf("check is index %v-%v should be deleted", dateStr, now)
 	layout := "2006.01.02 -0700"
 	t, err := time.Parse(layout, dateStr+" +0800")
 	if err != nil {
@@ -84,7 +90,7 @@ func IsIdxShouldDelete(now time.Time, dateStr string, expires float64) (bool, er
 
 // FilterToBeDeleteIndicies return the indices that need be delete
 func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []string, err error) {
-	log.Debugf("start to filter tobe delete indices %+v %+v", allInd, idxSt.Regexp)
+	utils.Logger.Debugf("start to filter tobe delete indices %+v %+v", allInd, idxSt.Regexp)
 	var (
 		idx      string
 		subS     []string
@@ -108,6 +114,6 @@ func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []str
 		indices = append(indices, subS[0])
 	}
 
-	log.Debugf("tobe delete indices %+v", indices)
+	utils.Logger.Debugf("tobe delete indices %+v", indices)
 	return indices, nil
 }

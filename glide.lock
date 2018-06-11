@@ -1,11 +1,12 @@
-hash: 26fe9038059023f38efc757921861ea5cee69cedaaa2b1a040b3c56f4c8a039c
-updated: 2018-05-07T17:36:44.932871214+08:00
+hash: a7fc554fc9f4b5ec5f0660145d1f0eb9cd236154b60b6c8b457771186af3120a
+updated: 2018-06-07T14:37:59.771270295+08:00
 imports:
 - name: github.com/astaxie/beego
-  version: 88c5dfa6ead42e624c2e7d9e04eab6cb2d07412a
+  version: bf5c5626ab429e66d88602e1ab1ab5fbf4629a01
   subpackages:
   - config
   - context
+  - context/param
   - grace
   - logs
   - session
@@ -26,7 +27,7 @@ imports:
 - name: github.com/dghubble/sling
   version: eb56e89ac5088bebb12eef3cb4b293300f43608b
 - name: github.com/dgrijalva/jwt-go
-  version: 24c63f56522a87ec5339cc3567883f1039378fdb
+  version: 06ea1031745cb8b3dab3f6a236daf2b0aa468b7e
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/go-fsnotify/fsnotify
@@ -45,6 +46,8 @@ imports:
   - json/token
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
+- name: github.com/Laisky/go-utils
+  version: c607b68769017fade5654fb2567211b9389bd98f
 - name: github.com/magiconair/properties
   version: 2c9e9502788518c97fe44e8955cd069417ee89df
 - name: github.com/mitchellh/mapstructure
@@ -62,7 +65,7 @@ imports:
 - name: github.com/spf13/jwalterweatherman
   version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
 - name: github.com/spf13/pflag
-  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
+  version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/spf13/viper
   version: b5e8006cbee93ec955a89ab31e0e3ce3204f3736
 - name: golang.org/x/net

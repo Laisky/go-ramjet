@@ -3,7 +3,7 @@ services:
 
   go-ramjet:
     image: ppcelery/go-ramjet:pateo
-    restart: "no"
+    restart: "on-failure"
     networks:
       - go-ramjet
     logging:
@@ -11,7 +11,7 @@ services:
       options:
         max-size: 10m
     environment:
-      - TASKS=heartbeat,es-monitor,es-remove,fl-monitor,es-rollover
+      - TASKS=heartbeat,es-monitor,fl-monitor,es-rollover
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml

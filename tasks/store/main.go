@@ -7,10 +7,9 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/cihub/seelog"
 	"github.com/spf13/viper"
 
-	"github.com/Laisky/go-ramjet/utils"
+	"github.com/Laisky/go-utils"
 )
 
 type tasksStore struct {
@@ -43,7 +42,7 @@ func isContians(s []string, n string) bool {
 	if len(s) == 0 { // not set -t
 		tse := os.Getenv("TASKS")
 		if len(tse) == 0 { // not set env `TASKS`
-			log.Debug("start to run all tasks...")
+			utils.Logger.Debug("start to run all tasks...")
 			return true
 		}
 
@@ -67,7 +66,7 @@ func Start() {
 				continue
 			}
 
-			log.Infof("start to running %v...", t.name)
+			utils.Logger.Infof("start to running %v...", t.name)
 			t.f()
 		}
 	})
@@ -76,7 +75,7 @@ func Start() {
 var runner = func(f func()) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("running task error for %v: %+v", utils.GetFunctionName(f), err)
+			utils.Logger.Errorf("running task error for %v: %+v", utils.GetFuncName(f), err)
 			go time.AfterFunc(30*time.Second, func() {
 				store.runChan <- f
 			})
@@ -89,7 +88,7 @@ var runner = func(f func()) {
 func Run() {
 	// forever loop to run each task func
 	for task := range store.runChan {
-		if viper.GetBool("debug") {
+		if utils.Settings.GetBool("debug") {
 			go task()
 		} else {
 			go runner(task)

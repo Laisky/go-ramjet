@@ -6,8 +6,7 @@ import (
 	"time"
 
 	chaining "github.com/Laisky/go-chaining"
-	log "github.com/cihub/seelog"
-	"github.com/Laisky/go-ramjet/utils"
+	"github.com/Laisky/go-utils"
 )
 
 var (
@@ -40,7 +39,7 @@ func extractStatsToMetricForEachIndex(indexsStat []map[string]string) (metric ma
 		indexName = stat["index"]
 		indexSize, err = strconv.ParseInt(stat["store.size"], 10, 64)
 		if err != nil {
-			log.Errorf("parse es storage int got error %v:%v", indexName, indexSize)
+			utils.Logger.Errorf("parse es storage int got error %v:%v", indexName, indexSize)
 			indexSize = 0
 		}
 

@@ -8,6 +8,6 @@ WORKDIR /go/src/github.com/Laisky/go-ramjet
 RUN go build main.go
 
 FROM alpine:3.7
-COPY --from=gobin /go/src/github.com/Laisky/go-ramjet/main .
+COPY --from=gobin /go/src/github.com/Laisky/go-ramjet/main go-ramjet
 COPY --from=gobin /etc/ssl/certs /etc/ssl/certs
-CMD ["./main"]
+CMD ["./go-ramjet"]
