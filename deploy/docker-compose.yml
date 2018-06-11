@@ -14,7 +14,7 @@ services:
       - TASKS=heartbeat,es-monitor,fl-monitor,es-rollover
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
-      - /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml
+      - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings/settings.yml
 
 networks:
   go-ramjet:
