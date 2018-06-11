@@ -12,8 +12,8 @@ import (
 
 	"github.com/Laisky/go-utils"
 
-	"golang.org/x/sync/semaphore"
 	"github.com/Laisky/go-ramjet/tasks/store"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/pkg/errors"
 )
@@ -42,7 +42,7 @@ func BindRolloverIndices() {
 	utils.Logger.Info("bind rollover indices...")
 
 	if utils.Settings.GetBool("debug") { // set for debug
-		utils.Settings.Set("tasks.elasticsearch-v2.interval", 1)
+		utils.Settings.Set("tasks.elasticsearch-v2.interval", 10)
 	}
 
 	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
