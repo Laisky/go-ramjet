@@ -4,8 +4,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-utils"
 )
 
 func runTask() {
@@ -22,6 +22,7 @@ func bindTask() {
 		utils.Settings.Set("tasks.heartbeat.interval", 1)
 	}
 
+	bindHttp()
 	go store.Ticker(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
 }
 

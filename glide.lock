@@ -1,19 +1,14 @@
-hash: a7fc554fc9f4b5ec5f0660145d1f0eb9cd236154b60b6c8b457771186af3120a
-updated: 2018-06-07T14:37:59.771270295+08:00
+hash: 797e8fdcc08fb7407b42ba663c308b844392918b0b222080ef301231a7b3d3b8
+updated: 2018-06-12T17:09:04.66682139+08:00
 imports:
-- name: github.com/astaxie/beego
-  version: bf5c5626ab429e66d88602e1ab1ab5fbf4629a01
+- name: github.com/aymerick/raymond
+  version: b565731e1464263de0bda75f2e45d97b54b60110
   subpackages:
-  - config
-  - context
-  - context/param
-  - grace
-  - logs
-  - session
-  - toolbox
-  - utils
+  - ast
+  - lexer
+  - parser
 - name: github.com/baidubce/bce-sdk-go
-  version: aa0c7bd66b0171e8daf35c599882f9a6a046bbdd
+  version: 13159b6532e6f2458fe8a4503f67175c6234c42d
   subpackages:
   - auth
   - bce
@@ -22,18 +17,26 @@ imports:
   - services/bos/api
   - util
   - util/log
+- name: github.com/BurntSushi/toml
+  version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
 - name: github.com/cihub/seelog
   version: d2c6e5aa9fbfdd1c624e140287063c7730654115
-- name: github.com/dghubble/sling
-  version: eb56e89ac5088bebb12eef3cb4b293300f43608b
 - name: github.com/dgrijalva/jwt-go
   version: 06ea1031745cb8b3dab3f6a236daf2b0aa468b7e
+- name: github.com/eknkc/amber
+  version: cdade1c073850f4ffc70a829e31235ea6892853b
+  subpackages:
+  - parser
+- name: github.com/fatih/structs
+  version: ebf56d35bba727c68ac77f56f2fcf90b181851aa
+- name: github.com/flosch/pongo2
+  version: 67f4ff8560dfa2b00920118f228c0a2f68760631
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
-- name: github.com/go-fsnotify/fsnotify
-  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+- name: github.com/hashicorp/go-version
+  version: 23480c0665776210b5fbbac6eaaee40e3e6a96b7
 - name: github.com/hashicorp/hcl
-  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
+  version: ef8a98b0bbce4a65b5aa4c368430a80ddc533168
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -44,20 +47,92 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/iris-contrib/formBinder
+  version: ad9fb86c356f971f30319c40ddbdcf72129a2791
+- name: github.com/Joker/jade
+  version: 8828253bfc54f2f91aaef5f32b44a244b0a98e4f
+- name: github.com/json-iterator/go
+  version: 7cceb6c2e37f896dc3817e031f83dce25b180a8b
+- name: github.com/juju/errors
+  version: c7d06af17c68cd34c835053720b21f6549d9b0ee
+- name: github.com/kataras/golog
+  version: 03be101463868edc5a81f094fc68a5f6c1b5503a
+- name: github.com/kataras/iris
+  version: 964fba44cf4f4b2e94b2cbd54fbbf4d264795df7
+  subpackages:
+  - cache
+  - cache/cfg
+  - cache/client
+  - cache/client/rule
+  - cache/entry
+  - cache/ruleset
+  - cache/uri
+  - context
+  - core/errors
+  - core/handlerconv
+  - core/host
+  - core/maintenance
+  - core/maintenance/version
+  - core/memstore
+  - core/netutil
+  - core/router
+  - core/router/macro
+  - core/router/macro/interpreter/ast
+  - core/router/macro/interpreter/lexer
+  - core/router/macro/interpreter/parser
+  - core/router/macro/interpreter/token
+  - core/router/node
+  - middleware/logger
+  - middleware/recover
+  - view
+- name: github.com/kataras/pio
+  version: a9733b5b6b83d32b479aacd51d26ef6018261963
+  subpackages:
+  - terminal
+- name: github.com/kataras/survey
+  version: 00934ae069eda15df26fa427ac393e67e239380c
+  subpackages:
+  - core
+  - terminal
+- name: github.com/klauspost/compress
+  version: 5fb1f31b0a61e9858f12f39266e059848a5f1cea
+  subpackages:
+  - flate
+  - gzip
+- name: github.com/klauspost/cpuid
+  version: e7e905edc00ea8827e58662220139109efea09db
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
 - name: github.com/Laisky/go-utils
-  version: c607b68769017fade5654fb2567211b9389bd98f
+  version: 75d309468da638a43d5d98ac9e505d2404e8f625
 - name: github.com/magiconair/properties
-  version: 2c9e9502788518c97fe44e8955cd069417ee89df
+  version: c2353362d570a7bfa228149c62842019201cfb71
+- name: github.com/mattn/go-colorable
+  version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
+- name: github.com/mattn/go-isatty
+  version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
+- name: github.com/mgutz/ansi
+  version: 9520e82c474b0a04dd04f8a40959027271bab992
+- name: github.com/microcosm-cc/bluemonday
+  version: 995366fdf961d03629cd17361bddd32745718e2c
 - name: github.com/mitchellh/mapstructure
-  version: 00c29f56e2386353d58c599509e8dc3801b0d716
+  version: bb74f1db0675b241733089d5a1faa5dd8b0ef57b
+- name: github.com/modern-go/concurrent
+  version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
+- name: github.com/modern-go/reflect2
+  version: 58118c1ea9161250907268a484af4dd6ed314280
 - name: github.com/pelletier/go-toml
-  version: 05bcc0fb0d3e60da4b8dd5bd7e0ea563eb4ca943
+  version: c01d1270ff3e442a8a57cddc1c92dc1138598194
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
+- name: github.com/ryanuber/columnize
+  version: abc90934186a77966e2beeac62ed966aac0561d5
+- name: github.com/satori/go.uuid
+  version: 36e9d2ebbde5e3f13ab2e25625fd453271d6522e
+- name: github.com/shurcooL/sanitized_anchor_name
+  version: 86672fcb3f950f35f2e675df2240550f2a50762f
 - name: github.com/spf13/afero
-  version: bbf41cb36dffe15dff5bf7e18c447801e7ffe163
+  version: 787d034dfe70e44075ccc060d346146ef53270ad
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -68,23 +143,32 @@ imports:
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/spf13/viper
   version: b5e8006cbee93ec955a89ab31e0e3ce3204f3736
+- name: golang.org/x/crypto
+  version: 8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9
+  subpackages:
+  - acme
+  - acme/autocert
 - name: golang.org/x/net
-  version: 640f4622ab692b87c2f3a94265e6f579fe38263d
+  version: db08ff08e8622530d9ed3a0e8ac279f6d4c02196
   subpackages:
   - context
+  - html
+  - html/atom
 - name: golang.org/x/sync
   version: 1d60e4601c6fd243af51cc01ddf169918a5407ca
   subpackages:
   - semaphore
 - name: golang.org/x/sys
-  version: d8e400bc7db4870d786864138af681469693d18c
+  version: bff228c7b664c5fce602223a05fb708fd8654986
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 8c34f848e18c4bd34d02db7f19a0ed1a0a8f5852
+  version: 5c1cf69b5978e5a34c5f9ba09a83e56acc4b7877
   subpackages:
   - transform
   - unicode/norm
+- name: gopkg.in/russross/blackfriday.v2
+  version: cadec560ec52d93835bf2f15bd794700d3a2473b
 - name: gopkg.in/yaml.v2
-  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5
+  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 testImports: []
