@@ -6,6 +6,8 @@ services:
     restart: "on-failure"
     networks:
       - go-ramjet
+    ports:
+      - 24087:24087
     logging:
       driver: "json-file"
       options:
