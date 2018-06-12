@@ -33,6 +33,7 @@ func main() {
 	fmt.Println("start main...")
 	pflag.Bool("debug", false, "run in debug mode")
 	pflag.Bool("dry", false, "run in dry mode")
+	pflag.Bool("pprof", false, "run with pprof")
 	pflag.String("addr", "localhost:24087", "like `localhost:24087`")
 	pflag.String("config", "/etc/go-ramjet/settings", "config file directory path")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
