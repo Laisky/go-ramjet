@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
-	"github.com/Laisky/go-ramjet/tasks/store"
 )
 
 type backupSetting struct {

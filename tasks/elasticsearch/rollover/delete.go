@@ -79,7 +79,6 @@ func RemoveIndexByName(api, index string) (err error) {
 // IsIdxShouldDelete check whether a index is should tobe deleted
 // dateStr like `2016.10.31`, treated as +0800
 func IsIdxShouldDelete(now time.Time, dateStr string, expires float64) (bool, error) {
-	utils.Logger.Debugf("check is index %v-%v should be deleted", dateStr, now)
 	layout := "2006.01.02 -0700"
 	t, err := time.Parse(layout, dateStr+" +0800")
 	if err != nil {
@@ -102,16 +101,15 @@ func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []str
 			continue
 		}
 
+		utils.Logger.Debugf("check is index %v should be deleted with expires %v", idx, idxSt.Expires)
 		toDelete, err = IsIdxShouldDelete(time.Now(), subS[1], idxSt.Expires)
 		if err != nil {
 			err = errors.Wrapf(err, "check whether index %v(%v) should delete got error", idx, idxSt.Expires)
-			return
+			return nil, err
 		}
-		if !toDelete {
-			continue
+		if toDelete {
+			indices = append(indices, subS[0])
 		}
-
-		indices = append(indices, subS[0])
 	}
 
 	utils.Logger.Debugf("tobe delete indices %+v", indices)

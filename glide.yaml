@@ -1,22 +1,21 @@
 package: github.com/Laisky/go-ramjet
 import:
-- package: github.com/dghubble/sling
-  version: ~1.1.0
-- package: github.com/cihub/seelog
-  version: ~2.6.0
-- package: github.com/spf13/viper
-  version: ~1.0.0
+- package: github.com/Laisky/go-chaining
+  version: ~0.1.0
+- package: github.com/Laisky/go-utils
+  version: ~0.0.4
+- package: github.com/baidubce/bce-sdk-go
+  subpackages:
+  - bce
+  - services/bos
+- package: github.com/kataras/iris
+  version: ~10.6.6
 - package: github.com/pkg/errors
   version: ~0.8.0
-- package: github.com/go-fsnotify/fsnotify
-  version: ~1.4.7
-- package: github.com/baidubce/bce-sdk-go
+- package: github.com/spf13/pflag
+  version: ~1.0.1
+- package: github.com/spf13/viper
+  version: ~1.0.2
 - package: golang.org/x/sync
   subpackages:
   - semaphore
-- package: github.com/Laisky/go-chaining
-  version: '>= 0.1'
-- package: github.com/spf13/pflag
-  version: ~1.0.1
-- package: github.com/Laisky/go-utils
-  version: ~0.0.1
