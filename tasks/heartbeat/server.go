@@ -7,7 +7,7 @@ import (
 	"github.com/kataras/iris"
 )
 
-func bindHttp() {
+func bindHTTP() {
 	ramjet.Server.Get("/heartbeat", func(ctx iris.Context) {
 		ctx.Writef("heartbeat with %v active goroutines", runtime.NumGoroutine())
 	})

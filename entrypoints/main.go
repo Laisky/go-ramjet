@@ -4,10 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Laisky/go-ramjet"
-	_ "github.com/Laisky/go-ramjet/tasks/elasticsearch"
-	_ "github.com/Laisky/go-ramjet/tasks/fluentd"
-	_ "github.com/Laisky/go-ramjet/tasks/heartbeat"
-	_ "github.com/Laisky/go-ramjet/tasks/logrotate/backup"
+	_ "github.com/Laisky/go-ramjet/tasks"
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
 	"github.com/spf13/pflag"
@@ -34,7 +31,7 @@ func main() {
 	pflag.Bool("debug", false, "run in debug mode")
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
-	pflag.String("addr", "localhost:24087", "like `localhost:24087`")
+	pflag.String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
 	pflag.String("config", "/etc/go-ramjet/settings", "config file directory path")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
 	pflag.Parse()

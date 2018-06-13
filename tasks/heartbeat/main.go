@@ -22,7 +22,7 @@ func bindTask() {
 		utils.Settings.Set("tasks.heartbeat.interval", 1)
 	}
 
-	bindHttp()
+	bindHTTP()
 	go store.Ticker(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
 }
 
