@@ -11,14 +11,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-utils"
 )
 
 var (
 	isIndicesFirstRun = sync.Map{}
 	httpClient        = http.Client{
 		Timeout: time.Second * 30,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+		},
 	}
 )
 
@@ -124,7 +128,7 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 	utils.Logger.Infof("push es metric to elasticsearch for node %v", c.Name)
 	jsonBytes, err := json.Marshal(metric)
 	if err != nil {
-		utils.Logger.Error(err.Error())
+		utils.Logger.Errorf("try to marshal es metric got error %+v", err)
 		return
 	}
 
@@ -132,18 +136,18 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 	if utils.Settings.GetBool("dry") {
 		return
 	}
-	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeader, bytes.NewBuffer(jsonBytes))
+	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeaderVal, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		utils.Logger.Error(err.Error())
+		utils.Logger.Errorf("try to push es metric got error: %+v", err)
 		return
 	}
 
 	err = utils.CheckResp(resp)
 	if err != nil {
-		utils.Logger.Error(err.Error())
+		utils.Logger.Errorf("got error after push %+v", err)
 		return
 	}
-
+	defer resp.Body.Close()
 	utils.Logger.Debugf("success to push es metric to elasticsearch for node %v", metric)
 }
 
