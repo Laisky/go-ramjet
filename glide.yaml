@@ -3,7 +3,7 @@ import:
 - package: github.com/Laisky/go-chaining
   version: ~0.1.0
 - package: github.com/Laisky/go-utils
-  version: ~0.0.4
+  version: develop
 - package: github.com/baidubce/bce-sdk-go
   subpackages:
   - bce
