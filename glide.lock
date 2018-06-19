@@ -1,5 +1,5 @@
-hash: 797e8fdcc08fb7407b42ba663c308b844392918b0b222080ef301231a7b3d3b8
-updated: 2018-06-12T17:09:04.66682139+08:00
+hash: 5f416aae896a1ec3b0dcd0dab8855bdee83d5bce894ca7463a0e408ebae2284c
+updated: 2018-06-19T14:54:52.614363672+08:00
 imports:
 - name: github.com/aymerick/raymond
   version: b565731e1464263de0bda75f2e45d97b54b60110
@@ -83,6 +83,7 @@ imports:
   - core/router/macro/interpreter/token
   - core/router/node
   - middleware/logger
+  - middleware/pprof
   - middleware/recover
   - view
 - name: github.com/kataras/pio
@@ -104,7 +105,7 @@ imports:
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
 - name: github.com/Laisky/go-utils
-  version: 75d309468da638a43d5d98ac9e505d2404e8f625
+  version: 99d5c561e95023bbbe808a93c905366b2cb36ebc
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mattn/go-colorable
@@ -167,6 +168,10 @@ imports:
   subpackages:
   - transform
   - unicode/norm
+- name: gopkg.in/alexcesaro/quotedprintable.v3
+  version: 2caba252f4dc53eaf6b553000885530023f54623
+- name: gopkg.in/gomail.v2
+  version: 81ebce5c23dfd25c6c67194b37d3dd3f338c98b1
 - name: gopkg.in/russross/blackfriday.v2
   version: cadec560ec52d93835bf2f15bd794700d3a2473b
 - name: gopkg.in/yaml.v2

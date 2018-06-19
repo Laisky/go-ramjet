@@ -24,10 +24,7 @@ func setupSettings() {
 	}
 }
 
-func main() {
-	defer fmt.Println("All done")
-	defer utils.Logger.Flush()
-	fmt.Println("start main...")
+func setupCMDArgs() {
 	pflag.Bool("debug", false, "run in debug mode")
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
@@ -36,8 +33,16 @@ func main() {
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
 	pflag.Parse()
 	viper.BindPFlags(pflag.CommandLine)
+}
 
+func main() {
+	defer fmt.Println("All done")
+	defer utils.Logger.Flush()
+	fmt.Println("start main...")
+
+	setupCMDArgs()
 	setupSettings()
+	ramjet.Email.Setup()
 
 	// Bind each task here
 	store.Start()
