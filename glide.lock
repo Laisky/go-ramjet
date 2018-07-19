@@ -1,5 +1,5 @@
-hash: 5f416aae896a1ec3b0dcd0dab8855bdee83d5bce894ca7463a0e408ebae2284c
-updated: 2018-06-19T14:54:52.614363672+08:00
+hash: 30c90eb6acb0d570aa1883503d6e99f958a7c91fcab0486f10714ada511ab033
+updated: 2018-07-19T11:27:14.825204609+08:00
 imports:
 - name: github.com/aymerick/raymond
   version: b565731e1464263de0bda75f2e45d97b54b60110
@@ -58,7 +58,7 @@ imports:
 - name: github.com/kataras/golog
   version: 03be101463868edc5a81f094fc68a5f6c1b5503a
 - name: github.com/kataras/iris
-  version: 964fba44cf4f4b2e94b2cbd54fbbf4d264795df7
+  version: eba6adbd78bb547b220f7fe7fbda331532134e87
   subpackages:
   - cache
   - cache/cfg
@@ -144,6 +144,8 @@ imports:
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/spf13/viper
   version: b5e8006cbee93ec955a89ab31e0e3ce3204f3736
+- name: github.com/yanyiwu/gojieba
+  version: 6e14c5c21cec8e7b26f319f3bcc3dddffacc703a
 - name: golang.org/x/crypto
   version: 8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9
   subpackages:
@@ -172,6 +174,13 @@ imports:
   version: 2caba252f4dc53eaf6b553000885530023f54623
 - name: gopkg.in/gomail.v2
   version: 81ebce5c23dfd25c6c67194b37d3dd3f338c98b1
+- name: gopkg.in/mgo.v2
+  version: 9856a29383ce1c59f308dd1cf0363a79b5bef6b5
+  subpackages:
+  - bson
+  - internal/json
+  - internal/sasl
+  - internal/scram
 - name: gopkg.in/russross/blackfriday.v2
   version: cadec560ec52d93835bf2f15bd794700d3a2473b
 - name: gopkg.in/yaml.v2
