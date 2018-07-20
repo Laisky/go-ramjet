@@ -19,3 +19,6 @@ import:
 - package: golang.org/x/sync
   subpackages:
   - semaphore
+- package: gopkg.in/mgo.v2
+- package: github.com/yanyiwu/gojieba
+  version: ~1.0.0
