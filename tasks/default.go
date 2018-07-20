@@ -6,4 +6,5 @@ import (
 	_ "github.com/Laisky/go-ramjet/tasks/heartbeat"
 	_ "github.com/Laisky/go-ramjet/tasks/keyword"
 	_ "github.com/Laisky/go-ramjet/tasks/logrotate/backup"
+	_ "github.com/Laisky/go-ramjet/tasks/sites"
 )
