@@ -19,7 +19,7 @@ func (e *EmailType) Setup() {
 }
 
 func (e *EmailType) Send(to, toName, subject, content string) (err error) {
-	utils.Logger.Infof("send email %v to %v", subject, to)
+	utils.Logger.Infof("send email `%v` to `%v`", subject, to)
 	err = e.sender.Send(
 		utils.Settings.GetString("email.sender"),
 		to,
