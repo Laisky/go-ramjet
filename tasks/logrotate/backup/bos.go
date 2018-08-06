@@ -92,7 +92,7 @@ func (u *bosUploader) Upload(fpath string) {
 
 	objName = u.getObjFname(fpath)
 	if u.isFileExists(objName) {
-		utils.Logger.Errorf("file %v already exists", objName)
+		utils.Logger.Warnf("file %v already exists", objName)
 		u.AddFaiFile(fpath)
 		return
 	}
@@ -105,6 +105,12 @@ func (u *bosUploader) Upload(fpath string) {
 	if err != nil {
 		utils.Logger.Errorf("upload file got error: %+v", err)
 		u.AddFaiFile(fpath)
+		return
+	}
+
+	if !u.isFileExists(objName) { // double check after uploading
+		u.AddFaiFile(fpath)
+		utils.Logger.Errorf("file not exists after upload")
 		return
 	}
 
