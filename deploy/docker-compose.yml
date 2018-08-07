@@ -9,9 +9,10 @@ services:
     ports:
       - 24087:24087
     logging:
-      driver: "json-file"
+      driver: "fluentd"
       options:
-        max-size: 10m
+        tag: ramjet.sit
+        fluentd-address: hbase1.sit.ptcloud.t.home:24225
     environment:
       - TASKS=heartbeat,es-monitor,fl-monitor,es-rollover
     volumes:
