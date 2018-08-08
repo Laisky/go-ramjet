@@ -9,7 +9,6 @@ import (
 
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
-	"github.com/Laisky/go-ramjet/tasks/store"
 )
 
 var (
@@ -106,34 +105,4 @@ func pushResultToES(metric *fluentdMonitorMetric) (err error) {
 
 	utils.Logger.Infof("success to push fluentd metric to elasticsearch for node %v", metric)
 	return nil
-}
-
-func runTask() {
-	var (
-		wg     = &sync.WaitGroup{}
-		metric = &fluentdMonitorMetric{
-			MonitorType: "fluentd",
-			Timestamp:   utils.UTCNow().Format(time.RFC3339),
-		}
-	)
-	for name, config := range settings {
-		wg.Add(1)
-		go checkFluentdHealth(wg, name, config.HealthCheckURL, metric)
-	}
-	wg.Wait()
-
-	err := pushResultToES(metric)
-	if err != nil {
-		utils.Logger.Errorf("push fluentd metric got error %+v", err)
-	}
-}
-
-func bindTask() {
-	utils.Logger.Info("bind fluentd monitor...")
-	settings = loadFluentdSettings()
-	go store.Ticker(utils.Settings.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
-}
-
-func init() {
-	store.Store("fl-monitor", bindTask)
 }
