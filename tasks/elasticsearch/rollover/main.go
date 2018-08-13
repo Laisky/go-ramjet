@@ -28,7 +28,7 @@ var (
 type IdxSetting struct {
 	Regexp        *regexp.Regexp
 	Rollover      string
-	Expires       float64
+	Expires       time.Duration
 	IdxAlias      string
 	NRepls        int
 	NShards       int
@@ -110,7 +110,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 
 		idx = &IdxSetting{
 			Regexp:        regexp.MustCompile(item["index"].(string)),
-			Expires:       float64(item["expires"].(int)),
+			Expires:       time.Duration(item["expires"].(int)) * time.Second,
 			IdxAlias:      item["index-alias"].(string),
 			IdxWriteAlias: item["index-write-alias"].(string),
 			Mapping:       Mappings[item["mapping"].(string)],

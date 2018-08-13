@@ -78,13 +78,14 @@ func RemoveIndexByName(api, index string) (err error) {
 
 // IsIdxShouldDelete check whether a index is should tobe deleted
 // dateStr like `2016.10.31`, treated as +0800
-func IsIdxShouldDelete(now time.Time, dateStr string, expires float64) (bool, error) {
+func IsIdxShouldDelete(now time.Time, dateStr string, expires time.Duration) (bool, error) {
 	layout := "2006.01.02 -0700"
 	t, err := time.Parse(layout, dateStr+" +0800")
 	if err != nil {
 		return false, errors.Wrapf(err, "parse date %v with layout %v error", dateStr, layout)
 	}
-	return now.Sub(t).Seconds() > expires, nil
+	t = t.Add(24 * time.Hour) // elasticsearch dateStr has 1 day delay
+	return now.Sub(t) > expires, nil
 }
 
 // FilterToBeDeleteIndicies return the indices that need be delete
