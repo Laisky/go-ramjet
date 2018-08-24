@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/Laisky/go-chaining"
+	utils "github.com/Laisky/go-utils"
 
 	"github.com/yanyiwu/gojieba"
 )
@@ -90,9 +91,35 @@ func FilterMinimalWordsCount(minialCount int) func(c *chaining.Chain) (interface
 	}
 }
 
+type sortItem struct {
+	k string
+	v int
+}
+
+func (i *sortItem) GetValue() int {
+	return i.v
+}
+func (i *sortItem) GetKey() interface{} {
+	return i.k
+}
+
 func FilterMostFreqWords(topN int) func(c *chaining.Chain) (interface{}, error) {
+	pairLs := utils.PairList{}
+	keyLs := []string{}
 	return func(c *chaining.Chain) (interface{}, error) {
 		wordsMap := c.GetVal().(map[string]int)
-		return GetMostFreqWords(wordsMap, topN), nil
+		for k, v := range wordsMap {
+			pairLs = append(pairLs, &sortItem{k, v})
+		}
+
+		utils.SortBiggest(pairLs)
+		for i, k := range pairLs {
+			if i >= topN {
+				break
+			}
+			keyLs = append(keyLs, k.GetKey().(string))
+		}
+
+		return keyLs, nil
 	}
 }

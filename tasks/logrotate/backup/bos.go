@@ -15,6 +15,7 @@ import (
 	"runtime/debug"
 
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
@@ -69,11 +70,11 @@ func (u *bosUploader) isFileExists(objName string) bool {
 }
 
 func (u *bosUploader) Upload(fpath string) {
-	utils.Logger.Debugf("uploading file %v ...", fpath)
+	utils.Logger.Debug("uploading file...", zap.String("fpath", fpath))
 	defer u.Done()
 
 	if utils.Settings.GetBool("dry") {
-		utils.Logger.Debugf("upload %v", fpath)
+		utils.Logger.Debug("upload %v", zap.String("fpath", fpath))
 		return
 	}
 
@@ -85,14 +86,14 @@ func (u *bosUploader) Upload(fpath string) {
 	)
 
 	if fsize, err = u.CheckIsFileReady(fpath); err != nil {
-		utils.Logger.Errorf("try to get file info error: %+v", err)
+		utils.Logger.Error("try to get file info error", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	objName = u.getObjFname(fpath)
 	if u.isFileExists(objName) {
-		utils.Logger.Warnf("file %v already exists", objName)
+		utils.Logger.Warn("file already exists", zap.String("file", objName))
 		u.AddFaiFile(fpath)
 		return
 	}
@@ -103,19 +104,19 @@ func (u *bosUploader) Upload(fpath string) {
 		err = u.cli.UploadSuperFile(u.args.Bucket, objName, fpath, "") // upload by multipart
 	}
 	if err != nil {
-		utils.Logger.Errorf("upload file got error: %+v", err)
+		utils.Logger.Error("upload file got error", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	if !u.isFileExists(objName) { // double check after uploading
 		u.AddFaiFile(fpath)
-		utils.Logger.Errorf("file not exists after upload")
+		utils.Logger.Error("file not exists after upload")
 		return
 	}
 
 	u.AddSucFile(fpath)
-	utils.Logger.Infof("success uploaded file %v: %v", fpath, r)
+	utils.Logger.Info("success uploaded file", zap.String("fpath", fpath), zap.String("result", r))
 }
 
 func (u *bosUploader) Clean() {
@@ -132,7 +133,7 @@ func (u *bosUploader) getObjFname(fpath string) string {
 }
 
 func Connect2bos(remote, accessKey, accessSecret string) (c *bos.Client, err error) {
-	utils.Logger.Debugf("connect to bos for remote %v", remote)
+	utils.Logger.Debug("connect to bos for remote", zap.String("remote", remote))
 
 	c, err = bos.NewClient(accessKey, accessSecret, remote)
 	if err != nil {

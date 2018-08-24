@@ -28,6 +28,7 @@ func setupCMDArgs() {
 	pflag.Bool("debug", false, "run in debug mode")
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
+	pflag.String("exclude", "", "exclude tasks")
 	pflag.String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
 	pflag.String("config", "/etc/go-ramjet/settings", "config file directory path")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
@@ -37,7 +38,7 @@ func setupCMDArgs() {
 
 func main() {
 	defer fmt.Println("All done")
-	defer utils.Logger.Flush()
+	defer utils.Logger.Sync()
 	fmt.Println("start main...")
 
 	setupCMDArgs()

@@ -3,6 +3,7 @@ package ramjet
 import (
 	utils "github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var (
@@ -19,7 +20,7 @@ func (e *EmailType) Setup() {
 }
 
 func (e *EmailType) Send(to, toName, subject, content string) (err error) {
-	utils.Logger.Infof("send email `%v` to `%v`", subject, to)
+	utils.Logger.Info("send email", zap.String("subject", subject), zap.String("to", to))
 	err = e.sender.Send(
 		utils.Settings.GetString("email.sender"),
 		to,

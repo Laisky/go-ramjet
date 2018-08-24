@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-utils"
@@ -15,7 +16,7 @@ import (
 func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting) {
 	sem.Acquire(ctx, 1)
 	defer sem.Release(1)
-	utils.Logger.Debugf("start to running delete expired index for %v...", st.IdxAlias)
+	utils.Logger.Debug("start to running delete expired index for alias", zap.String("alias", st.IdxAlias))
 
 	var (
 		allIdx        []string
@@ -25,40 +26,40 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 
 	allIdx, err = LoadAllIndicesNames(st.API)
 	if err != nil {
-		utils.Logger.Errorf("load indices got error %+v", err)
+		utils.Logger.Error("load indices got error", zap.Error(err))
 	}
 
 	// Delete expired indices
 	tobeDeleteIdx, err = FilterToBeDeleteIndicies(allIdx, st)
 	if err != nil {
-		utils.Logger.Errorf("try to filter delete indices got error %+v", err)
+		utils.Logger.Error("try to filter delete indices got error", zap.Error(err))
 	}
 
 	// Do not delete write-alias
 	tobeDeleteIdx, err = FilterReadyToBeDeleteIndices(GetAliasURL(st), tobeDeleteIdx)
 	if err != nil {
-		utils.Logger.Errorf("try to filter indices aliases got error %+v", err)
+		utils.Logger.Error("try to filter indices aliases got error", zap.Error(err))
 	}
 
-	utils.Logger.Infof("try to delete indices %+v", tobeDeleteIdx)
+	utils.Logger.Info("try to delete indices", zap.Strings("index", tobeDeleteIdx))
 	for _, idx := range tobeDeleteIdx {
 		err = RemoveIndexByName(st.API, idx)
 		if err != nil {
-			utils.Logger.Errorf("try to delete index %v got error %+v", idx, err)
+			utils.Logger.Error("try to delete index %v got error", zap.String("index", idx), zap.Error(err))
 		}
 	}
 }
 
 // RemoveIndexByName delete index by elasticsearch RESTful API
 func RemoveIndexByName(api, index string) (err error) {
-	utils.Logger.Infof("remove es index %v", index)
+	utils.Logger.Info("remove es index", zap.String("index", index))
 	url := api + index
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return errors.Wrap(err, "make request error")
 	}
 
-	utils.Logger.Debugf("remove index %v", index)
+	utils.Logger.Debug("remove index", zap.String("index", index))
 	if utils.Settings.GetBool("dry") {
 		return nil
 	}
@@ -72,7 +73,7 @@ func RemoveIndexByName(api, index string) (err error) {
 		return errors.Wrap(err, "remove index got error")
 	}
 
-	utils.Logger.Infof("success delete index %v", index)
+	utils.Logger.Info("success delete index", zap.String("index", index))
 	return nil
 }
 
@@ -90,7 +91,7 @@ func IsIdxShouldDelete(now time.Time, dateStr string, expires time.Duration) (bo
 
 // FilterToBeDeleteIndicies return the indices that need be delete
 func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []string, err error) {
-	utils.Logger.Debugf("start to filter tobe delete indices %+v %+v", allInd, idxSt.Regexp)
+	utils.Logger.Debug("start to filter tobe delete indices", zap.Strings("indices", allInd), zap.String("regex", idxSt.Regexp.String()))
 	var (
 		idx      string
 		subS     []string
@@ -102,7 +103,7 @@ func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []str
 			continue
 		}
 
-		utils.Logger.Debugf("check is index %v should be deleted with expires %v", idx, idxSt.Expires)
+		utils.Logger.Debug("check is index should be deleted with expires", zap.String("idx", idx), zap.Duration("expires", idxSt.Expires))
 		toDelete, err = IsIdxShouldDelete(time.Now(), subS[1], idxSt.Expires)
 		if err != nil {
 			err = errors.Wrapf(err, "check whether index %v(%v) should delete got error", idx, idxSt.Expires)
@@ -113,6 +114,6 @@ func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []str
 		}
 	}
 
-	utils.Logger.Debugf("tobe delete indices %+v", indices)
+	utils.Logger.Debug("tobe delete indices", zap.Strings("indices", indices))
 	return indices, nil
 }

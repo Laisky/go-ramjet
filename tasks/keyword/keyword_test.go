@@ -14,7 +14,7 @@ var (
 )
 
 func TestAnalyser(t *testing.T) {
-	words := analyser.Cut2Words("<p>南京市长江大桥</p>")
+	words := analyser.Cut2Words("<p>南京市长江大桥</p>", 1, 10)
 	for _, w := range words {
 		if w == "南京市" {
 			return

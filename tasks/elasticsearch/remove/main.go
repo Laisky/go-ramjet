@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
+	"go.uber.org/zap"
 
 	"github.com/Laisky/go-utils"
 	"golang.org/x/sync/semaphore"
@@ -77,7 +78,7 @@ func getURLByIndexName(index string) (url string) {
 
 // isRespInTrouble check whether response is really in trouble when status!=200
 func isRespInTrouble(errMsg string) (isErr bool) {
-	utils.Logger.Debugf("isRespInTrouble for errMsg %v", errMsg)
+	utils.Logger.Debug("isRespInTrouble", zap.String("err", errMsg))
 	isErr = true
 	if strings.Contains(errMsg, "No mapping found for [@timestamp]") {
 		isErr = false
@@ -91,13 +92,13 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	defer task.Unlock()
 
 	if err := sem.Acquire(ctx, 1); err != nil {
-		utils.Logger.Errorf("Failed to acquire semaphore: %v", err)
+		utils.Logger.Error("Failed to acquire semaphore", zap.Error(err))
 		return
 	}
 	defer sem.Release(1)
 
 	dateBefore := getDateStringSecondsAgo(task.Expire)
-	utils.Logger.Infof("removeDocumentsByTaskSetting for task %v, before %v", task.Index, dateBefore)
+	utils.Logger.Info("removeDocumentsByTaskSetting", zap.String("task", task.Index), zap.String("dateBefore", dateBefore))
 	requestBody := Query{
 		Range: &Range{
 			Range: map[string]interface{}{"@timestamp": map[string]string{
@@ -120,20 +121,20 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	// dry
 	if utils.Settings.GetBool("dry") {
 		b, _ := json.Marshal(requestData)
-		utils.Logger.Infof("request %v", string(b[:]))
+		utils.Logger.Info("request ", zap.ByteString("data", b))
 		return
 	}
 
 	if err := utils.RequestJSON("post", url, &requestData, &resp); err != nil {
 		errMsg := err.Error()
 		if isRespInTrouble(errMsg) {
-			utils.Logger.Errorf("delete documents error for task %v, url %v: %v", task.Index, url, errMsg)
+			utils.Logger.Error("delete documents error", zap.String("index", task.Index), zap.String("url", url), zap.Error(err))
 			resp = Resp{
 				Deleted: 0,
 				Total:   utils.Settings.GetInt("tasks.elasticsearch.batch"),
 			}
 		} else {
-			utils.Logger.Debugf("http.RequestJSON got some innocent error: %v", errMsg)
+			utils.Logger.Debug("http.RequestJSON got some innocent error", zap.Error(err))
 			resp = Resp{
 				Deleted: 0,
 				Total:   0,
@@ -141,7 +142,7 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 		}
 	}
 
-	utils.Logger.Infof("deleted documents for %v: %v/%v", task.Index, resp.Deleted, resp.Total)
+	utils.Logger.Info("deleted documents", zap.String("index", task.Index), zap.Int("deleted", resp.Deleted), zap.Int("total", resp.Total))
 	if resp.Total >= utils.Settings.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
 		go removeDocumentsByTaskSetting(task)
 	}
@@ -181,7 +182,7 @@ func loadDeleteTaskSettings() (taskSettings []*MonitorTaskConfig) {
 		term        = new(map[string]interface{})
 	)
 	for _, configI := range utils.Settings.Get("tasks.elasticsearch.configs").([]interface{}) {
-		utils.Logger.Debugf("load delete tasks settings: %+v", configI)
+		utils.Logger.Debug("load delete tasks settings")
 		config = configI.(map[interface{}]interface{})
 		indexConfig = &MonitorTaskConfig{
 			Index: config["index"].(string),

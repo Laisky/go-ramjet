@@ -6,10 +6,11 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 )
 
 func runTask() {
-	utils.Logger.Infof("heartbeat with %v active goroutines", runtime.NumGoroutine())
+	utils.Logger.Info("heartbeat", zap.Int("goroutine", runtime.NumGoroutine()))
 
 	// reload settings
 	utils.Settings.LoadSettings()
