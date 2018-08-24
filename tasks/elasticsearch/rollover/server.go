@@ -33,6 +33,7 @@ func bindHTTP() {
 		})
 	}
 
+	utils.Logger.Info("bind HTTP GET `/es/rollover`")
 	ramjet.Server.Get("/es/rollover", func(ctx iris.Context) {
 		jb, err := json.Marshal(details)
 		if err != nil {

@@ -13,12 +13,10 @@ services:
       options:
         tag: ramjet.sit
         fluentd-address: hbase1.sit.ptcloud.t.home:24225
-    environment:
-      - TASKS=heartbeat,es-monitor,fl-monitor,es-rollover
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings/settings.yml
-    entrypoint: ./go-ramjet --config=/etc/go-ramjet/settings --addr=0.0.0.0:24087
+    entrypoint: ./go-ramjet --config=/etc/go-ramjet/settings --addr=0.0.0.0:24087 -t=heartbeat,es-monitor,fl-monitor,es-rollover,es-password
 
 networks:
   go-ramjet:
