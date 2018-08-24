@@ -9,6 +9,7 @@ import (
 
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var (
@@ -61,7 +62,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, name, url string, metric *fluentdMon
 	)
 	resp, err = httpClient.Head(url)
 	if err != nil {
-		utils.Logger.Errorf("http get fluentd status error: %v", err)
+		utils.Logger.Error("http get fluentd status error", zap.Error(err))
 		return
 	}
 	if resp.StatusCode == 200 {
@@ -89,7 +90,7 @@ func pushResultToES(metric *fluentdMonitorMetric) (err error) {
 		return errors.Wrap(err, "parse json got error")
 	}
 
-	utils.Logger.Debugf("push fluentd metric %+v", string(jsonBytes[:]))
+	utils.Logger.Debug("push fluentd metric", zap.ByteString("metric", jsonBytes[:]))
 	if utils.Settings.GetBool("dry") {
 		return nil
 	}
@@ -103,6 +104,8 @@ func pushResultToES(metric *fluentdMonitorMetric) (err error) {
 		return err
 	}
 
-	utils.Logger.Infof("success to push fluentd metric to elasticsearch for node %v", metric)
+	utils.Logger.Info("success to push fluentd metric to elasticsearch",
+		zap.String("type", metric.MonitorType),
+		zap.String("ts", metric.Timestamp))
 	return nil
 }

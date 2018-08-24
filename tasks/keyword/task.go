@@ -5,6 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 )
 
 func runTask() {
@@ -15,7 +16,7 @@ func runTask() {
 		utils.Settings.GetString("tasks.keyword.db.keywordColName"),
 	)
 	if err != nil {
-		utils.Logger.Errorf("connect to database got error: %+v", err)
+		utils.Logger.Error("connect to database got error", zap.Error(err))
 	}
 	defer blogdb.Close()
 
@@ -46,7 +47,7 @@ func runTask() {
 			err = blogdb.UpdatePostTagsById(p.Id.Hex(), words)
 			if err != nil {
 				errCnt++
-				utils.Logger.Errorf("update post tags got error: %+v", err)
+				utils.Logger.Error("update post tags got error", zap.Error(err))
 
 				if errCnt > 3 {
 					utils.Logger.Error("too many errors during update post tags, exit...")
@@ -55,7 +56,7 @@ func runTask() {
 			}
 		}
 
-		utils.Logger.Infof("update keywords for %v: %v", p.Name, words)
+		utils.Logger.Info("update keywords", zap.String("name", p.Name))
 	}
 
 }

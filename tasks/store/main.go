@@ -3,11 +3,11 @@ package store
 
 import (
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 
 	"github.com/Laisky/go-utils"
 )
@@ -38,19 +38,17 @@ func Store(name string, f func()) {
 	})
 }
 
-func isContians(s []string, n string) bool {
-	if len(s) == 0 { // not set -t
+func isContians(tasks map[string]interface{}, n string) bool {
+	if len(tasks) == 0 { // not set -t
 		tse := os.Getenv("TASKS")
 		if len(tse) == 0 { // not set env `TASKS`
 			utils.Logger.Debug("start to run all tasks...")
 			return true
 		}
-
-		s = strings.Split(tse, ",")
 	}
 
-	for _, v := range s {
-		if v == n {
+	for k := range tasks {
+		if k == n {
 			return true
 		}
 	}
@@ -61,12 +59,13 @@ func isContians(s []string, n string) bool {
 // only run once
 func Start() {
 	once.Do(func() {
+		tasks := viper.Get("tasks").(map[string]interface{})
 		for _, t := range store.bindFuncs {
-			if t == nil || !isContians(viper.GetStringSlice("task"), t.name) {
+			if t == nil || !isContians(tasks, t.name) {
 				continue
 			}
 
-			utils.Logger.Infof("start to running %v...", t.name)
+			utils.Logger.Info("start to running...", zap.String("name", t.name))
 			t.f()
 		}
 	})
@@ -75,7 +74,7 @@ func Start() {
 var runner = func(f func()) {
 	defer func() {
 		if err := recover(); err != nil {
-			utils.Logger.Errorf("running task error for %v: %+v", utils.GetFuncName(f), err)
+			utils.Logger.Error("running task error", zap.String("func", utils.GetFuncName(f)), zap.Error(err.(error)))
 			go time.AfterFunc(30*time.Second, func() {
 				store.runChan <- f
 			})
@@ -115,6 +114,7 @@ func Ticker(interval time.Duration, f func()) {
 
 // TickerAfterRun run task before start ticker
 func TickerAfterRun(interval time.Duration, f func()) {
+	utils.Logger.Info("TickerAfterRun", zap.Duration("interval", interval))
 	PutReadyTask(f)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

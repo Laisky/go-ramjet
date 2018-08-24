@@ -11,6 +11,7 @@ import (
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type backupSetting struct {
@@ -79,9 +80,9 @@ func (u *baseUploader) CleanFiles() {
 	}
 	for _, fpath := range u.successedFiles {
 		if err := os.Remove(fpath); err != nil {
-			utils.Logger.Errorf("remove file got error: %+v", err)
+			utils.Logger.Error("remove file got error", zap.Error(err))
 		}
-		utils.Logger.Infof("remove file: %v", fpath)
+		utils.Logger.Info("remove file", zap.String("fpath", fpath))
 	}
 }
 
@@ -148,7 +149,7 @@ func IsFileReadyToUpload(regex, fname string, now time.Time) (ok bool, err error
 
 // ScanFiles return absolute file pathes that match regex
 func ScanFiles(dir, regex string) (files []string) {
-	utils.Logger.Debugf("ScanFiles for dir %v, regex %v", dir, regex)
+	utils.Logger.Debug("ScanFiles...", zap.String("dir", dir), zap.String("regex", regex))
 
 	if err := filepath.Walk(dir, func(fname string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -171,7 +172,7 @@ func ScanFiles(dir, regex string) (files []string) {
 		files = append(files, absPath)
 		return nil
 	}); err != nil {
-		utils.Logger.Errorf("scan files got error: %v", err)
+		utils.Logger.Error("scan files got error", zap.Error(err))
 	}
 
 	return
@@ -198,12 +199,12 @@ func runTask() {
 		case "bos":
 			loader = &bosUploader{}
 		default:
-			utils.Logger.Errorf("got unknown upload mode: %v", st.Mode)
+			utils.Logger.Error("got unknown upload mode", zap.String("mode", st.Mode))
 			continue
 		}
 		err = loader.New(st)
 		if err != nil {
-			utils.Logger.Errorf("construct uploader error: %+v", err)
+			utils.Logger.Error("construct uploader error", zap.Error(err))
 			continue
 		}
 

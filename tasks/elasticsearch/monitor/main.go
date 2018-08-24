@@ -13,6 +13,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 )
 
 var (
@@ -55,24 +56,24 @@ type St struct {
 }
 
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
-	utils.Logger.Debugf("load es stats for url %v", strings.Split(url, "@")[1])
+	utils.Logger.Debug("load es stats for url", zap.String("url", strings.Split(url, "@")[1]))
 	defer wg.Done()
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		utils.Logger.Errorf("try to get es stats got error for url %v: %+v", url, err)
+		utils.Logger.Error("try to get es stats got error", zap.String("url", url), zap.Error(err))
 		esStats = nil
 		return
 	}
 	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		utils.Logger.Errorf("try to read es stat body got error for url %v: %+v", url, err)
+		utils.Logger.Error("try to read es stat body got error", zap.String("url", url), zap.Error(err))
 		esStats = nil
 		return
 	}
 	err = json.Unmarshal(respBytes, esStats)
 	if err != nil {
-		utils.Logger.Errorf("try to parse es stat got error for url %v: %+v", url, err)
+		utils.Logger.Error("try to parse es stat got error", zap.String("url", url), zap.Error(err))
 		esStats = nil
 		return
 	}
@@ -125,30 +126,30 @@ type ESEvent struct {
 }
 
 func pushMetricToES(c *ClusterSt, metric interface{}) {
-	utils.Logger.Infof("push es metric to elasticsearch for node %v", c.Name)
+	utils.Logger.Info("push es metric to elasticsearch", zap.String("node", c.Name))
 	jsonBytes, err := json.Marshal(metric)
 	if err != nil {
-		utils.Logger.Errorf("try to marshal es metric got error %+v", err)
+		utils.Logger.Error("try to marshal es metric got error", zap.Error(err))
 		return
 	}
 
-	utils.Logger.Debugf("push es metric %v", string(jsonBytes[:]))
+	utils.Logger.Debug("push es metric", zap.ByteString("body", jsonBytes[:]))
 	if utils.Settings.GetBool("dry") {
 		return
 	}
 	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeaderVal, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		utils.Logger.Errorf("try to push es metric got error: %+v", err)
+		utils.Logger.Error("try to push es metric got error", zap.Error(err))
 		return
 	}
 
 	err = utils.CheckResp(resp)
 	if err != nil {
-		utils.Logger.Errorf("got error after push %+v", err)
+		utils.Logger.Error("got error after push", zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()
-	utils.Logger.Debugf("success to push es metric to elasticsearch for node %v", metric)
+	utils.Logger.Debug("success to push es metric to elasticsearch for node")
 }
 
 // BindMonitorTask start monitor tasks
@@ -174,7 +175,7 @@ func runTask() {
 
 // RunClusterMonitorTask run monitor task for each cluster
 func RunClusterMonitorTask(st *ClusterSt) {
-	utils.Logger.Infof("run cluster monitor for %v...", st.Name)
+	utils.Logger.Info("run cluster monitor", zap.String("node", st.Name))
 
 	var (
 		esStats       = make(map[string]interface{})

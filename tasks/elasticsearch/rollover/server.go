@@ -6,6 +6,7 @@ import (
 
 	"github.com/Laisky/go-ramjet"
 	"github.com/kataras/iris"
+	"go.uber.org/zap"
 
 	utils "github.com/Laisky/go-utils"
 )
@@ -35,7 +36,7 @@ func bindHTTP() {
 	ramjet.Server.Get("/es/rollover", func(ctx iris.Context) {
 		jb, err := json.Marshal(details)
 		if err != nil {
-			utils.Logger.Errorf("parse es-rollover details got error: %+v", err)
+			utils.Logger.Error("parse es-rollover details got error", zap.Error(err))
 			ctx.WriteString("parse es-rollover details got error")
 			return
 		}

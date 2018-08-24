@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"golang.org/x/sync/semaphore"
@@ -67,7 +68,7 @@ func runTask() {
 
 // LoadAllIndicesNames load all indices name by ES API
 func LoadAllIndicesNames(api string) (indices []string, err error) {
-	utils.Logger.Infof("load indices by api %v", strings.Split(api, "@")[1])
+	utils.Logger.Info("load indices by api", zap.String("api", strings.Split(api, "@")[1]))
 	var (
 		url     = api + "_cat/indices/?h=index&format=json"
 		idxList = []map[string]string{}
@@ -119,7 +120,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			NRepls:        utils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),
 			NShards:       utils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
 		}
-		utils.Logger.Debugf("load rollover setting %+v", idx)
+		utils.Logger.Debug("load rollover setting")
 		idxSettings = append(idxSettings, idx)
 	}
 
