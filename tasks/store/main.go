@@ -3,10 +3,10 @@ package store
 
 import (
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
 	"github.com/Laisky/go-utils"
@@ -32,26 +32,37 @@ var (
 
 // Store store binding func into tasksStore
 func Store(name string, f func()) {
+	utils.Logger.Info("store task", zap.String("name", name))
 	store.bindFuncs = append(store.bindFuncs, &task{
 		f:    f,
 		name: name,
 	})
 }
 
-func isContians(tasks map[string]interface{}, n string) bool {
-	if len(tasks) == 0 { // not set -t
+func isTaskEnabled(n string) bool {
+	tasks := utils.Settings.GetStringSlice("task")
+	extasks := strings.Split(utils.Settings.GetString("exclude"), ",")
+
+	if len(tasks) == 1 && tasks[0] == "" { // not set -t
 		tse := os.Getenv("TASKS")
 		if len(tse) == 0 { // not set env `TASKS`
-			utils.Logger.Debug("start to run all tasks...")
+			utils.Logger.Info("start to run all tasks...")
 			return true
 		}
 	}
 
-	for k := range tasks {
+	for _, k := range extasks {
+		if k == n {
+			return false
+		}
+	}
+
+	for _, k := range tasks {
 		if k == n {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -59,9 +70,9 @@ func isContians(tasks map[string]interface{}, n string) bool {
 // only run once
 func Start() {
 	once.Do(func() {
-		tasks := viper.Get("tasks").(map[string]interface{})
 		for _, t := range store.bindFuncs {
-			if t == nil || !isContians(tasks, t.name) {
+			if t == nil || !isTaskEnabled(t.name) {
+				utils.Logger.Info("ignore task", zap.String("task", t.name))
 				continue
 			}
 

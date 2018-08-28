@@ -28,10 +28,10 @@ func setupCMDArgs() {
 	pflag.Bool("debug", false, "run in debug mode")
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
-	pflag.String("exclude", "", "exclude tasks")
 	pflag.String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
 	pflag.String("config", "/etc/go-ramjet/settings", "config file directory path")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
+	pflag.StringSliceP("exclude", "e", []string{}, "which tasks do not want to runnning, like\n ./main -e t1,t2,heartbeat")
 	pflag.Parse()
 	viper.BindPFlags(pflag.CommandLine)
 }
