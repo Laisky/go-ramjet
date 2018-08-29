@@ -1,5 +1,5 @@
-hash: 30c90eb6acb0d570aa1883503d6e99f958a7c91fcab0486f10714ada511ab033
-updated: 2018-07-19T11:27:14.825204609+08:00
+hash: c3c91e95263197382c260aec39fb11dbfc17c24e156db54daa04b4dc978313ee
+updated: 2018-08-24T13:31:33.366855025+08:00
 imports:
 - name: github.com/aymerick/raymond
   version: b565731e1464263de0bda75f2e45d97b54b60110
@@ -19,8 +19,6 @@ imports:
   - util/log
 - name: github.com/BurntSushi/toml
   version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
-- name: github.com/cihub/seelog
-  version: d2c6e5aa9fbfdd1c624e140287063c7730654115
 - name: github.com/dgrijalva/jwt-go
   version: 06ea1031745cb8b3dab3f6a236daf2b0aa468b7e
 - name: github.com/eknkc/amber
@@ -49,6 +47,8 @@ imports:
   - json/token
 - name: github.com/iris-contrib/formBinder
   version: ad9fb86c356f971f30319c40ddbdcf72129a2791
+- name: github.com/iris-contrib/go.uuid
+  version: 36e9d2ebbde5e3f13ab2e25625fd453271d6522e
 - name: github.com/Joker/jade
   version: 8828253bfc54f2f91aaef5f32b44a244b0a98e4f
 - name: github.com/json-iterator/go
@@ -58,7 +58,7 @@ imports:
 - name: github.com/kataras/golog
   version: 03be101463868edc5a81f094fc68a5f6c1b5503a
 - name: github.com/kataras/iris
-  version: eba6adbd78bb547b220f7fe7fbda331532134e87
+  version: 2a08a0f1f7162b9e662d5ffdc28bc27376259453
   subpackages:
   - cache
   - cache/cfg
@@ -105,7 +105,7 @@ imports:
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
 - name: github.com/Laisky/go-utils
-  version: 99d5c561e95023bbbe808a93c905366b2cb36ebc
+  version: 59809d6d27544bb16d454ce6db5945ddfea9cc0a
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mattn/go-colorable
@@ -128,8 +128,6 @@ imports:
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/ryanuber/columnize
   version: abc90934186a77966e2beeac62ed966aac0561d5
-- name: github.com/satori/go.uuid
-  version: 36e9d2ebbde5e3f13ab2e25625fd453271d6522e
 - name: github.com/shurcooL/sanitized_anchor_name
   version: 86672fcb3f950f35f2e675df2240550f2a50762f
 - name: github.com/spf13/afero
@@ -141,11 +139,23 @@ imports:
 - name: github.com/spf13/jwalterweatherman
   version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
 - name: github.com/spf13/pflag
-  version: 583c0c0531f06d5278b7d917446061adc344b5cd
+  version: 9a97c102cda95a86cec2345a6f09f55a939babf5
 - name: github.com/spf13/viper
-  version: b5e8006cbee93ec955a89ab31e0e3ce3204f3736
+  version: ""
 - name: github.com/yanyiwu/gojieba
   version: 6e14c5c21cec8e7b26f319f3bcc3dddffacc703a
+- name: go.uber.org/atomic
+  version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
+- name: go.uber.org/multierr
+  version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
+- name: go.uber.org/zap
+  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
 - name: golang.org/x/crypto
   version: 8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9
   subpackages:

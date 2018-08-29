@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/viper"
+	"go.uber.org/zap"
 
 	"github.com/Laisky/go-utils"
 )
@@ -32,28 +32,37 @@ var (
 
 // Store store binding func into tasksStore
 func Store(name string, f func()) {
+	utils.Logger.Info("store task", zap.String("name", name))
 	store.bindFuncs = append(store.bindFuncs, &task{
 		f:    f,
 		name: name,
 	})
 }
 
-func isContians(s []string, n string) bool {
-	if len(s) == 0 { // not set -t
+func isTaskEnabled(n string) bool {
+	tasks := utils.Settings.GetStringSlice("task")
+	extasks := strings.Split(utils.Settings.GetString("exclude"), ",")
+
+	if len(tasks) == 1 && tasks[0] == "" { // not set -t
 		tse := os.Getenv("TASKS")
 		if len(tse) == 0 { // not set env `TASKS`
-			utils.Logger.Debug("start to run all tasks...")
-			return true
-		}
-
-		s = strings.Split(tse, ",")
-	}
-
-	for _, v := range s {
-		if v == n {
+			utils.Logger.Info("start to run all tasks...")
 			return true
 		}
 	}
+
+	for _, k := range extasks {
+		if k == n {
+			return false
+		}
+	}
+
+	for _, k := range tasks {
+		if k == n {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -62,11 +71,12 @@ func isContians(s []string, n string) bool {
 func Start() {
 	once.Do(func() {
 		for _, t := range store.bindFuncs {
-			if t == nil || !isContians(viper.GetStringSlice("task"), t.name) {
+			if t == nil || !isTaskEnabled(t.name) {
+				utils.Logger.Info("ignore task", zap.String("task", t.name))
 				continue
 			}
 
-			utils.Logger.Infof("start to running %v...", t.name)
+			utils.Logger.Info("start to running...", zap.String("name", t.name))
 			t.f()
 		}
 	})
@@ -75,7 +85,7 @@ func Start() {
 var runner = func(f func()) {
 	defer func() {
 		if err := recover(); err != nil {
-			utils.Logger.Errorf("running task error for %v: %+v", utils.GetFuncName(f), err)
+			utils.Logger.Error("running task error", zap.String("func", utils.GetFuncName(f)), zap.Error(err.(error)))
 			go time.AfterFunc(30*time.Second, func() {
 				store.runChan <- f
 			})
@@ -115,6 +125,7 @@ func Ticker(interval time.Duration, f func()) {
 
 // TickerAfterRun run task before start ticker
 func TickerAfterRun(interval time.Duration, f func()) {
+	utils.Logger.Info("TickerAfterRun", zap.Duration("interval", interval))
 	PutReadyTask(f)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

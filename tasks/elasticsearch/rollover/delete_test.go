@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
+	utils "github.com/Laisky/go-utils"
 )
 
 func TestRemoveIndexByName(t *testing.T) {
@@ -47,13 +48,13 @@ func TestFilterToBeDeleteIndicies(t *testing.T) {
 func TestIsIdxShouldDelete(t *testing.T) {
 	var (
 		dateStr     = "2018.01.02"
-		expires     = 3600.0
+		expires     = 1 * time.Hour
 		now         time.Time
 		expect, got bool
 		err         error
 	)
 	// case
-	now, _ = time.Parse("2006-01-02 15:04:05", "2018-01-02 01:00:00")
+	now, _ = time.Parse("2006-01-02 15:04:05-0700", "2018-01-03 00:01:00+0800")
 	expect = false
 	got, err = rollover.IsIdxShouldDelete(now, dateStr, expires)
 	if err != nil {
@@ -64,7 +65,7 @@ func TestIsIdxShouldDelete(t *testing.T) {
 	}
 
 	// case
-	now, _ = time.Parse("2006-01-02 15:04:05", "2018-01-02 01:00:01")
+	now, _ = time.Parse("2006-01-02 15:04:05-0700", "2018-01-05 01:00:01+0800")
 	expect = true
 	got, err = rollover.IsIdxShouldDelete(now, dateStr, expires)
 	if err != nil {
@@ -73,4 +74,8 @@ func TestIsIdxShouldDelete(t *testing.T) {
 	if got != expect {
 		t.Errorf("expect %v, got %v", expect, got)
 	}
+}
+
+func init() {
+	utils.Settings.Setup("/Users/laisky/repo/pateo/configs/go-ramjet")
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var (
@@ -25,7 +26,7 @@ func GetAliasURL(st *IdxSetting) string {
 
 // FilterReadyToBeDeleteIndices filter indices that is ready to be deleted
 func FilterReadyToBeDeleteIndices(aliasURL string, allIdx []string) (indices []string, err error) {
-	utils.Logger.Debugf("FilterReadyToBeDeleteIndices for aliasURL %v, allIdx %+v", aliasURL, allIdx)
+	utils.Logger.Debug("FilterReadyToBeDeleteIndices", zap.String("aliasURL", aliasURL), zap.Strings("allIdx", allIdx))
 	var (
 		aliases []*AliasesResp
 	)
@@ -76,10 +77,10 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 func IsIdxIsWriteAlias(idx string, aliases []*AliasesResp) (ret bool) {
 	for _, ad := range aliases {
 		if ad.Index == idx {
-			utils.Logger.Debugf("IsIdxIsWriteAlias for idx %v, aliases %v --> true", idx, ad.Index)
+			utils.Logger.Debug("IsIdxIsWriteAlias", zap.String("index", idx), zap.String("alias", ad.Index), zap.Bool("result", true))
 			return true
 		}
-		utils.Logger.Debugf("IsIdxIsWriteAlias for idx %v, aliases %v --> false", idx, ad.Index)
+		utils.Logger.Debug("IsIdxIsWriteAlias", zap.String("index", idx), zap.String("alias", ad.Index), zap.Bool("result", false))
 	}
 
 	return false

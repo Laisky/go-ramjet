@@ -12,6 +12,7 @@ import (
 
 	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type rsyncArgs struct {
@@ -32,7 +33,7 @@ func (u *rsyncUploader) New(st *backupSetting) error {
 }
 
 func (u *rsyncUploader) Upload(fpath string) {
-	utils.Logger.Debugf("uploading file %v ...", fpath)
+	utils.Logger.Debug("uploading file...", zap.String("fpath", fpath))
 	defer u.Done()
 
 	var (
@@ -41,27 +42,27 @@ func (u *rsyncUploader) Upload(fpath string) {
 	)
 
 	if fsize, err = u.CheckIsFileReady(fpath); err != nil {
-		utils.Logger.Errorf("try to get file info error: %+v", err)
+		utils.Logger.Error("try to get file info error", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
-	utils.Logger.Debugf("try to upload file via rsync for %vB", fsize)
+	utils.Logger.Debug("try to upload file via rsync", zap.Int64("fsize", fsize))
 	out, err := RunSysCMD(GenRsyncCMD(fpath, u.args.Remote))
 	if err != nil {
-		utils.Logger.Errorf("run upload cmd error: %+v", err)
+		utils.Logger.Error("run upload cmd error", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	if matched, err := regexp.MatchString("", out); !matched || err != nil {
-		utils.Logger.Errorf("upload got stderr: %+v", err)
+		utils.Logger.Error("upload got stderr", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	u.AddSucFile(fpath)
-	utils.Logger.Infof("success uploaded file: %v", fpath)
+	utils.Logger.Info("success uploaded file", zap.String("fpath", fpath))
 }
 
 func (u *rsyncUploader) Clean() {
@@ -74,7 +75,7 @@ func GenRsyncCMD(fpath, remote string) (cmd []string) {
 
 func RunSysCMD(cmd []string) (output string, err error) {
 	if utils.Settings.GetBool("debug") {
-		utils.Logger.Debugf("run cmd: %v", cmd)
+		utils.Logger.Debug("run cmd", zap.Strings("cmd", cmd))
 		return "", nil
 	}
 
@@ -89,6 +90,6 @@ func RunSysCMD(cmd []string) (output string, err error) {
 		return "", errors.Wrapf(err, "run cmd `%v` got error", cmd)
 	}
 
-	utils.Logger.Debugf("success run cmd %v: got %v", cmd, string(out[:]))
+	utils.Logger.Debug("success run", zap.Strings("cmd", cmd), zap.String("out", string(out[:])))
 	return string(out[:]), nil
 }

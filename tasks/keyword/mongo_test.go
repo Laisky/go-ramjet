@@ -25,11 +25,10 @@ func TestMongo(t *testing.T) {
 }
 
 func TestIter(t *testing.T) {
-	err := b.UpdatePostById("4db1fed00000000000000000", []string{"1", "2"})
+	err := b.UpdatePostTagsById("4db1fed00000000000000000", []string{"1", "2"})
 	if err != nil {
 		t.Errorf("got error: %+v", err)
 	}
-	t.Error()
 }
 
 func init() {
