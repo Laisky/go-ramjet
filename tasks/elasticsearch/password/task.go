@@ -61,6 +61,7 @@ func runTask() {
 			utils.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
 		}
+		defer resp.Body.Close()
 		if err = utils.CheckResp(resp); err != nil {
 			utils.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
