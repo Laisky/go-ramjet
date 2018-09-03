@@ -1,5 +1,5 @@
-hash: c3c91e95263197382c260aec39fb11dbfc17c24e156db54daa04b4dc978313ee
-updated: 2018-08-24T13:31:33.366855025+08:00
+hash: 29c0bf86ac151ebcafaa91ac4b709db2dee1fd495226de85ed551c1e277f28ac
+updated: 2018-09-03T16:35:58.740394522+08:00
 imports:
 - name: github.com/aymerick/raymond
   version: b565731e1464263de0bda75f2e45d97b54b60110
@@ -105,7 +105,7 @@ imports:
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
 - name: github.com/Laisky/go-utils
-  version: 59809d6d27544bb16d454ce6db5945ddfea9cc0a
+  version: d43b2eb6e0f7e422061388e27be0be18835ec006
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mattn/go-colorable
@@ -141,7 +141,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9a97c102cda95a86cec2345a6f09f55a939babf5
 - name: github.com/spf13/viper
-  version: ""
+  version: 907c19d40d9a6c9bb55f040ff4ae45271a4754b9
 - name: github.com/yanyiwu/gojieba
   version: 6e14c5c21cec8e7b26f319f3bcc3dddffacc703a
 - name: go.uber.org/atomic

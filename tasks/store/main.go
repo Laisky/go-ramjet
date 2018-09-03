@@ -39,26 +39,31 @@ func Store(name string, f func()) {
 	})
 }
 
-func isTaskEnabled(n string) bool {
+func isTaskEnabled(task string) bool {
+	utils.Logger.Debug("isTaskEnabled", zap.String("task", task))
 	tasks := utils.Settings.GetStringSlice("task")
 	extasks := strings.Split(utils.Settings.GetString("exclude"), ",")
 
-	if len(tasks) == 1 && tasks[0] == "" { // not set -t
+	if len(tasks) == 0 { // not set -t
 		tse := os.Getenv("TASKS")
 		if len(tse) == 0 { // not set env `TASKS`
 			utils.Logger.Info("start to run all tasks...")
 			return true
+		} else {
+			tasks = strings.Split(tse, ",")
+			utils.Logger.Debug("get tasks list from env", zap.Strings("tasks", tasks))
 		}
 	}
 
 	for _, k := range extasks {
-		if k == n {
+		if k == task {
+			utils.Logger.Debug("ignored by `exclude`")
 			return false
 		}
 	}
 
 	for _, k := range tasks {
-		if k == n {
+		if k == task {
 			return true
 		}
 	}
@@ -113,6 +118,7 @@ func PutReadyTask(f func()) {
 
 // Ticker put task into run queue
 func Ticker(interval time.Duration, f func()) {
+	utils.Logger.Info("Ticker", zap.Duration("interval", interval))
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
