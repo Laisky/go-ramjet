@@ -28,6 +28,10 @@ func BindPasswordTask() {
 		step = 5
 	}
 
+	if step == 0 { // no config
+		step = 1
+	}
+
 	go store.TickerAfterRun(step*time.Second, runTask)
 	bindHTTP()
 }
