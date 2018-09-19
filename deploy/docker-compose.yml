@@ -2,7 +2,7 @@ version: "2"
 services:
 
   go-ramjet:
-    image: ppcelery/go-ramjet:pateo
+    image: ppcelery/go-ramjet:latest
     restart: "on-failure"
     networks:
       - go-ramjet
