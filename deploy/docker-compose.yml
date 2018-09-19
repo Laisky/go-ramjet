@@ -9,10 +9,9 @@ services:
     ports:
       - 24087:24087
     logging:
-      driver: "fluentd"
+      driver: "json-file"
       options:
-        tag: ramjet.sit
-        fluentd-address: hbase1.sit.ptcloud.t.home:24225
+        max-size: 100m
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings/settings.yml
