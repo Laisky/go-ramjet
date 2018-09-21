@@ -22,11 +22,11 @@ func runTask() {
 func bindTask() {
 	utils.Logger.Info("bind heartbeat task...")
 	if utils.Settings.GetBool("debug") {
-		utils.Settings.Set("tasks.heartbeat.interval", 1)
+		utils.Settings.Set("tasks.heartbeat.interval", 10)
 	}
 
 	bindHTTP()
-	go store.Ticker(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
+	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
 }
 
 func init() {

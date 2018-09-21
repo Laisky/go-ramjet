@@ -42,6 +42,7 @@ type User struct {
 }
 
 func runTask() {
+	utils.Logger.Info("run elasticsearch.password")
 	newpasswd := GeneratePasswdByDate(utils.UTCNow(), utils.Settings.GetString("tasks.elasticsearch-v2.password.secret"))
 	for _, api := range utils.Settings.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
 		utils.Logger.Debug("try to change password", zap.String("api", maskAPI(api)))
@@ -60,7 +61,7 @@ func runTask() {
 			continue
 		}
 
-		resp, err := httpClient.Post(api, utils.HTTPJSONHeaderVal, bytes.NewBuffer(jb))
+		resp, err := httpClient.Post(api, utils.HTTPJSONHeaderVal, bytes.NewReader(jb))
 		if err != nil {
 			utils.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
