@@ -15,7 +15,7 @@ services:
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings/settings.yml
-    entrypoint: ./go-ramjet --config=/etc/go-ramjet/settings --addr=0.0.0.0:24087 -t=heartbeat,es-monitor,fl-monitor,es-rollover,es-password
+    entrypoint: ./go-ramjet --config=/etc/go-ramjet/settings --addr=0.0.0.0:24087 -t=heartbeat,es-monitor,fl-monitor,es-rollover,es-password,es-aliases
 
 networks:
   go-ramjet:
