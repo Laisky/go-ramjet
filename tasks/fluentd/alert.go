@@ -2,8 +2,11 @@ package fluentd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 )
 
 func checkForAlert(m *fluentdMonitorMetric) (err error) {
@@ -13,14 +16,19 @@ func checkForAlert(m *fluentdMonitorMetric) (err error) {
 		m.IsPROD1Alive &&
 		m.IsPROD2Alive) {
 		msg := fmt.Sprintf(`
-some fluentd server got error:
+[%v]some fluentd server got error:
 
 sit: %v
 uat: %v
 perf: %v
 prod-1: %v
 prod-2: %v`,
-			m.IsSITAlive, m.IsUATAlive, m.IsPERFAlive, m.IsPROD1Alive, m.IsPROD2Alive)
+			time.Now(), m.IsSITAlive, m.IsUATAlive, m.IsPERFAlive, m.IsPROD1Alive, m.IsPROD2Alive)
+
+		if utils.Settings.GetBool("dry") {
+			utils.Logger.Info("send fluentd alert email", zap.String("msg", msg))
+			return nil
+		}
 
 		err = ramjet.Email.Send(
 			"ppcelery@gmail.com",

@@ -60,7 +60,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, name, url string, metric *fluentdMon
 		err     error
 		isAlive = false
 	)
-	resp, err = httpClient.Head(url)
+	resp, err = httpClient.Get(url)
 	if err != nil {
 		utils.Logger.Error("http get fluentd status error", zap.Error(err))
 		return
