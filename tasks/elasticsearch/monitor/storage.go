@@ -13,8 +13,9 @@ import (
 var (
 	jsonPrefix    = "es.index."
 	jsonSuffix    = ".size.mb"
-	idxNameLayout = "^(\\w+-\\w+-\\w+)(-.*)?$"
-	idxNameReg    *regexp.Regexp
+	idxNameLayout = `^(\w+-\w+-\w+)(-.*)?$|` + // `perf-connector-logs-2018.10.21-000143`
+		`^(zipkin_\w+)(:span-.*)?$` // `zipkin_perf:span-2018-08-24`
+	idxNameReg *regexp.Regexp
 )
 
 type IndexStor struct {
@@ -88,8 +89,13 @@ func combineIdxNames(c *chaining.Chain) (interface{}, error) {
 		ok      bool
 	)
 	for key, v := range c.GetMapStringInterface() {
-		if matched = idxNameReg.FindStringSubmatch(key); len(matched) > 1 {
-			idxName = matched[1]
+		if matched = idxNameReg.FindStringSubmatch(key); len(matched) > 4 {
+			if matched[1] != "" {
+				idxName = matched[1]
+			} else {
+				idxName = matched[3]
+			}
+
 			if sv, ok = newMap[idxName]; !ok { // combine
 				newMap[idxName] = v
 			} else {
