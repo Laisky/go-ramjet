@@ -11,11 +11,6 @@ import (
 
 func runTask() {
 	utils.Logger.Info("heartbeat", zap.Int("goroutine", runtime.NumGoroutine()))
-
-	// reload settings
-	if err := utils.Settings.LoadSettings(); err != nil {
-		utils.Logger.Error("reload settings got error", zap.Error(err))
-	}
 }
 
 // bindTask bind heartbeat task
