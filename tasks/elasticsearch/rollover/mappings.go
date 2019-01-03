@@ -9,8 +9,19 @@ var Mappings = map[string]template.HTML{
 				"_source": {
 					"enabled": true
 				},
+				"_all": {
+					"enabled": false
+				},
 				"properties": {
+					"msgid": {
+						"type": "long"
+					},
 					"level": {
+						"type": "keyword",
+						"index": "not_analyzed",
+						"doc_values": true
+					},
+					"tag": {
 						"type": "keyword",
 						"index": "not_analyzed",
 						"doc_values": true
@@ -45,8 +56,19 @@ var Mappings = map[string]template.HTML{
 				"_source": {
 					"enabled": true
 				},
+				"_all": {
+					"enabled": false
+				},
 				"properties": {
+					"msgid": {
+						"type": "long"
+					},
 					"level": {
+						"type": "keyword",
+						"index": "not_analyzed",
+						"doc_values": true
+					},
+					"tag": {
 						"type": "keyword",
 						"index": "not_analyzed",
 						"doc_values": true
@@ -73,8 +95,19 @@ var Mappings = map[string]template.HTML{
 					"_source": {
 						"enabled": true
 					},
+					"_all": {
+						"enabled": false
+					},
 					"properties": {
+						"msgid": {
+							"type": "long"
+						},
 						"level": {
+							"type": "keyword",
+							"index": "not_analyzed",
+							"doc_values": true
+						},
+						"tag": {
 							"type": "keyword",
 							"index": "not_analyzed",
 							"doc_values": true
@@ -109,8 +142,19 @@ var Mappings = map[string]template.HTML{
 				"_source": {
 					"enabled": true
 				},
+				"_all": {
+					"enabled": false
+				},
 				"properties": {
+					"msgid": {
+						"type": "long"
+					},
 					"level": {
+						"type": "keyword",
+						"index": "not_analyzed",
+						"doc_values": true
+					},
+					"tag": {
 						"type": "keyword",
 						"index": "not_analyzed",
 						"doc_values": true
@@ -150,8 +194,19 @@ var Mappings = map[string]template.HTML{
 					"_source": {
 						"enabled": true
 					},
+					"_all": {
+						"enabled": false
+					},
 					"properties": {
+						"msgid": {
+							"type": "long"
+						},
 						"level": {
+							"type": "keyword",
+							"index": "not_analyzed",
+							"doc_values": true
+						},
+						"tag": {
 							"type": "keyword",
 							"index": "not_analyzed",
 							"doc_values": true
@@ -180,14 +235,68 @@ var Mappings = map[string]template.HTML{
 					}
 				}
 			}`),
+	"emqtt": template.HTML(`
+			"mappings": {
+				"logs": {
+					"_source": {
+						"enabled": true
+					},
+					"_all": {
+						"enabled": false
+					},
+					"properties": {
+						"msgid": {
+							"type": "long"
+						},
+						"datasource": {
+							"type": "keyword",
+							"index": "not_analyzed",
+							"doc_values": true
+						},
+						"tag": {
+							"type": "keyword",
+							"index": "not_analyzed",
+							"doc_values": true
+						},
+						"hostname": {
+							"type": "keyword",
+							"index": "not_analyzed",
+							"doc_values": true
+						},
+						"priority": {
+							"type": "short"
+						},
+						"facility": {
+							"type": "short"
+						},
+						"severity": {
+							"type": "short"
+						},
+						"content": {
+							"type": "string"
+						}
+					}
+				}
+			}`),
 	"spark": template.HTML(`
 	    "mappings": {
 			"logs": {
 				"_source": {
 					"enabled": true
 				},
+				"_all": {
+					"enabled": false
+				},
 				"properties": {
+					"msgid": {
+						"type": "long"
+					},
 					"level": {
+						"type": "keyword",
+						"index": "not_analyzed",
+						"doc_values": true
+					},
+					"tag": {
 						"type": "keyword",
 						"index": "not_analyzed",
 						"doc_values": true

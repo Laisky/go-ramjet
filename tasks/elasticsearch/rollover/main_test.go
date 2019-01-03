@@ -3,8 +3,8 @@ package rollover_test
 import (
 	"testing"
 
-	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
+	"github.com/Laisky/go-utils"
 )
 
 var (

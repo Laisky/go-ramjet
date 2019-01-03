@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	"github.com/Laisky/go-ramjet"
+	utils "github.com/Laisky/go-utils"
 	"github.com/kataras/iris"
 	"go.uber.org/zap"
-
-	utils "github.com/Laisky/go-utils"
 )
 
 type idxDetail struct {

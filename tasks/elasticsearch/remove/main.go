@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
-	"go.uber.org/zap"
-
 	"github.com/Laisky/go-utils"
+	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 

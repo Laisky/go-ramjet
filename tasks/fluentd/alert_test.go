@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet"
-
 	utils "github.com/Laisky/go-utils"
 )
 

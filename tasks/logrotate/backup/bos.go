@@ -15,11 +15,10 @@ import (
 	"runtime/debug"
 
 	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
-
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var (
@@ -59,14 +58,16 @@ func (u *bosUploader) New(st *backupSetting) error {
 	return nil
 }
 
-func (u *bosUploader) isFileExists(objName string) bool {
-	_, err := u.cli.GetObjectMeta(u.args.Bucket, objName)
+// loadRemoteFileLength load file length from bos
+// return 0 if file not exists
+func (u *bosUploader) loadRemoteFileLength(objName string) int64 {
+	meta, err := u.cli.GetObjectMeta(u.args.Bucket, objName)
 	if realErr, ok := err.(*bce.BceServiceError); ok {
 		if realErr.StatusCode == 404 {
-			return false
+			return 0
 		}
 	}
-	return true
+	return meta.ContentLength
 }
 
 func (u *bosUploader) Upload(fpath string) {
@@ -79,26 +80,31 @@ func (u *bosUploader) Upload(fpath string) {
 	}
 
 	var (
-		objName string
-		fsize   int64
-		err     error
-		r       = ""
+		objName       string
+		localFileSize int64
+		err           error
+		r             = ""
 	)
 
-	if fsize, err = u.CheckIsFileReady(fpath); err != nil {
+	if localFileSize, err = u.CheckIsFileReady(fpath); err != nil {
 		utils.Logger.Error("try to get file info error", zap.Error(err))
 		u.AddFaiFile(fpath)
 		return
 	}
 
 	objName = u.getObjFname(fpath)
-	if u.isFileExists(objName) {
-		utils.Logger.Warn("file already exists", zap.String("file", objName))
-		u.AddFaiFile(fpath)
-		return
+	if remoteFileLen := u.loadRemoteFileLength(objName); remoteFileLen != 0 {
+		if localFileSize < remoteFileLen {
+			utils.Logger.Warn("will discard local file since of remote already exists", zap.String("file", objName))
+			// remove local file if local file is smaller than remote
+			// TODO: download remote file and merge into local size, then upload the new file
+			u.AddSucFile(fpath)
+			return
+		}
+		utils.Logger.Info("will replace remote by local file", zap.String("file", objName))
 	}
 
-	if fsize < 1024*1024*1024 {
+	if localFileSize < 1024*1024*1024 {
 		r, err = u.cli.PutObjectFromFile(u.args.Bucket, objName, fpath, nil) // upload single file
 	} else { // file size must greater than 5 MB
 		err = u.cli.UploadSuperFile(u.args.Bucket, objName, fpath, "") // upload by multipart
@@ -109,7 +115,7 @@ func (u *bosUploader) Upload(fpath string) {
 		return
 	}
 
-	if !u.isFileExists(objName) { // double check after uploading
+	if u.loadRemoteFileLength(objName) == 0 { // double check after uploading
 		u.AddFaiFile(fpath)
 		utils.Logger.Error("file not exists after upload")
 		return

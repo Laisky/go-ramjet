@@ -10,13 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
-
 	"github.com/Laisky/go-ramjet/tasks/store"
-	"golang.org/x/sync/semaphore"
-
+	"github.com/Laisky/go-utils"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 var (
@@ -36,6 +34,7 @@ type IdxSetting struct {
 	IdxWriteAlias string
 	Mapping       template.HTML
 	API           string
+	IsSkipCreate  bool
 }
 
 // BindRolloverIndices bind the task to rollover indices
@@ -62,7 +61,9 @@ func runTask() {
 
 	for _, st = range taskSts {
 		go RunDeleteTask(ctx, sem, st)
-		go RunRolloverTask(ctx, sem, st)
+		if !st.IsSkipCreate {
+			go RunRolloverTask(ctx, sem, st)
+		}
 	}
 }
 
@@ -119,6 +120,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			Rollover:      item["rollover"].(string),
 			NRepls:        utils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),
 			NShards:       utils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
+			IsSkipCreate:  utils.FallBack(func() interface{} { return item["skip-create"].(bool) }, false).(bool),
 		}
 		utils.Logger.Debug("load rollover setting")
 		idxSettings = append(idxSettings, idx)

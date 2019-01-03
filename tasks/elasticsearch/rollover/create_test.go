@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
+	"github.com/Laisky/go-utils"
 )
 
 func TestGetIdxRolloverReqBodyByIdxAlias(t *testing.T) {

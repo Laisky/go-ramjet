@@ -7,10 +7,9 @@ import (
 	"net/http"
 
 	"github.com/Laisky/go-utils"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
-
-	"github.com/pkg/errors"
 )
 
 var (
@@ -21,12 +20,7 @@ func RunRolloverTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSettin
 	sem.Acquire(ctx, 1)
 	defer sem.Release(1)
 
-	var (
-		err error
-	)
-
-	err = RolloverNewIndex(st.API, st)
-	if err != nil {
+	if err := RolloverNewIndex(st.API, st); err != nil {
 		utils.Logger.Error("rollover index got error", zap.String("index", st.IdxAlias), zap.Error(err))
 	}
 }
@@ -43,6 +37,7 @@ func init() {
 		},
 		"settings": {
 			"index": {
+				"query.default_field": "message",
 				"number_of_shards": {{.NShards}},
 				"number_of_replicas": {{.NRepls}},
 				"store.type": "niofs"
@@ -97,7 +92,7 @@ func RolloverNewIndex(api string, st *IdxSetting) (err error) {
 
 	err = utils.CheckResp(resp)
 	if err != nil {
-		return errors.Wrap(err, "try to request rollover api got error")
+		return errors.Wrap(err, "rollover api return incorrect")
 	}
 
 	utils.Logger.Info("suceess rollover index", zap.String("index", st.IdxAlias))

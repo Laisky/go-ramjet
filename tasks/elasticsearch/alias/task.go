@@ -45,7 +45,8 @@ func runTask() {
 			utils.Logger.Error("failed to refresh aliases",
 				zap.String("api", maskAPI(api)),
 				zap.String("index", index),
-				zap.String("alias", alias))
+				zap.String("alias", alias),
+				zap.Error(err))
 		} else {
 			utils.Logger.Info("success refresh alias",
 				zap.String("index", index),
@@ -84,7 +85,8 @@ func createAlias(api, index, alias string) error {
 		utils.Logger.Error("try to request api got error",
 			zap.String("api", maskAPI(api)),
 			zap.String("index", index),
-			zap.String("alias", alias))
+			zap.String("alias", alias),
+			zap.Error(err))
 		return err
 	}
 	defer resp.Body.Close()
@@ -93,7 +95,8 @@ func createAlias(api, index, alias string) error {
 		utils.Logger.Error("request api got error",
 			zap.String("api", maskAPI(api)),
 			zap.String("index", index),
-			zap.String("alias", alias))
+			zap.String("alias", alias),
+			zap.Error(err))
 		return err
 	}
 

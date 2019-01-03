@@ -18,12 +18,16 @@ func checkForAlert(m *fluentdMonitorMetric) (err error) {
 		msg := fmt.Sprintf(`
 [%v]some fluentd server got error:
 
+testd from: %v
+
 sit: %v
 uat: %v
 perf: %v
 prod-1: %v
 prod-2: %v`,
-			time.Now(), m.IsSITAlive, m.IsUATAlive, m.IsPERFAlive, m.IsPROD1Alive, m.IsPROD2Alive)
+			time.Now().Format(time.RFC3339),
+			utils.Settings.GetString("host"),
+			m.IsSITAlive, m.IsUATAlive, m.IsPERFAlive, m.IsPROD1Alive, m.IsPROD2Alive)
 
 		if utils.Settings.GetBool("dry") {
 			utils.Logger.Info("send fluentd alert email", zap.String("msg", msg))
