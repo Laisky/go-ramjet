@@ -6,8 +6,8 @@ import (
 
 	"github.com/baidubce/bce-sdk-go/services/bos"
 
-	"github.com/Laisky/go-utils"
 	"github.com/Laisky/go-ramjet/tasks/logrotate/backup"
+	"github.com/Laisky/go-utils"
 )
 
 var (

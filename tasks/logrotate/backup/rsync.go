@@ -11,8 +11,8 @@ import (
 	"regexp"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 type rsyncArgs struct {

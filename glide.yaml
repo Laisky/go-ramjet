@@ -1,9 +1,9 @@
 package: github.com/Laisky/go-ramjet
 import:
 - package: github.com/Laisky/go-chaining
-  version: ~0.1.0
+  version: ~0.1
 - package: github.com/Laisky/go-utils
-  version: ~0.7.8
+  version: ~0.8
 - package: github.com/baidubce/bce-sdk-go
   subpackages:
   - bce
@@ -20,7 +20,7 @@ import:
   version: ~1.0.3
 - package: github.com/yanyiwu/gojieba
   version: ~1.0.0
-- package: go.uber.org/zap
+- package: github.com/Laisky/zap
   version: ~1.9.1
 - package: golang.org/x/sync
   subpackages:

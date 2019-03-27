@@ -7,9 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 )
 
 type tasksStore struct {

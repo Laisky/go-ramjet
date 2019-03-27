@@ -83,6 +83,6 @@ tasks:
       - index: prod-geely-logs
         expire: 2592000
       # monitor
-      - index: monitor-stats
+      - index: monitor-stats-write
         expire: 2592000
 

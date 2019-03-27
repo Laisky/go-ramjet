@@ -8,8 +8,8 @@ import (
 	ramjet "github.com/Laisky/go-ramjet"
 	"github.com/Laisky/go-ramjet/tasks/store"
 	utils "github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 func LoadCertExpiresAt(addr string) (t time.Time, err error) {

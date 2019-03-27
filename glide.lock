@@ -1,5 +1,5 @@
-hash: c07c2c7b43c317efb56c44facca195a765249731a682687c2125edef0062feab
-updated: 2019-01-03T11:41:05.435272+08:00
+hash: fd43fd21d77c89cec83a522b2eb52188ed3cd8c9fcb18a1423e03e89a3e393a5
+updated: 2019-02-25T16:05:59.831381+08:00
 imports:
 - name: github.com/aymerick/raymond
   version: b565731e1464263de0bda75f2e45d97b54b60110
@@ -30,9 +30,8 @@ imports:
 - name: github.com/dgrijalva/jwt-go
   version: 06ea1031745cb8b3dab3f6a236daf2b0aa468b7e
 - name: github.com/docker/docker
-  version: 626022d0f64d3fab10c80523c03613a8b3869cfb
+  version: dd945557876ba90c1b2c2eb6af17daf1dcdc83e3
   subpackages:
-  - api/types
   - api/types/blkiodev
   - api/types/container
   - api/types/filters
@@ -44,7 +43,6 @@ imports:
   - api/types/swarm/runtime
   - api/types/versions
   - errdefs
-  - opts
   - pkg/fileutils
   - pkg/homedir
   - pkg/idtools
@@ -60,10 +58,6 @@ imports:
   - nat
 - name: github.com/docker/go-units
   version: 2fb04c6466a548a03cb009c5569ee1ab1e35398e
-- name: github.com/docker/libnetwork
-  version: 7d806f082ca55cd6c957ee8697d4e436a22a14fd
-  subpackages:
-  - ipamutils
 - name: github.com/eknkc/amber
   version: cdade1c073850f4ffc70a829e31235ea6892853b
   subpackages:
@@ -75,13 +69,13 @@ imports:
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/fsouza/go-dockerclient
-  version: f3bdb27a96799b10006a884ef2fed89284466276
+  version: a8d735713a2b2b9101595fdf53fdb03cb51681b6
   subpackages:
   - internal/archive
   - internal/jsonmessage
   - internal/term
 - name: github.com/gogo/protobuf
-  version: 8e4a75f11384d0fb2188d872d456407e41f33fc0
+  version: ba06b47c162d49f2af050fb4c75bcbc86a159d5c
   subpackages:
   - proto
 - name: github.com/hashicorp/hcl
@@ -96,6 +90,8 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/ijc/Gotty
+  version: a8b993ba6abdb0e0c12b0125c603323a71c7790c
 - name: github.com/iris-contrib/blackfriday
   version: 48b3da6a6f3865c7eb1eba96d74cf0a16f63faca
 - name: github.com/iris-contrib/formBinder
@@ -105,13 +101,13 @@ imports:
 - name: github.com/Joker/jade
   version: 8828253bfc54f2f91aaef5f32b44a244b0a98e4f
 - name: github.com/json-iterator/go
-  version: 7cceb6c2e37f896dc3817e031f83dce25b180a8b
+  version: 1624edc4454b8682399def8740d46db5e4362ba4
 - name: github.com/juju/errors
   version: c7d06af17c68cd34c835053720b21f6549d9b0ee
 - name: github.com/kataras/golog
   version: 03be101463868edc5a81f094fc68a5f6c1b5503a
 - name: github.com/kataras/iris
-  version: 91118c6b07fc9ad466df139f0846267aed1734b1
+  version: a0f29bd2f48611021667c199cff55c1e3ab46f81
   subpackages:
   - cache
   - cache/cfg
@@ -153,36 +149,42 @@ imports:
 - name: github.com/Laisky/go-chaining
   version: 43dcdc5a21be9b79f2b7ee0d8ba67ed8a7158cda
 - name: github.com/Laisky/go-utils
-  version: 3750ef47a60e24bc27bac0c264dbb78f493f2a57
+  version: 617977a79ab834488894b2db3228bb98a2263b8e
+- name: github.com/Laisky/zap
+  version: 5c0138de209f397ae93319e22ec1923008cc5767
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/microcosm-cc/bluemonday
   version: 995366fdf961d03629cd17361bddd32745718e2c
 - name: github.com/Microsoft/go-winio
-  version: 97e4973ce50b2ff5f09635a57e2b88a037aae829
+  version: 1a8911d1ed007260465c3bfbbc785ac6915a0bb8
 - name: github.com/mitchellh/mapstructure
   version: bb74f1db0675b241733089d5a1faa5dd8b0ef57b
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
   version: 58118c1ea9161250907268a484af4dd6ed314280
-- name: github.com/Nvveen/Gotty
-  version: cd527374f1e5bff4938207604a14f2e38a9cf512
 - name: github.com/opencontainers/go-digest
-  version: c9281466c8b2f606084ac71339773efd177436e7
+  version: 4eb64ca734023ea9a10c70ff11dc0e3f69d38482
 - name: github.com/opencontainers/image-spec
-  version: e74bb5aed1c876be723e181895359d8dca9b56a6
+  version: befc3cba3ffdf76e2f72f52a248a20a2727cc4c9
   subpackages:
   - specs-go
   - specs-go/v1
 - name: github.com/opencontainers/runc
-  version: bbb17efcb4c0ab986407812a31ba333a7450064c
+  version: 5b5130ad76db44675e0e7f0229e8a19b1c231187
   subpackages:
   - libcontainer/user
 - name: github.com/pelletier/go-toml
   version: c01d1270ff3e442a8a57cddc1c92dc1138598194
 - name: github.com/pkg/errors
-  version: 645ef00459ed84a119197bfb8d8205042c6df63d
+  version: ba968bfe8b2f7e042a574c888954fccecfa385b4
 - name: github.com/ryanuber/columnize
   version: abc90934186a77966e2beeac62ed966aac0561d5
 - name: github.com/Shopify/goreferrer
@@ -190,7 +192,7 @@ imports:
 - name: github.com/shurcooL/sanitized_anchor_name
   version: 86672fcb3f950f35f2e675df2240550f2a50762f
 - name: github.com/sirupsen/logrus
-  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
+  version: 7d8d63893b994a654b3bc8d16ffd7fb6b9f884a4
 - name: github.com/spf13/afero
   version: 787d034dfe70e44075ccc060d346146ef53270ad
   subpackages:
@@ -209,14 +211,6 @@ imports:
   version: 1ea20fb1cbb1cc08cbd0d913a96dead89aa18289
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
-- name: go.uber.org/zap
-  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
-  subpackages:
-  - buffer
-  - internal/bufferpool
-  - internal/color
-  - internal/exit
-  - zapcore
 - name: golang.org/x/crypto
   version: 8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9
   subpackages:
@@ -263,3 +257,11 @@ testImports:
   subpackages:
   - tasks/elasticsearch/rollover
   - tasks/store
+- name: go.uber.org/zap
+  version: ff33455a0e382e8a81d14dd7c922020b6b5e7982
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 

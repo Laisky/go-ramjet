@@ -2,10 +2,10 @@ package rollover_test
 
 import (
 	"bytes"
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"strings"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"github.com/Laisky/go-utils"
 )
 

@@ -7,8 +7,8 @@ import (
 	_ "github.com/Laisky/go-ramjet/tasks"
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/spf13/pflag"
-	"go.uber.org/zap"
 )
 
 // setupSettings setup arguments restored in viper

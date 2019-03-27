@@ -1,6 +1,8 @@
 package monitor
 
-import "sync"
+import (
+	"sync"
+)
 
 // OperatorsMetric is the operations metric that happened on each node
 type OperatorsMetric struct {

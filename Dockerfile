@@ -1,4 +1,4 @@
-FROM golang:1.11.4-alpine3.8 AS gobin
+FROM golang:1.12.1-alpine3.9 AS gobin
 
 # http proxy
 ENV HTTP_PROXY=http://172.16.4.26:17777
@@ -16,7 +16,7 @@ WORKDIR /go/src/github.com/Laisky/go-ramjet
 RUN go build --ldflags '-extldflags "-static"' entrypoints/main.go
 
 # copy executable file and certs to a pure container
-FROM alpine:3.8
+FROM alpine:3.9
 COPY --from=gobin /go/src/github.com/Laisky/go-ramjet/main go-ramjet
 COPY --from=gobin /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobin /go/src/github.com/Laisky/go-ramjet/vendor/github.com/yanyiwu/gojieba /go/src/github.com/Laisky/go-ramjet/vendor/github.com/yanyiwu/gojieba

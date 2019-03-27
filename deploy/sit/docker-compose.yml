@@ -2,7 +2,7 @@ version: "2"
 services:
 
   go-ramjet-backup:
-    image: registry:5000/go-ramjet:paas-253
+    image: registry:5000/go-ramjet:paas-310
     restart: "on-failure"
     network_mode: host
     dns:

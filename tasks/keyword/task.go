@@ -1,11 +1,13 @@
 package keyword
 
 import (
+	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
+	"github.com/Laisky/zap"
 )
 
 func runTask() {
@@ -59,6 +61,8 @@ func runTask() {
 		utils.Logger.Info("update keywords", zap.String("name", p.Name))
 	}
 
+	runtime.GC() // bos taken too much memory
+	debug.FreeOSMemory()
 }
 
 func bindTask() {

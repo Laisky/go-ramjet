@@ -1,10 +1,9 @@
 package rollover_test
 
 import (
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"regexp"
 	"testing"
-
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 )
 
 func TestGetAliasURL(t *testing.T) {
@@ -54,20 +53,20 @@ func TestIsIdxIsWriteAlias(t *testing.T) {
 	var (
 		idx      = "sit-cp-logs-2018.04.01-0000002"
 		aliases1 = []*rollover.AliasesResp{
-			&rollover.AliasesResp{
+			{
 				Index: "sit-cp-logs-2018.04.01-0000002",
 			},
 		}
 		aliases2 = []*rollover.AliasesResp{
-			&rollover.AliasesResp{
+			{
 				Index: "sit-cp-logs-2018.04.01-0000001",
 			},
 		}
 		aliases3 = []*rollover.AliasesResp{
-			&rollover.AliasesResp{
+			{
 				Index: "sit-cp-logs-2018.04.01-0000001",
 			},
-			&rollover.AliasesResp{
+			{
 				Index: "sit-cp-logs-2018.04.01-0000002",
 			},
 		}

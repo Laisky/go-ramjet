@@ -13,7 +13,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
+	"github.com/Laisky/zap"
 )
 
 var (
@@ -46,13 +46,19 @@ func (c *ClusterSt) GetIdxStatAPI() string {
 
 // GetPushMetricAPI return the API to push metric data
 func (c *ClusterSt) GetPushMetricAPI() string {
-	return c.Push + "monitor-stats/stats/"
+	return c.Push + "monitor-stats-write/stats/"
+}
+
+type AlertSt struct {
+	Receivers  map[string]string
+	Conditions map[string]interface{}
 }
 
 // St is monitor task settings
 type St struct {
 	Sts      []*ClusterSt
 	Interval int
+	*AlertSt
 }
 
 func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
@@ -85,6 +91,7 @@ type NodeMetric struct {
 	NodeName    string `json:"node_name"`
 	MonitorType string `json:"monitor_type"`
 	Timestamp   string `json:"@timestamp"`
+	Message     string `json:"message"`
 	*OSMetric
 	*OperatorsMetric
 	*FSMetric
@@ -133,7 +140,9 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 		return
 	}
 
-	utils.Logger.Debug("push es metric", zap.ByteString("body", jsonBytes[:]))
+	utils.Logger.Debug("push es metric",
+		zap.String("api", c.GetPushMetricAPI()),
+		zap.ByteString("body", jsonBytes[:]))
 	if utils.Settings.GetBool("dry") {
 		return
 	}
@@ -169,12 +178,12 @@ func BindMonitorTask() {
 func runTask() {
 	st := LoadSettings()
 	for _, cst := range st.Sts {
-		go RunClusterMonitorTask(cst)
+		go RunClusterMonitorTask(cst, st.AlertSt)
 	}
 }
 
 // RunClusterMonitorTask run monitor task for each cluster
-func RunClusterMonitorTask(st *ClusterSt) {
+func RunClusterMonitorTask(st *ClusterSt, alert *AlertSt) {
 	utils.Logger.Info("run cluster monitor", zap.String("node", st.Name))
 
 	var (
@@ -196,6 +205,7 @@ func RunClusterMonitorTask(st *ClusterSt) {
 	// extract metric to compare without push
 	metrics := extractStatsToMetricForEachNode(st.Name, esStats)
 	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); isNotFirstRun {
+		monitorNodeMetrics(alert, metrics)
 		for _, metric := range metrics {
 			go pushMetricToES(st, metric)
 		}
@@ -205,6 +215,7 @@ func RunClusterMonitorTask(st *ClusterSt) {
 	// extract metric to compare without push
 	indexMetric := extractStatsToMetricForEachIndex(esIndexStats)
 	indexMetric["cluster_name"] = st.Name
+	indexMetric["message"] = ""
 	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); isNotFirstRun {
 		go pushMetricToES(st, indexMetric)
 	}
@@ -242,6 +253,10 @@ func ParseMonitorSettings(item map[interface{}]interface{}) (monitorSt *St) {
 	)
 	monitorSt = &St{
 		Sts: []*ClusterSt{},
+		AlertSt: &AlertSt{
+			Receivers:  map[string]string{},
+			Conditions: map[string]interface{}{},
+		},
 	}
 	monitorSt.Interval = item["interval"].(int)
 	for _, itemI = range item["urls"].([]interface{}) {
@@ -252,6 +267,14 @@ func ParseMonitorSettings(item map[interface{}]interface{}) (monitorSt *St) {
 			Push: cluStI["push"].(string),
 			Name: name,
 		})
+	}
+
+	for namei, addri := range item["alert"].(map[interface{}]interface{})["receivers"].(map[interface{}]interface{}) {
+		monitorSt.Receivers[namei.(string)] = addri.(string)
+	}
+
+	for namei, val := range item["alert"].(map[interface{}]interface{})["conditions"].(map[interface{}]interface{}) {
+		monitorSt.Conditions[namei.(string)] = val
 	}
 
 	return

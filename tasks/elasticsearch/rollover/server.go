@@ -6,8 +6,8 @@ import (
 
 	"github.com/Laisky/go-ramjet"
 	utils "github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/kataras/iris"
-	"go.uber.org/zap"
 )
 
 type idxDetail struct {

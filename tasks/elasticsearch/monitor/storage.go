@@ -7,7 +7,7 @@ import (
 
 	chaining "github.com/Laisky/go-chaining"
 	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
+	"github.com/Laisky/zap"
 )
 
 var (
@@ -41,7 +41,9 @@ func extractStatsToMetricForEachIndex(indexsStat []map[string]string) (metric ma
 		indexName = stat["index"]
 		indexSize, err = strconv.ParseInt(stat["store.size"], 10, 64)
 		if err != nil {
-			utils.Logger.Error("parse es storage int got error", zap.String("index", indexName), zap.Int64("indexSize", indexSize))
+			utils.Logger.Error("parse es storage int got error",
+				zap.String("index", indexName),
+				zap.String("indexSize", stat["store.size"]))
 			indexSize = 0
 		}
 

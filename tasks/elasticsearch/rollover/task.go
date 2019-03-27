@@ -12,8 +12,8 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -122,7 +122,9 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			NShards:       utils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
 			IsSkipCreate:  utils.FallBack(func() interface{} { return item["skip-create"].(bool) }, false).(bool),
 		}
-		utils.Logger.Debug("load rollover setting")
+		utils.Logger.Debug("load rollover setting",
+			zap.String("action", action),
+			zap.String("index", idx.IdxAlias))
 		idxSettings = append(idxSettings, idx)
 	}
 

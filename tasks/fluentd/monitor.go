@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 var (
 	httpClient = &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	settings map[string]*config
 )
 
 type fluentdMonitorMetric struct {
@@ -29,38 +28,38 @@ type fluentdMonitorMetric struct {
 	IsPROD2Alive bool   `json:"fluentd.aggregator.health.prod-2"`
 }
 
-type config struct {
-	IP             string
-	HealthCheckURL string
+type FluentdMonitorCfg struct {
+	Name, IP, HealthCheckURL string
 }
 
-func loadFluentdSettings() (settings map[string]*config) {
-	var (
-		configM map[string]interface{}
-	)
-	settings = map[string]*config{}
+func loadFluentdSettings() []*FluentdMonitorCfg {
+	settings := []*FluentdMonitorCfg{}
 	if utils.Settings.GetBool("debug") {
-		utils.Settings.Set("tasks.fluentd.interval", 1)
+		utils.Settings.Set("tasks.fluentd.interval", 3)
 	}
+
+	var configM map[string]interface{}
 	for name, configI := range utils.Settings.Get("tasks.fluentd.configs").(map[string]interface{}) {
 		configM = configI.(map[string]interface{})
-		settings[name] = &config{
+		settings = append(settings, &FluentdMonitorCfg{
+			Name:           name,
 			IP:             configM["ip"].(string),
 			HealthCheckURL: configM["health-check"].(string),
-		}
+		})
 	}
 
-	return
+	return settings
 }
 
-func checkFluentdHealth(wg *sync.WaitGroup, name, url string, metric *fluentdMonitorMetric) {
+func checkFluentdHealth(wg *sync.WaitGroup, cfg *FluentdMonitorCfg, metric *sync.Map) {
+	utils.Logger.Debug("checkFluentdHealth", zap.String("name", cfg.Name))
 	defer wg.Done()
 	var (
 		resp    *http.Response
 		err     error
 		isAlive = false
 	)
-	resp, err = httpClient.Get(url)
+	resp, err = httpClient.Get(cfg.HealthCheckURL)
 	if err != nil {
 		utils.Logger.Error("http get fluentd status error", zap.Error(err))
 		return
@@ -69,18 +68,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, name, url string, metric *fluentdMon
 		isAlive = true
 	}
 
-	switch name {
-	case "sit":
-		metric.IsSITAlive = isAlive
-	case "uat":
-		metric.IsUATAlive = isAlive
-	case "perf":
-		metric.IsPERFAlive = isAlive
-	case "prod-1":
-		metric.IsPROD1Alive = isAlive
-	case "prod-2":
-		metric.IsPROD2Alive = isAlive
-	}
+	metric.Store(cfg, isAlive)
 }
 
 func pushResultToES(metric *fluentdMonitorMetric) (err error) {

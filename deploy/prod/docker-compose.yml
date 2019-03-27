@@ -2,7 +2,7 @@ version: "2"
 services:
 
   go-ramjet:
-    image: registry:5000/go-ramjet:paas-253
+    image: registry:5000/go-ramjet:paas-310
     restart: "on-failure"
     network_mode: host
     dns:
@@ -16,4 +16,8 @@ services:
     volumes:
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings.yml
-    entrypoint: ./go-ramjet --config=/etc/go-ramjet --addr=0.0.0.0:24087 -t=heartbeat,es-monitor,fl-monitor,es-rollover,es-password,es-aliases,zipkin-monitor
+    entrypoint:
+      ./go-ramjet
+        --config=/etc/go-ramjet
+        --addr=0.0.0.0:24087
+        -t=heartbeat,es-monitor,fl-monitor,es-rollover,es-password,es-aliases,monitor

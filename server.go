@@ -1,7 +1,6 @@
 package ramjet
 
 import (
-	utils "github.com/Laisky/go-utils"
 	"github.com/kataras/iris"
 	"github.com/kataras/iris/middleware/pprof"
 )
@@ -15,9 +14,7 @@ func RunServer(addr string) {
 		ctx.Write([]byte("Hello, World"))
 	})
 
-	if utils.Settings.GetBool("pprof") {
-		Server.Any("/debug/pprof/{action:path}", pprof.New())
-	}
+	Server.Any("/admin/pprof/{action:path}", pprof.New())
 
 	Server.Run(iris.Addr(addr))
 }

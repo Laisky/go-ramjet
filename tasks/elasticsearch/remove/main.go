@@ -12,7 +12,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
+	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 )
 

@@ -3,6 +3,7 @@ package rollover
 import "html/template"
 
 var Mappings = map[string]template.HTML{
+	"empty": `"mappings": {}`,
 	"geely": template.HTML(`
 		"mappings": {
 			"logs": {

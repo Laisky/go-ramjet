@@ -15,10 +15,10 @@ import (
 	"runtime/debug"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 var (

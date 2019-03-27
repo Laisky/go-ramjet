@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/Laisky/go-ramjet/tasks/zipkin/dependencies"
 	docker "github.com/fsouza/go-dockerclient"
 )
 
@@ -60,4 +61,33 @@ func TestDocker(t *testing.T) {
 	t.Logf("got logs: %v", stdout.String())
 	t.Logf("got errs: %v", stderr.String())
 	t.Error("done")
+}
+
+func TestSplitImage2RepoAndTag(t *testing.T) {
+	image := "registry:5000/zipkin-dependencies:2.0.4"
+	repo, tag := dependencies.SplitImage2RepoAndTag(image)
+	if repo != "registry:5000/zipkin-dependencies" {
+		t.Fatalf("expect %v, got %v\n", "registry:5000/zipkin-dependencies", repo)
+	}
+	if tag != "2.0.4" {
+		t.Fatalf("expect %v, got %v\n", "2.0.4", tag)
+	}
+
+	image = "helloworld"
+	repo, tag = dependencies.SplitImage2RepoAndTag(image)
+	if repo != "helloworld" {
+		t.Fatalf("expect %v, got %v\n", "helloworld", repo)
+	}
+	if tag != "latest" {
+		t.Fatalf("expect %v, got %v\n", "latest", tag)
+	}
+
+	image = "helloworld:1.0"
+	repo, tag = dependencies.SplitImage2RepoAndTag(image)
+	if repo != "helloworld" {
+		t.Fatalf("expect %v, got %v\n", "helloworld", repo)
+	}
+	if tag != "1.0" {
+		t.Fatalf("expect %v, got %v\n", "1.0", tag)
+	}
 }

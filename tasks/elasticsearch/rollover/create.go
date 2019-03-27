@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -87,7 +87,7 @@ func RolloverNewIndex(api string, st *IdxSetting) (err error) {
 
 	resp, err = httpClient.Do(req)
 	if err != nil {
-		err = errors.Wrap(err, "try to request rollover api got error")
+		return errors.Wrap(err, "try to request rollover api got error")
 	}
 
 	err = utils.CheckResp(resp)

@@ -1,11 +1,11 @@
 package rollover_test
 
 import (
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"regexp"
 	"testing"
 	"time"
 
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	utils "github.com/Laisky/go-utils"
 )
 

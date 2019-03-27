@@ -3,9 +3,9 @@ package dependencies
 import (
 	"time"
 
-	"github.com/Laisky/go-utils"
-	"go.uber.org/zap"
 	"github.com/Laisky/go-ramjet/tasks/store"
+	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 )
 
 func runTask() {

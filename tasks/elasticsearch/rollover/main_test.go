@@ -1,9 +1,9 @@
 package rollover_test
 
 import (
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"github.com/Laisky/go-utils"
 )
 

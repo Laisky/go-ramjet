@@ -2,12 +2,13 @@ package dependencies
 
 import (
 	"bytes"
+	"strings"
 	"time"
 
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
 
 var DEFAULT_ENV = []string{
@@ -26,6 +27,32 @@ func generateContainerEnv(host, index, username, passwd string) []string {
 	}
 }
 
+func SplitImage2RepoAndTag(image string) (repo, tag string) {
+	images := strings.Split(image, "/")
+	name := ""
+	if len(images) == 1 {
+		name = image
+	} else {
+		repo = images[0]
+		name = images[1]
+	}
+
+	if !strings.Contains(name, ":") {
+		tag = "latest"
+	} else {
+		tag = strings.Split(name, ":")[1]
+		name = strings.Split(name, ":")[0]
+	}
+
+	if repo != "" {
+		repo += "/" + name
+	} else {
+		repo = name
+	}
+
+	return
+}
+
 // runDockerContainer running container by image name, and return stdout & stderr
 func runDockerContainer(endpoint, image string, env []string) (stdout, stderr []byte, err error) {
 	utils.Logger.Info("runDockerContainer", zap.String("image", image), zap.String("endpoint", endpoint))
@@ -40,6 +67,17 @@ func runDockerContainer(endpoint, image string, env []string) (stdout, stderr []
 		AutoRemove:  false,
 	}
 
+	utils.Logger.Debug("pulling image", zap.String("image", image))
+	repo, tag := SplitImage2RepoAndTag(image)
+	err = client.PullImage(docker.PullImageOptions{
+		Repository: repo,
+		Tag:        tag,
+	}, docker.AuthConfiguration{})
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "try to pull image got error")
+	}
+
+	utils.Logger.Debug("creating container", zap.String("image", image))
 	container, err := client.CreateContainer(docker.CreateContainerOptions{
 		Config: &docker.Config{
 			Image: image,
@@ -51,6 +89,7 @@ func runDockerContainer(endpoint, image string, env []string) (stdout, stderr []
 		return nil, nil, errors.Wrap(err, "try to create docker container got error")
 	}
 
+	utils.Logger.Debug("running container", zap.String("image", image))
 	startTs := time.Now()
 	err = client.StartContainer(container.ID, hostcfg)
 	if err != nil {
