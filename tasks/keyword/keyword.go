@@ -42,7 +42,7 @@ func FilterDiscardWords(c *chaining.Chain) (interface{}, error) {
 	)
 	ret := []string{}
 	for _, w = range c.GetSliceString() {
-		if discardWordsRegex.MatchString(w) {
+		if w == "" || discardWordsRegex.MatchString(w) {
 			goto PASS
 		}
 
