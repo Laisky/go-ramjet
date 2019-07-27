@@ -45,6 +45,7 @@ func runTask() {
 				break
 			}
 		}
+		// fmt.Println("end >>", words, len(words))
 		if !utils.Settings.GetBool("dry") {
 			err = blogdb.UpdatePostTagsById(p.Id.Hex(), words)
 			if err != nil {
