@@ -1,4 +1,4 @@
-FROM golang:1.12.7-alpine3.10 AS gobuild
+FROM golang:1.13.4-alpine3.10 AS gobuild
 
 # http proxy
 # ENV HTTP_PROXY=http://127.0.0.1:10874

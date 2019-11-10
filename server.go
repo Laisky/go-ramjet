@@ -1,8 +1,8 @@
 package ramjet
 
 import (
-	"github.com/kataras/iris"
-	"github.com/kataras/iris/middleware/pprof"
+	"github.com/kataras/iris/v12"
+	"github.com/kataras/iris/v12/middleware/pprof"
 )
 
 var (

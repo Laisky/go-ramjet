@@ -5,7 +5,7 @@ import (
 
 	ramjet "github.com/Laisky/go-ramjet"
 	utils "github.com/Laisky/go-utils"
-	"github.com/kataras/iris"
+	"github.com/kataras/iris/v12"
 )
 
 func bindHTTP() {
