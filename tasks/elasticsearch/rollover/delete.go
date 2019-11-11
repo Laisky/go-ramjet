@@ -14,14 +14,16 @@ import (
 
 // RunDeleteTask start to delete indices
 func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting) {
-	sem.Acquire(ctx, 1)
+	var err error
+	if err = sem.Acquire(ctx, 1); err != nil {
+		utils.Logger.Error("acquire task semaphore", zap.Error(err))
+	}
 	defer sem.Release(1)
 	utils.Logger.Debug("start to running delete expired index for alias", zap.String("alias", st.IdxAlias))
 
 	var (
 		allIdx        []string
 		tobeDeleteIdx []string
-		err           error
 	)
 
 	allIdx, err = LoadAllIndicesNames(st.API)

@@ -32,7 +32,7 @@ func BindPasswordTask() {
 		step = 1
 	}
 
-	go store.TickerAfterRun(step*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(step*time.Second, runTask)
 	bindHTTP()
 }
 

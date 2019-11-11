@@ -37,5 +37,5 @@ func runTask() {
 
 func BindTask() {
 	utils.Logger.Info("bind zipkin-dependencies task...")
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.zipkin.dependencies.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.zipkin.dependencies.interval")*time.Second, runTask)
 }

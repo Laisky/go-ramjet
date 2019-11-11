@@ -1,4 +1,4 @@
-package ramjet
+package alert
 
 import (
 	utils "github.com/Laisky/go-utils"

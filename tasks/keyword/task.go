@@ -1,8 +1,6 @@
 package keyword
 
 import (
-	"runtime"
-	"runtime/debug"
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
@@ -14,11 +12,14 @@ func runTask() {
 	blogdb, err := NewBlogDB(
 		utils.Settings.GetString("tasks.keyword.db.addr"),
 		utils.Settings.GetString("tasks.keyword.db.dbName"),
+		utils.Settings.GetString("tasks.keyword.db.user"),
+		utils.Settings.GetString("tasks.keyword.db.passwd"),
 		utils.Settings.GetString("tasks.keyword.db.postColName"),
 		utils.Settings.GetString("tasks.keyword.db.keywordColName"),
 	)
 	if err != nil {
 		utils.Logger.Error("connect to database got error", zap.Error(err))
+		return
 	}
 	defer blogdb.Close()
 
@@ -45,7 +46,6 @@ func runTask() {
 				break
 			}
 		}
-		// fmt.Println("end >>", words, len(words))
 		if !utils.Settings.GetBool("dry") {
 			err = blogdb.UpdatePostTagsById(p.Id.Hex(), words)
 			if err != nil {
@@ -62,15 +62,14 @@ func runTask() {
 		utils.Logger.Info("update keywords", zap.String("name", p.Name))
 	}
 
-	runtime.GC() // bos taken too much memory
-	debug.FreeOSMemory()
+	utils.TriggerGC()
 }
 
 func bindTask() {
 	utils.Logger.Info("bind keyword task...")
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.keyword.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.keyword.interval")*time.Second, runTask)
 }
 
 func init() {
-	store.Store("keyword", bindTask)
+	store.TaskStore.Store("keyword", bindTask)
 }

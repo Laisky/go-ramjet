@@ -11,8 +11,6 @@ package backup
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
@@ -127,10 +125,7 @@ func (u *bosUploader) Upload(fpath string) {
 
 func (u *bosUploader) Clean() {
 	u.CleanFiles()
-	go func() {
-		runtime.GC() // bos taken too much memory
-		debug.FreeOSMemory()
-	}()
+	utils.TriggerGC() // bos taken too much memory
 }
 
 func (u *bosUploader) getObjFname(fpath string) string {

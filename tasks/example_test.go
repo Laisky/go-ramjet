@@ -13,9 +13,9 @@ func runTask() {
 
 // bindTask setup tasks
 func bindTask() {
-	go store.Ticker(10*time.Second, runTask)
+	go store.TaskStore.Ticker(10*time.Second, runTask)
 }
 
 func Example() {
-	store.Store("es", bindTask)
+	store.TaskStore.Store("es", bindTask)
 }

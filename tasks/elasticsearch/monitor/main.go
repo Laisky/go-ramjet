@@ -172,7 +172,7 @@ func BindMonitorTask() {
 		interval = 3
 	}
 
-	go store.TickerAfterRun(time.Duration(interval)*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(time.Duration(interval)*time.Second, runTask)
 }
 
 func runTask() {
@@ -205,7 +205,7 @@ func RunClusterMonitorTask(st *ClusterSt, alert *AlertSt) {
 	// extract metric to compare without push
 	metrics := extractStatsToMetricForEachNode(st.Name, esStats)
 	if _, isNotFirstRun = isIndicesFirstRun.Load(st.Name); isNotFirstRun {
-		monitorNodeMetrics(alert, metrics)
+		go monitorNodeMetrics(st, alert, metrics) // check if need to throw alert
 		for _, metric := range metrics {
 			go pushMetricToES(st, metric)
 		}

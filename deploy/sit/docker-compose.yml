@@ -2,7 +2,7 @@ version: "2"
 services:
 
   go-ramjet-backup:
-    image: registry:5000/go-ramjet:paas-310
+    image: registry:5000/go-ramjet:71cd381
     restart: "on-failure"
     network_mode: host
     dns:
@@ -19,4 +19,8 @@ services:
       - /opt/configs/go-ramjet/settings.yml:/etc/go-ramjet/settings.yml
       - /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups
       - /var/run/docker.sock:/var/run/docker.sock
-    entrypoint: ./go-ramjet --config=/etc/go-ramjet --addr=0.0.0.0:24087 -t=heartbeat,backup,zipkin-dep
+    entrypoint:
+      ./go-ramjet
+        --config=/etc/go-ramjet
+        --addr=0.0.0.0:24087
+        -t=heartbeat,backup,zipkin-dep

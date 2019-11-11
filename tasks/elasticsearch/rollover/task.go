@@ -46,7 +46,7 @@ func BindRolloverIndices() {
 	}
 
 	bindHTTP()
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
 }
 
 func runTask() {

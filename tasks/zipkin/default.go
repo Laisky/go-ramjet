@@ -6,5 +6,5 @@ import (
 )
 
 func init() {
-	store.Store("zipkin-dep", dependencies.BindTask)
+	store.TaskStore.Store("zipkin-dep", dependencies.BindTask)
 }

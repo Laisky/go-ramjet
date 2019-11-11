@@ -1,12 +1,8 @@
-FROM golang:1.12.7-alpine3.10 AS gobuild
-
-# http proxy
-# ENV HTTP_PROXY=http://127.0.0.1:10874
-# ENV HTTPS_PROXY=http://127.0.0.1:10874
+FROM golang:1.13.3-alpine3.10 AS gobuild
 
 # run dependencies
 RUN apk update && apk upgrade && \
-    apk add --no-cache gcc git build-base ca-certificates curl && \
+    apk add --no-cache gcc build-base git ca-certificates && \
     update-ca-certificates
 
 ENV GO111MODULE=on
@@ -17,7 +13,6 @@ COPY go.sum .
 RUN go mod download
 
 # static build
-RUN go mod vendor
 ADD . .
 RUN go build -a --ldflags '-extldflags "-static"' entrypoints/main.go
 

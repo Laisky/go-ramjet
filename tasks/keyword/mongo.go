@@ -1,9 +1,17 @@
 package keyword
 
 import (
+	"time"
+
+	utils "github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
+)
+
+const (
+	defaultTimeout = 30 * time.Second
 )
 
 var (
@@ -21,8 +29,8 @@ type DB struct {
 	db *mgo.Database
 }
 
-func (d *DB) Dial(addr string) error {
-	s, err := mgo.Dial(addr)
+func (d *DB) Dial(dialInfo *mgo.DialInfo) error {
+	s, err := mgo.DialWithInfo(dialInfo)
 	if err != nil {
 		return errors.Wrap(err, "can not connect to db")
 	}
@@ -40,9 +48,25 @@ type Blog struct {
 	posts, keywords *mgo.Collection
 }
 
-func NewBlogDB(addr, dbName, postColName, keywordColName string) (b *Blog, err error) {
+func NewBlogDB(addr, dbName, user, pwd, postColName, keywordColName string) (b *Blog, err error) {
+	utils.Logger.Info("connect to db",
+		zap.String("addr", addr),
+		zap.String("dbName", dbName),
+		zap.String("postColName", postColName),
+		zap.String("keywordColName", keywordColName),
+	)
 	b = &Blog{}
-	err = b.Dial(addr)
+
+	dialInfo := &mgo.DialInfo{
+		Addrs:     []string{addr},
+		Direct:    true,
+		Timeout:   defaultTimeout,
+		Database:  dbName,
+		Username:  user,
+		Password:  pwd,
+		PoolLimit: 1000,
+	}
+	err = b.Dial(dialInfo)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	ramjet "github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-ramjet/alert"
+
 	"github.com/Laisky/go-ramjet/tasks/store"
 	utils "github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
@@ -30,7 +31,7 @@ func checkIsTimeTooCloseToAlert(now, expiresAt time.Time, d time.Duration) (isAl
 
 func sendAlertEmail(addr, receiver string, expiresAt time.Time) (err error) {
 	utils.Logger.Info("sendAlertEmail", zap.String("addr", addr), zap.String("receiver", receiver))
-	err = ramjet.Email.Send(
+	err = alert.Manager.Send(
 		receiver,
 		"Laisky Cai",
 		"SSL Cert Nearly expires",
@@ -67,9 +68,9 @@ func runTask() {
 func bindTask() {
 	utils.Logger.Info("bind ssl-monitor task...")
 
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
 }
 
 func init() {
-	store.Store("ssl-monitor", bindTask)
+	store.TaskStore.Store("ssl-monitor", bindTask)
 }

@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-ramjet/alert"
+
+	"github.com/Laisky/go-ramjet/tasks/store"
+
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 )
 
-func monitorNodeMetrics(alertSt *AlertSt, metrics []*NodeMetric) {
+// monitorNodeMetrics check node metrics to determine whether to throw alert
+func monitorNodeMetrics(st *ClusterSt, alertSt *AlertSt, metrics []*NodeMetric) {
 	utils.Logger.Debug("monitorNodeMetrics")
 	// monitor fs storage
 	title := "[Ramjet]ES Storage Alert"
@@ -17,11 +21,10 @@ func monitorNodeMetrics(alertSt *AlertSt, metrics []*NodeMetric) {
 	isNeedAlert := false
 
 	for _, m := range metrics {
-		fmt.Println(m.FSMetric.UsageRate)
-		fmt.Println("> ", alertSt.Conditions["fs_storage_rate"].(float64))
 		if m.FSMetric.UsageRate > alertSt.Conditions["fs_storage_rate"].(float64) {
 			isNeedAlert = true
 
+			store.TaskStore.Trigger(NodeStorageAlertEvt, map[string]interface{}{"node": m, "cluster": st}, nil, nil)
 			cnt += fmt.Sprintf("%v's storage is at: %v\n", m.NodeName, m.FSMetric.UsageRate)
 		}
 	}
@@ -31,7 +34,7 @@ func monitorNodeMetrics(alertSt *AlertSt, metrics []*NodeMetric) {
 	}
 
 	for name, addr := range alertSt.Receivers {
-		if err := ramjet.Email.Send(
+		if err := alert.Manager.Send(
 			addr,
 			name,
 			title,

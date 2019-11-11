@@ -50,6 +50,6 @@ func TestDiscardFmt(t *testing.T) {
 }
 
 func init() {
-	utils.SetupLogger("debug")
+	_ = utils.Logger.ChangeLevel("debug")
 	analyser = keyword.NewAnalyser()
 }

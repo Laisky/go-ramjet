@@ -313,4 +313,34 @@ var Mappings = map[string]template.HTML{
 				}
 			}
 		}`),
+	"wuling": template.HTML(`
+	    "mappings": {
+			"logs": {
+				"_source": {
+					"enabled": true
+				},
+				"_all": {
+					"enabled": false
+				},
+				"properties": {
+					"msgid": {
+						"type": "long"
+					},
+					"tag": {
+						"type": "keyword",
+						"index": "not_analyzed",
+						"doc_values": true
+					},
+					"vin": {
+						"type": "keyword"
+					},
+					"rowkey": {
+						"type": "keyword"
+					},
+					"location": {
+						"type": "geo_point"
+					}
+				}
+			}
+		}`),
 }

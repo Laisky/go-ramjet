@@ -5,7 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-ramjet/alert"
+
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 )
@@ -34,7 +35,7 @@ func checkForAlert(m *sync.Map) (err error) {
 	}
 
 	if cnt != "" {
-		err = ramjet.Email.Send(
+		err = alert.Manager.Send(
 			"ppcelery@gmail.com",
 			"Laisky Cai",
 			"[pateo]fluentd got problem",

@@ -3,11 +3,13 @@ package rollover
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet"
 	utils "github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
-	"github.com/kataras/iris"
 )
 
 type idxDetail struct {
@@ -33,13 +35,13 @@ func bindHTTP() {
 	}
 
 	utils.Logger.Info("bind HTTP GET `/es/rollover`")
-	ramjet.Server.Get("/es/rollover", func(ctx iris.Context) {
+	ramjet.Server.GET("/es/rollover", func(ctx *gin.Context) {
 		jb, err := json.Marshal(details)
 		if err != nil {
 			utils.Logger.Error("parse es-rollover details got error", zap.Error(err))
-			ctx.WriteString("parse es-rollover details got error")
+			ctx.String(http.StatusOK, "parse es-rollover details got error")
 			return
 		}
-		ctx.Write(jb)
+		ctx.Data(http.StatusOK, utils.HTTPJSONHeaderVal, jb)
 	})
 }

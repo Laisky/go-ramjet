@@ -11,9 +11,9 @@ import (
 
 // bindTask Bind tasks for Elasticsearch
 func init() {
-	store.Store("es-monitor", monitor.BindMonitorTask)
-	store.Store("es-remove", remove.BindRemoveCPLogs)
-	store.Store("es-rollover", rollover.BindRolloverIndices)
-	store.Store("es-password", password.BindPasswordTask)
-	store.Store("es-aliases", alias.BindAliasesTask)
+	store.TaskStore.Store("es-monitor", monitor.BindMonitorTask)
+	store.TaskStore.Store("es-remove", remove.BindRemoveCPLogs)
+	store.TaskStore.Store("es-rollover", rollover.BindRolloverIndices)
+	store.TaskStore.Store("es-password", password.BindPasswordTask)
+	store.TaskStore.Store("es-aliases", alias.BindAliasesTask)
 }

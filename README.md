@@ -4,6 +4,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/Laisky/go-ramjet)](https://goreportcard.com/report/github.com/Laisky/go-ramjet)
 [![GoDoc](https://godoc.org/github.com/Laisky/go-ramjet?status.svg)](https://godoc.org/github.com/Laisky/go-ramjet)
 
+Event-driven & Time-scheduler framwork.
+
 
 ## Dockerlize
 

@@ -28,7 +28,7 @@ func BindAliasesTask() {
 		step = 5
 	}
 
-	go store.TickerAfterRun(step*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(step*time.Second, runTask)
 }
 
 func runTask() {

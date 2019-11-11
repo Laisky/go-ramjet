@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 
 func bindTask() {
 	fmt.Println("bind task")
-	go store.Ticker(1*time.Second, taskRunner)
+	go store.TaskStore.Ticker(1*time.Second, taskRunner)
 }
 
 func taskRunner() {
@@ -18,11 +19,8 @@ func taskRunner() {
 
 func Example() {
 	// bind task binder
-	store.Store("demo", bindTask)
+	store.TaskStore.Store("demo", bindTask)
 
 	// start task binder
-	store.Start()
-
-	// run task
-	store.Run()
+	go store.TaskStore.Start(context.Background())
 }

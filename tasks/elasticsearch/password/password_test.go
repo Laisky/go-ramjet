@@ -36,8 +36,10 @@ func TestGeneratePasswdByDate(t *testing.T) {
 	if passwd5 != passwd1 {
 		t.Error("pw5 should equal to pw1")
 	}
+
+	// t.Error()
 }
 
 func init() {
-	utils.SetupLogger("debug")
+	utils.Logger.ChangeLevel("debug")
 }

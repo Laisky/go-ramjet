@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	ramjet "github.com/Laisky/go-ramjet"
+	alertManager "github.com/Laisky/go-ramjet/alert"
+
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
@@ -69,7 +70,7 @@ func runTask() {
 
 		alert = fmt.Sprintf("tested from: %v\n\n", utils.Settings.GetString("host")) + alert
 		alert = time.Now().Format(time.RFC3339) + "\n" + alert
-		if err := ramjet.Email.Send(
+		if err := alertManager.Manager.Send(
 			utils.Settings.GetString("tasks.monitor.receivers."+receiver),
 			receiver,
 			"[pateo]ramjet monitor report",
@@ -83,7 +84,7 @@ func runTask() {
 
 func BindTask() {
 	utils.Logger.Info("bind monitor")
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.monitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.monitor.interval")*time.Second, runTask)
 }
 
 func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
@@ -116,5 +117,5 @@ func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
 }
 
 func init() {
-	store.Store("monitor", BindTask)
+	store.TaskStore.Store("monitor", BindTask)
 }

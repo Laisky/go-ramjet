@@ -157,7 +157,7 @@ func BindRemoveCPLogs() {
 	}
 
 	sem = semaphore.NewWeighted(utils.Settings.GetInt64("tasks.elasticsearch.concurrent"))
-	go store.Ticker(utils.Settings.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
+	go store.TaskStore.Ticker(utils.Settings.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {

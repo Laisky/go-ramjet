@@ -228,9 +228,9 @@ func bindTask() {
 	}
 
 	LoadSettings()
-	go store.TickerAfterRun(interval, runTask)
+	go store.TaskStore.TickerAfterRun(interval, runTask)
 }
 
 func init() {
-	store.Store("backup", bindTask)
+	store.TaskStore.Store("backup", bindTask)
 }

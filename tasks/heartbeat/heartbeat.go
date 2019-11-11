@@ -10,6 +10,10 @@ import (
 )
 
 func runTask() {
+	store.TaskStore.Trigger(TaskDoneEvt, nil, nil, nil)
+}
+
+func evtHandler(evt *store.Event) {
 	utils.Logger.Info("heartbeat", zap.Int("goroutine", runtime.NumGoroutine()))
 }
 
@@ -21,9 +25,10 @@ func bindTask() {
 	}
 
 	bindHTTP()
-	go store.TickerAfterRun(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
 }
 
 func init() {
-	store.Store("heartbeat", bindTask)
+	store.TaskStore.Store("heartbeat", bindTask)
+	store.TaskStore.RegisterListener(TaskDoneEvt, "heartbeat", evtHandler)
 }

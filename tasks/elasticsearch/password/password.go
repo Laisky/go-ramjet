@@ -3,7 +3,7 @@ package password
 
 import (
 	"crypto/sha1"
-	"encoding/base64"
+	"encoding/hex"
 	"io"
 	"time"
 
@@ -14,7 +14,12 @@ import (
 func GeneratePasswdByDate(now time.Time, secret string) string {
 	utils.Logger.Debug("GeneratePasswdByDate", zap.Time("now", now))
 	h := sha1.New()
-	io.WriteString(h, now.Format("200601"))
-	io.WriteString(h, secret)
-	return base64.URLEncoding.EncodeToString(h.Sum(nil))[:15]
+	var err error
+	if _, err = io.WriteString(h, now.Format("200601")); err != nil {
+		utils.Logger.Error("write datestr", zap.Error(err))
+	}
+	if _, err = io.WriteString(h, secret); err != nil {
+		utils.Logger.Error("write secret", zap.Error(err))
+	}
+	return hex.EncodeToString(h.Sum(nil))[:15]
 }

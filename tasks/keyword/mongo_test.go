@@ -31,10 +31,10 @@ func TestIter(t *testing.T) {
 	}
 }
 
-func init() {
-	var err error
-	b, err = keyword.NewBlogDB("localhost:27017", "blog", "posts", "statistics")
-	if err != nil {
-		panic(err)
-	}
-}
+// func init() {
+// 	var err error
+// 	b, err = keyword.NewBlogDB("localhost:27017", "blog", "posts", "statistics")
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// }

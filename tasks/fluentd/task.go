@@ -34,9 +34,9 @@ func runTask() {
 
 func bindTask() {
 	utils.Logger.Info("bind fluentd monitor...")
-	go store.Ticker(utils.Settings.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
 }
 
 func init() {
-	store.Store("fl-monitor", bindTask)
+	store.TaskStore.Store("fl-monitor", bindTask)
 }
