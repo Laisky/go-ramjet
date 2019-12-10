@@ -26,7 +26,7 @@ func GetAliasURL(st *IdxSetting) string {
 
 // FilterReadyToBeDeleteIndices filter indices that is ready to be deleted
 func FilterReadyToBeDeleteIndices(aliasURL string, allIdx []string) (indices []string, err error) {
-	utils.Logger.Debug("FilterReadyToBeDeleteIndices", zap.String("aliasURL", aliasURL), zap.Strings("allIdx", allIdx))
+	utils.Logger.Debug("FilterReadyToBeDeleteIndices", zap.String("aliasURL", urlMasking(aliasURL)), zap.Strings("allIdx", allIdx))
 	var (
 		aliases []*AliasesResp
 	)

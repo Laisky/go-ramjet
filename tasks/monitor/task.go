@@ -73,7 +73,7 @@ func runTask() {
 		if err := alertManager.Manager.Send(
 			utils.Settings.GetString("tasks.monitor.receivers."+receiver),
 			receiver,
-			"[pateo]ramjet monitor report",
+			"[google]ramjet monitor report",
 			alert,
 		); err != nil {
 			utils.Logger.Error("try to send monitor alert email got error", zap.Error(err))

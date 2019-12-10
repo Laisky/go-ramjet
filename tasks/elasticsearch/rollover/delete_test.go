@@ -1,12 +1,14 @@
 package rollover_test
 
 import (
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"regexp"
 	"testing"
 	"time"
 
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
+
 	utils "github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 )
 
 func TestRemoveIndexByName(t *testing.T) {
@@ -77,5 +79,7 @@ func TestIsIdxShouldDelete(t *testing.T) {
 }
 
 func init() {
-	utils.Settings.Setup("/Users/laisky/repo/pateo/configs/go-ramjet")
+	if err := utils.Settings.Setup("/Users/laisky/repo/google/configs/go-ramjet"); err != nil {
+		utils.Logger.Panic("setup settings", zap.Error(err))
+	}
 }

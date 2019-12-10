@@ -1,4 +1,4 @@
-package keyword_test
+package blog_test
 
 import (
 	"testing"
@@ -6,11 +6,11 @@ import (
 	"github.com/Laisky/go-chaining"
 	utils "github.com/Laisky/go-utils"
 
-	"github.com/Laisky/go-ramjet/tasks/keyword"
+	"github.com/Laisky/go-ramjet/tasks/blog"
 )
 
 var (
-	analyser *keyword.Analyser
+	analyser *blog.Analyser
 )
 
 func TestAnalyser(t *testing.T) {
@@ -32,7 +32,7 @@ func TestDiscardRegex(t *testing.T) {
 		">",
 		"we",
 	}
-	ret, err := keyword.FilterDiscardWords(chaining.New(words, nil))
+	ret, err := blog.FilterDiscardWords(chaining.New(words, nil))
 	if err != nil || ret.([]string)[0] != "ddwqwqd" {
 		t.Error("analyser filter error")
 	}
@@ -40,7 +40,7 @@ func TestDiscardRegex(t *testing.T) {
 
 func TestDiscardFmt(t *testing.T) {
 	cnt := `<div><a class="ddd" target="xxx"> d33kok </a></div>`
-	ret, err := keyword.FilterFmt(chaining.New(cnt, nil))
+	ret, err := blog.FilterFmt(chaining.New(cnt, nil))
 	if err != nil {
 		t.Errorf("FilterFmt error, got %+v", err)
 	}
@@ -51,5 +51,5 @@ func TestDiscardFmt(t *testing.T) {
 
 func init() {
 	_ = utils.Logger.ChangeLevel("debug")
-	analyser = keyword.NewAnalyser()
+	analyser = blog.NewAnalyser()
 }

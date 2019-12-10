@@ -38,7 +38,7 @@ func checkForAlert(m *sync.Map) (err error) {
 		err = alert.Manager.Send(
 			"ppcelery@gmail.com",
 			"Laisky Cai",
-			"[pateo]fluentd got problem",
+			"[google]fluentd got problem",
 			cnt,
 		)
 	}

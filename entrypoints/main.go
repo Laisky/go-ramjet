@@ -16,12 +16,15 @@ import (
 
 // setupSettings setup arguments restored in viper
 func setupSettings(flag *pflag.FlagSet) {
+	var err error
 	//参数加载
-	if err := utils.Settings.BindPFlags(flag); err != nil {
+	if err = utils.Settings.BindPFlags(flag); err != nil {
 		utils.Logger.Panic("BindPFlags", zap.Error(err))
 	}
 	//配置加载
-	utils.Settings.Setup(utils.Settings.GetString("config"))
+	if err = utils.Settings.Setup(utils.Settings.GetString("config")); err != nil {
+		utils.Logger.Panic("setup settings", zap.Error(err))
+	}
 
 	//根据入参来区分日志输出级别
 	if utils.Settings.GetBool("debug") { // debug mode
@@ -49,7 +52,10 @@ func setupLogger(ctx context.Context) {
 	}
 
 	hook := utils.NewAlertHook(alertPusher)
-	if _, err := utils.SetDefaultLogger("go-ramjet:"+utils.Settings.GetString("host"), utils.Settings.GetString("log-level"), zap.Hooks(hook.GetZapHook())); err != nil {
+	if _, err := utils.SetDefaultLogger(
+		"go-ramjet:"+utils.Settings.GetString("host"),
+		utils.Settings.GetString("log-level"),
+		zap.HooksWithFields(hook.GetZapHook())); err != nil {
 		utils.Logger.Panic("setup logger", zap.Error(err))
 	}
 }

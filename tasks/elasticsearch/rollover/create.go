@@ -17,10 +17,14 @@ var (
 )
 
 func RunRolloverTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting) {
-	sem.Acquire(ctx, 1)
+	var err error
+	if err = sem.Acquire(ctx, 1); err != nil {
+		utils.Logger.Error("acquire sem", zap.Error(err))
+		return
+	}
 	defer sem.Release(1)
 
-	if err := RolloverNewIndex(st.API, st); err != nil {
+	if err = RolloverNewIndex(st.API, st); err != nil {
 		utils.Logger.Error("rollover index got error", zap.String("index", st.IdxAlias), zap.Error(err))
 	}
 }

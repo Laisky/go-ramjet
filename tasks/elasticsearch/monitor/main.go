@@ -67,20 +67,17 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		utils.Logger.Error("try to get es stats got error", zap.String("url", url), zap.Error(err))
-		esStats = nil
 		return
 	}
 	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		utils.Logger.Error("try to read es stat body got error", zap.String("url", url), zap.Error(err))
-		esStats = nil
 		return
 	}
 	err = json.Unmarshal(respBytes, esStats)
 	if err != nil {
 		utils.Logger.Error("try to parse es stat got error", zap.String("url", url), zap.Error(err))
-		esStats = nil
 		return
 	}
 }

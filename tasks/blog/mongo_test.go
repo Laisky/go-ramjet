@@ -1,13 +1,13 @@
-package keyword_test
+package blog_test
 
 import (
 	"testing"
 
-	"github.com/Laisky/go-ramjet/tasks/keyword"
+	"github.com/Laisky/go-ramjet/tasks/blog"
 )
 
 var (
-	b *keyword.Blog
+	b *blog.Blog
 )
 
 func TestMongo(t *testing.T) {
@@ -33,7 +33,7 @@ func TestIter(t *testing.T) {
 
 // func init() {
 // 	var err error
-// 	b, err = keyword.NewBlogDB("localhost:27017", "blog", "posts", "statistics")
+// 	b, err = blog.NewBlogDB("localhost:27017", "blog", "posts", "statistics")
 // 	if err != nil {
 // 		panic(err)
 // 	}

@@ -12,8 +12,8 @@ Event-driven & Time-scheduler framwork.
 Make docker image
 
 ```sh
-docker build . -t ppcelery/go-ramjet:pateo
-docker push ppcelery/go-ramjet:pateo
+docker build . -t ppcelery/go-ramjet:google
+docker push ppcelery/go-ramjet:google
 ```
 
 Run
@@ -31,5 +31,5 @@ docker run -it --rm \
 docker run -it --rm
     -v /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml \
     -v /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups \
-    ppcelery/go-ramjet:pateo
+    ppcelery/go-ramjet:google
 ```

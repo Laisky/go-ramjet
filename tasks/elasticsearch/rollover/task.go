@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
@@ -67,9 +66,13 @@ func runTask() {
 	}
 }
 
+func urlMasking(val string) string {
+	return utils.URLMasking(val, "*****")
+}
+
 // LoadAllIndicesNames load all indices name by ES API
 func LoadAllIndicesNames(api string) (indices []string, err error) {
-	utils.Logger.Info("load indices by api", zap.String("api", strings.Split(api, "@")[1]))
+	utils.Logger.Info("load indices by api", zap.String("api", urlMasking(api)))
 	var (
 		url     = api + "_cat/indices/?h=index&format=json"
 		idxList = []map[string]string{}
@@ -77,16 +80,16 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 	)
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		return nil, errors.Wrapf(err, "http get error for url %v", url)
+		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
 	defer resp.Body.Close()
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.Wrapf(err, "load body error for url %v", url)
+		return nil, errors.Wrapf(err, "load body error for url %v", urlMasking(url))
 	}
 	err = json.Unmarshal(respBytes, &idxList)
 	if err != nil {
-		return nil, errors.Wrapf(err, "parse json body for url %v error %v", url, string(respBytes[:]))
+		return nil, errors.Wrapf(err, "parse json body for url %v error %v", urlMasking(url), string(respBytes[:]))
 	}
 
 	for _, idxItm = range idxList {
@@ -115,7 +118,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			Expires:       time.Duration(item["expires"].(int)) * time.Second,
 			IdxAlias:      item["index-alias"].(string),
 			IdxWriteAlias: item["index-write-alias"].(string),
-			Mapping:       Mappings[item["mapping"].(string)],
+			Mapping:       getESMapping(item["mapping"].(string)),
 			API:           item["api"].(string),
 			Rollover:      item["rollover"].(string),
 			NRepls:        utils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),

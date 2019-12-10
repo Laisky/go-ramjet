@@ -39,7 +39,7 @@ package backup_test
 // }
 
 // func TestUploadFile(t *testing.T) {
-// 	got, err := client.PutObjectFromFile(bucket, "test", "/Users/laisky/repo/pateo/fluentd-conf/README.md", nil)
+// 	got, err := client.PutObjectFromFile(bucket, "test", "/Users/laisky/repo/google/fluentd-conf/README.md", nil)
 // 	if err != nil {
 // 		t.Errorf("%+v", err)
 // 	}

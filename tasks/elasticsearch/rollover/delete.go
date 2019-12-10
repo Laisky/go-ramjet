@@ -48,6 +48,7 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 		err = RemoveIndexByName(st.API, idx)
 		if err != nil {
 			utils.Logger.Error("try to delete index %v got error", zap.String("index", idx), zap.Error(err))
+			time.Sleep(3 * time.Second)
 		}
 	}
 }

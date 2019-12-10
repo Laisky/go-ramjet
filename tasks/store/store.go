@@ -213,11 +213,8 @@ func (s *taskStoreType) Ticker(interval time.Duration, f func()) {
 	utils.Logger.Info("Ticker", zap.Duration("interval", interval))
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			s.PutFunc2RunChan(f)
-		}
+	for range ticker.C {
+		s.PutFunc2RunChan(f)
 	}
 }
 
@@ -227,11 +224,8 @@ func (s *taskStoreType) TickerAfterRun(interval time.Duration, f func()) {
 	s.PutFunc2RunChan(f)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			s.PutFunc2RunChan(f)
-		}
+	for range ticker.C {
+		s.PutFunc2RunChan(f)
 	}
 }
 

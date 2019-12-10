@@ -1,10 +1,12 @@
 package rollover_test
 
 import (
-	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
 	"testing"
 
+	"github.com/Laisky/go-ramjet/tasks/elasticsearch/rollover"
+
 	"github.com/Laisky/go-utils"
+	"github.com/Laisky/zap"
 )
 
 var (
@@ -17,7 +19,9 @@ func init() {
 }
 
 func setUp() {
-	utils.Settings.Setup("/etc/go-ramjet/settings")
+	if err := utils.Settings.Setup("/etc/go-ramjet/settings"); err != nil {
+		utils.Logger.Panic("setup settings", zap.Error(err))
+	}
 
 	// api = utils.Settings.GetString("tasks.elasticsearch-v2.url")
 	// utils.Settings.Set("debug", true)

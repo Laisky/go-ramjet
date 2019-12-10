@@ -1,4 +1,4 @@
-package keyword
+package blog
 
 import (
 	"time"
@@ -14,14 +14,12 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
-var (
-	keywordType = &bson.M{"types": "keyword"}
-)
-
 type Post struct {
-	Id   bson.ObjectId `bson:"_id"`
-	Cnt  string        `bson:"post_content"`
-	Name string        `bson:"post_name"`
+	Id        bson.ObjectId `bson:"_id"`
+	Cnt       string        `bson:"post_content"`
+	Title     string        `bson:"post_title"`
+	Name      string        `bson:"post_name"`
+	CreatedAt time.Time     `bson:"post_created_at"`
 }
 
 type DB struct {

@@ -96,7 +96,7 @@ func runDockerContainer(endpoint, image string, env []string) (stdout, stderr []
 		return nil, nil, errors.Wrap(err, "try to starting container got error")
 	}
 	utils.Logger.Info("successed running container",
-		zap.Duration("cost", time.Now().Sub(startTs)),
+		zap.Duration("cost", time.Since(startTs)),
 		zap.String("image", image))
 
 	_, err = client.WaitContainer(container.ID)

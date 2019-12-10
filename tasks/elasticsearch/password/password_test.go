@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Laisky/zap"
+
 	"github.com/Laisky/go-ramjet/tasks/elasticsearch/password"
 	utils "github.com/Laisky/go-utils"
 )
@@ -41,5 +43,7 @@ func TestGeneratePasswdByDate(t *testing.T) {
 }
 
 func init() {
-	utils.Logger.ChangeLevel("debug")
+	if err := utils.Logger.ChangeLevel("debug"); err != nil {
+		utils.Logger.Panic("change log level", zap.Error(err))
+	}
 }
