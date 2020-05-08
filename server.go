@@ -3,8 +3,7 @@ package ramjet
 import (
 	"net/http"
 
-	ginMiddlewares "github.com/Laisky/go-utils/gin-middlewares"
-
+	ginMiddlewares "github.com/Laisky/gin-middlewares"
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"

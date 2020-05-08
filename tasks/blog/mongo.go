@@ -90,7 +90,7 @@ func (b *Blog) LoadAllPostsCnt() (cnt string, err error) {
 }
 
 func (b *Blog) GetPostIter() *mgo.Iter {
-	return b.posts.Find(nil).Iter()
+	return b.posts.Find(nil).Sort("-_id").Iter()
 }
 
 func (b *Blog) UpdatePostTagsById(bid string, tags []string) (err error) {

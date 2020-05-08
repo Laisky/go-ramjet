@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Laisky/go-ramjet/alert"
-
 	"github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-ramjet/alert"
 	_ "github.com/Laisky/go-ramjet/tasks"
 	"github.com/Laisky/go-ramjet/tasks/store"
 	"github.com/Laisky/go-utils"
@@ -21,10 +20,13 @@ func setupSettings(flag *pflag.FlagSet) {
 	if err = utils.Settings.BindPFlags(flag); err != nil {
 		utils.Logger.Panic("BindPFlags", zap.Error(err))
 	}
+
 	//配置加载
-	if err = utils.Settings.Setup(utils.Settings.GetString("config")); err != nil {
-		utils.Logger.Panic("setup settings", zap.Error(err))
+	cfgPath := utils.Settings.GetString("config")
+	if err = utils.Settings.SetupFromFile(cfgPath); err != nil {
+		utils.Logger.Panic("setup settings", zap.Error(err), zap.String("cfg", cfgPath))
 	}
+	utils.Logger.Info("load settings from file", zap.String("cfg", cfgPath))
 
 	//根据入参来区分日志输出级别
 	if utils.Settings.GetBool("debug") { // debug mode
@@ -51,12 +53,10 @@ func setupLogger(ctx context.Context) {
 		utils.Logger.Panic("create AlertPusher", zap.Error(err))
 	}
 
-	hook := utils.NewAlertHook(alertPusher)
-	if _, err := utils.SetDefaultLogger(
-		"go-ramjet:"+utils.Settings.GetString("host"),
-		utils.Settings.GetString("log-level"),
-		zap.HooksWithFields(hook.GetZapHook())); err != nil {
-		utils.Logger.Panic("setup logger", zap.Error(err))
+	utils.Logger = utils.Logger.WithOptions(zap.HooksWithFields(alertPusher.GetZapHook())).
+		Named("go-ramjet" + utils.Settings.GetString("host"))
+	if err = utils.Logger.ChangeLevel(utils.Settings.GetString("log-level")); err != nil {
+		utils.Logger.Panic("change level", zap.String("level", utils.Settings.GetString("log-level")))
 	}
 }
 
@@ -65,7 +65,7 @@ func setupCMDArgs() *pflag.FlagSet {
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
 	pflag.String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
-	pflag.String("config", "/etc/go-ramjet/settings", "config file path")
+	pflag.StringP("config", "c", "/etc/go-ramjet/settings.yml", "config file path")
 	pflag.String("host", "", "hostname")
 	pflag.String("log-level", "", "logger level")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")

@@ -3,6 +3,7 @@ package blog
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	utils "github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
@@ -14,6 +15,10 @@ type rssCfg struct {
 	link,
 	authorName,
 	authorEmail string
+}
+
+func toValidUTF8(src string) string {
+	return strings.ToValidUTF8(src, " ⚫")
 }
 
 func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
@@ -33,12 +38,12 @@ func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
 	n := 0
 	for iter.Next(p) {
 		feed.Items = append(feed.Items, &feeds.Item{
-			Title:   p.Title,
+			Title:   toValidUTF8(p.Title),
 			Link:    &feeds.Link{Href: rsscfg.link + "p/" + p.Name + "/"},
 			Id:      rsscfg.link + "p/" + p.Name + "/",
-			Content: p.Cnt,
+			Content: toValidUTF8(p.Cnt),
 			Author: &feeds.Author{
-				Name: fmt.Sprintf("%v(%v)", rsscfg.authorEmail, rsscfg.authorName),
+				Name: toValidUTF8(fmt.Sprintf("%s(%s)", rsscfg.authorEmail, rsscfg.authorName)),
 			},
 			Created: p.CreatedAt,
 		})
