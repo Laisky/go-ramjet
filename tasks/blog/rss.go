@@ -22,7 +22,7 @@ func toValidUTF8(src string) string {
 }
 
 func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
-	utils.Logger.Info("generateRSSFile")
+	utils.Logger.Debug("try generate rss file")
 	iter := blogdb.GetPostIter()
 	p := &Post{}
 	feed := &feeds.Feed{
@@ -74,5 +74,5 @@ func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
 	if _, err = fp.WriteString(rss); err != nil {
 		utils.Logger.Error("write rss to file", zap.String("fpath", fpath), zap.Error(err))
 	}
-	utils.Logger.Info("generated rss", zap.Int("n_posts", n))
+	utils.Logger.Info("generated rss", zap.Int("n_posts", n), zap.String("fpath", fpath))
 }

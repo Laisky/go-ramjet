@@ -21,7 +21,7 @@ Run
 ```sh
 # test
 docker run -it --rm \
-    -v /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml \
+    -v /etc/go-ramjet/settings.yml:/etc/go-ramjet/settings.yml \
     -v /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups \
     -e TASKS=heartbeat \
     ppcelery/go-ramjet:test \
@@ -29,7 +29,7 @@ docker run -it --rm \
 
 # prod
 docker run -it --rm
-    -v /etc/go-ramjet/settings/settings.yml:/etc/go-ramjet/settings/settings.yml \
+    -v /etc/go-ramjet/settings.yml:/etc/go-ramjet/settings.yml \
     -v /data/fluentd/fluentd-conf/backups:/data/fluentd/fluentd-conf/backups \
     ppcelery/go-ramjet:google
 ```
