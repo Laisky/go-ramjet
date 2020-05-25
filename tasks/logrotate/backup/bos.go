@@ -58,14 +58,18 @@ func (u *bosUploader) New(st *backupSetting) error {
 
 // loadRemoteFileLength load file length from bos
 // return 0 if file not exists
-func (u *bosUploader) loadRemoteFileLength(objName string) int64 {
+func (u *bosUploader) loadRemoteFileLength(objName string) (int64, error) {
 	meta, err := u.cli.GetObjectMeta(u.args.Bucket, objName)
-	if realErr, ok := err.(*bce.BceServiceError); ok {
-		if realErr.StatusCode == 404 {
-			return 0
+	if err != nil {
+		if realErr, ok := err.(*bce.BceServiceError); ok &&
+			realErr.StatusCode == 404 {
+			return 0, nil
 		}
+
+		return 0, errors.Wrapf(err, "get object `%s` metadata", objName)
 	}
-	return meta.ContentLength
+
+	return meta.ContentLength, nil
 }
 
 func (u *bosUploader) Upload(fpath string) {
@@ -91,7 +95,10 @@ func (u *bosUploader) Upload(fpath string) {
 	}
 
 	objName = u.getObjFname(fpath)
-	if remoteFileLen := u.loadRemoteFileLength(objName); remoteFileLen != 0 {
+	if remoteFileLen, err := u.loadRemoteFileLength(objName); err != nil {
+		utils.Logger.Error("load remote file length", zap.String("fname", objName), zap.Error(err))
+		return
+	} else if remoteFileLen != 0 {
 		if localFileSize < remoteFileLen {
 			utils.Logger.Warn("will discard local file since of remote already exists", zap.String("file", objName))
 			// remove local file if local file is smaller than remote
@@ -99,6 +106,7 @@ func (u *bosUploader) Upload(fpath string) {
 			u.AddSucFile(fpath)
 			return
 		}
+
 		utils.Logger.Info("will replace remote by local file", zap.String("file", objName))
 	}
 
@@ -113,7 +121,10 @@ func (u *bosUploader) Upload(fpath string) {
 		return
 	}
 
-	if u.loadRemoteFileLength(objName) == 0 { // double check after uploading
+	if l, err := u.loadRemoteFileLength(objName); err != nil {
+		utils.Logger.Error("load remote file length", zap.String("fname", objName), zap.Error(err))
+		return
+	} else if l == 0 { // double check after uploading
 		u.AddFaiFile(fpath)
 		utils.Logger.Error("file not exists after upload")
 		return
