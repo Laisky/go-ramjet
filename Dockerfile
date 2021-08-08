@@ -17,7 +17,7 @@ ADD . .
 RUN go build -a --ldflags '-extldflags "-static"' entrypoints/main.go
 
 # copy executable file and certs to a pure container
-FROM alpine:3.10
+FROM alpine:3
 COPY --from=gobuild /goapp/main go-ramjet
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.0.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.0.0
