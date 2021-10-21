@@ -1,9 +1,9 @@
-package ramjet
+package web
 
 import (
 	"net/http"
 
-	ginMiddlewares "github.com/Laisky/go-utils/gin-middlewares"
+	ginMiddlewares "github.com/Laisky/gin-middlewares"
 
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"

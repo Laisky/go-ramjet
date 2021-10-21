@@ -19,7 +19,7 @@ func init() {
 }
 
 func setUp() {
-	if err := utils.Settings.Setup("/etc/go-ramjet/settings"); err != nil {
+	if err := utils.Settings.LoadFromFile("/etc/go-ramjet/settings.yml"); err != nil {
 		utils.Logger.Panic("setup settings", zap.Error(err))
 	}
 

@@ -1,24 +1,6 @@
 tasks:
   heartbeat:
     interval: 60
-  fluentd:
-    interval: 60
-    configs:
-      sit:
-        ip: "172.16.5.20"
-        health-check: "http://172.16.5.20:24326/api/plugins.json"
-      uat:
-        ip: "172.16.5.21"
-        health-check: "http://172.16.5.21:24326/api/plugins.json"
-      perf:
-        ip: "172.16.5.22"
-        health-check: "http://172.16.5.22:24326/api/plugins.json"
-      prod-1:
-        ip: "172.16.4.85"
-        health-check: "http://172.16.4.85:24326/api/plugins.json"
-      prod-2:
-        ip: "172.16.4.86"
-        health-check: "http://172.16.4.86:24326/api/plugins.json"
   backups:
     interval: 3600
     configs:
@@ -85,4 +67,3 @@ tasks:
       # monitor
       - index: monitor-stats-write
         expire: 2592000
-

@@ -55,7 +55,7 @@ func getDevicesMetric(fs map[string]interface{}) float64 {
 	data := fs["total"].(map[string]interface{})
 	available := data["available_in_bytes"].(float64)
 	total := data["total_in_bytes"].(float64)
-	return 100 - utils.Round(available/total, 0.5, 2)*100
+	return 100 - utils.Round(available/total, 2)*100
 }
 
 func getIOStatMetric(fs map[string]interface{}) *IOStat {

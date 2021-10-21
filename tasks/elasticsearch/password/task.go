@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet/tasks/store"
-	utils "github.com/Laisky/go-utils"
+	gutils "github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 )
 
@@ -23,8 +23,8 @@ var (
 )
 
 func BindPasswordTask() {
-	step := utils.Settings.GetDuration("tasks.elasticsearch-v2.password.interval")
-	if utils.Settings.GetBool("debug") {
+	step := gutils.Settings.GetDuration("tasks.elasticsearch-v2.password.interval")
+	if gutils.Settings.GetBool("debug") {
 		step = 5
 	}
 
@@ -42,38 +42,38 @@ type User struct {
 }
 
 func runTask() {
-	utils.Logger.Info("run elasticsearch.password")
-	newpasswd := GeneratePasswdByDate(utils.UTCNow(), utils.Settings.GetString("tasks.elasticsearch-v2.password.secret"))
-	for _, api := range utils.Settings.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
-		utils.Logger.Debug("try to change password", zap.String("api", maskAPI(api)))
+	gutils.Logger.Info("run elasticsearch.password")
+	newpasswd := GeneratePasswdByDate(gutils.UTCNow(), gutils.Settings.GetString("tasks.elasticsearch-v2.password.secret"))
+	for _, api := range gutils.Settings.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
+		gutils.Logger.Debug("try to change password", zap.String("api", maskAPI(api)))
 		user := &User{
-			Username: utils.Settings.GetString("tasks.elasticsearch-v2.password.username"),
+			Username: gutils.Settings.GetString("tasks.elasticsearch-v2.password.username"),
 			Password: newpasswd,
 		}
 		jb, err := json.Marshal(user)
 		if err != nil {
-			utils.Logger.Error("try to marshal json got error", zap.Error(err))
+			gutils.Logger.Error("try to marshal json got error", zap.Error(err))
 			continue
 		}
 
-		if utils.Settings.GetBool("dry") {
-			utils.Logger.Info("change password via post", zap.String("api", maskAPI(api)), zap.String("password", newpasswd))
+		if gutils.Settings.GetBool("dry") {
+			gutils.Logger.Info("change password via post", zap.String("api", maskAPI(api)), zap.String("password", newpasswd))
 			continue
 		}
 
-		resp, err := httpClient.Post(api, utils.HTTPJSONHeaderVal, bytes.NewReader(jb))
+		resp, err := httpClient.Post(api, gutils.HTTPHeaderContentTypeValJSON, bytes.NewReader(jb))
 		if err != nil {
-			utils.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
+			gutils.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
 		}
 		defer resp.Body.Close()
-		if err = utils.CheckResp(resp); err != nil {
-			utils.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
+		if err = gutils.CheckResp(resp); err != nil {
+			gutils.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
 		}
 	}
 
-	utils.Logger.Info("success changed password")
+	gutils.Logger.Info("success changed password")
 }
 
 func maskAPI(api string) string {

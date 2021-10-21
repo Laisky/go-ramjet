@@ -80,7 +80,7 @@ func createAlias(api, index, alias string) error {
 		return nil
 	}
 
-	resp, err := httpClient.Post(api, utils.HTTPJSONHeaderVal, bytes.NewReader(reqJB))
+	resp, err := httpClient.Post(api, utils.HTTPHeaderContentTypeValJSON, bytes.NewReader(reqJB))
 	if err != nil {
 		utils.Logger.Error("try to request api got error",
 			zap.String("api", maskAPI(api)),

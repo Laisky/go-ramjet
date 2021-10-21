@@ -9,9 +9,9 @@ import (
 	"github.com/yanyiwu/gojieba"
 )
 
-var (
-	isUseHMM = false
-)
+// var (
+// 	isUseHMM = false
+// )
 
 type Analyser struct {
 	j *gojieba.Jieba
@@ -100,7 +100,7 @@ type sortItem struct {
 func (i *sortItem) GetValue() int {
 	return i.v
 }
-func (i *sortItem) GetKey() interface{} {
+func (i *sortItem) GetData() interface{} {
 	return i.k
 }
 
@@ -118,7 +118,7 @@ func FilterMostFreqWords(topN int) func(c *chaining.Chain) (interface{}, error) 
 			if i >= topN {
 				break
 			}
-			keyLs = append(keyLs, k.GetKey().(string))
+			keyLs = append(keyLs, k.GetData().(string))
 		}
 
 		return keyLs, nil

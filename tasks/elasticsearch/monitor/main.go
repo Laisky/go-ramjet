@@ -143,7 +143,7 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 	if utils.Settings.GetBool("dry") {
 		return
 	}
-	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPJSONHeaderVal, bytes.NewBuffer(jsonBytes))
+	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPHeaderContentTypeValJSON, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		utils.Logger.Error("try to push es metric got error", zap.Error(err))
 		return
@@ -163,8 +163,11 @@ func BindMonitorTask() {
 	utils.Logger.Info("bind ES monitors...")
 
 	st := LoadSettings()
-	interval := st.Interval
+	if st == nil {
+		return
+	}
 
+	interval := st.Interval
 	if utils.Settings.GetBool("debug") { // set for debug
 		interval = 3
 	}
@@ -228,7 +231,13 @@ func LoadSettings() (monitorSt *St) {
 		itemI interface{}
 		item  map[interface{}]interface{}
 	)
-	for _, itemI = range utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+	st, ok := utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{})
+	if !ok {
+		utils.Logger.Info("no elasticsearch monitor settings found")
+		return
+	}
+
+	for _, itemI = range st {
 		item = itemI.(map[interface{}]interface{})
 		switch item["action"].(string) {
 		case "monitor":

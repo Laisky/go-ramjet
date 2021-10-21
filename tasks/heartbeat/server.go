@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	ramjet "github.com/Laisky/go-ramjet"
+	"github.com/Laisky/go-ramjet/web"
 )
 
 func bindHTTP() {
-	ramjet.Server.GET("/heartbeat", func(ctx *gin.Context) {
+	web.Server.GET("/heartbeat", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "heartbeat with %v active goroutines", runtime.NumGoroutine())
 	})
 }

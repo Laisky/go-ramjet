@@ -79,7 +79,7 @@ func TestIsIdxShouldDelete(t *testing.T) {
 }
 
 func init() {
-	if err := utils.Settings.Setup("/Users/laisky/repo/google/configs/go-ramjet"); err != nil {
+	if err := utils.Settings.LoadFromFile("/Users/laisky/repo/google/configs/go-ramjet/settings.yml"); err != nil {
 		utils.Logger.Panic("setup settings", zap.Error(err))
 	}
 }

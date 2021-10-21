@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Laisky/go-ramjet"
+	web "github.com/Laisky/go-ramjet/web"
 	utils "github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 )
@@ -35,13 +35,13 @@ func bindHTTP() {
 	}
 
 	utils.Logger.Info("bind HTTP GET `/es/rollover`")
-	ramjet.Server.GET("/es/rollover", func(ctx *gin.Context) {
+	web.Server.GET("/es/rollover", func(ctx *gin.Context) {
 		jb, err := json.Marshal(details)
 		if err != nil {
 			utils.Logger.Error("parse es-rollover details got error", zap.Error(err))
 			ctx.String(http.StatusOK, "parse es-rollover details got error")
 			return
 		}
-		ctx.Data(http.StatusOK, utils.HTTPJSONHeaderVal, jb)
+		ctx.Data(http.StatusOK, utils.HTTPHeaderContentTypeValJSON, jb)
 	})
 }
