@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Laisky/go-ramjet/alert"
-	_ "github.com/Laisky/go-ramjet/tasks"
-	"github.com/Laisky/go-ramjet/tasks/store"
-	"github.com/Laisky/go-ramjet/web"
+	"github.com/Laisky/go-ramjet/library/log"
+
 	"github.com/Laisky/go-utils"
 	"github.com/Laisky/zap"
 	"github.com/spf13/pflag"
+
+	_ "github.com/Laisky/go-ramjet/internal/tasks"
+	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/alert"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // setupSettings setup arguments restored in viper
@@ -18,21 +21,23 @@ func setupSettings(flag *pflag.FlagSet) {
 	var err error
 	//参数加载
 	if err = utils.Settings.BindPFlags(flag); err != nil {
-		utils.Logger.Panic("BindPFlags", zap.Error(err))
+		log.Logger.Panic("BindPFlags", zap.Error(err))
 	}
 	//配置加载
-	if err = utils.Settings.LoadFromFile(utils.Settings.GetString("config")); err != nil {
-		utils.Logger.Panic("setup settings", zap.Error(err))
+	cfgFile := utils.Settings.GetString("config")
+	log.Logger.Info("load config", zap.String("file", cfgFile))
+	if err = utils.Settings.LoadFromFile(cfgFile); err != nil {
+		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 
 	//根据入参来区分日志输出级别
 	if utils.Settings.GetBool("debug") { // debug mode
 		fmt.Println("run in debug mode")
-		_ = utils.Logger.ChangeLevel("debug")
+		_ = log.Logger.ChangeLevel("debug")
 		utils.Settings.Set("log-level", "debug")
 	} else { // prod mode
 		fmt.Println("run in prod mode")
-		_ = utils.Logger.ChangeLevel("info")
+		_ = log.Logger.ChangeLevel("info")
 		utils.Settings.Set("log-level", "info")
 	}
 
@@ -47,14 +52,14 @@ func setupLogger(ctx context.Context) {
 		utils.Settings.GetString("logger.push_token"),
 	)
 	if err != nil {
-		utils.Logger.Panic("create AlertPusher", zap.Error(err))
+		log.Logger.Panic("create AlertPusher", zap.Error(err))
 	}
 
 	if _, err := utils.NewConsoleLoggerWithName(
 		"go-ramjet:"+utils.Settings.GetString("host"),
 		utils.Settings.GetString("log-level"),
 		zap.HooksWithFields(alertPusher.GetZapHook())); err != nil {
-		utils.Logger.Panic("setup logger", zap.Error(err))
+		log.Logger.Panic("setup logger", zap.Error(err))
 	}
 }
 
@@ -63,7 +68,7 @@ func setupCMDArgs() *pflag.FlagSet {
 	pflag.Bool("dry", false, "run in dry mode")
 	pflag.Bool("pprof", false, "run with pprof")
 	pflag.String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
-	pflag.StringP("config", "c", "/etc/go-ramjet/settings", "config file path")
+	pflag.StringP("config", "c", "/etc/go-ramjet/settings.yml", "config file path")
 	pflag.String("host", "", "hostname")
 	pflag.String("log-level", "", "logger level")
 	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
@@ -84,11 +89,11 @@ func Execute() {
 	alert.Manager.Setup()
 
 	if err := alert.Telegram.SendAlert("start go-ramjet"); err != nil {
-		utils.Logger.Error("send telegram msg", zap.Error(err))
+		log.Logger.Error("send telegram msg", zap.Error(err))
 	}
 
 	//获取参数
-	utils.Logger.Info("running...",
+	log.Logger.Info("running...",
 		zap.Bool("debug", utils.Settings.GetBool("debug")),
 		zap.String("addr", utils.Settings.GetString("addr")),
 		zap.String("config", utils.Settings.GetString("config")),

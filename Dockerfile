@@ -1,9 +1,9 @@
-FROM golang:1.13.4-alpine3.10 AS gobuild
+FROM golang:1.17.2-buster AS gobuild
 
-# run dependencies
-RUN apk update && apk upgrade && \
-    apk add --no-cache gcc build-base git ca-certificates && \
-    update-ca-certificates
+# install dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++ make gcc git build-essential ca-certificates curl \
+    && update-ca-certificates
 
 ENV GO111MODULE=on
 WORKDIR /goapp
@@ -14,12 +14,20 @@ RUN go mod download
 
 # static build
 ADD . .
-RUN go build -a --ldflags '-extldflags "-static"' entrypoints/main.go
+RUN go build -a --ldflags '-extldflags "-static"' main.go
 
 # copy executable file and certs to a pure container
-FROM alpine:3.10
-COPY --from=gobuild /goapp/main go-ramjet
+FROM debian:buster
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates haveged \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=gobuild /goapp/main /app/go-ramjet
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.0.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.0.0
 
-CMD ["./go-ramjet", "--config=/etc/go-ramjet/settings"]
+ENTRYPOINT ["/app/go-ramjet"]
