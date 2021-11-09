@@ -16,19 +16,19 @@ type Entities struct {
 }
 
 type Tweet struct {
-	MongoID         bson.ObjectId `bson:"_id" json:"mongo_id"`
-	ID              string        `bson:"id_str" json:"id"`
-	CreatedAt       *time.Time    `bson:"created_at" json:"created_at"`
-	Text            string        `bson:"text" json:"text"`
-	Topics          []string      `bson:"topics" json:"topics"`
-	User            *User         `bson:"user" json:"user"`
-	ReplyToStatusID string        `bson:"in_reply_to_status_id_str" json:"in_reply_to_status_id"`
-	Entities        *Entities     `bson:"entities" json:"entities"`
-	IsRetweeted     bool          `bson:"retweeted" json:"is_retweeted"`
-	RetweetedTweet  *Tweet        `bson:"retweeted_status,omitempty" json:"retweeted_tweet"`
-	IsQuoted        bool          `bson:"is_quote_status" json:"is_quote_status"`
-	QuotedTweet     *Tweet        `bson:"quoted_status,omitempty" json:"quoted_status"`
-	Viewer          []string      `bson:"viewer,omitempty" json:"viewer"`
+	MongoID         *bson.ObjectId `bson:"_id,omitempty" json:"mongo_id,omitempty"`
+	ID              string         `bson:"id_str" json:"id"`
+	CreatedAt       *time.Time     `bson:"created_at" json:"created_at"`
+	Text            string         `bson:"text" json:"text"`
+	Topics          []string       `bson:"topics" json:"topics"`
+	User            *User          `bson:"user" json:"user"`
+	ReplyToStatusID string         `bson:"in_reply_to_status_id_str" json:"in_reply_to_status_id"`
+	Entities        *Entities      `bson:"entities" json:"entities"`
+	IsRetweeted     bool           `bson:"retweeted" json:"is_retweeted"`
+	RetweetedTweet  *Tweet         `bson:"retweeted_status,omitempty" json:"retweeted_tweet"`
+	IsQuoted        bool           `bson:"is_quote_status" json:"is_quote_status"`
+	QuotedTweet     *Tweet         `bson:"quoted_status,omitempty" json:"quoted_status"`
+	Viewer          []string       `bson:"viewer,omitempty" json:"viewer"`
 }
 
 type User struct {

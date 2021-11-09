@@ -13,12 +13,12 @@ import (
 
 func prepareDB() (db *Blog, err error) {
 	if db, err = NewBlogDB(
-		utils.Settings.GetString("tasks.blog.db.addr"),
-		utils.Settings.GetString("tasks.blog.db.dbName"),
-		utils.Settings.GetString("tasks.blog.db.user"),
-		utils.Settings.GetString("tasks.blog.db.passwd"),
-		utils.Settings.GetString("tasks.blog.db.postColName"),
-		utils.Settings.GetString("tasks.blog.db.keywordColName"),
+		utils.Settings.GetString("db.blog.addr"),
+		utils.Settings.GetString("db.blog.db"),
+		utils.Settings.GetString("db.blog.user"),
+		utils.Settings.GetString("db.blog.passwd"),
+		utils.Settings.GetString("db.blog.collections.posts"),
+		utils.Settings.GetString("db.blog.collections.stats"),
 	); err != nil {
 		return nil, err
 	}

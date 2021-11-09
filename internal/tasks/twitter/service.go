@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	gutils "github.com/Laisky/go-utils"
+	"github.com/pkg/errors"
+	"gopkg.in/mgo.v2/bson"
 )
 
 var (
@@ -19,24 +21,35 @@ func initSvc() error {
 	svcMu.Lock()
 	defer svcMu.Unlock()
 
-	searchDao, err := NewSearchDao(gutils.Settings.GetString("tasks.twitter.clickhouse.dsn"))
+	searchDao, err := NewSearchDao(gutils.Settings.GetString("db.clickhouse.dsn"))
 	if err != nil {
 		return err
 	}
 
 	twitterDao, err := NewTwitterDao(
-		gutils.Settings.GetString("tasks.twitter.mongodb.addr"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.dbName"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.user"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.passwd"),
+		gutils.Settings.GetString("db.twitter.addr"),
+		gutils.Settings.GetString("db.twitter.db"),
+		gutils.Settings.GetString("db.twitter.user"),
+		gutils.Settings.GetString("db.twitter.passwd"),
+	)
+	if err != nil {
+		return err
+	}
+
+	twitterHome, err := NewTwitterDao(
+		gutils.Settings.GetString("db.twitter-home.addr"),
+		gutils.Settings.GetString("db.twitter-home.db"),
+		gutils.Settings.GetString("db.twitter-home.user"),
+		gutils.Settings.GetString("db.twitter-home.passwd"),
 	)
 	if err != nil {
 		return err
 	}
 
 	svc = &Service{
-		searchDao:  searchDao,
-		twitterDao: twitterDao,
+		searchDao:     searchDao,
+		twitterDao:    twitterDao,
+		twitterRepDao: twitterHome,
 	}
 
 	return nil
@@ -45,6 +58,8 @@ func initSvc() error {
 type Service struct {
 	searchDao  *SearchDao
 	twitterDao *TwitterDao
+	// twitterRepDao replica twitter db
+	twitterRepDao *TwitterDao
 }
 
 func getTweetUserID(tweet *Tweet) string {
@@ -55,13 +70,16 @@ func getTweetUserID(tweet *Tweet) string {
 	return ""
 }
 
+// SyncSearchTweets sync tweets to search db(clickhouse)
 func (s *Service) SyncSearchTweets() error {
 	latestT, err := s.searchDao.GetLatestCreatedAt()
 	if err != nil {
 		return err
 	}
 
-	iter := s.twitterDao.GetTweetsIter(latestT)
+	iter := s.twitterDao.GetTweetsIter(bson.M{
+		"created_at": bson.M{"$gte": latestT},
+	})
 	defer iter.Close()
 
 	tweet := new(Tweet)
@@ -75,6 +93,31 @@ func (s *Service) SyncSearchTweets() error {
 
 		if err := s.searchDao.SaveTweet(tweet); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// SyncReplicaTweets sync tweets to replica db
+func (s *Service) SyncReplicaTweets() error {
+	latestT, err := s.twitterRepDao.GetLargestID()
+	if err != nil {
+		return err
+	}
+
+	iter := s.twitterDao.GetTweetsIter(bson.M{
+		"_id": bson.M{"$gte": latestT},
+	})
+	defer iter.Close()
+
+	tweet := new(Tweet)
+	for iter.Next(tweet) {
+		if _, err = s.twitterRepDao.Upsert(
+			bson.M{"_id": tweet.MongoID},
+			bson.M{"$set": tweet},
+		); err != nil {
+			return errors.Wrapf(err, "upsert docu %v", tweet)
 		}
 	}
 

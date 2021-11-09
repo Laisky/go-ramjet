@@ -46,11 +46,31 @@ func NewTwitterDao(addr, dbName, user, pwd string) (d *TwitterDao, err error) {
 	return d, nil
 }
 
-func (d *TwitterDao) GetTweetsIter(fromTs time.Time) *mgo.Iter {
-	log.Logger.Debug("load tweets", zap.Time("from", fromTs))
-	return d.tweets.Find(bson.M{
-		"created_at": bson.M{"$gte": fromTs},
-	}).Sort("created_at").Iter()
+func (d *TwitterDao) GetTweetsIter(cond bson.M) *mgo.Iter {
+	log.Logger.Debug("load tweets", zap.Any("condition", cond))
+	return d.tweets.Find(cond).Sort("created_at").Iter()
+}
+
+func (d *TwitterDao) GetLargestID() (largestID bson.ObjectId, err error) {
+	tweet := new(Tweet)
+	if err = d.tweets.Find(bson.M{}).
+		Select(bson.M{"_id": 1}).
+		Sort("-id").
+		Limit(1).
+		One(tweet); err != nil {
+		return "", errors.Wrapf(err, "load largest id")
+	}
+
+	if tweet.MongoID == nil {
+		return "", errors.New("no id found")
+	}
+
+	return *tweet.MongoID, nil
+}
+
+func (d *TwitterDao) Upsert(cond, docu bson.M) (*mgo.ChangeInfo, error) {
+	log.Logger.Info("upsert tweet", zap.Any("condition", cond))
+	return d.tweets.Upsert(cond, docu)
 }
 
 type SearchDao struct {

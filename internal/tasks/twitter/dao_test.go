@@ -4,11 +4,11 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/Laisky/go-ramjet/library/config"
 	gutils "github.com/Laisky/go-utils"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/mgo.v2/bson"
 )
 
 func TestSearchDao_GetLargestID(t *testing.T) {
@@ -51,7 +51,7 @@ func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	iter := d.GetTweetsIter(time.Time{})
+	iter := d.GetTweetsIter(bson.M{})
 	defer iter.Close()
 
 	docu := new(Tweet)
