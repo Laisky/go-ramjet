@@ -39,7 +39,7 @@ type bosUploader struct {
 	cli  *bos.Client
 }
 
-func (u *bosUploader) New(st *backupSetting) error {
+func (u *bosUploader) New(st *BackupSetting) error {
 	u.baseUploader = createBaseUploader(st)
 	u.args = &BosArgs{
 		Remote:       st.Args["remote"].(string),

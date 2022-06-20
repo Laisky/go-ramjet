@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	utils "github.com/Laisky/go-utils/v2"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func LoadCertExpiresAt(addr string) (t time.Time, err error) {
@@ -21,7 +20,7 @@ func LoadCertExpiresAt(addr string) (t time.Time, err error) {
 	if err != nil {
 		return time.Time{}, errors.Wrapf(err, "request addr %v got error", addr)
 	}
-	defer conn.Close()
+	gutils.CloseQuietly(conn)
 
 	return conn.ConnectionState().VerifiedChains[0][0].NotAfter, nil
 }
@@ -50,7 +49,7 @@ func runTask() {
 	log.Logger.Info("run ssl-monitor...")
 	var err error
 
-	addr := utils.Settings.GetString("tasks.sites.addr")
+	addr := gutils.Settings.GetString("tasks.sites.addr")
 	expiresAt, err := LoadCertExpiresAt(addr)
 	if err != nil {
 		log.Logger.Error("LoadCertExpiresAt got error", zap.String("addr", addr), zap.Error(err))
@@ -58,8 +57,8 @@ func runTask() {
 	}
 
 	now := time.Now()
-	if checkIsTimeTooCloseToAlert(now, expiresAt, utils.Settings.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
-		err = sendAlertEmail(addr, utils.Settings.GetString("tasks.sites.receiver"), expiresAt)
+	if checkIsTimeTooCloseToAlert(now, expiresAt, gutils.Settings.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
+		err = sendAlertEmail(addr, gutils.Settings.GetString("tasks.sites.receiver"), expiresAt)
 		if err != nil {
 			log.Logger.Error("sendAlertEmail got error", zap.String("addr", addr), zap.Error(err))
 		}
@@ -70,7 +69,7 @@ func runTask() {
 func bindTask() {
 	log.Logger.Info("bind ssl-monitor task...")
 
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gutils.Settings.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
 }
 
 func init() {

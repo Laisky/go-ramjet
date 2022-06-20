@@ -14,19 +14,19 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-type TwitterDao struct {
+type Dao struct {
 	mongo.DB
 	db     *mgo.Database
 	tweets *mgo.Collection
 }
 
-func NewTwitterDao(addr, dbName, user, pwd string) (d *TwitterDao, err error) {
+func NewDao(addr, dbName, user, pwd string) (d *Dao, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
 	)
 
-	d = new(TwitterDao)
+	d = new(Dao)
 	dialInfo := &mgo.DialInfo{
 		Addrs:     []string{addr},
 		Direct:    true,
@@ -46,12 +46,12 @@ func NewTwitterDao(addr, dbName, user, pwd string) (d *TwitterDao, err error) {
 	return d, nil
 }
 
-func (d *TwitterDao) GetTweetsIter(cond bson.M) *mgo.Iter {
+func (d *Dao) GetTweetsIter(cond bson.M) *mgo.Iter {
 	log.Logger.Debug("load tweets", zap.Any("condition", cond))
 	return d.tweets.Find(cond).Sort("created_at").Iter()
 }
 
-func (d *TwitterDao) GetLargestID() (largestID bson.ObjectId, err error) {
+func (d *Dao) GetLargestID() (largestID bson.ObjectId, err error) {
 	tweet := new(Tweet)
 	if err = d.tweets.Find(bson.M{}).
 		Select(bson.M{"_id": 1}).
@@ -68,7 +68,7 @@ func (d *TwitterDao) GetLargestID() (largestID bson.ObjectId, err error) {
 	return *tweet.MongoID, nil
 }
 
-func (d *TwitterDao) Upsert(cond, docu bson.M) (*mgo.ChangeInfo, error) {
+func (d *Dao) Upsert(cond, docu bson.M) (*mgo.ChangeInfo, error) {
 	log.Logger.Info("upsert tweet", zap.Any("condition", cond))
 	return d.tweets.Upsert(cond, docu)
 }

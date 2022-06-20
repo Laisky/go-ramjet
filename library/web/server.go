@@ -21,7 +21,10 @@ func RunServer(addr string) {
 	}
 
 	Server.Use(gin.Recovery())
-	metrics.Enable(Server)
+	if err := metrics.Enable(Server); err != nil {
+		log.Logger.Panic("enable metrics", zap.Error(err))
+	}
+
 	Server.Any("/health", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "hello, world")
 	})

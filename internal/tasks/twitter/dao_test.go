@@ -44,7 +44,7 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	config.LoadTest()
-	d, err := NewTwitterDao(
+	d, err := NewDao(
 		gutils.Settings.GetString("tasks.twitter.mongodb.addr"),
 		gutils.Settings.GetString("tasks.twitter.mongodb.dbName"),
 		gutils.Settings.GetString("tasks.twitter.mongodb.user"),

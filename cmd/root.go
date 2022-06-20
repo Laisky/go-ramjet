@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/spf13/pflag"
 
+	// initialize all tasks
 	_ "github.com/Laisky/go-ramjet/internal/tasks"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
+	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -71,8 +72,10 @@ func setupCMDArgs() *pflag.FlagSet {
 	pflag.StringP("config", "c", "/etc/go-ramjet/settings.yml", "config file path")
 	pflag.String("host", "", "hostname")
 	pflag.String("log-level", "", "logger level")
-	pflag.StringSliceP("task", "t", []string{}, "which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
-	pflag.StringSliceP("exclude", "e", []string{}, "which tasks do not want to runnning, like\n ./main -e t1,t2,heartbeat")
+	pflag.StringSliceP("task", "t", []string{},
+		"which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
+	pflag.StringSliceP("exclude", "e", []string{},
+		"which tasks do not want to runnning, like\n ./main -e t1,t2,heartbeat")
 	pflag.Parse()
 	return pflag.CommandLine
 }

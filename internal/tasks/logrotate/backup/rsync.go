@@ -26,7 +26,7 @@ type rsyncUploader struct {
 	args *rsyncArgs
 }
 
-func (u *rsyncUploader) New(st *backupSetting) error {
+func (u *rsyncUploader) New(st *BackupSetting) error {
 	u.baseUploader = createBaseUploader(st)
 	u.args = &rsyncArgs{
 		Remote: st.Args["remote"].(string),

@@ -26,7 +26,7 @@ func initSvc() error {
 		return err
 	}
 
-	twitterDao, err := NewTwitterDao(
+	twitterDao, err := NewDao(
 		gutils.Settings.GetString("db.twitter.addr"),
 		gutils.Settings.GetString("db.twitter.db"),
 		gutils.Settings.GetString("db.twitter.user"),
@@ -36,7 +36,7 @@ func initSvc() error {
 		return err
 	}
 
-	twitterHome, err := NewTwitterDao(
+	twitterHome, err := NewDao(
 		gutils.Settings.GetString("db.twitter-home.addr"),
 		gutils.Settings.GetString("db.twitter-home.db"),
 		gutils.Settings.GetString("db.twitter-home.user"),
@@ -57,9 +57,9 @@ func initSvc() error {
 
 type Service struct {
 	searchDao  *SearchDao
-	twitterDao *TwitterDao
+	twitterDao *Dao
 	// twitterRepDao replica twitter db
-	twitterRepDao *TwitterDao
+	twitterRepDao *Dao
 }
 
 func getTweetUserID(tweet *Tweet) string {
