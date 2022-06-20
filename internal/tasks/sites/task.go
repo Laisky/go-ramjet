@@ -7,7 +7,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	utils "github.com/Laisky/go-utils"
+	utils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 

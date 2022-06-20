@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	utils "github.com/Laisky/go-utils"
+	utils "github.com/Laisky/go-utils/v2"
 
 	web "github.com/Laisky/go-ramjet/library/web"
 )

@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/Laisky/go-chaining"
-	utils "github.com/Laisky/go-utils"
+	utils "github.com/Laisky/go-utils/v2"
 
 	"github.com/yanyiwu/gojieba"
 )

@@ -1,8 +1,8 @@
 package log
 
-import gutils "github.com/Laisky/go-utils"
+import gutils "github.com/Laisky/go-utils/v2"
 
-var Logger *gutils.LoggerType
+var Logger gutils.LoggerItf
 
 func init() {
 	var err error

@@ -9,7 +9,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
 
-	utils "github.com/Laisky/go-utils"
+	utils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 )
 

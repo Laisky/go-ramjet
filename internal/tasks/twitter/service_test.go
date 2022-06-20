@@ -3,8 +3,9 @@ package twitter
 import (
 	"testing"
 
-	"github.com/Laisky/go-ramjet/library/config"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/config"
 )
 
 func TestService_SyncSearchTweets(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	"github.com/Laisky/go-utils"
+	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/graphql"

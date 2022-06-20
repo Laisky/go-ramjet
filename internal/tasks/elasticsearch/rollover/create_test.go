@@ -7,7 +7,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
 
-	"github.com/Laisky/go-utils"
+	"github.com/Laisky/go-utils/v2"
 )
 
 func TestGetIdxRolloverReqBodyByIdxAlias(t *testing.T) {

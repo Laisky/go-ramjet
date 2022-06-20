@@ -3,7 +3,7 @@ package twitter
 import (
 	"time"
 
-	gutils "github.com/Laisky/go-utils"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"

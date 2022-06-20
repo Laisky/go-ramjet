@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/library/config"
-	gutils "github.com/Laisky/go-utils"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/Laisky/go-ramjet/library/config"
 )
 
 func TestSearchDao_GetLargestID(t *testing.T) {
@@ -31,8 +32,8 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 	require.NoError(t, err)
 
 	tweets := []SearchTweet{
-		SearchTweet{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
-		SearchTweet{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
+		{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
+		{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
 	}
 
 	for i := range tweets {
