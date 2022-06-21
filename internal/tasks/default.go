@@ -20,4 +20,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/zipkin"
 	// twitter sync task
 	_ "github.com/Laisky/go-ramjet/internal/tasks/twitter"
+	// crawler task
+	_ "github.com/Laisky/go-ramjet/internal/tasks/crawler"
 )
