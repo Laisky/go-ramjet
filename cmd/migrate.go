@@ -6,8 +6,8 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/crawler"
 	"github.com/Laisky/go-ramjet/library/log"
 
-	gutils "github.com/Laisky/go-utils"
-	gcmd "github.com/Laisky/go-utils/cmd"
+	gutils "github.com/Laisky/go-utils/v2"
+	gcmd "github.com/Laisky/go-utils/v2/cmd"
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +19,7 @@ var migrateCMD = &cobra.Command{
 	Args:  gcmd.NoExtraArgs,
 	PreRun: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
-		if err := initialize(ctx, cmd); err != nil {
-			log.Logger.Panic("init", zap.Error(err))
-		}
+		initialize(ctx, cmd)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		d, err := crawler.NewDao(gutils.Settings.GetString("db.crawler.dsn"))

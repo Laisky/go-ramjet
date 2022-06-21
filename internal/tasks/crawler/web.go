@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Laisky/go-ramjet/library/web"
 	"github.com/gin-gonic/gin"
+
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 func registerWeb() {

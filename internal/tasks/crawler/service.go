@@ -6,11 +6,12 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/pkg/errors"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var httpCli *http.Client

@@ -16,7 +16,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-type BackupSetting struct {
+type Setting struct {
 	Name      string
 	Path      string
 	Regex     string
@@ -27,7 +27,7 @@ type BackupSetting struct {
 
 // uploader do the uploading
 type uploader interface {
-	New(*BackupSetting) error
+	New(*Setting) error
 	Upload(string)
 	Add(int)
 	Wait()
@@ -36,12 +36,12 @@ type uploader interface {
 
 type baseUploader struct {
 	wg             *sync.WaitGroup
-	ST             *BackupSetting
+	ST             *Setting
 	successedFiles []string
 	failedFiles    []string
 }
 
-func createBaseUploader(st *BackupSetting) *baseUploader {
+func createBaseUploader(st *Setting) *baseUploader {
 	return &baseUploader{
 		wg: &sync.WaitGroup{},
 		ST: st,
@@ -111,11 +111,11 @@ var (
 	backupLock    = &sync.Mutex{}
 )
 
-func LoadSettings() (configs []*BackupSetting) {
+func LoadSettings() (configs []*Setting) {
 	interval = utils.Settings.GetDuration("tasks.backups.interval") * time.Second
 	for name, ci := range utils.Settings.Get("tasks.backups.configs").(map[string]interface{}) {
 		c := ci.(map[string]interface{})
-		configs = append(configs, &BackupSetting{
+		configs = append(configs, &Setting{
 			Name:      name,
 			Path:      c["path"].(string),
 			Regex:     c["regex"].(string),

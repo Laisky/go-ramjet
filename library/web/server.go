@@ -5,8 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	gmw "github.com/Laisky/gin-middlewares"
-	"github.com/Laisky/gin-middlewares/metrics"
+	gmw "github.com/Laisky/gin-middlewares/v2"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -25,7 +24,8 @@ func RunServer(addr string) {
 		gin.Recovery(),
 		gmw.GetLoggerMiddleware(log.Logger),
 	)
-	if err := metrics.Enable(Server); err != nil {
+
+	if err := gmw.EnableMetric(Server); err != nil {
 		log.Logger.Panic("enable metrics", zap.Error(err))
 	}
 

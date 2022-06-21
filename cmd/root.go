@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Laisky/go-utils/v2"
+	gutils "github.com/Laisky/go-utils/v2"
+	gcmd "github.com/Laisky/go-utils/v2/cmd"
+	"github.com/Laisky/zap"
+	"github.com/spf13/cobra"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
-	gcmd "github.com/Laisky/go-utils/cmd"
-	"github.com/Laisky/go-utils/v2"
-	gutils "github.com/Laisky/go-utils/v2"
-	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 )
 
 var rootCMD = &cobra.Command{
@@ -50,15 +50,13 @@ var rootCMD = &cobra.Command{
 	},
 }
 
-func initialize(ctx context.Context, cmd *cobra.Command) error {
+func initialize(ctx context.Context, cmd *cobra.Command) {
 	if err := gutils.Settings.BindPFlags(cmd.Flags()); err != nil {
-		return errors.Wrap(err, "bind pflags")
+		log.Logger.Panic("bind pflags", zap.Error(err))
 	}
 
 	setupSettings(ctx)
 	setupLogger(ctx)
-
-	return nil
 }
 
 func setupSettings(ctx context.Context) {
