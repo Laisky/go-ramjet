@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	gconfig "github.com/Laisky/go-config"
+	gutils "github.com/Laisky/go-utils/v2"
 	gcmd "github.com/Laisky/go-utils/v2/cmd"
 	glog "github.com/Laisky/go-utils/v2/log"
 	"github.com/Laisky/zap"
@@ -24,7 +25,9 @@ var rootCMD = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 
-		initialize(ctx, cmd)
+		if !initialize(ctx, cmd) {
+			return
+		}
 
 		//加载参数并启动邮箱
 		alert.Manager.Setup()
@@ -50,17 +53,26 @@ var rootCMD = &cobra.Command{
 	},
 }
 
-func initialize(ctx context.Context, cmd *cobra.Command) {
+func initialize(ctx context.Context, cmd *cobra.Command) bool {
 	if err := gconfig.Shared.BindPFlags(cmd.Flags()); err != nil {
 		log.Logger.Panic("bind pflags", zap.Error(err))
 	}
 
-	setupSettings(ctx)
+	if !setupSettings(ctx) {
+		return false
+	}
+
 	setupLogger(ctx)
+	return true
 }
 
-func setupSettings(ctx context.Context) {
+func setupSettings(ctx context.Context) bool {
 	var err error
+
+	if gconfig.Shared.GetBool("version") {
+		fmt.Println(gutils.PrettyBuildInfo())
+		return false
+	}
 
 	//配置加载
 	cfgFile := gconfig.Shared.GetString("config")
@@ -68,6 +80,8 @@ func setupSettings(ctx context.Context) {
 	if err = gconfig.Shared.LoadFromFile(cfgFile); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
+
+	return true
 }
 
 func setupLogger(ctx context.Context) {
@@ -115,6 +129,7 @@ func init() {
 	rootCMD.PersistentFlags().String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
 	rootCMD.PersistentFlags().StringP("config", "c", "/etc/go-ramjet/settings.yml", "config file path")
 	rootCMD.PersistentFlags().String("host", "127.0.0.1", "hostname")
+	rootCMD.PersistentFlags().BoolP("version", "v", false, "show version")
 	rootCMD.PersistentFlags().String("log-level", "info", "logger level")
 	rootCMD.PersistentFlags().StringSliceP("task", "t", []string{},
 		"which tasks want to runnning, like\n ./main -t t1,t2,heartbeat")
