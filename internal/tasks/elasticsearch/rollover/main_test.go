@@ -3,12 +3,11 @@ package rollover_test
 import (
 	"testing"
 
-	"github.com/Laisky/go-ramjet/library/log"
+	gconfig "github.com/Laisky/go-config"
+	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
-
-	"github.com/Laisky/go-utils/v2"
-	"github.com/Laisky/zap"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -21,12 +20,12 @@ func init() {
 }
 
 func setUp() {
-	if err := utils.Settings.LoadFromFile("/etc/go-ramjet/settings.yml"); err != nil {
+	if err := gconfig.Shared.LoadFromFile("/etc/go-ramjet/settings.yml"); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 
-	// api = utils.Settings.GetString("tasks.elasticsearch-v2.url")
-	// utils.Settings.Set("debug", true)
+	// api = gconfig.Shared.GetString("tasks.elasticsearch-v2.url")
+	// gconfig.Shared.Set("debug", true)
 	idxSts = rollover.LoadSettings()
 	api = idxSts[0].API
 }

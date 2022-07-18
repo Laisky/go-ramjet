@@ -3,6 +3,7 @@ package crawler
 import (
 	"time"
 
+	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
@@ -24,7 +25,7 @@ func syncCrawler() {
 	defer log.Logger.Info("web crawler done")
 
 	if err := svc.CrawlAllPages(
-		gutils.Settings.GetStringSlice("tasks.crawler.sitemaps"),
+		gconfig.Shared.GetStringSlice("tasks.crawler.sitemaps"),
 	); err != nil {
 		log.Logger.Panic("crawl all pages", zap.Error(err))
 	}
@@ -36,12 +37,12 @@ func bindTask() {
 	initSvc()
 	registerWeb()
 
-	go store.TaskStore.TickerAfterRun(gutils.Settings.GetDuration("tasks.crawler.interval")*time.Second, syncCrawler)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, syncCrawler)
 }
 
 func initSvc() {
 	var err error
-	svc, err = NewService(gutils.Settings.GetString("db.crawler.dsn"))
+	svc, err = NewService(gconfig.Shared.GetString("db.crawler.dsn"))
 	if err != nil {
 		log.Logger.Panic("new service", zap.Error(err))
 	}

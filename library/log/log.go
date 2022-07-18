@@ -1,13 +1,12 @@
 package log
 
-import gutils "github.com/Laisky/go-utils/v2"
+import logsdk "github.com/Laisky/go-utils/v2/log"
 
-var Logger gutils.LoggerItf
+var Logger logsdk.Logger
 
 func init() {
 	var err error
-	Logger, err = gutils.NewConsoleLoggerWithName("go-ramjet",
-		gutils.LoggerLevelInfo)
+	Logger, err = logsdk.NewConsoleWithName("go-ramjet", logsdk.LevelInfo)
 	if err != nil {
 		panic(err)
 	}

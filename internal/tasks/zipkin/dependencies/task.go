@@ -3,27 +3,26 @@ package dependencies
 import (
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func runTask() {
 	log.Logger.Info("run zipkin-dependencies...")
-	for env := range utils.Settings.Get("tasks.zipkin.dependencies.configs").(map[string]interface{}) {
+	for env := range gconfig.Shared.Get("tasks.zipkin.dependencies.configs").(map[string]interface{}) {
 		environ := generateContainerEnv(
-			utils.Settings.GetString("tasks.zipkin.dependencies.host"),
-			utils.Settings.GetString("tasks.zipkin.dependencies.configs."+env+".index"),
-			utils.Settings.GetString("tasks.zipkin.dependencies.username"),
-			utils.Settings.GetString("tasks.zipkin.dependencies.passwd"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.host"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.configs."+env+".index"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.username"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.passwd"),
 		)
 
 		stdout, stderr, err := runDockerContainer(
-			utils.Settings.GetString("tasks.zipkin.dependencies.endpoint"),
-			utils.Settings.GetString("tasks.zipkin.dependencies.image"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.endpoint"),
+			gconfig.Shared.GetString("tasks.zipkin.dependencies.image"),
 			environ,
 		)
 		if err != nil || stderr != nil {
@@ -40,5 +39,5 @@ func runTask() {
 
 func BindTask() {
 	log.Logger.Info("bind zipkin-dependencies task...")
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.zipkin.dependencies.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.zipkin.dependencies.interval")*time.Second, runTask)
 }

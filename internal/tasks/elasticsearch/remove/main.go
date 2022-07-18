@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -71,7 +71,7 @@ func getDateStringSecondsAgo(seconds int) (dateString string) {
 
 func getURLByIndexName(index string) (url string) {
 	var baseURL bytes.Buffer
-	baseURL.WriteString(utils.Settings.GetString("tasks.elasticsearch.url"))
+	baseURL.WriteString(gconfig.Shared.GetString("tasks.elasticsearch.url"))
 	baseURL.WriteString(index)
 	baseURL.WriteString("/_delete_by_query?conflicts=proceed")
 	url = baseURL.String()
@@ -107,7 +107,7 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 				"lte": dateBefore,
 			}},
 		},
-		Size: utils.Settings.GetInt("tasks.elasticsearch.batch"),
+		Size: gconfig.Shared.GetInt("tasks.elasticsearch.batch"),
 		// Sort: []map[string]string{
 		// 	map[string]string{"@timestamp": "asc"},
 		// },
@@ -121,7 +121,7 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	}
 
 	// dry
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		b, _ := json.Marshal(requestData)
 		log.Logger.Info("request ", zap.ByteString("data", b))
 		return
@@ -133,7 +133,7 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 			log.Logger.Error("delete documents error", zap.String("index", task.Index), zap.String("url", url), zap.Error(err))
 			resp = Resp{
 				Deleted: 0,
-				Total:   utils.Settings.GetInt("tasks.elasticsearch.batch"),
+				Total:   gconfig.Shared.GetInt("tasks.elasticsearch.batch"),
 			}
 		} else {
 			log.Logger.Debug("http.RequestJSON got some innocent error", zap.Error(err))
@@ -145,7 +145,7 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	}
 
 	log.Logger.Info("deleted documents", zap.String("index", task.Index), zap.Int("deleted", resp.Deleted), zap.Int("total", resp.Total))
-	if resp.Total >= utils.Settings.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
+	if resp.Total >= gconfig.Shared.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
 		go removeDocumentsByTaskSetting(task)
 	}
 }
@@ -154,13 +154,13 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 func BindRemoveCPLogs() {
 	log.Logger.Info("bind remove ES Logs...")
 
-	if utils.Settings.GetBool("debug") { // set for debug
-		utils.Settings.Set("tasks.elasticsearch.interval", 1)
-		utils.Settings.Set("tasks.elasticsearch.batch", 1)
+	if gconfig.Shared.GetBool("debug") { // set for debug
+		gconfig.Shared.Set("tasks.elasticsearch.interval", 1)
+		gconfig.Shared.Set("tasks.elasticsearch.batch", 1)
 	}
 
-	sem = semaphore.NewWeighted(utils.Settings.GetInt64("tasks.elasticsearch.concurrent"))
-	go store.TaskStore.Ticker(utils.Settings.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
+	sem = semaphore.NewWeighted(gconfig.Shared.GetInt64("tasks.elasticsearch.concurrent"))
+	go store.TaskStore.Ticker(gconfig.Shared.GetDuration("tasks.elasticsearch.interval")*time.Second, runTask)
 }
 
 func runTask() {
@@ -183,7 +183,7 @@ func loadDeleteTaskSettings() (taskSettings []*MonitorTaskConfig) {
 		indexConfig *MonitorTaskConfig
 		term        = new(map[string]interface{})
 	)
-	for _, configI := range utils.Settings.Get("tasks.elasticsearch.configs").([]interface{}) {
+	for _, configI := range gconfig.Shared.Get("tasks.elasticsearch.configs").([]interface{}) {
 		log.Logger.Debug("load delete tasks settings")
 		config = configI.(map[interface{}]interface{})
 		indexConfig = &MonitorTaskConfig{

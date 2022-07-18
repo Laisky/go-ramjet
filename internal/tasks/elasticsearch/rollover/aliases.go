@@ -7,7 +7,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	"github.com/Laisky/go-utils/v2"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 )
@@ -56,12 +56,12 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 		return nil, errors.Wrap(err, "request aliases api error")
 	}
 
-	err = utils.CheckResp(resp)
+	err = gutils.CheckResp(resp)
 	if err != nil {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 	respB, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "try to read resp body error")

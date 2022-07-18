@@ -3,9 +3,9 @@ package password
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-
+	gconfig "github.com/Laisky/go-config"
 	utils "github.com/Laisky/go-utils/v2"
+	"github.com/gin-gonic/gin"
 
 	web "github.com/Laisky/go-ramjet/library/web"
 )
@@ -13,6 +13,6 @@ import (
 func bindHTTP() {
 	web.Server.GET("/es/password", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK,
-			GeneratePasswdByDate(utils.Clock.GetUTCNow(), utils.Settings.GetString("tasks.elasticsearch-v2.password.secret")))
+			GeneratePasswdByDate(utils.Clock.GetUTCNow(), gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret")))
 	})
 }

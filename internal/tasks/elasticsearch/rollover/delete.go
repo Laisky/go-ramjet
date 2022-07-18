@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 // RunDeleteTask start to delete indices
@@ -65,7 +66,7 @@ func RemoveIndexByName(api, index string) (err error) {
 	}
 
 	log.Logger.Debug("remove index", zap.String("index", index))
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		return nil
 	}
 

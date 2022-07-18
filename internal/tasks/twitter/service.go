@@ -3,6 +3,7 @@ package twitter
 import (
 	"sync"
 
+	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2/bson"
@@ -21,26 +22,26 @@ func initSvc() error {
 	svcMu.Lock()
 	defer svcMu.Unlock()
 
-	searchDao, err := NewSearchDao(gutils.Settings.GetString("db.clickhouse.dsn"))
+	searchDao, err := NewSearchDao(gconfig.Shared.GetString("db.clickhouse.dsn"))
 	if err != nil {
 		return err
 	}
 
 	twitterDao, err := NewDao(
-		gutils.Settings.GetString("db.twitter.addr"),
-		gutils.Settings.GetString("db.twitter.db"),
-		gutils.Settings.GetString("db.twitter.user"),
-		gutils.Settings.GetString("db.twitter.passwd"),
+		gconfig.Shared.GetString("db.twitter.addr"),
+		gconfig.Shared.GetString("db.twitter.db"),
+		gconfig.Shared.GetString("db.twitter.user"),
+		gconfig.Shared.GetString("db.twitter.passwd"),
 	)
 	if err != nil {
 		return err
 	}
 
 	twitterHome, err := NewDao(
-		gutils.Settings.GetString("db.twitter-home.addr"),
-		gutils.Settings.GetString("db.twitter-home.db"),
-		gutils.Settings.GetString("db.twitter-home.user"),
-		gutils.Settings.GetString("db.twitter-home.passwd"),
+		gconfig.Shared.GetString("db.twitter-home.addr"),
+		gconfig.Shared.GetString("db.twitter-home.db"),
+		gconfig.Shared.GetString("db.twitter-home.user"),
+		gconfig.Shared.GetString("db.twitter-home.passwd"),
 	)
 	if err != nil {
 		return err
@@ -80,7 +81,7 @@ func (s *Service) SyncSearchTweets() error {
 	iter := s.twitterDao.GetTweetsIter(bson.M{
 		"created_at": bson.M{"$gte": latestT},
 	})
-	defer iter.Close()
+	defer gutils.CloseQuietly(iter)
 
 	tweet := new(Tweet)
 	for iter.Next(tweet) {
@@ -109,7 +110,7 @@ func (s *Service) SyncReplicaTweets() error {
 	iter := s.twitterDao.GetTweetsIter(bson.M{
 		"_id": bson.M{"$gte": latestT},
 	})
-	defer iter.Close()
+	defer gutils.CloseQuietly(iter)
 
 	tweet := new(Tweet)
 	for iter.Next(tweet) {

@@ -6,7 +6,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 
 	gmw "github.com/Laisky/gin-middlewares/v2"
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 )
@@ -16,13 +16,13 @@ var (
 )
 
 func RunServer(addr string) {
-	if !utils.Settings.GetBool("debug") {
+	if !gconfig.Shared.GetBool("debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	Server.Use(
 		gin.Recovery(),
-		gmw.GetLoggerMiddleware(log.Logger),
+		gmw.NewLoggerMiddleware(gmw.WithLogger(log.Logger)),
 	)
 
 	if err := gmw.EnableMetric(Server); err != nil {

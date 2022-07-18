@@ -5,10 +5,9 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	"github.com/Laisky/go-utils/v2"
-	"github.com/Laisky/zap"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/graphql"
+	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +21,7 @@ type TelegramCli struct {
 }
 
 func (t *TelegramCli) Setup() {
-	t.url = utils.Settings.GetString("telegram.api")
+	t.url = gconfig.Shared.GetString("telegram.api")
 	t.cli = graphql.NewClient(t.url, nil)
 	log.Logger.Info("setup url", zap.String("url", t.url))
 }
@@ -49,7 +48,7 @@ func (t *TelegramCli) Send(ctx context.Context, alertType, token, msg string) (e
 }
 
 func (t *TelegramCli) SendAlert(msg string) (err error) {
-	alertType := utils.Settings.GetString("telegram.alert")
-	pushToken := utils.Settings.GetString("telegram.push_token")
+	alertType := gconfig.Shared.GetString("telegram.alert")
+	pushToken := gconfig.Shared.GetString("telegram.push_token")
 	return t.Send(context.Background(), alertType, pushToken, msg)
 }

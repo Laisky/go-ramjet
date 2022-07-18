@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
@@ -25,8 +26,8 @@ var (
 )
 
 func BindPasswordTask() {
-	step := gutils.Settings.GetDuration("tasks.elasticsearch-v2.password.interval")
-	if gutils.Settings.GetBool("debug") {
+	step := gconfig.Shared.GetDuration("tasks.elasticsearch-v2.password.interval")
+	if gconfig.Shared.GetBool("debug") {
 		step = 5
 	}
 
@@ -45,11 +46,11 @@ type User struct {
 
 func runTask() {
 	log.Logger.Info("run elasticsearch.password")
-	newpasswd := GeneratePasswdByDate(gutils.UTCNow(), gutils.Settings.GetString("tasks.elasticsearch-v2.password.secret"))
-	for _, api := range gutils.Settings.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
+	newpasswd := GeneratePasswdByDate(gutils.UTCNow(), gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret"))
+	for _, api := range gconfig.Shared.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
 		log.Logger.Debug("try to change password", zap.String("api", maskAPI(api)))
 		user := &User{
-			Username: gutils.Settings.GetString("tasks.elasticsearch-v2.password.username"),
+			Username: gconfig.Shared.GetString("tasks.elasticsearch-v2.password.username"),
 			Password: newpasswd,
 		}
 		jb, err := json.Marshal(user)
@@ -58,7 +59,7 @@ func runTask() {
 			continue
 		}
 
-		if gutils.Settings.GetBool("dry") {
+		if gconfig.Shared.GetBool("dry") {
 			log.Logger.Info("change password via post", zap.String("api", maskAPI(api)), zap.String("password", newpasswd))
 			continue
 		}
@@ -68,7 +69,7 @@ func runTask() {
 			log.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
 		}
-		defer resp.Body.Close()
+		defer gutils.CloseQuietly(resp.Body)
 		if err = gutils.CheckResp(resp); err != nil {
 			log.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue

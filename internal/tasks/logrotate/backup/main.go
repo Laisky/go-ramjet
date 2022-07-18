@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 
@@ -112,8 +112,8 @@ var (
 )
 
 func LoadSettings() (configs []*Setting) {
-	interval = utils.Settings.GetDuration("tasks.backups.interval") * time.Second
-	for name, ci := range utils.Settings.Get("tasks.backups.configs").(map[string]interface{}) {
+	interval = gconfig.Shared.GetDuration("tasks.backups.interval") * time.Second
+	for name, ci := range gconfig.Shared.Get("tasks.backups.configs").(map[string]interface{}) {
 		c := ci.(map[string]interface{})
 		configs = append(configs, &Setting{
 			Name:      name,
@@ -225,8 +225,8 @@ func runTask() {
 
 func bindTask() {
 	log.Logger.Info("bind backup es logs task...")
-	if utils.Settings.GetBool("debug") {
-		utils.Settings.Set("tasks.backups.interval", 1)
+	if gconfig.Shared.GetBool("debug") {
+		gconfig.Shared.Set("tasks.backups.interval", 1)
 	}
 
 	LoadSettings()

@@ -3,9 +3,9 @@ package rollover
 import (
 	"html/template"
 
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 )
 
 func getESMapping(name string) template.HTML {
-	return template.HTML(utils.Settings.GetString("tasks.elasticsearch.mappings." + name))
+	return template.HTML(gconfig.Shared.GetString("tasks.elasticsearch.mappings." + name))
 }

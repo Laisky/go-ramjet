@@ -6,6 +6,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
+	gconfig "github.com/Laisky/go-config"
 	utils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/gorilla/feeds"
@@ -46,7 +47,7 @@ func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
 		})
 		n++
 
-		if utils.Settings.GetBool("debug") && n > 5 {
+		if gconfig.Shared.GetBool("debug") && n > 5 {
 			break
 		}
 	}

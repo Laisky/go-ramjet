@@ -9,14 +9,14 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -43,12 +43,12 @@ type IdxSetting struct {
 func BindRolloverIndices() {
 	log.Logger.Info("bind rollover indices...")
 
-	if utils.Settings.GetBool("debug") { // set for debug
-		utils.Settings.Set("tasks.elasticsearch-v2.interval", 10)
+	if gconfig.Shared.GetBool("debug") { // set for debug
+		gconfig.Shared.Set("tasks.elasticsearch-v2.interval", 10)
 	}
 
 	bindHTTP()
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
 }
 
 func runTask() {
@@ -56,7 +56,7 @@ func runTask() {
 		taskSts []*IdxSetting
 		st      *IdxSetting
 		ctx     = context.Background()
-		sem     = semaphore.NewWeighted(utils.Settings.GetInt64("tasks.elasticsearch-v2.concurrent"))
+		sem     = semaphore.NewWeighted(gconfig.Shared.GetInt64("tasks.elasticsearch-v2.concurrent"))
 	)
 
 	taskSts = LoadSettings()
@@ -70,7 +70,7 @@ func runTask() {
 }
 
 func urlMasking(val string) string {
-	return utils.URLMasking(val, "*****")
+	return gutils.URLMasking(val, "*****")
 }
 
 // LoadAllIndicesNames load all indices name by ES API
@@ -85,7 +85,7 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "load body error for url %v", urlMasking(url))
@@ -110,7 +110,7 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 		item   map[interface{}]interface{}
 		action string
 	)
-	for _, itemI = range utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+	for _, itemI = range gconfig.Shared.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
 		item = itemI.(map[interface{}]interface{})
 		if action = item["action"].(string); action != "rollover" {
 			continue
@@ -124,9 +124,9 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 			Mapping:       getESMapping(item["mapping"].(string)),
 			API:           item["api"].(string),
 			Rollover:      item["rollover"].(string),
-			NRepls:        utils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),
-			NShards:       utils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
-			IsSkipCreate:  utils.FallBack(func() interface{} { return item["skip-create"].(bool) }, false).(bool),
+			NRepls:        gutils.FallBack(func() interface{} { return item["n-replicas"].(int) }, 1).(int),
+			NShards:       gutils.FallBack(func() interface{} { return item["n-shards"].(int) }, 5).(int),
+			IsSkipCreate:  gutils.FallBack(func() interface{} { return item["skip-create"].(bool) }, false).(bool),
 		}
 		log.Logger.Debug("load rollover setting",
 			zap.String("action", action),

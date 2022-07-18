@@ -5,12 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
+	gconfig "github.com/Laisky/go-config"
+	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
-
-	utils "github.com/Laisky/go-utils/v2"
-	"github.com/Laisky/zap"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func TestRemoveIndexByName(t *testing.T) {
@@ -81,7 +80,7 @@ func TestIsIdxShouldDelete(t *testing.T) {
 }
 
 func init() {
-	if err := utils.Settings.LoadFromFile("/Users/laisky/repo/google/configs/go-ramjet/settings.yml"); err != nil {
+	if err := gconfig.Shared.LoadFromFile("/Users/laisky/repo/google/configs/go-ramjet/settings.yml"); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 }

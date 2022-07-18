@@ -21,7 +21,7 @@ package backup_test
 // }
 
 // func setUp() {
-// 	utils.Settings.SetupFromFile()
+// 	gconfig.Shared.SetupFromFile()
 // 	st := backup.LoadSettings()[0]
 
 // 	remote = st.Args["remote"].(string)

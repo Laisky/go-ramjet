@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -72,7 +72,7 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 		log.Logger.Error("try to get es stats got error", zap.String("url", url), zap.Error(err))
 		return
 	}
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Logger.Error("try to read es stat body got error", zap.String("url", url), zap.Error(err))
@@ -113,7 +113,7 @@ func extractStatsToMetricForEachNode(clusterName string, stats map[string]interf
 			ClusterName:     clusterName,
 			NodeName:        data["name"].(string),
 			MonitorType:     "node",
-			Timestamp:       utils.UTCNow().Format(time.RFC3339),
+			Timestamp:       gutils.UTCNow().Format(time.RFC3339),
 			OSMetric:        getOSMetric(data),
 			OperatorsMetric: getOperatorsMetric(data),
 			FSMetric:        getFSMetric(data),
@@ -143,21 +143,21 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 	log.Logger.Debug("push es metric",
 		zap.String("api", c.GetPushMetricAPI()),
 		zap.ByteString("body", jsonBytes[:]))
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		return
 	}
-	resp, err := httpClient.Post(c.GetPushMetricAPI(), utils.HTTPHeaderContentTypeValJSON, bytes.NewBuffer(jsonBytes))
+	resp, err := httpClient.Post(c.GetPushMetricAPI(), gutils.HTTPHeaderContentTypeValJSON, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		log.Logger.Error("try to push es metric got error", zap.Error(err))
 		return
 	}
 
-	err = utils.CheckResp(resp)
+	err = gutils.CheckResp(resp)
 	if err != nil {
 		log.Logger.Error("got error after push", zap.Error(err))
 		return
 	}
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 	log.Logger.Debug("success to push es metric to elasticsearch for node")
 }
 
@@ -171,7 +171,7 @@ func BindMonitorTask() {
 	}
 
 	interval := st.Interval
-	if utils.Settings.GetBool("debug") { // set for debug
+	if gconfig.Shared.GetBool("debug") { // set for debug
 		interval = 3
 	}
 
@@ -234,7 +234,7 @@ func LoadSettings() (monitorSt *St) {
 		itemI interface{}
 		item  map[interface{}]interface{}
 	)
-	st, ok := utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{})
+	st, ok := gconfig.Shared.Get("tasks.elasticsearch-v2.configs").([]interface{})
 	if !ok {
 		log.Logger.Info("no elasticsearch monitor settings found")
 		return

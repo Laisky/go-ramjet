@@ -10,11 +10,11 @@ import (
 	"os/exec"
 	"regexp"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 type rsyncArgs struct {
@@ -76,7 +76,7 @@ func GenRsyncCMD(fpath, remote string) (cmd []string) {
 }
 
 func RunSysCMD(cmd []string) (output string, err error) {
-	if utils.Settings.GetBool("debug") {
+	if gconfig.Shared.GetBool("debug") {
 		log.Logger.Debug("run cmd", zap.Strings("cmd", cmd))
 		return "", nil
 	}

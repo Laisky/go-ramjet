@@ -5,6 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
@@ -13,12 +14,12 @@ import (
 
 func prepareDB() (db *Blog, err error) {
 	if db, err = NewBlogDB(
-		utils.Settings.GetString("db.blog.addr"),
-		utils.Settings.GetString("db.blog.db"),
-		utils.Settings.GetString("db.blog.user"),
-		utils.Settings.GetString("db.blog.passwd"),
-		utils.Settings.GetString("db.blog.collections.posts"),
-		utils.Settings.GetString("db.blog.collections.stats"),
+		gconfig.Shared.GetString("db.blog.addr"),
+		gconfig.Shared.GetString("db.blog.db"),
+		gconfig.Shared.GetString("db.blog.user"),
+		gconfig.Shared.GetString("db.blog.passwd"),
+		gconfig.Shared.GetString("db.blog.collections.posts"),
+		gconfig.Shared.GetString("db.blog.collections.stats"),
 	); err != nil {
 		return nil, err
 	}
@@ -35,12 +36,12 @@ func runRSSTask() {
 	defer db.Close()
 	generateRSSFile(
 		&rssCfg{
-			title:       utils.Settings.GetString("tasks.blog.rss.title"),
-			link:        utils.Settings.GetString("tasks.blog.rss.link"),
-			authorName:  utils.Settings.GetString("tasks.blog.rss.author.name"),
-			authorEmail: utils.Settings.GetString("tasks.blog.rss.author.email"),
+			title:       gconfig.Shared.GetString("tasks.blog.rss.title"),
+			link:        gconfig.Shared.GetString("tasks.blog.rss.link"),
+			authorName:  gconfig.Shared.GetString("tasks.blog.rss.author.name"),
+			authorEmail: gconfig.Shared.GetString("tasks.blog.rss.author.email"),
 		},
-		utils.Settings.GetString("tasks.blog.rss.rss_file_path"),
+		gconfig.Shared.GetString("tasks.blog.rss.rss_file_path"),
 		db,
 	)
 }
@@ -76,7 +77,7 @@ func runKeywordTask() {
 				break
 			}
 		}
-		if !utils.Settings.GetBool("dry") {
+		if !gconfig.Shared.GetBool("dry") {
 			err := db.UpdatePostTagsByID(p.ID.Hex(), words)
 			if err != nil {
 				errCnt++
@@ -97,12 +98,12 @@ func runKeywordTask() {
 
 func bindKeywordTask() {
 	log.Logger.Info("bind keyword task...")
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.blog.interval")*time.Second, runKeywordTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.blog.interval")*time.Second, runKeywordTask)
 }
 
 func bindRSSTask() {
 	log.Logger.Info("bind rss task...")
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.blog.interval")*time.Second, runRSSTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.blog.interval")*time.Second, runRSSTask)
 }
 
 func init() {

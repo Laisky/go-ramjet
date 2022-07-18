@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ func runTask() {
 	log.Logger.Info("run ssl-monitor...")
 	var err error
 
-	addr := gutils.Settings.GetString("tasks.sites.addr")
+	addr := gconfig.Shared.GetString("tasks.sites.addr")
 	expiresAt, err := LoadCertExpiresAt(addr)
 	if err != nil {
 		log.Logger.Error("LoadCertExpiresAt got error", zap.String("addr", addr), zap.Error(err))
@@ -57,8 +58,8 @@ func runTask() {
 	}
 
 	now := time.Now()
-	if checkIsTimeTooCloseToAlert(now, expiresAt, gutils.Settings.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
-		err = sendAlertEmail(addr, gutils.Settings.GetString("tasks.sites.receiver"), expiresAt)
+	if checkIsTimeTooCloseToAlert(now, expiresAt, gconfig.Shared.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
+		err = sendAlertEmail(addr, gconfig.Shared.GetString("tasks.sites.receiver"), expiresAt)
 		if err != nil {
 			log.Logger.Error("sendAlertEmail got error", zap.String("addr", addr), zap.Error(err))
 		}
@@ -69,7 +70,7 @@ func runTask() {
 func bindTask() {
 	log.Logger.Info("bind ssl-monitor task...")
 
-	go store.TaskStore.TickerAfterRun(gutils.Settings.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
 }
 
 func init() {

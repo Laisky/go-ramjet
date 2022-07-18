@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	utils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -26,8 +26,8 @@ var (
 )
 
 func BindAliasesTask() {
-	step := utils.Settings.GetDuration("tasks.elasticsearch-v2.aliases.interval")
-	if utils.Settings.GetBool("debug") {
+	step := gconfig.Shared.GetDuration("tasks.elasticsearch-v2.aliases.interval")
+	if gconfig.Shared.GetBool("debug") {
 		step = 5
 	}
 
@@ -40,8 +40,8 @@ func runTask() {
 		err   error
 		alias string
 	)
-	aliases := utils.Settings.Get("tasks.elasticsearch-v2.aliases.aliases").(map[string]interface{})
-	api := utils.Settings.GetString("tasks.elasticsearch-v2.aliases.api")
+	aliases := gconfig.Shared.Get("tasks.elasticsearch-v2.aliases.aliases").(map[string]interface{})
+	api := gconfig.Shared.GetString("tasks.elasticsearch-v2.aliases.api")
 	for index, aliasI := range aliases {
 		alias = aliasI.(string)
 		if err = createAlias(api, index, alias); err != nil {
@@ -75,7 +75,7 @@ func createAlias(api, index, alias string) error {
 		log.Logger.Error("try to marshal json got error", zap.Error(err))
 	}
 
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		log.Logger.Info("refresh aliases via post",
 			zap.String("api", maskAPI(api)),
 			zap.String("index", index),
@@ -83,7 +83,7 @@ func createAlias(api, index, alias string) error {
 		return nil
 	}
 
-	resp, err := httpClient.Post(api, utils.HTTPHeaderContentTypeValJSON, bytes.NewReader(reqJB))
+	resp, err := httpClient.Post(api, gutils.HTTPHeaderContentTypeValJSON, bytes.NewReader(reqJB))
 	if err != nil {
 		log.Logger.Error("try to request api got error",
 			zap.String("api", maskAPI(api)),
@@ -92,9 +92,9 @@ func createAlias(api, index, alias string) error {
 			zap.Error(err))
 		return err
 	}
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 	log.Logger.Debug("got response code", zap.Int("code", resp.StatusCode))
-	if err = utils.CheckResp(resp); err != nil {
+	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Error("request api got error",
 			zap.String("api", maskAPI(api)),
 			zap.String("index", index),

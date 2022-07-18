@@ -4,12 +4,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func runTask() {
@@ -23,12 +22,12 @@ func evtHandler(evt *store.Event) {
 // bindTask bind heartbeat task
 func bindTask() {
 	log.Logger.Info("bind heartbeat task...")
-	if utils.Settings.GetBool("debug") {
-		utils.Settings.Set("tasks.heartbeat.interval", 10)
+	if gconfig.Shared.GetBool("debug") {
+		gconfig.Shared.Set("tasks.heartbeat.interval", 10)
 	}
 
 	bindHTTP()
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.heartbeat.interval")*time.Second, runTask)
 }
 
 func init() {

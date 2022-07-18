@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
+	gconfig "github.com/Laisky/go-config"
 
-	"github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"
 )
 
 func TestGetIdxRolloverReqBodyByIdxAlias(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRolloverNewIndex(t *testing.T) {
 		err error
 	)
 
-	utils.Settings.Set("dry", true)
+	gconfig.Shared.Set("dry", true)
 	err = rollover.NewIndex(api, st)
 	if err != nil {
 		t.Error(err.Error())

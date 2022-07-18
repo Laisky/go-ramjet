@@ -3,7 +3,8 @@ package alert
 import (
 	"github.com/Laisky/go-ramjet/library/log"
 
-	utils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
+	gemail "github.com/Laisky/go-utils/v2/email"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 )
@@ -13,16 +14,16 @@ var (
 )
 
 type EmailType struct {
-	sender *utils.Mail
+	sender *gemail.Mail
 }
 
 func (e *EmailType) Setup() {
-	e.sender = utils.NewMail(utils.Settings.GetString("email.host"), utils.Settings.GetInt("email.port"))
-	e.sender.Login(utils.Settings.GetString("email.username"), utils.Settings.GetString("email.password"))
+	e.sender = gemail.NewMail(gconfig.Shared.GetString("email.host"), gconfig.Shared.GetInt("email.port"))
+	e.sender.Login(gconfig.Shared.GetString("email.username"), gconfig.Shared.GetString("email.password"))
 }
 
 func (e *EmailType) Send(to, toName, subject, content string) (err error) {
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		log.Logger.Info("send email",
 			zap.String("cnt", content),
 			zap.String("subject", subject),
@@ -31,9 +32,9 @@ func (e *EmailType) Send(to, toName, subject, content string) (err error) {
 	}
 
 	err = e.sender.Send(
-		utils.Settings.GetString("email.sender"),
+		gconfig.Shared.GetString("email.sender"),
 		to,
-		utils.Settings.GetString("email.senderName"),
+		gconfig.Shared.GetString("email.senderName"),
 		toName,
 		subject,
 		content,

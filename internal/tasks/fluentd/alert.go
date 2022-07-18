@@ -5,12 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/library/alert"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func checkForAlert(m *sync.Map) (err error) {
@@ -23,7 +22,7 @@ func checkForAlert(m *sync.Map) (err error) {
 		if cnt == "" {
 			cnt = fmt.Sprintf("[%v]some fluentd server got error:\ntestd from: %v\n",
 				time.Now().Format(time.RFC3339),
-				utils.Settings.GetString("host"))
+				gconfig.Shared.GetString("host"))
 		}
 
 		k := ki.(*MonitorCfg)
@@ -31,7 +30,7 @@ func checkForAlert(m *sync.Map) (err error) {
 		return true
 	})
 
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		log.Logger.Info("send fluentd alert email", zap.String("msg", cnt))
 		return nil
 	}

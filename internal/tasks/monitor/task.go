@@ -6,14 +6,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
+	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	alertManager "github.com/Laisky/go-ramjet/library/alert"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -29,21 +29,21 @@ func runTask() {
 	result := &sync.Map{}
 	wg := &sync.WaitGroup{}
 
-	for name := range utils.Settings.Get("tasks.monitor.tenants").(map[string]interface{}) {
+	for name := range gconfig.Shared.Get("tasks.monitor.tenants").(map[string]interface{}) {
 		wg.Add(1)
-		switch utils.Settings.GetString("tasks.monitor.tenants." + name + ".type") {
+		switch gconfig.Shared.GetString("tasks.monitor.tenants." + name + ".type") {
 		case "http":
-			checkHealthByHTTP(wg, name, utils.Settings.GetString("tasks.monitor.tenants."+name+".url"), result)
+			checkHealthByHTTP(wg, name, gconfig.Shared.GetString("tasks.monitor.tenants."+name+".url"), result)
 		default:
 			log.Logger.Error("unknown type",
-				zap.String("type", utils.Settings.GetString("tasks.monitor.tenants."+name+".type")))
+				zap.String("type", gconfig.Shared.GetString("tasks.monitor.tenants."+name+".type")))
 		}
 	}
 
 	wg.Wait()
 	alertForReceivers := map[string]string{}
-	for name := range utils.Settings.Get("tasks.monitor.tenants").(map[string]interface{}) {
-		for _, receiver := range utils.Settings.GetStringSlice("tasks.monitor.tenants." + name + ".receivers") {
+	for name := range gconfig.Shared.Get("tasks.monitor.tenants").(map[string]interface{}) {
+		for _, receiver := range gconfig.Shared.GetStringSlice("tasks.monitor.tenants." + name + ".receivers") {
 			var (
 				alert string
 				ok    bool
@@ -70,10 +70,10 @@ func runTask() {
 			continue
 		}
 
-		alert = fmt.Sprintf("tested from: %v\n\n", utils.Settings.GetString("host")) + alert
+		alert = fmt.Sprintf("tested from: %v\n\n", gconfig.Shared.GetString("host")) + alert
 		alert = time.Now().Format(time.RFC3339) + "\n" + alert
 		if err := alertManager.Manager.Send(
-			utils.Settings.GetString("tasks.monitor.receivers."+receiver),
+			gconfig.Shared.GetString("tasks.monitor.receivers."+receiver),
 			receiver,
 			"[google]ramjet monitor report",
 			alert,
@@ -86,7 +86,7 @@ func runTask() {
 
 func BindTask() {
 	log.Logger.Info("bind monitor")
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.monitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.monitor.interval")*time.Second, runTask)
 }
 
 func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
@@ -101,9 +101,9 @@ func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
 		result.Store(name, errors.Wrap(err, "try to request url got error"))
 		return
 	}
-	defer resp.Body.Close()
+	defer gutils.CloseQuietly(resp.Body)
 
-	if err = utils.CheckResp(resp); err != nil {
+	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Warn("request url return error",
 			zap.Error(err),
 			zap.String("name", name),

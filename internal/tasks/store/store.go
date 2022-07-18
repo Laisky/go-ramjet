@@ -8,10 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -76,8 +77,8 @@ func (s *taskStoreType) Store(name string, f func()) {
 
 func isTaskEnabled(task string) bool {
 	log.Logger.Debug("isTaskEnabled", zap.String("task", task))
-	tasks := utils.Settings.GetStringSlice("task")
-	extasks := strings.Split(utils.Settings.GetString("exclude"), ",")
+	tasks := gconfig.Shared.GetStringSlice("task")
+	extasks := strings.Split(gconfig.Shared.GetString("exclude"), ",")
 
 	if len(tasks) == 0 { // not set -t
 		tse := os.Getenv("TASKS")
@@ -146,7 +147,7 @@ func (s *taskStoreType) runTrigger(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case task = <-s.runChan:
-			if utils.Settings.GetBool("debug") {
+			if gconfig.Shared.GetBool("debug") {
 				go task()
 			} else {
 				go runner(task)

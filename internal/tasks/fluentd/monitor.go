@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -33,12 +33,12 @@ type MonitorCfg struct {
 
 func loadFluentdSettings() []*MonitorCfg {
 	settings := []*MonitorCfg{}
-	if utils.Settings.GetBool("debug") {
-		utils.Settings.Set("tasks.fluentd.interval", 3)
+	if gconfig.Shared.GetBool("debug") {
+		gconfig.Shared.Set("tasks.fluentd.interval", 3)
 	}
 
 	var configM map[string]interface{}
-	for name, configI := range utils.Settings.Get("tasks.fluentd.configs").(map[string]interface{}) {
+	for name, configI := range gconfig.Shared.Get("tasks.fluentd.configs").(map[string]interface{}) {
 		configM = configI.(map[string]interface{})
 		settings = append(settings, &MonitorCfg{
 			Name:           name,
@@ -69,14 +69,14 @@ func checkFluentdHealth(wg *sync.WaitGroup, cfg *MonitorCfg, metric *sync.Map) {
 }
 
 // func pushResultToES(metric *monitorMetric) (err error) {
-// 	url := utils.Settings.GetString("tasks.fluentd.push")
+// 	url := gconfig.Shared.GetString("tasks.fluentd.push")
 // 	jsonBytes, err := json.Marshal(metric)
 // 	if err != nil {
 // 		return errors.Wrap(err, "parse json got error")
 // 	}
 
 // 	log.Logger.Debug("push fluentd metric", zap.ByteString("metric", jsonBytes[:]))
-// 	if utils.Settings.GetBool("dry") {
+// 	if gconfig.Shared.GetBool("dry") {
 // 		return nil
 // 	}
 

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
@@ -15,7 +16,7 @@ import (
 func TestSearchDao_GetLargestID(t *testing.T) {
 	config.LoadTest()
 	d, err := NewSearchDao(
-		gutils.Settings.GetString("tasks.twitter.clickhouse.dsn"),
+		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
 	)
 	require.NoError(t, err)
 
@@ -27,7 +28,7 @@ func TestSearchDao_GetLargestID(t *testing.T) {
 func TestSearchDao_SaveTweets(t *testing.T) {
 	config.LoadTest()
 	d, err := NewSearchDao(
-		gutils.Settings.GetString("tasks.twitter.clickhouse.dsn"),
+		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
 	)
 	require.NoError(t, err)
 
@@ -45,10 +46,10 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	config.LoadTest()
 	d, err := NewDao(
-		gutils.Settings.GetString("tasks.twitter.mongodb.addr"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.dbName"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.user"),
-		gutils.Settings.GetString("tasks.twitter.mongodb.passwd"),
+		gconfig.Shared.GetString("tasks.twitter.mongodb.addr"),
+		gconfig.Shared.GetString("tasks.twitter.mongodb.dbName"),
+		gconfig.Shared.GetString("tasks.twitter.mongodb.user"),
+		gconfig.Shared.GetString("tasks.twitter.mongodb.passwd"),
 	)
 	require.NoError(t, err)
 

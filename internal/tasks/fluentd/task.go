@@ -4,12 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	utils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func runTask() {
@@ -37,7 +36,7 @@ func runTask() {
 
 func bindTask() {
 	log.Logger.Info("bind fluentd monitor...")
-	go store.TaskStore.TickerAfterRun(utils.Settings.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.fluentd.interval")*time.Second, runTask)
 }
 
 func init() {

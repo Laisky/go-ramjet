@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
-	"github.com/gin-gonic/gin"
-
+	gconfig "github.com/Laisky/go-config"
 	utils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
+	"github.com/gin-gonic/gin"
 
+	"github.com/Laisky/go-ramjet/library/log"
 	web "github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -25,7 +24,7 @@ func bindHTTP() {
 		stI     map[interface{}]interface{}
 		details = []*idxDetail{}
 	)
-	for _, sts := range utils.Settings.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
+	for _, sts := range gconfig.Shared.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
 		stI = sts.(map[interface{}]interface{})
 		if stI["action"].(string) != "rollover" {
 			continue

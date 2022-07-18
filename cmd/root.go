@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Laisky/go-utils/v2"
-	gutils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config"
 	gcmd "github.com/Laisky/go-utils/v2/cmd"
+	glog "github.com/Laisky/go-utils/v2/log"
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 
@@ -35,23 +35,23 @@ var rootCMD = &cobra.Command{
 
 		//获取参数
 		log.Logger.Info("running...",
-			zap.Bool("debug", utils.Settings.GetBool("debug")),
-			zap.String("addr", utils.Settings.GetString("addr")),
-			zap.String("config", utils.Settings.GetString("config")),
-			zap.Strings("task", utils.Settings.GetStringSlice("task")),
-			zap.Strings("exclude", utils.Settings.GetStringSlice("exclude")),
+			zap.Bool("debug", gconfig.Shared.GetBool("debug")),
+			zap.String("addr", gconfig.Shared.GetString("addr")),
+			zap.String("config", gconfig.Shared.GetString("config")),
+			zap.Strings("task", gconfig.Shared.GetStringSlice("task")),
+			zap.Strings("exclude", gconfig.Shared.GetStringSlice("exclude")),
 		)
 
 		// Bind each task here
 		store.TaskStore.Start(ctx)
 
 		// Run HTTP Server
-		web.RunServer(utils.Settings.GetString("addr"))
+		web.RunServer(gconfig.Shared.GetString("addr"))
 	},
 }
 
 func initialize(ctx context.Context, cmd *cobra.Command) {
-	if err := gutils.Settings.BindPFlags(cmd.Flags()); err != nil {
+	if err := gconfig.Shared.BindPFlags(cmd.Flags()); err != nil {
 		log.Logger.Panic("bind pflags", zap.Error(err))
 	}
 
@@ -63,9 +63,9 @@ func setupSettings(ctx context.Context) {
 	var err error
 
 	//配置加载
-	cfgFile := utils.Settings.GetString("config")
+	cfgFile := gconfig.Shared.GetString("config")
 	log.Logger.Info("load config", zap.String("file", cfgFile))
-	if err = utils.Settings.LoadFromFile(cfgFile); err != nil {
+	if err = gconfig.Shared.LoadFromFile(cfgFile); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 }
@@ -73,12 +73,12 @@ func setupSettings(ctx context.Context) {
 func setupLogger(ctx context.Context) {
 	opts := []zap.Option{}
 
-	if utils.Settings.GetString("logger.push_api") != "" {
-		alertPusher, err := utils.NewAlertPusherWithAlertType(
+	if gconfig.Shared.GetString("logger.push_api") != "" {
+		alertPusher, err := glog.NewAlert(
 			ctx,
-			utils.Settings.GetString("logger.push_api"),
-			utils.Settings.GetString("logger.alert_type"),
-			utils.Settings.GetString("logger.push_token"),
+			gconfig.Shared.GetString("logger.push_api"),
+			glog.WithAlertType(gconfig.Shared.GetString("logger.alert_type")),
+			glog.WithAlertToken(gconfig.Shared.GetString("logger.push_token")),
 		)
 		if err != nil {
 			log.Logger.Panic("create AlertPusher", zap.Error(err))
@@ -87,23 +87,23 @@ func setupLogger(ctx context.Context) {
 		opts = append(opts, zap.HooksWithFields(alertPusher.GetZapHook()))
 	}
 
-	if _, err := utils.NewConsoleLoggerWithName(
-		"go-ramjet:"+utils.Settings.GetString("host"),
-		utils.Settings.GetString("log-level"),
+	if _, err := glog.NewConsoleWithName(
+		"go-ramjet:"+gconfig.Shared.GetString("host"),
+		glog.Level(gconfig.Shared.GetString("log-level")),
 		opts...,
 	); err != nil {
 		log.Logger.Panic("setup logger", zap.Error(err))
 	}
 
 	//根据入参来区分日志输出级别
-	if utils.Settings.GetBool("debug") { // debug mode
+	if gconfig.Shared.GetBool("debug") { // debug mode
 		fmt.Println("run in debug mode")
 		_ = log.Logger.ChangeLevel("debug")
-		utils.Settings.Set("log-level", "debug")
+		gconfig.Shared.Set("log-level", "debug")
 	} else { // prod mode
 		fmt.Println("run in prod mode")
 		_ = log.Logger.ChangeLevel("info")
-		utils.Settings.Set("log-level", "info")
+		gconfig.Shared.Set("log-level", "info")
 	}
 
 }
@@ -124,6 +124,6 @@ func init() {
 
 func Execute() {
 	if err := rootCMD.Execute(); err != nil {
-		gutils.Logger.Panic("start", zap.Error(err))
+		glog.Shared.Panic("start", zap.Error(err))
 	}
 }

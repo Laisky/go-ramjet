@@ -12,13 +12,14 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"
 	"github.com/pkg/errors"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -78,7 +79,7 @@ func (u *bosUploader) Upload(fpath string) {
 	log.Logger.Debug("uploading file...", zap.String("fpath", fpath))
 	defer u.Done()
 
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		log.Logger.Debug("upload %v", zap.String("fpath", fpath))
 		return
 	}

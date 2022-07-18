@@ -6,12 +6,13 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
+	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -87,7 +88,7 @@ func NewIndex(api string, st *IdxSetting) (err error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	log.Logger.Debug("request to rollover index", zap.String("index", jb.String()))
-	if utils.Settings.GetBool("dry") {
+	if gconfig.Shared.GetBool("dry") {
 		return nil
 	}
 
