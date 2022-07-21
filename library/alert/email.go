@@ -4,7 +4,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 
 	gconfig "github.com/Laisky/go-config"
-	gemail "github.com/Laisky/go-utils/v2/email"
+	emailSDK "github.com/Laisky/go-utils/v2/email"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 )
@@ -14,11 +14,11 @@ var (
 )
 
 type EmailType struct {
-	sender *gemail.Mail
+	sender emailSDK.Mail
 }
 
 func (e *EmailType) Setup() {
-	e.sender = gemail.NewMail(gconfig.Shared.GetString("email.host"), gconfig.Shared.GetInt("email.port"))
+	e.sender = emailSDK.NewMail(gconfig.Shared.GetString("email.host"), gconfig.Shared.GetInt("email.port"))
 	e.sender.Login(gconfig.Shared.GetString("email.username"), gconfig.Shared.GetString("email.password"))
 }
 

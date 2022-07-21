@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/pkg/errors"
 
 	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
@@ -21,7 +22,10 @@ func prepareDB() (db *Blog, err error) {
 		gconfig.Shared.GetString("db.blog.collections.posts"),
 		gconfig.Shared.GetString("db.blog.collections.stats"),
 	); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "connect to blog db %s:%s",
+			gconfig.Shared.GetString("db.blog.addr"),
+			gconfig.Shared.GetString("db.blog.collections.posts"),
+		)
 	}
 	return
 }
