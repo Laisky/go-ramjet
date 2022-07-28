@@ -11,6 +11,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 
+	_ "github.com/Laisky/go-ramjet/internal/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
 	"github.com/Laisky/go-ramjet/library/log"

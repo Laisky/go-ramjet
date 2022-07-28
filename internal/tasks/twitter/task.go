@@ -1,9 +1,6 @@
 package twitter
 
 import (
-	"time"
-
-	gconfig "github.com/Laisky/go-config"
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
@@ -48,8 +45,8 @@ func bindTask() {
 		log.Logger.Panic("init twitter svc", zap.Error(err))
 	}
 
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncSearch)
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncReplica)
+	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncSearch)
+	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncReplica)
 }
 
 func init() {

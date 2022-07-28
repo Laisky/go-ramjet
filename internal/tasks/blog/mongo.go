@@ -3,14 +3,13 @@ package blog
 import (
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/Laisky/go-ramjet/library/db/mongo"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (

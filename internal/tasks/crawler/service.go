@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"time"
 
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
@@ -28,8 +27,8 @@ type Service struct {
 	dao *Dao
 }
 
-func NewService(dsn string) (*Service, error) {
-	dao, err := NewDao(dsn)
+func NewService(addr, dbName, user, pwd, docusColName string) (*Service, error) {
+	dao, err := NewDao(addr, dbName, user, pwd, docusColName)
 	if err != nil {
 		return nil, err
 	}
@@ -37,9 +36,9 @@ func NewService(dsn string) (*Service, error) {
 	return &Service{dao: dao}, nil
 }
 
-func (s *Service) RemoveOldPages() error {
-	return s.dao.RemoveLegacy(time.Now().Add(10 * time.Minute))
-}
+// func (s *Service) RemoveOldPages() error {
+// 	return s.dao.RemoveLegacy(time.Now().Add(10 * time.Minute))
+// }
 
 func (s *Service) Search(text string) (rets []SearchResult, err error) {
 	return s.dao.Search(text)

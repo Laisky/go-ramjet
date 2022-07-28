@@ -15,7 +15,7 @@ var muCrawler = gutils.NewMutex()
 
 var svc *Service
 
-func syncCrawler() {
+func fetchAllDocus() {
 	if !muCrawler.TryLock() {
 		return
 	}
@@ -37,12 +37,18 @@ func bindTask() {
 	initSvc()
 	registerWeb()
 
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, syncCrawler)
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, fetchAllDocus)
 }
 
 func initSvc() {
 	var err error
-	svc, err = NewService(gconfig.Shared.GetString("db.crawler.dsn"))
+	svc, err = NewService(
+		gconfig.Shared.GetString("db.crawler.addr"),
+		gconfig.Shared.GetString("db.crawler.db"),
+		gconfig.Shared.GetString("db.crawler.user"),
+		gconfig.Shared.GetString("db.crawler.passwd"),
+		gconfig.Shared.GetString("db.crawler.col_docu"),
+	)
 	if err != nil {
 		log.Logger.Panic("new service", zap.Error(err))
 	}
