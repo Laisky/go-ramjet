@@ -21,6 +21,8 @@ func fetchAllDocus() {
 	}
 	defer muCrawler.ForceRelease()
 
+	return
+
 	log.Logger.Info("running web crawler")
 	defer log.Logger.Info("web crawler done")
 

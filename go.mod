@@ -6,7 +6,7 @@ require (
 	github.com/Laisky/gin-middlewares/v2 v2.1.0
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config v1.0.1
-	github.com/Laisky/go-utils/v2 v2.0.4
+	github.com/Laisky/go-utils/v2 v2.0.5-0.20220728082445-b6f26273dd6f
 	github.com/Laisky/graphql v1.0.5
 	github.com/Laisky/zap v1.19.3-0.20220707055623-fe1750cd1b41
 	github.com/baidubce/bce-sdk-go v0.0.0-20190403065023-adf182f21d3f
