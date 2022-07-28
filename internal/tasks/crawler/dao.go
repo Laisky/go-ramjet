@@ -36,6 +36,7 @@ type SearchResult struct {
 }
 
 func (d *Dao) Search(text string) (rets []SearchResult, err error) {
+	rets = make([]SearchResult, 0)
 	if err = d.DB.colDocus.
 		Find(bson.M{"text": bson.M{"$regex": bson.RegEx{
 			Pattern: text,
