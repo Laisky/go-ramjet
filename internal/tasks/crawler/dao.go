@@ -47,24 +47,32 @@ func (d *Dao) Search(text string) (rets []SearchResult, err error) {
 		return nil, errors.Wrap(err, "search")
 	}
 
-	d.extractSearchContext(text, rets)
+	rets = d.extractSearchContext(text, rets)
 	return rets, nil
 }
 
 const searchCtxSpan = 20
 
-func (d *Dao) extractSearchContext(text string, rets []SearchResult) {
+func (d *Dao) extractSearchContext(text string, rets []SearchResult) []SearchResult {
+	var filtered []SearchResult
 	for i := range rets {
 		idx := strings.Index(rets[i].Text, text)
-		top := gutils.Max(idx-searchCtxSpan, 0)
-		bottom := gutils.Min(idx+searchCtxSpan, len(rets[i].Text))
+		if idx < 0 {
+			continue
+		}
+
+		begin := gutils.Max(idx-searchCtxSpan, 0)
+		end := gutils.Min(idx+searchCtxSpan, len(rets[i].Text))
 		rets[i].Context = fmt.Sprintf("%s<mark>%s</mark>%s",
-			rets[i].Text[top:top+searchCtxSpan],
+			rets[i].Text[begin:begin+searchCtxSpan],
 			rets[i].Text[idx:idx+len(text)],
-			rets[i].Text[idx+len(text):bottom],
+			rets[i].Text[idx+len(text):end],
 		)
 
+		filtered = append(filtered, rets[i])
 	}
+
+	return filtered
 }
 
 func (d *Dao) Save(title, text, url string) error {
