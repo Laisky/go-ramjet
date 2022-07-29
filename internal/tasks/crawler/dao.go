@@ -2,7 +2,7 @@ package crawler
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v2"
@@ -53,20 +53,26 @@ func (d *Dao) Search(text string) (rets []SearchResult, err error) {
 
 const searchCtxSpan = 20
 
-func (d *Dao) extractSearchContext(text string, rets []SearchResult) []SearchResult {
+func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []SearchResult {
+	reg, err := regexp.Compile("(?i)" + pattern)
+	if err != nil {
+		log.Logger.Warn("compile pattern", zap.Error(err))
+		return rets
+	}
+
 	var filtered []SearchResult
 	for i := range rets {
-		idx := strings.Index(rets[i].Text, text)
-		if idx < 0 {
+		loc := reg.FindStringIndex(rets[i].Text)
+		if loc == nil {
 			continue
 		}
 
-		begin := gutils.Max(idx-searchCtxSpan, 0)
-		end := gutils.Min(idx+searchCtxSpan, len(rets[i].Text))
+		begin := gutils.Max(loc[0]-searchCtxSpan, 0)
+		end := gutils.Min(loc[1]+searchCtxSpan, len(rets[i].Text))
 		rets[i].Context = fmt.Sprintf("%s<mark>%s</mark>%s",
-			rets[i].Text[begin:begin+searchCtxSpan],
-			rets[i].Text[idx:idx+len(text)],
-			rets[i].Text[idx+len(text):end],
+			rets[i].Text[begin:loc[0]],
+			rets[i].Text[loc[0]:loc[1]],
+			rets[i].Text[loc[1]:end],
 		)
 
 		filtered = append(filtered, rets[i])
