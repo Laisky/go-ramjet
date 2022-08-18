@@ -81,6 +81,16 @@ func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []Search
 	return filtered
 }
 
+func (d *Dao) RemoveLegacy(updateBefore time.Time) error {
+	if _, err := d.DB.colDocus.RemoveAll(
+		bson.M{"updated_at": bson.M{"$lt": updateBefore}},
+	); err != nil {
+		return errors.Wrap(err, "remove legacy")
+	}
+
+	return nil
+}
+
 func (d *Dao) Save(title, text, url string) error {
 	now := time.Now().UTC()
 	_, err := d.DB.colDocus.Upsert(

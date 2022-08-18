@@ -61,7 +61,8 @@ type task struct {
 	name string
 }
 
-/*Store store task func into taskStoreType
+/*
+Store store task func into taskStoreType
 
 stored funcs may not always run, it also depends settings `--task, --exclude`
 */

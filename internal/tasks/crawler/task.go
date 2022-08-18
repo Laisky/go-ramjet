@@ -15,6 +15,7 @@ var muCrawler = gutils.NewMutex()
 
 var svc *Service
 
+// fetchAllDocus fetch all pages by sitemaps
 func fetchAllDocus() {
 	if !muCrawler.TryLock() {
 		return

@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"time"
 
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
@@ -45,6 +46,7 @@ func (s *Service) Search(text string) (rets []SearchResult, err error) {
 }
 
 func (s *Service) CrawlAllPages(sitemaps []string) error {
+	startAt := gutils.Clock.GetUTCNow()
 	for _, u := range loadAllURLs(sitemaps) {
 		log.Logger.Debug("crawl", zap.String("url", u))
 		raw, err := httpGet(u)
@@ -58,6 +60,10 @@ func (s *Service) CrawlAllPages(sitemaps []string) error {
 		if err := s.dao.Save(title, text, u); err != nil {
 			return errors.Wrapf(err, "save text `%s`", u)
 		}
+	}
+
+	if err := s.dao.RemoveLegacy(startAt); err != nil {
+		return errors.Wrapf(err, "remove legacy before %s", startAt.Format(time.RFC3339))
 	}
 
 	return nil
