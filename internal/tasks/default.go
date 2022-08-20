@@ -22,4 +22,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/twitter"
 	// crawler task
 	_ "github.com/Laisky/go-ramjet/internal/tasks/crawler"
+	// gitlab
+	_ "github.com/Laisky/go-ramjet/internal/tasks/gitlab"
 )
