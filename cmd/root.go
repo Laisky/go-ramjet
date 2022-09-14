@@ -94,6 +94,7 @@ func setupLogger(ctx context.Context) {
 			gconfig.Shared.GetString("logger.push_api"),
 			glog.WithAlertType(gconfig.Shared.GetString("logger.alert_type")),
 			glog.WithAlertToken(gconfig.Shared.GetString("logger.push_token")),
+			glog.WithAlertHookLevel(zap.ErrorLevel),
 		)
 		if err != nil {
 			log.Logger.Panic("create AlertPusher", zap.Error(err))

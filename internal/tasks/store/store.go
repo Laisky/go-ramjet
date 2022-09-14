@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	gconfig "github.com/Laisky/go-config"
 	"github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -126,18 +128,23 @@ func (s *taskStoreType) Start(ctx context.Context) {
 	})
 }
 
+var runnerSG singleflight.Group
+
 // runTrigger run all tasks forever
 func (s *taskStoreType) runTrigger(ctx context.Context) {
 	defer log.Logger.Info("runTrigger exit")
 	var runner = func(f func()) {
 		defer func() {
-			if err := recover(); err != nil {
-				log.Logger.Error("running task error", zap.String("func", utils.GetFuncName(f)), zap.Error(err.(error)))
+			if reason := recover(); reason != nil {
+				log.Logger.Error("running task error",
+					zap.String("func", utils.GetFuncName(f)),
+					zap.String("reason", fmt.Sprintf("%+v", reason)))
 				go time.AfterFunc(defaultRetryWaitSec*time.Second, func() {
 					s.runChan <- f
 				})
 			}
 		}()
+
 		f()
 	}
 
@@ -148,11 +155,15 @@ func (s *taskStoreType) runTrigger(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case task = <-s.runChan:
-			if gconfig.Shared.GetBool("debug") {
-				go task()
-			} else {
-				go runner(task)
-			}
+			runnerSG.Do(utils.GetFuncName(task), func() (interface{}, error) {
+				if gconfig.Shared.GetBool("debug") {
+					go task()
+				} else {
+					go runner(task)
+				}
+
+				return nil, nil
+			})
 		}
 	}
 }

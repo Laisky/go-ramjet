@@ -28,7 +28,8 @@ func fetchAllDocus() {
 	if err := svc.CrawlAllPages(
 		gconfig.Shared.GetStringSlice("tasks.crawler.sitemaps"),
 	); err != nil {
-		log.Logger.Panic("crawl all pages", zap.Error(err))
+		log.Logger.Error("crawl all pages", zap.Error(err))
+		time.Sleep(10 * time.Second) // db reconnect
 	}
 }
 
