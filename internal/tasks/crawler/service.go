@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -28,8 +29,8 @@ type Service struct {
 	dao *Dao
 }
 
-func NewService(addr, dbName, user, pwd, docusColName string) (*Service, error) {
-	dao, err := NewDao(addr, dbName, user, pwd, docusColName)
+func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName string) (*Service, error) {
+	dao, err := NewDao(ctx, addr, dbName, user, pwd, docusColName)
 	if err != nil {
 		return nil, err
 	}

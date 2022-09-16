@@ -1,6 +1,7 @@
 package twitter
 
 import (
+	"context"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -45,7 +46,7 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	config.LoadTest()
-	d, err := NewDao(
+	d, err := NewDao(context.Background(),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.addr"),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.dbName"),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.user"),

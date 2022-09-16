@@ -1,6 +1,7 @@
 package twitter
 
 import (
+	"context"
 	"sync"
 
 	gconfig "github.com/Laisky/go-config"
@@ -14,7 +15,7 @@ var (
 	svcMu sync.Mutex
 )
 
-func initSvc() error {
+func initSvc(ctx context.Context) error {
 	if svc != nil {
 		return nil
 	}
@@ -27,7 +28,7 @@ func initSvc() error {
 		return err
 	}
 
-	twitterDao, err := NewDao(
+	twitterDao, err := NewDao(ctx,
 		gconfig.Shared.GetString("db.twitter.addr"),
 		gconfig.Shared.GetString("db.twitter.db"),
 		gconfig.Shared.GetString("db.twitter.user"),
@@ -37,7 +38,7 @@ func initSvc() error {
 		return err
 	}
 
-	twitterHome, err := NewDao(
+	twitterHome, err := NewDao(ctx,
 		gconfig.Shared.GetString("db.twitter-home.addr"),
 		gconfig.Shared.GetString("db.twitter-home.db"),
 		gconfig.Shared.GetString("db.twitter-home.user"),

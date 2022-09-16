@@ -1,12 +1,14 @@
 package crawler
 
 import (
+	"context"
 	"time"
 
 	"github.com/Laisky/zap"
 	"gopkg.in/mgo.v2"
 
-	"github.com/Laisky/go-ramjet/library/db/mongo"
+	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
+
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -23,7 +25,7 @@ type BBT struct {
 	colDocus *mgo.Collection
 }
 
-func NewBBTDB(addr, dbName, user, pwd, docusColName string) (b *BBT, err error) {
+func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string) (b *BBT, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
@@ -31,21 +33,14 @@ func NewBBTDB(addr, dbName, user, pwd, docusColName string) (b *BBT, err error) 
 	)
 	b = &BBT{}
 
-	dialInfo := &mgo.DialInfo{
-		Addrs:     []string{addr},
-		Direct:    true,
-		Timeout:   30 * time.Second,
-		Database:  dbName,
-		Username:  user,
-		Password:  pwd,
-		PoolLimit: 1000,
-	}
-	err = b.Dial(dialInfo)
+	b.DB, err = mongo.NewDB(ctx,
+		addr, dbName, user, pwd,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	db := b.S.DB(dbName)
+	db := b.DB.DB(dbName)
 	b.colDocus = db.C(docusColName)
 	return b, nil
 }

@@ -1,14 +1,15 @@
 package blog
 
 import (
+	"context"
 	"time"
 
+	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/Laisky/go-ramjet/library/db/mongo"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -29,7 +30,7 @@ type Blog struct {
 	posts, keywords *mgo.Collection
 }
 
-func NewBlogDB(addr, dbName, user, pwd, postColName, keywordColName string) (b *Blog, err error) {
+func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywordColName string) (b *Blog, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
@@ -37,22 +38,17 @@ func NewBlogDB(addr, dbName, user, pwd, postColName, keywordColName string) (b *
 		zap.String("keywordColName", keywordColName),
 	)
 	b = &Blog{}
-
-	dialInfo := &mgo.DialInfo{
-		Addrs:     []string{addr},
-		Direct:    true,
-		Timeout:   defaultTimeout,
-		Database:  dbName,
-		Username:  user,
-		Password:  pwd,
-		PoolLimit: 1000,
-	}
-	err = b.Dial(dialInfo)
+	b.DB, err = mongo.NewDB(ctx,
+		addr,
+		dbName,
+		user,
+		pwd,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	blogDB := b.S.DB(dbName)
+	blogDB := b.DB.DB(dbName)
 	b.posts = blogDB.C(postColName)
 	b.keywords = blogDB.C(keywordColName)
 	return b, nil

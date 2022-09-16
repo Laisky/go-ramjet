@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"context"
 	"time"
 
 	"github.com/pkg/errors"
@@ -14,8 +15,8 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 )
 
-func prepareDB() (db *Blog, err error) {
-	if db, err = NewBlogDB(
+func prepareDB(ctx context.Context) (db *Blog, err error) {
+	if db, err = NewBlogDB(ctx,
 		gconfig.Shared.GetString("db.blog.addr"),
 		gconfig.Shared.GetString("db.blog.db"),
 		gconfig.Shared.GetString("db.blog.user"),
@@ -33,7 +34,7 @@ func prepareDB() (db *Blog, err error) {
 
 func runRSSTask() {
 	log.Logger.Info("runRSSTask")
-	db, err := prepareDB()
+	db, err := prepareDB(context.Background())
 	if err != nil {
 		log.Logger.Error("connect to database got error", zap.Error(err))
 		return
@@ -53,7 +54,7 @@ func runRSSTask() {
 
 func runKeywordTask() {
 	log.Logger.Info("runKeywordTask")
-	db, err := prepareDB()
+	db, err := prepareDB(context.Background())
 	if err != nil {
 		log.Logger.Error("connect to database got error", zap.Error(err))
 		return

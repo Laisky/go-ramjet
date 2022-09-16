@@ -1,6 +1,8 @@
 package twitter
 
 import (
+	"context"
+
 	gutils "github.com/Laisky/go-utils/v2"
 	"github.com/Laisky/zap"
 
@@ -41,7 +43,7 @@ func syncReplica() {
 
 func bindTask() {
 	log.Logger.Info("bind twitter search sync monitor...")
-	if err := initSvc(); err != nil {
+	if err := initSvc(context.Background()); err != nil {
 		log.Logger.Panic("init twitter svc", zap.Error(err))
 	}
 

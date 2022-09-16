@@ -1,8 +1,10 @@
 package twitter
 
 import (
+	"context"
 	"time"
 
+	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
 	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
@@ -10,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Laisky/go-ramjet/library/db/clickhouse"
-	"github.com/Laisky/go-ramjet/library/db/mongo"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -20,28 +21,21 @@ type Dao struct {
 	tweets *mgo.Collection
 }
 
-func NewDao(addr, dbName, user, pwd string) (d *Dao, err error) {
+func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
 	)
 
 	d = new(Dao)
-	dialInfo := &mgo.DialInfo{
-		Addrs:     []string{addr},
-		Direct:    true,
-		Timeout:   10 * time.Second,
-		Database:  dbName,
-		Username:  user,
-		Password:  pwd,
-		PoolLimit: 1000,
-	}
-	err = d.Dial(dialInfo)
+	d.DB, err = mongo.NewDB(ctx,
+		addr, dbName, user, pwd,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	d.db = d.DB.S.DB(dbName)
+	d.db = d.DB.DB(dbName)
 	d.tweets = d.db.C("tweets")
 	return d, nil
 }

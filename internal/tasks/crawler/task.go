@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"time"
 
 	gconfig "github.com/Laisky/go-config"
@@ -36,15 +37,15 @@ func fetchAllDocus() {
 func bindTask() {
 	log.Logger.Info("bind web crawler sync monitor...")
 
-	initSvc()
+	initSvc(context.Background())
 	registerWeb()
 
 	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, fetchAllDocus)
 }
 
-func initSvc() {
+func initSvc(ctx context.Context) {
 	var err error
-	svc, err = NewService(
+	svc, err = NewService(ctx,
 		gconfig.Shared.GetString("db.crawler.addr"),
 		gconfig.Shared.GetString("db.crawler.db"),
 		gconfig.Shared.GetString("db.crawler.user"),

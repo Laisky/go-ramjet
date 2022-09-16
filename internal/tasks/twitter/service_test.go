@@ -1,6 +1,7 @@
 package twitter
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,7 +11,7 @@ import (
 
 func TestService_SyncSearchTweets(t *testing.T) {
 	config.LoadTest()
-	err := initSvc()
+	err := initSvc(context.Background())
 	require.NoError(t, err)
 
 	err = svc.SyncSearchTweets()

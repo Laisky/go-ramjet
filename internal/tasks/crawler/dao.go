@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"time"
@@ -17,8 +18,8 @@ type Dao struct {
 	DB *BBT
 }
 
-func NewDao(addr, dbName, user, pwd, docusColName string) (*Dao, error) {
-	db, err := NewBBTDB(addr, dbName, user, pwd, docusColName)
+func NewDao(ctx context.Context, addr, dbName, user, pwd, docusColName string) (*Dao, error) {
+	db, err := NewBBTDB(ctx, addr, dbName, user, pwd, docusColName)
 	if err != nil {
 		return nil, err
 	}
