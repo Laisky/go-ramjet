@@ -109,7 +109,11 @@ func (d *Dao) Save(title, text, url string) error {
 		},
 	)
 	if err != nil {
-		return errors.Wrap(err, "save")
+		// FIXME db auto reconnect not working!
+		//       use panic to force restart
+		log.Logger.Panic("save", zap.Error(err))
+
+		// return errors.Wrap(err, "save")
 	}
 
 	log.Logger.Debug("save", zap.String("url", url))
