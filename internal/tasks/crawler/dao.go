@@ -38,7 +38,7 @@ type SearchResult struct {
 
 func (d *Dao) Search(text string) (rets []SearchResult, err error) {
 	rets = make([]SearchResult, 0)
-	if err = d.DB.colDocus.
+	if err = d.DB.docusCol().
 		Find(bson.M{"text": bson.M{"$regex": bson.RegEx{
 			Pattern: text,
 			Options: "im",
@@ -83,7 +83,7 @@ func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []Search
 }
 
 func (d *Dao) RemoveLegacy(updateBefore time.Time) error {
-	if _, err := d.DB.colDocus.RemoveAll(
+	if _, err := d.DB.docusCol().RemoveAll(
 		bson.M{"updated_at": bson.M{"$lt": updateBefore}},
 	); err != nil {
 		return errors.Wrap(err, "remove legacy")
@@ -94,7 +94,7 @@ func (d *Dao) RemoveLegacy(updateBefore time.Time) error {
 
 func (d *Dao) Save(title, text, url string) error {
 	now := time.Now().UTC()
-	_, err := d.DB.colDocus.Upsert(
+	_, err := d.DB.docusCol().Upsert(
 		bson.M{"url": url},
 		bson.M{
 			"$set": bson.M{
@@ -109,11 +109,7 @@ func (d *Dao) Save(title, text, url string) error {
 		},
 	)
 	if err != nil {
-		// FIXME db auto reconnect not working!
-		//       use panic to force restart
-		log.Logger.Panic("save", zap.Error(err))
-
-		// return errors.Wrap(err, "save")
+		return errors.Wrap(err, "save")
 	}
 
 	log.Logger.Debug("save", zap.String("url", url))

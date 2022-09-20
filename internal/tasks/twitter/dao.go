@@ -16,9 +16,8 @@ import (
 )
 
 type Dao struct {
-	mongo.DB
-	db     *mgo.Database
-	tweets *mgo.Collection
+	db                    mongo.DB
+	dbName, tweetsColName string
 }
 
 func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err error) {
@@ -27,27 +26,32 @@ func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err er
 		zap.String("dbName", dbName),
 	)
 
-	d = new(Dao)
-	d.DB, err = mongo.NewDB(ctx,
+	d = &Dao{
+		dbName:        dbName,
+		tweetsColName: "tweets",
+	}
+	d.db, err = mongo.NewDB(ctx,
 		addr, dbName, user, pwd,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	d.db = d.DB.DB(dbName)
-	d.tweets = d.db.C("tweets")
 	return d, nil
+}
+
+func (db *Dao) tweetsCol() *mgo.Collection {
+	return db.db.DB(db.dbName).C(db.tweetsColName)
 }
 
 func (d *Dao) GetTweetsIter(cond bson.M) *mgo.Iter {
 	log.Logger.Debug("load tweets", zap.Any("condition", cond))
-	return d.tweets.Find(cond).Sort("created_at").Iter()
+	return d.tweetsCol().Find(cond).Sort("created_at").Iter()
 }
 
 func (d *Dao) GetLargestID() (largestID bson.ObjectId, err error) {
 	tweet := new(Tweet)
-	if err = d.tweets.Find(bson.M{}).
+	if err = d.tweetsCol().Find(bson.M{}).
 		Select(bson.M{"_id": 1}).
 		Sort("-id").
 		Limit(1).
@@ -64,7 +68,7 @@ func (d *Dao) GetLargestID() (largestID bson.ObjectId, err error) {
 
 func (d *Dao) Upsert(cond, docu bson.M) (*mgo.ChangeInfo, error) {
 	log.Logger.Info("upsert tweet", zap.Any("condition", cond))
-	return d.tweets.Upsert(cond, docu)
+	return d.tweetsCol().Upsert(cond, docu)
 }
 
 type SearchDao struct {

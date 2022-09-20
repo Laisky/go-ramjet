@@ -26,8 +26,10 @@ type Post struct {
 }
 
 type Blog struct {
-	mongo.DB
-	posts, keywords *mgo.Collection
+	db mongo.DB
+	dbName,
+	postColName,
+	keywordColName string
 }
 
 func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywordColName string) (b *Blog, err error) {
@@ -37,8 +39,12 @@ func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywor
 		zap.String("postColName", postColName),
 		zap.String("keywordColName", keywordColName),
 	)
-	b = &Blog{}
-	b.DB, err = mongo.NewDB(ctx,
+	b = &Blog{
+		dbName:         dbName,
+		postColName:    postColName,
+		keywordColName: keywordColName,
+	}
+	b.db, err = mongo.NewDB(ctx,
 		addr,
 		dbName,
 		user,
@@ -48,10 +54,15 @@ func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywor
 		return nil, err
 	}
 
-	blogDB := b.DB.DB(dbName)
-	b.posts = blogDB.C(postColName)
-	b.keywords = blogDB.C(keywordColName)
 	return b, nil
+}
+
+func (b *Blog) postCol() *mgo.Collection {
+	return b.db.DB(b.dbName).C(b.postColName)
+}
+
+func (b *Blog) keywordCol() *mgo.Collection {
+	return b.db.DB(b.dbName).C(b.keywordColName)
 }
 
 func (b *Blog) LoadAllPostsCnt() (cnt string, err error) {
@@ -69,11 +80,11 @@ func (b *Blog) LoadAllPostsCnt() (cnt string, err error) {
 }
 
 func (b *Blog) GetPostIter() *mgo.Iter {
-	return b.posts.Find(nil).Iter()
+	return b.postCol().Find(nil).Iter()
 }
 
 func (b *Blog) UpdatePostTagsByID(bid string, tags []string) (err error) {
-	err = b.posts.UpdateId(
+	err = b.postCol().UpdateId(
 		bson.ObjectIdHex(bid),
 		bson.M{"$set": bson.M{"post_tags": tags}},
 	)
@@ -81,4 +92,8 @@ func (b *Blog) UpdatePostTagsByID(bid string, tags []string) (err error) {
 		return errors.Wrap(err, "try to update post got error")
 	}
 	return nil
+}
+
+func (b *Blog) Close() {
+	b.db.Close()
 }

@@ -21,8 +21,8 @@ type Docu struct {
 }
 
 type BBT struct {
-	mongo.DB
-	colDocus *mgo.Collection
+	db                   mongo.DB
+	dbName, docusColName string
 }
 
 func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string) (b *BBT, err error) {
@@ -31,16 +31,21 @@ func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string)
 		zap.String("dbName", dbName),
 		zap.String("docusColName", docusColName),
 	)
-	b = &BBT{}
+	b = &BBT{
+		dbName:       dbName,
+		docusColName: docusColName,
+	}
 
-	b.DB, err = mongo.NewDB(ctx,
+	b.db, err = mongo.NewDB(ctx,
 		addr, dbName, user, pwd,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	db := b.DB.DB(dbName)
-	b.colDocus = db.C(docusColName)
 	return b, nil
+}
+
+func (db *BBT) docusCol() *mgo.Collection {
+	return db.db.DB(db.dbName).C(db.docusColName)
 }
