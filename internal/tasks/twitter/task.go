@@ -13,19 +13,19 @@ import (
 var muSearch = gutils.NewMutex()
 var muReplica = gutils.NewMutex()
 
-func syncSearch() {
-	if !muSearch.TryLock() {
-		return
-	}
-	defer muSearch.ForceRelease()
+// func syncSearch() {
+// 	if !muSearch.TryLock() {
+// 		return
+// 	}
+// 	defer muSearch.ForceRelease()
 
-	log.Logger.Info("running twitter sync search")
-	defer log.Logger.Info("twitter sync search done")
+// 	log.Logger.Info("running twitter sync search")
+// 	defer log.Logger.Info("twitter sync search done")
 
-	if err := svc.SyncSearchTweets(); err != nil {
-		log.Logger.Error("sync search tweets", zap.Error(err))
-	}
-}
+// 	if err := svc.SyncSearchTweets(); err != nil {
+// 		log.Logger.Error("sync search tweets", zap.Error(err))
+// 	}
+// }
 
 func syncReplica() {
 	if !muReplica.TryLock() {

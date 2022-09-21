@@ -23,10 +23,10 @@ func initSvc(ctx context.Context) error {
 	svcMu.Lock()
 	defer svcMu.Unlock()
 
-	searchDao, err := NewSearchDao(gconfig.Shared.GetString("db.clickhouse.dsn"))
-	if err != nil {
-		return err
-	}
+	// searchDao, err := NewSearchDao(gconfig.Shared.GetString("db.clickhouse.dsn"))
+	// if err != nil {
+	// 	return err
+	// }
 
 	twitterDao, err := NewDao(ctx,
 		gconfig.Shared.GetString("db.twitter.addr"),
@@ -49,7 +49,7 @@ func initSvc(ctx context.Context) error {
 	}
 
 	svc = &Service{
-		searchDao:     searchDao,
+		// searchDao:     searchDao,
 		twitterDao:    twitterDao,
 		twitterRepDao: twitterHome,
 	}
@@ -58,7 +58,7 @@ func initSvc(ctx context.Context) error {
 }
 
 type Service struct {
-	searchDao  *SearchDao
+	// searchDao  *SearchDao
 	twitterDao *Dao
 	// twitterRepDao replica twitter db
 	twitterRepDao *Dao
@@ -73,33 +73,33 @@ func getTweetUserID(tweet *Tweet) string {
 }
 
 // SyncSearchTweets sync tweets to search db(clickhouse)
-func (s *Service) SyncSearchTweets() error {
-	latestT, err := s.searchDao.GetLatestCreatedAt()
-	if err != nil {
-		return err
-	}
+// func (s *Service) SyncSearchTweets() error {
+// 	latestT, err := s.searchDao.GetLatestCreatedAt()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	iter := s.twitterDao.GetTweetsIter(bson.M{
-		"created_at": bson.M{"$gte": latestT},
-	})
-	defer gutils.CloseQuietly(iter)
+// 	iter := s.twitterDao.GetTweetsIter(bson.M{
+// 		"created_at": bson.M{"$gte": latestT},
+// 	})
+// 	defer gutils.CloseQuietly(iter)
 
-	tweet := new(Tweet)
-	for iter.Next(tweet) {
-		tweet := SearchTweet{
-			TweetID:   tweet.ID,
-			UserID:    getTweetUserID(tweet),
-			Text:      tweet.Text,
-			CreatedAt: tweet.CreatedAt,
-		}
+// 	tweet := new(Tweet)
+// 	for iter.Next(tweet) {
+// 		tweet := SearchTweet{
+// 			TweetID:   tweet.ID,
+// 			UserID:    getTweetUserID(tweet),
+// 			Text:      tweet.Text,
+// 			CreatedAt: tweet.CreatedAt,
+// 		}
 
-		if err := s.searchDao.SaveTweet(tweet); err != nil {
-			return err
-		}
-	}
+// 		if err := s.searchDao.SaveTweet(tweet); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // SyncReplicaTweets sync tweets to replica db
 func (s *Service) SyncReplicaTweets() error {
