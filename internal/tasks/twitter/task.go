@@ -36,9 +36,9 @@ func syncReplica() {
 	log.Logger.Info("running twitter sync replica")
 	defer log.Logger.Info("twitter sync replica done")
 
-	if err := svc.SyncReplicaTweets(); err != nil {
-		log.Logger.Error("sync replica tweets", zap.Error(err))
-	}
+	// if err := svc.SyncReplicaTweets(); err != nil {
+	// 	log.Logger.Error("sync replica tweets", zap.Error(err))
+	// }
 }
 
 func bindTask() {

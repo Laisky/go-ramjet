@@ -5,9 +5,6 @@ import (
 	"sync"
 
 	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
-	"github.com/pkg/errors"
-	"gopkg.in/mgo.v2/bson"
 )
 
 var (
@@ -38,20 +35,20 @@ func initSvc(ctx context.Context) error {
 		return err
 	}
 
-	twitterHome, err := NewDao(ctx,
-		gconfig.Shared.GetString("db.twitter-home.addr"),
-		gconfig.Shared.GetString("db.twitter-home.db"),
-		gconfig.Shared.GetString("db.twitter-home.user"),
-		gconfig.Shared.GetString("db.twitter-home.passwd"),
-	)
-	if err != nil {
-		return err
-	}
+	// twitterHome, err := NewDao(ctx,
+	// 	gconfig.Shared.GetString("db.twitter-home.addr"),
+	// 	gconfig.Shared.GetString("db.twitter-home.db"),
+	// 	gconfig.Shared.GetString("db.twitter-home.user"),
+	// 	gconfig.Shared.GetString("db.twitter-home.passwd"),
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
 	svc = &Service{
 		// searchDao:     searchDao,
-		twitterDao:    twitterDao,
-		twitterRepDao: twitterHome,
+		twitterDao: twitterDao,
+		// twitterRepDao: twitterHome,
 	}
 
 	return nil
@@ -61,7 +58,7 @@ type Service struct {
 	// searchDao  *SearchDao
 	twitterDao *Dao
 	// twitterRepDao replica twitter db
-	twitterRepDao *Dao
+	// twitterRepDao *Dao
 }
 
 func getTweetUserID(tweet *Tweet) string {
@@ -102,26 +99,26 @@ func getTweetUserID(tweet *Tweet) string {
 // }
 
 // SyncReplicaTweets sync tweets to replica db
-func (s *Service) SyncReplicaTweets() error {
-	latestT, err := s.twitterRepDao.GetLargestID()
-	if err != nil {
-		return err
-	}
+// func (s *Service) SyncReplicaTweets() error {
+// 	latestT, err := s.twitterRepDao.GetLargestID()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	iter := s.twitterDao.GetTweetsIter(bson.M{
-		"_id": bson.M{"$gte": latestT},
-	})
-	defer gutils.CloseQuietly(iter)
+// 	iter := s.twitterDao.GetTweetsIter(bson.M{
+// 		"_id": bson.M{"$gte": latestT},
+// 	})
+// 	defer gutils.CloseQuietly(iter)
 
-	tweet := new(Tweet)
-	for iter.Next(tweet) {
-		if _, err = s.twitterRepDao.Upsert(
-			bson.M{"_id": tweet.MongoID},
-			bson.M{"$set": tweet},
-		); err != nil {
-			return errors.Wrapf(err, "upsert docu %v", tweet)
-		}
-	}
+// 	tweet := new(Tweet)
+// 	for iter.Next(tweet) {
+// 		if _, err = s.twitterRepDao.Upsert(
+// 			bson.M{"_id": tweet.MongoID},
+// 			bson.M{"$set": tweet},
+// 		); err != nil {
+// 			return errors.Wrapf(err, "upsert docu %v", tweet)
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
