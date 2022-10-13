@@ -26,7 +26,8 @@ func init() {
 }
 
 type Service struct {
-	dao *Dao
+	dao         *Dao
+	searchCache *gutils.ExpCache
 }
 
 func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName string) (*Service, error) {
@@ -35,7 +36,10 @@ func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName strin
 		return nil, err
 	}
 
-	return &Service{dao: dao}, nil
+	return &Service{
+		dao:         dao,
+		searchCache: gutils.NewExpCache(ctx, time.Minute),
+	}, nil
 }
 
 // func (s *Service) RemoveOldPages() error {
@@ -43,7 +47,17 @@ func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName strin
 // }
 
 func (s *Service) Search(text string) (rets []SearchResult, err error) {
-	return s.dao.Search(text)
+	if data, ok := s.searchCache.Load(text); ok {
+		return data.([]SearchResult), nil
+	}
+
+	rets, err = s.dao.Search(text)
+	if err != nil {
+		return nil, errors.Wrapf(err, "search %s", text)
+	}
+
+	s.searchCache.Store(text, rets)
+	return rets, nil
 }
 
 func (s *Service) CrawlAllPages(sitemaps []string) error {
