@@ -8,7 +8,7 @@ require (
 	github.com/Laisky/go-config v1.0.1
 	github.com/Laisky/go-utils/v2 v2.1.3-0.20220907054848-2d14db0f6fe4
 	github.com/Laisky/graphql v1.0.5
-	github.com/Laisky/laisky-blog-graphql v1.0.1-0.20220916030358-c334096e4691
+	github.com/Laisky/laisky-blog-graphql v1.0.1-0.20220921025334-7986be783640
 	github.com/Laisky/zap v1.19.3-0.20220902144311-ba5bb1d3eb31
 	github.com/baidubce/bce-sdk-go v0.0.0-20190403065023-adf182f21d3f
 	github.com/deckarep/golang-set/v2 v2.1.0
