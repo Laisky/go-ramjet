@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	gconfig "github.com/Laisky/go-config"
+	gconfig "github.com/Laisky/go-config/v2"
 )
 
 var (
@@ -79,7 +79,7 @@ func getTweetUserID(tweet *Tweet) string {
 // 	iter := s.twitterDao.GetTweetsIter(bson.M{
 // 		"created_at": bson.M{"$gte": latestT},
 // 	})
-// 	defer gutils.CloseQuietly(iter)
+// 	defer gutils.SilentClose(iter)
 
 // 	tweet := new(Tweet)
 // 	for iter.Next(tweet) {
@@ -108,7 +108,7 @@ func getTweetUserID(tweet *Tweet) string {
 // 	iter := s.twitterDao.GetTweetsIter(bson.M{
 // 		"_id": bson.M{"$gte": latestT},
 // 	})
-// 	defer gutils.CloseQuietly(iter)
+// 	defer gutils.SilentClose(iter)
 
 // 	tweet := new(Tweet)
 // 	for iter.Next(tweet) {

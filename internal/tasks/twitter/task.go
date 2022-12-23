@@ -3,7 +3,7 @@ package twitter
 import (
 	"context"
 
-	gutils "github.com/Laisky/go-utils/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"

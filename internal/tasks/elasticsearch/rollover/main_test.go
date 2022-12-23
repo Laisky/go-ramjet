@@ -3,7 +3,7 @@ package rollover_test
 import (
 	"testing"
 
-	gconfig "github.com/Laisky/go-config"
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/rollover"

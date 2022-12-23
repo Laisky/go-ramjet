@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"time"
 
-	gutils "github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/Laisky/go-ramjet/library/log"

@@ -3,7 +3,7 @@ package rollover
 import (
 	"html/template"
 
-	gconfig "github.com/Laisky/go-config"
+	gconfig "github.com/Laisky/go-config/v2"
 )
 
 func getESMapping(name string) template.HTML {

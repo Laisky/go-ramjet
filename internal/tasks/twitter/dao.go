@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/Laisky/errors"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 	"gorm.io/gorm"

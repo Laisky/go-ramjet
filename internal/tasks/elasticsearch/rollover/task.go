@@ -9,10 +9,10 @@ import (
 	"regexp"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -85,7 +85,7 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "load body error for url %v", urlMasking(url))

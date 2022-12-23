@@ -5,10 +5,10 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	gconfig "github.com/Laisky/go-config"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/graphql"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 )
 
 var (

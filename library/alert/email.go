@@ -3,10 +3,10 @@ package alert
 import (
 	"github.com/Laisky/go-ramjet/library/log"
 
-	gconfig "github.com/Laisky/go-config"
-	emailSDK "github.com/Laisky/go-utils/v2/email"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
+	emailSDK "github.com/Laisky/go-utils/v3/email"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 )
 
 var (

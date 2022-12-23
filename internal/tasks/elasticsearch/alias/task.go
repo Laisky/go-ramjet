@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -92,7 +92,7 @@ func createAlias(api, index, alias string) error {
 			zap.Error(err))
 		return err
 	}
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 	log.Logger.Debug("got response code", zap.Int("code", resp.StatusCode))
 	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Error("request api got error",

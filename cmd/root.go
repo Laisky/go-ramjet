@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
-	gcmd "github.com/Laisky/go-utils/v2/cmd"
-	glog "github.com/Laisky/go-utils/v2/log"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
+	gcmd "github.com/Laisky/go-utils/v3/cmd"
+	glog "github.com/Laisky/go-utils/v3/log"
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 

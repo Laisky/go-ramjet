@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	"github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 

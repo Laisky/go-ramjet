@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -69,7 +69,7 @@ func runTask() {
 			log.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue
 		}
-		defer gutils.CloseQuietly(resp.Body)
+		defer gutils.SilentClose(resp.Body)
 		if err = gutils.CheckResp(resp); err != nil {
 			log.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
 			continue

@@ -6,8 +6,8 @@ package cmd
 // 	"github.com/Laisky/go-ramjet/internal/tasks/crawler"
 // 	"github.com/Laisky/go-ramjet/library/log"
 
-// 	gconfig "github.com/Laisky/go-config"
-// 	gcmd "github.com/Laisky/go-utils/v2/cmd"
+// 	gconfig "github.com/Laisky/go-config/v2"
+// 	gcmd "github.com/Laisky/go-utils/v3/cmd"
 // 	"github.com/Laisky/zap"
 // 	"github.com/spf13/cobra"
 // )

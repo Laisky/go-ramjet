@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"time"
 
-	gutils "github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -131,7 +131,7 @@ func httpGet(url string) (string, error) {
 		return "", errors.Wrapf(err, "get url %s", url)
 	}
 
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.Errorf("status code %d", resp.StatusCode)
 	}

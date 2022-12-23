@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"

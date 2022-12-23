@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 

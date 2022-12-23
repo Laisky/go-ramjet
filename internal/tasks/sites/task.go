@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
@@ -21,7 +21,7 @@ func LoadCertExpiresAt(addr string) (t time.Time, err error) {
 	if err != nil {
 		return time.Time{}, errors.Wrapf(err, "request addr %v got error", addr)
 	}
-	gutils.CloseQuietly(conn)
+	gutils.SilentClose(conn)
 
 	return conn.ConnectionState().VerifiedChains[0][0].NotAfter, nil
 }

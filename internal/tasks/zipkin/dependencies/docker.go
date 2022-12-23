@@ -7,9 +7,9 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
+	"github.com/Laisky/errors"
 	"github.com/Laisky/zap"
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/pkg/errors"
 )
 
 var DefaultEnvs = []string{

@@ -6,7 +6,7 @@ package backup_test
 
 // 	"github.com/baidubce/bce-sdk-go/services/bos"
 
-// 	"github.com/Laisky/go-utils/v2"
+// 	"github.com/Laisky/go-utils/v3"
 // 	"github.com/Laisky/go-ramjet/internal/tasks/logrotate/backup"
 // )
 

@@ -3,8 +3,8 @@ package password
 import (
 	"net/http"
 
-	gconfig "github.com/Laisky/go-config"
-	utils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	utils "github.com/Laisky/go-utils/v3"
 	"github.com/gin-gonic/gin"
 
 	web "github.com/Laisky/go-ramjet/library/web"

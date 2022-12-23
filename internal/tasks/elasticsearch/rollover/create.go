@@ -6,10 +6,10 @@ import (
 	"html/template"
 	"net/http"
 
-	gconfig "github.com/Laisky/go-config"
-	"github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/library/log"

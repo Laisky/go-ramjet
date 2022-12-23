@@ -3,7 +3,7 @@ package monitor
 import (
 	"sync"
 
-	"github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/go-utils/v3"
 )
 
 // FSMetric is metric for fs

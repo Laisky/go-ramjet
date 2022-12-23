@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	"github.com/Laisky/errors"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
-	"github.com/pkg/errors"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	alertManager "github.com/Laisky/go-ramjet/library/alert"
@@ -101,7 +101,7 @@ func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
 		result.Store(name, errors.Wrap(err, "try to request url got error"))
 		return
 	}
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 
 	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Warn("request url return error",

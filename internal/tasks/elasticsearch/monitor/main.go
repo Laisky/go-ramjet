@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	gconfig "github.com/Laisky/go-config"
-	gutils "github.com/Laisky/go-utils/v2"
+	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -72,7 +72,7 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 		log.Logger.Error("try to get es stats got error", zap.String("url", url), zap.Error(err))
 		return
 	}
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Logger.Error("try to read es stat body got error", zap.String("url", url), zap.Error(err))
@@ -157,7 +157,7 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 		log.Logger.Error("got error after push", zap.Error(err))
 		return
 	}
-	defer gutils.CloseQuietly(resp.Body)
+	defer gutils.SilentClose(resp.Body)
 	log.Logger.Debug("success to push es metric to elasticsearch for node")
 }
 
