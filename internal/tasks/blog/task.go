@@ -5,14 +5,12 @@ import (
 	"time"
 
 	"github.com/Laisky/errors"
-
-	"github.com/Laisky/go-ramjet/library/log"
-
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-utils/v3"
+	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func prepareDB(ctx context.Context) (db *Blog, err error) {
@@ -54,6 +52,7 @@ func runRSSTask() {
 
 func runKeywordTask() {
 	log.Logger.Info("runKeywordTask")
+	startAt := time.Now()
 	db, err := prepareDB(context.Background())
 	if err != nil {
 		log.Logger.Error("connect to database got error", zap.Error(err))
@@ -68,6 +67,7 @@ func runKeywordTask() {
 		words              []string
 		minimalCnt, errCnt int
 		topN               = 5
+		total              int
 	)
 	for iter.Next(p) {
 		minimalCnt = 3
@@ -96,10 +96,14 @@ func runKeywordTask() {
 			}
 		}
 
-		log.Logger.Info("update keywords", zap.String("name", p.Name))
+		total += 1
+		log.Logger.Debug("update keywords", zap.String("name", p.Name))
 	}
 
-	utils.TriggerGC()
+	log.Logger.Info("succeed updated keywords",
+		zap.String("cost", gutils.CostSecs(time.Since(startAt))),
+		zap.Int("count", total))
+	gutils.TriggerGC()
 }
 
 func bindKeywordTask() {

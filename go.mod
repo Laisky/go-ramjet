@@ -4,12 +4,12 @@ go 1.19
 
 require (
 	github.com/Laisky/errors v0.9.2-0.20221107084216-4b771a197718
-	github.com/Laisky/gin-middlewares/v4 v4.0.1-0.20221109015831-7096bd4a3192
+	github.com/Laisky/gin-middlewares/v4 v4.0.1
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
-	github.com/Laisky/go-config/v2 v2.0.0
-	github.com/Laisky/go-utils/v3 v3.1.1-0.20221223094932-ba161318e7db
+	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
+	github.com/Laisky/go-utils/v3 v3.1.5-0.20230112064434-1a0c8bce773d
 	github.com/Laisky/graphql v1.0.5
-	github.com/Laisky/laisky-blog-graphql v1.0.1-0.20220921025334-7986be783640
+	github.com/Laisky/laisky-blog-graphql v1.0.1
 	github.com/Laisky/zap v1.19.3-0.20220902144311-ba5bb1d3eb31
 	github.com/baidubce/bce-sdk-go v0.9.138
 	github.com/deckarep/golang-set/v2 v2.1.0
@@ -30,7 +30,6 @@ require (
 	github.com/ClickHouse/ch-go v0.51.0 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.4.3 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.0 // indirect
-	github.com/Laisky/go-utils/v2 v2.2.0 // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
 	github.com/Microsoft/hcsshim v0.9.6 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
@@ -78,6 +77,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monnand/dhkx v0.0.0-20180522003156-9e5b033f1ac4 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc2 // indirect
 	github.com/opencontainers/runc v1.1.4 // indirect
@@ -91,6 +91,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.39.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
+	github.com/rivo/duplo v0.0.0-20220703183130-751e882e6b83 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
@@ -101,6 +102,7 @@ require (
 	github.com/spf13/viper v1.14.0 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
+	github.com/xlzd/gotp v0.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.11.2 // indirect
 	go.opentelemetry.io/otel/trace v1.11.2 // indirect
