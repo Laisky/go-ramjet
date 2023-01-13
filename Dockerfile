@@ -28,6 +28,6 @@ WORKDIR /app
 
 COPY --from=gobuild /goapp/main /app/go-ramjet
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
-COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.1.2 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.1.2
+COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.2.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.2.0
 
 ENTRYPOINT ["/app/go-ramjet"]
