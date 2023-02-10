@@ -7,7 +7,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	"github.com/Laisky/errors"
+	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/zap"
 	docker "github.com/fsouza/go-dockerclient"
 )

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Laisky/errors"
+	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -27,7 +27,7 @@ func init() {
 
 type Service struct {
 	dao         *Dao
-	searchCache *gutils.ExpCache
+	searchCache gutils.ExpCacheInterface[[]SearchResult]
 }
 
 func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName string) (*Service, error) {
@@ -38,7 +38,7 @@ func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName strin
 
 	return &Service{
 		dao:         dao,
-		searchCache: gutils.NewExpCache(ctx, time.Minute),
+		searchCache: gutils.NewExpCache[[]SearchResult](ctx, time.Minute),
 	}, nil
 }
 
@@ -48,7 +48,7 @@ func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName strin
 
 func (s *Service) Search(text string) (rets []SearchResult, err error) {
 	if data, ok := s.searchCache.Load(text); ok {
-		return data.([]SearchResult), nil
+		return data, nil
 	}
 
 	rets, err = s.dao.Search(text)

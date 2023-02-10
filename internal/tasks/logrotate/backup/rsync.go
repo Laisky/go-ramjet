@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 
-	"github.com/Laisky/errors"
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
 

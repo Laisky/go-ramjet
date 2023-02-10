@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Laisky/errors"
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v3"
 	"github.com/Laisky/zap"
