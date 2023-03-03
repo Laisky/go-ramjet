@@ -117,12 +117,19 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 		return nil, errors.Wrap(err, "parse request")
 	}
 
+	// rewrite data
+	data["model"] = "gpt-3.5-turbo"
+
 	// check model
-	if v, ok := data["model"].(string); ok && v != "gpt-3.5-turbo-0301" {
-		return nil, errors.Errorf("only support `gpt-3.5-turbo-0301` model")
-	}
+	// if v, ok := data["model"].(string); ok && v != "gpt-3.5-turbo-0301" {
+	// 	return nil, errors.Errorf("only support `gpt-3.5-turbo-0301` model")
+	// }
 	if v, ok := data["max_tokens"].(float64); ok && v > 1000 {
 		return nil, errors.Errorf("max_tokens should less than 1000")
+	}
+
+	if payload, err = gutils.JSON.Marshal(data); err != nil {
+		return nil, errors.Wrap(err, "marshal new body")
 	}
 
 	return io.NopCloser(bytes.NewReader(payload)), nil
