@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -25,18 +24,13 @@ var (
 	httpcli *http.Client
 )
 
-func setupHTTPCli() error {
-	proxyurl, err := url.Parse(gconfig.Shared.GetString("openai.proxy"))
+func setupHTTPCli() (err error) {
+	httpcli, err = gutils.NewHTTPClient(
+		gutils.WithHTTPClientTimeout(30*time.Second),
+		gutils.WithHTTPClientProxy(gconfig.Shared.GetString("openai.proxy")),
+	)
 	if err != nil {
-		return errors.Wrap(err, "parse proxy")
-	}
-
-	httpcli = &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			Proxy:           http.ProxyURL(proxyurl),
-			IdleConnTimeout: 30 * time.Second,
-		},
+		return errors.Wrap(err, "new http client")
 	}
 
 	return nil
@@ -101,9 +95,30 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	return resp, nil
 }
 
+type OpenaiReqMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type OpenaiReq struct {
-	Model     string `json:"model"`
-	MaxTokens uint   `json:"max_tokens"`
+	Model            string             `json:"model"`
+	MaxTokens        uint               `json:"max_tokens"`
+	Messages         []OpenaiReqMessage `json:"messages"`
+	PresencePenalty  float64            `json:"presence_penalty"`
+	FrequencyPenalty float64            `json:"frequency_penalty"`
+	Stream           bool               `json:"stream"`
+	Temperature      float64            `json:"temperature"`
+	TopP             float64            `json:"top_p"`
+	N                int                `json:"n"`
+	// BestOf           int                `json:"best_of"`
+}
+
+func (r *OpenaiReq) fillDefault() {
+	r.MaxTokens = gutils.OptionalVal(&r.MaxTokens, 500)
+	r.Temperature = gutils.OptionalVal(&r.Temperature, 1)
+	r.TopP = gutils.OptionalVal(&r.TopP, 1)
+	r.N = gutils.OptionalVal(&r.N, 1)
+	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
 func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
@@ -112,19 +127,16 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 		return nil, errors.Wrap(err, "read request body")
 	}
 
-	data := make(map[string]interface{})
-	if err = gutils.JSON.Unmarshal(payload, &data); err != nil {
+	data := new(OpenaiReq)
+	if err = gutils.JSON.Unmarshal(payload, data); err != nil {
 		return nil, errors.Wrap(err, "parse request")
 	}
+	data.fillDefault()
 
 	// rewrite data
-	data["model"] = "gpt-3.5-turbo"
-
-	// check model
-	// if v, ok := data["model"].(string); ok && v != "gpt-3.5-turbo-0301" {
-	// 	return nil, errors.Errorf("only support `gpt-3.5-turbo-0301` model")
-	// }
-	if v, ok := data["max_tokens"].(float64); ok && v > 1000 {
+	data.Model = "gpt-3.5-turbo"
+	trimMessages(data)
+	if data.MaxTokens > 1000 {
 		return nil, errors.Errorf("max_tokens should less than 1000")
 	}
 
@@ -133,4 +145,17 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 	}
 
 	return io.NopCloser(bytes.NewReader(payload)), nil
+}
+
+func trimMessages(data *OpenaiReq) {
+	if len(data.Messages) > 7 {
+		data.Messages = data.Messages[len(data.Messages)-7:]
+	}
+
+	for i := range data.Messages {
+		cnt := data.Messages[i].Content
+		if len(cnt) > 1000 {
+			cnt = cnt[len(cnt)-1000:]
+		}
+	}
 }

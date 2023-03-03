@@ -5,7 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 
-	gmw "github.com/Laisky/gin-middlewares/v4"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"

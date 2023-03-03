@@ -6,9 +6,9 @@ import (
 	"os"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	gcmd "github.com/Laisky/go-utils/v3/cmd"
-	glog "github.com/Laisky/go-utils/v3/log"
 	gutils "github.com/Laisky/go-utils/v4"
+	gcmd "github.com/Laisky/go-utils/v4/cmd"
+	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 

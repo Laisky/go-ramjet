@@ -1,6 +1,6 @@
 package log
 
-import logsdk "github.com/Laisky/go-utils/v3/log"
+import logsdk "github.com/Laisky/go-utils/v4/log"
 
 var Logger logsdk.Logger
 
