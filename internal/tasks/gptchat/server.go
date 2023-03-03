@@ -1,6 +1,7 @@
 package gptchat
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,6 +49,7 @@ func bindHTTP() {
 
 	web.Server.Any("/chat/*any", func(ctx *gin.Context) {
 		defer ctx.Request.Body.Close()
+
 		resp, err := proxy(ctx)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
@@ -76,7 +78,15 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
 
-	req, err := http.NewRequest(ctx.Request.Method, newUrl, ctx.Request.Body)
+	body := ctx.Request.Body
+	if ctx.Request.Method == http.MethodPost {
+		body, err = bodyChecker(ctx.Request.Body)
+		if err != nil {
+			return nil, errors.Wrap(err, "request is illegal")
+		}
+	}
+
+	req, err := http.NewRequest(ctx.Request.Method, newUrl, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
@@ -89,4 +99,31 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	}
 
 	return resp, nil
+}
+
+type OpenaiReq struct {
+	Model     string `json:"model"`
+	MaxTokens uint   `json:"max_tokens"`
+}
+
+func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read request body")
+	}
+
+	data := make(map[string]interface{})
+	if err = gutils.JSON.Unmarshal(payload, &data); err != nil {
+		return nil, errors.Wrap(err, "parse request")
+	}
+
+	// check model
+	if v, ok := data["model"].(string); ok && v != "gpt-3.5-turbo-0301" {
+		return nil, errors.Errorf("only support `gpt-3.5-turbo-0301` model")
+	}
+	if v, ok := data["max_tokens"].(float64); ok && v > 1000 {
+		return nil, errors.Errorf("max_tokens should less than 1000")
+	}
+
+	return io.NopCloser(bytes.NewReader(payload)), nil
 }
