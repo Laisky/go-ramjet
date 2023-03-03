@@ -3,11 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	gutils "github.com/Laisky/go-utils/v3"
 	gcmd "github.com/Laisky/go-utils/v3/cmd"
 	glog "github.com/Laisky/go-utils/v3/log"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 
@@ -40,7 +41,7 @@ var rootCMD = &cobra.Command{
 		//获取参数
 		log.Logger.Info("running...",
 			zap.Bool("debug", gconfig.Shared.GetBool("debug")),
-			zap.String("addr", gconfig.Shared.GetString("addr")),
+			zap.String("addr", gconfig.Shared.GetString("server.addr")),
 			zap.String("config", gconfig.Shared.GetString("config")),
 			zap.Strings("task", gconfig.Shared.GetStringSlice("task")),
 			zap.Strings("exclude", gconfig.Shared.GetStringSlice("exclude")),
@@ -50,7 +51,7 @@ var rootCMD = &cobra.Command{
 		store.TaskStore.Start(ctx)
 
 		// Run HTTP Server
-		web.RunServer(gconfig.Shared.GetString("addr"))
+		web.RunServer(gconfig.Shared.GetString("server.addr"))
 	},
 }
 
@@ -103,8 +104,13 @@ func setupLogger(ctx context.Context) {
 		opts = append(opts, zap.HooksWithFields(alertPusher.GetZapHook()))
 	}
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Logger.Panic("get hostname", zap.Error(err))
+	}
+
 	if _, err := glog.NewConsoleWithName(
-		"go-ramjet:"+gconfig.Shared.GetString("host"),
+		"go-ramjet:"+hostname,
 		glog.Level(gconfig.Shared.GetString("log-level")),
 		opts...,
 	); err != nil {
@@ -128,9 +134,9 @@ func init() {
 	rootCMD.PersistentFlags().Bool("debug", false, "run in debug mode")
 	rootCMD.PersistentFlags().Bool("dry", false, "run in dry mode")
 	rootCMD.PersistentFlags().Bool("pprof", false, "run with pprof")
-	rootCMD.PersistentFlags().String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
+	// rootCMD.PersistentFlags().String("addr", "127.0.0.1:24087", "like `127.0.0.1:24087`")
 	rootCMD.PersistentFlags().StringP("config", "c", "/etc/go-ramjet/settings.yml", "config file path")
-	rootCMD.PersistentFlags().String("host", "127.0.0.1", "hostname")
+	// rootCMD.PersistentFlags().String("host", "127.0.0.1", "hostname")
 	rootCMD.PersistentFlags().BoolP("version", "v", false, "show version")
 	rootCMD.PersistentFlags().String("log-level", "info", "logger level")
 	rootCMD.PersistentFlags().StringSliceP("task", "t", []string{},
