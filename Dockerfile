@@ -1,4 +1,4 @@
-FROM golang:1.20.0-bullseye AS gobuild
+FROM golang:1.20.1-bullseye AS gobuild
 
 # install dependencies
 RUN apt-get update \
@@ -28,6 +28,6 @@ WORKDIR /app
 
 COPY --from=gobuild /goapp/main /app/go-ramjet
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
-COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.2.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.2.0
+COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.3.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.3.0
 
 ENTRYPOINT ["/app/go-ramjet"]
