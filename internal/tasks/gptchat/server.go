@@ -82,6 +82,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	}
 
 	req.Header = ctx.Request.Header
+	req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "do request")
