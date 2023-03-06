@@ -118,6 +118,7 @@ func (r *OpenaiReq) fillDefault() {
 	r.Temperature = gutils.OptionalVal(&r.Temperature, 1)
 	r.TopP = gutils.OptionalVal(&r.TopP, 1)
 	r.N = gutils.OptionalVal(&r.N, 1)
+	r.Model = gutils.OptionalVal(&r.Model, gconfig.Shared.GetString("openai.default_model"))
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
@@ -133,8 +134,10 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 	}
 	data.fillDefault()
 
-	// rewrite data
-	data.Model = gconfig.Shared.GetString("openai.model")
+	if !gutils.Contains(gconfig.Shared.GetStringSlice("openai.allowed_models"), data.Model) {
+		return nil, errors.Errorf("model `%s` is not allowed", data.Model)
+	}
+
 	trimMessages(data)
 	if data.MaxTokens > 1000 {
 		return nil, errors.Errorf("max_tokens should less than 1000")
