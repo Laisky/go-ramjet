@@ -134,7 +134,7 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 	data.fillDefault()
 
 	// rewrite data
-	data.Model = "gpt-3.5-turbo"
+	data.Model = gconfig.Shared.GetString("openai.model")
 	trimMessages(data)
 	if data.MaxTokens > 1000 {
 		return nil, errors.Errorf("max_tokens should less than 1000")
@@ -148,14 +148,17 @@ func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
 }
 
 func trimMessages(data *OpenaiReq) {
-	if len(data.Messages) > 7 {
-		data.Messages = data.Messages[len(data.Messages)-7:]
+	maxSessions := gconfig.Shared.GetInt("openai.max_sessions")
+	maxTokens := gconfig.Shared.GetInt("openai.max_tokens")
+
+	if len(data.Messages) > maxSessions {
+		data.Messages = data.Messages[len(data.Messages)-maxSessions:]
 	}
 
 	for i := range data.Messages {
 		cnt := data.Messages[i].Content
-		if len(cnt) > 1000 {
-			cnt = cnt[len(cnt)-1000:]
+		if len(cnt) > maxTokens {
+			cnt = cnt[len(cnt)-maxTokens:]
 		}
 	}
 }
