@@ -64,7 +64,7 @@ func bindHTTP() {
 func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	newUrl := fmt.Sprintf("%s%s",
-		strings.Trim(gconfig.Shared.GetString("openai.api"), "/"),
+		gconfig.Shared.GetString("openai.api"),
 		path,
 	)
 
@@ -73,11 +73,29 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	}
 
 	body := ctx.Request.Body
-	if ctx.Request.Method == http.MethodPost {
-		body, err = bodyChecker(ctx.Request.Body)
+	var data *OpenaiReq
+	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
+		data, err = bodyChecker(ctx.Request.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
+
+		switch data.Model {
+		case "gpt-3.5-turbo":
+			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
+			data.Prompt = ""
+		case "code-davinci-002":
+			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
+			data.Messages = nil
+		default:
+			return nil, errors.Errorf("unknown model %q", data.Model)
+		}
+
+		payload, err := gutils.JSON.Marshal(data)
+		if err != nil {
+			return nil, errors.Wrap(err, "marshal new body")
+		}
+		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
 	req, err := http.NewRequest(ctx.Request.Method, newUrl, body)
@@ -103,13 +121,14 @@ type OpenaiReqMessage struct {
 type OpenaiReq struct {
 	Model            string             `json:"model"`
 	MaxTokens        uint               `json:"max_tokens"`
-	Messages         []OpenaiReqMessage `json:"messages"`
+	Messages         []OpenaiReqMessage `json:"messages,omitempty"`
 	PresencePenalty  float64            `json:"presence_penalty"`
 	FrequencyPenalty float64            `json:"frequency_penalty"`
 	Stream           bool               `json:"stream"`
 	Temperature      float64            `json:"temperature"`
 	TopP             float64            `json:"top_p"`
 	N                int                `json:"n"`
+	Prompt           string             `json:"prompt,omitempty"`
 	// BestOf           int                `json:"best_of"`
 }
 
@@ -122,32 +141,25 @@ func (r *OpenaiReq) fillDefault() {
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
-func bodyChecker(body io.ReadCloser) (newBody io.ReadCloser, err error) {
+func bodyChecker(body io.ReadCloser) (data *OpenaiReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
 	}
 
-	data := new(OpenaiReq)
+	data = new(OpenaiReq)
 	if err = gutils.JSON.Unmarshal(payload, data); err != nil {
 		return nil, errors.Wrap(err, "parse request")
 	}
 	data.fillDefault()
 
-	if !gutils.Contains(gconfig.Shared.GetStringSlice("openai.allowed_models"), data.Model) {
-		return nil, errors.Errorf("model `%s` is not allowed", data.Model)
-	}
-
 	trimMessages(data)
-	if data.MaxTokens > 1000 {
-		return nil, errors.Errorf("max_tokens should less than 1000")
+	maxTokens := gconfig.Shared.GetInt("openai.max_tokens")
+	if data.MaxTokens > uint(maxTokens) {
+		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	if payload, err = gutils.JSON.Marshal(data); err != nil {
-		return nil, errors.Wrap(err, "marshal new body")
-	}
-
-	return io.NopCloser(bytes.NewReader(payload)), nil
+	return data, err
 }
 
 func trimMessages(data *OpenaiReq) {
