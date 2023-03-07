@@ -16,6 +16,7 @@ require (
 	github.com/fsouza/go-dockerclient v1.9.4
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gorilla/feeds v1.1.1
+	github.com/jinzhu/copier v0.3.5
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.1
 	github.com/yanyiwu/gojieba v1.3.0
@@ -61,7 +62,6 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
-	github.com/jinzhu/copier v0.3.5 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

@@ -14,6 +14,7 @@ import (
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -46,14 +47,14 @@ func bindHTTP() {
 
 		resp, err := proxy(ctx)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("%+v", err))
 			return
 		}
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("%+v", err))
 			return
 		}
 
@@ -73,28 +74,45 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	}
 
 	body := ctx.Request.Body
-	var data *OpenaiReq
+	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
-		data, err = bodyChecker(ctx.Request.Body)
+		frontendReq, err = bodyChecker(ctx.Request.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
 
-		switch data.Model {
+		var openaiReq any
+		switch frontendReq.Model {
 		case "gpt-3.5-turbo":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
-			data.Prompt = ""
+			req := new(OpenaiChatReq)
+			if err := copier.Copy(req, frontendReq); err != nil {
+				return nil, errors.Wrap(err, "copy to chat req")
+			}
+
+			if frontendReq.StaticContext != "" {
+				req.Messages = append([]OpenaiReqMessage{{
+					Role:    "user",
+					Content: frontendReq.StaticContext,
+				}}, req.Messages...)
+			}
+
+			openaiReq = req
 		case "code-davinci-002":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
-			data.Messages = nil
+			openaiReq = new(OpenaiCompletionReq)
+			if err := copier.Copy(openaiReq, frontendReq); err != nil {
+				return nil, errors.Wrap(err, "copy to completion req")
+			}
 		default:
-			return nil, errors.Errorf("unknown model %q", data.Model)
+			return nil, errors.Errorf("unknown model %q", frontendReq.Model)
 		}
 
-		payload, err := gutils.JSON.Marshal(data)
+		payload, err := gutils.JSON.Marshal(openaiReq)
 		if err != nil {
 			return nil, errors.Wrap(err, "marshal new body")
 		}
+		log.Logger.Debug("send request", zap.ByteString("req", payload))
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
@@ -113,26 +131,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	return resp, nil
 }
 
-type OpenaiReqMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type OpenaiReq struct {
-	Model            string             `json:"model"`
-	MaxTokens        uint               `json:"max_tokens"`
-	Messages         []OpenaiReqMessage `json:"messages,omitempty"`
-	PresencePenalty  float64            `json:"presence_penalty"`
-	FrequencyPenalty float64            `json:"frequency_penalty"`
-	Stream           bool               `json:"stream"`
-	Temperature      float64            `json:"temperature"`
-	TopP             float64            `json:"top_p"`
-	N                int                `json:"n"`
-	Prompt           string             `json:"prompt,omitempty"`
-	// BestOf           int                `json:"best_of"`
-}
-
-func (r *OpenaiReq) fillDefault() {
+func (r *FrontendReq) fillDefault() {
 	r.MaxTokens = gutils.OptionalVal(&r.MaxTokens, 500)
 	r.Temperature = gutils.OptionalVal(&r.Temperature, 1)
 	r.TopP = gutils.OptionalVal(&r.TopP, 1)
@@ -141,13 +140,13 @@ func (r *OpenaiReq) fillDefault() {
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
-func bodyChecker(body io.ReadCloser) (data *OpenaiReq, err error) {
+func bodyChecker(body io.ReadCloser) (data *FrontendReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
 	}
 
-	data = new(OpenaiReq)
+	data = new(FrontendReq)
 	if err = gutils.JSON.Unmarshal(payload, data); err != nil {
 		return nil, errors.Wrap(err, "parse request")
 	}
@@ -162,7 +161,7 @@ func bodyChecker(body io.ReadCloser) (data *OpenaiReq, err error) {
 	return data, err
 }
 
-func trimMessages(data *OpenaiReq) {
+func trimMessages(data *FrontendReq) {
 	maxSessions := gconfig.Shared.GetInt("openai.max_sessions")
 	maxTokens := gconfig.Shared.GetInt("openai.max_tokens")
 
