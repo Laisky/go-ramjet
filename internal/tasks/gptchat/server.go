@@ -27,7 +27,7 @@ var (
 
 func setupHTTPCli() (err error) {
 	httpcli, err = gutils.NewHTTPClient(
-		gutils.WithHTTPClientTimeout(30*time.Second),
+		gutils.WithHTTPClientTimeout(60*time.Second),
 		gutils.WithHTTPClientProxy(gconfig.Shared.GetString("openai.proxy")),
 	)
 	if err != nil {
