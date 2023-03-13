@@ -101,7 +101,8 @@ const RoleHuman = "user",
                 window.SetLocalStorage("chat_user_session_1", []);
             }
 
-            Object.keys(localStorage).forEach((key, idx) => {
+            let firstSession = true;
+            Object.keys(localStorage).forEach((key) => {
                 if (!key.startsWith("chat_user_session_")) {
                     return;
                 }
@@ -110,7 +111,8 @@ const RoleHuman = "user",
                 let sessionID = parseInt(key.replace("chat_user_session_", ""));
 
                 let active = "";
-                if (idx == 0) {
+                if (firstSession) {
+                    firstSession = false;
                     active = "active";
                 }
 
@@ -224,7 +226,8 @@ const RoleHuman = "user",
         let source = new SSE(window.OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + window.OpenaiToken()
+                "Authorization": "Bearer " + window.OpenaiToken(),
+                "X-Authorization-Type": window.OpenaiTokenType(),
             },
             method: "POST",
             payload: JSON.stringify({

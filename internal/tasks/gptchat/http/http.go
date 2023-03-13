@@ -3,6 +3,7 @@ package http
 import (
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -79,5 +80,17 @@ func Chat(ctx *gin.Context) {
 	err = tpl.ExecuteTemplate(ctx.Writer, "base", arg)
 	if AbortErr(ctx, err) {
 		return
+	}
+}
+
+func CopyHeader(to, from http.Header) {
+	for k, v := range from {
+		if gutils.Contains([]string{
+			"content-length",
+		}, strings.ToLower(k)) {
+			continue
+		}
+
+		to.Set(k, strings.Join(v, ";"))
 	}
 }

@@ -42,13 +42,11 @@ func APIHandler(ctx *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	ctx.Header("Content-Type", "text/event-stream")
-	ctx.Header("Cache-Control", "no-cache")
-	ctx.Header("X-Accel-Buffering", "no")
-	ctx.Header("Transfer-Encoding", "chunked")
-	for k, v := range resp.Header {
-		ctx.Header(k, strings.Join(v, ";"))
-	}
+	// ctx.Header("Content-Type", "text/event-stream")
+	// ctx.Header("Cache-Control", "no-cache")
+	// ctx.Header("X-Accel-Buffering", "no")
+	// ctx.Header("Transfer-Encoding", "chunked")
+	CopyHeader(ctx.Writer.Header(), resp.Header)
 
 	isStream := resp.Header.Get("Content-Type") == "text/event-stream"
 	reader := bufio.NewScanner(resp.Body)
@@ -145,8 +143,24 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		return nil, errors.Wrap(err, "new request")
 	}
 
-	req.Header = ctx.Request.Header
-	req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
+	// check token
+	{
+		typeHeader := ctx.Request.Header.Get("X-Authorization-Type")
+		switch typeHeader {
+		case "proxy":
+			// check request token
+			userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
+			if !gutils.Contains(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"), userToken) {
+				return nil, errors.Errorf("user token is invalid")
+			}
+
+			CopyHeader(req.Header, ctx.Request.Header)
+			req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
+		default:
+			return nil, errors.Errorf("unsupport auth type %q", typeHeader)
+		}
+	}
+
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "do request")

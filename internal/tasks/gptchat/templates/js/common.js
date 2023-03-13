@@ -1,9 +1,9 @@
 "use strict";
 
 const OpenaiTokenTypeProxy = "proxy",
-OpenaiTokenTypeDirect = "direct";
+    OpenaiTokenTypeDirect = "direct";
 
-(function(){
+(function () {
     window.OpenaiAPI = () => {
         switch (window.OpenaiTokenType()) {
             case OpenaiTokenTypeProxy:
@@ -14,18 +14,42 @@ OpenaiTokenTypeDirect = "direct";
     };
 
     window.OpenaiTokenType = () => {
-        return window.GetLocalStorage("config_api_token_type") || OpenaiTokenTypeProxy;
+        let t = window.GetLocalStorage("config_api_token_type");
+        if (!t) {
+            t = OpenaiTokenTypeProxy;
+            window.SetLocalStorage("config_api_token_type", t);
+        }
+
+        return t;
     };
 
     window.OpenaiToken = () => {
-        return window.GetLocalStorage("config_api_token_value") || "DEFAULT_PROXY_TOKEN";
+        let v = window.GetLocalStorage("config_api_token_value");
+        if (!v) {
+            v = "DEFAULT_PROXY_TOKEN"
+            window.SetLocalStorage("config_api_token_value", v);
+        }
+
+        return v
     };
 
     window.OpenaiMaxTokens = () => {
-        return window.GetLocalStorage("config_api_max_tokens") || "500";
+        let v = window.GetLocalStorage("config_api_max_tokens");
+        if (!v) {
+            v = "500";
+            window.SetLocalStorage("config_api_max_tokens", v);
+        }
+
+        return v;
     };
 
     window.OpenaiChatStaticContext = () => {
-        return window.GetLocalStorage("config_api_static_context") || "";
+        let v = window.GetLocalStorage("config_api_static_context");
+        if (!v) {
+            v = ""
+            window.SetLocalStorage("config_api_static_context", v);
+        }
+
+        return v;
     };
 })()
