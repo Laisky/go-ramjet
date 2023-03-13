@@ -1,0 +1,54 @@
+{{define "header"}}
+<style>
+    #chatConversation .role-human {
+        margin-bottom: 5px;
+    }
+
+    #chatConversation .role-ai {
+        margin-bottom: 5px;
+        /* border-bottom-style: dotted; */
+    }
+</style>
+{{end}}
+
+{{define "body"}}
+<div class="container-fluid">
+    <div class="row" style="height: 100vh; padding-top: 57px;">
+        <div class="col-2" style="padding: 0px;">
+            <div class="card text-center" id="chatSessionManager" style="height: 100%;">
+                <div class="card-header text-muted">
+                    <button type="button" class="btn btn-outline-secondary" id="newChatSessionBtn">新建会话</button>
+                </div>
+                <div class="card-body" style="min-height: 300px; padding: 0px;" id="chatSessionContainer">
+                    <!-- <div class="list-group" style="border-radius: 0%;">
+                        <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="1">
+                            会话 1
+                        </button>
+                    </div> -->
+                </div>
+                <div class="card-footer text-muted">
+                    <button type="button" class="btn btn-secondary" id="purgeAllSessionsBtn">清空会话</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-10" style="padding-left: 0px; max-height: 100%;">
+            <div class="card text-center" style="height: 100%; flex-direction: column;">
+                <div class="card-body" style="min-height: 300px; overflow-y: scroll;" id="chatConversation">
+
+                </div>
+                <div class="card-footer text-muted">
+                    <div class="input-group mb-3">
+                        <textarea class="form-control" placeholder="prompt" id="inputPrompt"
+                            style="height: 40px"></textarea>
+                        <button class="btn btn-outline-secondary" type="button" id="inputPromptBtn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "mainjs"}}
+<script src="/static/chat.js"></script>
+{{end}}
