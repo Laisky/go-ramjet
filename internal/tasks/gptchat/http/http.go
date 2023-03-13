@@ -20,10 +20,15 @@ var (
 )
 
 func SetupHTTPCli() (err error) {
-	httpcli, err = gutils.NewHTTPClient(
-		gutils.WithHTTPClientTimeout(60*time.Second),
-		gutils.WithHTTPClientProxy(gconfig.Shared.GetString("openai.proxy")),
-	)
+	httpargs := []gutils.HTTPClientOptFunc{
+		gutils.WithHTTPClientTimeout(60 * time.Second),
+	}
+
+	if gconfig.Shared.GetString("openai.proxy") != "" {
+		httpargs = append(httpargs, gutils.WithHTTPClientProxy(gconfig.Shared.GetString("openai.proxy")))
+	}
+
+	httpcli, err = gutils.NewHTTPClient(httpargs...)
 	if err != nil {
 		return errors.Wrap(err, "new http client")
 	}
@@ -73,10 +78,22 @@ func Chat(ctx *gin.Context) {
 	arg := struct {
 		CurrentModel string
 		DataJS       string
+		BootstrapJs, BootstrapCss,
+		SeeJs, ShowdownJs string
 	}{
 		CurrentModel: "chat",
 		DataJS:       injectDataPayload,
+		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
+		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
+		SeeJs:        gconfig.Shared.GetString("openai.static_libs.sse_js"),
+		ShowdownJs:   gconfig.Shared.GetString("openai.static_libs.showdown_js"),
 	}
+
+	arg.BootstrapJs = gutils.OptionalVal(&arg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
+	arg.BootstrapCss = gutils.OptionalVal(&arg.BootstrapCss, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
+	arg.ShowdownJs = gutils.OptionalVal(&arg.ShowdownJs, "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
+	arg.SeeJs = gutils.OptionalVal(&arg.SeeJs, "https://s3.laisky.com/static/sse/0.6.1/sse.js")
+
 	err = tpl.ExecuteTemplate(ctx.Writer, "base", arg)
 	if AbortErr(ctx, err) {
 		return

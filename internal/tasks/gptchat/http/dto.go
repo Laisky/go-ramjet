@@ -13,13 +13,13 @@ const (
 )
 
 const (
-	defaultMaxTokens   = 4000
-	defaultMaxMessages = 6
+	defaultMaxTokens   = 2000
+	defaultMaxMessages = 7
 	defaultChatModel   = "gpt-3.5-turbo"
 )
 
 func ChatModel() string {
-	v := gconfig.Shared.GetString("openai.chat_model")
+	v := gconfig.Shared.GetString("openai.default_model")
 	if v != "" {
 		return v
 	}

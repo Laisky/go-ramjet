@@ -1,0 +1,15 @@
+server:
+  addr: 0.0.0.0:24456
+openai:
+  token: "<YOUR_OPENAI_API_TOKEN>"
+  api: "https://api.openai.com"
+  # proxy: "<YOUR_HTTP_PROXY>"
+  # max_sessions: 7
+  # max_tokens: 4500
+  bypass_proxy_tokens:
+  - "DEFAULT_PROXY_TOKEN"
+  # static_libs:
+  #   sse_js: "https://s3.laisky.com/static/sse/0.6.1/sse.js"
+  #   bootstrap_js: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"
+  #   bootstrap_css: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
+  #   showdown_js: "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js"
