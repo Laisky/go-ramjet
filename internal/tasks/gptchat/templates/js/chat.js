@@ -199,7 +199,7 @@ const RoleHuman = "user",
         messages = messages.slice(-N);
         if (GetLocalStorage("config_api_static_context")) {
             messages = [{
-                role: RoleSystem,
+                role: RoleHuman,
                 content: GetLocalStorage("config_api_static_context")
             }].concat(messages);
         }
@@ -278,19 +278,16 @@ const RoleHuman = "user",
             }
         });
 
-        try {
-            source.stream();
-        } catch (err) {
-            console.error("process chat stream: ", err)
+        source.onerror = (err) => {
+            source.close();
             if (lastAIInputEle.dataset.status == "waiting") {
-                lastAIInputEle.innerHTML = "⚠️出错了……";
+                lastAIInputEle.innerHTML = `<p>⚠️出错了……</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
             }
 
+            window.ScrollDown(document.getElementById("chatConversation"));
             inputBtn.classList.remove("disabled");  // unlock input
-            source.close();
-
-            throw err;
-        }
+        };
+        source.stream();
     }
 
 
@@ -426,13 +423,14 @@ const RoleHuman = "user",
             })
         }
 
-        // bind save button
-        // {
-        //     document.getElementById("saveConfigBtn").addEventListener("click", (evt) => {
-        //         evt.stopPropagation();
+        // bind reset button
+        {
+            document.getElementById("resetBtn").addEventListener("click", (evt) => {
+                evt.stopPropagation();
 
-        //         window.SaveConfig();
-        //     })
-        // }
+                localStorage.clear();
+                location.reload();
+            })
+        }
     }
 })();

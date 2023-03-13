@@ -51,4 +51,13 @@
     window.TrimSpace = (str) => {
         return str.replace(/^[\s\n]+|[\s\n]+$/g, "");
     };
+
+    window.RenderStr2HTML = (str) => {
+        return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/\n/g, '<br/>')
+            .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    }
 })();
