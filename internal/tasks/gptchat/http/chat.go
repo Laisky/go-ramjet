@@ -42,6 +42,9 @@ func APIHandler(ctx *gin.Context) {
 	}
 	defer resp.Body.Close()
 
+	ctx.Header("Content-Type", "text/event-stream")
+	ctx.Header("Cache-Control", "no-cache")
+	ctx.Header("X-Accel-Buffering", "no")
 	for k, v := range resp.Header {
 		ctx.Header(k, strings.Join(v, ";"))
 	}
