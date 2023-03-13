@@ -6,11 +6,21 @@ const RoleHuman = "user",
 
 (function () {
     (function main() {
+        setupLocalStorage();
         setupConfig();
         setupSessionManager();
         setupChatInput();
 
     })();
+
+    function setupLocalStorage() {
+        if (localStorage.getItem("chat_user_session_1")) {
+            return
+        }
+
+        // purge localstorage
+        localStorage.clear();
+    }
 
 
     function storageSessionKey(sessionID) {
@@ -185,7 +195,7 @@ const RoleHuman = "user",
         });
 
         messages = messages.slice(-N);
-        if(GetLocalStorage("config_api_static_context")) {
+        if (GetLocalStorage("config_api_static_context")) {
             messages = [{
                 role: RoleSystem,
                 content: GetLocalStorage("config_api_static_context")
@@ -295,16 +305,16 @@ const RoleHuman = "user",
             })
 
 
-        document.getElementById("inputPrompt").addEventListener("keydown", (evt) => {
-            evt.stopPropagation();
-            if (evt.key != 'Enter' || isComposition) {
-                return;
-            }
+            document.getElementById("inputPrompt").addEventListener("keydown", (evt) => {
+                evt.stopPropagation();
+                if (evt.key != 'Enter' || isComposition) {
+                    return;
+                }
 
-            sendChat2server();
-            document.getElementById("inputPrompt").value = "";
-        })
-    }
+                sendChat2server();
+                document.getElementById("inputPrompt").value = "";
+            })
+        }
 
         // bind input button
         document.getElementById("inputPromptBtn").addEventListener("click", (evt) => {
