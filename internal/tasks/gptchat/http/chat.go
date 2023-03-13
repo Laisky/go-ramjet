@@ -142,6 +142,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
+	CopyHeader(req.Header, ctx.Request.Header)
 
 	// check token
 	{
@@ -150,12 +151,10 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		case "proxy":
 			// check request token
 			userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
-			if !gutils.Contains(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"), userToken) {
-				return nil, errors.Errorf("user token is invalid")
+			if gutils.Contains(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"), userToken) {
+				req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
 			}
 
-			CopyHeader(req.Header, ctx.Request.Header)
-			req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
 		default:
 			return nil, errors.Errorf("unsupport auth type %q", typeHeader)
 		}
