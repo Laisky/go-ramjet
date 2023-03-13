@@ -134,7 +134,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "marshal new body")
 		}
-		log.Logger.Debug("send request", zap.ByteString("req", payload))
+		log.Logger.Debug("prepare request", zap.ByteString("req", payload))
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
@@ -163,6 +163,11 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "do request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}
 
 	return resp, nil
