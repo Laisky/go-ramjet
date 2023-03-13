@@ -121,13 +121,6 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 				return nil, errors.Wrap(err, "copy to chat req")
 			}
 
-			// if frontendReq.StaticContext != "" {
-			// 	req.Messages = append([]OpenaiReqMessage{{
-			// 		Role:    "user",
-			// 		Content: frontendReq.StaticContext,
-			// 	}}, req.Messages...)
-			// }
-
 			openaiReq = req
 		case "code-davinci-002":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
