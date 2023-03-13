@@ -111,3 +111,5 @@ vendor
 # pprof
 memory.pprof
 cpu.pprof
+
+__debug_bin

@@ -1,0 +1,93 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenAI</title>
+    <link rel="icon" href="favicon.ico" />
+    <link href="https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet" />
+    {{block "header" .}}
+    {{end}}
+</head>
+
+<body>
+    <nav class="fixed-top navbar navbar-expand-lg bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">ChatGPT</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            Models[{{.CurrentModel}}]
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item active" href="#" data-value="gpt-3.5-turbo">Chat</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <button type="button" data-bs-toggle="offcanvas" data-bs-target="#hiddenChatConfigSideBar"
+                aria-controls="hiddenChatConfigSideBar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+
+        </div>
+    </nav>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="hiddenChatConfigSideBar"
+        aria-labelledby="offcanvasNavbarLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Configurations</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="mb-3">
+                <label for="token" class="form-label">Token:</label>
+                <div class="input-group mb-3 form-control" id="configTokenType" style="padding: 0px;">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false">Token 类型</button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" data-value="proxy" href="#">转发</a></li>
+                        <li><a class="dropdown-item" data-value="direct" href="#">直连</a></li>
+                    </ul>
+                    <input type="text" class="form-control" id="configAPIToken" value="DEFAULT_PROXY_TOKEN">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="configMaxTokens" class="form-label">Max Tokens:</label>
+                <input type="number" class="form-control" id="configMaxTokens" max="4000" min="500" value="500">
+            </div>
+            <div class="mb-3">
+                <label for="configStaticContext" class="form-label">Static Context:</label>
+                <textarea class="form-control" placeholder="something always send to AI" id="configStaticContext"
+                    style="height: 80px"></textarea>
+            </div>
+            <!-- <button type="submit" class="btn btn-primary" id="saveConfigBtn">Save</button> -->
+        </div>
+    </div>
+
+    {{block "body" .}}
+    {{end}}
+
+
+    <script src="https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://s3.laisky.com/static/sse/0.6.1/sse.js"></script>
+    <script src="https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js"></script>
+    <script src="/static/libs.js"></script>
+    <script src="/static/common.js"></script>
+    <script>
+        window.data = JSON.parse({{.DataJS}});
+    </script>
+
+    {{block "mainjs" .}}
+    {{end}}
+</body>
+
+</html>
+{{end}}
