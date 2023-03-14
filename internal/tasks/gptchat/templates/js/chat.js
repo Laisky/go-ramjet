@@ -82,6 +82,7 @@ const RoleHuman = "user",
                             会话 1
                         </button>
                     </div>`;
+                window.SetLocalStorage(storageSessionKey(1), []);
             });
         }
 
