@@ -79,8 +79,8 @@
     <script src="{{.BootstrapJs}}"></script>
     <script src="{{.SeeJs}}"></script>
     <script src="{{.ShowdownJs}}"></script>
-    <script src="/static/libs.js"></script>
-    <script src="/static/common.js"></script>
+    <script src="/static/libs{{.LibJsSuffix}}.js"></script>
+    <script src="/static/common{{.CommonJsSuffix}}.js"></script>
     <script>
         window.data = JSON.parse({{.DataJS}});
     </script>

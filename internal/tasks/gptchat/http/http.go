@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/sha1"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -36,14 +38,26 @@ func SetupHTTPCli() (err error) {
 	return nil
 }
 
+func ETAG(cnt []byte) string {
+	hasher := sha1.New()
+	hasher.Sum(cnt)
+	return fmt.Sprintf("%x", hasher.Sum(nil))[:7]
+}
+
 func RegisterStatic(g gin.IRouter) {
+	chatJsHash := ETAG(ijs.Chat)
+	commonJsHash := ETAG(ijs.Common)
+	libsJsHash := ETAG(ijs.Libs)
+
 	g.GET("/*any", func(ctx *gin.Context) {
+		ctx.Header("Cache-Control", "max-age=86400")
+
 		switch ctx.Param("any") {
-		case "/chat.js":
+		case fmt.Sprintf("/chat-%s.js", chatJsHash):
 			ctx.Data(http.StatusOK, "application/javascript", ijs.Chat)
-		case "/common.js":
+		case fmt.Sprintf("/common-%s.js", commonJsHash):
 			ctx.Data(http.StatusOK, "application/javascript", ijs.Common)
-		case "/libs.js":
+		case fmt.Sprintf("/libs-%s.js", libsJsHash):
 			ctx.Data(http.StatusOK, "application/javascript", ijs.Libs)
 		}
 	})
@@ -75,26 +89,30 @@ func Chat(ctx *gin.Context) {
 		return
 	}
 
-	arg := struct {
+	tplArg := struct {
 		CurrentModel string
 		DataJS       string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs string
+		LibJsSuffix, CommonJsSuffix, ChatJsSuffix string
 	}{
-		CurrentModel: "chat",
-		DataJS:       injectDataPayload,
-		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
-		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
-		SeeJs:        gconfig.Shared.GetString("openai.static_libs.sse_js"),
-		ShowdownJs:   gconfig.Shared.GetString("openai.static_libs.showdown_js"),
+		CurrentModel:   "chat",
+		DataJS:         injectDataPayload,
+		BootstrapJs:    gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
+		BootstrapCss:   gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
+		SeeJs:          gconfig.Shared.GetString("openai.static_libs.sse_js"),
+		ShowdownJs:     gconfig.Shared.GetString("openai.static_libs.showdown_js"),
+		LibJsSuffix:    "-" + ETAG(ijs.Libs),
+		CommonJsSuffix: "-" + ETAG(ijs.Common),
+		ChatJsSuffix:   "-" + ETAG(ijs.Chat),
 	}
 
-	arg.BootstrapJs = gutils.OptionalVal(&arg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
-	arg.BootstrapCss = gutils.OptionalVal(&arg.BootstrapCss, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
-	arg.ShowdownJs = gutils.OptionalVal(&arg.ShowdownJs, "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
-	arg.SeeJs = gutils.OptionalVal(&arg.SeeJs, "https://s3.laisky.com/static/sse/0.6.1/sse.js")
+	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
+	tplArg.BootstrapCss = gutils.OptionalVal(&tplArg.BootstrapCss, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
+	tplArg.ShowdownJs = gutils.OptionalVal(&tplArg.ShowdownJs, "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
+	tplArg.SeeJs = gutils.OptionalVal(&tplArg.SeeJs, "https://s3.laisky.com/static/sse/0.6.1/sse.js")
 
-	err = tpl.ExecuteTemplate(ctx.Writer, "base", arg)
+	err = tpl.ExecuteTemplate(ctx.Writer, "base", tplArg)
 	if AbortErr(ctx, err) {
 		return
 	}
