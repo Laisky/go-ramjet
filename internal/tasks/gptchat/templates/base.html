@@ -76,11 +76,11 @@
     {{end}}
 
 
-    <script src="{{.BootstrapJs}}"></script>
-    <script src="{{.SeeJs}}"></script>
-    <script src="{{.ShowdownJs}}"></script>
-    <script src="/static/{{.LibJs}}"></script>
-    <script src="/static/{{.SiteJs}}"></script>
+    <script async src="{{.BootstrapJs}}"></script>
+    <script async src="{{.SeeJs}}"></script>
+    <script async src="{{.ShowdownJs}}"></script>
+    <script defer src="/static/{{.LibJs}}"></script>
+    <script defer src="/static/{{.SiteJs}}"></script>
     <script>
         window.data = JSON.parse({{.DataJS}});
     </script>
