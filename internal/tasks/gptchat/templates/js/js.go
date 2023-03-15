@@ -8,6 +8,5 @@ var Chat []byte
 //go:embed common.js
 var Common []byte
 
-
 //go:embed libs.js
 var Libs []byte

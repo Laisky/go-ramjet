@@ -205,6 +205,12 @@ const RoleHuman = "user",
             }].concat(messages);
         }
 
+        messages = [{
+            role: RoleSystem,
+            content: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything."
+        }].concat(messages);
+
+
         return messages;
     }
 

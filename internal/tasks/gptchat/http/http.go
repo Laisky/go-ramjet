@@ -10,16 +10,24 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/gin-gonic/gin"
+
 	itemplates "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates"
 	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
 	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/gin-gonic/gin"
 )
 
 var (
-	httpcli *http.Client
+	httpcli     *http.Client
+	staticFiles struct {
+		LibJs, SiteJs *staticFile
+	}
 )
+
+func init() {
+	prepareStaticFiles()
+}
 
 func SetupHTTPCli() (err error) {
 	httpargs := []gutils.HTTPClientOptFunc{
@@ -38,29 +46,48 @@ func SetupHTTPCli() (err error) {
 	return nil
 }
 
-func ETAG(cnt []byte) string {
+type staticFile struct {
+	Name        string
+	Content     []byte
+	Hash        string
+	ContentType string
+}
+
+func prepareStaticFiles() {
+	staticFiles.LibJs = &staticFile{
+		Name:        "libs",
+		ContentType: "application/javascript",
+		Content:     ijs.Libs,
+	}
+	staticFiles.SiteJs = &staticFile{
+		Name:        "sites",
+		ContentType: "application/javascript",
+		Content:     append(ijs.Common, ijs.Chat...),
+	}
+
 	hasher := sha1.New()
-	hasher.Sum(cnt)
-	return fmt.Sprintf("%x", hasher.Sum(nil))[:7]
+	for _, v := range []*staticFile{
+		staticFiles.LibJs,
+		staticFiles.SiteJs,
+	} {
+		hasher.Reset()
+		hasher.Write(v.Content)
+		v.Hash = fmt.Sprintf("%x", hasher.Sum(nil))[:7]
+		v.Name = fmt.Sprintf("%s-%s.js", v.Name, v.Hash)
+	}
 }
 
 func RegisterStatic(g gin.IRouter) {
-	chatJsHash := ETAG(ijs.Chat)
-	commonJsHash := ETAG(ijs.Common)
-	libsJsHash := ETAG(ijs.Libs)
-
-	g.GET("/*any", func(ctx *gin.Context) {
-		ctx.Header("Cache-Control", "max-age=86400")
-
-		switch ctx.Param("any") {
-		case fmt.Sprintf("/chat-%s.js", chatJsHash):
-			ctx.Data(http.StatusOK, "application/javascript", ijs.Chat)
-		case fmt.Sprintf("/common-%s.js", commonJsHash):
-			ctx.Data(http.StatusOK, "application/javascript", ijs.Common)
-		case fmt.Sprintf("/libs-%s.js", libsJsHash):
-			ctx.Data(http.StatusOK, "application/javascript", ijs.Libs)
-		}
-	})
+	for _, sf := range []*staticFile{
+		staticFiles.LibJs,
+		staticFiles.SiteJs,
+	} {
+		sf := sf
+		g.GET(fmt.Sprintf("/%s", sf.Name), func(ctx *gin.Context) {
+			ctx.Header("Cache-Control", "max-age=86400")
+			ctx.Data(http.StatusOK, sf.ContentType, sf.Content)
+		})
+	}
 }
 
 func Chat(ctx *gin.Context) {
@@ -94,17 +121,16 @@ func Chat(ctx *gin.Context) {
 		DataJS       string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs string
-		LibJsSuffix, CommonJsSuffix, ChatJsSuffix string
+		LibJs, SiteJs string
 	}{
-		CurrentModel:   "chat",
-		DataJS:         injectDataPayload,
-		BootstrapJs:    gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
-		BootstrapCss:   gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
-		SeeJs:          gconfig.Shared.GetString("openai.static_libs.sse_js"),
-		ShowdownJs:     gconfig.Shared.GetString("openai.static_libs.showdown_js"),
-		LibJsSuffix:    "-" + ETAG(ijs.Libs),
-		CommonJsSuffix: "-" + ETAG(ijs.Common),
-		ChatJsSuffix:   "-" + ETAG(ijs.Chat),
+		CurrentModel: "chat",
+		DataJS:       injectDataPayload,
+		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
+		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
+		SeeJs:        gconfig.Shared.GetString("openai.static_libs.sse_js"),
+		ShowdownJs:   gconfig.Shared.GetString("openai.static_libs.showdown_js"),
+		LibJs:        staticFiles.LibJs.Name,
+		SiteJs:       staticFiles.SiteJs.Name,
 	}
 
 	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
