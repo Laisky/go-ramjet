@@ -79,7 +79,7 @@ const RoleHuman = "user",
                 document.getElementById("chatSessionContainer").innerHTML = `
                     <div class="list-group" style="border-radius: 0%;">
                         <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="1">
-                            会话 1
+                            Session 1
                         </button>
                     </div>`;
                 window.SetLocalStorage(storageSessionKey(1), []);
@@ -120,7 +120,7 @@ const RoleHuman = "user",
                 document.getElementById("chatSessionContainer").insertAdjacentHTML("beforeend", `
                     <div class="list-group" style="border-radius: 0%;">
                         <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true" data-session="${sessionID}">
-                            会话 ${sessionID}
+                            Session ${sessionID}
                         </button>
                     </div>`);
             });
@@ -155,7 +155,7 @@ const RoleHuman = "user",
                 document.getElementById("chatSessionContainer").insertAdjacentHTML("afterbegin", `
                     <div class="list-group" style="border-radius: 0%;">
                         <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="${newSessionID}">
-                            会话 ${newSessionID}
+                            Session ${newSessionID}
                         </button>
                     </div>`);
                 window.SetLocalStorage(storageSessionKey(newSessionID), []);
@@ -200,18 +200,29 @@ const RoleHuman = "user",
         messages = messages.slice(-N);
         if (GetLocalStorage("config_api_static_context")) {
             messages = [{
-                role: RoleHuman,
+                role: RoleSystem,
                 content: GetLocalStorage("config_api_static_context")
             }].concat(messages);
         }
 
         messages = [{
             role: RoleSystem,
-            content: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything."
+            content: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question and if possible, reference the context as much as you can."
         }].concat(messages);
 
 
         return messages;
+    }
+
+    let chatPromptInput = document.getElementById("inputPromptBtn");
+    function lockChatPromptInput() {
+        chatPromptInput.classList.add("disabled");
+    }
+    function unlockChatPromptInput() {
+        chatPromptInput.classList.remove("disabled");
+    }
+    function isAllowChatPrompInput() {
+        return !chatPromptInput.classList.contains("disabled");
     }
 
     function sendChat2server() {
@@ -228,7 +239,7 @@ const RoleHuman = "user",
         let lastAIInputEle = document.getElementById("chatConversation").querySelector(".row.role-ai:last-child").querySelector(".text-start");
 
         let inputBtn = document.getElementById("inputPromptBtn");
-        inputBtn.classList.add("disabled");  // lock input
+        lockChatPromptInput();
 
         let source = new SSE(window.OpenaiAPI(), {
             headers: {
@@ -281,18 +292,18 @@ const RoleHuman = "user",
                 scrollChatToDown();
 
                 appendChants2Storage(RoleAI, lastAIInputEle.innerHTML);
-                inputBtn.classList.remove("disabled");  // unlock input
+                unlockChatPromptInput();
             }
         });
 
         source.onerror = (err) => {
             source.close();
             if (lastAIInputEle.dataset.status == "waiting") {
-                lastAIInputEle.innerHTML = `<p>⚠️出错了……</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
+                lastAIInputEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
             }
 
             window.ScrollDown(document.getElementById("chatConversation"));
-            inputBtn.classList.remove("disabled");  // unlock input
+            unlockChatPromptInput();
         };
         source.stream();
     }
@@ -302,33 +313,40 @@ const RoleHuman = "user",
         // bind input press enter
         {
             let isComposition = false;
-            document.getElementById("inputPrompt").addEventListener("compositionstart", (evt) => {
-                evt.stopPropagation();
-                isComposition = true;
-            })
-            document.getElementById("inputPrompt").addEventListener("compositionend", (evt) => {
-                evt.stopPropagation();
-                isComposition = false;
-            })
+            document.getElementById("inputPrompt").
+                addEventListener("compositionstart", (evt) => {
+                    evt.stopPropagation();
+                    isComposition = true;
+                })
+            document.getElementById("inputPrompt").
+                addEventListener("compositionend", (evt) => {
+                    evt.stopPropagation();
+                    isComposition = false;
+                })
 
 
-            document.getElementById("inputPrompt").addEventListener("keydown", (evt) => {
-                evt.stopPropagation();
-                if (evt.key != 'Enter' || isComposition) {
-                    return;
-                }
+            document.getElementById("inputPrompt").
+                addEventListener("keydown", (evt) => {
+                    evt.stopPropagation();
+                    if (evt.key != 'Enter'
+                        || isComposition
+                        || (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey)
+                        || !isAllowChatPrompInput()) {
+                        return;
+                    }
 
-                sendChat2server();
-                document.getElementById("inputPrompt").value = "";
-            })
+                    sendChat2server();
+                    document.getElementById("inputPrompt").value = "";
+                })
         }
 
         // bind input button
-        document.getElementById("inputPromptBtn").addEventListener("click", (evt) => {
-            evt.stopPropagation();
-            sendChat2server();
-            document.getElementById("inputPrompt").value = "";
-        })
+        document.getElementById("inputPromptBtn").
+            addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                sendChat2server();
+                document.getElementById("inputPrompt").value = "";
+            })
     }
 
     function append2Chats(role, text, isHistory = false) {
@@ -374,7 +392,8 @@ const RoleHuman = "user",
                 break
         }
 
-        document.getElementById("chatConversation").insertAdjacentHTML("beforeend", chatEle);
+        document.getElementById("chatConversation").
+            insertAdjacentHTML("beforeend", chatEle);
 
         // chatEle = DOMParser.parseFromString(chatEle);
         // document.getElementById("chatConversation").insertAdjacentElement("beforeend", chatEle);
@@ -383,19 +402,23 @@ const RoleHuman = "user",
 
 
     function setupConfig() {
+        let tokenTypeParent = document.
+            querySelector("#hiddenChatConfigSideBar .input-group.token-type");
+
         // set token type
         {
+            let selectItems = tokenTypeParent.querySelectorAll("a.dropdown-item");
             switch (window.OpenaiTokenType()) {
                 case "proxy":
-                    ActiveElementsByData(document.getElementById("configTokenType").querySelectorAll("a.dropdown-item"), "value", "proxy");
+                    ActiveElementsByData(selectItems, "value", "proxy");
                     break;
                 case "direct":
-                    ActiveElementsByData(document.getElementById("configTokenType").querySelectorAll("a.dropdown-item"), "value", "direct");
+                    ActiveElementsByData(selectItems, "value", "direct");
                     break;
             }
 
-            // bind evt listener for configTokenType
-            document.getElementById("configTokenType").querySelectorAll("a.dropdown-item").forEach((ele) => {
+            // bind evt listener for choose different token type
+            selectItems.forEach((ele) => {
                 ele.addEventListener("click", (evt) => {
                     evt.stopPropagation();
                     window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
@@ -405,8 +428,10 @@ const RoleHuman = "user",
 
         //  config_api_token_value
         {
-            document.getElementById("configAPIToken").value = window.OpenaiToken();
-            document.getElementById("configAPIToken").addEventListener("input", (evt) => {
+            let apitokenInput = document
+                .querySelector("#hiddenChatConfigSideBar .input.api-token");
+            apitokenInput.value = window.OpenaiToken();
+            apitokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_token_value", evt.target.value);
             })
@@ -414,8 +439,10 @@ const RoleHuman = "user",
 
         //  config_api_max_tokens
         {
-            document.getElementById("configMaxTokens").value = window.OpenaiMaxTokens();
-            document.getElementById("configMaxTokens").addEventListener("input", (evt) => {
+            let maxtokenInput = document
+                .querySelector("#hiddenChatConfigSideBar .input.max-token");
+            maxtokenInput.value = window.OpenaiMaxTokens();
+            maxtokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_max_tokens", evt.target.value);
             })
@@ -423,8 +450,10 @@ const RoleHuman = "user",
 
         //  config_api_static_context
         {
-            document.getElementById("configStaticContext").value = window.OpenaiChatStaticContext();
-            document.getElementById("configStaticContext").addEventListener("input", (evt) => {
+            let staticConfigInput = document
+                .querySelector("#hiddenChatConfigSideBar .input.static-config");
+            staticConfigInput.value = window.OpenaiChatStaticContext();
+            staticConfigInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_static_context", evt.target.value);
             })
@@ -432,12 +461,22 @@ const RoleHuman = "user",
 
         // bind reset button
         {
-            document.getElementById("resetBtn").addEventListener("click", (evt) => {
-                evt.stopPropagation();
+            document.querySelector("#hiddenChatConfigSideBar .btn.reset")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    localStorage.clear();
+                    location.reload();
+                })
+        }
 
-                localStorage.clear();
-                location.reload();
-            })
+        // bind submit button
+        {
+            document.querySelector("#hiddenChatConfigSideBar .btn.submit")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    location.reload();
+                })
+
         }
     }
 })();

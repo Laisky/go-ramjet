@@ -14,7 +14,7 @@
 </head>
 
 <body>
-    <nav class="fixed-top navbar navbar-expand-lg bg-light">
+    <nav class="fixed-top navbar navbar-expand-lg bg-light" id="headerbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">ChatGPT</a>
             <div class="collapse navbar-collapse">
@@ -41,34 +41,34 @@
     </nav>
 
     <div class="offcanvas offcanvas-end" tabindex="-1" id="hiddenChatConfigSideBar"
-        aria-labelledby="offcanvasNavbarLabel">
+        aria-labelledby="toggleChatConfigSidebarBtn">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Configurations</h5>
+            <h5 class="offcanvas-title" id="toggleChatConfigSidebarBtn">Configurations</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
             <div class="mb-3">
                 <label for="token" class="form-label">Token:</label>
-                <div class="input-group mb-3 form-control" id="configTokenType" style="padding: 0px;">
+                <div class="input-group mb-3 form-control token-type" style="padding: 0px;">
                     <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
-                        aria-expanded="false">Token 类型</button>
+                        aria-expanded="false">HowTo Connect</button>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" data-value="proxy" href="#">转发</a></li>
-                        <li><a class="dropdown-item" data-value="direct" href="#">直连</a></li>
+                        <li><a class="dropdown-item" data-value="proxy" href="#">Proxy</a></li>
+                        <li><a class="dropdown-item disabled" data-value="direct" href="#">Direct</a></li>
                     </ul>
-                    <input type="text" class="form-control" id="configAPIToken" value="DEFAULT_PROXY_TOKEN">
+                    <input type="text" class="form-control input api-token" value="DEFAULT_PROXY_TOKEN">
                 </div>
             </div>
             <div class="mb-3">
                 <label for="configMaxTokens" class="form-label">Max Tokens:</label>
-                <input type="number" class="form-control" id="configMaxTokens" max="4000" min="500" value="500">
+                <input type="number" class="form-control input max-token" max="4000" min="500" value="500">
             </div>
             <div class="mb-3">
                 <label for="configStaticContext" class="form-label">Static Context:</label>
-                <textarea class="form-control" placeholder="something always send to AI" id="configStaticContext"
-                    style="height: 80px"></textarea>
+                <textarea class="form-control input static-config" placeholder="something always send to AI" style="height: 80px"></textarea>
             </div>
-            <button class="btn btn-secondary" id="resetBtn">Reset</button>
+            <button class="btn btn-primary submit">Save</button>
+            <button class="btn btn-secondary reset">Reset</button>
         </div>
     </div>
 

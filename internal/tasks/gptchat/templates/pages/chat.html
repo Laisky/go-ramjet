@@ -8,6 +8,7 @@
         margin-bottom: 5px;
         /* border-bottom-style: dotted; */
     }
+
 </style>
 {{end}}
 
@@ -17,7 +18,7 @@
         <div class="col-2" style="padding: 0px;">
             <div class="card text-center" id="chatSessionManager" style="height: 100%;">
                 <div class="card-header text-muted">
-                    <button type="button" class="btn btn-outline-secondary" id="newChatSessionBtn">新建会话</button>
+                    <button type="button" class="btn btn-outline-secondary" id="newChatSessionBtn">New Session</button>
                 </div>
                 <div class="card-body" style="min-height: 300px; padding: 0px;" id="chatSessionContainer">
                     <!-- <div class="list-group" style="border-radius: 0%;">
@@ -27,7 +28,7 @@
                     </div> -->
                 </div>
                 <div class="card-footer text-muted">
-                    <button type="button" class="btn btn-secondary" id="purgeAllSessionsBtn">清空会话</button>
+                    <button type="button" class="btn btn-secondary" id="purgeAllSessionsBtn">Clear All</button>
                 </div>
             </div>
         </div>
@@ -37,9 +38,9 @@
 
                 </div>
                 <div class="card-footer text-muted">
-                    <div class="input-group mb-3">
+                    <div class="input-group mb-3" style="margin-bottom: 0px!important;">
                         <textarea class="form-control" placeholder="prompt" id="inputPrompt"
-                            style="height: 40px"></textarea>
+                            style="height: 80px"></textarea>
                         <button class="btn btn-outline-secondary" type="button" id="inputPromptBtn">Send</button>
                     </div>
                 </div>
