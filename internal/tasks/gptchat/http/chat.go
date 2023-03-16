@@ -72,15 +72,19 @@ func APIHandler(ctx *gin.Context) {
 			chunk = matched[0][1]
 		}
 
-		resp := new(OpenaiCOmpletionStreamResp)
-		err = gutils.JSON.Unmarshal(chunk, resp)
+		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
 		if AbortErr(ctx, err) {
 			return
 		}
 
-		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
-		if AbortErr(ctx, err) {
-			return
+		resp := new(OpenaiCOmpletionStreamResp)
+		if err = gutils.JSON.Unmarshal(chunk, resp); err != nil {
+			// TODO completion's stream response is not support
+			//
+			// 2023-03-16T08:02:37Z	DEBUG	go-ramjet.chat	http/chat.go:68	got response line	{"line": "\ndata: {\"id\": \"cmpl-6ucrBZjC3aU8Nu4izkaSywzdVb8h1\", \"object\": \"text_completion\", \"created\": 1678953753, \"choices\": [{\"text\": \"\\n\", \"index\": 0, \"logprobs\": null, \"finish_reason\": null}], \"model\": \"text-davinci-003\"}"}
+			// 2023-03-16T08:02:37Z	DEBUG	go-ramjet.chat	http/chat.go:68	got response line	{"line": "\ndata: {\"id\": \"cmpl-6ucrBZjC3aU8Nu4izkaSywzdVb8h1\", \"object\": \"text_completion\", \"created\": 1678953753, \"choices\": [{\"text\": \"});\", \"index\": 0, \"logprobs\": null, \"finish_reason\": null}], \"model\": \"text-davinci-003\"}"}
+
+			continue
 		}
 
 		// check if resp is end
@@ -113,7 +117,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 
 		var openaiReq any
 		switch frontendReq.Model {
-		case "gpt-3.5-turbo":
+		case "gpt-3.5-turbo", "gpt-4":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
 			req := new(OpenaiChatReq)
 			if err := copier.Copy(req, frontendReq); err != nil {
@@ -121,7 +125,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			}
 
 			openaiReq = req
-		case "code-davinci-002":
+		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
 			if err := copier.Copy(openaiReq, frontendReq); err != nil {

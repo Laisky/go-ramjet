@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenAI</title>
+    <title>Chat</title>
     <link rel="icon" href="favicon.ico" />
     <link href="{{.BootstrapCss}}" rel="stylesheet" />
     {{block "header" .}}
@@ -16,16 +16,18 @@
 <body>
     <nav class="fixed-top navbar navbar-expand-lg bg-light" id="headerbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">ChatGPT</a>
+            <a class="navbar-brand" href="#">OpenAI</a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                             aria-expanded="false">
-                            Models[{{.CurrentModel}}]
+                            Chat
                         </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item active" href="#" data-value="gpt-3.5-turbo">Chat</a></li>
+                        <ul class="dropdown-menu chat-models">
+                            <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
+                            <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
+                            <li><a class="dropdown-item" href="#" data-model="text-davinci-003">davinci-003</a></li>
                         </ul>
                     </li>
                 </ul>

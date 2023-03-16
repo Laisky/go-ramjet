@@ -1,12 +1,18 @@
 "use strict";
 
+const Version = "1.1.0";
+
 const OpenaiTokenTypeProxy = "proxy",
-    OpenaiTokenTypeDirect = "direct",
-    Version = "1.0.0";
+    OpenaiTokenTypeDirect = "direct";
+
+const ChatModelTurbo35 = "gpt-3.5-turbo",
+    ChatModelGPT4 = "gpt-4",
+    CompletionModelDavinci3 = "text-davinci-003";
 
 (function () {
     (function main() {
         checkVersion();
+        setupHeader();
     })();
 
     function checkVersion() {
@@ -14,6 +20,40 @@ const OpenaiTokenTypeProxy = "proxy",
         if (latestVer !== Version) {
             SetLocalStorage("global_version", Version);
             window.location.reload();
+        }
+    }
+
+    function setupHeader() {
+        // setup chat models
+        {
+            // set default chat model
+            if (!GetLocalStorage("config_chat_model")) {
+                SetLocalStorage("config_chat_model", ChatModelTurbo35);
+            }
+
+            let modelElems = document.querySelectorAll("#headerbar .chat-models li a");
+
+            // set active
+            let model = GetLocalStorage("config_chat_model");
+            modelElems.forEach((elem) => {
+                if (elem.dataset.model === model) {
+                    elem.classList.add("active");
+                }
+            });
+
+            // listen click events
+            modelElems.forEach((elem) => {
+                elem.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    modelElems.forEach((elem) => {
+                        elem.classList.remove("active");
+                    });
+
+                    e.target.classList.add("active");
+                    let model = e.target.dataset.model;
+                    SetLocalStorage("config_chat_model", model);
+                });
+            });
         }
     }
 

@@ -249,6 +249,18 @@ const RoleHuman = "user",
         return !chatPromptInput.classList.contains("disabled");
     }
 
+    function parseChatResp(chatmodel, payload) {
+        switch (chatmodel) {
+            case ChatModelTurbo35:
+            case ChatModelGPT4:
+                return payload.choices[0].delta.content || "";
+                break;
+            case CompletionModelDavinci3:
+                return payload.choices[0].text || "";
+                break;
+        }
+    }
+
     function sendChat2server() {
         let prompt = chatPromptInput.value || "";
         chatPromptInput.value = "";
@@ -264,42 +276,75 @@ const RoleHuman = "user",
 
         lockChatPromptInput();
 
-        let source = new SSE(window.OpenaiAPI(), {
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + window.OpenaiToken(),
-                "X-Authorization-Type": window.OpenaiTokenType(),
-            },
-            method: "POST",
-            payload: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                stream: true,
-                max_tokens: parseInt(window.OpenaiMaxTokens()),
-                messages: getLastNChatMessages(6),
-                stop: ["\n\n"]
-            })
-        });
+        let source,
+            chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+        switch (chatmodel) {
+            case ChatModelTurbo35:
+            case ChatModelGPT4:
+                source = new SSE(window.OpenaiAPI(), {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + window.OpenaiToken(),
+                        "X-Authorization-Type": window.OpenaiTokenType(),
+                    },
+                    method: "POST",
+                    payload: JSON.stringify({
+                        model: chatmodel,
+                        stream: true,
+                        max_tokens: parseInt(window.OpenaiMaxTokens()),
+                        messages: getLastNChatMessages(6),
+                        stop: ["\n\n"]
+                    })
+                });
+
+                break;
+            case CompletionModelDavinci3:
+                source = new SSE(window.OpenaiAPI(), {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + window.OpenaiToken(),
+                        "X-Authorization-Type": window.OpenaiTokenType(),
+                    },
+                    method: "POST",
+                    payload: JSON.stringify({
+                        model: chatmodel,
+                        stream: true,
+                        max_tokens: parseInt(window.OpenaiMaxTokens()),
+                        prompt: prompt,
+                        stop: ["\n\n"]
+                    })
+                });
+
+                break;
+        }
 
 
         let rawHTMLResp = "";
         source.addEventListener("message", (evt) => {
             evt.stopPropagation();
 
-            let payload = JSON.parse(evt.data);
+            if (evt.data == "[DONE]") {
+                unlockChatPromptInput();
+                return;
+            }
+
+            let payload = JSON.parse(evt.data),
+                respContent = parseChatResp(chatmodel, payload);
             switch (lastAIInputEle.dataset.status) {
                 case "waiting":
                     lastAIInputEle.dataset.status = "writing";
-                    if (payload.choices[0].delta.content) {
-                        lastAIInputEle.innerHTML = payload.choices[0].delta.content;
-                        rawHTMLResp += payload.choices[0].delta.content;
+
+                    if (respContent) {
+                        lastAIInputEle.innerHTML = respContent;
+                        rawHTMLResp += respContent;
                     } else {
                         lastAIInputEle.innerHTML = "";
                     }
 
                     break
                 case "writing":
-                    if (payload.choices[0].delta.content) {
-                        rawHTMLResp += payload.choices[0].delta.content;
+                    if (respContent) {
+                        rawHTMLResp += respContent;
                         lastAIInputEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                     }
 

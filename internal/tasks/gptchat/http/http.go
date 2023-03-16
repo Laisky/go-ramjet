@@ -117,13 +117,13 @@ func Chat(ctx *gin.Context) {
 	}
 
 	tplArg := struct {
-		CurrentModel string
-		DataJS       string
+		// CurrentModel string
+		DataJS string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs string
 		LibJs, SiteJs string
 	}{
-		CurrentModel: "chat",
+		// CurrentModel: "chat",
 		DataJS:       injectDataPayload,
 		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
 		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
