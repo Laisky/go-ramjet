@@ -7,7 +7,10 @@ openai:
   # max_sessions: 7
   # max_tokens: 4500
   bypass_proxy_tokens:
-    - "DEFAULT_PROXY_TOKEN"
+  - token: "<DEFAULT_PROXY_TOKEN>"
+    allowed_models:
+    - "gpt-3.5-turbo"
+    - "text-davinci-003"
   allowed_models:
     - "gpt-3.5-turbo"
     - "text-davinci-003"
