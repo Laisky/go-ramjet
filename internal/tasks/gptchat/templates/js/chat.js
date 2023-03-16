@@ -323,36 +323,43 @@ const RoleHuman = "user",
         source.addEventListener("message", (evt) => {
             evt.stopPropagation();
 
+            let isChatRespDone = false;
             if (evt.data == "[DONE]") {
-                unlockChatPromptInput();
-                return;
+                isChatRespDone = true
             }
 
-            let payload = JSON.parse(evt.data),
-                respContent = parseChatResp(chatmodel, payload);
-            switch (lastAIInputEle.dataset.status) {
-                case "waiting":
-                    lastAIInputEle.dataset.status = "writing";
+            if (!isChatRespDone) {
+                let payload = JSON.parse(evt.data),
+                    respContent = parseChatResp(chatmodel, payload);
 
-                    if (respContent) {
-                        lastAIInputEle.innerHTML = respContent;
-                        rawHTMLResp += respContent;
-                    } else {
-                        lastAIInputEle.innerHTML = "";
-                    }
+                if (payload.choices[0].finish_reason) {
+                    isChatRespDone = true;
+                }
 
-                    break
-                case "writing":
-                    if (respContent) {
-                        rawHTMLResp += respContent;
-                        lastAIInputEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
-                    }
+                switch (lastAIInputEle.dataset.status) {
+                    case "waiting":
+                        lastAIInputEle.dataset.status = "writing";
 
-                    scrollChatToDown();
-                    break
+                        if (respContent) {
+                            lastAIInputEle.innerHTML = respContent;
+                            rawHTMLResp += respContent;
+                        } else {
+                            lastAIInputEle.innerHTML = "";
+                        }
+
+                        break
+                    case "writing":
+                        if (respContent) {
+                            rawHTMLResp += respContent;
+                            lastAIInputEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                        }
+
+                        scrollChatToDown();
+                        break
+                }
             }
 
-            if (payload.choices[0].finish_reason) {
+            if (isChatRespDone) {
                 source.close();
 
                 let markdownConverter = new window.showdown.Converter();

@@ -7,7 +7,11 @@ openai:
   # max_sessions: 7
   # max_tokens: 4500
   bypass_proxy_tokens:
-  - "DEFAULT_PROXY_TOKEN"
+    - "DEFAULT_PROXY_TOKEN"
+  allowed_models:
+    - "gpt-3.5-turbo"
+    - "text-davinci-003"
+    # - "gpt-4"
   # static_libs:
   #   sse_js: "https://s3.laisky.com/static/sse/0.6.1/sse.js"
   #   bootstrap_js: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"

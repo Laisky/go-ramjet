@@ -115,6 +115,14 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
 
+		if !gutils.Contains(
+			gconfig.Shared.GetStringSlice("openai.allowed_models"),
+			frontendReq.Model,
+		) {
+			fmt.Println(gconfig.Shared.GetStringSlice("openai.allowed_models"))
+			return nil, errors.Errorf("model %s is not allowed", frontendReq.Model)
+		}
+
 		var openaiReq any
 		switch frontendReq.Model {
 		case "gpt-3.5-turbo", "gpt-4":
@@ -157,6 +165,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			// check request token
 			userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 			if gutils.Contains(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"), userToken) {
+				// fmt.Println(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"))
 				req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
 			}
 
