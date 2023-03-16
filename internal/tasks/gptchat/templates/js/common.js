@@ -1,7 +1,5 @@
 "use strict";
 
-const Version = "1.1.0";
-
 const OpenaiTokenTypeProxy = "proxy",
     OpenaiTokenTypeDirect = "direct";
 

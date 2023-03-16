@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -96,6 +97,25 @@ func APIHandler(ctx *gin.Context) {
 	}
 }
 
+func tokenModelPermCheck(token, model string) (usertoken string, err error) {
+	for _, v := range iconfig.Config.BypassProxyTokens {
+		if v.Token == token {
+			if !gutils.Contains(v.AllowedModels, model) {
+				return "", errors.Errorf("model %s is not allowed for current user", model)
+			}
+
+			if v.OpenaiToken != "" {
+				return v.OpenaiToken, nil
+			}
+
+			return iconfig.Config.Token, nil
+		}
+	}
+
+	// bypass unknow token
+	return "", nil
+}
+
 func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	newUrl := fmt.Sprintf("%s%s",
@@ -107,6 +127,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
 
+	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 	body := ctx.Request.Body
 	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
@@ -115,12 +136,9 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
 
-		if !gutils.Contains(
-			gconfig.Shared.GetStringSlice("openai.allowed_models"),
-			frontendReq.Model,
-		) {
-			fmt.Println(gconfig.Shared.GetStringSlice("openai.allowed_models"))
-			return nil, errors.Errorf("model %s is not allowed", frontendReq.Model)
+		userToken, err = tokenModelPermCheck(userToken, frontendReq.Model)
+		if err != nil {
+			return nil, errors.Wrapf(err, "check whether token can access model %q", frontendReq.Model)
 		}
 
 		var openaiReq any
@@ -162,13 +180,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		typeHeader := ctx.Request.Header.Get("X-Authorization-Type")
 		switch typeHeader {
 		case "proxy":
-			// check request token
-			userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
-			if gutils.Contains(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"), userToken) {
-				// fmt.Println(gconfig.Shared.GetStringSlice("openai.bypass_proxy_tokens"))
-				req.Header.Set("authorization", "Bearer "+gconfig.Shared.GetString("openai.token"))
-			}
-
+			req.Header.Set("authorization", "Bearer "+userToken)
 		default:
 			return nil, errors.Errorf("unsupport auth type %q", typeHeader)
 		}

@@ -20,7 +20,7 @@
 {{define "body"}}
 <div class="container-fluid" id="chatContainer">
     <div class="row" style="height: 100vh; padding-top: 57px;">
-        <div class="col-2 sessionManager" style="padding: 0px;">
+        <div class="col-2 d-none d-md-block sessionManager" style="padding: 0px;">
             <div class="card text-center" style="height: 100%;">
                 <div class="card-header text-muted">
                     <button type="button" class="btn btn-outline-secondary new-session">New Session</button>
@@ -33,7 +33,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-10 chatManager" style="padding-left: 0px; max-height: 100%;">
+        <div class="col-md-10 col-12 chatManager" style="padding-left: 0px; max-height: 100%;">
             <div class="card text-center" style="height: 100%; flex-direction: column;">
                 <div class="card-body conservations" style="min-height: 300px; overflow-y: scroll;">
                     <!-- chats is here -->

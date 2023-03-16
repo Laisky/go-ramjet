@@ -90,6 +90,8 @@ func RegisterStatic(g gin.IRouter) {
 	}
 }
 
+var ts = time.Now().Format(time.RFC3339Nano)
+
 func Chat(ctx *gin.Context) {
 	tpl := template.New("mytemplate")
 	for name, cnt := range map[string]string{
@@ -117,13 +119,12 @@ func Chat(ctx *gin.Context) {
 	}
 
 	tplArg := struct {
-		// CurrentModel string
 		DataJS string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs string
 		LibJs, SiteJs string
+		Version       string
 	}{
-		// CurrentModel: "chat",
 		DataJS:       injectDataPayload,
 		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
 		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
@@ -131,6 +132,7 @@ func Chat(ctx *gin.Context) {
 		ShowdownJs:   gconfig.Shared.GetString("openai.static_libs.showdown_js"),
 		LibJs:        staticFiles.LibJs.Name,
 		SiteJs:       staticFiles.SiteJs.Name,
+		Version:      ts,
 	}
 
 	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")

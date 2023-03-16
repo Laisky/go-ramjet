@@ -14,7 +14,7 @@
 </head>
 
 <body>
-    <nav class="fixed-top navbar navbar-expand-lg bg-light" id="headerbar">
+    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">OpenAI</a>
             <div class="collapse navbar-collapse">
@@ -92,6 +92,7 @@
     <script defer src="/static/{{.LibJs}}"></script>
     <script defer src="/static/{{.SiteJs}}"></script>
     <script>
+        window.Version =  "{{.Version}}";
         window.data = JSON.parse({{.DataJS}});
     </script>
 
