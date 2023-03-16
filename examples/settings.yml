@@ -11,10 +11,6 @@ openai:
     allowed_models:
     - "gpt-3.5-turbo"
     - "text-davinci-003"
-  allowed_models:
-    - "gpt-3.5-turbo"
-    - "text-davinci-003"
-    # - "gpt-4"
   # static_libs:
   #   sse_js: "https://s3.laisky.com/static/sse/0.6.1/sse.js"
   #   bootstrap_js: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"
