@@ -1,47 +1,48 @@
 {{define "header"}}
 <style>
-    #chatConversation .role-human {
+    #chatContainer .chatManager .conservation .role-human {
         margin-bottom: 5px;
     }
 
-    #chatConversation .role-ai {
+    #chatContainer .chatManager .conservation .role-ai {
         margin-bottom: 5px;
         /* border-bottom-style: dotted; */
+    }
+
+    #chatContainer .chatManager .conservation .card-body pre {
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
     }
 
 </style>
 {{end}}
 
 {{define "body"}}
-<div class="container-fluid">
+<div class="container-fluid" id="chatContainer">
     <div class="row" style="height: 100vh; padding-top: 57px;">
-        <div class="col-2" style="padding: 0px;">
-            <div class="card text-center" id="chatSessionManager" style="height: 100%;">
+        <div class="col-2 sessionManager" style="padding: 0px;">
+            <div class="card text-center" style="height: 100%;">
                 <div class="card-header text-muted">
-                    <button type="button" class="btn btn-outline-secondary" id="newChatSessionBtn">New Session</button>
+                    <button type="button" class="btn btn-outline-secondary new-session">New Session</button>
                 </div>
-                <div class="card-body" style="min-height: 300px; padding: 0px;" id="chatSessionContainer">
-                    <!-- <div class="list-group" style="border-radius: 0%;">
-                        <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="1">
-                            会话 1
-                        </button>
-                    </div> -->
+                <div class="card-body sessions" style="min-height: 300px; padding: 0px;">
+                    <!-- sessions are here -->
                 </div>
                 <div class="card-footer text-muted">
-                    <button type="button" class="btn btn-secondary" id="purgeAllSessionsBtn">Clear All</button>
+                    <button type="button" class="btn btn-secondary purge">Clear All</button>
                 </div>
             </div>
         </div>
-        <div class="col-10" style="padding-left: 0px; max-height: 100%;">
+        <div class="col-10 chatManager" style="padding-left: 0px; max-height: 100%;">
             <div class="card text-center" style="height: 100%; flex-direction: column;">
-                <div class="card-body" style="min-height: 300px; overflow-y: scroll;" id="chatConversation">
-
+                <div class="card-body conservations" style="min-height: 300px; overflow-y: scroll;">
+                    <!-- chats is here -->
                 </div>
-                <div class="card-footer text-muted">
+                <div class="card-footer text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="CTRL + Enter to Send">
                     <div class="input-group mb-3" style="margin-bottom: 0px!important;">
-                        <textarea class="form-control" placeholder="prompt" id="inputPrompt"
+                        <textarea class="form-control input prompt" placeholder="CTRL+Enter to send"
                             style="height: 80px"></textarea>
-                        <button class="btn btn-outline-secondary" type="button" id="inputPromptBtn">Send</button>
+                        <button class="btn btn-outline-secondary send" type="button" >Send</button>
                     </div>
                 </div>
             </div>

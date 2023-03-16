@@ -5,13 +5,17 @@ const RoleHuman = "user",
     RoleAI = "assistant";
 
 (function () {
+    let chatContainer = document.getElementById("chatContainer"),
+        chatPromptInput = chatContainer.querySelector(".input.prompt"),
+        chatPromptInputBtn = chatContainer.querySelector(".btn.send");
+
     (function main() {
         setupLocalStorage();
         setupConfig();
         setupSessionManager();
         setupChatInput();
-
     })();
+
 
     function setupLocalStorage() {
         if (localStorage.getItem("chat_user_session_1")) {
@@ -41,7 +45,7 @@ const RoleHuman = "user",
     }
 
     function activeSessionID() {
-        let activeSession = document.getElementById("chatSessionManager").querySelector(".card-body button.active");
+        let activeSession = chatContainer.querySelector(".sessionManager .card-body button.active");
         if (activeSession) {
             return activeSession.dataset.session;
         }
@@ -51,14 +55,16 @@ const RoleHuman = "user",
 
     function listenSessionSwitch(evt) {
         // deactive all sessions
-        document.querySelectorAll("#chatSessionContainer .list-group-item.active").forEach((item) => {
-            item.classList.remove("active");
-        });
+        chatContainer
+            .querySelectorAll(".sessionManager .sessions .list-group-item.active")
+            .forEach((item) => {
+                item.classList.remove("active");
+            });
         evt.target.classList.add("active");
 
         // restore session hisgoty
         let sessionID = evt.target.dataset.session;
-        document.getElementById("chatConversation").innerHTML = "";
+        chatContainer.querySelector(".conservations").innerHTML = "";
         sessionChatHistory(sessionID).forEach((item) => {
             append2Chats(item.role, item.content, true);
         });
@@ -67,23 +73,31 @@ const RoleHuman = "user",
     function setupSessionManager() {
         // bind remove all sessions
         {
-            document.getElementById("purgeAllSessionsBtn").addEventListener("click", (evt) => {
-                let allkeys = Object.keys(localStorage);
-                allkeys.forEach((key) => {
-                    if (key.startsWith("chat_user_session_")) {
-                        localStorage.removeItem(key);
-                    }
-                });
+            chatContainer
+                .querySelector(".sessionManager .btn.purge")
+                .addEventListener("click", (evt) => {
+                    let allkeys = Object.keys(localStorage);
+                    allkeys.forEach((key) => {
+                        if (key.startsWith("chat_user_session_")) {
+                            localStorage.removeItem(key);
+                        }
+                    });
 
-                document.getElementById("chatConversation").innerHTML = "";
-                document.getElementById("chatSessionContainer").innerHTML = `
+                    chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
+                    chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
                     <div class="list-group" style="border-radius: 0%;">
-                        <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="1">
+                        <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
                             Session 1
                         </button>
                     </div>`;
-                window.SetLocalStorage(storageSessionKey(1), []);
-            });
+                    chatContainer
+                        .querySelector(".sessionManager .sessions .session")
+                        .addEventListener("click", listenSessionSwitch);
+
+                    window.SetLocalStorage(storageSessionKey(1), []);
+                });
+
+
         }
 
 
@@ -117,12 +131,15 @@ const RoleHuman = "user",
                     active = "active";
                 }
 
-                document.getElementById("chatSessionContainer").insertAdjacentHTML("beforeend", `
-                    <div class="list-group" style="border-radius: 0%;">
-                        <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true" data-session="${sessionID}">
-                            Session ${sessionID}
-                        </button>
-                    </div>`);
+                chatContainer
+                    .querySelector(".sessionManager .sessions")
+                    .insertAdjacentHTML(
+                        "beforeend",
+                        `<div class="list-group" style="border-radius: 0%;">
+                            <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
+                                Session ${sessionID}
+                            </button>
+                        </div>`);
             });
 
             // restore conservation history
@@ -133,43 +150,53 @@ const RoleHuman = "user",
 
         // new session
         {
-            document.getElementById("newChatSessionBtn").addEventListener("click", (evt) => {
-                let maxSessionID = 0;
-                Object.keys(localStorage).forEach((key) => {
-                    if (key.startsWith("chat_user_session_")) {
-                        let sessionID = parseInt(key.replace("chat_user_session_", ""));
-                        if (sessionID > maxSessionID) {
-                            maxSessionID = sessionID;
+            chatContainer
+                .querySelector(".sessionManager .btn.new-session")
+                .addEventListener("click", (evt) => {
+                    let maxSessionID = 0;
+                    Object.keys(localStorage).forEach((key) => {
+                        if (key.startsWith("chat_user_session_")) {
+                            let sessionID = parseInt(key.replace("chat_user_session_", ""));
+                            if (sessionID > maxSessionID) {
+                                maxSessionID = sessionID;
+                            }
                         }
-                    }
+                    });
+
+                    // deactive all sessions
+                    chatContainer.querySelectorAll(".sessionManager .sessions .list-group-item.active").forEach((item) => {
+                        item.classList.remove("active");
+                    });
+
+                    // add new active session
+                    chatContainer
+                        .querySelector(".chatManager .conservations").innerHTML = "";
+                    let newSessionID = maxSessionID + 1;
+                    chatContainer
+                        .querySelector(".sessionManager .sessions")
+                        .insertAdjacentHTML(
+                            "afterbegin",
+                            `<div class="list-group" style="border-radius: 0%;">
+                                <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
+                                    Session ${newSessionID}
+                                </button>
+                            </div>`);
+                    window.SetLocalStorage(storageSessionKey(newSessionID), []);
+
+                    // bind session switch listener for new session
+                    chatContainer
+                        .querySelector(`.sessionManager .sessions [data-session="${newSessionID}"]`)
+                        .addEventListener("click", listenSessionSwitch);
                 });
-
-                // deactive all sessions
-                document.querySelectorAll("#chatSessionContainer .list-group-item.active").forEach((item) => {
-                    item.classList.remove("active");
-                });
-
-                // add new active session
-                document.getElementById("chatConversation").innerHTML = "";
-                let newSessionID = maxSessionID + 1;
-                document.getElementById("chatSessionContainer").insertAdjacentHTML("afterbegin", `
-                    <div class="list-group" style="border-radius: 0%;">
-                        <button type="button" class="list-group-item list-group-item-action active" aria-current="true" data-session="${newSessionID}">
-                            Session ${newSessionID}
-                        </button>
-                    </div>`);
-                window.SetLocalStorage(storageSessionKey(newSessionID), []);
-
-                // bind session switch listener for new session
-                document.getElementById("chatSessionContainer").querySelector(`[data-session="${newSessionID}"]`).addEventListener("click", listenSessionSwitch);
-            });
         }
 
-        // switch session
+        // bind session switch
         {
-            document.querySelectorAll("#chatSessionContainer .list-group button").forEach((item) => {
-                item.addEventListener("click", listenSessionSwitch);
-            });
+            chatContainer
+                .querySelectorAll(".sessionManager .sessions .list-group .session")
+                .forEach((item) => {
+                    item.addEventListener("click", listenSessionSwitch);
+                });
         }
 
     }
@@ -189,7 +216,7 @@ const RoleHuman = "user",
 
 
     function scrollChatToDown() {
-        window.ScrollDown(document.getElementById("chatConversation"));
+        window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
     }
 
     function getLastNChatMessages(N) {
@@ -214,7 +241,6 @@ const RoleHuman = "user",
         return messages;
     }
 
-    let chatPromptInput = document.getElementById("inputPromptBtn");
     function lockChatPromptInput() {
         chatPromptInput.classList.add("disabled");
     }
@@ -226,8 +252,8 @@ const RoleHuman = "user",
     }
 
     function sendChat2server() {
-        let prompt = document.getElementById("inputPrompt").value || "";
-        document.getElementById("inputPrompt").value = "";
+        let prompt = chatPromptInput.value || "";
+        chatPromptInput.value = "";
         prompt = window.TrimSpace(prompt);
         if (prompt == "") {
             return;
@@ -236,9 +262,8 @@ const RoleHuman = "user",
 
         append2Chats(RoleHuman, prompt);
         appendChants2Storage(RoleHuman, prompt);
-        let lastAIInputEle = document.getElementById("chatConversation").querySelector(".row.role-ai:last-child").querySelector(".text-start");
+        let lastAIInputEle = chatContainer.querySelector(".chatManager .conservations").querySelector(".row.role-ai:last-child").querySelector(".text-start");
 
-        let inputBtn = document.getElementById("inputPromptBtn");
         lockChatPromptInput();
 
         let source = new SSE(window.OpenaiAPI(), {
@@ -302,7 +327,7 @@ const RoleHuman = "user",
                 lastAIInputEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
             }
 
-            window.ScrollDown(document.getElementById("chatConversation"));
+            window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
             unlockChatPromptInput();
         };
         source.stream();
@@ -313,39 +338,39 @@ const RoleHuman = "user",
         // bind input press enter
         {
             let isComposition = false;
-            document.getElementById("inputPrompt").
+            chatPromptInput.
                 addEventListener("compositionstart", (evt) => {
                     evt.stopPropagation();
                     isComposition = true;
                 })
-            document.getElementById("inputPrompt").
+            chatPromptInput.
                 addEventListener("compositionend", (evt) => {
                     evt.stopPropagation();
                     isComposition = false;
                 })
 
 
-            document.getElementById("inputPrompt").
+            chatPromptInput.
                 addEventListener("keydown", (evt) => {
                     evt.stopPropagation();
                     if (evt.key != 'Enter'
                         || isComposition
-                        || (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey)
+                        || (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey))
                         || !isAllowChatPrompInput()) {
                         return;
                     }
 
                     sendChat2server();
-                    document.getElementById("inputPrompt").value = "";
+                    chatPromptInput.value = "";
                 })
         }
 
         // bind input button
-        document.getElementById("inputPromptBtn").
+        chatPromptInputBtn.
             addEventListener("click", (evt) => {
                 evt.stopPropagation();
                 sendChat2server();
-                document.getElementById("inputPrompt").value = "";
+                chatPromptInput.value = "";
             })
     }
 
@@ -392,11 +417,11 @@ const RoleHuman = "user",
                 break
         }
 
-        document.getElementById("chatConversation").
+        chatContainer.querySelector(".chatManager .conservations").
             insertAdjacentHTML("beforeend", chatEle);
 
         // chatEle = DOMParser.parseFromString(chatEle);
-        // document.getElementById("chatConversation").insertAdjacentElement("beforeend", chatEle);
+        // chatContainer.querySelector(".chatManager .conservations").insertAdjacentElement("beforeend", chatEle);
         // return chatEle
     }
 
