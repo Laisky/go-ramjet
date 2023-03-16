@@ -31,7 +31,7 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
                 SetLocalStorage("config_chat_model", ChatModelTurbo35);
             }
 
-            let modelElems = document.querySelectorAll("#headerbar .chat-models li a");
+            let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .complete-models li a");
 
             // set active
             let model = GetLocalStorage("config_chat_model");
