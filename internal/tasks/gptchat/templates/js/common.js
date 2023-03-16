@@ -1,9 +1,22 @@
 "use strict";
 
 const OpenaiTokenTypeProxy = "proxy",
-    OpenaiTokenTypeDirect = "direct";
+    OpenaiTokenTypeDirect = "direct",
+    Version = "1.0.0";
 
 (function () {
+    (function main() {
+        checkVersion();
+    })();
+
+    function checkVersion() {
+        let latestVer = GetLocalStorage("global_version");
+        if (latestVer !== Version) {
+            SetLocalStorage("global_version", Version);
+            window.location.reload();
+        }
+    }
+
     window.OpenaiAPI = () => {
         switch (window.OpenaiTokenType()) {
             case OpenaiTokenTypeProxy:
