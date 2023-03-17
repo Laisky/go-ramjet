@@ -96,6 +96,9 @@
         window.data = JSON.parse({{.DataJS}});
     </script>
 
+    {{block "ga" .}}
+    {{end}}
+
     {{block "mainjs" .}}
     {{end}}
 </body>

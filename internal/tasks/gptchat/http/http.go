@@ -13,9 +13,11 @@ import (
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/gin-gonic/gin"
 
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	itemplates "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates"
 	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
 	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
+	ipartials "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/partials"
 )
 
 var (
@@ -98,8 +100,13 @@ func Chat(ctx *gin.Context) {
 		"base": itemplates.Base,
 		"chat": ipages.Chat,
 	} {
-		_, err := tpl.New(name).Parse(cnt)
-		if AbortErr(ctx, err) {
+		if _, err := tpl.New(name).Parse(cnt); AbortErr(ctx, err) {
+			return
+		}
+	}
+
+	if iconfig.Config.GoogleAnalytics != "" {
+		if _, err := tpl.Parse(ipartials.GoogleAnalytics); AbortErr(ctx, err) {
 			return
 		}
 	}
@@ -124,6 +131,7 @@ func Chat(ctx *gin.Context) {
 		SeeJs, ShowdownJs string
 		LibJs, SiteJs string
 		Version       string
+		GaCode        string
 	}{
 		DataJS:       injectDataPayload,
 		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
@@ -133,6 +141,7 @@ func Chat(ctx *gin.Context) {
 		LibJs:        staticFiles.LibJs.Name,
 		SiteJs:       staticFiles.SiteJs.Name,
 		Version:      ts,
+		GaCode:       iconfig.Config.GoogleAnalytics,
 	}
 
 	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")

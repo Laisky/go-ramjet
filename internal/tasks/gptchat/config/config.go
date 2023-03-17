@@ -19,6 +19,7 @@ type OpenAI struct {
 	Token             string        `json:"-" mapstructure:"token"`
 	Proxy             string        `json:"-" mapstructure:"proxy"`
 	BypassProxyTokens []proxyTokens `json:"bypass_proxy_tokens" mapstructure:"bypass_proxy_tokens"`
+	GoogleAnalytics   string        `json:"ga" mapstructure:"ga"`
 }
 
 type proxyTokens struct {

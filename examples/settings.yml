@@ -4,6 +4,7 @@ openai:
   token: "<YOUR_OPENAI_API_TOKEN>"
   api: "https://api.openai.com"
   # proxy: "<YOUR_HTTP_PROXY>"
+  # ga: "<YOUR_GOOGLE_ANALYTICS_CODE>"
   # max_sessions: 7
   # max_tokens: 4500
   bypass_proxy_tokens:
