@@ -16,10 +16,12 @@ func SetupConfig() (err error) {
 }
 
 type OpenAI struct {
-	Token             string        `json:"-" mapstructure:"token"`
-	Proxy             string        `json:"-" mapstructure:"proxy"`
-	BypassProxyTokens []proxyTokens `json:"bypass_proxy_tokens" mapstructure:"bypass_proxy_tokens"`
-	GoogleAnalytics   string        `json:"ga" mapstructure:"ga"`
+	API               string            `json:"api" mapstructure:"api"`
+	Token             string            `json:"-" mapstructure:"token"`
+	Proxy             string            `json:"-" mapstructure:"proxy"`
+	BypassProxyTokens []proxyTokens     `json:"bypass_proxy_tokens" mapstructure:"bypass_proxy_tokens"`
+	GoogleAnalytics   string            `json:"ga" mapstructure:"ga"`
+	StaticLibs        map[string]string `json:"static_libs" mapstructure:"static_libs"`
 }
 
 type proxyTokens struct {

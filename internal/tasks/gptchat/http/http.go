@@ -37,7 +37,7 @@ func SetupHTTPCli() (err error) {
 	}
 
 	if gconfig.Shared.GetString("openai.proxy") != "" {
-		httpargs = append(httpargs, gutils.WithHTTPClientProxy(gconfig.Shared.GetString("openai.proxy")))
+		httpargs = append(httpargs, gutils.WithHTTPClientProxy(iconfig.Config.Proxy))
 	}
 
 	httpcli, err = gutils.NewHTTPClient(httpargs...)
@@ -116,7 +116,7 @@ func Chat(ctx *gin.Context) {
 
 	injectData := map[string]any{
 		"openai": map[string]any{
-			"direct": gconfig.Shared.GetString("openai.api"),
+			"direct": iconfig.Config.API,
 			"proxy":  "/api/",
 		},
 	}
@@ -134,10 +134,10 @@ func Chat(ctx *gin.Context) {
 		GaCode        string
 	}{
 		DataJS:       injectDataPayload,
-		BootstrapJs:  gconfig.Shared.GetString("openai.static_libs.bootstrap_js"),
-		BootstrapCss: gconfig.Shared.GetString("openai.static_libs.bootstrap_css"),
-		SeeJs:        gconfig.Shared.GetString("openai.static_libs.sse_js"),
-		ShowdownJs:   gconfig.Shared.GetString("openai.static_libs.showdown_js"),
+		BootstrapJs:  iconfig.Config.StaticLibs["bootstrap_js"],
+		BootstrapCss: iconfig.Config.StaticLibs["bootstrap_css"],
+		SeeJs:        iconfig.Config.StaticLibs["sse_js"],
+		ShowdownJs:   iconfig.Config.StaticLibs["showdown_js"],
 		LibJs:        staticFiles.LibJs.Name,
 		SiteJs:       staticFiles.SiteJs.Name,
 		Version:      ts,
