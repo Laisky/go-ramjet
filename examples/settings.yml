@@ -16,4 +16,5 @@ openai:
   #   sse_js: "https://s3.laisky.com/static/sse/0.6.1/sse.js"
   #   bootstrap_js: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"
   #   bootstrap_css: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
+  #   bootstrap_icons: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
   #   showdown_js: "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js"

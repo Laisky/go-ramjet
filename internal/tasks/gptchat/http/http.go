@@ -128,22 +128,24 @@ func Chat(ctx *gin.Context) {
 	tplArg := struct {
 		DataJS string
 		BootstrapJs, BootstrapCss,
-		SeeJs, ShowdownJs string
+		SeeJs, ShowdownJs, BootstrapIcons string
 		LibJs, SiteJs string
 		Version       string
 		GaCode        string
 	}{
-		DataJS:       injectDataPayload,
-		BootstrapJs:  iconfig.Config.StaticLibs["bootstrap_js"],
-		BootstrapCss: iconfig.Config.StaticLibs["bootstrap_css"],
-		SeeJs:        iconfig.Config.StaticLibs["sse_js"],
-		ShowdownJs:   iconfig.Config.StaticLibs["showdown_js"],
-		LibJs:        staticFiles.LibJs.Name,
-		SiteJs:       staticFiles.SiteJs.Name,
-		Version:      ts,
-		GaCode:       iconfig.Config.GoogleAnalytics,
+		DataJS:         injectDataPayload,
+		BootstrapJs:    iconfig.Config.StaticLibs["bootstrap_js"],
+		BootstrapCss:   iconfig.Config.StaticLibs["bootstrap_css"],
+		BootstrapIcons: iconfig.Config.StaticLibs["bootstrap_icons"],
+		SeeJs:          iconfig.Config.StaticLibs["sse_js"],
+		ShowdownJs:     iconfig.Config.StaticLibs["showdown_js"],
+		LibJs:          staticFiles.LibJs.Name,
+		SiteJs:         staticFiles.SiteJs.Name,
+		Version:        ts,
+		GaCode:         iconfig.Config.GoogleAnalytics,
 	}
 
+	tplArg.BootstrapIcons = gutils.OptionalVal(&tplArg.BootstrapIcons, "https://s2.laisky.com/static/bootstrap-icons/1.10.3/bootstrap-icons.css")
 	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
 	tplArg.BootstrapCss = gutils.OptionalVal(&tplArg.BootstrapCss, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
 	tplArg.ShowdownJs = gutils.OptionalVal(&tplArg.ShowdownJs, "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")

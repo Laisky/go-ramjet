@@ -66,7 +66,7 @@ const RoleHuman = "user",
         let sessionID = evt.target.dataset.session;
         chatContainer.querySelector(".conservations").innerHTML = "";
         sessionChatHistory(sessionID).forEach((item) => {
-            append2Chats(item.role, item.content, true);
+            append2Chats(item.role, item.content, true, item.prompt);
         });
     }
 
@@ -142,7 +142,7 @@ const RoleHuman = "user",
 
             // restore conservation history
             activeSessionChatHistory().forEach((item) => {
-                append2Chats(item.role, item.content, true);
+                append2Chats(item.role, item.content, true, item.prompt);
             });
         }
 
@@ -201,13 +201,14 @@ const RoleHuman = "user",
 
 
 
-    function appendChants2Storage(role, content) {
+    function appendChats2Storage(role, content, prompt) {
         let storageActiveSessionKey = "chat_user_session_" + activeSessionID(),
             history = activeSessionChatHistory();
 
         history.push({
-            "role": role,
-            "content": content,
+            role: role,
+            content: content,
+            prompt: prompt,
         });
         window.SetLocalStorage(storageActiveSessionKey, history);
     }
@@ -239,14 +240,20 @@ const RoleHuman = "user",
         return messages;
     }
 
-    function lockChatPromptInput() {
-        chatPromptInput.classList.add("disabled");
+    function lockChatInput() {
+        chatPromptInputBtn.classList.add("disabled");
+        document.querySelectorAll("#chatContainer .conservations .role-ai .btn.reload").forEach((item) => {
+            item.classList.add("disabled");
+        });
     }
-    function unlockChatPromptInput() {
-        chatPromptInput.classList.remove("disabled");
+    function unlockChatInput() {
+        chatPromptInputBtn.classList.remove("disabled");
+        document.querySelectorAll("#chatContainer .conservations .role-ai .btn.reload").forEach((item) => {
+            item.classList.remove("disabled");
+        });
     }
     function isAllowChatPrompInput() {
-        return !chatPromptInput.classList.contains("disabled");
+        return !chatPromptInputBtn.classList.contains("disabled");
     }
 
     function parseChatResp(chatmodel, payload) {
@@ -261,26 +268,45 @@ const RoleHuman = "user",
         }
     }
 
-    function sendChat2server() {
-        let prompt = chatPromptInput.value || "";
-        chatPromptInput.value = "";
-        prompt = window.TrimSpace(prompt);
-        if (prompt == "") {
-            return;
+
+    function sendChat2Server(chatID) {
+        let isReload = false,
+            reqPromp,
+            aiRespEle;
+        if (!chatID) {
+            reqPromp = chatPromptInput.value || "";
+            chatPromptInput.value = "";
+            reqPromp = window.TrimSpace(reqPromp);
+            if (reqPromp == "") {
+                return;
+            }
+
+            chatID = append2Chats(RoleHuman, reqPromp);
+            appendChats2Storage(RoleHuman, reqPromp);
+        } else { // if chatID is not empty, it's a reload request
+            reqPromp = chatContainer.querySelector(`.chatManager .conservations #${chatID}`).dataset.prompt;
+            isReload = true;
         }
 
-
-        append2Chats(RoleHuman, prompt);
-        appendChants2Storage(RoleHuman, prompt);
-        let lastAIInputEle = chatContainer.querySelector(".chatManager .conservations").querySelector(".row.role-ai:last-child").querySelector(".text-start");
-
-        lockChatPromptInput();
+        aiRespEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+        lockChatInput();
 
         let source,
             chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+
         switch (chatmodel) {
             case ChatModelTurbo35:
             case ChatModelGPT4:
+                let messages;
+                messages = getLastNChatMessages(6);
+                if (isReload) {
+                    messages.push({
+                        role: RoleHuman,
+                        content: reqPromp
+                    });
+                    messages = messages.slice(-6);
+                }
+
                 source = new SSE(window.OpenaiAPI(), {
                     headers: {
                         "Content-Type": "application/json",
@@ -292,7 +318,7 @@ const RoleHuman = "user",
                         model: chatmodel,
                         stream: true,
                         max_tokens: parseInt(window.OpenaiMaxTokens()),
-                        messages: getLastNChatMessages(6),
+                        messages: messages,
                         stop: ["\n\n"]
                     })
                 });
@@ -310,7 +336,7 @@ const RoleHuman = "user",
                         model: chatmodel,
                         stream: true,
                         max_tokens: parseInt(window.OpenaiMaxTokens()),
-                        prompt: prompt,
+                        prompt: reqPromp,
                         stop: ["\n\n"]
                     })
                 });
@@ -336,25 +362,28 @@ const RoleHuman = "user",
                     isChatRespDone = true;
                 }
 
-                switch (lastAIInputEle.dataset.status) {
+                switch (aiRespEle.dataset.status) {
                     case "waiting":
-                        lastAIInputEle.dataset.status = "writing";
+                        aiRespEle.dataset.status = "writing";
 
                         if (respContent) {
-                            lastAIInputEle.innerHTML = respContent;
+                            aiRespEle.innerHTML = respContent;
                             rawHTMLResp += respContent;
                         } else {
-                            lastAIInputEle.innerHTML = "";
+                            aiRespEle.innerHTML = "";
                         }
 
                         break
                     case "writing":
                         if (respContent) {
                             rawHTMLResp += respContent;
-                            lastAIInputEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                            aiRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                         }
 
-                        scrollChatToDown();
+                        if (!isReload) {
+                            scrollChatToDown();
+                        }
+
                         break
                 }
             }
@@ -363,22 +392,30 @@ const RoleHuman = "user",
                 source.close();
 
                 let markdownConverter = new window.showdown.Converter();
-                lastAIInputEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
-                scrollChatToDown();
+                aiRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                if (!isReload) {
+                    scrollChatToDown();
+                }
 
-                appendChants2Storage(RoleAI, lastAIInputEle.innerHTML);
-                unlockChatPromptInput();
+                if (!isReload) {
+                    appendChats2Storage(RoleAI, aiRespEle.innerHTML, reqPromp);
+                } else {
+                    // TODO
+                    // replaceChatInStorage(RoleAI, chatID, aiRespEle.innerHTML);
+                }
+
+                unlockChatInput();
             }
         });
 
         source.onerror = (err) => {
             source.close();
-            if (lastAIInputEle.dataset.status == "waiting") {
-                lastAIInputEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
+            if (aiRespEle.dataset.status == "waiting") {
+                aiRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
             }
 
             window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
-            unlockChatPromptInput();
+            unlockChatInput();
         };
         source.stream();
     }
@@ -410,7 +447,7 @@ const RoleHuman = "user",
                         return;
                     }
 
-                    sendChat2server();
+                    sendChat2Server();
                     chatPromptInput.value = "";
                 })
         }
@@ -419,12 +456,22 @@ const RoleHuman = "user",
         chatPromptInputBtn.
             addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                sendChat2server();
+                sendChat2Server();
                 chatPromptInput.value = "";
             })
     }
 
-    function append2Chats(role, text, isHistory = false) {
+    // append chat to conservation container
+    //
+    // @param {string} role - RoleHuman/RoleSystem/RoleAI
+    // @param {string} text - chat text
+    // @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
+    //
+    // @return {string} conservationID - conservation id
+    function append2Chats(role, text, isHistory = false, prompt = "") {
+        let conservationID = `chat-${window.RandomString()}`,
+            contextHistory = getLastNChatMessages(6);
+
         let chatEle;
         switch (role) {
             case RoleSystem:
@@ -438,16 +485,21 @@ const RoleHuman = "user",
                 let waitAI = "";
                 if (!isHistory) {
                     waitAI = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;">
-                        <div class="col-1">🤖️</div>
-                        <div class="col-11 text-start" data-status="waiting">
-                            <p class="card-text placeholder-glow">
-                                <span class="placeholder col-7"></span>
-                                <span class="placeholder col-4"></span>
-                                <span class="placeholder col-4"></span>
-                                <span class="placeholder col-6"></span>
-                                <span class="placeholder col-8"></span>
-                            </p>
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}" data-prompt="${text}">
+                        <div class="row">
+                            <div class="col-1">🤖️</div>
+                            <div class="col-11 text-start ai-response" data-status="waiting">
+                                <p class="card-text placeholder-glow">
+                                    <span class="placeholder col-7"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-6"></span>
+                                    <span class="placeholder col-8"></span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="row d-flex align-items-center justify-content-center">
+                            <button class="btn btn-sm btn-outline-secondary reload" type="button"><i class="bi bi-repeat"></i> Reload</button>
                         </div>
                     </div>`
                 }
@@ -459,20 +511,52 @@ const RoleHuman = "user",
                     </div>${waitAI}`
                 break
             case RoleAI:
-                chatEle = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;">
-                        <div class="col-1">🤖️</div>
-                        <div class="col-11 text-start">${text}</div>
+                if (prompt) {
+                    chatEle = `
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}" data-prompt="${prompt}">
+                        <div class="row">
+                            <div class="col-1">🤖️</div>
+                            <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
+                        </div>
+                        <div class="row d-flex align-items-center justify-content-center">
+                            <button class="btn btn-sm btn-outline-secondary reload" type="button"><i class="bi bi-repeat"></i> Reload</button>
+                        </div>
                     </div>`
+                } else {
+                    chatEle = `
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}">
+                        <div class="col-1">🤖️</div>
+                        <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
+                    </div>`
+                }
+
                 break
         }
 
         chatContainer.querySelector(".chatManager .conservations").
             insertAdjacentHTML("beforeend", chatEle);
 
-        // chatEle = DOMParser.parseFromString(chatEle);
-        // chatContainer.querySelector(".chatManager .conservations").insertAdjacentElement("beforeend", chatEle);
-        // return chatEle
+
+        // bind reload button
+        // TODO 当恢复历史会话时，因为没有保留历史 reponse 对应的 prompt，暂时不支持 reload
+        let reloadBtn = chatContainer.querySelector(`#${conservationID} .btn.reload`);
+        if (reloadBtn) {
+            reloadBtn.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                document.querySelector(`#${conservationID} .ai-response`).innerHTML = `
+                <p class="card-text placeholder-glow">
+                    <span class="placeholder col-7"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-6"></span>
+                    <span class="placeholder col-8"></span>
+                </p>`;
+
+                sendChat2Server(conservationID);
+            });
+        }
+
+        return conservationID;
     }
 
 

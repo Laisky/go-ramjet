@@ -27,6 +27,11 @@
         white-space: pre-wrap;
     }
 
+    #chatContainer .chatManager .conservations .btn.reload {
+        width: 80px;
+        margin-bottom: 5px;
+    }
+
 </style>
 {{end}}
 
@@ -50,12 +55,32 @@
             <div class="card text-center" style="height: 100%; flex-direction: column;">
                 <div class="card-body conservations" style="min-height: 300px; overflow-y: scroll;">
                     <!-- chats is here -->
+
+                    <!-- <div class="container-fluid row role-ai" style="background-color: #f4f4f4;">
+                        <div class="row">
+                            <div class="col-1">🤖️</div>
+                            <div class="col-11 text-start" data-status="waiting">
+                                <p class="card-text placeholder-glow">
+                                    <span class="placeholder col-7"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-6"></span>
+                                    <span class="placeholder col-8"></span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="row d-flex align-items-center justify-content-center">
+                            <button class="btn btn-outline-secondary" type="button"><i class="bi bi-repeat"></i> Reload</button>
+                        </div>
+                    </div> -->
+
                 </div>
-                <div class="card-footer text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="CTRL + Enter to Send">
+                <div class="card-footer text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="CTRL + Enter to Send">
                     <div class="input-group mb-3" style="margin-bottom: 0px!important;">
                         <textarea class="form-control input prompt" placeholder="CTRL+Enter to send"
                             style="height: 80px"></textarea>
-                        <button class="btn btn-outline-secondary send" type="button" >Send</button>
+                        <button class="btn btn-outline-secondary send" type="button">Send</button>
                     </div>
                 </div>
             </div>
