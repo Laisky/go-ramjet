@@ -7,7 +7,9 @@ const RoleHuman = "user",
 (function () {
     let chatContainer = document.getElementById("chatContainer"),
         chatPromptInput = chatContainer.querySelector(".input.prompt"),
-        chatPromptInputBtn = chatContainer.querySelector(".btn.send");
+        chatPromptInputBtn = chatContainer.querySelector(".btn.send"),
+
+        currentAIRespSSE, currentAIRespEle;
 
     (function main() {
         setupLocalStorage();
@@ -271,8 +273,7 @@ const RoleHuman = "user",
 
     function sendChat2Server(chatID) {
         let isReload = false,
-            reqPromp,
-            aiRespEle;
+            reqPromp;
         if (!chatID) {
             reqPromp = chatPromptInput.value || "";
             chatPromptInput.value = "";
@@ -288,12 +289,11 @@ const RoleHuman = "user",
             isReload = true;
         }
 
-        aiRespEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+        currentAIRespEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+        currentAIRespEle = currentAIRespEle;
         lockChatInput();
 
-        let source,
-            chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
-
+        let chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
         switch (chatmodel) {
             case ChatModelTurbo35:
             case ChatModelGPT4:
@@ -307,7 +307,7 @@ const RoleHuman = "user",
                     messages = messages.slice(-6);
                 }
 
-                source = new SSE(window.OpenaiAPI(), {
+                currentAIRespSSE = new SSE(window.OpenaiAPI(), {
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + window.OpenaiToken(),
@@ -325,7 +325,7 @@ const RoleHuman = "user",
 
                 break;
             case CompletionModelDavinci3:
-                source = new SSE(window.OpenaiAPI(), {
+                currentAIRespSSE = new SSE(window.OpenaiAPI(), {
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + window.OpenaiToken(),
@@ -346,7 +346,7 @@ const RoleHuman = "user",
 
 
         let rawHTMLResp = "";
-        source.addEventListener("message", (evt) => {
+        currentAIRespSSE.addEventListener("message", (evt) => {
             evt.stopPropagation();
 
             let isChatRespDone = false;
@@ -362,22 +362,22 @@ const RoleHuman = "user",
                     isChatRespDone = true;
                 }
 
-                switch (aiRespEle.dataset.status) {
+                switch (currentAIRespEle.dataset.status) {
                     case "waiting":
-                        aiRespEle.dataset.status = "writing";
+                        currentAIRespEle.dataset.status = "writing";
 
                         if (respContent) {
-                            aiRespEle.innerHTML = respContent;
+                            currentAIRespEle.innerHTML = respContent;
                             rawHTMLResp += respContent;
                         } else {
-                            aiRespEle.innerHTML = "";
+                            currentAIRespEle.innerHTML = "";
                         }
 
                         break
                     case "writing":
                         if (respContent) {
                             rawHTMLResp += respContent;
-                            aiRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                            currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                         }
 
                         if (!isReload) {
@@ -389,35 +389,52 @@ const RoleHuman = "user",
             }
 
             if (isChatRespDone) {
-                source.close();
+                currentAIRespSSE.close();
+                currentAIRespSSE = null;
 
                 let markdownConverter = new window.showdown.Converter();
-                aiRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                 if (!isReload) {
                     scrollChatToDown();
                 }
 
                 if (!isReload) {
-                    appendChats2Storage(RoleAI, aiRespEle.innerHTML, reqPromp);
+                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp);
                 } else {
                     // TODO
-                    // replaceChatInStorage(RoleAI, chatID, aiRespEle.innerHTML);
+                    // replaceChatInStorage(RoleAI, chatID, currentAIRespEle.innerHTML);
                 }
 
                 unlockChatInput();
             }
         });
 
-        source.onerror = (err) => {
-            source.close();
-            if (aiRespEle.dataset.status == "waiting") {
-                aiRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(JSON.parse(err.data))}</pre>`;
-            }
-
-            window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
-            unlockChatInput();
+        currentAIRespSSE.onerror = (err) => {
+            abortAIResp(err);
         };
-        source.stream();
+        currentAIRespSSE.stream();
+    }
+
+    function abortAIResp(err) {
+        currentAIRespSSE.close();
+        currentAIRespSSE = null;
+
+        let errMsg;
+        try {
+            errMsg = JSON.parse(err.data);
+        } catch (e) {
+            errMsg = e.toString();
+        }
+
+        if (currentAIRespEle.dataset.status == "waiting") {
+            currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        }else {
+            currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        }
+
+        // window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
+        currentAIRespEle.scrollIntoView({ behavior: "smooth" });
+        unlockChatInput();
     }
 
 

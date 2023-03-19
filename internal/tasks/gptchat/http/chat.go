@@ -98,7 +98,7 @@ func APIHandler(ctx *gin.Context) {
 }
 
 func tokenModelPermCheck(token, model string) (usertoken string, err error) {
-	for _, v := range iconfig.Config.BypassProxyTokens {
+	for _, v := range iconfig.Config.UserTokens {
 		if v.Token == token {
 			if !gutils.Contains(v.AllowedModels, model) {
 				return "", errors.Errorf("model %s is not allowed for current user", model)
