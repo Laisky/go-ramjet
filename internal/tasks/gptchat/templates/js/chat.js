@@ -395,6 +395,7 @@ const RoleHuman = "user",
 
                 let markdownConverter = new window.showdown.Converter();
                 currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                Prism.highlightAll();
                 if (!isReload) {
                     scrollChatToDown();
                 }
