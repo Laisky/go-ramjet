@@ -68,7 +68,7 @@ const RoleHuman = "user",
         let sessionID = evt.target.dataset.session;
         chatContainer.querySelector(".conservations").innerHTML = "";
         sessionChatHistory(sessionID).forEach((item) => {
-            append2Chats(item.role, item.content, true, item.prompt);
+            append2Chats(item.role, item.content, true, item.prompt, item.chatID);
         });
     }
 
@@ -144,7 +144,7 @@ const RoleHuman = "user",
 
             // restore conservation history
             activeSessionChatHistory().forEach((item) => {
-                append2Chats(item.role, item.content, true, item.prompt);
+                append2Chats(item.role, item.content, true, item.prompt, item.chatID);
             });
         }
 
@@ -203,14 +203,15 @@ const RoleHuman = "user",
 
 
 
-    function appendChats2Storage(role, content, prompt) {
-        let storageActiveSessionKey = "chat_user_session_" + activeSessionID(),
+    function appendChats2Storage(role, content, prompt, chatid) {
+        let storageActiveSessionKey = storageSessionKey(activeSessionID()),
             history = activeSessionChatHistory();
 
         history.push({
             role: role,
             content: content,
             prompt: prompt,
+            chatID: chatid,
         });
         window.SetLocalStorage(storageActiveSessionKey, history);
     }
@@ -399,10 +400,9 @@ const RoleHuman = "user",
                 }
 
                 if (!isReload) {
-                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp);
+                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
                 } else {
-                    // TODO
-                    // replaceChatInStorage(RoleAI, chatID, currentAIRespEle.innerHTML);
+                    replaceChatInStorage(RoleAI, chatID, currentAIRespEle.innerHTML);
                 }
 
                 unlockChatInput();
@@ -413,6 +413,19 @@ const RoleHuman = "user",
             abortAIResp(err);
         };
         currentAIRespSSE.stream();
+    }
+
+    function replaceChatInStorage(role, chatID, content) {
+        let storageKey = storageSessionKey(activeSessionID()),
+            chats = window.GetLocalStorage(storageKey) || [];
+
+        chats.forEach((item) => {
+            if (item.chatID == chatID && item.role == role) {
+                item.content = content;
+            }
+        });
+
+        window.SetLocalStorage(storageKey, chats);
     }
 
     function abortAIResp(err) {
@@ -428,7 +441,7 @@ const RoleHuman = "user",
 
         if (currentAIRespEle.dataset.status == "waiting") {
             currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
-        }else {
+        } else {
             currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
         }
 
@@ -485,11 +498,13 @@ const RoleHuman = "user",
     // @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
     //
     // @return {string} conservationID - conservation id
-    function append2Chats(role, text, isHistory = false, prompt = "") {
-        let conservationID = `chat-${window.RandomString()}`,
-            contextHistory = getLastNChatMessages(6);
-
+    function append2Chats(role, text, isHistory = false, prompt = "", chatID) {
         let chatEle;
+
+        if (!chatID) {
+            chatID = `chat-${window.RandomString()}`
+        }
+
         switch (role) {
             case RoleSystem:
                 chatEle = `
@@ -502,7 +517,7 @@ const RoleHuman = "user",
                 let waitAI = "";
                 if (!isHistory) {
                     waitAI = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}" data-prompt="${text}">
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}" data-prompt="${text}">
                         <div class="row">
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="waiting">
@@ -530,7 +545,7 @@ const RoleHuman = "user",
             case RoleAI:
                 if (prompt) {
                     chatEle = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}" data-prompt="${prompt}">
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}" data-prompt="${prompt}">
                         <div class="row">
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
@@ -541,7 +556,7 @@ const RoleHuman = "user",
                     </div>`
                 } else {
                     chatEle = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${conservationID}">
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}">
                         <div class="col-1">🤖️</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
                     </div>`
@@ -556,11 +571,11 @@ const RoleHuman = "user",
 
         // bind reload button
         // TODO 当恢复历史会话时，因为没有保留历史 reponse 对应的 prompt，暂时不支持 reload
-        let reloadBtn = chatContainer.querySelector(`#${conservationID} .btn.reload`);
+        let reloadBtn = chatContainer.querySelector(`#${chatID} .btn.reload`);
         if (reloadBtn) {
             reloadBtn.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                document.querySelector(`#${conservationID} .ai-response`).innerHTML = `
+                document.querySelector(`#${chatID} .ai-response`).innerHTML = `
                 <p class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -569,11 +584,11 @@ const RoleHuman = "user",
                     <span class="placeholder col-8"></span>
                 </p>`;
 
-                sendChat2Server(conservationID);
+                sendChat2Server(chatID);
             });
         }
 
-        return conservationID;
+        return chatID;
     }
 
 
