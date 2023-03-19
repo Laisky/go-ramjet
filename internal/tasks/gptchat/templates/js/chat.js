@@ -633,9 +633,11 @@ const RoleHuman = "user",
             let maxtokenInput = document
                 .querySelector("#hiddenChatConfigSideBar .input.max-token");
             maxtokenInput.value = window.OpenaiMaxTokens();
+            document.querySelector("#hiddenChatConfigSideBar .input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
             maxtokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_max_tokens", evt.target.value);
+                document.querySelector("#hiddenChatConfigSideBar .input-group.max-token .max-token-val").innerHTML = evt.target.value;
             })
         }
 

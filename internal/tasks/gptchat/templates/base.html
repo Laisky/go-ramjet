@@ -71,9 +71,10 @@
                     <input type="text" class="form-control input api-token" value="DEFAULT_PROXY_TOKEN">
                 </div>
             </div>
-            <div class="mb-3">
-                <label for="configMaxTokens" class="form-label">Max Tokens:</label>
-                <input type="number" class="form-control input max-token" max="4000" min="500" value="500">
+            <div class="mb-3 input-group max-token">
+                <label for="configMaxTokens" class="form-label">Max Tokens - <span class="max-token-val"></span></label>
+                <input type="range" class="form-range input max-token" min="1000" max="4000" step="100" value="500">
+                <!-- <input type="number" class="form-control input max-token" max="4000" min="500" value="500"> -->
             </div>
             <div class="mb-3">
                 <label for="configStaticContext" class="form-label">Static Context:</label>
