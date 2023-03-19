@@ -10,6 +10,7 @@
     <link rel="icon" href="favicon.ico" />
     <link href="{{.BootstrapCss}}" rel="stylesheet" />
     <link rel="stylesheet" href="{{.BootstrapIcons}}">
+    <link href="{{.PrismCss}}" rel="stylesheet" />
     {{block "header" .}}
     {{end}}
 </head>
@@ -90,6 +91,7 @@
     <script async src="{{.BootstrapJs}}"></script>
     <script async src="{{.SeeJs}}"></script>
     <script async src="{{.ShowdownJs}}"></script>
+    <script async src="{{.PrismJs}}"></script>
     <script defer src="/static/{{.LibJs}}"></script>
     <script defer src="/static/{{.SiteJs}}"></script>
     <script>

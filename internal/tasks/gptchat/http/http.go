@@ -128,7 +128,8 @@ func Chat(ctx *gin.Context) {
 	tplArg := struct {
 		DataJS string
 		BootstrapJs, BootstrapCss,
-		SeeJs, ShowdownJs, BootstrapIcons string
+		SeeJs, ShowdownJs, BootstrapIcons,
+		PrismJs, PrismCss string
 		LibJs, SiteJs string
 		Version       string
 		GaCode        string
@@ -139,17 +140,28 @@ func Chat(ctx *gin.Context) {
 		BootstrapIcons: iconfig.Config.StaticLibs["bootstrap_icons"],
 		SeeJs:          iconfig.Config.StaticLibs["sse_js"],
 		ShowdownJs:     iconfig.Config.StaticLibs["showdown_js"],
+		PrismJs:        iconfig.Config.StaticLibs["prism_js"],
+		PrismCss:       iconfig.Config.StaticLibs["prism_css"],
 		LibJs:          staticFiles.LibJs.Name,
 		SiteJs:         staticFiles.SiteJs.Name,
 		Version:        ts,
 		GaCode:         iconfig.Config.GoogleAnalytics,
 	}
 
-	tplArg.BootstrapIcons = gutils.OptionalVal(&tplArg.BootstrapIcons, "https://s2.laisky.com/static/bootstrap-icons/1.10.3/bootstrap-icons.css")
-	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
-	tplArg.BootstrapCss = gutils.OptionalVal(&tplArg.BootstrapCss, "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
-	tplArg.ShowdownJs = gutils.OptionalVal(&tplArg.ShowdownJs, "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
-	tplArg.SeeJs = gutils.OptionalVal(&tplArg.SeeJs, "https://s3.laisky.com/static/sse/0.6.1/sse.js")
+	tplArg.BootstrapIcons = gutils.OptionalVal(&tplArg.BootstrapIcons,
+		"https://s2.laisky.com/static/bootstrap-icons/1.10.3/bootstrap-icons.css")
+	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs,
+		"https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
+	tplArg.BootstrapCss = gutils.OptionalVal(&tplArg.BootstrapCss,
+		"https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
+	tplArg.ShowdownJs = gutils.OptionalVal(&tplArg.ShowdownJs,
+		"https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
+	tplArg.SeeJs = gutils.OptionalVal(&tplArg.SeeJs,
+		"https://s3.laisky.com/static/sse/0.6.1/sse.js")
+	tplArg.PrismJs = gutils.OptionalVal(&tplArg.PrismJs,
+		"https://s3.laisky.com/static/prism/1.29.0/prism.js")
+	tplArg.PrismCss = gutils.OptionalVal(&tplArg.PrismCss,
+		"https://s3.laisky.com/static/prism/1.29.0/prism.css")
 
 	err = tpl.ExecuteTemplate(ctx.Writer, "base", tplArg)
 	if AbortErr(ctx, err) {
