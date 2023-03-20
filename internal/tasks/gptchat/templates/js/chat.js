@@ -4,7 +4,27 @@ const RoleHuman = "user",
     RoleSystem = "system",
     RoleAI = "assistant";
 
+
 (function () {
+    const OpenaiChatPricingPerKTokens = {
+        "gpt-3.5-turbo": {
+            prompt: 0.002,
+            completion: 0.002,
+        },
+        "gpt-4-8k": {
+            prompt: 0.03,
+            completion: 0.06,
+        },
+        "gpt-4-32k": {
+            prompt: 0.06,
+            completion: 0.12,
+        },
+        "davinci": {
+            prompt: 0.02,
+            completion: 0.02,
+        },
+    };
+
     let chatContainer = document.getElementById("chatContainer"),
         chatPromptInput = chatContainer.querySelector(".input.prompt"),
         chatPromptInputBtn = chatContainer.querySelector(".btn.send"),
@@ -233,12 +253,6 @@ const RoleHuman = "user",
                 content: GetLocalStorage("config_api_static_context")
             }].concat(messages);
         }
-
-        messages = [{
-            role: RoleSystem,
-            content: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question and if possible, reference the context as much as you can."
-        }].concat(messages);
-
 
         return messages;
     }
@@ -645,7 +659,7 @@ const RoleHuman = "user",
         //  config_api_static_context
         {
             let staticConfigInput = document
-                .querySelector("#hiddenChatConfigSideBar .input.static-config");
+                .querySelector("#hiddenChatConfigSideBar .input.static-prompt");
             staticConfigInput.value = window.OpenaiChatStaticContext();
             staticConfigInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();

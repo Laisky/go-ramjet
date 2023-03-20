@@ -11,6 +11,12 @@
     <link href="{{.BootstrapCss}}" rel="stylesheet" />
     <link rel="stylesheet" href="{{.BootstrapIcons}}">
     <link href="{{.PrismCss}}" rel="stylesheet" />
+    <style>
+        #hiddenChatConfigSideBar .input.static-prompt {
+            min-height: 220px;
+            font-size: smaller;
+        }
+    </style>
     {{block "header" .}}
     {{end}}
 </head>
@@ -77,8 +83,8 @@
                 <!-- <input type="number" class="form-control input max-token" max="4000" min="500" value="500"> -->
             </div>
             <div class="mb-3">
-                <label for="configStaticContext" class="form-label">Static Context:</label>
-                <textarea class="form-control input static-config" placeholder="something always send to AI" style="height: 80px"></textarea>
+                <label for="configStaticContext" class="form-label">Static Prompt:</label>
+                <textarea class="form-control input static-prompt" placeholder="something always send to AI"></textarea>
             </div>
             <button class="btn btn-primary submit">Save</button>
             <button class="btn btn-secondary reset">Reset</button>
