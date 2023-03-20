@@ -14,9 +14,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     })();
 
     function checkVersion() {
-        let latestVer = GetLocalStorage("global_version");
-        if (latestVer !== Version) {
-            SetLocalStorage("global_version", Version);
+        SetLocalStorage("global_version", Version);
+        if (((new Date()).getTime() -  (new Date(window.Version)).getTime()) > 86400000) { // 1 day
             window.location.reload();
         }
     }
