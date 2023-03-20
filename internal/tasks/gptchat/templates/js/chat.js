@@ -300,11 +300,14 @@ const RoleHuman = "user",
             chatID = append2Chats(RoleHuman, reqPromp);
             appendChats2Storage(RoleHuman, reqPromp);
         } else { // if chatID is not empty, it's a reload request
-            reqPromp = chatContainer.querySelector(`.chatManager .conservations #${chatID}`).dataset.prompt;
+            reqPromp = chatContainer
+            .querySelector(`.chatManager .conservations #${chatID}`)
+            .dataset.prompt;
             isReload = true;
         }
 
-        currentAIRespEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+        currentAIRespEle = chatContainer
+        .querySelector(`.chatManager .conservations #${chatID} .ai-response`);
         currentAIRespEle = currentAIRespEle;
         lockChatInput();
 
@@ -364,6 +367,7 @@ const RoleHuman = "user",
         currentAIRespSSE.addEventListener("message", (evt) => {
             evt.stopPropagation();
 
+            // console.log("got: ", evt.data);
             let isChatRespDone = false;
             if (evt.data == "[DONE]") {
                 isChatRespDone = true
