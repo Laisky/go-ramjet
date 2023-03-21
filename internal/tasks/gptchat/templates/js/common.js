@@ -132,7 +132,7 @@ window.ready(() => {
     window.ChatNContexts = () => {
         let v = window.GetLocalStorage("config_chat_n_contexts");
         if (!v) {
-            v = "1";
+            v = "3";
             window.SetLocalStorage("config_chat_n_contexts", v);
         }
 
