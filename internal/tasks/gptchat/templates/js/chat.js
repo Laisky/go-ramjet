@@ -4,8 +4,7 @@ const RoleHuman = "user",
     RoleSystem = "system",
     RoleAI = "assistant";
 
-
-(function () {
+window.ready(() => {
     const OpenaiChatPricingPerKTokens = {
         "gpt-3.5-turbo": {
             prompt: 0.002,
@@ -167,6 +166,8 @@ const RoleHuman = "user",
             activeSessionChatHistory().forEach((item) => {
                 append2Chats(item.role, item.content, true, item.prompt, item.chatID);
             });
+
+            window.EnableTooltipsEverywhere();
         }
 
         // new session
@@ -316,14 +317,16 @@ const RoleHuman = "user",
         switch (chatmodel) {
             case ChatModelTurbo35:
             case ChatModelGPT4:
-                let messages;
-                messages = getLastNChatMessages(6);
+                let messages,
+                    nContexts = parseInt(window.ChatNContexts());
+
+                messages = getLastNChatMessages(nContexts);
                 if (isReload) {
                     messages.push({
                         role: RoleHuman,
                         content: reqPromp
                     });
-                    messages = messages.slice(-6);
+                    // messages = messages.slice(nContexts);
                 }
 
                 currentAIRespSSE = new SSE(window.OpenaiAPI(), {
@@ -420,7 +423,10 @@ const RoleHuman = "user",
 
                 let markdownConverter = new window.showdown.Converter();
                 currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+
                 Prism.highlightAll();
+                window.EnableTooltipsEverywhere();
+
                 if (!isReload) {
                     scrollChatToDown();
                 }
@@ -531,15 +537,26 @@ const RoleHuman = "user",
             chatID = `chat-${window.RandomString()}`
         }
 
+        let reloadBtnHTML = `
+            <div class="row d-flex align-items-center justify-content-center">
+                <button class="btn btn-sm btn-outline-secondary reload" type="button" data-bs-toggle="tooltip" data-bs-placement="top" title="reload response base on latest context and chat model">
+                    <i class="bi bi-repeat"></i>
+                    Reload</button>
+            </div>`;
+
         switch (role) {
             case RoleSystem:
+                text = window.escapeHtml(text);
+
                 chatEle = `
                     <div class="container-fluid row role-human">
                         <div class="col-1">💻</div>
-                        <div class="col-11 text-start">${text}</div>
+                        <div class="col-11 text-start"><pre>${text}</pre></div>
                     </div>`
                 break
             case RoleHuman:
+                text = window.escapeHtml(text);
+
                 let waitAI = "";
                 if (!isHistory) {
                     waitAI = `
@@ -556,16 +573,14 @@ const RoleHuman = "user",
                                 </p>
                             </div>
                         </div>
-                        <div class="row d-flex align-items-center justify-content-center">
-                            <button class="btn btn-sm btn-outline-secondary reload" type="button"><i class="bi bi-repeat"></i> Reload</button>
-                        </div>
+                        ${reloadBtnHTML}
                     </div>`
                 }
 
                 chatEle = `
                     <div class="container-fluid row role-human">
                         <div class="col-1">🤔️</div>
-                        <div class="col-11 text-start">${text}</div>
+                        <div class="col-11 text-start"><pre>${text}</pre></div>
                     </div>${waitAI}`
                 break
             case RoleAI:
@@ -576,9 +591,7 @@ const RoleHuman = "user",
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
                         </div>
-                        <div class="row d-flex align-items-center justify-content-center">
-                            <button class="btn btn-sm btn-outline-secondary reload" type="button"><i class="bi bi-repeat"></i> Reload</button>
-                        </div>
+                        ${reloadBtnHTML}
                     </div>`
                 } else {
                     chatEle = `
@@ -658,6 +671,19 @@ const RoleHuman = "user",
             apitokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_token_value", evt.target.value);
+            })
+        }
+
+        //  config_chat_n_contexts
+        {
+            let maxtokenInput = configContainer
+                .querySelector(".input.contexts");
+            maxtokenInput.value = window.ChatNContexts();
+            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
+            maxtokenInput.addEventListener("input", (evt) => {
+                evt.stopPropagation();
+                window.SetLocalStorage("config_chat_n_contexts", evt.target.value);
+                configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.target.value;
             })
         }
 
@@ -743,5 +769,7 @@ const RoleHuman = "user",
                 })
 
         }
+
+        window.EnableTooltipsEverywhere();
     }
-})();
+});

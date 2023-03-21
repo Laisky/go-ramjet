@@ -7,11 +7,12 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     ChatModelGPT4 = "gpt-4",
     CompletionModelDavinci3 = "text-davinci-003";
 
-(function () {
+window.ready(() => {
     (function main() {
         checkVersion();
         setupHeader();
     })();
+
 
     function checkVersion() {
         SetLocalStorage("global_version", Version);
@@ -91,7 +92,7 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     window.OpenaiMaxTokens = () => {
         let v = window.GetLocalStorage("config_api_max_tokens");
         if (!v) {
-            v = "1500";
+            v = "500";
             window.SetLocalStorage("config_api_max_tokens", v);
         }
 
@@ -128,6 +129,16 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
         return v;
     };
 
+    window.ChatNContexts = () => {
+        let v = window.GetLocalStorage("config_chat_n_contexts");
+        if (!v) {
+            v = "1";
+            window.SetLocalStorage("config_chat_n_contexts", v);
+        }
+
+        return v;
+    };
+
     window.OpenaiChatStaticContext = () => {
         let v = window.GetLocalStorage("config_api_static_context");
         if (!v) {
@@ -137,4 +148,4 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
 
         return v;
     };
-})()
+});

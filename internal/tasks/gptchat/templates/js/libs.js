@@ -64,4 +64,31 @@
     window.RandomString = () => {
         return Math.random().toString(36).substring(2);
     };
+
+    window.ready = (fn) => {
+        if (document.readyState == 'complete') {
+            fn();
+        } else {
+            document.addEventListener('DOMContentLoaded', fn);
+        }
+    };
+
+    window.escapeHtml = (str) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+
+        return str.replace(/[&<>"']/g, function (m) { return map[m]; });
+    };
+
+    window.EnableTooltipsEverywhere = () => {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+    };
 })();
