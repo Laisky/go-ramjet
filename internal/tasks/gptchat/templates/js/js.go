@@ -10,3 +10,6 @@ var Common []byte
 
 //go:embed libs.js
 var Libs []byte
+
+//go:embed chat-prompts.js
+var ChatPrompts []byte
