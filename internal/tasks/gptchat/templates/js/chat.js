@@ -596,7 +596,6 @@ const RoleHuman = "user",
 
 
         // bind reload button
-        // TODO 当恢复历史会话时，因为没有保留历史 reponse 对应的 prompt，暂时不支持 reload
         let reloadBtn = chatContainer.querySelector(`#${chatID} .btn.reload`);
         if (reloadBtn) {
             reloadBtn.addEventListener("click", (evt) => {

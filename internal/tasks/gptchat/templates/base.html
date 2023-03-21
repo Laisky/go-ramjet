@@ -16,6 +16,12 @@
             min-height: 220px;
             font-size: smaller;
         }
+
+        #hiddenChatConfigSideBar .input-group {
+            margin-bottom: 0px !important;
+            padding-top: 1px;
+        }
+
     </style>
     {{block "header" .}}
     {{end}}
@@ -65,9 +71,9 @@
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-            <div class="mb-3">
+            <div class="input-group mb-3">
                 <label for="token" class="form-label">Token:</label>
-                <div class="input-group mb-3 form-control token-type" style="padding: 0px;">
+                <div class="input-group mb-3 token-type" style="padding: 0px;">
                     <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button" data-bs-toggle="dropdown"
                         aria-expanded="false">proxy</button>
                     <ul class="dropdown-menu">
