@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"html/template"
@@ -23,7 +24,7 @@ import (
 var (
 	httpcli     *http.Client
 	staticFiles struct {
-		LibJs, SiteJs *staticFile
+		LibJs, SiteJs, DataJs *staticFile
 	}
 )
 
@@ -64,13 +65,21 @@ func prepareStaticFiles() {
 	staticFiles.SiteJs = &staticFile{
 		Name:        "sites",
 		ContentType: "application/javascript",
-		Content:     append(ijs.Common, ijs.Chat...),
+		Content: bytes.Join([][]byte{
+			ijs.Common, ijs.Chat,
+		}, []byte("\n")),
+	}
+	staticFiles.DataJs = &staticFile{
+		Name:        "data",
+		ContentType: "application/javascript",
+		Content:     ijs.ChatPrompts,
 	}
 
 	hasher := sha1.New()
 	for _, v := range []*staticFile{
 		staticFiles.LibJs,
 		staticFiles.SiteJs,
+		staticFiles.DataJs,
 	} {
 		hasher.Reset()
 		hasher.Write(v.Content)
@@ -119,6 +128,9 @@ func Chat(ctx *gin.Context) {
 			"direct": iconfig.Config.API,
 			"proxy":  "/api/",
 		},
+		"static_libs": map[string]any{
+			"chat_prompts": staticFiles.DataJs.Name,
+		},
 	}
 	injectDataPayload, err := gutils.JSON.MarshalToString(injectData)
 	if AbortErr(ctx, err) {
@@ -129,7 +141,8 @@ func Chat(ctx *gin.Context) {
 		DataJS string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs, BootstrapIcons,
-		PrismJs, PrismCss string
+		PrismJs, PrismCss,
+		FuseJs string
 		LibJs, SiteJs string
 		Version       string
 		GaCode        string
@@ -142,6 +155,7 @@ func Chat(ctx *gin.Context) {
 		ShowdownJs:     iconfig.Config.StaticLibs["showdown_js"],
 		PrismJs:        iconfig.Config.StaticLibs["prism_js"],
 		PrismCss:       iconfig.Config.StaticLibs["prism_css"],
+		FuseJs:         iconfig.Config.StaticLibs["fuse_js"],
 		LibJs:          staticFiles.LibJs.Name,
 		SiteJs:         staticFiles.SiteJs.Name,
 		Version:        ts,
@@ -162,6 +176,8 @@ func Chat(ctx *gin.Context) {
 		"https://s3.laisky.com/static/prism/1.29.0/prism.js")
 	tplArg.PrismCss = gutils.OptionalVal(&tplArg.PrismCss,
 		"https://s3.laisky.com/static/prism/1.29.0/prism.css")
+	tplArg.FuseJs = gutils.OptionalVal(&tplArg.FuseJs,
+		"https://s3.laisky.com/static/fuse.js/6.6.2/fuse.min.js")
 
 	err = tpl.ExecuteTemplate(ctx.Writer, "base", tplArg)
 	if AbortErr(ctx, err) {

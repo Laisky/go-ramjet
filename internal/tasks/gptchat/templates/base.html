@@ -68,22 +68,33 @@
             <div class="mb-3">
                 <label for="token" class="form-label">Token:</label>
                 <div class="input-group mb-3 form-control token-type" style="padding: 0px;">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
-                        aria-expanded="false">HowTo Connect</button>
+                    <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false">proxy</button>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" data-value="proxy" href="#">Proxy</a></li>
-                        <li><a class="dropdown-item disabled" data-value="direct" href="#">Direct</a></li>
+                        <li><a class="dropdown-item" data-value="proxy" href="#">proxy</a></li>
+                        <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
                     </ul>
                     <input type="text" class="form-control input api-token" value="DEFAULT_PROXY_TOKEN">
                 </div>
             </div>
             <div class="mb-3 input-group max-token">
-                <label for="configMaxTokens" class="form-label">Max Tokens - <span class="max-token-val"></span></label>
+                <label for="configMaxTokens" class="form-label">max tokens - <span class="max-token-val"></span></label>
                 <input type="range" class="form-range input max-token" min="1000" max="4000" step="100" value="500">
-                <!-- <input type="number" class="form-control input max-token" max="4000" min="500" value="500"> -->
+            </div>
+            <div class="mb-3 input-group temperature">
+                <label for="configTemperature" class="form-label">temperature - <span class="temperature-val"></span></label>
+                <input type="range" class="form-range input temperature" min="0" max="2" step="0.1" value="1">
+            </div>
+            <div class="mb-3 input-group presence_penalty">
+                <label for="configpresence_penalty" class="form-label">presence_penalty - <span class="presence_penalty-val"></span></label>
+                <input type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1" value="0">
+            </div>
+            <div class="mb-3 input-group frequency_penalty">
+                <label for="configfrequency_penalty" class="form-label">frequency_penalty - <span class="frequency_penalty-val"></span></label>
+                <input type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
             </div>
             <div class="mb-3">
-                <label for="configStaticContext" class="form-label">Static Prompt:</label>
+                <label for="configStaticContext" class="form-label">static prompt:</label>
                 <textarea class="form-control input static-prompt" placeholder="something always send to AI"></textarea>
             </div>
             <button class="btn btn-primary submit">Save</button>
@@ -99,6 +110,7 @@
     <script async src="{{.SeeJs}}"></script>
     <script async src="{{.ShowdownJs}}"></script>
     <script async src="{{.PrismJs}}"></script>
+    <script async src="{{.FuseJs}}"></script>
     <script defer src="/static/{{.LibJs}}"></script>
     <script defer src="/static/{{.SiteJs}}"></script>
     <script>

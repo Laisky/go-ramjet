@@ -26,6 +26,7 @@ const RoleHuman = "user",
     };
 
     let chatContainer = document.getElementById("chatContainer"),
+        configContainer = document.getElementById("hiddenChatConfigSideBar"),
         chatPromptInput = chatContainer.querySelector(".input.prompt"),
         chatPromptInputBtn = chatContainer.querySelector(".btn.send"),
 
@@ -301,13 +302,13 @@ const RoleHuman = "user",
             appendChats2Storage(RoleHuman, reqPromp);
         } else { // if chatID is not empty, it's a reload request
             reqPromp = chatContainer
-            .querySelector(`.chatManager .conservations #${chatID}`)
-            .dataset.prompt;
+                .querySelector(`.chatManager .conservations #${chatID}`)
+                .dataset.prompt;
             isReload = true;
         }
 
         currentAIRespEle = chatContainer
-        .querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+            .querySelector(`.chatManager .conservations #${chatID} .ai-response`);
         currentAIRespEle = currentAIRespEle;
         lockChatInput();
 
@@ -336,6 +337,9 @@ const RoleHuman = "user",
                         model: chatmodel,
                         stream: true,
                         max_tokens: parseInt(window.OpenaiMaxTokens()),
+                        temperature: parseFloat(window.OpenaiTemperature()),
+                        presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
+                        frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
                         messages: messages,
                         stop: ["\n\n"]
                     })
@@ -354,6 +358,9 @@ const RoleHuman = "user",
                         model: chatmodel,
                         stream: true,
                         max_tokens: parseInt(window.OpenaiMaxTokens()),
+                        temperature: parseFloat(window.OpenaiTemperature()),
+                        presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
+                        frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
                         prompt: reqPromp,
                         stop: ["\n\n"]
                     })
@@ -612,17 +619,22 @@ const RoleHuman = "user",
 
 
     function setupConfig() {
-        let tokenTypeParent = document.
-            querySelector("#hiddenChatConfigSideBar .input-group.token-type");
+        let tokenTypeParent = configContainer.
+            querySelector(".input-group.token-type");
 
         // set token type
         {
-            let selectItems = tokenTypeParent.querySelectorAll("a.dropdown-item");
+            let selectItems = tokenTypeParent
+                .querySelectorAll("a.dropdown-item");
             switch (window.OpenaiTokenType()) {
                 case "proxy":
+                    configContainer
+                        .querySelector(".token-type .show-val").innerHTML = "proxy";
                     ActiveElementsByData(selectItems, "value", "proxy");
                     break;
                 case "direct":
+                    configContainer
+                        .querySelector(".token-type .show-val").innerHTML = "direct";
                     ActiveElementsByData(selectItems, "value", "direct");
                     break;
             }
@@ -630,7 +642,10 @@ const RoleHuman = "user",
             // bind evt listener for choose different token type
             selectItems.forEach((ele) => {
                 ele.addEventListener("click", (evt) => {
-                    evt.stopPropagation();
+                    // evt.stopPropagation();
+                    configContainer
+                        .querySelector(".token-type .show-val")
+                        .innerHTML = evt.target.dataset.value;
                     window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
                 })
             });
@@ -638,8 +653,8 @@ const RoleHuman = "user",
 
         //  config_api_token_value
         {
-            let apitokenInput = document
-                .querySelector("#hiddenChatConfigSideBar .input.api-token");
+            let apitokenInput = configContainer
+                .querySelector(".input.api-token");
             apitokenInput.value = window.OpenaiToken();
             apitokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
@@ -649,21 +664,60 @@ const RoleHuman = "user",
 
         //  config_api_max_tokens
         {
-            let maxtokenInput = document
-                .querySelector("#hiddenChatConfigSideBar .input.max-token");
+            let maxtokenInput = configContainer
+                .querySelector(".input.max-token");
             maxtokenInput.value = window.OpenaiMaxTokens();
-            document.querySelector("#hiddenChatConfigSideBar .input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
+            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
             maxtokenInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage("config_api_max_tokens", evt.target.value);
-                document.querySelector("#hiddenChatConfigSideBar .input-group.max-token .max-token-val").innerHTML = evt.target.value;
+                configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.target.value;
+            })
+        }
+
+        //  config_api_temperature
+        {
+            let maxtokenInput = configContainer
+                .querySelector(".input.temperature");
+            maxtokenInput.value = window.OpenaiTemperature();
+            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
+            maxtokenInput.addEventListener("input", (evt) => {
+                evt.stopPropagation();
+                window.SetLocalStorage("config_api_temperature", evt.target.value);
+                configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.target.value;
+            })
+        }
+
+        //  config_api_presence_penalty
+        {
+            let maxtokenInput = configContainer
+                .querySelector(".input.presence_penalty");
+            maxtokenInput.value = window.OpenaiPresencePenalty();
+            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
+            maxtokenInput.addEventListener("input", (evt) => {
+                evt.stopPropagation();
+                window.SetLocalStorage("config_api_presence_penalty", evt.target.value);
+                configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.target.value;
+            })
+        }
+
+        //  config_api_frequency_penalty
+        {
+            let maxtokenInput = configContainer
+                .querySelector(".input.frequency_penalty");
+            maxtokenInput.value = window.OpenaiFrequencyPenalty();
+            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
+            maxtokenInput.addEventListener("input", (evt) => {
+                evt.stopPropagation();
+                window.SetLocalStorage("config_api_frequency_penalty", evt.target.value);
+                configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.target.value;
             })
         }
 
         //  config_api_static_context
         {
-            let staticConfigInput = document
-                .querySelector("#hiddenChatConfigSideBar .input.static-prompt");
+            let staticConfigInput = configContainer
+                .querySelector(".input.static-prompt");
             staticConfigInput.value = window.OpenaiChatStaticContext();
             staticConfigInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
@@ -673,7 +727,7 @@ const RoleHuman = "user",
 
         // bind reset button
         {
-            document.querySelector("#hiddenChatConfigSideBar .btn.reset")
+            configContainer.querySelector(".btn.reset")
                 .addEventListener("click", (evt) => {
                     evt.stopPropagation();
                     localStorage.clear();
@@ -683,7 +737,7 @@ const RoleHuman = "user",
 
         // bind submit button
         {
-            document.querySelector("#hiddenChatConfigSideBar .btn.submit")
+            configContainer.querySelector(".btn.submit")
                 .addEventListener("click", (evt) => {
                     evt.stopPropagation();
                     location.reload();

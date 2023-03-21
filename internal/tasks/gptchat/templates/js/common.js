@@ -15,7 +15,7 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
 
     function checkVersion() {
         SetLocalStorage("global_version", Version);
-        if (((new Date()).getTime() -  (new Date(window.Version)).getTime()) > 86400000) { // 1 day
+        if (((new Date()).getTime() - (new Date(window.Version)).getTime()) > 86400000) { // 1 day
             window.location.reload();
         }
     }
@@ -63,6 +63,11 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
         }
     };
 
+    window.OpenaiUserIdentify = () => {
+        t = window.OpenaiToken();
+        return t;
+    };
+
     window.OpenaiTokenType = () => {
         let t = window.GetLocalStorage("config_api_token_type");
         if (!t) {
@@ -88,6 +93,36 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
         if (!v) {
             v = "1500";
             window.SetLocalStorage("config_api_max_tokens", v);
+        }
+
+        return v;
+    };
+
+    window.OpenaiTemperature = () => {
+        let v = window.GetLocalStorage("config_api_temperature");
+        if (!v) {
+            v = "1";
+            window.SetLocalStorage("config_api_temperature", v);
+        }
+
+        return v;
+    };
+
+    window.OpenaiPresencePenalty = () => {
+        let v = window.GetLocalStorage("config_api_presence_penalty");
+        if (!v) {
+            v = "0";
+            window.SetLocalStorage("config_api_presence_penalty", v);
+        }
+
+        return v;
+    };
+
+    window.OpenaiFrequencyPenalty = () => {
+        let v = window.GetLocalStorage("config_api_frequency_penalty");
+        if (!v) {
+            v = "0";
+            window.SetLocalStorage("config_api_frequency_penalty", v);
         }
 
         return v;
