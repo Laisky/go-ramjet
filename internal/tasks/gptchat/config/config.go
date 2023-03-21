@@ -25,7 +25,9 @@ type OpenAI struct {
 }
 
 type proxyTokens struct {
-	Token         string   `json:"-" mapstructure:"token"`
+	// Token (required) client request token
+	Token string `json:"-" mapstructure:"token"`
+	// OpenaiToken (optional) openai token
 	OpenaiToken   string   `json:"-" mapstructure:"openai_token"`
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 }
