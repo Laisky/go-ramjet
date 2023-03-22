@@ -16,7 +16,7 @@ window.ready(() => {
 
     function checkVersion() {
         SetLocalStorage("global_version", Version);
-        if (((new Date()).getTime() - (new Date(window.Version)).getTime()) > 86400000) { // 1 day
+        if (((new Date()).getTime() - (new Date(GetLocalStorage("global_version"))).getTime()) > 86400000) { // 1 day
             window.location.reload();
         }
     }
