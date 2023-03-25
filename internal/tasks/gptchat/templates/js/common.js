@@ -11,6 +11,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts";
 
 window.ready(() => {
+    let headerBar = document.getElementById("headerbar");
+
     (function main() {
         checkVersion();
         setupHeader();
@@ -27,6 +29,23 @@ window.ready(() => {
     }
 
     function setupHeader() {
+        // setup chat qa models
+        {
+            let qaModels = window.data["qa_chat_models"] || [],
+                qaModelsContainer = headerBar.querySelector(".dropdown-menu.qa-models");
+
+            qaModels.forEach((model) => {
+                let li = document.createElement("li");
+                let a = document.createElement("a");
+                a.href = "#";
+                a.classList.add("dropdown-item");
+                a.dataset.model = model.name;
+                a.textContent = model.name;
+                li.appendChild(a);
+                qaModelsContainer.appendChild(li);
+            });
+        }
+
         // setup chat models
         {
             // set default chat model
@@ -58,6 +77,7 @@ window.ready(() => {
                 });
             });
         }
+
     }
 
     window.OpenaiAPI = () => {

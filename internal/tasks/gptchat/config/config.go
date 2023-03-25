@@ -22,7 +22,12 @@ type OpenAI struct {
 	UserTokens      []proxyTokens     `json:"user_tokens" mapstructure:"user_tokens"`
 	GoogleAnalytics string            `json:"ga" mapstructure:"ga"`
 	StaticLibs      map[string]string `json:"static_libs" mapstructure:"static_libs"`
-	QAUrl           string            `json:"qa_url" mapstructure:"qa_url"`
+	QAChatModels    []qaChatModel     `json:"qa_chat_models" mapstructure:"qa_chat_models"`
+}
+
+type qaChatModel struct {
+	Name string `json:"name" mapstructure:"name"`
+	URL  string `json:"url" mapstructure:"url"`
 }
 
 type proxyTokens struct {

@@ -377,7 +377,14 @@ window.ready(() => {
                 //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
                 //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
                 // }
-                fetch(`${window.data["qa_url"]}?q=${encodeURIComponent(reqPromp)}`, {
+                let url;
+                window.data['qa_chat_models'].forEach((item) => {
+                    if (item['name'] == chatmodel) {
+                        url = item['url'];
+                    }
+                });
+
+                fetch(`${url}?q=${encodeURIComponent(reqPromp)}`, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
