@@ -22,6 +22,7 @@ type OpenAI struct {
 	UserTokens      []proxyTokens     `json:"user_tokens" mapstructure:"user_tokens"`
 	GoogleAnalytics string            `json:"ga" mapstructure:"ga"`
 	StaticLibs      map[string]string `json:"static_libs" mapstructure:"static_libs"`
+	QAUrl           string            `json:"qa_url" mapstructure:"qa_url"`
 }
 
 type proxyTokens struct {

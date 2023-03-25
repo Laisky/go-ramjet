@@ -5,7 +5,10 @@ const OpenaiTokenTypeProxy = "proxy",
 
 const ChatModelTurbo35 = "gpt-3.5-turbo",
     ChatModelGPT4 = "gpt-4",
+    QAModelBasebit = "qa-basebit",
     CompletionModelDavinci3 = "text-davinci-003";
+
+const StorageKeyPromptShortCuts = "config_prompt_shortcuts";
 
 window.ready(() => {
     (function main() {
@@ -15,8 +18,10 @@ window.ready(() => {
 
 
     function checkVersion() {
-        SetLocalStorage("global_version", Version);
-        if (((new Date()).getTime() - (new Date(GetLocalStorage("global_version"))).getTime()) > 86400000) { // 1 day
+        SetLocalStorage("version", Version);
+        let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
+        if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
+            SetLocalStorage("last_reload_at", (new Date()).toISOString());
             window.location.reload();
         }
     }
@@ -29,7 +34,7 @@ window.ready(() => {
                 SetLocalStorage("config_chat_model", ChatModelTurbo35);
             }
 
-            let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .complete-models li a");
+            let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a");
 
             // set active
             let model = GetLocalStorage("config_chat_model");
@@ -142,7 +147,7 @@ window.ready(() => {
     window.OpenaiChatStaticContext = () => {
         let v = window.GetLocalStorage("config_api_static_context");
         if (!v) {
-            v = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question and if possible, reference the context as much as you can."
+            v = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
             window.SetLocalStorage("config_api_static_context", v);
         }
 

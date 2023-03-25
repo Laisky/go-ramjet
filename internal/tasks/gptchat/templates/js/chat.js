@@ -36,6 +36,7 @@ window.ready(() => {
         setupConfig();
         setupSessionManager();
         setupChatInput();
+        setupPromptManager();
     })();
 
 
@@ -370,6 +371,37 @@ window.ready(() => {
                 });
 
                 break;
+            case QAModelBasebit:
+                // {
+                //     "question": "XFS 是干啥的",
+                //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
+                //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
+                // }
+                fetch(`${window.data["qa_url"]}?q=${encodeURIComponent(reqPromp)}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + window.OpenaiToken(),
+                        "X-Authorization-Type": window.OpenaiTokenType(),
+                    }
+                })
+                    .then(async (resp) => {
+                        let data = await resp.json();
+                        if (data && data.text) {
+                            let rawHTMLResp = `${data.text}\n\n📖: <pre>${data.url.replace(/, /g, "\n")}</pre>`
+                            currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                            appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
+                            currentAIRespEle.scrollIntoView({ behavior: "smooth" });
+                        }
+                    })
+                    .catch((err) => {
+                        abortAIResp(err);
+                    })
+                    .finally(() => {
+                        unlockChatInput();
+                    });
+
+                return
         }
 
 
@@ -461,8 +493,10 @@ window.ready(() => {
     }
 
     function abortAIResp(err) {
-        currentAIRespSSE.close();
-        currentAIRespSSE = null;
+        if (currentAIRespSSE) {
+            currentAIRespSSE.close();
+            currentAIRespSSE = null;
+        }
 
         let errMsg;
         try {
@@ -771,5 +805,76 @@ window.ready(() => {
         }
 
         window.EnableTooltipsEverywhere();
+    }
+
+    function loadPromptShortcutsFromStorage() {
+        let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+        if (!shortcuts) {
+            shortcuts = [
+                {
+                    title: "chat",
+                    description: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
+                },
+                {
+                    title: "中英互译",
+                    description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
+                }
+            ];
+            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+        }
+
+        return shortcuts;
+    }
+
+    // append prompt shortcuts to html and localstorage
+    //
+    // @param {Object} shortcut - shortcut object
+    function appendPromptShortcut(shortcut, storage = false) {
+        let promptShortcutContainer = configContainer.querySelector(".prompt-shortcuts");
+
+        // add to local storage
+        if (storage) {
+            let shortcuts = loadPromptShortcutsFromStorage();
+            shortcuts.push(shortcut);
+            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+        }
+
+        // new element
+        let ele = document.createElement("span");
+        ele.classList.add("badge", "text-bg-info");
+        ele.dataset.prompt = shortcut.description;
+        ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`;
+
+        // add delete click event
+        ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            evt.target.parentElement.remove();
+
+            // remove localstorage shortcut
+            let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+            shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
+            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+        });
+
+        // add click event
+        // replace system prompt
+        ele.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            let promptInput = configContainer.querySelector(".input.static-prompt");
+            promptInput.value = evt.target.dataset.prompt;
+        });
+
+        // add to html
+        promptShortcutContainer.appendChild(ele);
+    }
+
+    function setupPromptManager() {
+        // restore shortcuts from localstorage
+        {
+            let shortcuts = loadPromptShortcutsFromStorage();
+            shortcuts.forEach((shortcut) => {
+                appendPromptShortcut(shortcut, false);
+            });
+        }
     }
 });

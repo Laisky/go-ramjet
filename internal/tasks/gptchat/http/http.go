@@ -131,6 +131,7 @@ func Chat(ctx *gin.Context) {
 		"static_libs": map[string]any{
 			"chat_prompts": staticFiles.DataJs.Name,
 		},
+		"qa_url": iconfig.Config.QAUrl,
 	}
 	injectDataPayload, err := gutils.JSON.MarshalToString(injectData)
 	if AbortErr(ctx, err) {

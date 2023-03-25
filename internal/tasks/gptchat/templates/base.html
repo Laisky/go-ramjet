@@ -22,8 +22,17 @@
             padding-top: 1px;
         }
 
+        #hiddenChatConfigSideBar .input-group label[for="configStaticContext"] {
+            width: 100%;
+        }
+
         #hiddenChatConfigSideBar i.bi {
             font-size: small;
+        }
+
+        #hiddenChatConfigSideBar .prompt-shortcuts span.badge {
+            margin-right: 5px;
+            cursor: pointer;
         }
 
     </style>
@@ -45,15 +54,19 @@
                         <ul class="dropdown-menu chat-models">
                             <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
                             <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="#" data-model="text-davinci-003">davinci-003</a></li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                             aria-expanded="false">
-                            Complete
+                            Q&A
                         </a>
-                        <ul class="dropdown-menu chat-models">
-                            <li><a class="dropdown-item" href="#" data-model="text-davinci-003">davinci-003</a></li>
+                        <ul class="dropdown-menu qa-models">
+                            <li><a class="dropdown-item" href="#" data-model="qa-basebit">qa-basebit</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -78,8 +91,8 @@
             <div class="input-group mb-3">
                 <label for="token" class="form-label">token:</label>
                 <div class="input-group mb-3 token-type" style="padding: 0px;">
-                    <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button" data-bs-toggle="dropdown"
-                        aria-expanded="false">proxy</button>
+                    <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">proxy</button>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" data-value="proxy" href="#">proxy</a></li>
                         <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
@@ -88,7 +101,8 @@
                 </div>
             </div>
             <div class="mb-3 input-group contexts">
-                <label for="configChatNContexts" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top" title="Sending how many recent contexts each time, may lead to AI repeating the answer to the recent question.">
+                <label for="configChatNContexts" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="Sending how many recent contexts each time, may lead to AI repeating the answer to the recent question.">
                     contexts <i class="bi bi-info-circle"></i> - <span class="contexts-val"></span>
                 </label>
                 <input type="range" class="form-range input contexts" min="1" max="6" step="1" value="1">
@@ -117,11 +131,19 @@
                 </label>
                 <input type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
             </div>
-            <div class="mb-3">
-                <label for="configStaticContext" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top" title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers.">
-                    static prompt <i class="bi bi-info-circle"></i>:
+            <div class="mb-3 input-group">
+                <label for="configStaticContext" class="form-label">
+                    static prompt <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
+                        title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers."></i>:
+                    <span style="float: right;">
+                        <i class="bi bi-bookmark-star"></i>
+                        <i class="bi bi-search" disabled></i>
+                    </span>
                 </label>
                 <textarea class="form-control input static-prompt" placeholder="something always send to AI"></textarea>
+            </div>
+            <div class="mb-3 prompt-shortcuts">
+
             </div>
             <button class="btn btn-primary submit">Save</button>
             <button class="btn btn-secondary reset">Reset</button>
@@ -132,8 +154,8 @@
     {{end}}
 
     <script>
-        window.Version =  "{{.Version}}";
-        window.data = JSON.parse({{.DataJS}});
+        window.Version = "{{.Version}}";
+        window.data = JSON.parse({{.DataJS }});
     </script>
 
     <script defer src="{{.BootstrapJs}}"></script>
