@@ -783,7 +783,7 @@ window.ready(() => {
         //  config_api_static_context
         {
             let staticConfigInput = configContainer
-                .querySelector(".input.static-prompt");
+                .querySelector(".system-prompt .input");
             staticConfigInput.value = window.OpenaiChatStaticContext();
             staticConfigInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
@@ -817,11 +817,8 @@ window.ready(() => {
     function loadPromptShortcutsFromStorage() {
         let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
         if (!shortcuts) {
+            // default prompts
             shortcuts = [
-                {
-                    title: "chat",
-                    description: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
-                },
                 {
                     title: "中英互译",
                     description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
@@ -836,6 +833,7 @@ window.ready(() => {
     // append prompt shortcuts to html and localstorage
     //
     // @param {Object} shortcut - shortcut object
+    // @param {bool} storage - whether to save to localstorage
     function appendPromptShortcut(shortcut, storage = false) {
         let promptShortcutContainer = configContainer.querySelector(".prompt-shortcuts");
 
@@ -867,7 +865,7 @@ window.ready(() => {
         // replace system prompt
         ele.addEventListener("click", (evt) => {
             evt.stopPropagation();
-            let promptInput = configContainer.querySelector(".input.static-prompt");
+            let promptInput = configContainer.querySelector(".system-prompt .input");
             promptInput.value = evt.target.dataset.prompt;
         });
 
@@ -878,10 +876,76 @@ window.ready(() => {
     function setupPromptManager() {
         // restore shortcuts from localstorage
         {
+            // bind default prompt shortcuts
+            configContainer
+            .querySelector(".prompt-shortcuts .badge")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let promptInput = configContainer.querySelector(".system-prompt .input");
+                promptInput.value = evt.target.dataset.prompt;
+            });
+
             let shortcuts = loadPromptShortcutsFromStorage();
             shortcuts.forEach((shortcut) => {
                 appendPromptShortcut(shortcut, false);
             });
+        }
+
+        // bind star prompt
+        let saveSystemPromptModelEle = document.querySelector("#save-system.modal"),
+            saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
+
+        {
+            configContainer
+                .querySelector(".system-prompt .bi.save-prompt")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    let promptInput = configContainer
+                        .querySelector(".system-prompt .input");
+
+                    saveSystemPromptModelEle
+                        .querySelector(".modal-body textarea.user-input")
+                        .innerHTML = promptInput.value;
+
+                    saveSystemPromptModal.show();
+                });
+        }
+
+        // bind save button in system-prompt modal
+        {
+            saveSystemPromptModelEle
+                .querySelector(".btn.save")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    let titleInput = saveSystemPromptModelEle
+                        .querySelector(".modal-body input.title");
+                    let descriptionInput = saveSystemPromptModelEle
+                        .querySelector(".modal-body textarea.user-input");
+
+                    // trim space
+                    titleInput.value = titleInput.value.trim();
+                    descriptionInput.value = descriptionInput.value.trim();
+
+                    // if title is empty, set input border to red
+                    if (titleInput.value === "") {
+                        titleInput.classList.add("border-danger");
+                        return;
+                    }
+
+                    let shortcut = {
+                        title: titleInput.value,
+                        description: descriptionInput.value
+                    };
+
+                    appendPromptShortcut(shortcut, true);
+
+
+                    // clear input
+                    titleInput.value = "";
+                    descriptionInput.value = "";
+                    titleInput.classList.remove("border-danger");
+                    saveSystemPromptModal.hide();
+                });
         }
     }
 });

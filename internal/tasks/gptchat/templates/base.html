@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="{{.BootstrapIcons}}">
     <link href="{{.PrismCss}}" rel="stylesheet" />
     <style>
-        #hiddenChatConfigSideBar .input.static-prompt {
+        #hiddenChatConfigSideBar .system-prompt .input {
             min-height: 220px;
             font-size: smaller;
         }
@@ -33,6 +33,17 @@
         #hiddenChatConfigSideBar .prompt-shortcuts span.badge {
             margin-right: 5px;
             cursor: pointer;
+            height: 22px;
+        }
+
+        #hiddenChatConfigSideBar .prompt-shortcuts span.badge .bi.bi-trash {
+            margin-left: 5px;
+        }
+
+        #hiddenChatConfigSideBar .system-prompt .bi.save-prompt,
+        #hiddenChatConfigSideBar .system-prompt .bi.open-prompt-market {
+            cursor: pointer;
+            margin-left: 5px;
         }
 
     </style>
@@ -131,24 +142,51 @@
                 </label>
                 <input type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
             </div>
-            <div class="mb-3 input-group">
+            <div class="mb-3 input-group system-prompt">
                 <label for="configStaticContext" class="form-label">
-                    static prompt <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
+                    system prompt <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
                         title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers."></i>:
                     <span style="float: right;">
-                        <i class="bi bi-bookmark-star"></i>
-                        <i class="bi bi-search" disabled></i>
+                        <i class="bi bi-bookmark-star save-prompt">
+                        </i>
+
+                        <i class="bi bi-search open-prompt-market"></i>
                     </span>
                 </label>
-                <textarea class="form-control input static-prompt" placeholder="something always send to AI"></textarea>
+                <textarea class="form-control input" placeholder="something always send to AI"></textarea>
             </div>
             <div class="mb-3 prompt-shortcuts">
-
+                <span class="badge text-bg-info"
+                    data-prompt="The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.">
+                    chat</span>
             </div>
             <button class="btn btn-primary submit">Save</button>
             <button class="btn btn-secondary reset">Reset</button>
         </div>
     </div>
+
+    <div class="modal" tabindex="-1" id="save-system">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Save System Prompt</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 prompt-name">
+                        <label for="promptName" class="form-label">Name:</label>
+                        <input type="text" class="form-control mb-3 title" placeholder="prompt name">
+                        <textarea class="form-control user-input" rows="10"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary save">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     {{block "body" .}}
     {{end}}
