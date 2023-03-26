@@ -152,11 +152,10 @@
                     system prompt <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
                         title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers."></i>:
                     <span style="float: right;">
-                        <i class="bi bi-bookmark-star save-prompt">
-                        </i>
-
-                        <i class="bi bi-search open-prompt-market" data-bs-toggle="modal"
-                            data-bs-target="#prompt-market"></i>
+                        <i class="bi bi-bookmark-star save-prompt" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="save current prompt to shortcuts"></i>
+                        <i class="bi bi-search open-prompt-market" data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="search more open prompts"></i>
                     </span>
                 </label>
                 <textarea class="form-control input" placeholder="something always send to AI"></textarea>
@@ -167,8 +166,8 @@
                     chat</span>
             </div>
             <button class="btn btn-success submit">Save</button>
-            <button class="btn btn-secondary clear-chats">Clear Chats</button>
-            <button class="btn btn-danger reset">Reset</button>
+            <button class="btn btn-secondary clear-chats" data-bs-toggle="tooltip" data-bs-placement="top" title="clear all chats history">Clear Chats</button>
+            <button class="btn btn-danger reset" data-bs-toggle="tooltip" data-bs-placement="top" title="reset all">Reset</button>
         </div>
     </div>
 

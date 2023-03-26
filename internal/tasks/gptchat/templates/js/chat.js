@@ -913,7 +913,6 @@ window.ready(() => {
         // bind star prompt
         let saveSystemPromptModelEle = document.querySelector("#save-system-prompt.modal"),
             saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
-
         {
             configContainer
                 .querySelector(".system-prompt .bi.save-prompt")
@@ -927,6 +926,18 @@ window.ready(() => {
                         .innerHTML = promptInput.value;
 
                     saveSystemPromptModal.show();
+                });
+        }
+
+        // bind prompt market modal
+        {
+            configContainer
+                .querySelector(".system-prompt .bi.open-prompt-market")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    let promptMarketModalEle = document.querySelector("#prompt-market.modal");
+                    let promptMarketModal = new bootstrap.Modal(promptMarketModalEle);
+                    promptMarketModal.show();
                 });
         }
 
