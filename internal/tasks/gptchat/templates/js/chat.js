@@ -93,32 +93,38 @@ window.ready(() => {
         });
     }
 
+    function clearSessionAndChats(evt) {
+        if (evt) {
+            evt.stopPropagation();
+        }
+
+        let allkeys = Object.keys(localStorage);
+        allkeys.forEach((key) => {
+            if (key.startsWith("chat_user_session_")) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
+        chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
+            <div class="list-group" style="border-radius: 0%;">
+                <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
+                    Session 1
+                </button>
+            </div>`;
+        chatContainer
+            .querySelector(".sessionManager .sessions .session")
+            .addEventListener("click", listenSessionSwitch);
+
+        window.SetLocalStorage(storageSessionKey(1), []);
+    }
+
     function setupSessionManager() {
         // bind remove all sessions
         {
             chatContainer
                 .querySelector(".sessionManager .btn.purge")
-                .addEventListener("click", (evt) => {
-                    let allkeys = Object.keys(localStorage);
-                    allkeys.forEach((key) => {
-                        if (key.startsWith("chat_user_session_")) {
-                            localStorage.removeItem(key);
-                        }
-                    });
-
-                    chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
-                    chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
-                    <div class="list-group" style="border-radius: 0%;">
-                        <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-                            Session 1
-                        </button>
-                    </div>`;
-                    chatContainer
-                        .querySelector(".sessionManager .sessions .session")
-                        .addEventListener("click", listenSessionSwitch);
-
-                    window.SetLocalStorage(storageSessionKey(1), []);
-                });
+                .addEventListener("click", clearSessionAndChats);
         }
 
 
@@ -801,6 +807,15 @@ window.ready(() => {
                 })
         }
 
+        // bind clear-chats button
+        {
+            configContainer.querySelector(".btn.clear-chats")
+                .addEventListener("click", (evt) => {
+                    clearSessionAndChats(evt);
+                    location.reload();
+                });
+        }
+
         // bind submit button
         {
             configContainer.querySelector(".btn.submit")
@@ -878,12 +893,12 @@ window.ready(() => {
         {
             // bind default prompt shortcuts
             configContainer
-            .querySelector(".prompt-shortcuts .badge")
-            .addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                let promptInput = configContainer.querySelector(".system-prompt .input");
-                promptInput.value = evt.target.dataset.prompt;
-            });
+                .querySelector(".prompt-shortcuts .badge")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    let promptInput = configContainer.querySelector(".system-prompt .input");
+                    promptInput.value = evt.target.dataset.prompt;
+                });
 
             let shortcuts = loadPromptShortcutsFromStorage();
             shortcuts.forEach((shortcut) => {
