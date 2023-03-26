@@ -92,6 +92,7 @@ func RegisterStatic(g gin.IRouter) {
 	for _, sf := range []*staticFile{
 		staticFiles.LibJs,
 		staticFiles.SiteJs,
+		staticFiles.DataJs,
 	} {
 		sf := sf
 		g.GET(fmt.Sprintf("/%s", sf.Name), func(ctx *gin.Context) {
@@ -139,16 +140,16 @@ func Chat(ctx *gin.Context) {
 	}
 
 	tplArg := struct {
-		DataJS string
+		DataJSON string
 		BootstrapJs, BootstrapCss,
 		SeeJs, ShowdownJs, BootstrapIcons,
 		PrismJs, PrismCss,
 		FuseJs string
-		LibJs, SiteJs string
-		Version       string
-		GaCode        string
+		LibJs, SiteJs, DataJs string
+		Version               string
+		GaCode                string
 	}{
-		DataJS:         injectDataPayload,
+		DataJSON:       injectDataPayload,
 		BootstrapJs:    iconfig.Config.StaticLibs["bootstrap_js"],
 		BootstrapCss:   iconfig.Config.StaticLibs["bootstrap_css"],
 		BootstrapIcons: iconfig.Config.StaticLibs["bootstrap_icons"],
@@ -157,6 +158,7 @@ func Chat(ctx *gin.Context) {
 		PrismJs:        iconfig.Config.StaticLibs["prism_js"],
 		PrismCss:       iconfig.Config.StaticLibs["prism_css"],
 		FuseJs:         iconfig.Config.StaticLibs["fuse_js"],
+		DataJs:         staticFiles.DataJs.Name,
 		LibJs:          staticFiles.LibJs.Name,
 		SiteJs:         staticFiles.SiteJs.Name,
 		Version:        ts,

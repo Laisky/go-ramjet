@@ -16,6 +16,7 @@ window.ready(() => {
     (function main() {
         checkVersion();
         setupHeader();
+        setupDeleteCheckModal();
     })();
 
 
@@ -26,6 +27,22 @@ window.ready(() => {
             SetLocalStorage("last_reload_at", (new Date()).toISOString());
             window.location.reload();
         }
+    }
+
+    function setupDeleteCheckModal() {
+        window.deleteCheckCallback = null;
+        window.deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
+        document.getElementById("deleteCheckModal")
+            .querySelector(".modal-body .yes")
+            .addEventListener("click", (e) => {
+                e.preventDefault();
+
+                if (window.deleteCheckCallback) {
+                    window.deleteCheckCallback();
+                }
+
+                window.deleteCheckModal.hide();
+            });
     }
 
     function setupHeader() {

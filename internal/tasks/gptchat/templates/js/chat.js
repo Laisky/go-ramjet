@@ -868,12 +868,16 @@ window.ready(() => {
         // add delete click event
         ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
             evt.stopPropagation();
-            evt.target.parentElement.remove();
 
-            // remove localstorage shortcut
-            let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
-            shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
-            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+            window.deleteCheckCallback = () => {
+                evt.target.parentElement.remove();
+
+                // remove localstorage shortcut
+                let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+                shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
+                window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+            }
+            window.deleteCheckModal.show();
         });
 
         // add click event
@@ -907,7 +911,7 @@ window.ready(() => {
         }
 
         // bind star prompt
-        let saveSystemPromptModelEle = document.querySelector("#save-system.modal"),
+        let saveSystemPromptModelEle = document.querySelector("#save-system-prompt.modal"),
             saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
 
         {
@@ -960,6 +964,63 @@ window.ready(() => {
                     descriptionInput.value = "";
                     titleInput.classList.remove("border-danger");
                     saveSystemPromptModal.hide();
+                });
+        }
+
+        // fill chat prompts market
+        let promptMarketModal = document.querySelector("#prompt-market"),
+            promptInput = promptMarketModal.querySelector("textarea.prompt-content"),
+            promptTitle = promptMarketModal.querySelector("input.prompt-title");
+        {
+            window.chatPrompts.forEach((prompt) => {
+                let ele = document.createElement("span");
+                ele.classList.add("badge", "text-bg-info");
+                ele.dataset.description = prompt.description;
+                ele.dataset.title = prompt.title;
+                ele.innerHTML = ` ${prompt.title}  <i class="bi bi-plus-circle"></i>`;
+
+                // add click event
+                // replace system prompt
+                ele.addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+
+                    promptInput.value = evt.target.dataset.description;
+                    promptTitle.value = evt.target.dataset.title;
+                });
+
+                promptMarketModal.querySelector(".prompt-labels").appendChild(ele);
+            });
+        }
+
+        // bind chat prompts market add button
+        {
+            promptMarketModal.querySelector(".modal-body .save")
+                .addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+
+                    // trim and check empty
+                    promptTitle.value = promptTitle.value.trim();
+                    promptInput.value = promptInput.value.trim();
+                    if (promptTitle.value === "") {
+                        promptTitle.classList.add("border-danger");
+                        return;
+                    }
+                    if (promptInput.value === "") {
+                        promptInput.classList.add("border-danger");
+                        return;
+                    }
+
+                    let shortcut = {
+                        title: promptTitle.value,
+                        description: promptInput.value
+                    };
+
+                    appendPromptShortcut(shortcut, true);
+
+                    promptTitle.value = "";
+                    promptInput.value = "";
+                    promptTitle.classList.remove("border-danger");
+                    promptInput.classList.remove("border-danger");
                 });
         }
     }
