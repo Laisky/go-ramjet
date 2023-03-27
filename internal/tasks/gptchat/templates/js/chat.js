@@ -885,6 +885,7 @@ window.ready(() => {
         ele.addEventListener("click", (evt) => {
             evt.stopPropagation();
             let promptInput = configContainer.querySelector(".system-prompt .input");
+            window.SetLocalStorage("config_api_static_context", evt.target.dataset.prompt);
             promptInput.value = evt.target.dataset.prompt;
         });
 
