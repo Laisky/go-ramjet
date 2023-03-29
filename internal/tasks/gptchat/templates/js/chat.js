@@ -378,19 +378,26 @@ window.ready(() => {
 
                 break;
             case QAModelBasebit:
+            case QAModelSecurity:
                 // {
                 //     "question": "XFS 是干啥的",
                 //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
                 //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
                 // }
-                let url;
+                let url, project;
                 window.data['qa_chat_models'].forEach((item) => {
                     if (item['name'] == chatmodel) {
                         url = item['url'];
+                        project = item['project'];
                     }
                 });
 
-                fetch(`${url}?q=${encodeURIComponent(reqPromp)}`, {
+                if (!project) {
+                    console.error("can't find project name for chat model: " + chatmodel);
+                    return;
+                }
+
+                fetch(`${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
@@ -417,6 +424,9 @@ window.ready(() => {
                 return
         }
 
+        if (!currentAIRespSSE) {
+            return;
+        }
 
         let rawHTMLResp = "";
         currentAIRespSSE.addEventListener("message", (evt) => {

@@ -4,7 +4,6 @@ FROM golang:1.20.2-bullseye AS gobuild
 RUN apt-get update \
     && apt-get install -y --no-install-recommends g++ make gcc git \
     build-essential ca-certificates curl \
-    libmagic-dev poppler-utils tesseract-ocr libreoffice \
     && update-ca-certificates
 
 ENV GO111MODULE=on

@@ -5,7 +5,8 @@ const OpenaiTokenTypeProxy = "proxy",
 
 const ChatModelTurbo35 = "gpt-3.5-turbo",
     ChatModelGPT4 = "gpt-4",
-    QAModelBasebit = "qa-basebit",
+    QAModelBasebit = "qa-bbt-xego",
+    QAModelSecurity = "qa-security",
     CompletionModelDavinci3 = "text-davinci-003";
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts";

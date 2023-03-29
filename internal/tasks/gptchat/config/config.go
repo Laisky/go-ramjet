@@ -26,8 +26,9 @@ type OpenAI struct {
 }
 
 type qaChatModel struct {
-	Name string `json:"name" mapstructure:"name"`
-	URL  string `json:"url" mapstructure:"url"`
+	Name    string `json:"name" mapstructure:"name"`
+	URL     string `json:"url" mapstructure:"url"`
+	Project string `json:"project" mapstructure:"project"`
 }
 
 type proxyTokens struct {
