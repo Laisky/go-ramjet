@@ -9,9 +9,10 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     QAModelSecurity = "qa-security",
     CompletionModelDavinci3 = "text-davinci-003";
 
-const StorageKeyPromptShortCuts = "config_prompt_shortcuts";
+const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
+    StorageKeySystemPrompt = "config_api_static_context";
 
-window.ready(() => {
+(function () {
     let headerBar = document.getElementById("headerbar");
 
     (function main() {
@@ -183,12 +184,12 @@ window.ready(() => {
     };
 
     window.OpenaiChatStaticContext = () => {
-        let v = window.GetLocalStorage("config_api_static_context");
+        let v = window.GetLocalStorage(StorageKeySystemPrompt);
         if (!v) {
             v = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
-            window.SetLocalStorage("config_api_static_context", v);
+            window.SetLocalStorage(StorageKeySystemPrompt, v);
         }
 
         return v;
     };
-});
+})();

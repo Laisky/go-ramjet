@@ -256,10 +256,10 @@ window.ready(() => {
         });
 
         messages = messages.slice(-N);
-        if (GetLocalStorage("config_api_static_context")) {
+        if (GetLocalStorage(StorageKeySystemPrompt)) {
             messages = [{
                 role: RoleSystem,
-                content: GetLocalStorage("config_api_static_context")
+                content: GetLocalStorage(StorageKeySystemPrompt)
             }].concat(messages);
         }
 
@@ -397,6 +397,7 @@ window.ready(() => {
                     return;
                 }
 
+                currentAIRespEle.scrollIntoView({ behavior: "smooth" });
                 fetch(`${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`, {
                     method: "GET",
                     headers: {
@@ -411,7 +412,6 @@ window.ready(() => {
                             let rawHTMLResp = `${data.text}\n\n📖: \n\n${data.url.replace(/, /g, "\n")}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
-                            currentAIRespEle.scrollIntoView({ behavior: "smooth" });
                         }
                     })
                     .catch((err) => {
@@ -803,7 +803,7 @@ window.ready(() => {
             staticConfigInput.value = window.OpenaiChatStaticContext();
             staticConfigInput.addEventListener("input", (evt) => {
                 evt.stopPropagation();
-                window.SetLocalStorage("config_api_static_context", evt.target.value);
+                window.SetLocalStorage(StorageKeySystemPrompt, evt.target.value);
             })
         }
 
@@ -895,8 +895,8 @@ window.ready(() => {
         ele.addEventListener("click", (evt) => {
             evt.stopPropagation();
             let promptInput = configContainer.querySelector(".system-prompt .input");
-            window.SetLocalStorage("config_api_static_context", evt.target.dataset.prompt);
-            promptInput.value = evt.target.dataset.prompt;
+            window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
+            promptInput.value = evt.currentTarget.dataset.prompt;
         });
 
         // add to html
@@ -913,6 +913,7 @@ window.ready(() => {
                     evt.stopPropagation();
                     let promptInput = configContainer.querySelector(".system-prompt .input");
                     promptInput.value = evt.target.dataset.prompt;
+                    window.SetLocalStorage(StorageKeySystemPrompt, evt.target.dataset.prompt);
                 });
 
             let shortcuts = loadPromptShortcutsFromStorage();
@@ -1006,8 +1007,8 @@ window.ready(() => {
                 ele.addEventListener("click", (evt) => {
                     evt.stopPropagation();
 
-                    promptInput.value = evt.target.dataset.description;
-                    promptTitle.value = evt.target.dataset.title;
+                    promptInput.value = evt.currentTarget.dataset.description;
+                    promptTitle.value = evt.currentTarget.dataset.title;
                 });
 
                 promptMarketModal.querySelector(".prompt-labels").appendChild(ele);
