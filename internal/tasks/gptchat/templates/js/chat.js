@@ -408,7 +408,7 @@ window.ready(() => {
                     .then(async (resp) => {
                         let data = await resp.json();
                         if (data && data.text) {
-                            let rawHTMLResp = `${data.text}\n\n📖: <pre>${data.url.replace(/, /g, "\n")}</pre>`
+                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${data.url.replace(/, /g, "\n")}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
                             currentAIRespEle.scrollIntoView({ behavior: "smooth" });
