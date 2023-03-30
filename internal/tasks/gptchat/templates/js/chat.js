@@ -409,7 +409,7 @@ window.ready(() => {
                     .then(async (resp) => {
                         let data = await resp.json();
                         if (data && data.text) {
-                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${data.url.replace(/, /g, "\n")}`
+                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${wrapLines(data.url.replace(/, /g, "\n"))}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
                         }
@@ -501,6 +501,17 @@ window.ready(() => {
         };
         currentAIRespSSE.stream();
     }
+
+    function wrapLines(input) {
+        const lines = input.split('\n');
+        let result = '';
+        for (let i = 0; i < lines.length; i++) {
+            result += `* <${lines[i]}>\n`;
+        }
+        return result;
+    }
+
+
 
     function replaceChatInStorage(role, chatID, content) {
         let storageKey = storageSessionKey(activeSessionID()),
