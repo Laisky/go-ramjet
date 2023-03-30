@@ -409,7 +409,7 @@ window.ready(() => {
                     .then(async (resp) => {
                         let data = await resp.json();
                         if (data && data.text) {
-                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${wrapLines(data.url.replace(/, /g, "\n"))}`
+                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${wrapRefLines(data.url.replace(/, /g, "\n"))}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
                         }
@@ -502,10 +502,16 @@ window.ready(() => {
         currentAIRespSSE.stream();
     }
 
-    function wrapLines(input) {
+    // parse langchain qa references to markdown links
+    function wrapRefLines(input) {
         const lines = input.split('\n');
         let result = '';
         for (let i = 0; i < lines.length; i++) {
+            // skip empty lines
+            if (lines[i].trim() == '') {
+                continue;
+            }
+
             result += `* <${lines[i]}>\n`;
         }
         return result;
