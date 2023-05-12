@@ -8,8 +8,8 @@ import (
 
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/Laisky/testify/require"
+	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/Laisky/go-ramjet/library/config"
 )
@@ -45,6 +45,7 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 }
 
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
+	ctx := context.Background()
 	config.LoadTest()
 	d, err := NewDao(context.Background(),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.addr"),
@@ -54,10 +55,11 @@ func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	iter := d.GetTweetsIter(bson.M{})
-	defer iter.Close()
+	iter, err := d.GetTweetsIter(ctx, bson.M{})
+	require.NoError(t, err)
+	defer iter.Close(ctx)
 
 	docu := new(Tweet)
-	require.True(t, iter.Next(docu))
+	require.True(t, iter.Next(ctx))
 	require.True(t, len(docu.Text) > 0)
 }

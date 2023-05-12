@@ -1,7 +1,11 @@
 package twitter
 
 import (
+	"context"
 	"testing"
+
+	"github.com/Laisky/testify/require"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/blog"
 )
@@ -11,24 +15,22 @@ var (
 )
 
 func TestMongo(t *testing.T) {
-	var (
-		err error
-		cnt string
-	)
-	cnt, err = b.LoadAllPostsCnt()
-	if err != nil {
-		t.Errorf("%+v", err)
-	}
+	ctx := context.Background()
+	cnt, err := b.LoadAllPostsCnt(ctx)
+	require.NoError(t, err)
+
 	if len(cnt) < 1000 {
 		t.Error("can not load content")
 	}
 }
 
 func TestIter(t *testing.T) {
-	err := b.UpdatePostTagsByID("4db1fed00000000000000000", []string{"1", "2"})
-	if err != nil {
-		t.Errorf("got error: %+v", err)
-	}
+	ctx := context.Background()
+	bid, err := primitive.ObjectIDFromHex("4db1fed00000000000000000")
+	require.NoError(t, err)
+
+	err = b.UpdatePostTagsByID(ctx, bid, []string{"1", "2"})
+	require.NoError(t, err)
 }
 
 // func init() {

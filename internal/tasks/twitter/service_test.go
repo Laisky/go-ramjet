@@ -4,7 +4,7 @@ package twitter
 // 	"context"
 // 	"testing"
 
-// 	"github.com/stretchr/testify/require"
+// 	"github.com/Laisky/testify/require"
 
 // 	"github.com/Laisky/go-ramjet/library/config"
 // )

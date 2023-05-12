@@ -13,6 +13,8 @@ import (
 func bindHTTP() {
 	web.Server.GET("/es/password", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK,
-			GeneratePasswdByDate(utils.Clock.GetUTCNow(), gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret")))
+			GeneratePasswdByDate(
+				utils.Clock.GetUTCNow(),
+				gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret")))
 	})
 }

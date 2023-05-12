@@ -1,16 +1,39 @@
 package blog
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"strings"
+
+	"github.com/Laisky/errors/v2"
+	utils "github.com/Laisky/go-utils/v4"
+	glog "github.com/Laisky/go-utils/v4/log"
+	"github.com/Laisky/zap"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	s3lib "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/gorilla/feeds"
 
 	"github.com/Laisky/go-ramjet/library/log"
-
-	gconfig "github.com/Laisky/go-config/v2"
-	utils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/zap"
-	"github.com/gorilla/feeds"
+	"github.com/Laisky/go-ramjet/library/s3"
 )
+
+// RssWorker rss worker
+type RssWorker struct {
+	logger glog.Logger
+	feed   *feeds.Feed
+	db     *Blog
+}
+
+// NewRssWorker create rss worker
+func NewRssWorker(blogdb *Blog) (*RssWorker, error) {
+	w := &RssWorker{
+		logger: log.Logger.Named("rss"),
+		db:     blogdb,
+	}
+
+	return w, nil
+}
 
 type rssCfg struct {
 	title,
@@ -19,11 +42,16 @@ type rssCfg struct {
 	authorEmail string
 }
 
-func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
-	log.Logger.Info("generateRSSFile")
-	iter := blogdb.GetPostIter()
-	p := &Post{}
-	feed := &feeds.Feed{
+// GenerateRSS scan all posts and generate rss
+func (w *RssWorker) GenerateRSS(ctx context.Context, rsscfg *rssCfg) (err error) {
+	log.Logger.Info("generateRSS")
+	iter, err := w.db.GetPostIter(ctx)
+	if err != nil {
+		return errors.Wrap(err, "get post iter")
+	}
+	defer iter.Close(ctx) // nolint: errcheck
+
+	w.feed = &feeds.Feed{
 		Title: rsscfg.title,
 		Link:  &feeds.Link{Href: rsscfg.link},
 		Author: &feeds.Author{
@@ -32,10 +60,15 @@ func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
 		},
 		Created: utils.Clock.GetUTCNow(),
 	}
-	feed.Items = []*feeds.Item{}
-	n := 0
-	for iter.Next(p) {
-		feed.Items = append(feed.Items, &feeds.Item{
+	w.feed.Items = []*feeds.Item{}
+
+	for iter.Next(ctx) {
+		p := &Post{}
+		if err = iter.Decode(p); err != nil {
+			return errors.Wrap(err, "decode post")
+		}
+
+		w.feed.Items = append(w.feed.Items, &feeds.Item{
 			Title:   p.Title,
 			Link:    &feeds.Link{Href: rsscfg.link + "p/" + p.Name + "/"},
 			Id:      rsscfg.link + "p/" + p.Name + "/",
@@ -45,32 +78,66 @@ func generateRSSFile(rsscfg *rssCfg, fpath string, blogdb *Blog) {
 			},
 			Created: p.CreatedAt,
 		})
-		n++
+	}
 
-		if gconfig.Shared.GetBool("debug") && n > 5 {
-			break
-		}
-	}
-	rss, err := feed.ToRss()
+	return nil
+}
+
+// Write2File write rss to file
+func (w *RssWorker) Write2File(fpath string) (err error) {
+	logger := w.logger.Named("file")
+	logger.Info("run Write2File", zap.String("fpath", fpath))
+
+	fp, err := os.CreateTemp("", "*")
 	if err != nil {
-		log.Logger.Error("generate rss", zap.Error(err))
-		return
+		return errors.Wrap(err, "create temp file")
 	}
-	fp, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE, 0664)
+
+	if err = w.feed.WriteRss(fp); err != nil {
+		return errors.Wrap(err, "write rss")
+	}
+
+	if err = fp.Close(); err != nil {
+		return errors.Wrap(err, "close file")
+	}
+
+	if err = os.Rename(fp.Name(), fpath); err != nil {
+		return errors.Wrap(err, "rename file")
+	}
+
+	logger.Info("write rss to file", zap.String("fpath", fpath))
+	return nil
+}
+
+// Write2S3 write rss to s3
+func (w *RssWorker) Write2S3(ctx context.Context,
+	endpoint,
+	accessKey,
+	accessSecret,
+	bucket,
+	objKey string,
+) error {
+	logger := w.logger.Named("s3")
+	logger.Info("run Write2File", zap.String("s3", endpoint))
+
+	s3cli, err := s3.NewClient(ctx, endpoint, accessKey, accessSecret)
 	if err != nil {
-		log.Logger.Error("open file", zap.String("fpath", fpath), zap.Error(err))
-		return
+		return errors.Wrap(err, "new s3 client")
 	}
-	if err = fp.Truncate(0); err != nil {
-		log.Logger.Error("truncate file", zap.Error(err))
-		return
+
+	payload, err := w.feed.ToRss()
+	if err != nil {
+		return errors.Wrap(err, "to rss")
 	}
-	if _, err = fp.Seek(0, 0); err != nil {
-		log.Logger.Error("seek file", zap.Error(err))
-		return
+
+	if _, err = s3cli.PutObject(ctx, &s3lib.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(objKey),
+		Body:   strings.NewReader(payload),
+	}); err != nil {
+		return errors.Wrapf(err, "put object %v", objKey)
 	}
-	if _, err = fp.WriteString(rss); err != nil {
-		log.Logger.Error("write rss to file", zap.String("fpath", fpath), zap.Error(err))
-	}
-	log.Logger.Info("generated rss", zap.Int("n_posts", n))
+
+	logger.Info("write rss to s3", zap.String("s3", endpoint))
+	return nil
 }

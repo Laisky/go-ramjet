@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	gmw "github.com/Laisky/gin-middlewares/v5"
-	// gconfig "github.com/Laisky/go-config/v2"
 	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -22,7 +21,7 @@ func init() {
 		gin.Recovery(),
 		gmw.NewLoggerMiddleware(
 			gmw.WithLoggerMwColored(),
-			gmw.WithLevel(glog.LevelInfo),
+			gmw.WithLevel(glog.LevelInfo.String()),
 			gmw.WithLogger(log.Logger),
 		),
 	)

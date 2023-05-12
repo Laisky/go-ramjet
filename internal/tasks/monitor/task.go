@@ -1,3 +1,4 @@
+// Package monitor implements monitor task.
 package monitor
 
 import (
@@ -101,7 +102,7 @@ func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
 		result.Store(name, errors.Wrap(err, "try to request url got error"))
 		return
 	}
-	defer gutils.SilentClose(resp.Body)
+	defer resp.Body.Close() // nolint: errcheck,gosec
 
 	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Warn("request url return error",

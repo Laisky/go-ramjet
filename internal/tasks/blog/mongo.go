@@ -7,22 +7,20 @@ import (
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	mongoLib "go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-const (
-	defaultTimeout = 30 * time.Second
-)
-
 type Post struct {
-	ID        bson.ObjectId `bson:"_id"`
-	Cnt       string        `bson:"post_content"`
-	Title     string        `bson:"post_title"`
-	Name      string        `bson:"post_name"`
-	CreatedAt time.Time     `bson:"post_created_at"`
+	ID        primitive.ObjectID `bson:"_id"`
+	Cnt       string             `bson:"post_content"`
+	Title     string             `bson:"post_title"`
+	Name      string             `bson:"post_name"`
+	CreatedAt time.Time          `bson:"post_created_at"`
 }
 
 type Blog struct {
@@ -34,6 +32,7 @@ type Blog struct {
 
 func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywordColName string) (b *Blog, err error) {
 	log.Logger.Info("connect to db",
+		zap.String("user", user),
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
 		zap.String("postColName", postColName),
@@ -44,12 +43,12 @@ func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywor
 		postColName:    postColName,
 		keywordColName: keywordColName,
 	}
-	b.db, err = mongo.NewDB(ctx,
-		addr,
-		dbName,
-		user,
-		pwd,
-	)
+	b.db, err = mongo.NewDB(ctx, mongo.DialInfo{
+		Addr:   addr,
+		DBName: dbName,
+		User:   user,
+		Pwd:    pwd,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -57,35 +56,45 @@ func NewBlogDB(ctx context.Context, addr, dbName, user, pwd, postColName, keywor
 	return b, nil
 }
 
-func (b *Blog) postCol() *mgo.Collection {
-	return b.db.DB(b.dbName).C(b.postColName)
+func (b *Blog) postCol() *mongoLib.Collection {
+	return b.db.DB(b.dbName).Collection(b.postColName)
 }
 
-func (b *Blog) keywordCol() *mgo.Collection {
-	return b.db.DB(b.dbName).C(b.keywordColName)
+func (b *Blog) keywordCol() *mongoLib.Collection {
+	return b.db.DB(b.dbName).Collection(b.keywordColName)
 }
 
-func (b *Blog) LoadAllPostsCnt() (cnt string, err error) {
-	p := &Post{}
+func (b *Blog) LoadAllPostsCnt(ctx context.Context) (cnt string, err error) {
 	cnt = ""
-	iter := b.GetPostIter()
-	for iter.Next(p) {
+	iter, err := b.GetPostIter(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "try to load all posts content got error")
+	}
+	defer iter.Close(ctx) // nolint: errcheck
+
+	for iter.Next(ctx) {
+		p := &Post{}
+		if err = iter.Decode(p); err != nil {
+			return "", errors.Wrap(err, "try to load all posts content got error")
+		}
+
 		cnt += p.Cnt
 	}
 
-	if err = iter.Close(); err != nil {
-		return "", errors.Wrap(err, "try to load all posts content got error")
-	}
 	return cnt, nil
 }
 
-func (b *Blog) GetPostIter() *mgo.Iter {
-	return b.postCol().Find(nil).Iter()
+func (b *Blog) GetPostIter(ctx context.Context) (*mongoLib.Cursor, error) {
+	return b.postCol().Find(ctx,
+		bson.D{},
+		options.Find().
+			SetSort(bson.M{"_id": -1}),
+	)
 }
 
-func (b *Blog) UpdatePostTagsByID(bid string, tags []string) (err error) {
-	err = b.postCol().UpdateId(
-		bson.ObjectIdHex(bid),
+func (b *Blog) UpdatePostTagsByID(ctx context.Context, bid primitive.ObjectID, tags []string) (err error) {
+	_, err = b.postCol().UpdateByID(ctx,
+		bid,
 		bson.M{"$set": bson.M{"post_tags": tags}},
 	)
 	if err != nil {
@@ -94,6 +103,6 @@ func (b *Blog) UpdatePostTagsByID(bid string, tags []string) (err error) {
 	return nil
 }
 
-func (b *Blog) Close() {
-	b.db.Close()
+func (b *Blog) Close(ctx context.Context) {
+	b.db.Close(ctx) // nolint: errcheck
 }

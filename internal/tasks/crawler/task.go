@@ -23,10 +23,13 @@ func fetchAllDocus() {
 	}
 	defer muCrawler.ForceRelease()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	log.Logger.Info("running web crawler")
 	defer log.Logger.Info("web crawler done")
 
-	if err := svc.CrawlAllPages(
+	if err := svc.CrawlAllPages(ctx,
 		gconfig.Shared.GetStringSlice("tasks.crawler.sitemaps"),
 	); err != nil {
 		log.Logger.Error("crawl all pages", zap.Error(err))

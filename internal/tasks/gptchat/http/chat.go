@@ -42,7 +42,7 @@ func APIHandler(ctx *gin.Context) {
 	if AbortErr(ctx, err) {
 		return
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // nolint: errcheck
 
 	// ctx.Header("Content-Type", "text/event-stream")
 	// ctx.Header("Cache-Control", "no-cache")
@@ -80,6 +80,7 @@ func APIHandler(ctx *gin.Context) {
 
 		resp := new(OpenaiCOmpletionStreamResp)
 		if err = gutils.JSON.Unmarshal(chunk, resp); err != nil {
+			//nolint: lll
 			// TODO completion's stream response is not support
 			//
 			// 2023-03-16T08:02:37Z	DEBUG	go-ramjet.chat	http/chat.go:68	got response line	{"line": "\ndata: {\"id\": \"cmpl-6ucrBZjC3aU8Nu4izkaSywzdVb8h1\", \"object\": \"text_completion\", \"created\": 1678953753, \"choices\": [{\"text\": \"\\n\", \"index\": 0, \"logprobs\": null, \"finish_reason\": null}], \"model\": \"text-davinci-003\"}"}

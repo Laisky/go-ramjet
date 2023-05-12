@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/Laisky/testify/require"
 )
 
 func Test_parseGitFileReq(t *testing.T) {

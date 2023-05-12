@@ -46,12 +46,12 @@ func NewService(ctx context.Context, addr, dbName, user, pwd, docusColName strin
 // 	return s.dao.RemoveLegacy(time.Now().Add(10 * time.Minute))
 // }
 
-func (s *Service) Search(text string) (rets []SearchResult, err error) {
+func (s *Service) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
 	if data, ok := s.searchCache.Load(text); ok {
 		return data, nil
 	}
 
-	rets, err = s.dao.Search(text)
+	rets, err = s.dao.Search(ctx, text)
 	if err != nil {
 		return nil, errors.Wrapf(err, "search %s", text)
 	}
@@ -60,7 +60,7 @@ func (s *Service) Search(text string) (rets []SearchResult, err error) {
 	return rets, nil
 }
 
-func (s *Service) CrawlAllPages(sitemaps []string) error {
+func (s *Service) CrawlAllPages(ctx context.Context, sitemaps []string) error {
 	startAt := gutils.Clock.GetUTCNow()
 	for _, u := range loadAllURLs(sitemaps) {
 		log.Logger.Debug("crawl", zap.String("url", u))
@@ -72,12 +72,12 @@ func (s *Service) CrawlAllPages(sitemaps []string) error {
 
 		text := extractAllText(raw)
 		title := extractTitle(raw)
-		if err := s.dao.Save(title, text, u); err != nil {
+		if err := s.dao.Save(ctx, title, text, u); err != nil {
 			return errors.Wrapf(err, "save text `%s`", u)
 		}
 	}
 
-	if err := s.dao.RemoveLegacy(startAt); err != nil {
+	if err := s.dao.RemoveLegacy(ctx, startAt); err != nil {
 		return errors.Wrapf(err, "remove legacy before %s", startAt.Format(time.RFC3339))
 	}
 

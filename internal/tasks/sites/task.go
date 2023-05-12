@@ -1,3 +1,4 @@
+// Package sites implements sites tasks.
 package sites
 
 import (
@@ -27,7 +28,10 @@ func LoadCertExpiresAt(addr string) (t time.Time, err error) {
 }
 
 func checkIsTimeTooCloseToAlert(now, expiresAt time.Time, d time.Duration) (isAlert bool) {
-	log.Logger.Debug("checkIsTimeTooCloseToAlert", zap.Time("now", now), zap.Time("expiresAt", expiresAt), zap.Duration("duration", d))
+	log.Logger.Debug("checkIsTimeTooCloseToAlert",
+		zap.Time("now", now),
+		zap.Time("expiresAt", expiresAt),
+		zap.Duration("duration", d))
 	return expiresAt.Sub(now) < d
 }
 
@@ -70,7 +74,10 @@ func runTask() {
 func bindTask() {
 	log.Logger.Info("bind ssl-monitor task...")
 
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.sites.sslMonitor.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(
+		gconfig.Shared.GetDuration(
+			"tasks.sites.sslMonitor.interval")*time.Second,
+		runTask)
 }
 
 func init() {

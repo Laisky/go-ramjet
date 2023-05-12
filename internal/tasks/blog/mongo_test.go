@@ -1,7 +1,11 @@
 package blog_test
 
 import (
+	"context"
 	"testing"
+
+	"github.com/Laisky/testify/require"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/blog"
 )
@@ -15,7 +19,8 @@ func TestMongo(t *testing.T) {
 		err error
 		cnt string
 	)
-	cnt, err = b.LoadAllPostsCnt()
+
+	cnt, err = b.LoadAllPostsCnt(context.Background())
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
@@ -25,10 +30,12 @@ func TestMongo(t *testing.T) {
 }
 
 func TestIter(t *testing.T) {
-	err := b.UpdatePostTagsByID("4db1fed00000000000000000", []string{"1", "2"})
-	if err != nil {
-		t.Errorf("got error: %+v", err)
-	}
+	ctx := context.Background()
+	oid, err := primitive.ObjectIDFromHex("4db1fed00000000000000000")
+	require.NoError(t, err)
+
+	err = b.UpdatePostTagsByID(ctx, oid, []string{"1", "2"})
+	require.NoError(t, err)
 }
 
 // func init() {

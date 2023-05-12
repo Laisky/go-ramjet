@@ -1,3 +1,4 @@
+// Package gitlab implements gitlab api server.
 package gitlab
 
 import (

@@ -7,8 +7,9 @@ import (
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	mongoLib "go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 
 	"github.com/Laisky/go-ramjet/library/db/clickhouse"
@@ -31,7 +32,12 @@ func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err er
 		tweetsColName: "tweets",
 	}
 	d.db, err = mongo.NewDB(ctx,
-		addr, dbName, user, pwd,
+		mongo.DialInfo{
+			Addr:   addr,
+			DBName: dbName,
+			User:   user,
+			Pwd:    pwd,
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -40,35 +46,28 @@ func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err er
 	return d, nil
 }
 
-func (db *Dao) tweetsCol() *mgo.Collection {
-	return db.db.DB(db.dbName).C(db.tweetsColName)
+func (db *Dao) tweetsCol() *mongoLib.Collection {
+	return db.db.DB(db.dbName).Collection(db.tweetsColName)
 }
 
-func (d *Dao) GetTweetsIter(cond bson.M) *mgo.Iter {
+func (d *Dao) GetTweetsIter(ctx context.Context, cond bson.M) (*mongoLib.Cursor, error) {
 	log.Logger.Debug("load tweets", zap.Any("condition", cond))
-	return d.tweetsCol().Find(cond).Sort("created_at").Iter()
+	return d.tweetsCol().Find(ctx, cond, options.Find().SetSort(bson.M{"created_at": -1}))
 }
 
-func (d *Dao) GetLargestID() (largestID bson.ObjectId, err error) {
+func (d *Dao) GetLargestID(ctx context.Context) (*Tweet, error) {
 	tweet := new(Tweet)
-	if err = d.tweetsCol().Find(bson.M{}).
-		Select(bson.M{"_id": 1}).
-		Sort("-id").
-		Limit(1).
-		One(tweet); err != nil {
-		return "", errors.Wrapf(err, "load largest id")
+	err := d.tweetsCol().FindOne(ctx, bson.M{}, options.FindOne().SetSort(bson.M{"id": -1})).Decode(tweet)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to load tweet with largest id")
 	}
-
-	if tweet.MongoID == nil {
-		return "", errors.New("no id found")
-	}
-
-	return *tweet.MongoID, nil
+	return tweet, nil
 }
 
-func (d *Dao) Upsert(cond, docu bson.M) (*mgo.ChangeInfo, error) {
+func (d *Dao) Upsert(ctx context.Context, cond, docu bson.M) (*mongoLib.UpdateResult, error) {
 	log.Logger.Info("upsert tweet", zap.Any("condition", cond))
-	return d.tweetsCol().Upsert(cond, docu)
+	opt := options.Update().SetUpsert(true)
+	return d.tweetsCol().UpdateOne(ctx, cond, docu, opt)
 }
 
 type SearchDao struct {

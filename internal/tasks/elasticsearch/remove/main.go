@@ -100,7 +100,9 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	defer sem.Release(1)
 
 	dateBefore := getDateStringSecondsAgo(task.Expire)
-	log.Logger.Info("removeDocumentsByTaskSetting", zap.String("task", task.Index), zap.String("dateBefore", dateBefore))
+	log.Logger.Info("removeDocumentsByTaskSetting",
+		zap.String("task", task.Index),
+		zap.String("dateBefore", dateBefore))
 	requestBody := Query{
 		Range: &Range{
 			Range: map[string]interface{}{"@timestamp": map[string]string{
@@ -144,7 +146,10 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 		}
 	}
 
-	log.Logger.Info("deleted documents", zap.String("index", task.Index), zap.Int("deleted", resp.Deleted), zap.Int("total", resp.Total))
+	log.Logger.Info("deleted documents",
+		zap.String("index", task.Index),
+		zap.Int("deleted", resp.Deleted),
+		zap.Int("total", resp.Total))
 	if resp.Total >= gconfig.Shared.GetInt("tasks.elasticsearch.batch") { // continue to delete documents
 		go removeDocumentsByTaskSetting(task)
 	}

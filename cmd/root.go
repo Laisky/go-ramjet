@@ -1,3 +1,4 @@
+// Package cmd implements the root command of go-ramjet.
 package cmd
 
 import (

@@ -4,10 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Laisky/zap"
-	"gopkg.in/mgo.v2"
-
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
+	"github.com/Laisky/zap"
+	mongoLib "go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -37,7 +36,12 @@ func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string)
 	}
 
 	b.db, err = mongo.NewDB(ctx,
-		addr, dbName, user, pwd,
+		mongo.DialInfo{
+			Addr:   addr,
+			DBName: dbName,
+			User:   user,
+			Pwd:    pwd,
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -46,6 +50,6 @@ func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string)
 	return b, nil
 }
 
-func (db *BBT) docusCol() *mgo.Collection {
-	return db.db.DB(db.dbName).C(db.docusColName)
+func (db *BBT) docusCol() *mongoLib.Collection {
+	return db.db.DB(db.dbName).Collection(db.docusColName)
 }

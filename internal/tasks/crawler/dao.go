@@ -9,7 +9,9 @@ import (
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -32,19 +34,20 @@ type SearchResult struct {
 	URL     string `bson:"url" json:"url"`
 	Title   string `bson:"title" json:"title"`
 
-	ID   bson.ObjectId `bson:"_id" json:"-"`
-	Text string        `bson:"text" json:"-"`
+	ID   primitive.ObjectID `bson:"_id" json:"-"`
+	Text string             `bson:"text" json:"-"`
 }
 
-func (d *Dao) Search(text string) (rets []SearchResult, err error) {
+func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
 	rets = make([]SearchResult, 0)
-	if err = d.DB.docusCol().
-		Find(bson.M{"text": bson.M{"$regex": bson.RegEx{
-			Pattern: text,
-			Options: "im",
-		}}}).
-		Limit(99).
-		All(&rets); err != nil {
+	cursor, err := d.DB.docusCol().
+		Find(ctx, bson.M{"text": bson.M{"$regex": "(?i)" + text}},
+			options.Find().SetLimit(99))
+	if err != nil {
+		return nil, errors.Wrap(err, "search")
+	}
+
+	if err := cursor.All(ctx, &rets); err != nil {
 		return nil, errors.Wrap(err, "search")
 	}
 
@@ -82,8 +85,8 @@ func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []Search
 	return filtered
 }
 
-func (d *Dao) RemoveLegacy(updateBefore time.Time) error {
-	if _, err := d.DB.docusCol().RemoveAll(
+func (d *Dao) RemoveLegacy(ctx context.Context, updateBefore time.Time) error {
+	if _, err := d.DB.docusCol().DeleteMany(ctx,
 		bson.M{"updated_at": bson.M{"$lt": updateBefore}},
 	); err != nil {
 		return errors.Wrap(err, "remove legacy")
@@ -92,9 +95,9 @@ func (d *Dao) RemoveLegacy(updateBefore time.Time) error {
 	return nil
 }
 
-func (d *Dao) Save(title, text, url string) error {
+func (d *Dao) Save(ctx context.Context, title, text, url string) error {
 	now := time.Now().UTC()
-	_, err := d.DB.docusCol().Upsert(
+	_, err := d.DB.docusCol().UpdateOne(ctx,
 		bson.M{"url": url},
 		bson.M{
 			"$set": bson.M{
@@ -107,6 +110,7 @@ func (d *Dao) Save(title, text, url string) error {
 				"created_at": now,
 			},
 		},
+		options.Update().SetUpsert(true),
 	)
 	if err != nil {
 		return errors.Wrap(err, "save")

@@ -1,3 +1,4 @@
+// Package fluentd implements fluentd monitor task.
 package fluentd
 
 import (

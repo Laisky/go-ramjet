@@ -8,7 +8,7 @@ import (
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/stretchr/testify/require"
+	"github.com/Laisky/testify/require"
 )
 
 func TestAPIHandler(t *testing.T) {

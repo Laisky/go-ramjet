@@ -17,7 +17,7 @@ func registerWeb() {
 			return
 		}
 
-		rets, err := svc.Search(q)
+		rets, err := svc.Search(ctx, q)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, err)
 			return
