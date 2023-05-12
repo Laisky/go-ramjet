@@ -1,3 +1,4 @@
+// Package partials implements partials.
 package partials
 
 import _ "embed"

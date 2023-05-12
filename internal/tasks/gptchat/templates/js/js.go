@@ -1,3 +1,4 @@
+// Package templates implements templates.
 package templates
 
 import _ "embed"

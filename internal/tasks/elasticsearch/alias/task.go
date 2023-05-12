@@ -92,7 +92,8 @@ func createAlias(api, index, alias string) error {
 			zap.Error(err))
 		return err
 	}
-	defer gutils.SilentClose(resp.Body)
+	defer resp.Body.Close() // nolint: errcheck,gosec
+
 	log.Logger.Debug("got response code", zap.Int("code", resp.StatusCode))
 	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Error("request api got error",

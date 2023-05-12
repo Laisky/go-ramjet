@@ -62,8 +62,12 @@ func runTask() {
 	}
 
 	now := time.Now()
-	if checkIsTimeTooCloseToAlert(now, expiresAt, gconfig.Shared.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
-		err = sendAlertEmail(addr, gconfig.Shared.GetString("tasks.sites.receiver"), expiresAt)
+	if checkIsTimeTooCloseToAlert(
+		now, expiresAt,
+		gconfig.Shared.GetDuration("tasks.sites.sslMonitor.duration")*time.Second) {
+		err = sendAlertEmail(addr,
+			gconfig.Shared.GetString("tasks.sites.receiver"),
+			expiresAt)
 		if err != nil {
 			log.Logger.Error("sendAlertEmail got error", zap.String("addr", addr), zap.Error(err))
 		}

@@ -1,3 +1,4 @@
+// Package static implements static files.
 package static
 
 import _ "embed"
