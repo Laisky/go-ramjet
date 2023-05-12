@@ -74,6 +74,8 @@ func RemoveIndexByName(api, index string) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "do request got error")
 	}
+	defer resp.Body.Close() // nolint: errcheck,gosec
+
 	err = utils.CheckResp(resp)
 	if err != nil {
 		return errors.Wrap(err, "remove index got error")

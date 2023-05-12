@@ -61,13 +61,13 @@ type Service struct {
 	// twitterRepDao *Dao
 }
 
-func getTweetUserID(tweet *Tweet) string {
-	if tweet.User != nil {
-		return tweet.User.ID
-	}
+// func getTweetUserID(tweet *Tweet) string {
+// 	if tweet.User != nil {
+// 		return tweet.User.ID
+// 	}
 
-	return ""
-}
+// 	return ""
+// }
 
 // SyncSearchTweets sync tweets to search db(clickhouse)
 // func (s *Service) SyncSearchTweets() error {

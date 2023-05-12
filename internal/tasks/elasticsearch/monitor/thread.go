@@ -1,3 +1,4 @@
+// Package monitor implements monitor task.
 package monitor
 
 type ThreadMetric struct {

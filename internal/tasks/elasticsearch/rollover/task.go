@@ -85,7 +85,8 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
-	defer gutils.SilentClose(resp.Body)
+	defer resp.Body.Close() // nolint: errcheck,gosec
+
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "load body error for url %v", urlMasking(url))

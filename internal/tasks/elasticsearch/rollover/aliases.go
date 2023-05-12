@@ -28,7 +28,9 @@ func GetAliasURL(st *IdxSetting) string {
 
 // FilterReadyToBeDeleteIndices filter indices that is ready to be deleted
 func FilterReadyToBeDeleteIndices(aliasURL string, allIdx []string) (indices []string, err error) {
-	log.Logger.Debug("FilterReadyToBeDeleteIndices", zap.String("aliasURL", urlMasking(aliasURL)), zap.Strings("allIdx", allIdx))
+	log.Logger.Debug("FilterReadyToBeDeleteIndices",
+		zap.String("aliasURL", urlMasking(aliasURL)),
+		zap.Strings("allIdx", allIdx))
 	var (
 		aliases []*AliasesResp
 	)
@@ -55,13 +57,13 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "request aliases api error")
 	}
+	defer resp.Body.Close() // nolint: errcheck,gosec
 
 	err = gutils.CheckResp(resp)
 	if err != nil {
 		return nil, err
 	}
 
-	defer gutils.SilentClose(resp.Body)
 	respB, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "try to read resp body error")

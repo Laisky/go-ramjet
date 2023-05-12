@@ -1,3 +1,4 @@
+// Package gptchat implements gptchat tasks.
 package gptchat
 
 import (

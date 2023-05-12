@@ -12,6 +12,7 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
+// nolint:lll
 var DefaultEnvs = []string{
 	"JAVA_OPTS=-XX:+UseG1GC -Xss256k -XX:G1ConcRefinementThreads=2 -XX:CICompilerCount=4 -XX:ParallelGCThreads=4 -XX:MaxMetaspaceSize=128m -XX:CompressedClassSpaceSize=32m",
 	"TZ=Asia/Shanghai",

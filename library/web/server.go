@@ -1,3 +1,4 @@
+// Package web implements web server.
 package web
 
 import (

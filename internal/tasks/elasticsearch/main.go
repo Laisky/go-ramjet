@@ -1,3 +1,4 @@
+// Package elasticsearch implements elasticsearch tasks.
 package elasticsearch
 
 import (

@@ -1,3 +1,4 @@
+// Package alert implements alert.
 package alert
 
 var Manager = new(ManagerType)

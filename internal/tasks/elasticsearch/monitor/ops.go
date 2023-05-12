@@ -38,12 +38,25 @@ func getNodeOpsStatChange(nodeName string, newMetric *OperatorsMetric) *Operator
 	if n, ok := nodeOperatorStats.Load(nodeName); ok {
 		lastOperatorsMetrics := n.(*OperatorsMetric)
 		currentMetric = lastOperatorsMetrics
-		currentMetric.IndexingMetric.Index = newMetric.IndexingMetric.Index - lastOperatorsMetrics.IndexingMetric.Index
-		currentMetric.IndexingMetric.Delete = newMetric.IndexingMetric.Delete - lastOperatorsMetrics.IndexingMetric.Delete
-		currentMetric.GetMetric.Get = newMetric.GetMetric.Get - lastOperatorsMetrics.GetMetric.Get
-		currentMetric.SearchMetric.Query = newMetric.SearchMetric.Query - lastOperatorsMetrics.SearchMetric.Query
-		currentMetric.SearchMetric.Fetch = newMetric.SearchMetric.Fetch - lastOperatorsMetrics.SearchMetric.Fetch
-		currentMetric.SearchMetric.Scroll = newMetric.SearchMetric.Scroll - lastOperatorsMetrics.SearchMetric.Scroll
+		currentMetric.IndexingMetric.Index =
+			newMetric.IndexingMetric.Index -
+				lastOperatorsMetrics.IndexingMetric.Index
+		currentMetric.IndexingMetric.Delete =
+
+			newMetric.IndexingMetric.Delete -
+				lastOperatorsMetrics.IndexingMetric.Delete
+		currentMetric.GetMetric.Get =
+			newMetric.GetMetric.Get -
+				lastOperatorsMetrics.GetMetric.Get
+		currentMetric.SearchMetric.Query =
+			newMetric.SearchMetric.Query -
+				lastOperatorsMetrics.SearchMetric.Query
+		currentMetric.SearchMetric.Fetch =
+			newMetric.SearchMetric.Fetch -
+				lastOperatorsMetrics.SearchMetric.Fetch
+		currentMetric.SearchMetric.Scroll =
+			newMetric.SearchMetric.Scroll -
+				lastOperatorsMetrics.SearchMetric.Scroll
 	} else {
 		currentMetric = &OperatorsMetric{
 			IndexingMetric: &IndexingMetric{Index: 0, Delete: 0},

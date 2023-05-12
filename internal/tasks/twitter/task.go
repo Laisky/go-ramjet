@@ -1,17 +1,17 @@
+// Package twitter implements twitter sync task.
 package twitter
 
 import (
 	"context"
 
-	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-var muSearch = gutils.NewMutex()
-var muReplica = gutils.NewMutex()
+// var muSearch = gutils.NewMutex()
+// var muReplica = gutils.NewMutex()
 
 // func syncSearch() {
 // 	if !muSearch.TryLock() {
@@ -27,19 +27,19 @@ var muReplica = gutils.NewMutex()
 // 	}
 // }
 
-func syncReplica() {
-	if !muReplica.TryLock() {
-		return
-	}
-	defer muReplica.ForceRelease()
+// func syncReplica() {
+// 	if !muReplica.TryLock() {
+// 		return
+// 	}
+// 	defer muReplica.ForceRelease()
 
-	log.Logger.Info("running twitter sync replica")
-	defer log.Logger.Info("twitter sync replica done")
+// 	log.Logger.Info("running twitter sync replica")
+// 	defer log.Logger.Info("twitter sync replica done")
 
-	// if err := svc.SyncReplicaTweets(); err != nil {
-	// 	log.Logger.Error("sync replica tweets", zap.Error(err))
-	// }
-}
+// 	// if err := svc.SyncReplicaTweets(); err != nil {
+// 	// 	log.Logger.Error("sync replica tweets", zap.Error(err))
+// 	// }
+// }
 
 func bindTask() {
 	log.Logger.Info("bind twitter search sync monitor...")
@@ -47,6 +47,7 @@ func bindTask() {
 		log.Logger.Panic("init twitter svc", zap.Error(err))
 	}
 
+	// nolint:lll
 	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncSearch)
 	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncReplica)
 }

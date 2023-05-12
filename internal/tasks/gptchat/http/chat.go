@@ -35,14 +35,14 @@ var (
 )
 
 func APIHandler(ctx *gin.Context) {
-	defer ctx.Request.Body.Close()
+	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	logger := log.Logger.Named("chat")
 
 	resp, err := proxy(ctx)
 	if AbortErr(ctx, err) {
 		return
 	}
-	defer resp.Body.Close() // nolint: errcheck
+	defer resp.Body.Close() // nolint: errcheck,gosec
 
 	// ctx.Header("Content-Type", "text/event-stream")
 	// ctx.Header("Cache-Control", "no-cache")
@@ -192,8 +192,9 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "do request")
 	}
+	defer resp.Body.Close() // nolint
+
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}

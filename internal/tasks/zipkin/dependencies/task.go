@@ -1,3 +1,4 @@
+// Package dependencies implements zipkin dependencies task.
 package dependencies
 
 import (
@@ -39,5 +40,7 @@ func runTask() {
 
 func BindTask() {
 	log.Logger.Info("bind zipkin-dependencies task...")
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.zipkin.dependencies.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(
+		gconfig.Shared.GetDuration("tasks.zipkin.dependencies.interval")*time.Second,
+		runTask)
 }

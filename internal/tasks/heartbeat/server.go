@@ -1,3 +1,4 @@
+// Package heartbeat implements self heartbeat.
 package heartbeat
 
 import (

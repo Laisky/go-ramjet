@@ -89,6 +89,7 @@ type OpenaiCompletionReq struct {
 	Prompt           string  `json:"prompt,omitempty"`
 }
 
+// nolint: lll
 // OpenaiCompletionResp return from openai chat api
 //
 // https://platform.openai.com/docs/guides/chat/response-format

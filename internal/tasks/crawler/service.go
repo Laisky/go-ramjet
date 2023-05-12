@@ -130,8 +130,8 @@ func httpGet(url string) (string, error) {
 	if err != nil {
 		return "", errors.Wrapf(err, "get url %s", url)
 	}
+	defer resp.Body.Close() // nolint: errcheck,gosec
 
-	defer gutils.SilentClose(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.Errorf("status code %d", resp.StatusCode)
 	}

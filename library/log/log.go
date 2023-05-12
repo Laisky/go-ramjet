@@ -1,3 +1,4 @@
+// Package log implements log.
 package log
 
 import logsdk "github.com/Laisky/go-utils/v4/log"

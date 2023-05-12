@@ -46,7 +46,9 @@ type User struct {
 
 func runTask() {
 	log.Logger.Info("run elasticsearch.password")
-	newpasswd := GeneratePasswdByDate(gutils.UTCNow(), gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret"))
+	newpasswd := GeneratePasswdByDate(
+		gutils.UTCNow(),
+		gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret"))
 	for _, api := range gconfig.Shared.GetStringSlice("tasks.elasticsearch-v2.password.apis") {
 		log.Logger.Debug("try to change password", zap.String("api", maskAPI(api)))
 		user := &User{

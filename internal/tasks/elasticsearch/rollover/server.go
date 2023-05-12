@@ -1,3 +1,4 @@
+// Package rollover implements elasticsearch rollover tasks.
 package rollover
 
 import (

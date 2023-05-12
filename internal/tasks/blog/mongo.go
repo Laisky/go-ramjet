@@ -60,9 +60,9 @@ func (b *Blog) postCol() *mongoLib.Collection {
 	return b.db.DB(b.dbName).Collection(b.postColName)
 }
 
-func (b *Blog) keywordCol() *mongoLib.Collection {
-	return b.db.DB(b.dbName).Collection(b.keywordColName)
-}
+// func (b *Blog) keywordCol() *mongoLib.Collection {
+// 	return b.db.DB(b.dbName).Collection(b.keywordColName)
+// }
 
 func (b *Blog) LoadAllPostsCnt(ctx context.Context) (cnt string, err error) {
 	cnt = ""
@@ -104,5 +104,5 @@ func (b *Blog) UpdatePostTagsByID(ctx context.Context, bid primitive.ObjectID, t
 }
 
 func (b *Blog) Close(ctx context.Context) {
-	b.db.Close(ctx) // nolint: errcheck
+	_ = b.db.Close(ctx)
 }

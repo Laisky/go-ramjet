@@ -1,3 +1,4 @@
+// Package zipkin implements zipkin tasks.
 package zipkin
 
 import (
