@@ -131,9 +131,10 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 	}
 
 	if _, err = s3cli.PutObject(ctx, &s3lib.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objKey),
-		Body:   strings.NewReader(payload),
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(objKey),
+		Body:        strings.NewReader(payload),
+		ContentType: aws.String("application/rss+xml"),
 	}); err != nil {
 		return errors.Wrapf(err, "put object %v", objKey)
 	}
