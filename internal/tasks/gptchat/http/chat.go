@@ -175,6 +175,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
+	req = req.WithContext(ctx.Request.Context())
 	CopyHeader(req.Header, ctx.Request.Header)
 
 	// check token
@@ -188,17 +189,20 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		}
 	}
 
+	log.Logger.Debug("proxy request", zap.String("url", newUrl))
+	// resp, err = http.DefaultClient.Do(req)
 	resp, err = httpcli.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "do request")
+		return nil, errors.Wrapf(err, "do request %q", newUrl)
 	}
-	defer resp.Body.Close() // nolint
 
 	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close() // nolint
 		body, _ := io.ReadAll(resp.Body)
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}
 
+	// do not close resp.Body
 	return resp, nil
 }
 

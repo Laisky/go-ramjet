@@ -20,6 +20,7 @@ import (
 	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
 	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
 	ipartials "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/partials"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -35,10 +36,11 @@ func init() {
 
 func SetupHTTPCli() (err error) {
 	httpargs := []gutils.HTTPClientOptFunc{
-		gutils.WithHTTPClientTimeout(60 * time.Second),
+		gutils.WithHTTPClientTimeout(10 * time.Second),
 	}
 
 	if gconfig.Shared.GetString("openai.proxy") != "" {
+		log.Logger.Info("use proxy for openai")
 		httpargs = append(httpargs, gutils.WithHTTPClientProxy(iconfig.Config.Proxy))
 	}
 

@@ -10,11 +10,10 @@ import (
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/singleflight"
-
-	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -79,7 +78,6 @@ func (s *taskStoreType) Store(name string, f func()) {
 }
 
 func isTaskEnabled(task string) bool {
-	log.Logger.Debug("isTaskEnabled", zap.String("task", task))
 	tasks := gconfig.Shared.GetStringSlice("task")
 	extasks := strings.Split(gconfig.Shared.GetString("exclude"), ",")
 

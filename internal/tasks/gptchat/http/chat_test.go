@@ -25,7 +25,7 @@ func TestAPIHandler(t *testing.T) {
 	reqbody, err := gutils.JSON.Marshal(req)
 	require.NoError(t, err)
 
-	httpreq, err := http.NewRequest(http.MethodPost, "http://0.0.0.0:24456/chat/api", bytes.NewReader(reqbody))
+	httpreq, err := http.NewRequest(http.MethodPost, "http://0.0.0.0:24456/api", bytes.NewReader(reqbody))
 	require.NoError(t, err)
 
 	httpreq.Header.Set("Content-Type", "application/json")
