@@ -27,7 +27,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
         let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
         if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
             SetLocalStorage("last_reload_at", (new Date()).toISOString());
-            window.location.reload();
+            // window.location.reload();
         }
     }
 
