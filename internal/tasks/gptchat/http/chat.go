@@ -64,6 +64,7 @@ func APIHandler(ctx *gin.Context) {
 		return 0, nil, nil
 	})
 
+	var lastResp *OpenaiCOmpletionStreamResp
 	for reader.Scan() {
 		line := reader.Bytes()
 		logger.Debug("got response line", zap.ByteString("line", line))
@@ -78,8 +79,8 @@ func APIHandler(ctx *gin.Context) {
 			return
 		}
 
-		resp := new(OpenaiCOmpletionStreamResp)
-		if err = gutils.JSON.Unmarshal(chunk, resp); err != nil {
+		lastResp = new(OpenaiCOmpletionStreamResp)
+		if err = gutils.JSON.Unmarshal(chunk, lastResp); err != nil {
 			//nolint: lll
 			// TODO completion's stream response is not support
 			//
@@ -91,8 +92,25 @@ func APIHandler(ctx *gin.Context) {
 
 		// check if resp is end
 		if !isStream ||
-			len(resp.Choices) == 0 ||
-			resp.Choices[0].FinishReason != "" {
+			len(lastResp.Choices) == 0 ||
+			lastResp.Choices[0].FinishReason != "" {
+			return
+		}
+	}
+
+	// write last line
+	if lastResp != nil &&
+		len(lastResp.Choices) != 0 &&
+		lastResp.Choices[0].FinishReason == "" {
+		lastResp.Choices[0].FinishReason = "stop"
+		lastResp.Choices[0].Delta.Content = " [TRUNCATED BY SERVER]"
+		payload, err := gutils.JSON.MarshalToString(lastResp)
+		if AbortErr(ctx, err) {
+			return
+		}
+
+		_, err = io.Copy(ctx.Writer, strings.NewReader("\ndata: "+payload))
+		if AbortErr(ctx, err) {
 			return
 		}
 	}
