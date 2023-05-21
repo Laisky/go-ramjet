@@ -613,7 +613,7 @@ window.ready(() => {
 
         let reloadBtnHTML = `
             <div class="row d-flex align-items-center justify-content-center">
-                <button class="btn btn-sm btn-outline-secondary reload" type="button" data-bs-toggle="tooltip" data-bs-placement="top" title="reload response base on latest context and chat model">
+                <button class="btn btn-sm btn-outline-secondary reload" type="button">
                     <i class="bi bi-repeat"></i>
                     Reload</button>
             </div>`;
