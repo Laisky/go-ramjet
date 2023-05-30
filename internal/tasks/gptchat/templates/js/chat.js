@@ -478,7 +478,8 @@ window.ready(() => {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + window.OpenaiToken(),
                         "X-Authorization-Type": window.OpenaiTokenType(),
-                    }
+                    },
+                    cache: "no-cache"
                 })
                     .then(async (resp) => {
                         let data = await resp.json();
