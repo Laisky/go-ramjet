@@ -10,10 +10,11 @@ import (
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -153,7 +154,7 @@ func (s *taskStoreType) runTrigger(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case task = <-s.runChan:
-			runnerSG.Do(utils.GetFuncName(task), func() (interface{}, error) {
+			_, _, _ = runnerSG.Do(utils.GetFuncName(task), func() (interface{}, error) {
 				if gconfig.Shared.GetBool("debug") {
 					go task()
 				} else {

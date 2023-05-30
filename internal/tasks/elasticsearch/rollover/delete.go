@@ -22,7 +22,8 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 		log.Logger.Error("acquire task semaphore", zap.Error(err))
 	}
 	defer sem.Release(1)
-	log.Logger.Debug("start to running delete expired index for alias", zap.String("alias", st.IdxAlias))
+	log.Logger.Debug("start to running delete expired index for alias",
+		zap.String("alias", st.IdxAlias))
 
 	var (
 		allIdx        []string
@@ -50,7 +51,8 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 	for _, idx := range tobeDeleteIdx {
 		err = RemoveIndexByName(st.API, idx)
 		if err != nil {
-			log.Logger.Error("try to delete index %v got error", zap.String("index", idx), zap.Error(err))
+			log.Logger.Error("try to delete index %v got error",
+				zap.String("index", idx), zap.Error(err))
 			time.Sleep(3 * time.Second)
 		}
 	}
@@ -87,7 +89,9 @@ func RemoveIndexByName(api, index string) (err error) {
 
 // IsIdxShouldDelete check whether a index is should tobe deleted
 // dateStr like `2016.10.31`, treated as +0800
-func IsIdxShouldDelete(now time.Time, dateStr string, expires time.Duration) (bool, error) {
+func IsIdxShouldDelete(now time.Time,
+	dateStr string,
+	expires time.Duration) (bool, error) {
 	layout := "2006.01.02 -0700"
 	t, err := time.Parse(layout, strings.Replace(dateStr, "-", ".", -1)+" +0800")
 	//t, err := time.Parse(layout, dateStr+" +0800")
@@ -99,8 +103,11 @@ func IsIdxShouldDelete(now time.Time, dateStr string, expires time.Duration) (bo
 }
 
 // FilterToBeDeleteIndicies return the indices that need be delete
-func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []string, err error) {
-	log.Logger.Debug("start to filter tobe delete indices", zap.Strings("indices", allInd), zap.String("regex", idxSt.Regexp.String()))
+func FilterToBeDeleteIndicies(allInd []string,
+	idxSt *IdxSetting) (indices []string, err error) {
+	log.Logger.Debug("start to filter tobe delete indices",
+		zap.Strings("indices", allInd),
+		zap.String("regex", idxSt.Regexp.String()))
 	var (
 		idx      string
 		subS     []string
@@ -112,10 +119,13 @@ func FilterToBeDeleteIndicies(allInd []string, idxSt *IdxSetting) (indices []str
 			continue
 		}
 
-		log.Logger.Debug("check is index should be deleted with expires", zap.String("idx", idx), zap.Duration("expires", idxSt.Expires))
+		log.Logger.Debug("check is index should be deleted with expires",
+			zap.String("idx", idx),
+			zap.Duration("expires", idxSt.Expires))
 		toDelete, err = IsIdxShouldDelete(time.Now(), subS[1], idxSt.Expires)
 		if err != nil {
-			err = errors.Wrapf(err, "check whether index %v(%v) should delete got error", idx, idxSt.Expires)
+			err = errors.Wrapf(err, "check whether index %v(%v) should delete got error",
+				idx, idxSt.Expires)
 			return nil, err
 		}
 		if toDelete {

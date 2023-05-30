@@ -69,7 +69,7 @@ func (s *Service) GetFile(file string) (*GetFileResponse, error) {
 		return nil, errors.Wrap(err, "do request")
 	}
 
-	defer resp.Body.Close()
+	defer resp.Body.Close() // nolint: errcheck,gosec
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("status code %d", resp.StatusCode)
 	}

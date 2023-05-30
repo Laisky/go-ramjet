@@ -266,6 +266,7 @@ func trimMessages(data *FrontendReq) {
 		cnt := data.Messages[i].Content
 		if len(cnt) > maxTokens {
 			cnt = cnt[len(cnt)-maxTokens:]
+			data.Messages[i].Content = cnt
 		}
 	}
 }

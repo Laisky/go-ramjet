@@ -96,6 +96,7 @@ func NewIndex(api string, st *IdxSetting) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "try to request rollover api got error")
 	}
+	defer resp.Body.Close() // nolint: errcheck,gosec
 
 	err = utils.CheckResp(resp)
 	if err != nil {

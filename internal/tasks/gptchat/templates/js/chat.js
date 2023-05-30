@@ -32,12 +32,21 @@ window.ready(() => {
         currentAIRespSSE, currentAIRespEle;
 
     (function main() {
+        // -------------------------------------
+        // for compatibility
+        updateChatHistory();
+        // -------------------------------------
+
         setupLocalStorage();
         setupConfig();
         setupSessionManager();
         setupChatInput();
         setupPromptManager();
     })();
+
+    function newChatID() {
+        return "chat-" + window.RandomString();
+    }
 
 
     function setupLocalStorage() {
@@ -89,7 +98,7 @@ window.ready(() => {
         let sessionID = evt.target.dataset.session;
         chatContainer.querySelector(".conservations").innerHTML = "";
         sessionChatHistory(sessionID).forEach((item) => {
-            append2Chats(item.role, item.content, true, item.prompt, item.chatID);
+            append2Chats(item.role, item.content, true, item.chatID);
         });
     }
 
@@ -117,6 +126,38 @@ window.ready(() => {
             .addEventListener("click", listenSessionSwitch);
 
         window.SetLocalStorage(storageSessionKey(1), []);
+    }
+
+    // update legacy chat history, add chatID to each chat
+    function updateChatHistory() {
+        Object.keys(localStorage).forEach((key) => {
+            if (!key.startsWith("chat_user_session_")) {
+                return;
+            }
+
+            let sessionID = parseInt(key.replace("chat_user_session_", ""));
+
+            let latestChatID,
+                history = sessionChatHistory(sessionID);
+            history.forEach((item) => {
+                if (!item.chatID && item.role != RoleAI) {
+                    // compatability with old version,
+                    // that old version's history doesn't have chatID.
+                    item.chatID = newChatID();
+                }
+
+                if (item.role == RoleAI) {
+                    // compatability with old version,
+                    // some old version's AI history has different chatID with user's,
+                    // so we overwrite it with latestChatID.
+                    item.chatID = latestChatID;
+                }
+
+                latestChatID = item.chatID;
+            });
+
+            window.SetLocalStorage(key, history);
+        });
     }
 
     function setupSessionManager() {
@@ -171,7 +212,7 @@ window.ready(() => {
 
             // restore conservation history
             activeSessionChatHistory().forEach((item) => {
-                append2Chats(item.role, item.content, true, item.prompt, item.chatID);
+                append2Chats(item.role, item.content, true, item.chatID);
             });
 
             window.EnableTooltipsEverywhere();
@@ -232,16 +273,49 @@ window.ready(() => {
 
 
 
-    function appendChats2Storage(role, content, prompt, chatid) {
+    // append or update chat history by chatid and role
+    function appendChats2Storage(role, content, chatid) {
+        if (!chatid) {
+            throw "chatid is required";
+        }
+
         let storageActiveSessionKey = storageSessionKey(activeSessionID()),
             history = activeSessionChatHistory();
 
-        history.push({
-            role: role,
-            content: content,
-            prompt: prompt,
-            chatID: chatid,
+        // if chat is already in history, find and update it.
+        let found = false;
+        history.forEach((item, idx) => {
+            if (item.chatID == chatid && item.role == role) {
+                found = true;
+                item.content = content;
+            }
         });
+
+        // if ai response is not in history, add it after user's chat which has same chatid
+        if (!found && role == RoleAI) {
+            history.forEach((item, idx) => {
+                if (item.chatID == chatid) {
+                    found = true;
+                    if (item.role != RoleAI) {
+                        history.splice(idx + 1, 0, {
+                            role: RoleAI,
+                            content: content,
+                            chatID: chatid,
+                        });
+                    }
+                }
+            });
+        }
+
+        // if chat is not in history, add it
+        if (!found) {
+            history.push({
+                role: role,
+                content: content,
+                chatID: chatid,
+            });
+        }
+
         window.SetLocalStorage(storageActiveSessionKey, history);
     }
 
@@ -298,20 +372,20 @@ window.ready(() => {
     function sendChat2Server(chatID) {
         let isReload = false,
             reqPromp;
-        if (!chatID) {
-            reqPromp = chatPromptInput.value || "";
+        if (!chatID) { // if chatID is empty, it's a new request
+            chatID = newChatID();
+            reqPromp = window.TrimSpace(chatPromptInput.value || "");
+
             chatPromptInput.value = "";
-            reqPromp = window.TrimSpace(reqPromp);
             if (reqPromp == "") {
                 return;
             }
 
-            chatID = append2Chats(RoleHuman, reqPromp);
-            appendChats2Storage(RoleHuman, reqPromp);
+            append2Chats(RoleHuman, reqPromp, false, chatID);
+            appendChats2Storage(RoleHuman, reqPromp, chatID);
         } else { // if chatID is not empty, it's a reload request
             reqPromp = chatContainer
-                .querySelector(`.chatManager .conservations #${chatID}`)
-                .dataset.prompt;
+                .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
             isReload = true;
         }
 
@@ -411,7 +485,7 @@ window.ready(() => {
                         if (data && data.text) {
                             let rawHTMLResp = `${data.text}\n\n📖: \n\n${wrapRefLines(data.url.replace(/, /g, "\n"))}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
-                            appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
+                            appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
                         }
                     })
                     .catch((err) => {
@@ -486,12 +560,7 @@ window.ready(() => {
                     scrollChatToDown();
                 }
 
-                if (!isReload) {
-                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, reqPromp, chatID);
-                } else {
-                    replaceChatInStorage(RoleAI, chatID, currentAIRespEle.innerHTML);
-                }
-
+                appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
                 unlockChatInput();
             }
         });
@@ -519,18 +588,18 @@ window.ready(() => {
 
 
 
-    function replaceChatInStorage(role, chatID, content) {
-        let storageKey = storageSessionKey(activeSessionID()),
-            chats = window.GetLocalStorage(storageKey) || [];
+    // function replaceChatInStorage(role, chatID, content) {
+    //     let storageKey = storageSessionKey(activeSessionID()),
+    //         chats = window.GetLocalStorage(storageKey) || [];
 
-        chats.forEach((item) => {
-            if (item.chatID == chatID && item.role == role) {
-                item.content = content;
-            }
-        });
+    //     chats.forEach((item) => {
+    //         if (item.chatID == chatID && item.role == role) {
+    //             item.content = content;
+    //         }
+    //     });
 
-        window.SetLocalStorage(storageKey, chats);
-    }
+    //     window.SetLocalStorage(storageKey, chats);
+    // }
 
     function abortAIResp(err) {
         if (currentAIRespSSE) {
@@ -602,13 +671,11 @@ window.ready(() => {
     // @param {string} role - RoleHuman/RoleSystem/RoleAI
     // @param {string} text - chat text
     // @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
-    //
-    // @return {string} conservationID - conservation id
-    function append2Chats(role, text, isHistory = false, prompt = "", chatID) {
+    function append2Chats(role, text, isHistory = false, chatID) {
         let chatEle;
 
-        if (!chatID) {
-            chatID = `chat-${window.RandomString()}`
+        if (chatID == undefined) {
+            throw "chatID is required";
         }
 
         let reloadBtnHTML = `
@@ -618,6 +685,7 @@ window.ready(() => {
                     Reload</button>
             </div>`;
 
+        let chatOp = "append";
         switch (role) {
             case RoleSystem:
                 text = window.escapeHtml(text);
@@ -634,33 +702,38 @@ window.ready(() => {
                 let waitAI = "";
                 if (!isHistory) {
                     waitAI = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}" data-prompt="${text}">
-                        <div class="row">
-                            <div class="col-1">🤖️</div>
-                            <div class="col-11 text-start ai-response" data-status="waiting">
-                                <p class="card-text placeholder-glow">
-                                    <span class="placeholder col-7"></span>
-                                    <span class="placeholder col-4"></span>
-                                    <span class="placeholder col-4"></span>
-                                    <span class="placeholder col-6"></span>
-                                    <span class="placeholder col-8"></span>
-                                </p>
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                            <div class="row">
+                                <div class="col-1">🤖️</div>
+                                <div class="col-10 text-start ai-response" data-status="waiting">
+                                    <p class="card-text placeholder-glow">
+                                        <span class="placeholder col-7"></span>
+                                        <span class="placeholder col-4"></span>
+                                        <span class="placeholder col-4"></span>
+                                        <span class="placeholder col-6"></span>
+                                        <span class="placeholder col-8"></span>
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        ${reloadBtnHTML}
-                    </div>`
+                            ${reloadBtnHTML}
+                        </div>`
                 }
 
                 chatEle = `
-                    <div class="container-fluid row role-human">
-                        <div class="col-1">🤔️</div>
-                        <div class="col-11 text-start"><pre>${text}</pre></div>
-                    </div>${waitAI}`
+                    <div id="${chatID}">
+                        <div class="container-fluid row role-human" data-chatid="${chatID}">
+                            <div class="col-1">🤔️</div>
+                            <div class="col-10 text-start"><pre>${text}</pre></div>
+                            <div class="col-1"><i class="bi bi-pencil-square"></i></div>
+                        </div>
+                        ${waitAI}
+                    </div>`
                 break
             case RoleAI:
-                if (prompt) {
+                if (!isHistory) {
+                    chatOp = "replace";
                     chatEle = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}" data-prompt="${prompt}">
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="row">
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
@@ -669,17 +742,32 @@ window.ready(() => {
                     </div>`
                 } else {
                     chatEle = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" id="${chatID}">
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-1">🤖️</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
+                        ${reloadBtnHTML}
                     </div>`
                 }
 
                 break
         }
 
-        chatContainer.querySelector(".chatManager .conservations").
-            insertAdjacentHTML("beforeend", chatEle);
+        console.log("append chat", role, chatOp, chatID);
+        if (chatOp == "append") {
+            if (role == RoleAI) {
+                // ai response is always after human, so we need to find the last human chat,
+                // and append ai response after it
+                chatContainer.querySelector(`.chatManager .conservations #${chatID}`).
+                    insertAdjacentHTML("beforeend", chatEle);
+            } else {
+                chatContainer.querySelector(`.chatManager .conservations`).
+                    insertAdjacentHTML("beforeend", chatEle);
+            }
+        } else if (chatOp == "replace") {
+            // replace html element of ai
+            chatContainer.querySelector(`.chatManager .conservations #${chatID} .role-ai`).
+                outerHTML = chatEle;
+        }
 
 
         // bind reload button
@@ -700,7 +788,68 @@ window.ready(() => {
             });
         }
 
-        return chatID;
+
+        let editHumanInputHandler = (evt) => {
+            evt.stopPropagation();
+            let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
+                text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
+
+            chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
+                <textarea class="form-control" rows="3">${text}</textarea>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-secondary save" type="button">
+                        <i class="bi bi-check"></i>
+                        Save</button>
+                    <button class="btn btn-sm btn-outline-secondary cancel" type="button">
+                        <i class="bi bi-x"></i>
+                        Cancel</button>
+                </div>`;
+
+            let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
+            let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
+            saveBtn.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
+                chatContainer.querySelector(`#${chatID}`).innerHTML = `
+                        <div class="container-fluid row role-human" data-chatid="chat-93upb32o06e">
+                            <div class="col-1">🤔️</div>
+                            <div class="col-10 text-start"><pre>${newText}</pre></div>
+                            <div class="col-1"><i class="bi bi-pencil-square"></i></div>
+                        </div>
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="chat-93upb32o06e">
+                            <div class="col-1">🤖️</div>
+                            <div class="col-11 text-start ai-response" data-status="writing">
+                                <p class="card-text placeholder-glow">
+                                    <span class="placeholder col-7"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-6"></span>
+                                    <span class="placeholder col-8"></span>
+                                </p>
+                            </div>
+                        </div>
+                    `;
+
+                // bind edit button
+                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`).addEventListener("click", editHumanInputHandler);
+
+                sendChat2Server(chatID);
+                appendChats2Storage(RoleHuman, newText, chatID);
+            });
+
+            cancelBtn.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                chatContainer.querySelector(`#${chatID}`).innerHTML = oldText;
+
+                // bind edit button
+                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`).addEventListener("click", editHumanInputHandler);
+            });
+        }
+
+
+        // bind edit button
+        chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+            .addEventListener("click", editHumanInputHandler);
     }
 
 
