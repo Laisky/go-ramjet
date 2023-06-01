@@ -19,7 +19,7 @@ require (
 	github.com/baidubce/bce-sdk-go v0.9.150
 	github.com/deckarep/golang-set/v2 v2.3.0
 	github.com/fsouza/go-dockerclient v1.9.7
-	github.com/gin-gonic/gin v1.9.0
+	github.com/gin-gonic/gin v1.9.1
 	github.com/gorilla/feeds v1.1.1
 	github.com/jinzhu/copier v0.3.5
 	github.com/spf13/cobra v1.7.0
@@ -54,7 +54,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.0 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bytedance/sonic v1.9.0 // indirect
+	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
