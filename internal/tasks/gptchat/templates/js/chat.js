@@ -272,6 +272,21 @@ window.ready(() => {
     }
 
 
+    // remove chat in storage by chatid
+    function removeChatInStorage(chatid) {
+        if (!chatid) {
+            throw "chatid is required";
+        }
+
+        let storageActiveSessionKey = storageSessionKey(activeSessionID()),
+            history = activeSessionChatHistory();
+
+        // remove all chats with the same chatid
+        history = history.filter((item) => item.chatID !== chatid);
+
+        window.localStorage.setItem(storageActiveSessionKey, JSON.stringify(history));
+    }
+
 
     // append or update chat history by chatid and role
     function appendChats2Storage(role, content, chatid) {
@@ -725,7 +740,12 @@ window.ready(() => {
                         <div class="container-fluid row role-human" data-chatid="${chatID}">
                             <div class="col-1">🤔️</div>
                             <div class="col-10 text-start"><pre>${text}</pre></div>
-                            <div class="col-1"><i class="bi bi-pencil-square"></i></div>
+                            <div class="col-1">
+
+                            <div class="col-1 d-flex justify-content-between">
+                                <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-trash"></i>
+                            </div>
                         </div>
                         ${waitAI}
                     </div>`
@@ -771,12 +791,14 @@ window.ready(() => {
         }
 
 
-        // bind reload button
-        let reloadBtn = chatContainer.querySelector(`#${chatID} .btn.reload`);
-        if (reloadBtn) {
-            reloadBtn.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                document.querySelector(`#${chatID} .ai-response`).innerHTML = `
+        // avoid duplicate event listener, only bind event listener for new chat
+        if (role == RoleHuman) {
+            // bind reload button
+            let reloadBtn = chatContainer.querySelector(`#${chatID} .btn.reload`);
+            if (reloadBtn) {
+                reloadBtn.addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    document.querySelector(`#${chatID} .ai-response`).innerHTML = `
                 <p class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -785,17 +807,25 @@ window.ready(() => {
                     <span class="placeholder col-8"></span>
                 </p>`;
 
-                sendChat2Server(chatID);
-            });
-        }
+                    sendChat2Server(chatID);
+                });
+            }
 
+            // bind delete button
+            let deleteBtnHandler = (evt) => {
+                evt.stopPropagation();
+                let chatEle = chatContainer.querySelector(`#${chatID}`);
+                chatEle.parentNode.removeChild(chatEle);
+                removeChatInStorage(chatID);
+            };
 
-        let editHumanInputHandler = (evt) => {
-            evt.stopPropagation();
-            let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
-                text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
+            let editHumanInputHandler = (evt) => {
+                evt.stopPropagation();
 
-            chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
+                let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
+                    text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
+
+                chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-secondary save" type="button">
@@ -806,16 +836,19 @@ window.ready(() => {
                         Cancel</button>
                 </div>`;
 
-            let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
-            let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
-            saveBtn.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
-                chatContainer.querySelector(`#${chatID}`).innerHTML = `
+                let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
+                let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
+                saveBtn.addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
+                    chatContainer.querySelector(`#${chatID}`).innerHTML = `
                         <div class="container-fluid row role-human" data-chatid="chat-93upb32o06e">
                             <div class="col-1">🤔️</div>
                             <div class="col-10 text-start"><pre>${newText}</pre></div>
-                            <div class="col-1"><i class="bi bi-pencil-square"></i></div>
+                            <div class="col-1 d-flex justify-content-between">
+                                <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-trash"></i>
+                            </div>
                         </div>
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="chat-93upb32o06e">
                             <div class="col-1">🤖️</div>
@@ -831,26 +864,36 @@ window.ready(() => {
                         </div>
                     `;
 
-                // bind edit button
-                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`).addEventListener("click", editHumanInputHandler);
+                    // bind delete and edit button
+                    chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+                        .addEventListener("click", deleteBtnHandler);
+                    chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+                        .addEventListener("click", editHumanInputHandler);
 
-                sendChat2Server(chatID);
-                appendChats2Storage(RoleHuman, newText, chatID);
-            });
+                    sendChat2Server(chatID);
+                    appendChats2Storage(RoleHuman, newText, chatID);
+                });
 
-            cancelBtn.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                chatContainer.querySelector(`#${chatID}`).innerHTML = oldText;
+                cancelBtn.addEventListener("click", (evt) => {
+                    evt.stopPropagation();
+                    chatContainer.querySelector(`#${chatID}`).innerHTML = oldText;
 
-                // bind edit button
-                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`).addEventListener("click", editHumanInputHandler);
-            });
+                    // bind delete and edit button
+                    chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+                        .addEventListener("click", deleteBtnHandler);
+                    chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+                        .addEventListener("click", editHumanInputHandler);
+                });
+            };
+
+
+
+            // bind delete and edit button
+            chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+                .addEventListener("click", deleteBtnHandler);
+            chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+                .addEventListener("click", editHumanInputHandler);
         }
-
-
-        // bind edit button
-        chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
-            .addEventListener("click", editHumanInputHandler);
     }
 
 
