@@ -10,8 +10,8 @@ install:
 lint:
 	goimports -local github.com/Laisky/go-ramjet -w .
 	go mod tidy
-	go vet
 	gofmt -s -w .
+	go vet
 	golangci-lint run -c .golangci.lint.yml
 	govulncheck ./...
 

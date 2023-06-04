@@ -4,7 +4,6 @@ package monitor
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"

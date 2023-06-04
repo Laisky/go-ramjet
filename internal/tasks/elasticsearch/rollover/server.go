@@ -2,12 +2,12 @@
 package rollover
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
 	gconfig "github.com/Laisky/go-config/v2"
 	utils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 

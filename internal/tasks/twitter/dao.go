@@ -46,8 +46,8 @@ func NewDao(ctx context.Context, addr, dbName, user, pwd string) (d *Dao, err er
 	return d, nil
 }
 
-func (db *Dao) tweetsCol() *mongoLib.Collection {
-	return db.db.DB(db.dbName).Collection(db.tweetsColName)
+func (d *Dao) tweetsCol() *mongoLib.Collection {
+	return d.db.DB(d.dbName).Collection(d.tweetsColName)
 }
 
 func (d *Dao) GetTweetsIter(ctx context.Context, cond bson.M) (*mongoLib.Cursor, error) {

@@ -1,15 +1,15 @@
 package rollover
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -81,10 +81,16 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 func IsIdxIsWriteAlias(idx string, aliases []*AliasesResp) (ret bool) {
 	for _, ad := range aliases {
 		if ad.Index == idx {
-			log.Logger.Debug("IsIdxIsWriteAlias", zap.String("index", idx), zap.String("alias", ad.Index), zap.Bool("result", true))
+			log.Logger.Debug("IsIdxIsWriteAlias",
+				zap.String("index", idx),
+				zap.String("alias", ad.Index),
+				zap.Bool("result", true))
 			return true
 		}
-		log.Logger.Debug("IsIdxIsWriteAlias", zap.String("index", idx), zap.String("alias", ad.Index), zap.Bool("result", false))
+		log.Logger.Debug("IsIdxIsWriteAlias",
+			zap.String("index", idx),
+			zap.String("alias", ad.Index),
+			zap.Bool("result", false))
 	}
 
 	return false

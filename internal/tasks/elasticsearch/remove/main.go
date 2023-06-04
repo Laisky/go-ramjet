@@ -4,7 +4,6 @@ package remove
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -12,6 +11,7 @@ import (
 
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 
@@ -132,13 +132,17 @@ func removeDocumentsByTaskSetting(task *MonitorTaskConfig) {
 	if err := utils.RequestJSON("post", url, &requestData, &resp); err != nil {
 		errMsg := err.Error()
 		if isRespInTrouble(errMsg) {
-			log.Logger.Error("delete documents error", zap.String("index", task.Index), zap.String("url", url), zap.Error(err))
+			log.Logger.Error("delete documents error",
+				zap.String("index", task.Index),
+				zap.String("url", url),
+				zap.Error(err))
 			resp = Resp{
 				Deleted: 0,
 				Total:   gconfig.Shared.GetInt("tasks.elasticsearch.batch"),
 			}
 		} else {
-			log.Logger.Debug("http.RequestJSON got some innocent error", zap.Error(err))
+			log.Logger.Debug("http.RequestJSON got some innocent error",
+				zap.Error(err))
 			resp = Resp{
 				Deleted: 0,
 				Total:   0,

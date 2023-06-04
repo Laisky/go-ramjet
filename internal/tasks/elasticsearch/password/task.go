@@ -2,13 +2,13 @@ package password
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -57,24 +57,33 @@ func runTask() {
 		}
 		jb, err := json.Marshal(user)
 		if err != nil {
-			log.Logger.Error("try to marshal json got error", zap.Error(err))
+			log.Logger.Error("try to marshal json got error",
+				zap.Error(err))
 			continue
 		}
 
 		if gconfig.Shared.GetBool("dry") {
-			log.Logger.Info("change password via post", zap.String("api", maskAPI(api)), zap.String("password", newpasswd))
+			log.Logger.Info("change password via post",
+				zap.String("api", maskAPI(api)),
+				zap.String("password", newpasswd))
 			continue
 		}
 
-		resp, err := httpClient.Post(api, gutils.HTTPHeaderContentTypeValJSON, bytes.NewReader(jb))
+		resp, err := httpClient.Post(api,
+			gutils.HTTPHeaderContentTypeValJSON,
+			bytes.NewReader(jb))
 		if err != nil {
-			log.Logger.Error("try to request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
+			log.Logger.Error("try to request api got error",
+				zap.String("api", maskAPI(api)),
+				zap.Error(err))
 			continue
 		}
 		defer resp.Body.Close() // nolint: errcheck,gosec
 
 		if err = gutils.CheckResp(resp); err != nil {
-			log.Logger.Error("request api got error", zap.String("api", maskAPI(api)), zap.Error(err))
+			log.Logger.Error("request api got error",
+				zap.String("api", maskAPI(api)),
+				zap.Error(err))
 			continue
 		}
 	}

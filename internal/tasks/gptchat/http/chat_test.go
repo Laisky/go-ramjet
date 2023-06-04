@@ -8,6 +8,7 @@ import (
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/testify/require"
 )
 
@@ -22,7 +23,7 @@ func TestAPIHandler(t *testing.T) {
 			},
 		},
 	}
-	reqbody, err := gutils.JSON.Marshal(req)
+	reqbody, err := json.Marshal(req)
 	require.NoError(t, err)
 
 	httpreq, err := http.NewRequest(http.MethodPost, "http://0.0.0.0:24456/api", bytes.NewReader(reqbody))
@@ -48,7 +49,7 @@ func TestAPIHandler(t *testing.T) {
 
 		resp := new(OpenaiCOmpletionStreamResp)
 		// t.Logf("line: %q", string(line))
-		err = gutils.JSON.Unmarshal(line, resp)
+		err = json.Unmarshal(line, resp)
 		require.NoError(t, err)
 
 		if len(resp.Choices) == 0 || resp.Choices[0].FinishReason != "" {

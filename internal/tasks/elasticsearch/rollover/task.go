@@ -2,7 +2,6 @@ package rollover
 
 import (
 	"context"
-	"encoding/json"
 	"html/template"
 	"io/ioutil"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 
@@ -48,7 +48,9 @@ func BindRolloverIndices() {
 	}
 
 	bindHTTP()
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.elasticsearch-v2.interval")*time.Second, runTask)
+	go store.TaskStore.TickerAfterRun(
+		gconfig.Shared.GetDuration("tasks.elasticsearch-v2.interval")*time.Second,
+		runTask)
 }
 
 func runTask() {
@@ -56,7 +58,8 @@ func runTask() {
 		taskSts []*IdxSetting
 		st      *IdxSetting
 		ctx     = context.Background()
-		sem     = semaphore.NewWeighted(gconfig.Shared.GetInt64("tasks.elasticsearch-v2.concurrent"))
+		sem     = semaphore.NewWeighted(
+			gconfig.Shared.GetInt64("tasks.elasticsearch-v2.concurrent"))
 	)
 
 	taskSts = LoadSettings()

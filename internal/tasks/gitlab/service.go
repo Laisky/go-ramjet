@@ -12,6 +12,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/library/log"
@@ -80,7 +81,7 @@ func (s *Service) GetFile(file string) (*GetFileResponse, error) {
 	}
 
 	gitResp := new(gitFileResponse)
-	if err = gutils.JSON.Unmarshal(body, gitResp); err != nil {
+	if err = json.Unmarshal(body, gitResp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal body")
 	}
 
@@ -111,6 +112,7 @@ func extractFileSurrounding(fileCnt []byte, lineFrom, lineTo int) (start uint, e
 	return uint(lineFrom), uint(lineTo), strings.Join(lines[lineFrom:lineTo], "\n")
 }
 
+//nolint:lll
 var gitFileReqRegexp = regexp.MustCompile(`(?m:https://git\.basebit\.me/(?P<id>[^/]+/[^/]+)/-/blob/(?P<ref>\w+)/(?P<path>[^#]+)(?:#L(?P<line_from>\d+)(?:-(?P<line_to>\d+))?)?)`)
 
 type GitFileURL struct {

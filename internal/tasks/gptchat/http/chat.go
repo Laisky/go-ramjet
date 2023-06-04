@@ -12,6 +12,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -80,7 +81,7 @@ func APIHandler(ctx *gin.Context) {
 		}
 
 		lastResp = new(OpenaiCOmpletionStreamResp)
-		if err = gutils.JSON.Unmarshal(chunk, lastResp); err != nil {
+		if err = json.Unmarshal(chunk, lastResp); err != nil {
 			//nolint: lll
 			// TODO completion's stream response is not support
 			//
@@ -104,7 +105,7 @@ func APIHandler(ctx *gin.Context) {
 		lastResp.Choices[0].FinishReason == "" {
 		lastResp.Choices[0].FinishReason = "stop"
 		lastResp.Choices[0].Delta.Content = " [TRUNCATED BY SERVER]"
-		payload, err := gutils.JSON.MarshalToString(lastResp)
+		payload, err := json.MarshalToString(lastResp)
 		if AbortErr(ctx, err) {
 			return
 		}
@@ -123,7 +124,7 @@ func tokenModelPermCheck(reqToken, model string) (usertoken string, err error) {
 				return "", errors.Errorf("model %s is not allowed for current user", model)
 			}
 
-			if v.OpenaiToken != "" { // if user has specfic openai token
+			if v.OpenaiToken != "" { // if user has specific openai token
 				return v.OpenaiToken, nil
 			}
 
@@ -181,7 +182,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			return nil, errors.Errorf("unknown model %q", frontendReq.Model)
 		}
 
-		payload, err := gutils.JSON.Marshal(openaiReq)
+		payload, err := json.Marshal(openaiReq)
 		if err != nil {
 			return nil, errors.Wrap(err, "marshal new body")
 		}
@@ -240,7 +241,7 @@ func bodyChecker(body io.ReadCloser) (data *FrontendReq, err error) {
 	}
 
 	data = new(FrontendReq)
-	if err = gutils.JSON.Unmarshal(payload, data); err != nil {
+	if err = json.Unmarshal(payload, data); err != nil {
 		return nil, errors.Wrap(err, "parse request")
 	}
 	data.fillDefault()

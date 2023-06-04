@@ -1,14 +1,15 @@
+// Package alias implements elasticsearch alias.
 package alias
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"

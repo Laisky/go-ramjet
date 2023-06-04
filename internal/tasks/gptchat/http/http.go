@@ -13,6 +13,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	"github.com/gin-gonic/gin"
 
 	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -137,7 +138,7 @@ func Chat(ctx *gin.Context) {
 		},
 		"qa_chat_models": iconfig.Config.QAChatModels,
 	}
-	injectDataPayload, err := gutils.JSON.MarshalToString(injectData)
+	injectDataPayload, err := json.MarshalToString(injectData)
 	if AbortErr(ctx, err) {
 		return
 	}
