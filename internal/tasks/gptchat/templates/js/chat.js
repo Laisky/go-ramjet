@@ -499,7 +499,7 @@ window.ready(() => {
                     .then(async (resp) => {
                         let data = await resp.json();
                         if (data && data.text) {
-                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.refs)}`
+                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
                         }
