@@ -590,7 +590,7 @@ window.ready(() => {
     function combineRefs(arr) {
         let markdown = "";
         for (const val of arr) {
-            markdown += `- ${val}\n`;
+            markdown += `- <${val}>\n`;
         }
 
         return markdown;
