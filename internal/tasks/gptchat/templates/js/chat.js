@@ -499,7 +499,7 @@ window.ready(() => {
                     .then(async (resp) => {
                         let data = await resp.json();
                         if (data && data.text) {
-                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${wrapRefLines(data.url.replace(/, /g, "\n"))}`
+                            let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.refs)}`
                             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
                         }
@@ -585,6 +585,15 @@ window.ready(() => {
             abortAIResp(err);
         };
         currentAIRespSSE.stream();
+    }
+
+    function combineRefs(arr) {
+        let markdown = "";
+        for (const val of arr) {
+            markdown += `- ${val}\n`;
+        }
+
+        return markdown;
     }
 
     // parse langchain qa references to markdown links
