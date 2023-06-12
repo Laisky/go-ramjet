@@ -639,6 +639,11 @@ window.ready(() => {
             errMsg = e.toString();
         }
 
+        // if errMsg contains
+        if (errMsg.includes("Access denied due to invalid subscription key or wrong API endpoint")) {
+            alert("API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
+        }
+
         if (currentAIRespEle.dataset.status == "waiting") {
             currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
         } else {
