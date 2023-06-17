@@ -48,6 +48,16 @@
         font-size: small;
     }
 
+    #modal-pdfchat .modal-body .input-group,
+    #modal-pdfchat .modal-body .mb-3 {
+        margin-bottom: 3px !important;
+    }
+
+    #modal-pdfchat div[data-field="dataset"] {
+        border: 1px solid rgb(133, 124, 124);
+        max-height: 300px;
+        overflow: scroll;
+    }
 </style>
 {{end}}
 
@@ -102,6 +112,97 @@
         </div>
     </div>
 </div>
+
+<!-- some extra modals -->
+
+<div class="modal" tabindex="-1" id="save-system-prompt">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Save System Prompt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 prompt-name">
+                    <label for="promptName" class="form-label">Name:</label>
+                    <input type="text" class="form-control mb-3 title" placeholder="prompt name">
+                    <textarea class="form-control user-input" rows="10"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <!-- <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button> -->
+                <button type="button" class="btn btn-primary save">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" tabindex="-1" id="prompt-market">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add to shortcuts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 5px;">
+                <div class="row g-2">
+                    <div class="col-10">
+                        <input type="text" class="form-control mb-1 prompt-title" placeholder="prompt name">
+                    </div>
+                    <div class="col-2">
+                        <button type="button" class="btn btn-primary save">Add</button>
+                    </div>
+                </div>
+
+
+                <textarea class="mb-1 form-control prompt-content" rows="5" style="font-size: small;"></textarea>
+                <div class="prompt-labels" style="max-height: 400px; overflow-y: scroll;">
+                    <!-- fill prompts from datasource -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" tabindex="-1" id="modal-pdfchat">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Private Knowledge Base</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 5px;">
+                <form>
+                    <div class="input-group mb-3" data-field="pdffile">
+                        <div class="mb-3">
+                            <label for="formFile" class="form-label">Upload New PDF</label>
+                            <input class="form-control" type="file">
+                        </div>
+                    </div>
+                    <div class="input-group mb-3" data-field="dataset-name">
+                        <span class="input-group-text">Name</span>
+                        <input type="text" class="form-control" placeholder="dataset name">
+                    </div>
+                    <div class="input-group mb-3" data-field="data-key">
+                        <span class="input-group-text">Data Key</span>
+                        <input type="text" class="form-control" placeholder="e2e encrypt data key">
+                    </div>
+                    <div class="input-group mb-3" data-field="buttons">
+                        <div class="btn-group" role="group" aria-label="Basic outlined example">
+                            <button type="button" class="btn btn-outline-primary" data-fn="upload">Upload File</button>
+                            <button type="button" class="btn btn-outline-primary" data-fn="refresh">Refresh Dataset</button>
+                            <button type="button" class="btn btn-success" data-fn="build">Build Context</button>
+                        </div>
+                    </div>
+                    <div data-field="dataset">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 {{end}}
 
 {{define "mainjs"}}

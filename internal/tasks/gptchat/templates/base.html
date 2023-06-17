@@ -174,57 +174,6 @@
         </div>
     </div>
 
-    <!-- some extra modals -->
-
-    <div class="modal" tabindex="-1" id="save-system-prompt">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Save System Prompt</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3 prompt-name">
-                        <label for="promptName" class="form-label">Name:</label>
-                        <input type="text" class="form-control mb-3 title" placeholder="prompt name">
-                        <textarea class="form-control user-input" rows="10"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <!-- <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button> -->
-                    <button type="button" class="btn btn-primary save">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" tabindex="-1" id="prompt-market">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add to shortcuts</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" style="padding: 5px;">
-                    <div class="row g-2">
-                        <div class="col-10">
-                            <input type="text" class="form-control mb-1 prompt-title" placeholder="prompt name">
-                        </div>
-                        <div class="col-2">
-                            <button type="button" class="btn btn-primary save">Add</button>
-                        </div>
-                    </div>
-
-
-                    <textarea class="mb-1 form-control prompt-content" rows="5" style="font-size: small;"></textarea>
-                    <div class="prompt-labels" style="max-height: 400px; overflow-y: scroll;">
-                        <!-- fill prompts from datasource -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="modal" id="deleteCheckModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -258,6 +207,41 @@
             </div>
         </div>
     </div> -->
+
+<!-- Add this div to your HTML code -->
+<div id="spinner" class="spinner-container" hidden>
+    <div class="spinner"></div>
+</div>
+
+<!-- Add this CSS code to your stylesheet -->
+<style>
+    .spinner-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .spinner {
+        border: 16px solid #f3f3f3;
+        border-top: 16px solid #3498db;
+        border-radius: 50%;
+        width: 120px;
+        height: 120px;
+        animation: spin 2s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 
 
 
