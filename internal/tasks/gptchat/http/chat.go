@@ -3,6 +3,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,12 +33,28 @@ func AbortErr(ctx *gin.Context, err error) bool {
 }
 
 var (
-	dataReg = regexp.MustCompile(`data: (\{.*\})`)
+	ratelimiter *gutils.Throttle
+	dataReg     = regexp.MustCompile(`data: (\{.*\})`)
 )
+
+func init() {
+	var err error
+	if ratelimiter, err = gutils.NewThrottleWithCtx(context.Background(), &gutils.ThrottleCfg{
+		Max:     10,
+		NPerSec: 1,
+	}); err != nil {
+		log.Logger.Panic("new ratelimiter", zap.Error(err))
+	}
+}
 
 func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	logger := log.Logger.Named("chat")
+
+	if !ratelimiter.Allow() { // check rate limit
+		ctx.AbortWithStatusJSON(http.StatusTooManyRequests, "too many requests, please try again later")
+		return
+	}
 
 	resp, err := proxy(ctx)
 	if AbortErr(ctx, err) {
