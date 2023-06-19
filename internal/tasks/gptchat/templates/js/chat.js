@@ -2,9 +2,7 @@
 
 const RoleHuman = "user",
     RoleSystem = "system",
-    RoleAI = "assistant",
-    // RamjetAPI = "http://100.97.108.34:37851/gptchat";
-    RamjetAPI = "https://chat.laisky.com/ramjet";
+    RoleAI = "assistant";
 
 
 let chatContainer = document.getElementById("chatContainer"),
@@ -371,7 +369,7 @@ function parseChatResp(chatmodel, payload) {
 }
 
 
-function sendChat2Server(chatID) {
+async function sendChat2Server(chatID) {
     let isReload = false,
         reqPromp;
     if (!chatID) { // if chatID is empty, it's a new request
@@ -453,6 +451,7 @@ function sendChat2Server(chatID) {
             });
 
             break;
+        case QAModelCustom:
         case QAModelBasebit:
         case QAModelSecurity:
             // {
@@ -460,45 +459,58 @@ function sendChat2Server(chatID) {
             //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
             //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
             // }
-            let url, project;
-            window.data['qa_chat_models'].forEach((item) => {
-                if (item['name'] == chatmodel) {
-                    url = item['url'];
-                    project = item['project'];
-                }
-            });
 
-            if (!project) {
-                console.error("can't find project name for chat model: " + chatmodel);
-                return;
+            let url, project;
+            switch (chatmodel) {
+                case QAModelBasebit:
+                case QAModelSecurity:
+                    window.data['qa_chat_models'].forEach((item) => {
+                        if (item['name'] == chatmodel) {
+                            url = item['url'];
+                            project = item['project'];
+                        }
+                    });
+
+                    if (!project) {
+                        console.error("can't find project name for chat model: " + chatmodel);
+                        return;
+                    }
+                    break;
+                case QAModelCustom:
+                    url = "/ramjet/gptchat/ctx";
+                    break
             }
 
             currentAIRespEle.scrollIntoView({ behavior: "smooth" });
-            fetch(`${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + window.OpenaiToken(),
-                    "X-Authorization-Type": window.OpenaiTokenType(),
-                },
-                cache: "no-cache"
-            })
-                .then(async (resp) => {
-                    let data = await resp.json();
-                    if (data && data.text) {
-                        let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`
-                        currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
-                        appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
-                    }
-                })
-                .catch((err) => {
-                    abortAIResp(err);
-                })
-                .finally(() => {
-                    unlockChatInput();
+            try {
+                const resp = await fetch(`${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + window.OpenaiToken(),
+                        "X-Authorization-Type": window.OpenaiTokenType(),
+                    },
+                    cache: "no-cache"
                 });
 
-            return
+                if (resp.status != 200) {
+                    throw new Error(`[${resp.status}]: ${await resp.text()}`);
+                }
+
+                let data = await resp.json();
+                if (data && data.text) {
+                    let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
+                    currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
+                }
+            } catch (err) {
+                abortAIResp(err);
+                return;
+            } finally {
+                unlockChatInput();
+            }
+
+            return;
     }
 
     if (!currentAIRespSSE) {
@@ -623,7 +635,7 @@ function abortAIResp(err) {
     try {
         errMsg = JSON.parse(err.data);
     } catch (e) {
-        errMsg = e.toString();
+        errMsg = err.toString();
     }
 
     // if errMsg contains
@@ -631,7 +643,7 @@ function abortAIResp(err) {
         alert("API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
     }
 
-    if (currentAIRespEle.dataset.status == "waiting") {
+    if (currentAIRespEle.dataset.status == "waiting" || currentAIRespEle.dataset.status == "writing") {
         currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
     } else {
         currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
@@ -660,7 +672,7 @@ function setupChatInput() {
 
 
         chatPromptInput.
-            addEventListener("keydown", (evt) => {
+            addEventListener("keydown", async (evt) => {
                 evt.stopPropagation();
                 if (evt.key != 'Enter'
                     || isComposition
@@ -669,16 +681,16 @@ function setupChatInput() {
                     return;
                 }
 
-                sendChat2Server();
+                await sendChat2Server();
                 chatPromptInput.value = "";
             })
     }
 
     // bind input button
     chatPromptInputBtn.
-        addEventListener("click", (evt) => {
+        addEventListener("click", async (evt) => {
             evt.stopPropagation();
-            sendChat2Server();
+            await sendChat2Server();
             chatPromptInput.value = "";
         })
 }
@@ -839,7 +851,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
 
             let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
             let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
-            saveBtn.addEventListener("click", (evt) => {
+            saveBtn.addEventListener("click", async (evt) => {
                 evt.stopPropagation();
                 let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
                 chatContainer.querySelector(`#${chatID}`).innerHTML = `
@@ -871,7 +883,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
                     .addEventListener("click", editHumanInputHandler);
 
-                sendChat2Server(chatID);
+                await sendChat2Server(chatID);
                 appendChats2Storage(RoleHuman, newText, chatID);
             });
 
@@ -1152,14 +1164,6 @@ function setupPromptManager() {
             });
     }
 
-    // bind pdf-file modal
-    {
-        let pdfFileModalEle = document.querySelector("#modal-pdfchat"),
-            pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
-
-        pdfFileModal.show();
-    }
-
     // bind prompt market modal
     {
         configContainer
@@ -1271,24 +1275,34 @@ function setupPromptManager() {
 function setupPrivateDataset() {
     let pdfchatModalEle = document.querySelector("#modal-pdfchat");
 
-    document
-        .querySelectorAll('#modal-pdfchat div[data-field="buttons"] button')
-        .forEach((ele) => {
-            ele.addEventListener("click", (evt) => {
+    // bind header's custom qa button
+    {
+        // bind pdf-file modal
+        let pdfFileModalEle = document.querySelector("#modal-pdfchat"),
+            pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
+
+
+        document
+            .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
+            .addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                window.ShowSpinner();
-            })
-        })
+                pdfFileModal.show();
+            });
+    }
 
     // bind datakey to localstorage
     {
-        pdfchatModalEle
-            .querySelector('div[data-field="data-key"] input')
+        let datakeyEle = pdfchatModalEle
+            .querySelector('div[data-field="data-key"] input');
+
+        datakeyEle.value = window.GetLocalStorage(StorageKeyDatasetKey);
+
+        datakeyEle
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage(StorageKeyDatasetKey, evt.target.value);
             }
-        );
+            );
     }
 
     // bind file upload
@@ -1302,18 +1316,18 @@ function setupPrivateDataset() {
                 let form = new FormData();
                 form.append("file", pdfchatModalEle
                     .querySelector('div[data-field="pdffile"] input').files[0]);
-                form.append("name", pdfchatModalEle
+                form.append("file_key", pdfchatModalEle
                     .querySelector('div[data-field="dataset-name"] input').value);
-                form.append("datakey", pdfchatModalEle
-                    .querySelector('div[data-field="dataset-name"] input').value);
+                form.append("data_key", pdfchatModalEle
+                    .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
                 let headers = new Headers();
-                headers.append("Content-Type", "multipart/form-data");
+                // headers.append("Content-Type", "multipart/form-data");
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
 
                 try {
                     window.ShowSpinner();
-                    await fetch(RamjetAPI + "/gptchat/files", {
+                    await fetch("/ramjet/gptchat/files", {
                         method: "POST",
                         headers: headers,
                         body: form
@@ -1340,7 +1354,7 @@ function setupPrivateDataset() {
                 let body;
                 try {
                     window.ShowSpinner();
-                    resp = await fetch(RamjetAPI + "/gptchat/files", {
+                    const resp = await fetch("/ramjet/gptchat/files", {
                         method: "GET",
                         headers: headers
                     })
@@ -1356,16 +1370,16 @@ function setupPrivateDataset() {
                     .querySelector('div[data-field="dataset"]');
                 let datasetsHTML = "";
                 body.files.forEach((datasetName) => {
-                    querySelector += `
+                    datasetsHTML += `
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="form-check form-switch" data-filename="${datasetName}">
-                                <input class="form-check-input" type="checkbox" checked>
+                                <input class="form-check-input" type="checkbox">
                                 <label class="form-check-label" for="flexSwitchCheckChecked">${datasetName}</label>
                             </div>
                             <i class="bi bi-trash"></i>
                         </div>`
                 });
-                datasetListEle.innerHTML += ele;
+                datasetListEle.innerHTML = datasetsHTML;
             }
             );
     }
@@ -1386,22 +1400,28 @@ function setupPrivateDataset() {
                         }
                     });
 
+                if (selectedDatasets.length === 0) {
+                    alert("please select at least one dataset, click [List Dataset] button to fetch dataset list");
+                    return;
+                }
+
                 let headers = new Headers();
                 headers.append("Content-Type", "application/json");
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
 
-                let body;
                 try {
                     window.ShowSpinner();
-                    resp = await fetch(RamjetAPI + "/gptchat/ctx", {
+                    await fetch("/ramjet/gptchat/ctx", {
                         method: "POST",
                         headers: headers,
                         body: JSON.stringify({
                             datasets: selectedDatasets,
-                            data_key: window.GetLocalStorage(StorageKeyDatasetKey)
+                            data_key: pdfchatModalEle
+                                .querySelector('div[data-field="data-key"] input').value
                         })
                     })
-                    body = await resp.json();
+
+                    alert("build dataset success, you can chat now");
                 } catch (err) {
                     alert("build dataset failed");
                     throw err;
