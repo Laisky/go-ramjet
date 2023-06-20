@@ -58,6 +58,16 @@
         max-height: 300px;
         overflow: scroll;
     }
+    #modal-pdfchat div[data-field="dataset"] .row,
+    #modal-pdfchat div[data-field="dataset"] .container-fluid {
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+    #modal-pdfchat div[data-field="dataset"] label[for="flexSwitchCheckChecked"] {
+        max-width: 130px;
+        word-break: break-all;
+    }
+
 </style>
 {{end}}
 
@@ -191,7 +201,7 @@
                         <div class="btn-group" role="group" aria-label="Basic outlined example">
                             <button type="button" class="btn btn-outline-primary" data-fn="upload">Upload File</button>
                             <button type="button" class="btn btn-outline-primary" data-fn="refresh">List Dataset</button>
-                            <button type="button" class="btn btn-success" data-fn="build">Build Context</button>
+                            <button type="button" class="btn btn-success" data-fn="build">Build ChatBot</button>
                         </div>
                     </div>
                     <div data-field="dataset">

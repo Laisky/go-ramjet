@@ -1332,6 +1332,8 @@ function setupPrivateDataset() {
                         headers: headers,
                         body: form
                     })
+
+                    alert("upload dataset success, please wait few minutes to process");
                 } catch (err) {
                     alert("upload dataset failed");
                     throw err;
@@ -1369,16 +1371,52 @@ function setupPrivateDataset() {
                 let datasetListEle = pdfchatModalEle
                     .querySelector('div[data-field="dataset"]');
                 let datasetsHTML = "";
+
+
+                // add processing files
+                // show processing files in grey and progress bar
+                body["processing_files"].forEach((datasetName) => {
+                    datasetsHTML += `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="container-fluid row">
+                            <div class="col-5">
+                                <div class="form-check form-switch" data-filename="${datasetName}">
+                                    <input class="form-check-input" type="checkbox" disabled>
+                                    <label class="form-check-label" for="flexSwitchCheckChecked">${datasetName}</label>
+                                </div>
+                            </div>
+                            <div class="col-5">
+                                <div class="progress" role="progressbar" aria-label="Example with label" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar" style="width: 75%">wait few minutes</div>
+                                </div>
+                            </div>
+                            <div class="col-2 text-end">
+                                <i class="bi bi-trash"></i>
+                            </div>
+                        </div>
+                    </div>`
+                });
+
+                // add finished files
                 body.files.forEach((datasetName) => {
                     datasetsHTML += `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="form-check form-switch" data-filename="${datasetName}">
-                                <input class="form-check-input" type="checkbox">
-                                <label class="form-check-label" for="flexSwitchCheckChecked">${datasetName}</label>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="container-fluid row">
+                            <div class="col-5">
+                                <div class="form-check form-switch" data-filename="${datasetName}">
+                                    <input class="form-check-input" type="checkbox">
+                                    <label class="form-check-label" for="flexSwitchCheckChecked">${datasetName}</label>
+                                </div>
                             </div>
-                            <i class="bi bi-trash"></i>
-                        </div>`
+                            <div class="col-5">
+                            </div>
+                            <div class="col-2 text-end">
+                                <i class="bi bi-trash"></i>
+                            </div>
+                        </div>
+                    </div>`
                 });
+
                 datasetListEle.innerHTML = datasetsHTML;
             }
             );
