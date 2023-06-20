@@ -33,6 +33,19 @@ function newChatID() {
     return "chat-" + window.RandomString();
 }
 
+// show alert
+//
+// type: primary, secondary, success, danger, warning, info, light, dark
+function showalert(type, msg) {
+    let alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
+            <div>${msg}</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+
+        // append as first child
+    chatContainer.querySelector(".chatManager")
+    .insertAdjacentHTML("afterbegin", alertEle);
+}
 
 function setupLocalStorage() {
     if (localStorage.getItem("chat_user_session_1")) {
@@ -640,7 +653,7 @@ function abortAIResp(err) {
 
     // if errMsg contains
     if (errMsg.includes("Access denied due to invalid subscription key or wrong API endpoint")) {
-        alert("API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
+        showalert("danger", "API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
     }
 
     if (currentAIRespEle.dataset.status == "waiting" || currentAIRespEle.dataset.status == "writing") {
@@ -1333,9 +1346,9 @@ function setupPrivateDataset() {
                         body: form
                     })
 
-                    alert("upload dataset success, please wait few minutes to process");
+                    showalert("success", "upload dataset success, please wait few minutes to process");
                 } catch (err) {
-                    alert("upload dataset failed");
+                    showalert("danger","upload dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1362,7 +1375,7 @@ function setupPrivateDataset() {
                     })
                     body = await resp.json();
                 } catch (err) {
-                    alert("fetch dataset failed");
+                    showalert("danger","fetch dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1439,7 +1452,7 @@ function setupPrivateDataset() {
                     });
 
                 if (selectedDatasets.length === 0) {
-                    alert("please select at least one dataset, click [List Dataset] button to fetch dataset list");
+                    showalert("warning","please select at least one dataset, click [List Dataset] button to fetch dataset list");
                     return;
                 }
 
@@ -1459,9 +1472,9 @@ function setupPrivateDataset() {
                         })
                     })
 
-                    alert("build dataset success, you can chat now");
+                    showalert("success","build dataset success, you can chat now");
                 } catch (err) {
-                    alert("build dataset failed");
+                    showalert("danger","build dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();

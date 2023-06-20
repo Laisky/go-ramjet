@@ -4,6 +4,11 @@
         padding: 0px;
     }
 
+    #chatContainer .chatManager .alert {
+        margin-bottom: 1px;
+        z-index: 1099;
+    }
+
     #chatContainer .chatManager .conservations {
         padding: 0px;
     }
@@ -73,7 +78,7 @@
 
 {{define "body"}}
 <div class="container-fluid" id="chatContainer">
-    <div class="row" style="height: 100vh; padding-top: 40px;">
+    <div class="row" style="height: 100vh; padding-top: 48px;">
         <div class="col-2 d-none d-md-block sessionManager" style="padding: 0px;">
             <div class="card text-center" style="height: 100%;">
                 <div class="card-header text-muted">
@@ -89,6 +94,11 @@
         </div>
         <div class="col-md-10 col-12 chatManager" style="padding-left: 0px; max-height: 100%;">
             <div class="card text-center" style="height: 100%; flex-direction: column;">
+                <!-- <div class="alert alert-success alert-dismissible" role="alert">
+                    <div>A simple success alert—check it out!</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div> -->
+
                 <div class="card-body conservations" style="min-height: 300px; overflow-y: scroll;">
                     <!-- chats is here -->
 
