@@ -502,6 +502,7 @@ async function sendChat2Server(chatID) {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + window.OpenaiToken(),
                         "X-Authorization-Type": window.OpenaiTokenType(),
+                        "X-PDFCHAT-PASSWORD": window.GetLocalStorage(StorageKeyCustomDatasetPassword)
                     },
                     cache: "no-cache"
                 });
@@ -1308,12 +1309,12 @@ function setupPrivateDataset() {
         let datakeyEle = pdfchatModalEle
             .querySelector('div[data-field="data-key"] input');
 
-        datakeyEle.value = window.GetLocalStorage(StorageKeyDatasetKey);
+        datakeyEle.value = window.GetLocalStorage(StorageKeyCustomDatasetPassword);
 
         datakeyEle
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
-                window.SetLocalStorage(StorageKeyDatasetKey, evt.target.value);
+                window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.target.value);
             }
             );
     }

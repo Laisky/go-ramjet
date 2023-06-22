@@ -11,7 +11,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     CompletionModelDavinci3 = "text-davinci-003";
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
-    StorageKeyDatasetKey = "config_chat_dataset_key",
+    // custom dataset's end-to-end password
+    StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
     StorageKeySystemPrompt = "config_api_static_context";
 
 (function () {
