@@ -42,9 +42,9 @@ function showalert(type, msg) {
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>`;
 
-        // append as first child
+    // append as first child
     chatContainer.querySelector(".chatManager")
-    .insertAdjacentHTML("afterbegin", alertEle);
+        .insertAdjacentHTML("afterbegin", alertEle);
 }
 
 function setupLocalStorage() {
@@ -1320,6 +1320,36 @@ function setupPrivateDataset() {
 
     // bind file upload
     {
+        // when user choosen file, get file name of
+        // pdfchatModalEle.querySelector('div[data-field="pdffile"] input').files[0]
+        // and set to dataset-name input
+        pdfchatModalEle
+            .querySelector('div[data-field="pdffile"] input')
+            .addEventListener("change", (evt) => {
+                evt.stopPropagation();
+
+                let filename = evt.target.files[0].name;
+
+                // only accept .pdf
+                if (!filename.endsWith(".pdf")) {
+                    // remove choosen
+                    pdfchatModalEle
+                        .querySelector('div[data-field="pdffile"] input').value = "";
+
+                    showalert("warning", "currently only support pdf file");
+                    return;
+                }
+
+                // remove extension and non-ascii charactors
+                filename = filename.substring(0, filename.lastIndexOf("."));
+                filename = filename.replace(/[^a-zA-Z0-9]/g, "_");
+
+                pdfchatModalEle
+                    .querySelector('div[data-field="dataset-name"] input')
+                    .value = filename;
+            });
+
+        // bind upload button
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] button[data-fn="upload"]')
             .addEventListener("click", async (evt) => {
@@ -1348,7 +1378,7 @@ function setupPrivateDataset() {
 
                     showalert("success", "upload dataset success, please wait few minutes to process");
                 } catch (err) {
-                    showalert("danger","upload dataset failed");
+                    showalert("danger", "upload dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1375,7 +1405,7 @@ function setupPrivateDataset() {
                     })
                     body = await resp.json();
                 } catch (err) {
-                    showalert("danger","fetch dataset failed");
+                    showalert("danger", "fetch dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1452,7 +1482,7 @@ function setupPrivateDataset() {
                     });
 
                 if (selectedDatasets.length === 0) {
-                    showalert("warning","please select at least one dataset, click [List Dataset] button to fetch dataset list");
+                    showalert("warning", "please select at least one dataset, click [List Dataset] button to fetch dataset list");
                     return;
                 }
 
@@ -1472,9 +1502,9 @@ function setupPrivateDataset() {
                         })
                     })
 
-                    showalert("success","build dataset success, you can chat now");
+                    showalert("success", "build dataset success, you can chat now");
                 } catch (err) {
-                    showalert("danger","build dataset failed");
+                    showalert("danger", "build dataset failed");
                     throw err;
                 } finally {
                     window.HideSpinner();
