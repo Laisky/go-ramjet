@@ -1395,6 +1395,7 @@ function setupPrivateDataset() {
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
 
                 let body;
                 try {
