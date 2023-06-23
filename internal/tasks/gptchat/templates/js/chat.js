@@ -1420,7 +1420,7 @@ function setupPrivateDataset() {
 
                 // add processing files
                 // show processing files in grey and progress bar
-                body.forEach((dataset) => {
+                body.datasets.forEach((dataset) => {
                     switch (dataset.status) {
                         case "done":
                             datasetsHTML += `
