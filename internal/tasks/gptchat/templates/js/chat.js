@@ -1397,6 +1397,7 @@ function setupPrivateDataset() {
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
                 headers.append("Cache-Control", "no-cache");
+                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
                 let body;
                 try {
@@ -1465,8 +1466,14 @@ function setupPrivateDataset() {
                 });
 
                 datasetListEle.innerHTML = datasetsHTML;
-            }
-            );
+
+                // selected binded datasets
+                body.selected.forEach((dataset) => {
+                    datasetListEle
+                        .querySelector(`div[data-filename="${dataset}"] input`)
+                        .checked = true;
+                });
+            });
     }
 
     // build context
