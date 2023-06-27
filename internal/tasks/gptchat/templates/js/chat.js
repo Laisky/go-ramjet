@@ -355,15 +355,9 @@ function getLastNChatMessages(N) {
 
 function lockChatInput() {
     chatPromptInputBtn.classList.add("disabled");
-    document.querySelectorAll("#chatContainer .conservations .role-ai .btn.reload").forEach((item) => {
-        item.classList.add("disabled");
-    });
 }
 function unlockChatInput() {
     chatPromptInputBtn.classList.remove("disabled");
-    document.querySelectorAll("#chatContainer .conservations .role-ai .btn.reload").forEach((item) => {
-        item.classList.remove("disabled");
-    });
 }
 function isAllowChatPrompInput() {
     return !chatPromptInputBtn.classList.contains("disabled");
@@ -383,8 +377,7 @@ function parseChatResp(chatmodel, payload) {
 
 
 async function sendChat2Server(chatID) {
-    let isReload = false,
-        reqPromp;
+    let reqPromp;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
         reqPromp = window.TrimSpace(chatPromptInput.value || "");
@@ -399,7 +392,6 @@ async function sendChat2Server(chatID) {
     } else { // if chatID is not empty, it's a reload request
         reqPromp = chatContainer
             .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
-        isReload = true;
     }
 
     currentAIRespEle = chatContainer
@@ -415,14 +407,12 @@ async function sendChat2Server(chatID) {
                 nContexts = parseInt(window.ChatNContexts());
 
             messages = getLastNChatMessages(nContexts);
-            if (isReload) {
+            if (chatID) {  // reload current chat by latest context
                 messages.push({
                     role: RoleHuman,
                     content: reqPromp
                 });
-                // messages = messages.slice(nContexts);
             }
-
             currentAIRespSSE = new SSE(window.OpenaiAPI(), {
                 headers: {
                     "Content-Type": "application/json",
@@ -567,10 +557,7 @@ async function sendChat2Server(chatID) {
                         currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                     }
 
-                    if (!isReload) {
-                        scrollChatToDown();
-                    }
-
+                    scrollChatToDown();
                     break
             }
         }
@@ -585,10 +572,7 @@ async function sendChat2Server(chatID) {
             Prism.highlightAll();
             window.EnableTooltipsEverywhere();
 
-            if (!isReload) {
-                scrollChatToDown();
-            }
-
+            scrollChatToDown();
             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
             unlockChatInput();
         }
@@ -725,13 +709,6 @@ function append2Chats(role, text, isHistory = false, chatID) {
         throw "chatID is required";
     }
 
-    let reloadBtnHTML = `
-            <div class="row d-flex align-items-center justify-content-center">
-                <button class="btn btn-sm btn-outline-secondary reload" type="button">
-                    <i class="bi bi-repeat"></i>
-                    Reload</button>
-            </div>`;
-
     let chatOp = "append";
     switch (role) {
         case RoleSystem:
@@ -762,7 +739,6 @@ function append2Chats(role, text, isHistory = false, chatID) {
                                     </p>
                                 </div>
                             </div>
-                            ${reloadBtnHTML}
                         </div>`
             }
 
@@ -790,14 +766,12 @@ function append2Chats(role, text, isHistory = false, chatID) {
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
                         </div>
-                        ${reloadBtnHTML}
                     </div>`
             } else {
                 chatEle = `
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-1">🤖️</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
-                        ${reloadBtnHTML}
                     </div>`
             }
 
@@ -824,24 +798,6 @@ function append2Chats(role, text, isHistory = false, chatID) {
 
     // avoid duplicate event listener, only bind event listener for new chat
     if (role == RoleHuman) {
-        // bind reload button
-        let reloadBtn = chatContainer.querySelector(`#${chatID} .btn.reload`);
-        if (reloadBtn) {
-            reloadBtn.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                document.querySelector(`#${chatID} .ai-response`).innerHTML = `
-                <p class="card-text placeholder-glow">
-                    <span class="placeholder col-7"></span>
-                    <span class="placeholder col-4"></span>
-                    <span class="placeholder col-4"></span>
-                    <span class="placeholder col-6"></span>
-                    <span class="placeholder col-8"></span>
-                </p>`;
-
-                sendChat2Server(chatID);
-            });
-        }
-
         // bind delete button
         let deleteBtnHandler = (evt) => {
             evt.stopPropagation();
