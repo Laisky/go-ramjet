@@ -603,7 +603,11 @@ async function sendChat2Server(chatID) {
 function combineRefs(arr) {
     let markdown = "";
     for (const val of arr) {
-        markdown += `- <${val}>\n`;
+        if (val.startsWith("https") || val.startsWith("http")) {
+            markdown += `- <${val}>\n`;
+        } else {  // sometimes refs are just plain text, not url
+            markdown += `- \`${val}\`\n`;
+        }
     }
 
     return markdown;
