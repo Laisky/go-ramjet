@@ -497,7 +497,7 @@ async function sendChat2Server(chatID) {
                     cache: "no-cache"
                 });
 
-                if (resp.status != 200) {
+                if (!resp.ok || resp.status != 200) {
                     throw new Error(`[${resp.status}]: ${await resp.text()}`);
                 }
 
@@ -1289,6 +1289,10 @@ function setupPrivateDataset() {
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
 
+                if (evt.target.files.length === 0) {
+                    return;
+                }
+
                 let filename = evt.target.files[0].name;
 
                 // only accept .pdf
@@ -1316,6 +1320,12 @@ function setupPrivateDataset() {
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
 
+                if (pdfchatModalEle
+                    .querySelector('div[data-field="pdffile"] input').files.length === 0) {
+                    showalert("warning", "please choose a pdf file before upload");
+                    return;
+                }
+
                 // build post form
                 let form = new FormData();
                 form.append("file", pdfchatModalEle
@@ -1331,11 +1341,15 @@ function setupPrivateDataset() {
 
                 try {
                     window.ShowSpinner();
-                    await fetch("/ramjet/gptchat/files", {
+                    const resp = await fetch("/ramjet/gptchat/files", {
                         method: "POST",
                         headers: headers,
                         body: form
                     })
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
 
                     showalert("success", "upload dataset success, please wait few minutes to process");
                 } catch (err) {
@@ -1366,6 +1380,11 @@ function setupPrivateDataset() {
                         method: "GET",
                         headers: headers
                     })
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
+
                     body = await resp.json();
                 } catch (err) {
                     showalert("danger", "fetch dataset failed");
@@ -1463,7 +1482,7 @@ function setupPrivateDataset() {
 
                 try {
                     window.ShowSpinner();
-                    await fetch("/ramjet/gptchat/ctx", {
+                    const resp = await fetch("/ramjet/gptchat/ctx", {
                         method: "POST",
                         headers: headers,
                         body: JSON.stringify({
@@ -1472,6 +1491,10 @@ function setupPrivateDataset() {
                                 .querySelector('div[data-field="data-key"] input').value
                         })
                     })
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
 
                     showalert("success", "build dataset success, you can chat now");
                 } catch (err) {
