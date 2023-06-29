@@ -1353,7 +1353,7 @@ function setupPrivateDataset() {
 
                     showalert("success", "upload dataset success, please wait few minutes to process");
                 } catch (err) {
-                    showalert("danger", "upload dataset failed");
+                    showalert("danger", `upload dataset failed, ${err.message}`);
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1387,7 +1387,7 @@ function setupPrivateDataset() {
 
                     body = await resp.json();
                 } catch (err) {
-                    showalert("danger", "fetch dataset failed");
+                    showalert("danger", `fetch dataset failed, ${err.message}`);
                     throw err;
                 } finally {
                     window.HideSpinner();
@@ -1498,7 +1498,7 @@ function setupPrivateDataset() {
 
                     showalert("success", "build dataset success, you can chat now");
                 } catch (err) {
-                    showalert("danger", "build dataset failed");
+                    showalert("danger", `build dataset failed, ${err.message}`);
                     throw err;
                 } finally {
                     window.HideSpinner();
