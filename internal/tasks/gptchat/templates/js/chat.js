@@ -1361,6 +1361,51 @@ function setupPrivateDataset() {
             });
     }
 
+    // bind delete datasets buttion
+    const bindDatasetDeleteBtn = () => {
+        let datasets = pdfchatModalEle
+            .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash');
+
+        if (datasets == null || datasets.length === 0) {
+            return;
+        }
+
+        datasets.forEach((ele) => {
+            ele.addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+                // headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch(`/ramjet/gptchat/files`, {
+                        method: "DELETE",
+                        headers: headers,
+                        body: JSON.stringify({
+                            datasets: [evt.target.closest(".dataset-item").getAttribute("data-filename")]
+                        })
+                    })
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
+                    await resp.json();
+                } catch (err) {
+                    showalert("danger", `delete dataset failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
+
+                // remove dataset item
+                evt.target.closest(".dataset-item").remove();
+            });
+        });
+    };
+
     // bind list datasets
     {
         pdfchatModalEle
@@ -1404,10 +1449,10 @@ function setupPrivateDataset() {
                     switch (dataset.status) {
                         case "done":
                             datasetsHTML += `
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
-                                            <div class="form-check form-switch" data-filename="${dataset.name}">
+                                            <div class="form-check form-switch">
                                                 <input class="form-check-input" type="checkbox">
                                                 <label class="form-check-label" for="flexSwitchCheckChecked">${dataset.name}</label>
                                             </div>
@@ -1422,10 +1467,10 @@ function setupPrivateDataset() {
                             break;
                         case "processing":
                             datasetsHTML += `
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
-                                            <div class="form-check form-switch" data-filename="${dataset.name}">
+                                            <div class="form-check form-switch">
                                                 <input class="form-check-input" type="checkbox" disabled>
                                                 <label class="form-check-label" for="flexSwitchCheckChecked">${dataset.name}</label>
                                             </div>
@@ -1449,9 +1494,11 @@ function setupPrivateDataset() {
                 // selected binded datasets
                 body.selected.forEach((dataset) => {
                     datasetListEle
-                        .querySelector(`div[data-filename="${dataset}"] input`)
+                        .querySelector(`div[data-filename="${dataset}"] input[type="checkbox"]`)
                         .checked = true;
                 });
+
+                bindDatasetDeleteBtn();
             });
     }
 
@@ -1467,7 +1514,8 @@ function setupPrivateDataset() {
                     querySelectorAll('div[data-field="dataset"] input[type="checkbox"]')
                     .forEach((ele) => {
                         if (ele.checked) {
-                            selectedDatasets.push(ele.parentElement.getAttribute("data-filename"));
+                            selectedDatasets.push(
+                                ele.closest(".dataset-item").getAttribute("data-filename"));
                         }
                     });
 
