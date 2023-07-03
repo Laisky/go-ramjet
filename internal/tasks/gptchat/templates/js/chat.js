@@ -1076,7 +1076,7 @@ function appendPromptShortcut(shortcut, storage = false) {
     ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
         evt.stopPropagation();
 
-        window.ConfirmModal("delete saved prompt", () => {
+        window.ConfirmModal("delete saved prompt", async () => {
             evt.target.parentElement.remove();
 
             // remove localstorage shortcut
@@ -1504,7 +1504,7 @@ function setupPrivateDataset() {
     // build context
     {
         pdfchatModalEle
-            .querySelector('div[data-field="buttons"] button[data-fn="build"]')
+            .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
 
@@ -1523,34 +1523,43 @@ function setupPrivateDataset() {
                     return;
                 }
 
-                let headers = new Headers();
-                headers.append("Content-Type", "application/json");
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-
-                try {
-                    window.ShowSpinner();
-                    const resp = await fetch("/ramjet/gptchat/ctx", {
-                        method: "POST",
-                        headers: headers,
-                        body: JSON.stringify({
-                            datasets: selectedDatasets,
-                            data_key: pdfchatModalEle
-                                .querySelector('div[data-field="data-key"] input').value
-                        })
-                    })
-
-                    if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`);
+                // ask chatbot's name
+                window.SingleInputModal("build bot", "chatbot name", async (botname) => {
+                    // botname should be 1-32 ascii characters
+                    if (!botname.match(/^[a-zA-Z0-9_\-]{1,32}$/)) {
+                        showalert("warning", "chatbot name should be 1-32 ascii characters");
+                        return;
                     }
 
-                    showalert("success", "build dataset success, you can chat now");
-                } catch (err) {
-                    showalert("danger", `build dataset failed, ${err.message}`);
-                    throw err;
-                } finally {
-                    window.HideSpinner();
-                }
-            }
-            );
+                    let headers = new Headers();
+                    headers.append("Content-Type", "application/json");
+                    headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+
+                    try {
+                        window.ShowSpinner();
+                        const resp = await fetch("/ramjet/gptchat/ctx", {
+                            method: "POST",
+                            headers: headers,
+                            body: JSON.stringify({
+                                chatbot_name: botname,
+                                datasets: selectedDatasets,
+                                data_key: pdfchatModalEle
+                                    .querySelector('div[data-field="data-key"] input').value
+                            })
+                        })
+
+                        if (!resp.ok || resp.status !== 200) {
+                            throw new Error(`${resp.status} ${await resp.text()}`);
+                        }
+
+                        showalert("success", "build dataset success, you can chat now");
+                    } catch (err) {
+                        showalert("danger", `build dataset failed, ${err.message}`);
+                        throw err;
+                    } finally {
+                        window.HideSpinner();
+                    }
+                });
+            });
     }
 }

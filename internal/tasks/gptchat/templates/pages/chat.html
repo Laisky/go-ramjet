@@ -1,5 +1,13 @@
 {{define "header"}}
 <style>
+    .modal.show .modal-content{
+        z-index: 1100;
+    }
+
+    #singleInputModal, #deleteCheckModal {
+        z-index: 1500;
+    }
+
     #chatContainer .chatManager {
         padding: 0px;
     }
@@ -58,6 +66,9 @@
         margin-bottom: 3px !important;
     }
 
+    #modal-pdfchat div[data-field="buttons"] .btn {
+        border-radius: 0px;
+    }
     #modal-pdfchat div[data-field="dataset"] {
         border: 1px solid rgb(133, 124, 124);
         max-height: 300px;
@@ -214,7 +225,15 @@
                         <div class="btn-group" role="group" aria-label="Basic outlined example">
                             <button type="button" class="btn btn-outline-primary" data-fn="upload">Upload File</button>
                             <button type="button" class="btn btn-outline-primary" data-fn="refresh">List Dataset</button>
-                            <button type="button" class="btn btn-success" data-fn="build">Build ChatBot</button>
+
+                            <div class="dropdown">
+                                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">ChatBot</button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" data-fn="build-bot">Build</a></li>
+                                    <li><a class="dropdown-item" href="#" data-fn="share-bot">Share</a></li>
+                                    <li><a class="dropdown-item" href="#" data-fn="list-bot">List</a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     <div data-field="dataset">

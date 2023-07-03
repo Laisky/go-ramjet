@@ -20,7 +20,8 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     (function main() {
         checkVersion();
         setupHeader();
-        setupDeleteCheckModal();
+        setupConfirmModal();
+        setupSingleInputModal();
     })();
 })();
 
@@ -34,16 +35,68 @@ function checkVersion() {
     }
 }
 
-function setupDeleteCheckModal() {
+
+function setupSingleInputModal() {
+    window.singleInputCallback = null;
+    window.singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
+    document.getElementById("singleInputModal")
+        .querySelector(".modal-body .yes")
+        .addEventListener("click", async (e) => {
+            e.preventDefault();
+
+            if (window.singleInputCallback) {
+                await window.singleInputCallback();
+            }
+
+            window.singleInputModal.hide();
+        });
+}
+
+window.SingleInputModal = (title, message, callback) => {
+    const modal = document.getElementById("singleInputModal");
+    window.singleInputCallback = async () => {
+        try {
+            window.ShowSpinner();
+            await callback(modal.querySelector(".modal-body input").value)
+        } finally {
+            window.HideSpinner();
+        }
+    };
+
+    modal.querySelector(".modal-title").innerHTML = title;
+    modal.querySelector(".modal-body label.form-label").innerHTML = message;
+    window.singleInputModal.show();
+};
+
+// show modal to confirm,
+// callback will be called if user click yes
+//
+// params:
+//   - title: modal title
+//   - callback: async callback function
+window.ConfirmModal = (title, callback) => {
+    window.deleteCheckCallback = async () => {
+        try {
+            window.ShowSpinner();
+            await callback()
+        } finally {
+            window.HideSpinner();
+        }
+    };
+    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
+    window.deleteCheckModal.show();
+};
+
+function setupConfirmModal() {
     window.deleteCheckCallback = null;
     window.deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
     document.getElementById("deleteCheckModal")
         .querySelector(".modal-body .yes")
-        .addEventListener("click", (e) => {
+        .addEventListener("click",async (e) => {
             e.preventDefault();
 
             if (window.deleteCheckCallback) {
-                window.deleteCheckCallback();
+                await window.deleteCheckCallback();
             }
 
             window.deleteCheckModal.hide();
@@ -101,21 +154,6 @@ function setupHeader() {
         });
     }
 }
-
-// show modal to confirm,
-// callback will be called if user click yes
-window.ConfirmModal = (title, callback) => {
-    window.deleteCheckCallback = () => {
-        try {
-            window.ShowSpinner();
-            callback()
-        } finally {
-            window.HideSpinner();
-        }
-    };
-    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
-    window.deleteCheckModal.show();
-};
 
 window.ShowSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", false);
