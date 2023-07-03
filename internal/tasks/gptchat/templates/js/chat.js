@@ -1076,15 +1076,14 @@ function appendPromptShortcut(shortcut, storage = false) {
     ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
         evt.stopPropagation();
 
-        window.deleteCheckCallback = () => {
+        window.ConfirmModal("delete saved prompt", () => {
             evt.target.parentElement.remove();
 
             // remove localstorage shortcut
             let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
             shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
             window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
-        }
-        window.deleteCheckModal.show();
+        });
     });
 
     // add click event

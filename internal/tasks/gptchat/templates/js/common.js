@@ -102,6 +102,21 @@ function setupHeader() {
     }
 }
 
+// show modal to confirm,
+// callback will be called if user click yes
+window.ConfirmModal = (title, callback) => {
+    window.deleteCheckCallback = () => {
+        try {
+            window.ShowSpinner();
+            callback()
+        } finally {
+            window.HideSpinner();
+        }
+    };
+    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
+    window.deleteCheckModal.show();
+};
+
 window.ShowSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", false);
 };
