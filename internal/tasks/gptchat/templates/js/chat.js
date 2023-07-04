@@ -1501,16 +1501,138 @@ function setupPrivateDataset() {
             });
     }
 
+    // bind list chatbots
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+
+                let body;
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch("/ramjet/gptchat/ctx/list", {
+                        method: "GET",
+                        headers: headers
+                    })
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
+
+                    body = await resp.json();
+                } catch (err) {
+                    showalert("danger", `fetch chatbot list failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
+
+                let datasetListEle = pdfchatModalEle
+                    .querySelector('div[data-field="dataset"]');
+                let chatbotsHTML = "";
+
+                body.chatbots.forEach((chatbot) => {
+                    let selectedHTML = "";
+                    if (chatbot == body.current) {
+                        selectedHTML = `checked`;
+                    }
+
+
+                    chatbotsHTML += `
+                        <div class="d-flex justify-content-between align-items-center chatbot-item" data-name="${chatbot}">
+                            <div class="container-fluid row">
+                                <div class="col-5">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" ${selectedHTML}>
+                                        <label class="form-check-label" for="flexSwitchCheckChecked">${chatbot}</label>
+                                    </div>
+                                </div>
+                                <div class="col-5">
+                                </div>
+                                <div class="col-2 text-end">
+                                    <i class="bi bi-trash"></i>
+                                </div>
+                            </div>
+                        </div>`
+
+                });
+
+                datasetListEle.innerHTML = chatbotsHTML;
+
+                // bind active new selected chatbot
+                datasetListEle
+                    .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
+                    .forEach((ele) => {
+                        ele.addEventListener("change", async (evt) => {
+                            evt.stopPropagation();
+
+                            if (!evt.target.checked) {
+                                // at least one chatbot should be selected
+                                evt.target.checked = true;
+                                return;
+                            } else {
+                                // uncheck other chatbot
+                                datasetListEle
+                                    .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
+                                    .forEach((ele) => {
+                                        if (ele != evt.target) {
+                                            ele.checked = false;
+                                        }
+                                    });
+                            }
+
+                            let headers = new Headers();
+                            headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+
+                            try {
+                                window.ShowSpinner();
+                                const chatbotName = evt.target.closest(".chatbot-item").getAttribute("data-name");
+                                const resp = await fetch("/ramjet/gptchat/ctx/active", {
+                                    method: "POST",
+                                    headers: headers,
+                                    body: JSON.stringify({
+                                        data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                                        chatbot_name: chatbotName
+                                    })
+                                })
+
+                                if (!resp.ok || resp.status !== 200) {
+                                    throw new Error(`${resp.status} ${await resp.text()}`);
+                                }
+
+                                const body = await resp.json();
+                                showalert("success", `active chatbot success, you can chat with ${chatbotName} now`);
+                            } catch (err) {
+                                showalert("danger", `active chatbot failed, ${err.message}`);
+                                throw err;
+                            } finally {
+                                window.HideSpinner();
+                            }
+
+                        });
+                    });
+
+            });
+    }
+
     // build custom chatbot
     {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
 
                 let selectedDatasets = [];
                 pdfchatModalEle.
-                    querySelectorAll('div[data-field="dataset"] input[type="checkbox"]')
+                    querySelectorAll('div[data-field="dataset"] .dataset-item input[type="checkbox"]')
                     .forEach((ele) => {
                         if (ele.checked) {
                             selectedDatasets.push(
@@ -1535,9 +1657,9 @@ function setupPrivateDataset() {
                     headers.append("Content-Type", "application/json");
                     headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
 
-                    try {
+                    try { // build chatbot
                         window.ShowSpinner();
-                        const resp = await fetch("/ramjet/gptchat/ctx", {
+                        const resp = await fetch("/ramjet/gptchat/ctx/build", {
                             method: "POST",
                             headers: headers,
                             body: JSON.stringify({
