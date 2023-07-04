@@ -480,7 +480,7 @@ async function sendChat2Server(chatID) {
                     }
                     break;
                 case QAModelCustom:
-                    url = "/ramjet/gptchat/ctx";
+                    url = "/ramjet/gptchat/ctx/chat";
                     break
             }
 
@@ -1501,7 +1501,7 @@ function setupPrivateDataset() {
             });
     }
 
-    // build context
+    // build custom chatbot
     {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
