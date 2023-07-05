@@ -400,6 +400,14 @@ async function sendChat2Server(chatID) {
     lockChatInput();
 
     let chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+    // get chatmodel from url parameters
+    if (window.location.search) {
+        let params = new URLSearchParams(window.location.search);
+        if (params.has("chatmodel")) {
+            chatmodel = params.get("chatmodel");
+        }
+    }
+
     switch (chatmodel) {
         case ChatModelTurbo35:
         case ChatModelGPT4:
@@ -457,6 +465,7 @@ async function sendChat2Server(chatID) {
         case QAModelCustom:
         case QAModelBasebit:
         case QAModelSecurity:
+        case QAModelShared:
             // {
             //     "question": "XFS 是干啥的",
             //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
@@ -478,15 +487,26 @@ async function sendChat2Server(chatID) {
                         console.error("can't find project name for chat model: " + chatmodel);
                         return;
                     }
+
+                    url = `${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`;
                     break;
                 case QAModelCustom:
-                    url = "/ramjet/gptchat/ctx/chat";
+                    url = `/ramjet/gptchat/ctx/chat?q=${encodeURIComponent(reqPromp)}`;
                     break
+                case QAModelShared:
+                    // example url:
+                    //
+                    // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+
+                    let params = new URLSearchParams(window.location.search);
+                    url = `/ramjet/gptchat/ctx/share?uid=${params.get("uid")}`
+                        + `&chatbot_name=${params.get("chatbot_name")}`
+                        + `&q=${encodeURIComponent(reqPromp)}`;
             }
 
             currentAIRespEle.scrollIntoView({ behavior: "smooth" });
             try {
-                const resp = await fetch(`${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`, {
+                const resp = await fetch(url, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
@@ -1619,6 +1639,58 @@ function setupPrivateDataset() {
                         });
                     });
 
+            });
+    }
+
+    // bind share chatbots
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+
+                let checkedChatbotEle = pdfchatModalEle
+                    .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
+                if (!checkedChatbotEle) {
+                    showalert("danger", `please click [Chatbot List] first`);
+                    return;
+                }
+
+                let chatbot_name = checkedChatbotEle.closest(".chatbot-item").getAttribute("data-name");
+
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+
+                let respBody;
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch("/ramjet/gptchat/ctx/share", {
+                        method: "POST",
+                        headers: headers,
+                        body: JSON.stringify({
+                            chatbot_name: chatbot_name,
+                            data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                        })
+                    });
+
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
+
+                    respBody = await resp.json();
+                } catch (err) {
+                    showalert("danger", `fetch chatbot list failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
+
+                // open new tab page
+                const sharedChatbotUrl = `${window.location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
+                showalert("info", `open ${sharedChatbotUrl}`);
+                window.open(sharedChatbotUrl, "_blank");
             });
     }
 

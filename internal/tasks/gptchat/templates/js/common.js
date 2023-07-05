@@ -8,6 +8,7 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     QAModelBasebit = "qa-bbt-xego",
     QAModelSecurity = "qa-security",
     QAModelCustom = "qa-custom",
+    QAModelShared = "qa-shared",
     CompletionModelDavinci3 = "text-davinci-003";
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
