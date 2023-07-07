@@ -4,7 +4,13 @@ const OpenaiTokenTypeProxy = "proxy",
     OpenaiTokenTypeDirect = "direct";
 
 const ChatModelTurbo35 = "gpt-3.5-turbo",
+    ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
+    ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
+    ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
     ChatModelGPT4 = "gpt-4",
+    ChatModelGPT4_0613 = "gpt-4-0613",
+    ChatModelGPT4_32K = "gpt-4-32k",
+    ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
     QAModelBasebit = "qa-bbt-xego",
     QAModelSecurity = "qa-security",
     QAModelCustom = "qa-custom",
@@ -16,6 +22,12 @@ const ChatModels = [
     ChatModelTurbo35,
     ChatModelGPT4,
     CompletionModelDavinci3,
+    ChatModelTurbo35_16K,
+    ChatModelTurbo35_0613,
+    ChatModelTurbo35_0613_16K,
+    ChatModelGPT4_0613,
+    ChatModelGPT4_32K,
+    ChatModelGPT4_0613_32K,
 ];
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
@@ -262,11 +274,7 @@ function setupHeader() {
             response.json().then((data) => {
                 let modelsEle = "";
                 if (data.allowed_models.includes("*")) {
-                    data.allowed_models = [
-                        ChatModelTurbo35,
-                        ChatModelGPT4,
-                        CompletionModelDavinci3,
-                    ];
+                    data.allowed_models = ChatModels;
                 }
 
                 // if user selected one of ChatModels, but it's not in allowed_models, then use the first one.
@@ -283,13 +291,13 @@ function setupHeader() {
 
                 // set selected model
                 document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a")
-                .forEach((elem) => {
-                    elem.classList.remove("active");
+                    .forEach((elem) => {
+                        elem.classList.remove("active");
 
-                    if (elem.dataset.model == selectedModel) {
-                        elem.classList.add("active");
-                    }
-                });
+                        if (elem.dataset.model == selectedModel) {
+                            elem.classList.add("active");
+                        }
+                    });
 
                 // listen click events
                 let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a");
