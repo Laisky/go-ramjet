@@ -21,16 +21,6 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-func AbortErr(ctx *gin.Context, err error) bool {
-	if err == nil {
-		return false
-	}
-
-	log.Logger.Error("openai chat abort", zap.Error(err))
-	ctx.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("%+v", err))
-	return true
-}
-
 var (
 	ratelimiter *gutils.Throttle
 	dataReg     = regexp.MustCompile(`data: (\{.*\})`)
@@ -144,7 +134,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
 
-	user, err := getUser(ctx)
+	user, err := getUserFromToken(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get user")
 	}

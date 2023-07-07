@@ -18,11 +18,14 @@ func bindHTTP() {
 		log.Logger.Panic("setup http client", zap.Error(err))
 	}
 
-	ihttp.RegisterStatic(web.Server.Group("/static"))
-	web.Server.GET("/favicon.ico", func(ctx *gin.Context) {
+	grp := web.Server.Group("/gptchat")
+
+	ihttp.RegisterStatic(grp.Group("/static"))
+	grp.GET("/favicon.ico", func(ctx *gin.Context) {
 		ctx.Header("Cache-Control", "max-age=86400")
 		ctx.Data(http.StatusOK, "image/png", istatic.Favicon)
 	})
-	web.Server.Any("/api/", ihttp.APIHandler)
-	web.Server.GET("/", ihttp.Chat)
+	grp.Any("/api/", ihttp.APIHandler)
+	grp.GET("/", ihttp.Chat)
+	grp.GET("/user/me", ihttp.GetCurrentUser)
 }
