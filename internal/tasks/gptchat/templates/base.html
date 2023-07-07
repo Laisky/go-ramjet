@@ -68,12 +68,13 @@
                             Chat
                         </a>
                         <ul class="dropdown-menu chat-models">
-                            <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
+                            <li><a class="dropdown-item" href="#">loading...</a></li>
+                            <!-- <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
                             <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
-                            <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li>
+                            <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -110,12 +111,12 @@
             <div class="input-group mb-3">
                 <label for="token" class="form-label">token:</label>
                 <div class="input-group mb-3 token-type" style="padding: 0px;">
-                    <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button"
+                    <!-- <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button"
                         data-bs-toggle="dropdown" aria-expanded="false">proxy</button>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" data-value="proxy" href="#">proxy</a></li>
                         <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
-                    </ul>
+                    </ul> -->
                     <input type="text" class="form-control input api-token" value="DEFAULT_PROXY_TOKEN">
                 </div>
             </div>
@@ -130,7 +131,7 @@
                 <label for="configMaxTokens" class="form-label">
                     max tokens - <span class="max-token-val"></span>
                 </label>
-                <input type="range" class="form-range input max-token" min="1000" max="4000" step="100" value="500">
+                <input type="range" class="form-range input max-token" min="1000" max="32000" step="100" value="500">
             </div>
             <div class="mb-3 input-group temperature">
                 <label for="configTemperature" class="form-label">

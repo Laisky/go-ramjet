@@ -11,150 +11,19 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     QAModelShared = "qa-shared",
     CompletionModelDavinci3 = "text-davinci-003";
 
+// casual chat models
+const ChatModels = [
+    ChatModelTurbo35,
+    ChatModelGPT4,
+    CompletionModelDavinci3,
+];
+
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
     StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
     StorageKeySystemPrompt = "config_api_static_context";
 
-(function () {
 
-    (function main() {
-        checkVersion();
-        setupHeader();
-        setupConfirmModal();
-        setupSingleInputModal();
-    })();
-})();
-
-
-function checkVersion() {
-    SetLocalStorage("version", Version);
-    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
-    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
-        SetLocalStorage("last_reload_at", (new Date()).toISOString());
-        // window.location.reload();
-    }
-}
-
-
-function setupSingleInputModal() {
-    window.singleInputCallback = null;
-    window.singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
-    document.getElementById("singleInputModal")
-        .querySelector(".modal-body .yes")
-        .addEventListener("click", async (e) => {
-            e.preventDefault();
-
-            if (window.singleInputCallback) {
-                await window.singleInputCallback();
-            }
-
-            window.singleInputModal.hide();
-        });
-}
-
-window.SingleInputModal = (title, message, callback) => {
-    const modal = document.getElementById("singleInputModal");
-    window.singleInputCallback = async () => {
-        try {
-            window.ShowSpinner();
-            await callback(modal.querySelector(".modal-body input").value)
-        } finally {
-            window.HideSpinner();
-        }
-    };
-
-    modal.querySelector(".modal-title").innerHTML = title;
-    modal.querySelector(".modal-body label.form-label").innerHTML = message;
-    window.singleInputModal.show();
-};
-
-// show modal to confirm,
-// callback will be called if user click yes
-//
-// params:
-//   - title: modal title
-//   - callback: async callback function
-window.ConfirmModal = (title, callback) => {
-    window.deleteCheckCallback = async () => {
-        try {
-            window.ShowSpinner();
-            await callback()
-        } finally {
-            window.HideSpinner();
-        }
-    };
-    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
-    window.deleteCheckModal.show();
-};
-
-function setupConfirmModal() {
-    window.deleteCheckCallback = null;
-    window.deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
-    document.getElementById("deleteCheckModal")
-        .querySelector(".modal-body .yes")
-        .addEventListener("click",async (e) => {
-            e.preventDefault();
-
-            if (window.deleteCheckCallback) {
-                await window.deleteCheckCallback();
-            }
-
-            window.deleteCheckModal.hide();
-        });
-}
-
-function setupHeader() {
-    // setup chat qa models
-    {
-        let qaModels = window.data["qa_chat_models"] || [],
-            headerBarEle = document.getElementById("headerbar"),
-            qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
-
-        qaModels.forEach((model) => {
-            let li = document.createElement("li");
-            let a = document.createElement("a");
-            a.href = "#";
-            a.classList.add("dropdown-item");
-            a.dataset.model = model.name;
-            a.textContent = model.name;
-            li.appendChild(a);
-            qaModelsContainer.appendChild(li);
-        });
-    }
-
-    // setup chat models
-    {
-        // set default chat model
-        if (!GetLocalStorage("config_chat_model")) {
-            SetLocalStorage("config_chat_model", ChatModelTurbo35);
-        }
-
-        let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a");
-
-        // set active
-        let model = GetLocalStorage("config_chat_model");
-        modelElems.forEach((elem) => {
-            if (elem.dataset.model === model) {
-                elem.classList.add("active");
-            }
-        });
-
-        // listen click events
-        modelElems.forEach((elem) => {
-            elem.addEventListener("click", (e) => {
-                e.preventDefault();
-                modelElems.forEach((elem) => {
-                    elem.classList.remove("active");
-                });
-
-                e.target.classList.add("active");
-                let model = e.target.dataset.model;
-                SetLocalStorage("config_chat_model", model);
-            });
-        });
-    }
-}
 
 window.ShowSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", false);
@@ -257,3 +126,186 @@ window.OpenaiChatStaticContext = () => {
 
     return v;
 };
+
+
+window.SingleInputModal = (title, message, callback) => {
+    const modal = document.getElementById("singleInputModal");
+    window.singleInputCallback = async () => {
+        try {
+            window.ShowSpinner();
+            await callback(modal.querySelector(".modal-body input").value)
+        } finally {
+            window.HideSpinner();
+        }
+    };
+
+    modal.querySelector(".modal-title").innerHTML = title;
+    modal.querySelector(".modal-body label.form-label").innerHTML = message;
+    window.singleInputModal.show();
+};
+
+// show modal to confirm,
+// callback will be called if user click yes
+//
+// params:
+//   - title: modal title
+//   - callback: async callback function
+window.ConfirmModal = (title, callback) => {
+    window.deleteCheckCallback = async () => {
+        try {
+            window.ShowSpinner();
+            await callback()
+        } finally {
+            window.HideSpinner();
+        }
+    };
+    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
+    window.deleteCheckModal.show();
+};
+
+
+
+(function () {
+    (function main() {
+        checkVersion();
+        setupHeader();
+        setupConfirmModal();
+        setupSingleInputModal();
+    })();
+})();
+
+
+function checkVersion() {
+    SetLocalStorage("version", Version);
+    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
+    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
+        SetLocalStorage("last_reload_at", (new Date()).toISOString());
+        // window.location.reload();
+    }
+}
+
+
+function setupSingleInputModal() {
+    window.singleInputCallback = null;
+    window.singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
+    document.getElementById("singleInputModal")
+        .querySelector(".modal-body .yes")
+        .addEventListener("click", async (e) => {
+            e.preventDefault();
+
+            if (window.singleInputCallback) {
+                await window.singleInputCallback();
+            }
+
+            window.singleInputModal.hide();
+        });
+}
+
+
+function setupConfirmModal() {
+    window.deleteCheckCallback = null;
+    window.deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
+    document.getElementById("deleteCheckModal")
+        .querySelector(".modal-body .yes")
+        .addEventListener("click", async (e) => {
+            e.preventDefault();
+
+            if (window.deleteCheckCallback) {
+                await window.deleteCheckCallback();
+            }
+
+            window.deleteCheckModal.hide();
+        });
+}
+
+function setupHeader() {
+    // setup chat qa models
+    {
+        let qaModels = window.data["qa_chat_models"] || [],
+            headerBarEle = document.getElementById("headerbar"),
+            qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
+
+        qaModels.forEach((model) => {
+            let li = document.createElement("li");
+            let a = document.createElement("a");
+            a.href = "#";
+            a.classList.add("dropdown-item");
+            a.dataset.model = model.name;
+            a.textContent = model.name;
+            li.appendChild(a);
+            qaModelsContainer.appendChild(li);
+        });
+    }
+
+    // setup chat models
+    {
+        // set default chat model
+        if (!GetLocalStorage("config_chat_model")) {
+            SetLocalStorage("config_chat_model", ChatModelTurbo35);
+        }
+
+        let selectedModel = GetLocalStorage("config_chat_model");
+
+        // get users' models
+        let headers = new Headers();
+        headers.append("Authorization", "Bearer " + window.OpenaiToken());
+        fetch("/user/me", {
+            method: "GET",
+            headers: headers,
+            cache: "no-cache"
+        }).then((response) => {
+            if (response.status != 200) {
+                return;
+            }
+
+            let modelsContainer = document.querySelector("#headerbar .chat-models");
+            response.json().then((data) => {
+                let modelsEle = "";
+                if (data.allowed_models.includes("*")) {
+                    data.allowed_models = [
+                        ChatModelTurbo35,
+                        ChatModelGPT4,
+                        CompletionModelDavinci3,
+                    ];
+                }
+
+                // if user selected one of ChatModels, but it's not in allowed_models, then use the first one.
+                // if user selected one of QaModels, no matter it's in allowed_models or not, do not change it.
+                if (ChatModels.includes(selectedModel) && !data.allowed_models.includes(selectedModel)) {
+                    selectedModel = data.allowed_models[0];
+                    SetLocalStorage("config_chat_model", selectedModel);
+                }
+
+                data.allowed_models.forEach((model) => {
+                    modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+                });
+                modelsContainer.innerHTML = modelsEle;
+
+                // set selected model
+                document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a")
+                .forEach((elem) => {
+                    elem.classList.remove("active");
+
+                    if (elem.dataset.model == selectedModel) {
+                        elem.classList.add("active");
+                    }
+                });
+
+                // listen click events
+                let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a");
+                modelElems.forEach((elem) => {
+                    elem.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        modelElems.forEach((elem) => {
+                            elem.classList.remove("active");
+                        });
+
+                        e.target.classList.add("active");
+                        let model = e.target.dataset.model;
+                        SetLocalStorage("config_chat_model", model);
+                    });
+                });
+            });
+        });
+    }
+}

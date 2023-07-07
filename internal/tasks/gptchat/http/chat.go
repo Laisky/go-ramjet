@@ -226,7 +226,7 @@ func bodyChecker(body io.ReadCloser) (data *FrontendReq, err error) {
 
 	trimMessages(data)
 	maxTokens := uint(MaxTokens())
-	if data.MaxTokens > maxTokens {
+	if maxTokens != 0 && data.MaxTokens > maxTokens {
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 

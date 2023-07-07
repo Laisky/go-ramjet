@@ -909,33 +909,33 @@ function setupConfig() {
         querySelector(".input-group.token-type");
 
     // set token type
-    {
-        let selectItems = tokenTypeParent
-            .querySelectorAll("a.dropdown-item");
-        switch (window.OpenaiTokenType()) {
-            case "proxy":
-                configContainer
-                    .querySelector(".token-type .show-val").innerHTML = "proxy";
-                ActiveElementsByData(selectItems, "value", "proxy");
-                break;
-            case "direct":
-                configContainer
-                    .querySelector(".token-type .show-val").innerHTML = "direct";
-                ActiveElementsByData(selectItems, "value", "direct");
-                break;
-        }
+    // {
+    //     let selectItems = tokenTypeParent
+    //         .querySelectorAll("a.dropdown-item");
+    //     switch (window.OpenaiTokenType()) {
+    //         case "proxy":
+    //             configContainer
+    //                 .querySelector(".token-type .show-val").innerHTML = "proxy";
+    //             ActiveElementsByData(selectItems, "value", "proxy");
+    //             break;
+    //         case "direct":
+    //             configContainer
+    //                 .querySelector(".token-type .show-val").innerHTML = "direct";
+    //             ActiveElementsByData(selectItems, "value", "direct");
+    //             break;
+    //     }
 
-        // bind evt listener for choose different token type
-        selectItems.forEach((ele) => {
-            ele.addEventListener("click", (evt) => {
-                // evt.stopPropagation();
-                configContainer
-                    .querySelector(".token-type .show-val")
-                    .innerHTML = evt.target.dataset.value;
-                window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
-            })
-        });
-    }
+    //     // bind evt listener for choose different token type
+    //     selectItems.forEach((ele) => {
+    //         ele.addEventListener("click", (evt) => {
+    //             // evt.stopPropagation();
+    //             configContainer
+    //                 .querySelector(".token-type .show-val")
+    //                 .innerHTML = evt.target.dataset.value;
+    //             window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
+    //         })
+    //     });
+    // }
 
     //  config_api_token_value
     {
