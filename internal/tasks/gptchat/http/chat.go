@@ -18,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 
-	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -134,26 +133,6 @@ func APIHandler(ctx *gin.Context) {
 	}
 }
 
-func tokenModelPermCheck(reqToken, model string) (usertoken string, err error) {
-	for _, v := range iconfig.Config.UserTokens {
-		if v.Token == reqToken {
-			if !gutils.Contains(v.AllowedModels, model) {
-				return "", errors.Errorf("model %s is not allowed for current user", model)
-			}
-
-			if v.OpenaiToken != "" { // if user has specific openai token
-				return v.OpenaiToken, nil
-			}
-
-			// use default shared openai token
-			return iconfig.Config.Token, nil
-		}
-	}
-
-	// bypass unknow token
-	return reqToken, nil
-}
-
 func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	newUrl := fmt.Sprintf("%s%s",
@@ -165,7 +144,11 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
 
-	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "get user")
+	}
+
 	body := ctx.Request.Body
 	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
@@ -174,9 +157,8 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
 
-		userToken, err = tokenModelPermCheck(userToken, frontendReq.Model)
-		if err != nil {
-			return nil, errors.Wrapf(err, "check whether token can access model %q", frontendReq.Model)
+		if !user.IsModelAllowed(frontendReq.Model) {
+			return nil, errors.Errorf("model is not allowed for current user %q", user.UserName)
 		}
 
 		var openaiReq any
@@ -196,7 +178,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 				return nil, errors.Wrap(err, "copy to completion req")
 			}
 		default:
-			return nil, errors.Errorf("unknown model %q", frontendReq.Model)
+			return nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
 		}
 
 		payload, err := json.Marshal(openaiReq)
@@ -213,20 +195,9 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	}
 	req = req.WithContext(ctx.Request.Context())
 	CopyHeader(req.Header, ctx.Request.Header)
-
-	// check token
-	{
-		typeHeader := ctx.Request.Header.Get("X-Authorization-Type")
-		switch typeHeader {
-		case "proxy":
-			req.Header.Set("authorization", "Bearer "+userToken)
-		default:
-			return nil, errors.Errorf("unsupport auth type %q", typeHeader)
-		}
-	}
+	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
 
 	log.Logger.Debug("proxy request", zap.String("url", newUrl))
-	// resp, err = http.DefaultClient.Do(req)
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", newUrl)

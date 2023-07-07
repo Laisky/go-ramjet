@@ -13,6 +13,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/spf13/cobra"
 
+	"github.com/Laisky/go-ramjet/internal/pkg/singleton"
 	_ "github.com/Laisky/go-ramjet/internal/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
@@ -82,6 +83,10 @@ func setupSettings(ctx context.Context) bool {
 	log.Logger.Info("load config", zap.String("file", cfgFile))
 	if err = gconfig.Shared.LoadFromFile(cfgFile); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
+	}
+
+	if err = singleton.Setup(); err != nil {
+		log.Logger.Panic("setup singleton", zap.Error(err))
 	}
 
 	return true
