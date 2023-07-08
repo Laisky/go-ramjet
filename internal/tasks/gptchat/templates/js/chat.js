@@ -1312,10 +1312,11 @@ function setupPrivateDataset() {
                     return;
                 }
 
-                let filename = evt.target.files[0].name;
+                let filename = evt.target.files[0].name,
+                    fileext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
 
-                // only accept .pdf
-                if (!filename.endsWith(".pdf")) {
+
+                if ([".pdf", ".md", ".ppt", ".pptx", ".doc", ".docx"].indexOf(fileext) === -1) {
                     // remove choosen
                     pdfchatModalEle
                         .querySelector('div[data-field="pdffile"] input').value = "";
