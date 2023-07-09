@@ -366,7 +366,13 @@ function isAllowChatPrompInput() {
 function parseChatResp(chatmodel, payload) {
     switch (chatmodel) {
         case ChatModelTurbo35:
+        case ChatModelTurbo35_16K:
+        case ChatModelTurbo35_0613:
+        case ChatModelTurbo35_0613_16K:
         case ChatModelGPT4:
+        case ChatModelGPT4_0613:
+        case ChatModelGPT4_32K:
+        case ChatModelGPT4_0613_32K:
             return payload.choices[0].delta.content || "";
             break;
         case CompletionModelDavinci3:
