@@ -153,7 +153,14 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 
 		var openaiReq any
 		switch frontendReq.Model {
-		case "gpt-3.5-turbo", "gpt-4":
+		case "gpt-3.5-turbo",
+			"gpt-3.5-turbo-16k",
+			"gpt-3.5-turbo-0613",
+			"gpt-3.5-turbo-16k-0613",
+			"gpt-4",
+			"gpt-4-0613",
+			"gpt-4-32k",
+			"gpt-4-32k-0613":
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
 			req := new(OpenaiChatReq)
 			if err := copier.Copy(req, frontendReq); err != nil {
