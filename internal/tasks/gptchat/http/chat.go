@@ -237,15 +237,17 @@ func trimMessages(data *FrontendReq) {
 	maxMessages := MaxMessages()
 	maxTokens := MaxTokens()
 
-	if len(data.Messages) > maxMessages {
+	if maxMessages != 0 && len(data.Messages) > maxMessages {
 		data.Messages = data.Messages[len(data.Messages)-maxMessages:]
 	}
 
-	for i := range data.Messages {
-		cnt := data.Messages[i].Content
-		if len(cnt) > maxTokens {
-			cnt = cnt[len(cnt)-maxTokens:]
-			data.Messages[i].Content = cnt
+	if maxTokens != 0 {
+		for i := range data.Messages {
+			cnt := data.Messages[i].Content
+			if len(cnt) > maxTokens {
+				cnt = cnt[len(cnt)-maxTokens:]
+				data.Messages[i].Content = cnt
+			}
 		}
 	}
 }
