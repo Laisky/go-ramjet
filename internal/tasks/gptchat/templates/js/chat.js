@@ -30,7 +30,7 @@ window.ready(() => {
 
 
 function newChatID() {
-    return "chat-" + window.RandomString();
+    return "chat-" + window.RandomString(16);
 }
 
 // show alert
@@ -739,7 +739,7 @@ function setupChatInput() {
 function append2Chats(role, text, isHistory = false, chatID) {
     let chatEle;
 
-    if (chatID == undefined) {
+    if (!chatID) {
         throw "chatID is required";
     }
 
@@ -863,7 +863,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 evt.stopPropagation();
                 let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
                 chatContainer.querySelector(`#${chatID}`).innerHTML = `
-                        <div class="container-fluid row role-human" data-chatid="chat-93upb32o06e">
+                        <div class="container-fluid row role-human" data-chatid="${chatID}">
                             <div class="col-1">🤔️</div>
                             <div class="col-10 text-start"><pre>${newText}</pre></div>
                             <div class="col-1 d-flex justify-content-between">
@@ -871,7 +871,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                                 <i class="bi bi-trash"></i>
                             </div>
                         </div>
-                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="chat-93upb32o06e">
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                             <div class="col-1">🤖️</div>
                             <div class="col-11 text-start ai-response" data-status="writing">
                                 <p class="card-text placeholder-glow">

@@ -61,10 +61,6 @@
             .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
     }
 
-    window.RandomString = () => {
-        return Math.random().toString(36).substring(2);
-    };
-
     window.ready = (fn) => {
         if (document.readyState == 'complete') {
             fn();
