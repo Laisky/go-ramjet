@@ -5,12 +5,12 @@ const OpenaiTokenTypeProxy = "proxy",
 
 const ChatModelTurbo35 = "gpt-3.5-turbo",
     ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
-    ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
-    ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
+    // ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
+    // ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
     ChatModelGPT4 = "gpt-4",
-    ChatModelGPT4_0613 = "gpt-4-0613",
+    // ChatModelGPT4_0613 = "gpt-4-0613",
     ChatModelGPT4_32K = "gpt-4-32k",
-    ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
+    // ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
     QAModelBasebit = "qa-bbt-xego",
     QAModelSecurity = "qa-security",
     QAModelCustom = "qa-custom",
@@ -18,23 +18,45 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     CompletionModelDavinci3 = "text-davinci-003";
 
 // casual chat models
+
 const ChatModels = [
     ChatModelTurbo35,
     ChatModelGPT4,
     CompletionModelDavinci3,
     ChatModelTurbo35_16K,
-    ChatModelTurbo35_0613,
-    ChatModelTurbo35_0613_16K,
-    ChatModelGPT4_0613,
+    // ChatModelTurbo35_0613,
+    // ChatModelTurbo35_0613_16K,
+    // ChatModelGPT4_0613,
     ChatModelGPT4_32K,
-    ChatModelGPT4_0613_32K,
-];
+    // ChatModelGPT4_0613_32K,
+],
+    QaModels = [
+        QAModelBasebit,
+        QAModelSecurity,
+        QAModelCustom,
+        QAModelShared,
+    ],
+    CompletionModels = [
+        CompletionModelDavinci3,
+    ];
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
     StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
     StorageKeySystemPrompt = "config_api_static_context";
 
+
+window.IsChatModel = (model) => {
+    return ChatModels.includes(model);
+};
+
+window.IsQaModel = (model) => {
+    return QaModels.includes(model);
+};
+
+window.IsCompletionModel = (model) => {
+    return CompletionModels.includes(model);
+};
 
 
 window.ShowSpinner = () => {
@@ -284,10 +306,22 @@ function setupHeader() {
                     SetLocalStorage("config_chat_model", selectedModel);
                 }
 
+                let unsupportedModels = [];
                 data.allowed_models.forEach((model) => {
+                    if (!ChatModels.includes(model)) {
+                        unsupportedModels.push(model);
+                        return;
+                    }
+
                     modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
                 });
                 modelsContainer.innerHTML = modelsEle;
+
+                if (unsupportedModels.length > 0) {
+                    showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
+                        + `maybe you need refresh your browser. if this warning still exists, `
+                        + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
+                }
 
                 // set selected model
                 document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a")

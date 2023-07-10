@@ -364,20 +364,12 @@ function isAllowChatPrompInput() {
 }
 
 function parseChatResp(chatmodel, payload) {
-    switch (chatmodel) {
-        case ChatModelTurbo35:
-        case ChatModelTurbo35_16K:
-        case ChatModelTurbo35_0613:
-        case ChatModelTurbo35_0613_16K:
-        case ChatModelGPT4:
-        case ChatModelGPT4_0613:
-        case ChatModelGPT4_32K:
-        case ChatModelGPT4_0613_32K:
-            return payload.choices[0].delta.content || "";
-            break;
-        case CompletionModelDavinci3:
-            return payload.choices[0].text || "";
-            break;
+    if (window.IsChatModel(chatmodel)) {
+        return payload.choices[0].delta.content || "";
+    } else if (window.IsCompletionModel(chatmodel)) {
+        return payload.choices[0].text || "";
+    } else {
+        showalert("error", `Unknown chat model ${chatmodel}`);
     }
 }
 
@@ -414,139 +406,130 @@ async function sendChat2Server(chatID) {
         }
     }
 
-    switch (chatmodel) {
-        case ChatModelTurbo35:
-        case ChatModelTurbo35_16K:
-        case ChatModelTurbo35_0613:
-        case ChatModelTurbo35_0613_16K:
-        case ChatModelGPT4:
-        case ChatModelGPT4_0613:
-        case ChatModelGPT4_32K:
-        case ChatModelGPT4_0613_32K:
-            let messages,
-                nContexts = parseInt(window.ChatNContexts());
+    if (window.IsChatModel(chatmodel)) {
+        let messages,
+            nContexts = parseInt(window.ChatNContexts());
 
-            messages = getLastNChatMessages(nContexts);
-            if (chatID) {  // reload current chat by latest context
-                messages.push({
-                    role: RoleHuman,
-                    content: reqPromp
-                });
-            }
-            currentAIRespSSE = new SSE(window.OpenaiAPI(), {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + window.OpenaiToken(),
-                    "X-Authorization-Type": window.OpenaiTokenType(),
-                },
-                method: "POST",
-                payload: JSON.stringify({
-                    model: chatmodel,
-                    stream: true,
-                    max_tokens: parseInt(window.OpenaiMaxTokens()),
-                    temperature: parseFloat(window.OpenaiTemperature()),
-                    presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
-                    frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
-                    messages: messages,
-                    stop: ["\n\n"]
-                })
+        messages = getLastNChatMessages(nContexts);
+        if (chatID) {  // reload current chat by latest context
+            messages.push({
+                role: RoleHuman,
+                content: reqPromp
             });
+        }
+        currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + window.OpenaiToken(),
+                "X-Authorization-Type": window.OpenaiTokenType(),
+            },
+            method: "POST",
+            payload: JSON.stringify({
+                model: chatmodel,
+                stream: true,
+                max_tokens: parseInt(window.OpenaiMaxTokens()),
+                temperature: parseFloat(window.OpenaiTemperature()),
+                presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
+                frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                messages: messages,
+                stop: ["\n\n"]
+            })
+        });
+    } else if (window.IsCompletionModel(chatmodel)) {
+        currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + window.OpenaiToken(),
+                "X-Authorization-Type": window.OpenaiTokenType(),
+            },
+            method: "POST",
+            payload: JSON.stringify({
+                model: chatmodel,
+                stream: true,
+                max_tokens: parseInt(window.OpenaiMaxTokens()),
+                temperature: parseFloat(window.OpenaiTemperature()),
+                presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
+                frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                prompt: reqPromp,
+                stop: ["\n\n"]
+            })
+        });
 
-            break;
-        case CompletionModelDavinci3:
-            currentAIRespSSE = new SSE(window.OpenaiAPI(), {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer " + window.OpenaiToken(),
-                    "X-Authorization-Type": window.OpenaiTokenType(),
-                },
-                method: "POST",
-                payload: JSON.stringify({
-                    model: chatmodel,
-                    stream: true,
-                    max_tokens: parseInt(window.OpenaiMaxTokens()),
-                    temperature: parseFloat(window.OpenaiTemperature()),
-                    presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
-                    frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
-                    prompt: reqPromp,
-                    stop: ["\n\n"]
-                })
-            });
+    } else if (window.IsQaModel(chatmodel)) {
+        // {
+        //     "question": "XFS 是干啥的",
+        //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
+        //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
+        // }
 
-            break;
-        case QAModelCustom:
-        case QAModelBasebit:
-        case QAModelSecurity:
-        case QAModelShared:
-            // {
-            //     "question": "XFS 是干啥的",
-            //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
-            //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
-            // }
-
-            let url, project;
-            switch (chatmodel) {
-                case QAModelBasebit:
-                case QAModelSecurity:
-                    window.data['qa_chat_models'].forEach((item) => {
-                        if (item['name'] == chatmodel) {
-                            url = item['url'];
-                            project = item['project'];
-                        }
-                    });
-
-                    if (!project) {
-                        console.error("can't find project name for chat model: " + chatmodel);
-                        return;
+        let url, project;
+        switch (chatmodel) {
+            case QAModelBasebit:
+            case QAModelSecurity:
+                window.data['qa_chat_models'].forEach((item) => {
+                    if (item['name'] == chatmodel) {
+                        url = item['url'];
+                        project = item['project'];
                     }
-
-                    url = `${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`;
-                    break;
-                case QAModelCustom:
-                    url = `/ramjet/gptchat/ctx/chat?q=${encodeURIComponent(reqPromp)}`;
-                    break
-                case QAModelShared:
-                    // example url:
-                    //
-                    // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
-
-                    let params = new URLSearchParams(window.location.search);
-                    url = `/ramjet/gptchat/ctx/share?uid=${params.get("uid")}`
-                        + `&chatbot_name=${params.get("chatbot_name")}`
-                        + `&q=${encodeURIComponent(reqPromp)}`;
-            }
-
-            currentAIRespEle.scrollIntoView({ behavior: "smooth" });
-            try {
-                const resp = await fetch(url, {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer " + window.OpenaiToken(),
-                        "X-Authorization-Type": window.OpenaiTokenType(),
-                        "X-PDFCHAT-PASSWORD": window.GetLocalStorage(StorageKeyCustomDatasetPassword)
-                    },
-                    cache: "no-cache"
                 });
 
-                if (!resp.ok || resp.status != 200) {
-                    throw new Error(`[${resp.status}]: ${await resp.text()}`);
+                if (!project) {
+                    console.error("can't find project name for chat model: " + chatmodel);
+                    return;
                 }
 
-                let data = await resp.json();
-                if (data && data.text) {
-                    let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
-                    currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
-                    appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
-                }
-            } catch (err) {
-                abortAIResp(err);
-                return;
-            } finally {
-                unlockChatInput();
+                url = `${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`;
+                break;
+            case QAModelCustom:
+                url = `/ramjet/gptchat/ctx/chat?q=${encodeURIComponent(reqPromp)}`;
+                break
+            case QAModelShared:
+                // example url:
+                //
+                // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+
+                let params = new URLSearchParams(window.location.search);
+                url = `/ramjet/gptchat/ctx/share?uid=${params.get("uid")}`
+                    + `&chatbot_name=${params.get("chatbot_name")}`
+                    + `&q=${encodeURIComponent(reqPromp)}`;
+                break;
+            default:
+                console.error("unknown qa chat model: " + chatmodel);
+        }
+
+        currentAIRespEle.scrollIntoView({ behavior: "smooth" });
+        try {
+            const resp = await fetch(url, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + window.OpenaiToken(),
+                    "X-Authorization-Type": window.OpenaiTokenType(),
+                    "X-PDFCHAT-PASSWORD": window.GetLocalStorage(StorageKeyCustomDatasetPassword)
+                },
+                cache: "no-cache"
+            });
+
+            if (!resp.ok || resp.status != 200) {
+                throw new Error(`[${resp.status}]: ${await resp.text()}`);
             }
 
+            let data = await resp.json();
+            if (data && data.text) {
+                let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
+                currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
+            }
+        } catch (err) {
+            abortAIResp(err);
             return;
+        } finally {
+            unlockChatInput();
+        }
+
+        return;
+    } else {
+        showalert("danger", `unknown chat model: ${chatmodel}`);
     }
 
     if (!currentAIRespSSE) {
