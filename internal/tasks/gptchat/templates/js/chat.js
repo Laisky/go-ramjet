@@ -337,9 +337,25 @@ function scrollChatToDown() {
     window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
 }
 
-function getLastNChatMessages(N) {
+// Get the last N chat messages, which will be sent to the AI as context.
+//
+// @param {number} N - The number of messages to retrieve.
+// @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
+// @returns {Array} An array of chat messages.
+function getLastNChatMessages(N, ignoredChatID) {
     let messages = activeSessionChatHistory().filter((ele) => {
-        return ele.role == RoleHuman;
+        if (ele.role != RoleHuman) {
+            // Ignore AI's chat, only use human's chat as context.
+            return false;
+        };
+
+        if (ignoredChatID && ignoredChatID == ele.chatID) {
+            // This is a reload request with edited chat,
+            // ignore chat with same chatid to avoid duplicate context.
+            return false;
+        }
+
+        return true;
     });
 
     messages = messages.slice(-N);
@@ -410,7 +426,7 @@ async function sendChat2Server(chatID) {
         let messages,
             nContexts = parseInt(window.ChatNContexts());
 
-        messages = getLastNChatMessages(nContexts);
+        messages = getLastNChatMessages(nContexts, chatID);
         if (chatID) {  // reload current chat by latest context
             messages.push({
                 role: RoleHuman,
