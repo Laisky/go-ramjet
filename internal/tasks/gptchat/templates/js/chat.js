@@ -337,11 +337,14 @@ function scrollChatToDown() {
     window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
 }
 
-// Get the last N chat messages, which will be sent to the AI as context.
-//
-// @param {number} N - The number of messages to retrieve.
-// @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
-// @returns {Array} An array of chat messages.
+/**
+*
+* Get the last N chat messages, which will be sent to the AI as context.
+*
+* @param {number} N - The number of messages to retrieve.
+* @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
+* @returns {Array} An array of chat messages.
+*/
 function getLastNChatMessages(N, ignoredChatID) {
     let messages = activeSessionChatHistory().filter((ele) => {
         if (ele.role != RoleHuman) {
