@@ -5,6 +5,11 @@ import (
 	gconfig "github.com/Laisky/go-config/v2"
 )
 
+const (
+	// FREETIER_USER_TOKEN freetier user token
+	FREETIER_USER_TOKEN = "DEFAULT_PROXY_TOKEN"
+)
+
 var (
 	// Config global shared config instance
 	Config *OpenAI

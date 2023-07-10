@@ -91,10 +91,25 @@ window.OpenaiTokenType = () => {
     return t;
 };
 
+/**
+ * Generates a random string of the specified length.
+ * @param {number} length - The length of the string to generate.
+ * @returns {string} - The generated random string.
+ */
+function RandomString(length) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    return result;
+}
+
 window.OpenaiToken = () => {
     let v = window.GetLocalStorage("config_api_token_value");
     if (!v) {
-        v = "DEFAULT_PROXY_TOKEN"
+        v = "FREETIER-" + RandomString(32);
         window.SetLocalStorage("config_api_token_value", v);
     }
 
