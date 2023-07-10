@@ -108,7 +108,10 @@ window.RandomString = (length) => {
 
 window.OpenaiToken = () => {
     let v = window.GetLocalStorage("config_api_token_value");
-    if (!v) {
+    if (!v || v == "DEFAULT_PROXY_TOKEN") {
+        // if v is empty, this is a new user.
+        // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
+        // generate an unique token for this user.
         v = "FREETIER-" + RandomString(32);
         window.SetLocalStorage("config_api_token_value", v);
     }
