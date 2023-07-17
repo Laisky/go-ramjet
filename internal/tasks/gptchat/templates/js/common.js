@@ -34,6 +34,7 @@ const ChatModels = [
     QaModels = [
         QAModelBasebit,
         QAModelSecurity,
+        QAModelImmigrate,
         QAModelCustom,
         QAModelShared,
     ],
