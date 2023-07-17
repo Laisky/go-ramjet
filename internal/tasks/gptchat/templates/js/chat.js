@@ -485,6 +485,7 @@ async function sendChat2Server(chatID) {
         switch (chatmodel) {
             case QAModelBasebit:
             case QAModelSecurity:
+            case QAModelImmigrate:
                 window.data['qa_chat_models'].forEach((item) => {
                     if (item['name'] == chatmodel) {
                         url = item['url'];

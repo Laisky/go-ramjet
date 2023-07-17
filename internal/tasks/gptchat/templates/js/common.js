@@ -13,6 +13,7 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     // ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
     QAModelBasebit = "qa-bbt-xego",
     QAModelSecurity = "qa-security",
+    QAModelImmigrate = "qa-immigrate",
     QAModelCustom = "qa-custom",
     QAModelShared = "qa-shared",
     CompletionModelDavinci3 = "text-davinci-003";
