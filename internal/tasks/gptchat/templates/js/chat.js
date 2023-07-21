@@ -522,6 +522,7 @@ async function sendChat2Server(chatID) {
             const resp = await fetch(url, {
                 method: "GET",
                 headers: {
+                    "Connection": "keep-alive",
                     "Content-Type": "application/json",
                     "Authorization": "Bearer " + window.OpenaiToken(),
                     "X-Authorization-Type": window.OpenaiTokenType(),
@@ -663,16 +664,22 @@ function wrapRefLines(input) {
 // }
 
 function abortAIResp(err) {
+    console.error(`abort AI resp: ${err}`);
     if (currentAIRespSSE) {
         currentAIRespSSE.close();
         currentAIRespSSE = null;
     }
 
     let errMsg;
-    try {
+    if (err.data) {
         errMsg = JSON.parse(err.data);
-    } catch (e) {
+    } else {
         errMsg = err.toString();
+    }
+
+    if (errMsg == "[object CustomEvent]") {
+        // firefox will throw this error when SSE is closed, just ignore it.
+        return;
     }
 
     // if errMsg contains
@@ -680,7 +687,7 @@ function abortAIResp(err) {
         showalert("danger", "API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
     }
 
-    if (currentAIRespEle.dataset.status == "waiting" || currentAIRespEle.dataset.status == "writing") {
+    if (currentAIRespEle.dataset.status == "waiting") {// || currentAIRespEle.dataset.status == "writing") {
         currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
     } else {
         currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
