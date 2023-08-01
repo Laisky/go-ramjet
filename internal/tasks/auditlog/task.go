@@ -21,7 +21,7 @@ func bindTask() {
 		gconfig.Shared.GetString("db.auditlog.db"),
 		gconfig.Shared.GetString("db.auditlog.user"),
 		gconfig.Shared.GetString("db.auditlog.passwd"),
-		gconfig.Shared.GetString("db.auditlog.col_name_log"),
+		gconfig.Shared.GetString("db.auditlog.col_log"),
 	)
 	if err != nil {
 		logger.Panic("new db", zap.Error(err))

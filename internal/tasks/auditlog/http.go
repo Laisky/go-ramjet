@@ -28,6 +28,7 @@ func newRouter(logger glog.Logger, svc *Service) *router {
 func (r *router) bindHTTP() {
 	grp := web.Server.Group("/auditlog")
 	grp.POST("/log", r.receiveLog)
+	grp.GET("/log", r.listLogs)
 }
 
 func (r *router) abortErr(ctx *gin.Context, err error) bool {
@@ -57,5 +58,17 @@ func (r *router) receiveLog(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"msg": "ok",
+	})
+}
+
+func (r *router) listLogs(ctx *gin.Context) {
+	logs, err := r.svc.ListLogs(ctx.Request.Context())
+	if r.abortErr(ctx, err) {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"msg":  "ok",
+		"logs": logs,
 	})
 }
