@@ -27,4 +27,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/gitlab"
 	// gptchat
 	_ "github.com/Laisky/go-ramjet/internal/tasks/gptchat"
+	// auditlog
+	_ "github.com/Laisky/go-ramjet/internal/tasks/auditlog"
 )

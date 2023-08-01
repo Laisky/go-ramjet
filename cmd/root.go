@@ -133,7 +133,6 @@ func setupLogger(ctx context.Context) {
 		_ = log.Logger.ChangeLevel("info")
 		gconfig.Shared.Set("log-level", "info")
 	}
-
 }
 
 func init() {
