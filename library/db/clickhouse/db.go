@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// New new clickhouse db
 func New(dsn string) (*gorm.DB, error) {
 	//nolint:lll
 	// dsn := fmt.Sprintf("tcp://%s?database=%s&username=%s&password=%s&read_timeout=10&write_timeout=20", addr, database, user, passwd)

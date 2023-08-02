@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetCurrentUser get current user
 func GetCurrentUser(ctx *gin.Context) {
 	user, err := getUserFromToken(ctx)
 	if AbortErr(ctx, err) {

@@ -16,7 +16,6 @@ func bindTask() {
 	}
 
 	bindHTTP()
-
 }
 
 func init() {

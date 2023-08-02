@@ -15,6 +15,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+// AbortErr abort with error
 func AbortErr(ctx *gin.Context, err error) bool {
 	if err == nil {
 		return false

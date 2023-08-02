@@ -1,7 +1,6 @@
 package auditlog
 
 import (
-	"fmt"
 	"net/http"
 
 	glog "github.com/Laisky/go-utils/v4/log"
@@ -13,10 +12,10 @@ import (
 
 type router struct {
 	logger glog.Logger
-	svc    *Service
+	svc    *service
 }
 
-func newRouter(logger glog.Logger, svc *Service) *router {
+func newRouter(logger glog.Logger, svc *service) *router {
 	r := &router{
 		logger: logger,
 		svc:    svc,
@@ -37,7 +36,9 @@ func (r *router) abortErr(ctx *gin.Context, err error) bool {
 	}
 
 	r.logger.Error("http server abort", zap.Error(err))
-	ctx.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("%+v", err))
+	ctx.AbortWithStatusJSON(http.StatusBadRequest, map[string]any{
+		"error": err.Error(),
+	})
 	return true
 }
 

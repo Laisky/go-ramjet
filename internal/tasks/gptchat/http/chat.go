@@ -36,6 +36,7 @@ func init() {
 	}
 }
 
+// APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	logger := log.Logger.Named("chat")

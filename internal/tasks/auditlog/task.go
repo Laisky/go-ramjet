@@ -3,6 +3,7 @@ package auditlog
 
 import (
 	"context"
+	"crypto/x509"
 
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -17,17 +18,20 @@ func bindTask() {
 
 	ctx := context.Background()
 	db, err := NewDB(ctx,
-		gconfig.Shared.GetString("db.auditlog.addr"),
-		gconfig.Shared.GetString("db.auditlog.db"),
-		gconfig.Shared.GetString("db.auditlog.user"),
-		gconfig.Shared.GetString("db.auditlog.passwd"),
-		gconfig.Shared.GetString("db.auditlog.col_log"),
+		gconfig.Shared.GetString("tasks.auditlog.db.addr"),
+		gconfig.Shared.GetString("tasks.auditlog.db.db"),
+		gconfig.Shared.GetString("tasks.auditlog.db.user"),
+		gconfig.Shared.GetString("tasks.auditlog.db.passwd"),
+		gconfig.Shared.GetString("tasks.auditlog.db.col_log"),
 	)
 	if err != nil {
 		logger.Panic("new db", zap.Error(err))
 	}
 
-	svc, err := NewService(logger, db)
+	rootcaPool := x509.NewCertPool()
+	rootcaPool.AppendCertsFromPEM([]byte(gconfig.Shared.GetString("tasks.auditlog.root_ca_pem")))
+
+	svc, err := newService(logger, db, rootcaPool)
 	if err != nil {
 		logger.Panic("new service", zap.Error(err))
 	}

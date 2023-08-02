@@ -4,12 +4,16 @@ import (
 	gconfig "github.com/Laisky/go-config/v2"
 )
 
+// OpenaiMessageRole message role
 type OpenaiMessageRole string
 
 const (
+	// OpenaiMessageRoleSystem system message
 	OpenaiMessageRoleSystem = "system"
-	OpenaiMessageRoleUser   = "user"
-	OpenaiMessageRoleAI     = "assistant"
+	// OpenaiMessageRoleUser user message
+	OpenaiMessageRoleUser = "user"
+	// OpenaiMessageRoleAI ai message
+	OpenaiMessageRoleAI = "assistant"
 )
 
 const (
@@ -18,6 +22,7 @@ const (
 	defaultChatModel   = "gpt-3.5-turbo"
 )
 
+// ChatModel return chat model
 func ChatModel() string {
 	v := gconfig.Shared.GetString("openai.default_model")
 	if v != "" {
@@ -27,10 +32,12 @@ func ChatModel() string {
 	return defaultChatModel
 }
 
+// MaxTokens return max tokens
 func MaxTokens() int {
 	return gconfig.Shared.GetInt("openai.max_tokens")
 }
 
+// MaxMessages return max messages
 func MaxMessages() int {
 	v := gconfig.Shared.GetInt("openai.max_messages")
 	if v != 0 {
@@ -40,11 +47,13 @@ func MaxMessages() int {
 	return defaultMaxMessages
 }
 
+// OpenaiReqMessage request message to openai chat api
 type OpenaiReqMessage struct {
 	Role    OpenaiMessageRole `json:"role"`
 	Content string            `json:"content"`
 }
 
+// FrontendReq request from frontend
 type FrontendReq struct {
 	Model            string             `json:"model"`
 	MaxTokens        uint               `json:"max_tokens"`
@@ -59,6 +68,7 @@ type FrontendReq struct {
 	// StaticContext    string             `json:"static_context,omitempty"`
 }
 
+// OpenaiChatReq request to openai chat api
 type OpenaiChatReq struct {
 	Model            string             `json:"model"`
 	MaxTokens        uint               `json:"max_tokens"`

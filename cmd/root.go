@@ -70,7 +70,7 @@ func initialize(ctx context.Context, cmd *cobra.Command) bool {
 	return true
 }
 
-func setupSettings(ctx context.Context) bool {
+func setupSettings(_ context.Context) bool {
 	var err error
 
 	if gconfig.Shared.GetBool("version") {
@@ -150,6 +150,7 @@ func init() {
 		"which tasks do not want to runnning, like\n ./main -e t1,t2,heartbeat")
 }
 
+// Execute run root command
 func Execute() {
 	if err := rootCMD.Execute(); err != nil {
 		glog.Shared.Panic("start", zap.Error(err))

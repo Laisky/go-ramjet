@@ -35,6 +35,7 @@ func init() {
 	prepareStaticFiles()
 }
 
+// SetupHTTPCli setup http client
 func SetupHTTPCli() (err error) {
 	httpargs := []gutils.HTTPClientOptFunc{
 		gutils.WithHTTPClientTimeout(time.Minute * 3),
@@ -92,6 +93,7 @@ func prepareStaticFiles() {
 	}
 }
 
+// RegisterStatic register static files
 func RegisterStatic(g gin.IRouter) {
 	for _, sf := range []*staticFile{
 		staticFiles.LibJs,
@@ -108,6 +110,7 @@ func RegisterStatic(g gin.IRouter) {
 
 var ts = time.Now().Format(time.RFC3339Nano)
 
+// Chat render chat page
 func Chat(ctx *gin.Context) {
 	tpl := template.New("mytemplate")
 	for name, cnt := range map[string]string{
@@ -192,6 +195,7 @@ func Chat(ctx *gin.Context) {
 	}
 }
 
+// CopyHeader copy header from `from` to `to`
 func CopyHeader(to, from http.Header) {
 	for k, v := range from {
 		if gutils.Contains([]string{
