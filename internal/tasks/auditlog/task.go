@@ -28,8 +28,11 @@ func bindTask() {
 		logger.Panic("new db", zap.Error(err))
 	}
 
-	rootcaPool := x509.NewCertPool()
-	rootcaPool.AppendCertsFromPEM([]byte(gconfig.Shared.GetString("tasks.auditlog.root_ca_pem")))
+	var rootcaPool *x509.CertPool
+	if rootpem := gconfig.Shared.GetString("tasks.auditlog.root_ca_pem"); rootpem != "" {
+		rootcaPool := x509.NewCertPool()
+		rootcaPool.AppendCertsFromPEM([]byte(rootpem))
+	}
 
 	svc, err := newService(logger, db, rootcaPool)
 	if err != nil {
