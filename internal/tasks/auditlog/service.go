@@ -44,6 +44,7 @@ func (s *service) SaveLog(ctx context.Context, log *Log) (err error) {
 func (s *service) ListLogs(ctx context.Context) ([]Log, error) {
 	logs := make([]Log, 0)
 	cur, err := s.db.logCol().Find(ctx, bson.M{},
+		options.Find().SetLimit(500),
 		options.Find().SetSort(map[string]int{"_id": -1}),
 	)
 	if err != nil {
