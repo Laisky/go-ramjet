@@ -1,7 +1,9 @@
 package auditlog
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
@@ -52,7 +54,13 @@ func (r *router) receiveLog(ctx *gin.Context) {
 		return
 	}
 
-	err = r.svc.SaveLog(ctx.Request.Context(), log)
+	// notice: use longlived background context,
+	// 	   so that the request will not be aborted to avoid data loss
+	// 	   when the client disconnects.
+	ctxSave, cancel := context.WithTimeout(ctx, time.Second*30)
+	defer cancel()
+
+	err = r.svc.SaveLog(ctxSave, log)
 	if r.abortErr(ctx, err) {
 		return
 	}
