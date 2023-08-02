@@ -34,7 +34,7 @@ import (
 //	        "signature": "3282c1160a47c84xxx"
 //		}
 type Log struct {
-	ID          primitive.ObjectID `bson:"_id" json:"id"`
+	ID          primitive.ObjectID `bson:"_id" json:"-"`
 	Level       string             `bson:"level" json:"level"`
 	Time        time.Time          `bson:"time" json:"time"`
 	Logger      string             `bson:"logger" json:"logger"`
