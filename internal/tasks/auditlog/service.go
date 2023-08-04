@@ -3,6 +3,7 @@ package auditlog
 import (
 	"context"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -31,17 +32,23 @@ func init() {
 }
 
 type service struct {
-	logger     glog.Logger
-	db         *AuditDB
-	rootcaPool *x509.CertPool
+	logger      glog.Logger
+	db          *AuditDB
+	rootcaPool  *x509.CertPool
+	alertPusher *glog.Alert
 }
 
 // newService new auditlog service
-func newService(logger glog.Logger, db *AuditDB, rootcaPool *x509.CertPool) (*service, error) {
+func newService(logger glog.Logger,
+	db *AuditDB,
+	rootcaPool *x509.CertPool,
+	alertPusher *glog.Alert,
+) (*service, error) {
 	return &service{
-		logger:     logger,
-		db:         db,
-		rootcaPool: rootcaPool,
+		logger:      logger,
+		db:          db,
+		rootcaPool:  rootcaPool,
+		alertPusher: alertPusher,
 	}, nil
 }
 
@@ -126,8 +133,14 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 
 	// check version must be monotonically increasing
 	if taskData.LastVersion > data.Version {
-		// FIXME send telegram alert
-		return errors.Errorf("invalid version %d, last version %d", data.Version, taskData.LastVersion)
+		errMsg := fmt.Sprintf(
+			"[fingerprint check] cluster fingerprint version %d < last version %d",
+			data.Version, taskData.LastVersion)
+		if err = s.alertPusher.Send(errMsg); err != nil {
+			logger.Error("send alert", zap.Error(err))
+		}
+
+		return errors.Errorf(errMsg)
 	}
 
 	// save task

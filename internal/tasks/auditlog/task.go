@@ -9,6 +9,7 @@ import (
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
+	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
 )
 
@@ -36,7 +37,16 @@ func bindTask() {
 		rootcaPool.AppendCertsFromPEM([]byte(rootpem))
 	}
 
-	svc, err := newService(logger, db, rootcaPool)
+	alert, err := glog.NewAlert(ctx,
+		gconfig.Shared.GetString("tasks.auditlog.alert.api"),
+		glog.WithAlertType(gconfig.Shared.GetString("tasks.auditlog.alert.type")),
+		glog.WithAlertToken(gconfig.Shared.GetString("tasks.auditlog.alert.token")),
+	)
+	if err != nil {
+		logger.Panic("new alert", zap.Error(err))
+	}
+
+	svc, err := newService(logger, db, rootcaPool, alert)
 	if err != nil {
 		logger.Panic("new service", zap.Error(err))
 	}
