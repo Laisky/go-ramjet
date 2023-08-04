@@ -3,13 +3,32 @@ package auditlog
 import (
 	"context"
 	"crypto/x509"
+	"io"
+	"net/http"
 
 	"github.com/Laisky/errors/v2"
+	"github.com/Laisky/go-ramjet/library/log"
+	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v4/json"
 	glog "github.com/Laisky/go-utils/v4/log"
+	auditProto "github.com/Laisky/protocols/proto/auditlog/v1"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"
+	mongoLib "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/protobuf/proto"
 )
+
+var (
+	httpcli *http.Client
+)
+
+func init() {
+	var err error
+	if httpcli, err = gutils.NewHTTPClient(); err != nil {
+		log.Logger.Panic("new http client", zap.Error(err))
+	}
+}
 
 type service struct {
 	logger     glog.Logger
@@ -56,4 +75,77 @@ func (s *service) ListLogs(ctx context.Context) ([]Log, error) {
 	}
 
 	return logs, nil
+}
+
+type clusterFingerprintTask struct {
+	LastVersion uint32 `json:"last_version"`
+}
+
+func (s *service) checkClunterFingerprint(ctx context.Context, furl string) error {
+	logger := s.logger.Named("cluster_fingerprint")
+	logger.Debug("run", zap.String("url", furl))
+
+	// download cluster fingerprint file
+	req, err := http.NewRequestWithContext(ctx, "GET", furl, nil)
+	if err != nil {
+		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
+	}
+
+	resp, err := httpcli.Do(req)
+	if err != nil {
+		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
+	}
+	defer gutils.LogErr(resp.Body.Close, s.logger)
+
+	filecnt, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
+	}
+
+	data := new(auditProto.ClusterFingerprint)
+	if err = proto.Unmarshal(filecnt, data); err != nil {
+		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
+	}
+
+	// load latest saved version
+	task := new(Task)
+	taskData := new(clusterFingerprintTask)
+	if err = s.db.taskCol().FindOne(ctx,
+		bson.M{"type": string(TaskTypeClusterFingerprint)}).
+		Decode(task); err != nil {
+		if err == mongoLib.ErrNoDocuments {
+			task = &Task{
+				Type: TaskTypeClusterFingerprint,
+			}
+		} else {
+			return errors.Wrap(err, "find task")
+		}
+	} else if err = json.UnmarshalFromString(task.Data, taskData); err != nil {
+		return errors.Wrap(err, "unmarshal task data")
+	}
+
+	// check version must be monotonically increasing
+	if taskData.LastVersion > data.Version {
+		// FIXME send telegram alert
+		return errors.Errorf("invalid version %d, last version %d", data.Version, taskData.LastVersion)
+	}
+
+	// save task
+	taskData.LastVersion = data.Version
+	if task.Data, err = json.MarshalToString(taskData); err != nil {
+		return errors.Wrap(err, "marshal task data")
+	}
+
+	if _, err = s.db.taskCol().UpdateOne(ctx,
+		bson.M{"type": string(TaskTypeClusterFingerprint)},
+		bson.M{"$set": task},
+		options.Update().SetUpsert(true),
+	); err != nil {
+		return errors.Wrap(err, "update task")
+	}
+
+	logger.Debug("succeed check cluster fingerprint",
+		zap.Uint32("version", data.Version),
+	)
+	return nil
 }

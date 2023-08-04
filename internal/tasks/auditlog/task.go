@@ -4,6 +4,7 @@ package auditlog
 import (
 	"context"
 	"crypto/x509"
+	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -23,6 +24,7 @@ func bindTask() {
 		gconfig.Shared.GetString("tasks.auditlog.db.user"),
 		gconfig.Shared.GetString("tasks.auditlog.db.passwd"),
 		gconfig.Shared.GetString("tasks.auditlog.db.col_log"),
+		gconfig.Shared.GetString("tasks.auditlog.db.col_task"),
 	)
 	if err != nil {
 		logger.Panic("new db", zap.Error(err))
@@ -39,7 +41,18 @@ func bindTask() {
 		logger.Panic("new service", zap.Error(err))
 	}
 
+	// bind http
 	_ = newRouter(logger, svc)
+
+	// bind tasks
+	go store.TaskStore.TickerAfterRun(time.Minute, func() {
+		if err := svc.checkClunterFingerprint(ctx,
+			gconfig.Shared.GetString("tasks.auditlog.cluster_fingerprint_url"),
+		); err != nil {
+			logger.Error("checkClunterFingerprint", zap.Error(err))
+		}
+	})
+
 	logger.Info("bind audit task done")
 }
 

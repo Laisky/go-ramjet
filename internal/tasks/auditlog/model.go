@@ -17,6 +17,25 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+// TaskType type of audit task
+type TaskType string
+
+// String convert TaskType to string
+func (t TaskType) String() string {
+	return string(t)
+}
+
+const (
+	// TaskTypeClusterFingerprint check cluster fingerprint
+	TaskTypeClusterFingerprint TaskType = "cluster_fingerprint"
+)
+
+type Task struct {
+	ID   primitive.ObjectID `bson:"_id" json:"-"`
+	Type TaskType           `bson:"type" json:"type"`
+	Data string             `bson:"data" json:"data"`
+}
+
 // Log for audit log
 //
 // # Example
@@ -96,21 +115,25 @@ func (l *Log) Valid(rootcaPool *x509.CertPool) (err error) {
 
 // AuditDB audit db
 type AuditDB struct {
-	db                 mongo.DB
-	dbName, logColName string
+	db mongo.DB
+	dbName,
+	logColName, taskColName string
 }
 
 // NewDB new db
-func NewDB(ctx context.Context, addr, dbName, user, pwd, logColName string) (b *AuditDB, err error) {
+func NewDB(ctx context.Context, addr, dbName, user, pwd,
+	logColName, taskColName string) (b *AuditDB, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("user", user),
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
 		zap.String("logColName", logColName),
+		zap.String("taskColName", taskColName),
 	)
 	b = &AuditDB{
-		dbName:     dbName,
-		logColName: logColName,
+		dbName:      dbName,
+		logColName:  logColName,
+		taskColName: taskColName,
 	}
 	b.db, err = mongo.NewDB(ctx, mongo.DialInfo{
 		Addr:   addr,
@@ -127,6 +150,10 @@ func NewDB(ctx context.Context, addr, dbName, user, pwd, logColName string) (b *
 
 func (b *AuditDB) logCol() *mongoLib.Collection {
 	return b.db.DB(b.dbName).Collection(b.logColName)
+}
+
+func (b *AuditDB) taskCol() *mongoLib.Collection {
+	return b.db.DB(b.dbName).Collection(b.taskColName)
 }
 
 // Close close db connection
