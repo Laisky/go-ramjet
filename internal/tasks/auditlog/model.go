@@ -31,7 +31,7 @@ const (
 )
 
 type Task struct {
-	ID   primitive.ObjectID `bson:"_id" json:"-"`
+	ID   primitive.ObjectID `bson:"_id,omitempty" json:"-"`
 	Type TaskType           `bson:"type" json:"type"`
 	Data string             `bson:"data" json:"data"`
 }
@@ -53,7 +53,7 @@ type Task struct {
 //	        "signature": "3282c1160a47c84xxx"
 //		}
 type Log struct {
-	ID          primitive.ObjectID `bson:"_id" json:"-"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"-"`
 	Level       string             `bson:"level" json:"level"`
 	Time        time.Time          `bson:"time" json:"time"`
 	Logger      string             `bson:"logger" json:"logger"`

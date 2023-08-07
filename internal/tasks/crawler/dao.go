@@ -34,7 +34,7 @@ type SearchResult struct {
 	URL     string `bson:"url" json:"url"`
 	Title   string `bson:"title" json:"title"`
 
-	ID   primitive.ObjectID `bson:"_id" json:"-"`
+	ID   primitive.ObjectID `bson:"_id,omitempty" json:"-"`
 	Text string             `bson:"text" json:"-"`
 }
 
