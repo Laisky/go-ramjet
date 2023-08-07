@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	glog "github.com/Laisky/go-utils/v4/log"
@@ -18,6 +17,8 @@ import (
 	mongoLib "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -53,16 +54,23 @@ func newService(logger glog.Logger,
 }
 
 // SaveLog save log to db
-func (s *service) SaveLog(ctx context.Context, log *Log) (err error) {
-	if err = log.Valid(s.rootcaPool); err != nil {
+func (s *service) SaveLog(ctx context.Context, logEnt *Log) (err error) {
+	if err = logEnt.ValidFormat(); err != nil {
 		return errors.Wrap(err, "invalid log")
 	}
 
-	if _, err = s.db.logCol().InsertOne(ctx, log); err != nil {
+	logEnt.Verified = false
+	if s.rootcaPool != nil {
+		if err = logEnt.ValidRootCA(s.rootcaPool); err == nil {
+			logEnt.Verified = true
+		}
+	}
+
+	if _, err = s.db.logCol().InsertOne(ctx, logEnt); err != nil {
 		return errors.Wrap(err, "insert log")
 	}
 
-	s.logger.Debug("save log", zap.String("log", log.UUID))
+	s.logger.Debug("save log", zap.String("log", logEnt.UUID))
 	return nil
 }
 
