@@ -48,7 +48,7 @@ func (s *Service) syncTweets(ctx context.Context) error {
 	}
 
 	iter, err := s.twitterDao.GetTweetsIter(ctx, bson.M{
-		"id_str": bson.M{"$gte": latestTweetID},
+		"id_str": bson.M{"$gt": latestTweetID},
 	})
 	if err != nil {
 		return errors.Wrap(err, "get tweets iter")

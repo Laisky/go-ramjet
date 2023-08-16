@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/config"
-	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
+
+	"github.com/Laisky/go-ramjet/library/config"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func TestSearchDao_GetLargestID(t *testing.T) {

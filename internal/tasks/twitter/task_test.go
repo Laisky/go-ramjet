@@ -4,9 +4,10 @@ package twitter
 import (
 	"testing"
 
+	"github.com/Laisky/testify/require"
+
 	"github.com/Laisky/go-ramjet/library/config"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/testify/require"
 )
 
 func Test_syncFromMongodb2Es(t *testing.T) {
