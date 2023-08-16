@@ -169,13 +169,13 @@ func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (string, error) {
 		},
 	}
 
-	body, err := json.Marshal(query)
+	bodyPayload, err := json.Marshal(query)
 	if err != nil {
 		return "", errors.Wrap(err, "marshal query")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		d.api+"_search", bytes.NewReader(body))
+		d.api+"_search", bytes.NewReader(bodyPayload))
 	if err != nil {
 		return "", errors.Wrap(err, "new request")
 	}
@@ -190,16 +190,22 @@ func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (string, error) {
 	var result struct {
 		Aggregations struct {
 			MaxID struct {
-				Value int `json:"value"`
+				Value float64 `json:"value"`
 			} `json:"max_id"`
 		} `json:"aggregations"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	bodyPayload, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read response")
+	}
+	// fmt.Println(string(bodyPayload))
+
+	if err := json.Unmarshal(bodyPayload, &result); err != nil {
 		return "", errors.Wrap(err, "decode response")
 	}
 
-	return strconv.Itoa(result.Aggregations.MaxID.Value), nil
+	return strconv.FormatFloat(result.Aggregations.MaxID.Value, 'f', -1, 64), nil
 }
 
 func (d *ElasticsearchDao) SaveTweet(ctx context.Context, tweet *Tweet) error {
