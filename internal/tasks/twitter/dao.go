@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -60,12 +59,12 @@ func (d *mongoDao) tweetsCol() *mongoLib.Collection {
 
 func (d *mongoDao) GetTweetsIter(ctx context.Context, cond bson.M) (*mongoLib.Cursor, error) {
 	log.Logger.Debug("load tweets", zap.Any("condition", cond))
-	return d.tweetsCol().Find(ctx, cond, options.Find().SetSort(bson.M{"id_str": 1}))
+	return d.tweetsCol().Find(ctx, cond, options.Find().SetSort(bson.M{"id": 1}))
 }
 
 func (d *mongoDao) GetLargestID(ctx context.Context) (*Tweet, error) {
 	tweet := new(Tweet)
-	err := d.tweetsCol().FindOne(ctx, bson.M{}, options.FindOne().SetSort(bson.M{"id_str": -1})).Decode(tweet)
+	err := d.tweetsCol().FindOne(ctx, bson.M{}, options.FindOne().SetSort(bson.M{"id": -1})).Decode(tweet)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load tweet with largest id")
 	}
@@ -158,7 +157,7 @@ func newElasticsearchDao(logger glog.Logger, api string) (ins *ElasticsearchDao,
 	return ins, nil
 }
 
-func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (string, error) {
+func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (largestID float64, err error) {
 	query := map[string]interface{}{
 		"aggs": map[string]interface{}{
 			"max_id": map[string]interface{}{
@@ -171,19 +170,19 @@ func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (string, error) {
 
 	bodyPayload, err := json.Marshal(query)
 	if err != nil {
-		return "", errors.Wrap(err, "marshal query")
+		return largestID, errors.Wrap(err, "marshal query")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		d.api+"_search", bytes.NewReader(bodyPayload))
 	if err != nil {
-		return "", errors.Wrap(err, "new request")
+		return largestID, errors.Wrap(err, "new request")
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := d.cli.Do(req)
 	if err != nil {
-		return "", errors.Wrap(err, "do request")
+		return largestID, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
 
@@ -197,15 +196,15 @@ func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (string, error) {
 
 	bodyPayload, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return "", errors.Wrap(err, "read response")
+		return largestID, errors.Wrap(err, "read response")
 	}
 	// fmt.Println(string(bodyPayload))
 
 	if err := json.Unmarshal(bodyPayload, &result); err != nil {
-		return "", errors.Wrap(err, "decode response")
+		return largestID, errors.Wrap(err, "decode response")
 	}
 
-	return strconv.FormatFloat(result.Aggregations.MaxID.Value, 'f', -1, 64), nil
+	return result.Aggregations.MaxID.Value, nil
 }
 
 func (d *ElasticsearchDao) SaveTweet(ctx context.Context, tweet *Tweet) error {

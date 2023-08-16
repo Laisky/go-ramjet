@@ -47,8 +47,9 @@ func (s *Service) syncTweets(ctx context.Context) error {
 		return errors.Wrap(err, "get latest tweet id")
 	}
 
+	latestTweetID = 0
 	iter, err := s.twitterDao.GetTweetsIter(ctx, bson.M{
-		"id_str": bson.M{"$gt": latestTweetID},
+		"id": bson.M{"$gt": latestTweetID},
 	})
 	if err != nil {
 		return errors.Wrap(err, "get tweets iter")
@@ -67,14 +68,10 @@ func (s *Service) syncTweets(ctx context.Context) error {
 			return errors.Wrap(err, "save tweet")
 		}
 
-		if tweet.ID > latestTweetID {
-			latestTweetID = tweet.ID
-		}
-
 		i++
 		if i%10 == 0 {
 			s.logger.Info("sync tweets",
-				zap.String("latestTweetID", latestTweetID),
+				zap.String("latestTweetID", tweet.ID),
 				zap.Int("count", i))
 		}
 	}
