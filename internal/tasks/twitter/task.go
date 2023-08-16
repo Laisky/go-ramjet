@@ -68,5 +68,5 @@ func syncFromMongodb2Es(logger glog.Logger) error {
 }
 
 func init() {
-	store.TaskStore.Store("twitter-sync-search", bindTask)
+	store.TaskStore.Store("twitter-sync", bindTask)
 }
