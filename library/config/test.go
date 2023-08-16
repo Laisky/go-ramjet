@@ -1,9 +1,14 @@
 package config
 
-import gconfig "github.com/Laisky/go-config/v2"
+import (
+	"testing"
 
-func LoadTest() {
-	if err := gconfig.Shared.LoadFromFile("/opt/configs/go-ramjet/settings.yml"); err != nil {
-		panic(err)
-	}
+	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/testify/require"
+)
+
+func LoadTest(tb testing.TB) {
+	tb.Helper()
+	err := gconfig.Shared.LoadFromFile("/opt/configs/go-ramjet/settings.yml")
+	require.NoError(tb, err)
 }

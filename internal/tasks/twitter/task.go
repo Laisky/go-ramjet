@@ -3,53 +3,67 @@ package twitter
 
 import (
 	"context"
+	"time"
 
-	"github.com/Laisky/zap"
-
+	"github.com/Laisky/errors/v2"
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
+	gutils "github.com/Laisky/go-utils/v4"
+	glog "github.com/Laisky/go-utils/v4/log"
+	"github.com/Laisky/zap"
 )
-
-// var muSearch = gutils.NewMutex()
-// var muReplica = gutils.NewMutex()
-
-// func syncSearch() {
-// 	if !muSearch.TryLock() {
-// 		return
-// 	}
-// 	defer muSearch.ForceRelease()
-
-// 	log.Logger.Info("running twitter sync search")
-// 	defer log.Logger.Info("twitter sync search done")
-
-// 	if err := svc.SyncSearchTweets(); err != nil {
-// 		log.Logger.Error("sync search tweets", zap.Error(err))
-// 	}
-// }
-
-// func syncReplica() {
-// 	if !muReplica.TryLock() {
-// 		return
-// 	}
-// 	defer muReplica.ForceRelease()
-
-// 	log.Logger.Info("running twitter sync replica")
-// 	defer log.Logger.Info("twitter sync replica done")
-
-// 	// if err := svc.SyncReplicaTweets(); err != nil {
-// 	// 	log.Logger.Error("sync replica tweets", zap.Error(err))
-// 	// }
-// }
 
 func bindTask() {
 	log.Logger.Info("bind twitter search sync monitor...")
-	if err := initSvc(context.Background()); err != nil {
-		log.Logger.Panic("init twitter svc", zap.Error(err))
+
+	syncTweetsLock := gutils.NewMutex()
+
+	go store.TaskStore.TickerAfterRun(
+		gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second,
+		func() {
+			if !syncTweetsLock.TryLock() {
+				log.Logger.Debug("another sync tweets is running")
+				return
+			}
+			defer syncTweetsLock.ForceRelease()
+
+			if err := syncFromMongodb2Es(log.Logger.Named("sync-tweets")); err != nil {
+				log.Logger.Error("sync tweets", zap.Error(err))
+			}
+		})
+}
+
+func syncFromMongodb2Es(logger glog.Logger) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
+	defer cancel()
+
+	twitterDao, err := NewDao(ctx,
+		gconfig.Shared.GetString("db.twitter.addr"),
+		gconfig.Shared.GetString("db.twitter.db"),
+		gconfig.Shared.GetString("db.twitter.user"),
+		gconfig.Shared.GetString("db.twitter.passwd"),
+	)
+	if err != nil {
+		return errors.Wrap(err, "new twitter dao")
 	}
 
-	// nolint:lll
-	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncSearch)
-	// go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second, syncReplica)
+	esDao, err := newElasticsearchDao(logger,
+		gconfig.Shared.GetString("tasks.twitter.elasticsearch.addr"))
+	if err != nil {
+		return errors.Wrap(err, "new elasticsearch dao")
+	}
+
+	svc, err := newSvc(ctx, logger, twitterDao, esDao)
+	if err != nil {
+		return errors.Wrap(err, "new twitter svc")
+	}
+
+	if err = svc.syncTweets(ctx); err != nil {
+		return errors.Wrap(err, "sync tweets")
+	}
+
+	return nil
 }
 
 func init() {

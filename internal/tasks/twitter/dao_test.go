@@ -7,15 +7,15 @@ import (
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/go-ramjet/library/config"
+	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
-
-	"github.com/Laisky/go-ramjet/library/config"
 )
 
 func TestSearchDao_GetLargestID(t *testing.T) {
-	config.LoadTest()
+	config.LoadTest(t)
 	d, err := NewSearchDao(
 		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
 	)
@@ -27,13 +27,13 @@ func TestSearchDao_GetLargestID(t *testing.T) {
 }
 
 func TestSearchDao_SaveTweets(t *testing.T) {
-	config.LoadTest()
+	config.LoadTest(t)
 	d, err := NewSearchDao(
 		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
 	)
 	require.NoError(t, err)
 
-	tweets := []SearchTweet{
+	tweets := []ClickhouseTweet{
 		{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
 		{TweetID: strconv.Itoa(rand.Int()), Text: gutils.RandomStringWithLength(10), UserID: strconv.Itoa(rand.Int())},
 	}
@@ -46,7 +46,7 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	ctx := context.Background()
-	config.LoadTest()
+	config.LoadTest(t)
 	d, err := NewDao(context.Background(),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.addr"),
 		gconfig.Shared.GetString("tasks.twitter.mongodb.dbName"),
@@ -62,4 +62,32 @@ func TestTwitterDao_GetTweetsIter(t *testing.T) {
 	docu := new(Tweet)
 	require.True(t, iter.Next(ctx))
 	require.True(t, len(docu.Text) > 0)
+}
+
+func TestElasticsearchDao_GetLargestID(t *testing.T) {
+	ctx := context.Background()
+	logger := log.Logger.Named("test")
+	config.LoadTest(t)
+
+	d, err := newElasticsearchDao(logger,
+		gconfig.Shared.GetString("tasks.twitter.elasticsearch.addr"))
+	require.NoError(t, err)
+
+	t.Run("test get largest id", func(t *testing.T) {
+		largestID, err := d.GetLargestID(ctx)
+		require.NoError(t, err)
+		t.Logf("got largest id %v", largestID)
+	})
+
+	t.Run("save tweet", func(t *testing.T) {
+		tweet := &Tweet{
+			ID:   strconv.Itoa(rand.Int()),
+			Text: gutils.RandomStringWithLength(10),
+			// User: &User{
+			// 	ID: strconv.Itoa(rand.Int()),
+			// },
+		}
+		err = d.SaveTweet(ctx, tweet)
+		require.NoError(t, err)
+	})
 }

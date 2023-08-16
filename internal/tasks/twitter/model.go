@@ -16,19 +16,19 @@ type Entities struct {
 }
 
 type Tweet struct {
-	MongoID         primitive.ObjectID `bson:"_id,omitempty" json:"mongo_id,omitempty"`
-	ID              string             `bson:"id_str" json:"id"`
-	CreatedAt       *time.Time         `bson:"created_at" json:"created_at"`
-	Text            string             `bson:"text" json:"text"`
-	Topics          []string           `bson:"topics" json:"topics"`
-	User            *User              `bson:"user" json:"user"`
-	ReplyToStatusID string             `bson:"in_reply_to_status_id_str" json:"in_reply_to_status_id"`
-	Entities        *Entities          `bson:"entities" json:"entities"`
-	IsRetweeted     bool               `bson:"retweeted" json:"is_retweeted"`
-	RetweetedTweet  *Tweet             `bson:"retweeted_status,omitempty" json:"retweeted_tweet"`
-	IsQuoted        bool               `bson:"is_quote_status" json:"is_quote_status"`
-	QuotedTweet     *Tweet             `bson:"quoted_status,omitempty" json:"quoted_status"`
-	Viewer          []string           `bson:"viewer,omitempty" json:"viewer"`
+	MongoID primitive.ObjectID `bson:"_id,omitempty" json:"mongo_id,omitempty"`
+	ID      string             `bson:"id_str" json:"id"`
+	// CreatedAt       *time.Time         `bson:"created_at" json:"created_at"`
+	Text string `bson:"text" json:"text"`
+	// Topics          []string           `bson:"topics" json:"topics"`
+	// User            *User              `bson:"user" json:"user"`
+	// ReplyToStatusID string             `bson:"in_reply_to_status_id_str" json:"in_reply_to_status_id"`
+	// Entities        *Entities          `bson:"entities" json:"entities"`
+	// IsRetweeted     bool               `bson:"retweeted" json:"is_retweeted"`
+	// RetweetedTweet  *Tweet             `bson:"retweeted_status,omitempty" json:"retweeted_tweet"`
+	// IsQuoted        bool               `bson:"is_quote_status" json:"is_quote_status"`
+	// QuotedTweet     *Tweet             `bson:"quoted_status,omitempty" json:"quoted_status"`
+	// Viewer          []int64            `bson:"viewer,omitempty" json:"viewer"`
 }
 
 type User struct {
@@ -38,13 +38,13 @@ type User struct {
 	Dscription string `bson:"dscription" json:"dscription"`
 }
 
-type SearchTweet struct {
+type ClickhouseTweet struct {
 	TweetID   string     `gorm:"column:tweet_id" json:"tweet_id"`
 	Text      string     `gorm:"column:text" json:"text"`
 	UserID    string     `gorm:"column:user_id" json:"user_id"`
 	CreatedAt *time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-func (SearchTweet) TableName() string {
+func (ClickhouseTweet) TableName() string {
 	return "tweets"
 }

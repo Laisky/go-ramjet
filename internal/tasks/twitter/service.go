@@ -2,63 +2,31 @@ package twitter
 
 import (
 	"context"
-	"sync"
 
-	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/errors/v2"
+	glog "github.com/Laisky/go-utils/v4/log"
+	"github.com/Laisky/zap"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
-var (
-	svc   *Service
-	svcMu sync.Mutex
-)
-
-func initSvc(ctx context.Context) error {
-	if svc != nil {
-		return nil
-	}
-
-	svcMu.Lock()
-	defer svcMu.Unlock()
-
-	// searchDao, err := NewSearchDao(gconfig.Shared.GetString("db.clickhouse.dsn"))
-	// if err != nil {
-	// 	return err
-	// }
-
-	twitterDao, err := NewDao(ctx,
-		gconfig.Shared.GetString("db.twitter.addr"),
-		gconfig.Shared.GetString("db.twitter.db"),
-		gconfig.Shared.GetString("db.twitter.user"),
-		gconfig.Shared.GetString("db.twitter.passwd"),
-	)
-	if err != nil {
-		return err
-	}
-
-	// twitterHome, err := NewDao(ctx,
-	// 	gconfig.Shared.GetString("db.twitter-home.addr"),
-	// 	gconfig.Shared.GetString("db.twitter-home.db"),
-	// 	gconfig.Shared.GetString("db.twitter-home.user"),
-	// 	gconfig.Shared.GetString("db.twitter-home.passwd"),
-	// )
-	// if err != nil {
-	// 	return err
-	// }
-
+func newSvc(ctx context.Context,
+	logger glog.Logger,
+	twitterDao *mongoDao,
+	esDao *ElasticsearchDao,
+) (svc *Service, err error) {
 	svc = &Service{
-		// searchDao:     searchDao,
+		logger:     logger,
 		twitterDao: twitterDao,
-		// twitterRepDao: twitterHome,
+		esDao:      esDao,
 	}
 
-	return nil
+	return svc, nil
 }
 
 type Service struct {
-	// searchDao  *SearchDao
-	twitterDao *Dao
-	// twitterRepDao replica twitter db
-	// twitterRepDao *Dao
+	logger     glog.Logger
+	twitterDao *mongoDao
+	esDao      *ElasticsearchDao
 }
 
 // func getTweetUserID(tweet *Tweet) string {
@@ -69,34 +37,50 @@ type Service struct {
 // 	return ""
 // }
 
-// SyncSearchTweets sync tweets to search db(clickhouse)
-// func (s *Service) SyncSearchTweets() error {
-// 	latestT, err := s.searchDao.GetLatestCreatedAt()
-// 	if err != nil {
-// 		return err
-// 	}
+// syncTweets sync tweets to elasticsearch
+func (s *Service) syncTweets(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-// 	iter := s.twitterDao.GetTweetsIter(bson.M{
-// 		"created_at": bson.M{"$gte": latestT},
-// 	})
-// 	defer gutils.SilentClose(iter)
+	latestTweetID, err := s.esDao.GetLargestID(ctx)
+	if err != nil {
+		return errors.Wrap(err, "get latest tweet id")
+	}
 
-// 	tweet := new(Tweet)
-// 	for iter.Next(tweet) {
-// 		tweet := SearchTweet{
-// 			TweetID:   tweet.ID,
-// 			UserID:    getTweetUserID(tweet),
-// 			Text:      tweet.Text,
-// 			CreatedAt: tweet.CreatedAt,
-// 		}
+	iter, err := s.twitterDao.GetTweetsIter(ctx, bson.M{
+		"id_str": bson.M{"$gte": latestTweetID},
+	})
+	if err != nil {
+		return errors.Wrap(err, "get tweets iter")
+	}
 
-// 		if err := s.searchDao.SaveTweet(tweet); err != nil {
-// 			return err
-// 		}
-// 	}
+	var i int
+	for iter.Next(ctx) {
+		tweet := new(Tweet)
+		if err = iter.Decode(tweet); err != nil {
+			s.logger.Warn("decode tweet",
+				zap.ByteString("tweet", iter.Current),
+				zap.Error(err))
+		}
 
-// 	return nil
-// }
+		if err := s.esDao.SaveTweet(ctx, tweet); err != nil {
+			return errors.Wrap(err, "save tweet")
+		}
+
+		if tweet.ID > latestTweetID {
+			latestTweetID = tweet.ID
+		}
+
+		i++
+		if i%10 == 0 {
+			s.logger.Info("sync tweets",
+				zap.String("latestTweetID", latestTweetID),
+				zap.Int("count", i))
+		}
+	}
+
+	return nil
+}
 
 // SyncReplicaTweets sync tweets to replica db
 // func (s *Service) SyncReplicaTweets() error {
