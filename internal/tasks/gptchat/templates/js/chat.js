@@ -1312,12 +1312,17 @@ function setupPrivateDataset() {
 
         datakeyEle.value = window.GetLocalStorage(StorageKeyCustomDatasetPassword);
 
+        // set default datakey
+        if (!datakeyEle.value) {
+            datakeyEle.value = window.RandomString(16);
+            window.SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value);
+        }
+
         datakeyEle
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
                 window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.target.value);
-            }
-            );
+            });
     }
 
     // bind file upload
