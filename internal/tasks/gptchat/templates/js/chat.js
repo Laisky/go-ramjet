@@ -361,7 +361,12 @@ function getLastNChatMessages(N, ignoredChatID) {
         return true;
     });
 
-    messages = messages.slice(-N);
+    if (N == 0) {
+        messages = [];
+    } else {
+        messages = messages.slice(-N);
+    }
+
     if (GetLocalStorage(StorageKeySystemPrompt)) {
         messages = [{
             role: RoleSystem,
@@ -429,13 +434,16 @@ async function sendChat2Server(chatID) {
         let messages,
             nContexts = parseInt(window.ChatNContexts());
 
-        messages = getLastNChatMessages(nContexts, chatID);
         if (chatID) {  // reload current chat by latest context
+            messages = getLastNChatMessages(nContexts - 1, chatID);
             messages.push({
                 role: RoleHuman,
                 content: reqPromp
             });
+        } else {
+            messages = getLastNChatMessages(nContexts, chatID);
         }
+
         currentAIRespSSE = new SSE(window.OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
@@ -658,95 +666,95 @@ function wrapRefLines(input) {
 
         result += `* <${lines[i]}>\n`;
     }
-            return result;
+    return result;
 }
 
 
 
 // function replaceChatInStorage(role, chatID, content) {
-                //     let storageKey = storageSessionKey(activeSessionID()),
-                //         chats = window.GetLocalStorage(storageKey) || [];
+//     let storageKey = storageSessionKey(activeSessionID()),
+//         chats = window.GetLocalStorage(storageKey) || [];
 
-                //     chats.forEach((item) => {
-                //         if (item.chatID == chatID && item.role == role) {
-                //             item.content = content;
-                //         }
-                //     });
+//     chats.forEach((item) => {
+//         if (item.chatID == chatID && item.role == role) {
+//             item.content = content;
+//         }
+//     });
 
-                //     window.SetLocalStorage(storageKey, chats);
-                // }
+//     window.SetLocalStorage(storageKey, chats);
+// }
 
-                function abortAIResp(err) {
-                    console.error(`abort AI resp: ${err}`);
-                    if (currentAIRespSSE) {
-                        currentAIRespSSE.close();
-                        currentAIRespSSE = null;
-                    }
+function abortAIResp(err) {
+    console.error(`abort AI resp: ${err}`);
+    if (currentAIRespSSE) {
+        currentAIRespSSE.close();
+        currentAIRespSSE = null;
+    }
 
-                    let errMsg;
-                    if (err.data) {
-                        errMsg = JSON.parse(err.data);
-                    } else {
-                        errMsg = err.toString();
-                    }
+    let errMsg;
+    if (err.data) {
+        errMsg = JSON.parse(err.data);
+    } else {
+        errMsg = err.toString();
+    }
 
-                    if (errMsg == "[object CustomEvent]") {
-                        // firefox will throw this error when SSE is closed, just ignore it.
-                        return;
-                    }
+    if (errMsg == "[object CustomEvent]") {
+        // firefox will throw this error when SSE is closed, just ignore it.
+        return;
+    }
 
-                    // if errMsg contains
-                    if (errMsg.includes("Access denied due to invalid subscription key or wrong API endpoint")) {
-                        showalert("danger", "API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
-                    }
+    // if errMsg contains
+    if (errMsg.includes("Access denied due to invalid subscription key or wrong API endpoint")) {
+        showalert("danger", "API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。");
+    }
 
-                    if (currentAIRespEle.dataset.status == "waiting") {// || currentAIRespEle.dataset.status == "writing") {
-                        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
-                    } else {
-                        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
-                    }
+    if (currentAIRespEle.dataset.status == "waiting") {// || currentAIRespEle.dataset.status == "writing") {
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+    } else {
+        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+    }
 
-                    // window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
-                    currentAIRespEle.scrollIntoView({ behavior: "smooth" });
-                    unlockChatInput();
-                }
+    // window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
+    currentAIRespEle.scrollIntoView({ behavior: "smooth" });
+    unlockChatInput();
+}
 
 
 function setupChatInput() {
-                // bind input press enter
-                {
-                    let isComposition = false;
-                    chatPromptInput.
-                        addEventListener("compositionstart", (evt) => {
-                            evt.stopPropagation();
-                            isComposition = true;
-                        })
+    // bind input press enter
+    {
+        let isComposition = false;
         chatPromptInput.
-                        addEventListener("compositionend", (evt) => {
-                            evt.stopPropagation();
-                            isComposition = false;
-                        })
+            addEventListener("compositionstart", (evt) => {
+                evt.stopPropagation();
+                isComposition = true;
+            })
+        chatPromptInput.
+            addEventListener("compositionend", (evt) => {
+                evt.stopPropagation();
+                isComposition = false;
+            })
 
 
         chatPromptInput.
-                        addEventListener("keydown", async (evt) => {
-                            evt.stopPropagation();
-                            if (evt.key != 'Enter'
-                                || isComposition
-                                || (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey))
-                                || !isAllowChatPrompInput()) {
-                                return;
-                            }
-
-                            await sendChat2Server();
-                            chatPromptInput.value = "";
-                        })
+            addEventListener("keydown", async (evt) => {
+                evt.stopPropagation();
+                if (evt.key != 'Enter'
+                    || isComposition
+                    || (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey))
+                    || !isAllowChatPrompInput()) {
+                    return;
                 }
+
+                await sendChat2Server();
+                chatPromptInput.value = "";
+            })
+    }
 
     // bind input button
     chatPromptInputBtn.
         addEventListener("click", async (evt) => {
-                evt.stopPropagation();
+            evt.stopPropagation();
             await sendChat2Server();
             chatPromptInput.value = "";
         })
@@ -757,15 +765,15 @@ function setupChatInput() {
 // @param {string} role - RoleHuman/RoleSystem/RoleAI
 // @param {string} text - chat text
 // @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
-            function append2Chats(role, text, isHistory = false, chatID) {
-                let chatEle;
+function append2Chats(role, text, isHistory = false, chatID) {
+    let chatEle;
 
-            if (!chatID) {
+    if (!chatID) {
         throw "chatID is required";
     }
 
-            let chatOp = "append";
-            switch (role) {
+    let chatOp = "append";
+    switch (role) {
         case RoleSystem:
             text = window.escapeHtml(text);
 
@@ -775,7 +783,7 @@ function setupChatInput() {
                 <div class="col-11 text-start"><pre>${text}</pre></div>
             </div>`
             break
-            case RoleHuman:
+        case RoleHuman:
             text = window.escapeHtml(text);
 
             let waitAI = "";
@@ -811,10 +819,10 @@ function setupChatInput() {
                     </div>
                     ${waitAI}
                 </div>`
-                break
-                case RoleAI:
-                if (!isHistory) {
-                    chatOp = "replace";
+            break
+        case RoleAI:
+            if (!isHistory) {
+                chatOp = "replace";
                 chatEle = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="row">
@@ -823,51 +831,51 @@ function setupChatInput() {
                     </div>
                 </div>`
             } else {
-                    chatEle = `
+                chatEle = `
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-1">🤖️</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
                     </div>`
-                }
+            }
 
-                break
+            break
     }
 
-                console.log("append chat", role, chatOp, chatID);
-                if (chatOp == "append") {
+    console.log("append chat", role, chatOp, chatID);
+    if (chatOp == "append") {
         if (role == RoleAI) {
-                    // ai response is always after human, so we need to find the last human chat,
-                    // and append ai response after it
-                    chatContainer.querySelector(`.chatManager .conservations #${chatID}`).
-                        insertAdjacentHTML("beforeend", chatEle);
+            // ai response is always after human, so we need to find the last human chat,
+            // and append ai response after it
+            chatContainer.querySelector(`.chatManager .conservations #${chatID}`).
+                insertAdjacentHTML("beforeend", chatEle);
         } else {
-                    chatContainer.querySelector(`.chatManager .conservations`).
-                        insertAdjacentHTML("beforeend", chatEle);
+            chatContainer.querySelector(`.chatManager .conservations`).
+                insertAdjacentHTML("beforeend", chatEle);
         }
     } else if (chatOp == "replace") {
-                    // replace html element of ai
-                    chatContainer.querySelector(`.chatManager .conservations #${chatID} .role-ai`).
-                        outerHTML = chatEle;
+        // replace html element of ai
+        chatContainer.querySelector(`.chatManager .conservations #${chatID} .role-ai`).
+            outerHTML = chatEle;
     }
 
 
-                // avoid duplicate event listener, only bind event listener for new chat
-                if (role == RoleHuman) {
-                    // bind delete button
-                    let deleteBtnHandler = (evt) => {
-                    evt.stopPropagation();
-                let chatEle = chatContainer.querySelector(`#${chatID}`);
-                chatEle.parentNode.removeChild(chatEle);
-                removeChatInStorage(chatID);
+    // avoid duplicate event listener, only bind event listener for new chat
+    if (role == RoleHuman) {
+        // bind delete button
+        let deleteBtnHandler = (evt) => {
+            evt.stopPropagation();
+            let chatEle = chatContainer.querySelector(`#${chatID}`);
+            chatEle.parentNode.removeChild(chatEle);
+            removeChatInStorage(chatID);
         };
 
         let editHumanInputHandler = (evt) => {
-                    evt.stopPropagation();
+            evt.stopPropagation();
 
-                let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
+            let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
                 text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
 
-                chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
+            chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-secondary save" type="button">
@@ -878,10 +886,10 @@ function setupChatInput() {
                         Cancel</button>
                 </div>`;
 
-                let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
-                let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
+            let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
+            let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
             saveBtn.addEventListener("click", async (evt) => {
-                    evt.stopPropagation();
+                evt.stopPropagation();
                 let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
                 chatContainer.querySelector(`#${chatID}`).innerHTML = `
                 <div class="container-fluid row role-human" data-chatid="${chatID}">
@@ -908,492 +916,492 @@ function setupChatInput() {
 
                 // bind delete and edit button
                 chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
-                .addEventListener("click", deleteBtnHandler);
+                    .addEventListener("click", deleteBtnHandler);
                 chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
-                .addEventListener("click", editHumanInputHandler);
+                    .addEventListener("click", editHumanInputHandler);
 
                 await sendChat2Server(chatID);
                 appendChats2Storage(RoleHuman, newText, chatID);
             });
 
             cancelBtn.addEventListener("click", (evt) => {
-                    evt.stopPropagation();
+                evt.stopPropagation();
                 chatContainer.querySelector(`#${chatID}`).innerHTML = oldText;
 
                 // bind delete and edit button
                 chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
-                .addEventListener("click", deleteBtnHandler);
+                    .addEventListener("click", deleteBtnHandler);
                 chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
-                .addEventListener("click", editHumanInputHandler);
+                    .addEventListener("click", editHumanInputHandler);
             });
         };
 
 
 
-                // bind delete and edit button
-                chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
-                .addEventListener("click", deleteBtnHandler);
-                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
-                .addEventListener("click", editHumanInputHandler);
+        // bind delete and edit button
+        chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+            .addEventListener("click", deleteBtnHandler);
+        chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+            .addEventListener("click", editHumanInputHandler);
     }
 }
 
 
-                function setupConfig() {
-                    let tokenTypeParent = configContainer.
-                querySelector(".input-group.token-type");
+function setupConfig() {
+    let tokenTypeParent = configContainer.
+        querySelector(".input-group.token-type");
 
     // set token type
     // {
-                    //     let selectItems = tokenTypeParent
-                    //         .querySelectorAll("a.dropdown-item");
-                    //     switch (window.OpenaiTokenType()) {
-                    //         case "proxy":
-                    //             configContainer
-                    //                 .querySelector(".token-type .show-val").innerHTML = "proxy";
-                    //             ActiveElementsByData(selectItems, "value", "proxy");
-                    //             break;
-                    //         case "direct":
-                    //             configContainer
-                    //                 .querySelector(".token-type .show-val").innerHTML = "direct";
-                    //             ActiveElementsByData(selectItems, "value", "direct");
-                    //             break;
-                    //     }
+    //     let selectItems = tokenTypeParent
+    //         .querySelectorAll("a.dropdown-item");
+    //     switch (window.OpenaiTokenType()) {
+    //         case "proxy":
+    //             configContainer
+    //                 .querySelector(".token-type .show-val").innerHTML = "proxy";
+    //             ActiveElementsByData(selectItems, "value", "proxy");
+    //             break;
+    //         case "direct":
+    //             configContainer
+    //                 .querySelector(".token-type .show-val").innerHTML = "direct";
+    //             ActiveElementsByData(selectItems, "value", "direct");
+    //             break;
+    //     }
 
-                    //     // bind evt listener for choose different token type
-                    //     selectItems.forEach((ele) => {
-                    //         ele.addEventListener("click", (evt) => {
-                    //             // evt.stopPropagation();
-                    //             configContainer
-                    //                 .querySelector(".token-type .show-val")
-                    //                 .innerHTML = evt.target.dataset.value;
-                    //             window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
-                    //         })
-                    //     });
-                    // }
+    //     // bind evt listener for choose different token type
+    //     selectItems.forEach((ele) => {
+    //         ele.addEventListener("click", (evt) => {
+    //             // evt.stopPropagation();
+    //             configContainer
+    //                 .querySelector(".token-type .show-val")
+    //                 .innerHTML = evt.target.dataset.value;
+    //             window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
+    //         })
+    //     });
+    // }
 
-                    //  config_api_token_value
-                    {
-                        let apitokenInput = configContainer
-                            .querySelector(".input.api-token");
-                        apitokenInput.value = window.OpenaiToken();
-                        apitokenInput.addEventListener("input", (evt) => {
-                            evt.stopPropagation();
-                            window.SetLocalStorage("config_api_token_value", evt.target.value);
-                        })
-                    }
+    //  config_api_token_value
+    {
+        let apitokenInput = configContainer
+            .querySelector(".input.api-token");
+        apitokenInput.value = window.OpenaiToken();
+        apitokenInput.addEventListener("input", (evt) => {
+            evt.stopPropagation();
+            window.SetLocalStorage("config_api_token_value", evt.target.value);
+        })
+    }
 
     //  config_chat_n_contexts
     {
-                    let maxtokenInput = configContainer
-                .querySelector(".input.contexts");
-                maxtokenInput.value = window.ChatNContexts();
-                configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
+        let maxtokenInput = configContainer
+            .querySelector(".input.contexts");
+        maxtokenInput.value = window.ChatNContexts();
+        configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
         maxtokenInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage("config_chat_n_contexts", evt.target.value);
-                configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.target.value;
+            evt.stopPropagation();
+            window.SetLocalStorage("config_chat_n_contexts", evt.target.value);
+            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.target.value;
         })
     }
 
-                //  config_api_max_tokens
-                {
-                    let maxtokenInput = configContainer
-                .querySelector(".input.max-token");
-                maxtokenInput.value = window.OpenaiMaxTokens();
-                configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
+    //  config_api_max_tokens
+    {
+        let maxtokenInput = configContainer
+            .querySelector(".input.max-token");
+        maxtokenInput.value = window.OpenaiMaxTokens();
+        configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
         maxtokenInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage("config_api_max_tokens", evt.target.value);
-                configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.target.value;
+            evt.stopPropagation();
+            window.SetLocalStorage("config_api_max_tokens", evt.target.value);
+            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.target.value;
         })
     }
 
-                //  config_api_temperature
-                {
-                    let maxtokenInput = configContainer
-                .querySelector(".input.temperature");
-                maxtokenInput.value = window.OpenaiTemperature();
-                configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
+    //  config_api_temperature
+    {
+        let maxtokenInput = configContainer
+            .querySelector(".input.temperature");
+        maxtokenInput.value = window.OpenaiTemperature();
+        configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
         maxtokenInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage("config_api_temperature", evt.target.value);
-                configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.target.value;
+            evt.stopPropagation();
+            window.SetLocalStorage("config_api_temperature", evt.target.value);
+            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.target.value;
         })
     }
 
-                //  config_api_presence_penalty
-                {
-                    let maxtokenInput = configContainer
-                .querySelector(".input.presence_penalty");
-                maxtokenInput.value = window.OpenaiPresencePenalty();
-                configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
+    //  config_api_presence_penalty
+    {
+        let maxtokenInput = configContainer
+            .querySelector(".input.presence_penalty");
+        maxtokenInput.value = window.OpenaiPresencePenalty();
+        configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
         maxtokenInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage("config_api_presence_penalty", evt.target.value);
-                configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.target.value;
+            evt.stopPropagation();
+            window.SetLocalStorage("config_api_presence_penalty", evt.target.value);
+            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.target.value;
         })
     }
 
-                //  config_api_frequency_penalty
-                {
-                    let maxtokenInput = configContainer
-                .querySelector(".input.frequency_penalty");
-                maxtokenInput.value = window.OpenaiFrequencyPenalty();
-                configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
+    //  config_api_frequency_penalty
+    {
+        let maxtokenInput = configContainer
+            .querySelector(".input.frequency_penalty");
+        maxtokenInput.value = window.OpenaiFrequencyPenalty();
+        configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
         maxtokenInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage("config_api_frequency_penalty", evt.target.value);
-                configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.target.value;
+            evt.stopPropagation();
+            window.SetLocalStorage("config_api_frequency_penalty", evt.target.value);
+            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.target.value;
         })
     }
 
-                //  config_api_static_context
-                {
-                    let staticConfigInput = configContainer
-                .querySelector(".system-prompt .input");
-                staticConfigInput.value = window.OpenaiChatStaticContext();
+    //  config_api_static_context
+    {
+        let staticConfigInput = configContainer
+            .querySelector(".system-prompt .input");
+        staticConfigInput.value = window.OpenaiChatStaticContext();
         staticConfigInput.addEventListener("input", (evt) => {
-                    evt.stopPropagation();
-                window.SetLocalStorage(StorageKeySystemPrompt, evt.target.value);
+            evt.stopPropagation();
+            window.SetLocalStorage(StorageKeySystemPrompt, evt.target.value);
         })
     }
 
-                // bind reset button
-                {
-                    configContainer.querySelector(".btn.reset")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
-                            localStorage.clear();
-                            location.reload();
-                        })
-                }
+    // bind reset button
+    {
+        configContainer.querySelector(".btn.reset")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                localStorage.clear();
+                location.reload();
+            })
+    }
 
     // bind clear-chats button
-                {
-                    configContainer.querySelector(".btn.clear-chats")
-                        .addEventListener("click", (evt) => {
-                            clearSessionAndChats(evt);
-                            location.reload();
-                        });
+    {
+        configContainer.querySelector(".btn.clear-chats")
+            .addEventListener("click", (evt) => {
+                clearSessionAndChats(evt);
+                location.reload();
+            });
     }
 
-                // bind submit button
-                {
-                    configContainer.querySelector(".btn.submit")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
-                            location.reload();
-                        })
+    // bind submit button
+    {
+        configContainer.querySelector(".btn.submit")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                location.reload();
+            })
 
-                }
+    }
 
-                window.EnableTooltipsEverywhere();
+    window.EnableTooltipsEverywhere();
 }
 
-                function loadPromptShortcutsFromStorage() {
-                    let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
-                if (!shortcuts) {
-                    // default prompts
-                    shortcuts = [
-                        {
-                            title: "中英互译",
-                            description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
-                        }
-                    ];
-                window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+function loadPromptShortcutsFromStorage() {
+    let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+    if (!shortcuts) {
+        // default prompts
+        shortcuts = [
+            {
+                title: "中英互译",
+                description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
+            }
+        ];
+        window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
     }
 
-                return shortcuts;
+    return shortcuts;
 }
 
 // append prompt shortcuts to html and localstorage
 //
 // @param {Object} shortcut - shortcut object
 // @param {bool} storage - whether to save to localstorage
-                function appendPromptShortcut(shortcut, storage = false) {
-                    let promptShortcutContainer = configContainer.querySelector(".prompt-shortcuts");
+function appendPromptShortcut(shortcut, storage = false) {
+    let promptShortcutContainer = configContainer.querySelector(".prompt-shortcuts");
 
-                // add to local storage
-                if (storage) {
-                    let shortcuts = loadPromptShortcutsFromStorage();
-                shortcuts.push(shortcut);
-                window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+    // add to local storage
+    if (storage) {
+        let shortcuts = loadPromptShortcutsFromStorage();
+        shortcuts.push(shortcut);
+        window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
     }
 
-                // new element
-                let ele = document.createElement("span");
-                ele.classList.add("badge", "text-bg-info");
-                ele.dataset.prompt = shortcut.description;
-                ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`;
+    // new element
+    let ele = document.createElement("span");
+    ele.classList.add("badge", "text-bg-info");
+    ele.dataset.prompt = shortcut.description;
+    ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`;
 
     // add delete click event
     ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
-                    evt.stopPropagation();
+        evt.stopPropagation();
 
         window.ConfirmModal("delete saved prompt", async () => {
-                    evt.target.parentElement.remove();
+            evt.target.parentElement.remove();
 
-                // remove localstorage shortcut
-                let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+            // remove localstorage shortcut
+            let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
             shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
-                window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
         });
     });
 
     // add click event
     // replace system prompt
     ele.addEventListener("click", (evt) => {
-                    evt.stopPropagation();
-                let promptInput = configContainer.querySelector(".system-prompt .input");
-                window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
-                promptInput.value = evt.currentTarget.dataset.prompt;
+        evt.stopPropagation();
+        let promptInput = configContainer.querySelector(".system-prompt .input");
+        window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
+        promptInput.value = evt.currentTarget.dataset.prompt;
     });
 
-                // add to html
-                promptShortcutContainer.appendChild(ele);
+    // add to html
+    promptShortcutContainer.appendChild(ele);
 }
 
-                function setupPromptManager() {
-                    // restore shortcuts from localstorage
-                    {
-                        // bind default prompt shortcuts
-                        configContainer
+function setupPromptManager() {
+    // restore shortcuts from localstorage
+    {
+        // bind default prompt shortcuts
+        configContainer
             .querySelector(".prompt-shortcuts .badge")
-                            .addEventListener("click", (evt) => {
-                                evt.stopPropagation();
-                                let promptInput = configContainer.querySelector(".system-prompt .input");
-                                promptInput.value = evt.target.dataset.prompt;
-                                window.SetLocalStorage(StorageKeySystemPrompt, evt.target.dataset.prompt);
-                            });
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let promptInput = configContainer.querySelector(".system-prompt .input");
+                promptInput.value = evt.target.dataset.prompt;
+                window.SetLocalStorage(StorageKeySystemPrompt, evt.target.dataset.prompt);
+            });
 
-                        let shortcuts = loadPromptShortcutsFromStorage();
-                        shortcuts.forEach((shortcut) => {
-                            appendPromptShortcut(shortcut, false);
-                        });
-                    }
+        let shortcuts = loadPromptShortcutsFromStorage();
+        shortcuts.forEach((shortcut) => {
+            appendPromptShortcut(shortcut, false);
+        });
+    }
 
     // bind star prompt
     let saveSystemPromptModelEle = document.querySelector("#save-system-prompt.modal"),
-                saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
-                {
-                    configContainer
-                        .querySelector(".system-prompt .bi.save-prompt")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
-                            let promptInput = configContainer
-                                .querySelector(".system-prompt .input");
+        saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
+    {
+        configContainer
+            .querySelector(".system-prompt .bi.save-prompt")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let promptInput = configContainer
+                    .querySelector(".system-prompt .input");
 
-                            saveSystemPromptModelEle
-                                .querySelector(".modal-body textarea.user-input")
-                                .innerHTML = promptInput.value;
+                saveSystemPromptModelEle
+                    .querySelector(".modal-body textarea.user-input")
+                    .innerHTML = promptInput.value;
 
-                            saveSystemPromptModal.show();
-                        });
+                saveSystemPromptModal.show();
+            });
     }
 
-                // bind prompt market modal
-                {
-                    configContainer
-                        .querySelector(".system-prompt .bi.open-prompt-market")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
-                            let promptMarketModalEle = document.querySelector("#prompt-market.modal");
-                            let promptMarketModal = new bootstrap.Modal(promptMarketModalEle);
-                            promptMarketModal.show();
-                        });
+    // bind prompt market modal
+    {
+        configContainer
+            .querySelector(".system-prompt .bi.open-prompt-market")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let promptMarketModalEle = document.querySelector("#prompt-market.modal");
+                let promptMarketModal = new bootstrap.Modal(promptMarketModalEle);
+                promptMarketModal.show();
+            });
     }
 
-                // bind save button in system-prompt modal
-                {
-                    saveSystemPromptModelEle
-                        .querySelector(".btn.save")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
-                            let titleInput = saveSystemPromptModelEle
-                                .querySelector(".modal-body input.title");
-                            let descriptionInput = saveSystemPromptModelEle
-                                .querySelector(".modal-body textarea.user-input");
+    // bind save button in system-prompt modal
+    {
+        saveSystemPromptModelEle
+            .querySelector(".btn.save")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let titleInput = saveSystemPromptModelEle
+                    .querySelector(".modal-body input.title");
+                let descriptionInput = saveSystemPromptModelEle
+                    .querySelector(".modal-body textarea.user-input");
 
-                            // trim space
-                            titleInput.value = titleInput.value.trim();
-                            descriptionInput.value = descriptionInput.value.trim();
+                // trim space
+                titleInput.value = titleInput.value.trim();
+                descriptionInput.value = descriptionInput.value.trim();
 
-                            // if title is empty, set input border to red
-                            if (titleInput.value === "") {
-                                titleInput.classList.add("border-danger");
-                                return;
-                            }
+                // if title is empty, set input border to red
+                if (titleInput.value === "") {
+                    titleInput.classList.add("border-danger");
+                    return;
+                }
 
-                            let shortcut = {
-                                title: titleInput.value,
-                                description: descriptionInput.value
-                            };
+                let shortcut = {
+                    title: titleInput.value,
+                    description: descriptionInput.value
+                };
 
-                            appendPromptShortcut(shortcut, true);
+                appendPromptShortcut(shortcut, true);
 
 
-                            // clear input
-                            titleInput.value = "";
-                            descriptionInput.value = "";
-                            titleInput.classList.remove("border-danger");
-                            saveSystemPromptModal.hide();
-                        });
+                // clear input
+                titleInput.value = "";
+                descriptionInput.value = "";
+                titleInput.classList.remove("border-danger");
+                saveSystemPromptModal.hide();
+            });
     }
 
-                // fill chat prompts market
-                let promptMarketModal = document.querySelector("#prompt-market"),
-                promptInput = promptMarketModal.querySelector("textarea.prompt-content"),
-                promptTitle = promptMarketModal.querySelector("input.prompt-title");
-                {
-                    window.chatPrompts.forEach((prompt) => {
-                        let ele = document.createElement("span");
-                        ele.classList.add("badge", "text-bg-info");
-                        ele.dataset.description = prompt.description;
-                        ele.dataset.title = prompt.title;
-                        ele.innerHTML = ` ${prompt.title}  <i class="bi bi-plus-circle"></i>`;
+    // fill chat prompts market
+    let promptMarketModal = document.querySelector("#prompt-market"),
+        promptInput = promptMarketModal.querySelector("textarea.prompt-content"),
+        promptTitle = promptMarketModal.querySelector("input.prompt-title");
+    {
+        window.chatPrompts.forEach((prompt) => {
+            let ele = document.createElement("span");
+            ele.classList.add("badge", "text-bg-info");
+            ele.dataset.description = prompt.description;
+            ele.dataset.title = prompt.title;
+            ele.innerHTML = ` ${prompt.title}  <i class="bi bi-plus-circle"></i>`;
 
-                        // add click event
-                        // replace system prompt
-                        ele.addEventListener("click", (evt) => {
-                            evt.stopPropagation();
+            // add click event
+            // replace system prompt
+            ele.addEventListener("click", (evt) => {
+                evt.stopPropagation();
 
-                            promptInput.value = evt.currentTarget.dataset.description;
-                            promptTitle.value = evt.currentTarget.dataset.title;
-                        });
+                promptInput.value = evt.currentTarget.dataset.description;
+                promptTitle.value = evt.currentTarget.dataset.title;
+            });
 
-                        promptMarketModal.querySelector(".prompt-labels").appendChild(ele);
-                    });
+            promptMarketModal.querySelector(".prompt-labels").appendChild(ele);
+        });
     }
 
-                // bind chat prompts market add button
-                {
-                    promptMarketModal.querySelector(".modal-body .save")
-                        .addEventListener("click", (evt) => {
-                            evt.stopPropagation();
+    // bind chat prompts market add button
+    {
+        promptMarketModal.querySelector(".modal-body .save")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
 
-                            // trim and check empty
-                            promptTitle.value = promptTitle.value.trim();
-                            promptInput.value = promptInput.value.trim();
-                            if (promptTitle.value === "") {
-                                promptTitle.classList.add("border-danger");
-                                return;
-                            }
-                            if (promptInput.value === "") {
-                                promptInput.classList.add("border-danger");
-                                return;
-                            }
+                // trim and check empty
+                promptTitle.value = promptTitle.value.trim();
+                promptInput.value = promptInput.value.trim();
+                if (promptTitle.value === "") {
+                    promptTitle.classList.add("border-danger");
+                    return;
+                }
+                if (promptInput.value === "") {
+                    promptInput.classList.add("border-danger");
+                    return;
+                }
 
-                            let shortcut = {
-                                title: promptTitle.value,
-                                description: promptInput.value
-                            };
+                let shortcut = {
+                    title: promptTitle.value,
+                    description: promptInput.value
+                };
 
-                            appendPromptShortcut(shortcut, true);
+                appendPromptShortcut(shortcut, true);
 
-                            promptTitle.value = "";
-                            promptInput.value = "";
-                            promptTitle.classList.remove("border-danger");
-                            promptInput.classList.remove("border-danger");
-                        });
+                promptTitle.value = "";
+                promptInput.value = "";
+                promptTitle.classList.remove("border-danger");
+                promptInput.classList.remove("border-danger");
+            });
     }
 }
 
-                // setup private dataset modal
-                function setupPrivateDataset() {
-                    let pdfchatModalEle = document.querySelector("#modal-pdfchat");
+// setup private dataset modal
+function setupPrivateDataset() {
+    let pdfchatModalEle = document.querySelector("#modal-pdfchat");
 
-                // bind header's custom qa button
-                {
-                    // bind pdf-file modal
-                    let pdfFileModalEle = document.querySelector("#modal-pdfchat"),
-                pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
+    // bind header's custom qa button
+    {
+        // bind pdf-file modal
+        let pdfFileModalEle = document.querySelector("#modal-pdfchat"),
+            pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
 
 
-                document
-                .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
+        document
+            .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
             .addEventListener("click", (evt) => {
-                    evt.stopPropagation();
+                evt.stopPropagation();
                 pdfFileModal.show();
             });
     }
 
-                // bind datakey to localstorage
-                {
-                    let datakeyEle = pdfchatModalEle
-                .querySelector('div[data-field="data-key"] input');
+    // bind datakey to localstorage
+    {
+        let datakeyEle = pdfchatModalEle
+            .querySelector('div[data-field="data-key"] input');
 
-                datakeyEle.value = window.GetLocalStorage(StorageKeyCustomDatasetPassword);
+        datakeyEle.value = window.GetLocalStorage(StorageKeyCustomDatasetPassword);
 
-                // set default datakey
-                if (!datakeyEle.value) {
-                    datakeyEle.value = window.RandomString(16);
-                window.SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value);
+        // set default datakey
+        if (!datakeyEle.value) {
+            datakeyEle.value = window.RandomString(16);
+            window.SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value);
         }
 
-                datakeyEle
+        datakeyEle
             .addEventListener("change", (evt) => {
-                    evt.stopPropagation();
+                evt.stopPropagation();
                 window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.target.value);
             });
     }
 
-                // bind file upload
-                {
-                    // when user choosen file, get file name of
-                    // pdfchatModalEle.querySelector('div[data-field="pdffile"] input').files[0]
-                    // and set to dataset-name input
+    // bind file upload
+    {
+        // when user choosen file, get file name of
+        // pdfchatModalEle.querySelector('div[data-field="pdffile"] input').files[0]
+        // and set to dataset-name input
+        pdfchatModalEle
+            .querySelector('div[data-field="pdffile"] input')
+            .addEventListener("change", (evt) => {
+                evt.stopPropagation();
+
+                if (evt.target.files.length === 0) {
+                    return;
+                }
+
+                let filename = evt.target.files[0].name,
+                    fileext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
+
+
+                if ([".pdf", ".md", ".ppt", ".pptx", ".doc", ".docx"].indexOf(fileext) === -1) {
+                    // remove choosen
                     pdfchatModalEle
-                        .querySelector('div[data-field="pdffile"] input')
-                        .addEventListener("change", (evt) => {
-                            evt.stopPropagation();
+                        .querySelector('div[data-field="pdffile"] input').value = "";
 
-                            if (evt.target.files.length === 0) {
-                                return;
-                            }
+                    showalert("warning", "currently only support pdf file");
+                    return;
+                }
 
-                            let filename = evt.target.files[0].name,
-                                fileext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
+                // remove extension and non-ascii charactors
+                filename = filename.substring(0, filename.lastIndexOf("."));
+                filename = filename.replace(/[^a-zA-Z0-9]/g, "_");
 
-
-                            if ([".pdf", ".md", ".ppt", ".pptx", ".doc", ".docx"].indexOf(fileext) === -1) {
-                                // remove choosen
-                                pdfchatModalEle
-                                    .querySelector('div[data-field="pdffile"] input').value = "";
-
-                                showalert("warning", "currently only support pdf file");
-                                return;
-                            }
-
-                            // remove extension and non-ascii charactors
-                            filename = filename.substring(0, filename.lastIndexOf("."));
-                            filename = filename.replace(/[^a-zA-Z0-9]/g, "_");
-
-                            pdfchatModalEle
-                                .querySelector('div[data-field="dataset-name"] input')
-                                .value = filename;
-                        });
-
-                // bind upload button
                 pdfchatModalEle
-                .querySelector('div[data-field="buttons"] button[data-fn="upload"]')
+                    .querySelector('div[data-field="dataset-name"] input')
+                    .value = filename;
+            });
+
+        // bind upload button
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] button[data-fn="upload"]')
             .addEventListener("click", async (evt) => {
-                    evt.stopPropagation();
+                evt.stopPropagation();
 
                 if (pdfchatModalEle
-                .querySelector('div[data-field="pdffile"] input').files.length === 0) {
+                    .querySelector('div[data-field="pdffile"] input').files.length === 0) {
                     showalert("warning", "please choose a pdf file before upload");
-                return;
+                    return;
                 }
 
                 // build post form
                 let form = new FormData();
                 form.append("file", pdfchatModalEle
-                .querySelector('div[data-field="pdffile"] input').files[0]);
+                    .querySelector('div[data-field="pdffile"] input').files[0]);
                 form.append("file_key", pdfchatModalEle
-                .querySelector('div[data-field="dataset-name"] input').value);
+                    .querySelector('div[data-field="dataset-name"] input').value);
                 form.append("data_key", pdfchatModalEle
-                .querySelector('div[data-field="data-key"] input').value);
+                    .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
                 let headers = new Headers();
                 // headers.append("Content-Type", "multipart/form-data");
@@ -1401,20 +1409,20 @@ function setupChatInput() {
 
                 try {
                     window.ShowSpinner();
-                const resp = await fetch("/ramjet/gptchat/files", {
-                    method: "POST",
-                headers: headers,
-                body: form
+                    const resp = await fetch("/ramjet/gptchat/files", {
+                        method: "POST",
+                        headers: headers,
+                        body: form
                     })
 
-                if (!resp.ok || resp.status !== 200) {
+                    if (!resp.ok || resp.status !== 200) {
                         throw new Error(`${resp.status} ${await resp.text()}`);
                     }
 
-                showalert("success", "upload dataset success, please wait few minutes to process");
+                    showalert("success", "upload dataset success, please wait few minutes to process");
                 } catch (err) {
                     showalert("danger", `upload dataset failed, ${err.message}`);
-                throw err;
+                    throw err;
                 } finally {
                     window.HideSpinner();
                 }
@@ -1423,92 +1431,92 @@ function setupChatInput() {
 
     // bind delete datasets buttion
     const bindDatasetDeleteBtn = () => {
-                    let datasets = pdfchatModalEle
-                .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash');
+        let datasets = pdfchatModalEle
+            .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash');
 
-                if (datasets == null || datasets.length === 0) {
+        if (datasets == null || datasets.length === 0) {
             return;
         }
 
         datasets.forEach((ele) => {
-                    ele.addEventListener("click", async (evt) => {
-                        evt.stopPropagation();
+            ele.addEventListener("click", async (evt) => {
+                evt.stopPropagation();
 
-                        let headers = new Headers();
-                        headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                        headers.append("Cache-Control", "no-cache");
-                        // headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+                // headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
-                        try {
-                            window.ShowSpinner();
-                            const resp = await fetch(`/ramjet/gptchat/files`, {
-                                method: "DELETE",
-                                headers: headers,
-                                body: JSON.stringify({
-                                    datasets: [evt.target.closest(".dataset-item").getAttribute("data-filename")]
-                                })
-                            })
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch(`/ramjet/gptchat/files`, {
+                        method: "DELETE",
+                        headers: headers,
+                        body: JSON.stringify({
+                            datasets: [evt.target.closest(".dataset-item").getAttribute("data-filename")]
+                        })
+                    })
 
-                            if (!resp.ok || resp.status !== 200) {
-                                throw new Error(`${resp.status} ${await resp.text()}`);
-                            }
-                            await resp.json();
-                        } catch (err) {
-                            showalert("danger", `delete dataset failed, ${err.message}`);
-                            throw err;
-                        } finally {
-                            window.HideSpinner();
-                        }
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
+                    await resp.json();
+                } catch (err) {
+                    showalert("danger", `delete dataset failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
 
-                        // remove dataset item
-                        evt.target.closest(".dataset-item").remove();
-                    });
+                // remove dataset item
+                evt.target.closest(".dataset-item").remove();
+            });
         });
     };
 
-                // bind list datasets
-                {
-                    pdfchatModalEle
-                        .querySelector('div[data-field="buttons"] button[data-fn="refresh"]')
-                        .addEventListener("click", async (evt) => {
-                            evt.stopPropagation();
+    // bind list datasets
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] button[data-fn="refresh"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
 
-                            let headers = new Headers();
-                            headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                            headers.append("Cache-Control", "no-cache");
-                            headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
-                            let body;
-                            try {
-                                window.ShowSpinner();
-                                const resp = await fetch("/ramjet/gptchat/files", {
-                                    method: "GET",
-                                    headers: headers
-                                })
+                let body;
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch("/ramjet/gptchat/files", {
+                        method: "GET",
+                        headers: headers
+                    })
 
-                                if (!resp.ok || resp.status !== 200) {
-                                    throw new Error(`${resp.status} ${await resp.text()}`);
-                                }
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
 
-                                body = await resp.json();
-                            } catch (err) {
-                                showalert("danger", `fetch dataset failed, ${err.message}`);
-                                throw err;
-                            } finally {
-                                window.HideSpinner();
-                            }
+                    body = await resp.json();
+                } catch (err) {
+                    showalert("danger", `fetch dataset failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
 
-                            let datasetListEle = pdfchatModalEle
-                                .querySelector('div[data-field="dataset"]');
-                            let datasetsHTML = "";
+                let datasetListEle = pdfchatModalEle
+                    .querySelector('div[data-field="dataset"]');
+                let datasetsHTML = "";
 
 
-                            // add processing files
-                            // show processing files in grey and progress bar
-                            body.datasets.forEach((dataset) => {
-                                switch (dataset.status) {
-                                    case "done":
-                                        datasetsHTML += `
+                // add processing files
+                // show processing files in grey and progress bar
+                body.datasets.forEach((dataset) => {
+                    switch (dataset.status) {
+                        case "done":
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -1524,9 +1532,9 @@ function setupChatInput() {
                                         </div>
                                     </div>
                                 </div>`
-                                        break;
-                                    case "processing":
-                                        datasetsHTML += `
+                            break;
+                        case "processing":
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -1545,68 +1553,68 @@ function setupChatInput() {
                                         </div>
                                     </div>
                                 </div>`
-                                        break;
-                                }
-                            });
+                            break;
+                    }
+                });
 
-                            datasetListEle.innerHTML = datasetsHTML;
+                datasetListEle.innerHTML = datasetsHTML;
 
-                            // selected binded datasets
-                            body.selected.forEach((dataset) => {
-                                datasetListEle
-                                    .querySelector(`div[data-filename="${dataset}"] input[type="checkbox"]`)
-                                    .checked = true;
-                            });
+                // selected binded datasets
+                body.selected.forEach((dataset) => {
+                    datasetListEle
+                        .querySelector(`div[data-filename="${dataset}"] input[type="checkbox"]`)
+                        .checked = true;
+                });
 
-                            bindDatasetDeleteBtn();
-                        });
+                bindDatasetDeleteBtn();
+            });
     }
 
-                // bind list chatbots
-                {
-                    pdfchatModalEle
-                        .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
-                        .addEventListener("click", async (evt) => {
-                            evt.stopPropagation();
-                            new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+    // bind list chatbots
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
 
-                            let headers = new Headers();
-                            headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                            headers.append("Cache-Control", "no-cache");
-                            headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
+                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
-                            let body;
-                            try {
-                                window.ShowSpinner();
-                                const resp = await fetch("/ramjet/gptchat/ctx/list", {
-                                    method: "GET",
-                                    headers: headers
-                                })
+                let body;
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch("/ramjet/gptchat/ctx/list", {
+                        method: "GET",
+                        headers: headers
+                    })
 
-                                if (!resp.ok || resp.status !== 200) {
-                                    throw new Error(`${resp.status} ${await resp.text()}`);
-                                }
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
 
-                                body = await resp.json();
-                            } catch (err) {
-                                showalert("danger", `fetch chatbot list failed, ${err.message}`);
-                                throw err;
-                            } finally {
-                                window.HideSpinner();
-                            }
+                    body = await resp.json();
+                } catch (err) {
+                    showalert("danger", `fetch chatbot list failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
 
-                            let datasetListEle = pdfchatModalEle
-                                .querySelector('div[data-field="dataset"]');
-                            let chatbotsHTML = "";
+                let datasetListEle = pdfchatModalEle
+                    .querySelector('div[data-field="dataset"]');
+                let chatbotsHTML = "";
 
-                            body.chatbots.forEach((chatbot) => {
-                                let selectedHTML = "";
-                                if (chatbot == body.current) {
-                                    selectedHTML = `checked`;
-                                }
+                body.chatbots.forEach((chatbot) => {
+                    let selectedHTML = "";
+                    if (chatbot == body.current) {
+                        selectedHTML = `checked`;
+                    }
 
 
-                                chatbotsHTML += `
+                    chatbotsHTML += `
                         <div class="d-flex justify-content-between align-items-center chatbot-item" data-name="${chatbot}">
                             <div class="container-fluid row">
                                 <div class="col-5">
@@ -1623,178 +1631,178 @@ function setupChatInput() {
                             </div>
                         </div>`
 
-                            });
+                });
 
-                            datasetListEle.innerHTML = chatbotsHTML;
+                datasetListEle.innerHTML = chatbotsHTML;
 
-                            // bind active new selected chatbot
-                            datasetListEle
-                                .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
-                                .forEach((ele) => {
-                                    ele.addEventListener("change", async (evt) => {
-                                        evt.stopPropagation();
-
-                                        if (!evt.target.checked) {
-                                            // at least one chatbot should be selected
-                                            evt.target.checked = true;
-                                            return;
-                                        } else {
-                                            // uncheck other chatbot
-                                            datasetListEle
-                                                .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
-                                                .forEach((ele) => {
-                                                    if (ele != evt.target) {
-                                                        ele.checked = false;
-                                                    }
-                                                });
-                                        }
-
-                                        let headers = new Headers();
-                                        headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-
-                                        try {
-                                            window.ShowSpinner();
-                                            const chatbotName = evt.target.closest(".chatbot-item").getAttribute("data-name");
-                                            const resp = await fetch("/ramjet/gptchat/ctx/active", {
-                                                method: "POST",
-                                                headers: headers,
-                                                body: JSON.stringify({
-                                                    data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
-                                                    chatbot_name: chatbotName
-                                                })
-                                            })
-
-                                            if (!resp.ok || resp.status !== 200) {
-                                                throw new Error(`${resp.status} ${await resp.text()}`);
-                                            }
-
-                                            const body = await resp.json();
-                                            showalert("success", `active chatbot success, you can chat with ${chatbotName} now`);
-                                        } catch (err) {
-                                            showalert("danger", `active chatbot failed, ${err.message}`);
-                                            throw err;
-                                        } finally {
-                                            window.HideSpinner();
-                                        }
-
-                                    });
-                                });
-
-                        });
-    }
-
-                // bind share chatbots
-                {
-                    pdfchatModalEle
-                        .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
-                        .addEventListener("click", async (evt) => {
+                // bind active new selected chatbot
+                datasetListEle
+                    .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
+                    .forEach((ele) => {
+                        ele.addEventListener("change", async (evt) => {
                             evt.stopPropagation();
-                            new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
 
-                            let checkedChatbotEle = pdfchatModalEle
-                                .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
-                            if (!checkedChatbotEle) {
-                                showalert("danger", `please click [Chatbot List] first`);
+                            if (!evt.target.checked) {
+                                // at least one chatbot should be selected
+                                evt.target.checked = true;
                                 return;
+                            } else {
+                                // uncheck other chatbot
+                                datasetListEle
+                                    .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
+                                    .forEach((ele) => {
+                                        if (ele != evt.target) {
+                                            ele.checked = false;
+                                        }
+                                    });
                             }
-
-                            let chatbot_name = checkedChatbotEle.closest(".chatbot-item").getAttribute("data-name");
 
                             let headers = new Headers();
                             headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                            headers.append("Cache-Control", "no-cache");
 
-                            let respBody;
                             try {
                                 window.ShowSpinner();
-                                const resp = await fetch("/ramjet/gptchat/ctx/share", {
+                                const chatbotName = evt.target.closest(".chatbot-item").getAttribute("data-name");
+                                const resp = await fetch("/ramjet/gptchat/ctx/active", {
                                     method: "POST",
                                     headers: headers,
                                     body: JSON.stringify({
-                                        chatbot_name: chatbot_name,
                                         data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                                        chatbot_name: chatbotName
                                     })
-                                });
+                                })
 
                                 if (!resp.ok || resp.status !== 200) {
                                     throw new Error(`${resp.status} ${await resp.text()}`);
                                 }
 
-                                respBody = await resp.json();
+                                const body = await resp.json();
+                                showalert("success", `active chatbot success, you can chat with ${chatbotName} now`);
                             } catch (err) {
-                                showalert("danger", `fetch chatbot list failed, ${err.message}`);
+                                showalert("danger", `active chatbot failed, ${err.message}`);
                                 throw err;
                             } finally {
                                 window.HideSpinner();
                             }
 
-                            // open new tab page
-                            const sharedChatbotUrl = `${window.location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
-                            showalert("info", `open ${sharedChatbotUrl}`);
-                            window.open(sharedChatbotUrl, "_blank");
                         });
+                    });
+
+            });
     }
 
-                // build custom chatbot
-                {
-                    pdfchatModalEle
-                        .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
-                        .addEventListener("click", async (evt) => {
-                            evt.stopPropagation();
-                            new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+    // bind share chatbots
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
 
-                            let selectedDatasets = [];
-                            pdfchatModalEle.
-                                querySelectorAll('div[data-field="dataset"] .dataset-item input[type="checkbox"]')
-                                .forEach((ele) => {
-                                    if (ele.checked) {
-                                        selectedDatasets.push(
-                                            ele.closest(".dataset-item").getAttribute("data-filename"));
-                                    }
-                                });
+                let checkedChatbotEle = pdfchatModalEle
+                    .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
+                if (!checkedChatbotEle) {
+                    showalert("danger", `please click [Chatbot List] first`);
+                    return;
+                }
 
-                            if (selectedDatasets.length === 0) {
-                                showalert("warning", "please select at least one dataset, click [List Dataset] button to fetch dataset list");
-                                return;
-                            }
+                let chatbot_name = checkedChatbotEle.closest(".chatbot-item").getAttribute("data-name");
 
-                            // ask chatbot's name
-                            window.SingleInputModal("build bot", "chatbot name", async (botname) => {
-                                // botname should be 1-32 ascii characters
-                                if (!botname.match(/^[a-zA-Z0-9_\-]{1,32}$/)) {
-                                    showalert("warning", "chatbot name should be 1-32 ascii characters");
-                                    return;
-                                }
+                let headers = new Headers();
+                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("Cache-Control", "no-cache");
 
-                                let headers = new Headers();
-                                headers.append("Content-Type", "application/json");
-                                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                let respBody;
+                try {
+                    window.ShowSpinner();
+                    const resp = await fetch("/ramjet/gptchat/ctx/share", {
+                        method: "POST",
+                        headers: headers,
+                        body: JSON.stringify({
+                            chatbot_name: chatbot_name,
+                            data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                        })
+                    });
 
-                                try { // build chatbot
-                                    window.ShowSpinner();
-                                    const resp = await fetch("/ramjet/gptchat/ctx/build", {
-                                        method: "POST",
-                                        headers: headers,
-                                        body: JSON.stringify({
-                                            chatbot_name: botname,
-                                            datasets: selectedDatasets,
-                                            data_key: pdfchatModalEle
-                                                .querySelector('div[data-field="data-key"] input').value
-                                        })
-                                    })
+                    if (!resp.ok || resp.status !== 200) {
+                        throw new Error(`${resp.status} ${await resp.text()}`);
+                    }
 
-                                    if (!resp.ok || resp.status !== 200) {
-                                        throw new Error(`${resp.status} ${await resp.text()}`);
-                                    }
+                    respBody = await resp.json();
+                } catch (err) {
+                    showalert("danger", `fetch chatbot list failed, ${err.message}`);
+                    throw err;
+                } finally {
+                    window.HideSpinner();
+                }
 
-                                    showalert("success", "build dataset success, you can chat now");
-                                } catch (err) {
-                                    showalert("danger", `build dataset failed, ${err.message}`);
-                                    throw err;
-                                } finally {
-                                    window.HideSpinner();
-                                }
-                            });
-                        });
+                // open new tab page
+                const sharedChatbotUrl = `${window.location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
+                showalert("info", `open ${sharedChatbotUrl}`);
+                window.open(sharedChatbotUrl, "_blank");
+            });
+    }
+
+    // build custom chatbot
+    {
+        pdfchatModalEle
+            .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
+            .addEventListener("click", async (evt) => {
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+
+                let selectedDatasets = [];
+                pdfchatModalEle.
+                    querySelectorAll('div[data-field="dataset"] .dataset-item input[type="checkbox"]')
+                    .forEach((ele) => {
+                        if (ele.checked) {
+                            selectedDatasets.push(
+                                ele.closest(".dataset-item").getAttribute("data-filename"));
+                        }
+                    });
+
+                if (selectedDatasets.length === 0) {
+                    showalert("warning", "please select at least one dataset, click [List Dataset] button to fetch dataset list");
+                    return;
+                }
+
+                // ask chatbot's name
+                window.SingleInputModal("build bot", "chatbot name", async (botname) => {
+                    // botname should be 1-32 ascii characters
+                    if (!botname.match(/^[a-zA-Z0-9_\-]{1,32}$/)) {
+                        showalert("warning", "chatbot name should be 1-32 ascii characters");
+                        return;
+                    }
+
+                    let headers = new Headers();
+                    headers.append("Content-Type", "application/json");
+                    headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+
+                    try { // build chatbot
+                        window.ShowSpinner();
+                        const resp = await fetch("/ramjet/gptchat/ctx/build", {
+                            method: "POST",
+                            headers: headers,
+                            body: JSON.stringify({
+                                chatbot_name: botname,
+                                datasets: selectedDatasets,
+                                data_key: pdfchatModalEle
+                                    .querySelector('div[data-field="data-key"] input').value
+                            })
+                        })
+
+                        if (!resp.ok || resp.status !== 200) {
+                            throw new Error(`${resp.status} ${await resp.text()}`);
+                        }
+
+                        showalert("success", "build dataset success, you can chat now");
+                    } catch (err) {
+                        showalert("danger", `build dataset failed, ${err.message}`);
+                        throw err;
+                    } finally {
+                        window.HideSpinner();
+                    }
+                });
+            });
     }
 }
