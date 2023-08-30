@@ -3,7 +3,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,29 +21,13 @@ import (
 )
 
 var (
-	ratelimiter *gutils.Throttle
-	dataReg     = regexp.MustCompile(`data: (\{.*\})`)
+	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
-
-func init() {
-	var err error
-	if ratelimiter, err = gutils.NewThrottleWithCtx(context.Background(), &gutils.ThrottleCfg{
-		Max:     10,
-		NPerSec: 1,
-	}); err != nil {
-		log.Logger.Panic("new ratelimiter", zap.Error(err))
-	}
-}
 
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	logger := log.Logger.Named("chat")
-
-	if !ratelimiter.Allow() { // check rate limit
-		ctx.AbortWithStatusJSON(http.StatusTooManyRequests, "too many requests, please try again later")
-		return
-	}
 
 	resp, err := proxy(ctx)
 	if AbortErr(ctx, err) {
@@ -148,8 +131,8 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
 
-		if !user.IsModelAllowed(frontendReq.Model) {
-			return nil, errors.Errorf("model is not allowed for current user %q", user.UserName)
+		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
+			return nil, errors.Wrap(err, "check is model allowed")
 		}
 
 		var openaiReq any

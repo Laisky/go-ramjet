@@ -31,7 +31,7 @@ func generateContainerEnv(host, index, username, passwd string) []string {
 
 func SplitImage2RepoAndTag(image string) (repo, tag string) {
 	images := strings.Split(image, "/")
-	name := ""
+	var name string
 	if len(images) == 1 {
 		name = image
 	} else {

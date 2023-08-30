@@ -1,8 +1,14 @@
 package config
 
 import (
+	"context"
+
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -47,23 +53,62 @@ type UserConfig struct {
 	// OpenaiToken (optional) openai token
 	OpenaiToken   string   `json:"-" mapstructure:"openai_token"`
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
+	// LimitExpensiveModels more strict rate limit for expensive models
+	LimitExpensiveModels bool `json:"limit_expensive_models" mapstructure:"limit_expensive_models"`
+}
+
+var (
+	ratelimiter, expensiveModelRateLimiter *gutils.Throttle
+)
+
+func init() {
+	var err error
+	if ratelimiter, err = gutils.NewThrottleWithCtx(context.Background(),
+		&gutils.ThrottleCfg{
+			Max:     10,
+			NPerSec: 1,
+		}); err != nil {
+		log.Logger.Panic("new ratelimiter", zap.Error(err))
+	}
+	if expensiveModelRateLimiter, err = gutils.NewThrottleWithCtx(context.Background(),
+		&gutils.ThrottleCfg{
+			Max:     65,
+			NPerSec: 1,
+		}); err != nil {
+		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
+	}
 }
 
 // IsModelAllowed check if model is allowed
-func (c *UserConfig) IsModelAllowed(model string) bool {
+func (c *UserConfig) IsModelAllowed(model string) error {
 	if len(c.AllowedModels) == 0 {
-		return false
+		return errors.Errorf("no allowed models for current user %q", c.UserName)
+	}
+
+	if !ratelimiter.Allow() { // check rate limit
+		return errors.Errorf("too many requests, please try again later")
+	}
+
+	if c.LimitExpensiveModels && model != "gpt-3.5-turbo" {
+		// rate limit only support limit by second,
+		// so we consume 60 tokens once to make it limit by minute
+		for i := 0; i < 60; i++ {
+			if !expensiveModelRateLimiter.Allow() { // check rate limit
+				return errors.Errorf("too many requests for expensive model %q, "+
+					"please try again later or use 3.5-turbo instead", model)
+			}
+		}
 	}
 
 	for _, m := range c.AllowedModels {
 		if m == "*" {
-			return true
+			return nil
 		}
 
 		if m == model {
-			return true
+			return nil
 		}
 	}
 
-	return false
+	return errors.Errorf("model %q is not allowed for user %q", model, c.UserName)
 }

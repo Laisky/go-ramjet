@@ -3,7 +3,6 @@ package http
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -22,7 +21,7 @@ func AbortErr(ctx *gin.Context, err error) bool {
 	}
 
 	log.Logger.Error("openai chat abort", zap.Error(err))
-	ctx.AbortWithStatusJSON(http.StatusBadRequest, fmt.Sprintf("%+v", err))
+	ctx.AbortWithStatusJSON(http.StatusBadRequest, err.Error())
 	return true
 }
 
@@ -51,10 +50,11 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		for _, u := range config.Config.UserTokens {
 			if u.Token == config.FREETIER_USER_TOKEN {
 				return &config.UserConfig{
-					UserName:      username,
-					Token:         userToken,
-					OpenaiToken:   config.Config.Token,
-					AllowedModels: u.AllowedModels,
+					UserName:             username,
+					Token:                userToken,
+					OpenaiToken:          config.Config.Token,
+					AllowedModels:        u.AllowedModels,
+					LimitExpensiveModels: u.LimitExpensiveModels,
 				}, nil
 			}
 		}

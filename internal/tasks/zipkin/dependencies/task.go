@@ -13,6 +13,7 @@ import (
 
 func runTask() {
 	log.Logger.Info("run zipkin-dependencies...")
+	//nolint:forcetypeassert
 	for env := range gconfig.Shared.Get("tasks.zipkin.dependencies.configs").(map[string]interface{}) {
 		environ := generateContainerEnv(
 			gconfig.Shared.GetString("tasks.zipkin.dependencies.host"),
