@@ -793,7 +793,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                             <div class="row">
                                 <div class="col-1">🤖️</div>
                                 <div class="col-10 text-start ai-response" data-status="waiting">
-                                    <p class="card-text placeholder-glow">
+                                    <p dir="auto" class="card-text placeholder-glow">
                                         <span class="placeholder col-7"></span>
                                         <span class="placeholder col-4"></span>
                                         <span class="placeholder col-4"></span>
@@ -876,7 +876,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
 
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
-                <textarea class="form-control" rows="3">${text}</textarea>
+                <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-secondary save" type="button">
                         <i class="bi bi-check"></i>
@@ -1521,7 +1521,7 @@ function setupPrivateDataset() {
                                     <div class="container-fluid row">
                                         <div class="col-5">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox">
+                                                <input dir="auto" class="form-check-input" type="checkbox">
                                                 <label class="form-check-label" for="flexSwitchCheckChecked">${dataset.name}</label>
                                             </div>
                                         </div>
@@ -1539,7 +1539,7 @@ function setupPrivateDataset() {
                                     <div class="container-fluid row">
                                         <div class="col-5">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" disabled>
+                                                <input dir="auto" class="form-check-input" type="checkbox" disabled>
                                                 <label class="form-check-label" for="flexSwitchCheckChecked">${dataset.name}</label>
                                             </div>
                                         </div>
@@ -1619,7 +1619,7 @@ function setupPrivateDataset() {
                             <div class="container-fluid row">
                                 <div class="col-5">
                                     <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" ${selectedHTML}>
+                                        <input dir="auto" class="form-check-input" type="checkbox" ${selectedHTML}>
                                         <label class="form-check-label" for="flexSwitchCheckChecked">${chatbot}</label>
                                     </div>
                                 </div>

@@ -141,7 +141,7 @@
                 </div>
                 <div class="card-footer text-muted">
                     <div class="input-group mb-3" style="margin-bottom: 0px!important;">
-                        <textarea class="form-control input prompt" placeholder="CTRL+Enter to send"
+                        <textarea dir="auto" class="form-control input prompt" placeholder="CTRL+Enter to send"
                             style="height: 80px"></textarea>
                         <button class="btn btn-outline-secondary send" type="button">Send</button>
                     </div>
@@ -163,8 +163,8 @@
             <div class="modal-body">
                 <div class="mb-3 prompt-name">
                     <label for="promptName" class="form-label">Name:</label>
-                    <input type="text" class="form-control mb-3 title" placeholder="prompt name">
-                    <textarea class="form-control user-input" rows="10"></textarea>
+                    <input dir="auto" type="text" class="form-control mb-3 title" placeholder="prompt name">
+                    <textarea dir="auto" class="form-control user-input" rows="10"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -185,7 +185,7 @@
             <div class="modal-body" style="padding: 5px;">
                 <div class="row g-2">
                     <div class="col-10">
-                        <input type="text" class="form-control mb-1 prompt-title" placeholder="prompt name">
+                        <input dir="auto" type="text" class="form-control mb-1 prompt-title" placeholder="prompt name">
                     </div>
                     <div class="col-2">
                         <button type="button" class="btn btn-primary save">Add</button>
@@ -193,7 +193,7 @@
                 </div>
 
 
-                <textarea class="mb-1 form-control prompt-content" rows="5" style="font-size: small;"></textarea>
+                <textarea dir="auto" class="mb-1 form-control prompt-content" rows="5" style="font-size: small;"></textarea>
                 <div class="prompt-labels" style="max-height: 400px; overflow-y: scroll;">
                     <!-- fill prompts from datasource -->
                 </div>
@@ -214,16 +214,16 @@
                     <div class="input-group mb-3" data-field="pdffile">
                         <div class="mb-3">
                             <label for="formFile" class="form-label">Upload New File</label>
-                            <input class="form-control" type="file" accept=".pdf,.doc,.docx,.md,.ppt,.pptx">
+                            <input dir="auto" class="form-control" type="file" accept=".pdf,.doc,.docx,.md,.ppt,.pptx">
                         </div>
                     </div>
                     <div class="input-group mb-3" data-field="dataset-name">
                         <span class="input-group-text">Name</span>
-                        <input type="text" class="form-control" placeholder="dataset name">
+                        <input dir="auto" type="text" class="form-control" placeholder="dataset name">
                     </div>
                     <div class="input-group mb-3" data-field="data-key">
                         <span class="input-group-text">Password</span>
-                        <input type="text" class="form-control" placeholder="e2e encrypt data key">
+                        <input dir="auto" type="text" class="form-control" placeholder="e2e encrypt data key">
                     </div>
                     <div class="input-group mb-3" data-field="buttons">
                         <div class="btn-group" role="group" aria-label="Basic outlined example">

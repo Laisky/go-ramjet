@@ -117,7 +117,7 @@
                         <li><a class="dropdown-item" data-value="proxy" href="#">proxy</a></li>
                         <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
                     </ul> -->
-                    <input type="text" class="form-control input api-token" value="">
+                    <input dir="auto" type="text" class="form-control input api-token" value="">
                 </div>
             </div>
             <div class="mb-3 input-group contexts">
@@ -125,31 +125,31 @@
                     title="Sending how many recent contexts each time, may lead to AI repeating the answer to the recent question.">
                     contexts <i class="bi bi-info-circle"></i> - <span class="contexts-val"></span>
                 </label>
-                <input type="range" class="form-range input contexts" min="1" max="6" step="1" value="1">
+                <input dir="auto" type="range" class="form-range input contexts" min="1" max="6" step="1" value="1">
             </div>
             <div class="mb-3 input-group max-token">
                 <label for="configMaxTokens" class="form-label">
                     max tokens - <span class="max-token-val"></span>
                 </label>
-                <input type="range" class="form-range input max-token" min="1000" max="32000" step="100" value="500">
+                <input dir="auto" type="range" class="form-range input max-token" min="1000" max="32000" step="100" value="500">
             </div>
             <div class="mb-3 input-group temperature">
                 <label for="configTemperature" class="form-label">
                     temperature - <span class="temperature-val"></span>
                 </label>
-                <input type="range" class="form-range input temperature" min="0" max="2" step="0.1" value="1">
+                <input dir="auto" type="range" class="form-range input temperature" min="0" max="2" step="0.1" value="1">
             </div>
             <div class="mb-3 input-group presence_penalty">
                 <label for="configpresence_penalty" class="form-label">
                     presence_penalty - <span class="presence_penalty-val"></span>
                 </label>
-                <input type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1" value="0">
+                <input dir="auto" type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1" value="0">
             </div>
             <div class="mb-3 input-group frequency_penalty">
                 <label for="configfrequency_penalty" class="form-label">
                     frequency_penalty - <span class="frequency_penalty-val"></span>
                 </label>
-                <input type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
+                <input dir="auto" type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
             </div>
             <div class="mb-3 input-group system-prompt">
                 <label for="configStaticContext" class="form-label">
@@ -162,7 +162,7 @@
                             title="search more open prompts"></i>
                     </span>
                 </label>
-                <textarea class="form-control input" placeholder="something always send to AI"></textarea>
+                <textarea dir="auto" class="form-control input" placeholder="something always send to AI"></textarea>
             </div>
             <div class="mb-3 prompt-shortcuts">
                 <span class="badge text-bg-info"
@@ -203,7 +203,7 @@
                 <div class="modal-body text-center">
                     <div class="mb-3">
                         <label class="form-label">Input:</label>
-                        <input type="text" class="form-control mb-3 title">
+                        <input dir="auto" type="text" class="form-control mb-3 title">
                     </div>
                     <div class="d-flex justify-content-center">
                         <button type="button" class="btn btn-success me-2 yes">Yes</button>
@@ -222,7 +222,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <input type="text" class="form-control mb-1">
+                    <input dir="auto" type="text" class="form-control mb-1">
                     <button type="button" class="btn btn-success me-2 save">Save</button>
                     <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal">Cancel</button>
                 </div>
