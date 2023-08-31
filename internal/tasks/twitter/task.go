@@ -20,8 +20,12 @@ func bindTask() {
 
 	syncTweetsLock := gutils.NewMutex()
 
-	go store.TaskStore.TickerAfterRun(
-		gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval")*time.Second,
+	interval := gconfig.Shared.GetDuration("tasks.twitter.search.sync.interval") * time.Second
+	if interval < time.Second {
+		interval = 60 * time.Second
+	}
+
+	go store.TaskStore.TickerAfterRun(interval,
 		func() {
 			if !syncTweetsLock.TryLock() {
 				log.Logger.Debug("another sync tweets is running")
