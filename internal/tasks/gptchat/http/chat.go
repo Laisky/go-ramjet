@@ -3,6 +3,8 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,7 +35,21 @@ func APIHandler(ctx *gin.Context) {
 	if AbortErr(ctx, err) {
 		return
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	bodyReader := resp.Body
+	switch resp.Header.Get("Content-Encoding") {
+	case "gzip":
+		bodyReader, err = gzip.NewReader(resp.Body)
+	case "": // no content encoding
+	case "flate":
+		bodyReader = flate.NewReader(resp.Body)
+	default:
+		err = errors.Errorf("unsupport content encoding %q", resp.Header.Get("Content-Encoding"))
+	}
+	if AbortErr(ctx, err) {
+		return
+	}
 
 	// ctx.Header("Content-Type", "text/event-stream")
 	// ctx.Header("Cache-Control", "no-cache")
@@ -42,7 +58,7 @@ func APIHandler(ctx *gin.Context) {
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 
 	isStream := resp.Header.Get("Content-Type") == "text/event-stream"
-	reader := bufio.NewScanner(resp.Body)
+	reader := bufio.NewScanner(bodyReader)
 	reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF {
 			return 0, nil, io.EOF
@@ -90,8 +106,8 @@ func APIHandler(ctx *gin.Context) {
 	}
 
 	// write last line
-	if lastResp != nil &&
-		len(lastResp.Choices) != 0 &&
+	// if lastResp != nil &&
+	if len(lastResp.Choices) != 0 &&
 		lastResp.Choices[0].FinishReason == "" {
 		lastResp.Choices[0].FinishReason = "stop"
 		lastResp.Choices[0].Delta.Content = " [TRUNCATED BY SERVER]"
@@ -177,6 +193,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	req = req.WithContext(ctx.Request.Context())
 	CopyHeader(req.Header, ctx.Request.Header)
 	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	log.Logger.Debug("proxy request", zap.String("url", newUrl))
 	resp, err = httpcli.Do(req)
