@@ -51,6 +51,11 @@ func SetupHTTPCli() (err error) {
 		return errors.Wrap(err, "new http client")
 	}
 
+	// FIXME: remove this
+	// httpcli.Transport = &http.Transport{
+	// 	DisableCompression: true,
+	// }
+
 	return nil
 }
 

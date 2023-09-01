@@ -3,8 +3,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"compress/flate"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,20 +35,6 @@ func APIHandler(ctx *gin.Context) {
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	bodyReader := resp.Body
-	switch resp.Header.Get("Content-Encoding") {
-	case "": // no content encoding
-	case "gzip":
-		bodyReader, err = gzip.NewReader(resp.Body)
-	case "flate":
-		bodyReader = flate.NewReader(resp.Body)
-	default:
-		err = errors.Errorf("unsupport content encoding %q", resp.Header.Get("Content-Encoding"))
-	}
-	if AbortErr(ctx, err) {
-		return
-	}
-
 	// ctx.Header("Content-Type", "text/event-stream")
 	// ctx.Header("Cache-Control", "no-cache")
 	// ctx.Header("X-Accel-Buffering", "no")
@@ -58,6 +42,23 @@ func APIHandler(ctx *gin.Context) {
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 
 	isStream := resp.Header.Get("Content-Type") == "text/event-stream"
+	bodyReader := resp.Body
+
+	// if !resp.Uncompressed {
+	// 	switch resp.Header.Get("Content-Encoding") {
+	// 	case "": // no content encoding
+	// 	case "gzip":
+	// 		bodyReader, err = gzip.NewReader(resp.Body)
+	// 	case "flate":
+	// 		bodyReader = flate.NewReader(resp.Body)
+	// 	default:
+	// 		err = errors.Errorf("unsupport content encoding %q", resp.Header.Get("Content-Encoding"))
+	// 	}
+	// 	if AbortErr(ctx, err) {
+	// 		return
+	// 	}
+	// }
+
 	reader := bufio.NewScanner(bodyReader)
 	reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF {
@@ -195,7 +196,10 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	req = req.WithContext(ctx.Request.Context())
 	CopyHeader(req.Header, ctx.Request.Header)
 	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
-	req.Header.Set("Accept-Encoding", "gzip")
+
+	// if set header "Accept-Encoding" manually,
+	// golang's http client will not auto decompress response body
+	req.Header.Del("Accept-Encoding")
 
 	log.Logger.Debug("proxy request", zap.String("url", newUrl))
 	resp, err = httpcli.Do(req)
