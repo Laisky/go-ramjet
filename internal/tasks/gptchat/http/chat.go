@@ -105,7 +105,7 @@ func APIHandler(ctx *gin.Context) {
 		}
 	}
 
-	// write last line
+	// scanner quit unexpected, write last line
 	if lastResp != nil &&
 		len(lastResp.Choices) != 0 &&
 		lastResp.Choices[0].FinishReason == "" {
@@ -120,6 +120,8 @@ func APIHandler(ctx *gin.Context) {
 		if AbortErr(ctx, err) {
 			return
 		}
+	} else {
+		AbortErr(ctx, errors.Errorf("unsupport resp body %q", reader.Text()))
 	}
 }
 
