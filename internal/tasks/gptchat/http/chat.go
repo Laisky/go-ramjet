@@ -39,9 +39,9 @@ func APIHandler(ctx *gin.Context) {
 
 	bodyReader := resp.Body
 	switch resp.Header.Get("Content-Encoding") {
+	case "": // no content encoding
 	case "gzip":
 		bodyReader, err = gzip.NewReader(resp.Body)
-	case "": // no content encoding
 	case "flate":
 		bodyReader = flate.NewReader(resp.Body)
 	default:
@@ -106,8 +106,8 @@ func APIHandler(ctx *gin.Context) {
 	}
 
 	// write last line
-	// if lastResp != nil &&
-	if len(lastResp.Choices) != 0 &&
+	if lastResp != nil &&
+		len(lastResp.Choices) != 0 &&
 		lastResp.Choices[0].FinishReason == "" {
 		lastResp.Choices[0].FinishReason = "stop"
 		lastResp.Choices[0].Delta.Content = " [TRUNCATED BY SERVER]"
