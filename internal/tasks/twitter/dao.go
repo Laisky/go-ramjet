@@ -144,7 +144,7 @@ func newElasticsearchDao(logger glog.Logger, api string) (ins *ElasticsearchDao,
 		return nil, errors.Wrap(err, "check es health")
 	} else {
 		defer gutils.LogErr(resp.Body.Close, logger)
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			respCnt, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, errors.Wrap(err, "read response")

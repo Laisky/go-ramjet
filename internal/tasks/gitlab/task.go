@@ -17,7 +17,6 @@ func bindTask() {
 	)
 
 	registerWeb()
-
 }
 
 func init() {

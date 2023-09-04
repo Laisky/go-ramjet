@@ -62,7 +62,7 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 func RemoveIndexByName(api, index string) (err error) {
 	log.Logger.Info("remove es index", zap.String("index", index))
 	url := api + index
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return errors.Wrap(err, "make request error")
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
-func registerWeb() {
+func registerWeb(svc *Service) {
 	web.Server.GET("/crawler/search", func(ctx *gin.Context) {
 		q := strings.TrimSpace(ctx.Query("q"))
 		if q == "" {
@@ -17,7 +17,7 @@ func registerWeb() {
 			return
 		}
 
-		rets, err := svc.Search(ctx, q)
+		rets, err := svc.Search(ctx.Request.Context(), q)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, err)
 			return

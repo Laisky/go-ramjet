@@ -64,7 +64,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, cfg *MonitorCfg, metric *sync.Map) {
 	}
 	defer resp.Body.Close() // nolint: errcheck,gosec
 
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		isAlive = true
 	}
 

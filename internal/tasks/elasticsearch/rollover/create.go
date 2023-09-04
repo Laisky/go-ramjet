@@ -81,7 +81,7 @@ func NewIndex(api string, st *IdxSetting) (err error) {
 		return errors.Wrap(err, "get index rollover body got error")
 	}
 
-	req, err = http.NewRequest("POST", url, jb)
+	req, err = http.NewRequest(http.MethodPost, url, jb)
 	if err != nil {
 		return errors.Wrap(err, "try to make rollover index http request got error")
 	}

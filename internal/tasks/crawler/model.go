@@ -11,6 +11,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+// Docu database for bbt document
 type Docu struct {
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
@@ -19,11 +20,13 @@ type Docu struct {
 	URL       string    `bson:"url" json:"url"`
 }
 
+// BBT database for basebit
 type BBT struct {
 	db                   mongo.DB
 	dbName, docusColName string
 }
 
+// NewBBTDB new bbt db
 func NewBBTDB(ctx context.Context, addr, dbName, user, pwd, docusColName string) (b *BBT, err error) {
 	log.Logger.Info("connect to db",
 		zap.String("addr", addr),

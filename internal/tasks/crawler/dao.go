@@ -38,21 +38,30 @@ type SearchResult struct {
 	Text string             `bson:"text" json:"-"`
 }
 
+// Search search text in title and content
 func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
-	rets = make([]SearchResult, 0)
-	cursor, err := d.DB.docusCol().
+	// search in title
+	titleRets := make([]SearchResult, 0)
+	if cursor, err := d.DB.docusCol().
+		Find(ctx, bson.M{"title": bson.M{"$regex": "(?i)" + text}},
+			options.Find().SetLimit(10)); err != nil {
+		return nil, errors.Wrap(err, "search")
+	} else if err := cursor.All(ctx, &titleRets); err != nil {
+		return nil, errors.Wrap(err, "search")
+	}
+
+	// search in content
+	contentRets := make([]SearchResult, 0)
+	if cursor, err := d.DB.docusCol().
 		Find(ctx, bson.M{"text": bson.M{"$regex": "(?i)" + text}},
-			options.Find().SetLimit(99))
-	if err != nil {
+			options.Find().SetLimit(10)); err != nil {
+		return nil, errors.Wrap(err, "search")
+	} else if err := cursor.All(ctx, &contentRets); err != nil {
 		return nil, errors.Wrap(err, "search")
 	}
 
-	if err := cursor.All(ctx, &rets); err != nil {
-		return nil, errors.Wrap(err, "search")
-	}
-
-	rets = d.extractSearchContext(text, rets)
-	return rets, nil
+	rets = d.extractSearchContext(text, append(titleRets, contentRets...))
+	return contentRets, nil
 }
 
 const searchCtxSpan = 20

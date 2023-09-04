@@ -15,6 +15,8 @@ RUN go mod download
 
 # static build
 ADD . .
+ENV GOOS=linux
+ENV GOARCH=amd64
 RUN go build -a --ldflags '-extldflags "-static"' main.go
 
 # copy executable file and certs to a pure container

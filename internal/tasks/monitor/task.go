@@ -82,7 +82,6 @@ func runTask() {
 			log.Logger.Error("try to send monitor alert email got error", zap.Error(err))
 		}
 	}
-
 }
 
 func BindTask() {

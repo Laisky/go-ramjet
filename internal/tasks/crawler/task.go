@@ -41,15 +41,8 @@ func fetchAllDocus() {
 func bindTask() {
 	log.Logger.Info("bind web crawler sync monitor...")
 
-	initSvc(context.Background())
-	registerWeb()
-
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, fetchAllDocus)
-}
-
-func initSvc(ctx context.Context) {
-	var err error
-	svc, err = NewService(ctx,
+	ctx := context.Background()
+	svc, err := NewService(ctx,
 		gconfig.Shared.GetString("db.crawler.addr"),
 		gconfig.Shared.GetString("db.crawler.db"),
 		gconfig.Shared.GetString("db.crawler.user"),
@@ -59,6 +52,10 @@ func initSvc(ctx context.Context) {
 	if err != nil {
 		log.Logger.Panic("new service", zap.Error(err))
 	}
+
+	registerWeb(svc)
+
+	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, fetchAllDocus)
 }
 
 func init() {
