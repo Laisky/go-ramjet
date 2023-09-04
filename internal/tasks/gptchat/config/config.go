@@ -55,6 +55,8 @@ type UserConfig struct {
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 	// LimitExpensiveModels more strict rate limit for expensive models
 	LimitExpensiveModels bool `json:"limit_expensive_models" mapstructure:"limit_expensive_models"`
+	// LimitAllModels general rate limiter for all models
+	LimitAllModels bool `json:"limit_all_models" mapstructure:"limit_all_models"`
 }
 
 var (
@@ -85,7 +87,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		return errors.Errorf("no allowed models for current user %q", c.UserName)
 	}
 
-	if !ratelimiter.Allow() { // check rate limit
+	if c.LimitAllModels && !ratelimiter.Allow() { // check rate limit
 		return errors.Errorf("too many requests, please try again later")
 	}
 
