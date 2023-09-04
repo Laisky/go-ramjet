@@ -84,8 +84,8 @@ github.com/Laisky/go-gin-prometheus v1.0.0 h1:eWb9jmUqNL2tz0bwt6vWjJHEpglSHJT6qt
 github.com/Laisky/go-gin-prometheus v1.0.0/go.mod h1:3yC0gDd4f79ikEM1eGHLTWSRG0tluOV2mmx/liYLtIA=
 github.com/Laisky/go-utils/v3 v3.5.0 h1:CsPA/mcIHqBnA6I8rF/zDn9iRDE6BFQePrC7c36eNk8=
 github.com/Laisky/go-utils/v3 v3.5.0/go.mod h1:UY8fpnM/YqroAC3cxF2rwaehfX4vQktz9MJYrTxU9kg=
-github.com/Laisky/go-utils/v4 v4.5.1-0.20230831083518-24720219019c h1:GJBEJi9AAwxYhZ8l1F1z9O7diwP6YMJU3gTzw9oa3gI=
-github.com/Laisky/go-utils/v4 v4.5.1-0.20230831083518-24720219019c/go.mod h1:T4KPusSi+Jgex/vYIFO48xH8SBd8593sgK6xfmrKtLg=
+github.com/Laisky/go-utils/v4 v4.5.1-0.20230904025611-c4cf384f8e8f h1:nm9A7ayJWs6lo81b9gcE/zP7j51q65W3nd2KlM/eBb8=
+github.com/Laisky/go-utils/v4 v4.5.1-0.20230904025611-c4cf384f8e8f/go.mod h1:Jw7lXntOTcj3/titGj36/NK653peJw0855C1Dh2y/O0=
 github.com/Laisky/graphql v1.0.6 h1:NEULGxfxo+wbsW2OmqBXOMNUGgqo8uFjWNabwuNK10g=
 github.com/Laisky/graphql v1.0.6/go.mod h1:zaKVqXmMQTnTkFJ2AA53oyBWMzlGCnzr3aodKTrtOxI=
 github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4 h1:aEmpytQAWVtHQvwB0yRstYdRJevXtJPOQ8JJxyE4HIY=
@@ -1517,8 +1517,8 @@ golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.11.0 h1:eG7RXZHdqOJ1i+0lgLgCpSXAp6M3LYlAo6osgSi0xOM=
-golang.org/x/sys v0.11.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.12.0 h1:CM0HF96J0hcLAwsHPJZjfdNzs0gftsLfgKt57wWHJ0o=
+golang.org/x/sys v0.12.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
@@ -1526,8 +1526,8 @@ golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b/go.mod h1:jbD1KX2456YbFQfuX
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/term v0.0.0-20220526004731-065cf7ba2467/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/term v0.5.0/go.mod h1:jMB1sMXY+tzblOD4FWmEbocvup2/aLOaQEp7JmGp78k=
-golang.org/x/term v0.11.0 h1:F9tnn/DA/Im8nCwm+fX+1/eBwi4qFjRT++MhtVC4ZX0=
-golang.org/x/term v0.11.0/go.mod h1:zC9APTIj3jG3FdV/Ons+XE1riIZXG4aZ4GTHiPZJPIU=
+golang.org/x/term v0.12.0 h1:/ZfYdc3zq+q02Rv9vGqTeSItdzZTSNDmfTi0mBAuidU=
+golang.org/x/term v0.12.0/go.mod h1:owVbMEjm3cBLCHdkQu9b1opXd4ETQWc3BhuQGKgXgvU=
 golang.org/x/text v0.0.0-20170915032832-14c0d48ead0c/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

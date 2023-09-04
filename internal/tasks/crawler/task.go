@@ -15,26 +15,26 @@ import (
 
 var muCrawler = gutils.NewMutex()
 
-var svc *Service
+// factFetchAllDocus fetch all pages by sitemaps
+func factFetchAllDocus(svc *Service) func() {
+	return func() {
+		if !muCrawler.TryLock() {
+			return
+		}
+		defer muCrawler.ForceRelease()
 
-// fetchAllDocus fetch all pages by sitemaps
-func fetchAllDocus() {
-	if !muCrawler.TryLock() {
-		return
-	}
-	defer muCrawler.ForceRelease()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+		log.Logger.Info("running web crawler")
+		defer log.Logger.Info("web crawler done")
 
-	log.Logger.Info("running web crawler")
-	defer log.Logger.Info("web crawler done")
-
-	if err := svc.CrawlAllPages(ctx,
-		gconfig.Shared.GetStringSlice("tasks.crawler.sitemaps"),
-	); err != nil {
-		log.Logger.Error("crawl all pages", zap.Error(err))
-		time.Sleep(10 * time.Second) // db reconnect
+		if err := svc.CrawlAllPages(ctx,
+			gconfig.Shared.GetStringSlice("tasks.crawler.sitemaps"),
+		); err != nil {
+			log.Logger.Error("crawl all pages", zap.Error(err))
+			time.Sleep(10 * time.Second) // db reconnect
+		}
 	}
 }
 
@@ -55,7 +55,10 @@ func bindTask() {
 
 	registerWeb(svc)
 
-	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second, fetchAllDocus)
+	go store.TaskStore.TickerAfterRun(
+		gconfig.Shared.GetDuration("tasks.crawler.interval")*time.Second,
+		factFetchAllDocus(svc),
+	)
 }
 
 func init() {
