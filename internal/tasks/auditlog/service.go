@@ -101,7 +101,7 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 	logger.Debug("run", zap.String("url", furl))
 
 	// download cluster fingerprint file
-	req, err := http.NewRequestWithContext(ctx, "GET", furl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, furl, nil)
 	if err != nil {
 		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
 	}

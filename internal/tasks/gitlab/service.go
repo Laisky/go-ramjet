@@ -59,7 +59,7 @@ func (s *Service) GetFile(file string) (*GetFileResponse, error) {
 	}
 
 	gitUrl := fmt.Sprintf("%s/projects/%s/repository/files/%s?ref=%s", s.gitAPI, query.ID, query.Path, query.Ref)
-	req, err := http.NewRequest("GET", gitUrl, nil)
+	req, err := http.NewRequest(http.MethodGet, gitUrl, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}

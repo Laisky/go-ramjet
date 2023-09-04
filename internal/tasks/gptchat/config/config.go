@@ -58,20 +58,20 @@ type UserConfig struct {
 }
 
 var (
-	ratelimiter, expensiveModelRateLimiter *gutils.Throttle
+	ratelimiter, expensiveModelRateLimiter *gutils.RateLimiter
 )
 
 func init() {
 	var err error
-	if ratelimiter, err = gutils.NewThrottleWithCtx(context.Background(),
-		&gutils.ThrottleCfg{
+	if ratelimiter, err = gutils.NewRateLimiter(context.Background(),
+		gutils.RateLimiterArgs{
 			Max:     10,
 			NPerSec: 1,
 		}); err != nil {
 		log.Logger.Panic("new ratelimiter", zap.Error(err))
 	}
-	if expensiveModelRateLimiter, err = gutils.NewThrottleWithCtx(context.Background(),
-		&gutils.ThrottleCfg{
+	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+		gutils.RateLimiterArgs{
 			Max:     65,
 			NPerSec: 1,
 		}); err != nil {
