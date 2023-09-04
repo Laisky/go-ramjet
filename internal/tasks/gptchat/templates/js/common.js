@@ -109,16 +109,30 @@ window.RandomString = (length) => {
 }
 
 window.OpenaiToken = () => {
-    let v = window.GetLocalStorage("config_api_token_value");
-    if (!v || v == "DEFAULT_PROXY_TOKEN") {
-        // if v is empty, this is a new user.
-        // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
-        // generate an unique token for this user.
-        v = "FREETIER-" + RandomString(32);
-        window.SetLocalStorage("config_api_token_value", v);
+    let apikey;
+
+    // get token from url params first
+    {
+        apikey = new URLSearchParams(window.location.search).get("apikey");
+        // only remove apikey from url params
+        let url = new URL(window.location.href);
+        url.searchParams.delete("apikey");
+        window.history.pushState({}, document.title, url);
     }
 
-    return v
+    // get token from localstorage
+    if (!apikey) {
+        apikey = window.GetLocalStorage("config_api_token_value");
+        if (!apikey || apikey == "DEFAULT_PROXY_TOKEN") {
+            // if v is empty, this is a new user.
+            // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
+            // generate an unique token for this user.
+            apikey = "FREETIER-" + RandomString(32);
+        }
+    }
+
+    window.SetLocalStorage("config_api_token_value", apikey);
+    return apikey
 };
 
 window.OpenaiMaxTokens = () => {
