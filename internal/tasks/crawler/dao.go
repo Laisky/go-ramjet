@@ -61,7 +61,7 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 	}
 
 	rets = d.extractSearchContext(text, append(titleRets, contentRets...))
-	return contentRets, nil
+	return rets, nil
 }
 
 const searchCtxSpan = 20
