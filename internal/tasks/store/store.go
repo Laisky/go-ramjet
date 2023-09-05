@@ -161,7 +161,7 @@ func (s *taskStoreType) runTrigger(ctx context.Context) {
 					go runner(task)
 				}
 
-				return nil, nil
+				return nil, nil //nolint:nilnil
 			})
 		}
 	}
