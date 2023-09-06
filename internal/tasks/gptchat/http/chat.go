@@ -3,11 +3,14 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
@@ -16,6 +19,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -145,7 +149,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	body := ctx.Request.Body
 	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
-		frontendReq, err = bodyChecker(ctx.Request.Body)
+		frontendReq, err = bodyChecker(ctx.Request.Context(), ctx.Request.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
@@ -226,25 +230,170 @@ func (r *FrontendReq) fillDefault() {
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
-func bodyChecker(body io.ReadCloser) (data *FrontendReq, err error) {
+var (
+	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
+	urlContentCache = gutils.NewExpCache[string](context.Background(), 24*time.Hour)
+)
+
+// embeddingUrlContent if user has mentioned some url in message,
+// try to fetch and embed content of url into the tail of message.
+func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
+	if len(r.Messages) == 0 {
+		return
+	}
+
+	var lastUserPrompt *string
+	for i := len(r.Messages) - 1; i >= 0; i-- {
+		if r.Messages[i].Role != OpenaiMessageRoleUser {
+			continue
+		}
+
+		lastUserPrompt = &r.Messages[i].Content
+	}
+
+	if lastUserPrompt == nil { // no user prompt
+		return
+	}
+
+	urls := urlRegexp.FindAllString(*lastUserPrompt, -1)
+	if len(urls) == 0 { // user do not mention any url
+		return
+	}
+
+	var (
+		pool        errgroup.Group
+		mu          sync.Mutex
+		auxiliaries []string
+	)
+	for _, url := range urls {
+		url := url
+		pool.Go(func() (err error) {
+			auxiliary, ok := urlContentCache.Load(url)
+
+			if ok {
+				log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
+			} else {
+				log.Logger.Debug("dynamic query mentioned url", zap.String("url", url))
+				queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
+				if err != nil {
+					return errors.Wrapf(err, "new request %q", url)
+				}
+				req.Header.Set("User-Agent", "go-ramjet-bot")
+
+				resp, err := httpcli.Do(req)
+				if err != nil {
+					return errors.Wrapf(err, "do request %q", url)
+				}
+				defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+				if resp.StatusCode != http.StatusOK {
+					return errors.Errorf("[%d]%s", resp.StatusCode, url)
+				}
+
+				content, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return errors.Wrap(err, "read response body")
+				}
+
+				if auxiliary, err = queryChunks(ctx, string(content), *lastUserPrompt); err != nil {
+					return errors.Wrap(err, "query chunks")
+				}
+			}
+
+			urlContentCache.Store(url, auxiliary) // save cache
+
+			mu.Lock()
+			auxiliaries = append(auxiliaries, auxiliary)
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := pool.Wait(); err != nil {
+		log.Logger.Error("query mentioned urls", zap.Error(err))
+		*lastUserPrompt += "\n\n(some url content is not available)"
+	}
+
+	if len(auxiliaries) == 0 {
+		return
+	}
+
+	*lastUserPrompt += "\n\nfollowing are auxiliary content just for your reference:\n\n" +
+		strings.Join(auxiliaries, "\n")
+	return
+}
+
+type queryChunksResponse struct {
+	Results string `json:"results"`
+}
+
+func queryChunks(ctx context.Context, htmlContent, query string) (result string, err error) {
+	log.Logger.Debug("query ramjet to search chunks")
+	const url = "https://app.laisky.com/gptchat/query/chunks"
+
+	postBody, err := json.Marshal(map[string]string{
+		"content": htmlContent,
+		"query":   query,
+		"ext":     ".html",
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "marshal post body")
+	}
+
+	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, url, bytes.NewReader(postBody))
+	if err != nil {
+		return "", errors.Wrapf(err, "new request %q", url)
+	}
+
+	resp, err := httpcli.Do(req)
+	if err != nil {
+		return "", errors.Wrapf(err, "do request %q", url)
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("[%d]%s", resp.StatusCode, url)
+	}
+
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read response body")
+	}
+
+	respData := new(queryChunksResponse)
+	if err = json.Unmarshal(content, respData); err != nil {
+		return "", errors.Wrap(err, "unmarshal response body")
+	}
+
+	return respData.Results, nil
+}
+
+func bodyChecker(ctx context.Context, body io.ReadCloser) (userReq *FrontendReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
 	}
 
-	data = new(FrontendReq)
-	if err = json.Unmarshal(payload, data); err != nil {
+	userReq = new(FrontendReq)
+	if err = json.Unmarshal(payload, userReq); err != nil {
 		return nil, errors.Wrap(err, "parse request")
 	}
-	data.fillDefault()
+	userReq.fillDefault()
 
-	trimMessages(data)
+	trimMessages(userReq)
 	maxTokens := uint(MaxTokens())
-	if maxTokens != 0 && data.MaxTokens > maxTokens {
+	if maxTokens != 0 && userReq.MaxTokens > maxTokens {
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	return data, err
+	userReq.embeddingUrlContent(ctx)
+
+	return userReq, err
 }
 
 func trimMessages(data *FrontendReq) {

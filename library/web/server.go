@@ -3,6 +3,7 @@ package web
 
 import (
 	"net/http"
+	"time"
 
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	glog "github.com/Laisky/go-utils/v4/log"
@@ -51,6 +52,14 @@ func RunServer(addr string) {
 		ctx.String(http.StatusOK, "hello, world")
 	})
 
+	httpSrv := &http.Server{
+		Addr:         addr,
+		Handler:      Server,
+		ReadTimeout:  300 * time.Second,
+		WriteTimeout: 300 * time.Second,
+		IdleTimeout:  300 * time.Second,
+	}
+
 	log.Logger.Info("listening on http", zap.String("addr", addr))
-	log.Logger.Panic("Server exit", zap.Error(Server.Run(addr)))
+	log.Logger.Panic("Server exit", zap.Error(httpSrv.ListenAndServe()))
 }
