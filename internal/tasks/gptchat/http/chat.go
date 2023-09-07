@@ -37,7 +37,7 @@ func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	logger := log.Logger.Named("chat")
 
-	resp, err := proxy(ctx)
+	resp, err := proxy(ctx) //nolint:bodyclose
 	if AbortErr(ctx, err) {
 		return
 	}
@@ -236,7 +236,7 @@ func (r *FrontendReq) fillDefault() {
 
 var (
 	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
-	urlContentCache = gutils.NewExpCache[string](context.Background(), 24*time.Hour)
+	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
 )
 
 // embeddingUrlContent if user has mentioned some url in message,
@@ -272,8 +272,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 	for _, url := range urls {
 		url := url
 		pool.Go(func() (err error) {
-			auxiliary, ok := urlContentCache.Load(url)
-
+			content, ok := urlContentCache.Load(url)
 			if ok {
 				log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
 			} else {
@@ -286,7 +285,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				}
 				req.Header.Set("User-Agent", "go-ramjet-bot")
 
-				resp, err := httpcli.Do(req)
+				resp, err := httpcli.Do(req) // nolint:bodyclose
 				if err != nil {
 					return errors.Wrapf(err, "do request %q", url)
 				}
@@ -296,17 +295,16 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 					return errors.Errorf("[%d]%s", resp.StatusCode, url)
 				}
 
-				content, err := io.ReadAll(resp.Body)
-				if err != nil {
+				if content, err = io.ReadAll(resp.Body); err != nil {
 					return errors.Wrap(err, "read response body")
 				}
-
-				if auxiliary, err = queryChunks(ctx, string(content), *lastUserPrompt); err != nil {
-					return errors.Wrap(err, "query chunks")
-				}
+				urlContentCache.Store(url, content) // save cache
 			}
 
-			urlContentCache.Store(url, auxiliary) // save cache
+			auxiliary, err := queryChunks(ctx, string(content), *lastUserPrompt)
+			if err != nil {
+				return errors.Wrap(err, "query chunks")
+			}
 
 			mu.Lock()
 			auxiliaries = append(auxiliaries, auxiliary)
@@ -327,7 +325,6 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 
 	*lastUserPrompt += "\n\nfollowing are auxiliary content just for your reference:\n\n" +
 		strings.Join(auxiliaries, "\n")
-	return
 }
 
 type queryChunksResponse struct {
@@ -353,7 +350,7 @@ func queryChunks(ctx context.Context, htmlContent, query string) (result string,
 		return "", errors.Wrapf(err, "new request %q", ramjetChunkSearchURL)
 	}
 
-	resp, err := httpcli.Do(req)
+	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
 		return "", errors.Wrapf(err, "do request %q", ramjetChunkSearchURL)
 	}
