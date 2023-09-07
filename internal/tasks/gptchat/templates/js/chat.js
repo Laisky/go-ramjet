@@ -634,6 +634,7 @@ async function sendChat2Server(chatID) {
     });
 
     currentAIRespSSE.onerror = (err) => {
+        // abortAIResp(new Error("SSE error: " + err));
         abortAIResp(err);
     };
     currentAIRespSSE.stream();
@@ -698,7 +699,7 @@ function abortAIResp(err) {
         errMsg = err.toString();
     }
 
-    if (errMsg == "[object CustomEvent]") {
+    if (errMsg == "[object CustomEvent]" && navigator.userAgent.includes("Firefox")) {
         // firefox will throw this error when SSE is closed, just ignore it.
         return;
     }
