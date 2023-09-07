@@ -301,7 +301,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				urlContentCache.Store(url, content) // save cache
 			}
 
-			auxiliary, err := queryChunks(ctx, string(content), *lastUserPrompt)
+			auxiliary, err := queryChunks(ctx, url, string(content), *lastUserPrompt)
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
@@ -331,13 +331,14 @@ type queryChunksResponse struct {
 	Results string `json:"results"`
 }
 
-func queryChunks(ctx context.Context, htmlContent, query string) (result string, err error) {
+func queryChunks(ctx context.Context, cacheKey, htmlContent, query string) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks")
 
 	postBody, err := json.Marshal(map[string]string{
-		"content": htmlContent,
-		"query":   query,
-		"ext":     ".html",
+		"content":   htmlContent,
+		"query":     query,
+		"ext":       ".html",
+		"cache_key": cacheKey,
 	})
 	if err != nil {
 		return "", errors.Wrap(err, "marshal post body")
