@@ -273,8 +273,8 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 			if ok {
 				log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
 			} else {
-				log.Logger.Debug("dynamic query mentioned url", zap.String("url", url))
-				queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
+				queryCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 				defer cancel()
 				req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
 				if err != nil {
