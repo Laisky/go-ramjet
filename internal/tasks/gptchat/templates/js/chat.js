@@ -670,8 +670,6 @@ function wrapRefLines(input) {
     return result;
 }
 
-
-
 // function replaceChatInStorage(role, chatID, content) {
 //     let storageKey = storageSessionKey(activeSessionID()),
 //         chats = window.GetLocalStorage(storageKey) || [];
@@ -892,6 +890,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
             saveBtn.addEventListener("click", async (evt) => {
                 evt.stopPropagation();
                 let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
+                chatContainer.querySelector(`#${chatID}`).dataset.status = "waiting";
                 chatContainer.querySelector(`#${chatID}`).innerHTML = `
                 <div class="container-fluid row role-human" data-chatid="${chatID}">
                     <div class="col-1">🤔️</div>
