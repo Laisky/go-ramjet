@@ -890,29 +890,29 @@ function append2Chats(role, text, isHistory = false, chatID) {
             saveBtn.addEventListener("click", async (evt) => {
                 evt.stopPropagation();
                 let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
-                chatContainer.querySelector(`#${chatID}`).dataset.status = "waiting";
                 chatContainer.querySelector(`#${chatID}`).innerHTML = `
                 <div class="container-fluid row role-human" data-chatid="${chatID}">
-                    <div class="col-1">🤔️</div>
-                    <div class="col-10 text-start"><pre>${newText}</pre></div>
+                <div class="col-1">🤔️</div>
+                <div class="col-10 text-start"><pre>${newText}</pre></div>
                     <div class="col-1 d-flex justify-content-between">
-                        <i class="bi bi-pencil-square"></i>
-                        <i class="bi bi-trash"></i>
+                    <i class="bi bi-pencil-square"></i>
+                    <i class="bi bi-trash"></i>
                     </div>
-                </div>
-                <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                    </div>
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="col-1">🤖️</div>
                     <div class="col-11 text-start ai-response" data-status="writing">
                         <p class="card-text placeholder-glow">
-                            <span class="placeholder col-7"></span>
-                            <span class="placeholder col-4"></span>
-                            <span class="placeholder col-4"></span>
-                            <span class="placeholder col-6"></span>
-                            <span class="placeholder col-8"></span>
+                        <span class="placeholder col-7"></span>
+                        <span class="placeholder col-4"></span>
+                        <span class="placeholder col-4"></span>
+                        <span class="placeholder col-6"></span>
+                        <span class="placeholder col-8"></span>
                         </p>
-                    </div>
-                </div>
-                `;
+                        </div>
+                        </div>
+                    `;
+                chatContainer.querySelector(`#${chatID} .role-ai`).dataset.status = "waiting";
 
                 // bind delete and edit button
                 chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)

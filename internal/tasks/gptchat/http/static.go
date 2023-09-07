@@ -38,7 +38,7 @@ func init() {
 // SetupHTTPCli setup http client
 func SetupHTTPCli() (err error) {
 	httpargs := []gutils.HTTPClientOptFunc{
-		gutils.WithHTTPClientTimeout(time.Minute * 3),
+		gutils.WithHTTPClientTimeout(300 * time.Second),
 	}
 
 	if gconfig.Shared.GetString("openai.proxy") != "" {

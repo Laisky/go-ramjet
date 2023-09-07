@@ -28,6 +28,10 @@ var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
 
+const ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
+
+// const ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
@@ -274,8 +278,8 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
 			} else {
 				log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
-				queryCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-				defer cancel()
+				queryCtx, queryCancel := context.WithTimeout(ctx, 20*time.Second)
+				defer queryCancel()
 				req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
 				if err != nil {
 					return errors.Wrapf(err, "new request %q", url)
@@ -332,7 +336,6 @@ type queryChunksResponse struct {
 
 func queryChunks(ctx context.Context, htmlContent, query string) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks")
-	const url = "https://app.laisky.com/gptchat/query/chunks"
 
 	postBody, err := json.Marshal(map[string]string{
 		"content": htmlContent,
@@ -343,21 +346,21 @@ func queryChunks(ctx context.Context, htmlContent, query string) (result string,
 		return "", errors.Wrap(err, "marshal post body")
 	}
 
-	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, url, bytes.NewReader(postBody))
+	queryCtx, queryCancel := context.WithTimeout(ctx, 180*time.Second)
+	defer queryCancel()
+	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, ramjetChunkSearchURL, bytes.NewReader(postBody))
 	if err != nil {
-		return "", errors.Wrapf(err, "new request %q", url)
+		return "", errors.Wrapf(err, "new request %q", ramjetChunkSearchURL)
 	}
 
 	resp, err := httpcli.Do(req)
 	if err != nil {
-		return "", errors.Wrapf(err, "do request %q", url)
+		return "", errors.Wrapf(err, "do request %q", ramjetChunkSearchURL)
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("[%d]%s", resp.StatusCode, url)
+		return "", errors.Errorf("[%d]%s", resp.StatusCode, ramjetChunkSearchURL)
 	}
 
 	content, err := io.ReadAll(resp.Body)
