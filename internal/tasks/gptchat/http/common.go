@@ -29,17 +29,6 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 
 	switch {
-	// case strings.HasPrefix(userToken, "sk-"): // use user's own openai token
-	// 	hasher := sha256.New()
-	// 	hasher.Write([]byte(userToken))
-	// 	username := hex.EncodeToString(hasher.Sum(nil))[:16]
-	// 	log.Logger.Debug("use user's own openai token", zap.String("user", username))
-	// 	return &config.UserConfig{
-	// 		UserName:      username,
-	// 		Token:         userToken,
-	// 		OpenaiToken:   userToken,
-	// 		AllowedModels: []string{"*"},
-	// 	}, nil
 	case strings.HasPrefix(userToken, "FREETIER-"): // use server's default openai token
 		hasher := sha256.New()
 		hasher.Write([]byte(userToken))
@@ -72,9 +61,8 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		}
 
 		// use user's own openai/azure or whatever token
-		hasher := sha256.New()
-		hasher.Write([]byte(userToken))
-		username := hex.EncodeToString(hasher.Sum(nil))[:16]
+		hashed := sha256.Sum256([]byte(userToken))
+		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
 		return &config.UserConfig{
 			UserName:      username,

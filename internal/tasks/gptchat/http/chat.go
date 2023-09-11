@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,8 +32,8 @@ var (
 )
 
 const (
-	ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
-	// ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+	// ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
+	ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
 )
 
 // APIHandler handle api request
@@ -249,35 +247,6 @@ const (
 	UserQueryTypeScan UserQueryType = "scan"
 )
 
-// QueryType query type
-// func (r *FrontendReq) QueryType(ctx context.Context, user *config.UserConfig) UserQueryType {
-// 	query := fmt.Sprintf(gutils.Dedent(`
-// 		there are some types of task, including search and scan. you should judge the task type by user's query and answer the exact type of task in your opinion, do not answer any other words.
-
-// 		for example, if the query is "summary this", you should answer "scan".
-// 		for example, if the query is "what is TEE's abilitity", you should answer "search".
-
-// 		the user's query is between ">>>>>" and "<<<<<":
-// 		>>>>>
-// 		%q
-// 		<<<<<
-// 		your answer is:`), r.Messages[len(r.Messages)-1].Content)
-// 	answer, err := AskAI(ctx, user.OpenaiToken, query)
-// 	if err != nil {
-// 		log.Logger.Error("ask ai", zap.Error(err))
-// 		return UserQueryTypeSearch
-// 	}
-
-// 	switch strings.ToLower(strings.TrimSpace(answer)) {
-// 	case "search":
-// 		return UserQueryTypeSearch
-// 	case "scan":
-// 		return UserQueryTypeScan
-// 	default:
-// 		return UserQueryTypeSearch
-// 	}
-// }
-
 var (
 	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
 	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
@@ -318,13 +287,9 @@ func fetchURLContent(ctx context.Context, url string) (content []byte, err error
 	return content, nil
 }
 
-func (r *FrontendReq) summaryUrlContent(ctx context.Context, user *config.UserConfig) {
-
-}
-
 // embeddingUrlContent if user has mentioned some url in message,
 // try to fetch and embed content of url into the tail of message.
-func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
+func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.UserConfig) {
 	if len(r.Messages) == 0 {
 		return
 	}
@@ -370,8 +335,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				ext = ".html" // default
 			}
 
-			cacheKeyBytes := sha1.Sum([]byte(url))
-			auxiliary, err := queryChunks(ctx, hex.EncodeToString(cacheKeyBytes[:]), *lastUserPrompt, ext, content)
+			auxiliary, err := queryChunks(ctx, user.OpenaiToken, *lastUserPrompt, ext, content)
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
@@ -404,15 +368,15 @@ type queryChunksResponse struct {
 	Operator string `json:"operator"`
 }
 
-func queryChunks(ctx context.Context, cacheKey, query, ext string, content []byte) (result string, err error) {
+func queryChunks(ctx context.Context, apikey, query, ext string, content []byte) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks",
-		zap.String("ext", ext), zap.String("cache_key", cacheKey))
+		zap.String("ext", ext))
 
 	postBody, err := json.Marshal(map[string]any{
-		"content":   content,
-		"query":     query,
-		"ext":       ext,
-		"cache_key": cacheKey,
+		"content": content,
+		"query":   query,
+		"ext":     ext,
+		"apikey":  apikey,
 	})
 	if err != nil {
 		return "", errors.Wrap(err, "marshal post body")
@@ -472,71 +436,9 @@ func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadClose
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	// switch userReq.QueryType(ctx, user) {
-	// case UserQueryTypeSearch:
-	// case UserQueryTypeScan:
-	// 	log.Logger.Warn("scan is not support yet")
-	// }
-
-	userReq.embeddingUrlContent(ctx)
+	userReq.embeddingUrlContent(ctx, user)
 	return userReq, err
 }
-
-// func AskAI(ctx context.Context, apikey string, query string) (answer string, err error) {
-// 	log.Logger.Debug("ask ai to get query type")
-// 	api := strings.TrimSuffix(gconfig.Shared.GetString("openai.api"), "/") + "/v1/chat/completions"
-// 	body, err := json.Marshal(map[string]any{
-// 		"model": "gpt-3.5-turbo",
-// 		"messages": []map[string]string{
-// 			{
-// 				"role": "system",
-// 				"content": gutils.Dedent(`
-// 				The following is a conversation with Chat-GPT, an AI created by OpenAI.
-// 				The AI is helpful, creative, clever, and very friendly,
-// 				it's mainly focused on solving coding problems,
-// 				so it likely provide code example whenever it can and every code block is rendered as markdown.
-// 				However, it also has a sense of humor and can talk about anything.
-// 				Please answer user's last question, and if possible,
-// 				reference the context as much as you can.`),
-// 			},
-// 			{
-// 				"role":    "user",
-// 				"content": query,
-// 			},
-// 		},
-// 	})
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "marshal body")
-// 	}
-
-// 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api, bytes.NewReader(body))
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "new request")
-// 	}
-
-// 	req.Header.Set("Authorization", "Bearer "+apikey)
-// 	req.Header.Set("Content-Type", "application/json")
-// 	resp, err := httpcli.Do(req)
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "do request")
-// 	}
-
-// 	if resp.StatusCode != http.StatusOK {
-// 		return "", errors.Errorf("[%d]%s", resp.StatusCode, api)
-// 	}
-
-// 	respBody, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "read response body")
-// 	}
-// 	gutils.LogErr(resp.Body.Close, log.Logger)
-// 	respData := new(OpenaiCompletionResp)
-// 	if err = json.Unmarshal(respBody, respData); err != nil {
-// 		return "", errors.Wrap(err, "unmarshal response body")
-// 	}
-
-// 	return respData.Choices[0].Message.Content, nil
-// }
 
 func trimMessages(data *FrontendReq) {
 	maxMessages := MaxMessages()
