@@ -32,8 +32,8 @@ var (
 )
 
 const (
-	// ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
-	ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+	ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
+	// ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
 )
 
 // APIHandler handle api request
