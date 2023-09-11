@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -368,7 +370,8 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				ext = ".html" // default
 			}
 
-			auxiliary, err := queryChunks(ctx, url, *lastUserPrompt, ext, content)
+			cacheKeyBytes := sha1.Sum([]byte(url))
+			auxiliary, err := queryChunks(ctx, hex.EncodeToString(cacheKeyBytes[:]), *lastUserPrompt, ext, content)
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
