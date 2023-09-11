@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	urllib "net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -30,8 +32,8 @@ var (
 )
 
 const (
-	ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
-	// ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+	// ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
+	ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
 )
 
 // APIHandler handle api request
@@ -356,7 +358,17 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 				return errors.Wrap(err, "fetch url content")
 			}
 
-			auxiliary, err := queryChunks(ctx, url, *lastUserPrompt, content)
+			parsedURL, err := urllib.Parse(url)
+			if err != nil {
+				return errors.Wrap(err, "parse url")
+			}
+
+			ext := strings.ToLower(filepath.Ext(parsedURL.Path))
+			if !gutils.Contains([]string{".txt", ".md", ".doc", ".docx", ".ppt", ".pptx", ".pdf"}, ext) {
+				ext = ".html" // default
+			}
+
+			auxiliary, err := queryChunks(ctx, url, *lastUserPrompt, ext, content)
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
@@ -383,16 +395,20 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 }
 
 type queryChunksResponse struct {
-	Results string `json:"results"`
+	Results  string `json:"results"`
+	Cached   bool   `json:"cached"`
+	CacheKey string `json:"cache_key"`
+	Operator string `json:"operator"`
 }
 
-func queryChunks(ctx context.Context, cacheKey, query string, content []byte) (result string, err error) {
-	log.Logger.Debug("query ramjet to search chunks")
+func queryChunks(ctx context.Context, cacheKey, query, ext string, content []byte) (result string, err error) {
+	log.Logger.Debug("query ramjet to search chunks",
+		zap.String("ext", ext), zap.String("cache_key", cacheKey))
 
 	postBody, err := json.Marshal(map[string]any{
 		"content":   content,
 		"query":     query,
-		"ext":       ".html",
+		"ext":       ext,
 		"cache_key": cacheKey,
 	})
 	if err != nil {
@@ -426,6 +442,12 @@ func queryChunks(ctx context.Context, cacheKey, query string, content []byte) (r
 		return "", errors.Wrap(err, "unmarshal response body")
 	}
 
+	log.Logger.Debug("got ramjet parsed chunks",
+		// zap.String("result", respData.Results),
+		zap.Bool("cached", respData.Cached),
+		zap.String("cache_key", respData.CacheKey),
+		zap.String("operator", respData.Operator),
+	)
 	return respData.Results, nil
 }
 
