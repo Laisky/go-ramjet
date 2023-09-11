@@ -21,6 +21,7 @@ import (
 	"github.com/jinzhu/copier"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -28,14 +29,15 @@ var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
 
-const ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
-
-// const ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+const (
+	ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
+	// ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
+)
 
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
-	logger := log.Logger.Named("chat")
+	// logger := log.Logger.Named("chat")
 
 	resp, err := proxy(ctx) //nolint:bodyclose
 	if AbortErr(ctx, err) {
@@ -83,7 +85,7 @@ func APIHandler(ctx *gin.Context) {
 	var lastResp *OpenaiCOmpletionStreamResp
 	for reader.Scan() {
 		line := reader.Bytes()
-		logger.Debug("got response line", zap.ByteString("line", line))
+		// logger.Debug("got response line", zap.ByteString("line", line))
 
 		var chunk []byte
 		if matched := dataReg.FindAllSubmatch(line, -1); len(matched) != 0 {
@@ -153,7 +155,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	body := ctx.Request.Body
 	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
-		frontendReq, err = bodyChecker(ctx.Request.Context(), ctx.Request.Body)
+		frontendReq, err = bodyChecker(ctx.Request.Context(), user, ctx.Request.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "request is illegal")
 		}
@@ -193,15 +195,14 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "marshal new body")
 		}
-		log.Logger.Debug("prepare request", zap.ByteString("req", payload))
+		// log.Logger.Debug("prepare request", zap.ByteString("req", payload))
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
-	req, err := http.NewRequest(ctx.Request.Method, newUrl, body)
+	req, err := http.NewRequestWithContext(ctx.Request.Context(), ctx.Request.Method, newUrl, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
-	req = req.WithContext(ctx.Request.Context())
 	CopyHeader(req.Header, ctx.Request.Header)
 	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
 
@@ -234,10 +235,88 @@ func (r *FrontendReq) fillDefault() {
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
 }
 
+// UserQueryType user query type
+type UserQueryType string
+
+const (
+	// UserQueryTypeSearch search by embeddings chunks
+	UserQueryTypeSearch UserQueryType = "search"
+	// UserQueryTypeScan scan by map-reduce
+	UserQueryTypeScan UserQueryType = "scan"
+)
+
+// QueryType query type
+func (r *FrontendReq) QueryType(ctx context.Context, user *config.UserConfig) UserQueryType {
+	query := fmt.Sprintf(gutils.Dedent(`
+		there are some types of task, including search and scan. you should judge the task type by user's query and answer the exact type of task in your opinion, do not answer any other words.
+
+		for example, if the query is "summary this", you should answer "scan".
+		for example, if the query is "what is TEE's abilitity", you should answer "search".
+
+		the user's query is between ">>>>>" and "<<<<<":
+		>>>>>
+		%q
+		<<<<<
+		your answer is:`), r.Messages[len(r.Messages)-1].Content)
+	answer, err := AskAI(ctx, user.OpenaiToken, query)
+	if err != nil {
+		log.Logger.Error("ask ai", zap.Error(err))
+		return UserQueryTypeSearch
+	}
+
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "search":
+		return UserQueryTypeSearch
+	case "scan":
+		return UserQueryTypeScan
+	default:
+		return UserQueryTypeSearch
+	}
+}
+
 var (
 	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
 	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
 )
+
+// fetchURLContent fetch url content
+func fetchURLContent(ctx context.Context, url string) (content []byte, err error) {
+	content, ok := urlContentCache.Load(url)
+	if ok {
+		log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
+		return content, nil
+	}
+
+	log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
+	queryCtx, queryCancel := context.WithTimeout(ctx, 20*time.Second)
+	defer queryCancel()
+	req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "new request %q", url)
+	}
+	req.Header.Set("User-Agent", "go-ramjet-bot")
+
+	resp, err := httpcli.Do(req) // nolint:bodyclose
+	if err != nil {
+		return nil, errors.Wrapf(err, "do request %q", url)
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
+	}
+
+	if content, err = io.ReadAll(resp.Body); err != nil {
+		return nil, errors.Wrap(err, "read response body")
+	}
+
+	urlContentCache.Store(url, content) // save cache
+	return content, nil
+}
+
+func (r *FrontendReq) summaryUrlContent(ctx context.Context, user *config.UserConfig) {
+
+}
 
 // embeddingUrlContent if user has mentioned some url in message,
 // try to fetch and embed content of url into the tail of message.
@@ -272,36 +351,12 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context) {
 	for _, url := range urls {
 		url := url
 		pool.Go(func() (err error) {
-			content, ok := urlContentCache.Load(url)
-			if ok {
-				log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
-			} else {
-				log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
-				queryCtx, queryCancel := context.WithTimeout(ctx, 20*time.Second)
-				defer queryCancel()
-				req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
-				if err != nil {
-					return errors.Wrapf(err, "new request %q", url)
-				}
-				req.Header.Set("User-Agent", "go-ramjet-bot")
-
-				resp, err := httpcli.Do(req) // nolint:bodyclose
-				if err != nil {
-					return errors.Wrapf(err, "do request %q", url)
-				}
-				defer gutils.LogErr(resp.Body.Close, log.Logger)
-
-				if resp.StatusCode != http.StatusOK {
-					return errors.Errorf("[%d]%s", resp.StatusCode, url)
-				}
-
-				if content, err = io.ReadAll(resp.Body); err != nil {
-					return errors.Wrap(err, "read response body")
-				}
-				urlContentCache.Store(url, content) // save cache
+			content, err := fetchURLContent(ctx, url)
+			if err != nil {
+				return errors.Wrap(err, "fetch url content")
 			}
 
-			auxiliary, err := queryChunks(ctx, url, string(content), *lastUserPrompt)
+			auxiliary, err := queryChunks(ctx, url, *lastUserPrompt, content)
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
@@ -331,11 +386,11 @@ type queryChunksResponse struct {
 	Results string `json:"results"`
 }
 
-func queryChunks(ctx context.Context, cacheKey, htmlContent, query string) (result string, err error) {
+func queryChunks(ctx context.Context, cacheKey, query string, content []byte) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks")
 
-	postBody, err := json.Marshal(map[string]string{
-		"content":   htmlContent,
+	postBody, err := json.Marshal(map[string]any{
+		"content":   content,
 		"query":     query,
 		"ext":       ".html",
 		"cache_key": cacheKey,
@@ -361,7 +416,7 @@ func queryChunks(ctx context.Context, cacheKey, htmlContent, query string) (resu
 		return "", errors.Errorf("[%d]%s", resp.StatusCode, ramjetChunkSearchURL)
 	}
 
-	content, err := io.ReadAll(resp.Body)
+	content, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return "", errors.Wrap(err, "read response body")
 	}
@@ -374,7 +429,7 @@ func queryChunks(ctx context.Context, cacheKey, htmlContent, query string) (resu
 	return respData.Results, nil
 }
 
-func bodyChecker(ctx context.Context, body io.ReadCloser) (userReq *FrontendReq, err error) {
+func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
@@ -392,9 +447,70 @@ func bodyChecker(ctx context.Context, body io.ReadCloser) (userReq *FrontendReq,
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	userReq.embeddingUrlContent(ctx)
+	switch userReq.QueryType(ctx, user) {
+	case UserQueryTypeSearch:
+		userReq.embeddingUrlContent(ctx)
+	case UserQueryTypeScan:
+		log.Logger.Warn("scan is not support yet")
+	}
 
 	return userReq, err
+}
+
+func AskAI(ctx context.Context, apikey string, query string) (answer string, err error) {
+	log.Logger.Debug("ask ai to get query type")
+	api := strings.TrimSuffix(gconfig.Shared.GetString("openai.api"), "/") + "/v1/chat/completions"
+	body, err := json.Marshal(map[string]any{
+		"model": "gpt-3.5-turbo",
+		"messages": []map[string]string{
+			{
+				"role": "system",
+				"content": gutils.Dedent(`
+				The following is a conversation with Chat-GPT, an AI created by OpenAI.
+				The AI is helpful, creative, clever, and very friendly,
+				it's mainly focused on solving coding problems,
+				so it likely provide code example whenever it can and every code block is rendered as markdown.
+				However, it also has a sense of humor and can talk about anything.
+				Please answer user's last question, and if possible,
+				reference the context as much as you can.`),
+			},
+			{
+				"role":    "user",
+				"content": query,
+			},
+		},
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "marshal body")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api, bytes.NewReader(body))
+	if err != nil {
+		return "", errors.Wrap(err, "new request")
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apikey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := httpcli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "do request")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("[%d]%s", resp.StatusCode, api)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read response body")
+	}
+	gutils.LogErr(resp.Body.Close, log.Logger)
+	respData := new(OpenaiCompletionResp)
+	if err = json.Unmarshal(respBody, respData); err != nil {
+		return "", errors.Wrap(err, "unmarshal response body")
+	}
+
+	return respData.Choices[0].Message.Content, nil
 }
 
 func trimMessages(data *FrontendReq) {
