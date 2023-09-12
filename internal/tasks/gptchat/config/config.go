@@ -74,7 +74,7 @@ func init() {
 	}
 	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
 		gutils.RateLimiterArgs{
-			Max:     65,
+			Max:     61,
 			NPerSec: 1,
 		}); err != nil {
 		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))

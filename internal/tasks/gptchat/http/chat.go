@@ -310,6 +310,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 		return
 	}
 
+	log.Logger.Debug("query ramjet to search chunks", zap.String("url", ramjetChunkSearchURL))
 	var (
 		pool        errgroup.Group
 		mu          sync.Mutex
@@ -450,7 +451,6 @@ func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadClose
 	}
 
 	if ramjetChunkSearchURL != "" {
-		log.Logger.Debug("query ramjet to search chunks", zap.String("url", ramjetChunkSearchURL))
 		userReq.embeddingUrlContent(ctx, user)
 	}
 
