@@ -94,7 +94,16 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 	if c.LimitExpensiveModels && model != "gpt-3.5-turbo" {
 		// rate limit only support limit by second,
 		// so we consume 60 tokens once to make it limit by minute
-		if !expensiveModelRateLimiter.AllowN(30) { // check rate limit
+		price := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+		if price == 0 {
+			price = 60 // default
+		}
+
+		// if price less than 0, means no limit
+		log.Logger.Debug("check expensive model rate limit",
+			zap.String("model", model),
+			zap.Int("price", price))
+		if price >= 0 && !expensiveModelRateLimiter.AllowN(price) { // check rate limit
 			return errors.Errorf("too many requests for expensive model %q, "+
 				"please try again later or use 3.5-turbo instead", model)
 		}
