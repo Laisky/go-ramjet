@@ -94,7 +94,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 	if c.LimitExpensiveModels && model != "gpt-3.5-turbo" {
 		// rate limit only support limit by second,
 		// so we consume 60 tokens once to make it limit by minute
-		if !expensiveModelRateLimiter.AllowN(60) { // check rate limit
+		if !expensiveModelRateLimiter.AllowN(30) { // check rate limit
 			return errors.Errorf("too many requests for expensive model %q, "+
 				"please try again later or use 3.5-turbo instead", model)
 		}
