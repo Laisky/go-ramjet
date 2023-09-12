@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	urllib "net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -31,10 +32,7 @@ var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
 
-const (
-	ramjetChunkSearchURL = "https://app.laisky.com/gptchat/query/chunks"
-	// ramjetChunkSearchURL = "http://100.97.108.34:37851/gptchat/query/chunks"
-)
+var ramjetChunkSearchURL = os.Getenv("GPTCHAT_CHUNK_SEARCH_URL")
 
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
@@ -335,7 +333,13 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 				ext = ".html" // default
 			}
 
-			auxiliary, err := queryChunks(ctx, user.OpenaiToken, *lastUserPrompt, ext, content)
+			auxiliary, err := queryChunks(ctx, queryChunksArgs{
+				apikey:  user.OpenaiToken,
+				query:   *lastUserPrompt,
+				ext:     ext,
+				model:   r.Model,
+				content: content,
+			})
 			if err != nil {
 				return errors.Wrap(err, "query chunks")
 			}
@@ -368,15 +372,23 @@ type queryChunksResponse struct {
 	Operator string `json:"operator"`
 }
 
-func queryChunks(ctx context.Context, apikey, query, ext string, content []byte) (result string, err error) {
+type queryChunksArgs struct {
+	apikey  string
+	query   string
+	ext     string
+	model   string
+	content []byte
+}
+
+func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks",
-		zap.String("ext", ext))
+		zap.String("ext", args.ext))
 
 	postBody, err := json.Marshal(map[string]any{
-		"content": content,
-		"query":   query,
-		"ext":     ext,
-		"apikey":  apikey,
+		"content": args.content,
+		"query":   args.query,
+		"ext":     args.ext,
+		"model":   args.model,
 	})
 	if err != nil {
 		return "", errors.Wrap(err, "marshal post body")
@@ -388,6 +400,7 @@ func queryChunks(ctx context.Context, apikey, query, ext string, content []byte)
 	if err != nil {
 		return "", errors.Wrapf(err, "new request %q", ramjetChunkSearchURL)
 	}
+	req.Header.Set("Authorization", "Bearer "+args.apikey)
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
@@ -399,13 +412,13 @@ func queryChunks(ctx context.Context, apikey, query, ext string, content []byte)
 		return "", errors.Errorf("[%d]%s", resp.StatusCode, ramjetChunkSearchURL)
 	}
 
-	content, err = io.ReadAll(resp.Body)
+	args.content, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return "", errors.Wrap(err, "read response body")
 	}
 
 	respData := new(queryChunksResponse)
-	if err = json.Unmarshal(content, respData); err != nil {
+	if err = json.Unmarshal(args.content, respData); err != nil {
 		return "", errors.Wrap(err, "unmarshal response body")
 	}
 
@@ -436,7 +449,11 @@ func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadClose
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	userReq.embeddingUrlContent(ctx, user)
+	if ramjetChunkSearchURL != "" {
+		log.Logger.Debug("query ramjet to search chunks", zap.String("url", ramjetChunkSearchURL))
+		userReq.embeddingUrlContent(ctx, user)
+	}
+
 	return userReq, err
 }
 
