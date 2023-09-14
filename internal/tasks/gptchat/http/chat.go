@@ -32,7 +32,7 @@ var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
 
-var ramjetChunkSearchURL = os.Getenv("GPTCHAT_CHUNK_SEARCH_URL")
+var ramjetURL = strings.TrimSuffix(os.Getenv("GPTCHAT_CHUNK_SEARCH_URL"), "/")
 
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
@@ -310,7 +310,6 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 		return
 	}
 
-	log.Logger.Debug("query ramjet to search chunks", zap.String("url", ramjetChunkSearchURL))
 	var (
 		pool        errgroup.Group
 		mu          sync.Mutex
@@ -395,22 +394,24 @@ func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err 
 		return "", errors.Wrap(err, "marshal post body")
 	}
 
+	queryChunkURL := fmt.Sprintf("%s/gptchat/query/chunks", ramjetURL)
+
 	queryCtx, queryCancel := context.WithTimeout(ctx, 180*time.Second)
 	defer queryCancel()
-	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, ramjetChunkSearchURL, bytes.NewReader(postBody))
+	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, queryChunkURL, bytes.NewReader(postBody))
 	if err != nil {
-		return "", errors.Wrapf(err, "new request %q", ramjetChunkSearchURL)
+		return "", errors.Wrapf(err, "new request %q", queryChunkURL)
 	}
 	req.Header.Set("Authorization", "Bearer "+args.apikey)
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
-		return "", errors.Wrapf(err, "do request %q", ramjetChunkSearchURL)
+		return "", errors.Wrapf(err, "do request %q", queryChunkURL)
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("[%d]%s", resp.StatusCode, ramjetChunkSearchURL)
+		return "", errors.Errorf("[%d]%s", resp.StatusCode, queryChunkURL)
 	}
 
 	args.content, err = io.ReadAll(resp.Body)
@@ -450,7 +451,7 @@ func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadClose
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	if ramjetChunkSearchURL != "" {
+	if ramjetURL != "" {
 		userReq.embeddingUrlContent(ctx, user)
 	}
 

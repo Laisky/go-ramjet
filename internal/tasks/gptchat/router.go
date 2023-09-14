@@ -26,6 +26,7 @@ func bindHTTP() {
 		ctx.Data(http.StatusOK, "image/png", istatic.Favicon)
 	})
 	grp.Any("/api/", ihttp.APIHandler)
-	grp.GET("/", ihttp.Chat)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
+	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
+	grp.GET("/", ihttp.Chat)
 }

@@ -1317,7 +1317,6 @@ function setupPrivateDataset() {
         let pdfFileModalEle = document.querySelector("#modal-pdfchat"),
             pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
 
-
         document
             .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
             .addEventListener("click", (evt) => {
