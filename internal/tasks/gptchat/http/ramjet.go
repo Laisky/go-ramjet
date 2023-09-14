@@ -29,6 +29,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 	}
 
 	req.Header = ctx.Request.Header
+	req.Header.Del("Accept-Encoding") // do not disable gzip
 	if user, err := getUserFromToken(ctx); err != nil {
 		AbortErr(ctx, err)
 	} else {
