@@ -47,5 +47,12 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		return
 	}
 
+	for k, v := range resp.Header {
+		if len(v) == 0 {
+			continue
+		}
+
+		ctx.Header(k, v[0])
+	}
 	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
 }
