@@ -33,7 +33,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 	if user, err := getUserFromToken(ctx); err != nil {
 		AbortErr(ctx, err)
 	} else {
-		req.Header.Set("Authorization", "Bearer "+user.OpenaiToken)
+		req.Header.Set("Authorization", user.OpenaiToken)
 	}
 
 	resp, err := httpcli.Do(req)
