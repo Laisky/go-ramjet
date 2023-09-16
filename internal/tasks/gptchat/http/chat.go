@@ -334,7 +334,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 			}
 
 			auxiliary, err := queryChunks(ctx, queryChunksArgs{
-				apikey:  user.OpenaiToken,
+				user:    user,
 				query:   *lastUserPrompt,
 				ext:     ext,
 				model:   r.Model,
@@ -373,7 +373,7 @@ type queryChunksResponse struct {
 }
 
 type queryChunksArgs struct {
-	apikey  string
+	user    *config.UserConfig
 	query   string
 	ext     string
 	model   string
@@ -384,12 +384,19 @@ func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err 
 	log.Logger.Debug("query ramjet to search chunks",
 		zap.String("ext", args.ext))
 
-	postBody, err := json.Marshal(map[string]any{
-		"content": args.content,
-		"query":   args.query,
-		"ext":     args.ext,
-		"model":   args.model,
-	})
+	reqData := map[string]any{
+		"content":    args.content,
+		"query":      args.query,
+		"ext":        args.ext,
+		"model":      args.model,
+		"max_chunks": 200,
+	}
+
+	if args.user.IsPaid {
+		reqData["max_chunks"] = 1500
+	}
+
+	postBody, err := json.Marshal(reqData)
 	if err != nil {
 		return "", errors.Wrap(err, "marshal post body")
 	}
@@ -402,7 +409,7 @@ func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err 
 	if err != nil {
 		return "", errors.Wrapf(err, "new request %q", queryChunkURL)
 	}
-	req.Header.Set("Authorization", "Bearer "+args.apikey)
+	req.Header.Set("Authorization", "Bearer "+args.user.OpenaiToken)
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {

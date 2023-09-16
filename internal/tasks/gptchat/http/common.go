@@ -55,6 +55,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			if u.Token == userToken {
 				log.Logger.Debug("use server's default openai token",
 					zap.String("user", u.UserName))
+				u.IsPaid = true
 				u.OpenaiToken = config.Config.Token // use server's default openai token
 				return &u, nil
 			}
@@ -69,6 +70,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			Token:         userToken,
 			OpenaiToken:   userToken,
 			AllowedModels: []string{"*"},
+			IsPaid:        true,
 		}, nil
 	}
 }

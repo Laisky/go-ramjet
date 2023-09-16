@@ -51,7 +51,9 @@ type UserConfig struct {
 	// Token (required) client request token
 	Token string `json:"-" mapstructure:"token"`
 	// OpenaiToken (optional) openai token
-	OpenaiToken   string   `json:"-" mapstructure:"openai_token"`
+	OpenaiToken string `json:"-" mapstructure:"openai_token"`
+	// IsPaid whether is paid user
+	IsPaid        bool     `json:"is_paid" mapstructure:"is_paid"`
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 	// LimitExpensiveModels more strict rate limit for expensive models
 	LimitExpensiveModels bool `json:"limit_expensive_models" mapstructure:"limit_expensive_models"`
