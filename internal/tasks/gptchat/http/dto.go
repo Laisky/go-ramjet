@@ -7,6 +7,11 @@ import (
 // OpenaiMessageRole message role
 type OpenaiMessageRole string
 
+// String return string
+func (r OpenaiMessageRole) String() string {
+	return string(r)
+}
+
 const (
 	// OpenaiMessageRoleSystem system message
 	OpenaiMessageRoleSystem = "system"

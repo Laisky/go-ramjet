@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -39,35 +40,15 @@ func APIHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	// logger := log.Logger.Named("chat")
 
-	resp, err := proxy(ctx) //nolint:bodyclose
+	frontReq, resp, err := send2openai(ctx) //nolint:bodyclose
 	if AbortErr(ctx, err) {
 		return
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	// ctx.Header("Content-Type", "text/event-stream")
-	// ctx.Header("Cache-Control", "no-cache")
-	// ctx.Header("X-Accel-Buffering", "no")
-	// ctx.Header("Transfer-Encoding", "chunked")
 	CopyHeader(ctx.Writer.Header(), resp.Header)
-
 	isStream := resp.Header.Get("Content-Type") == "text/event-stream"
 	bodyReader := resp.Body
-
-	// if !resp.Uncompressed {
-	// 	switch resp.Header.Get("Content-Encoding") {
-	// 	case "": // no content encoding
-	// 	case "gzip":
-	// 		bodyReader, err = gzip.NewReader(resp.Body)
-	// 	case "flate":
-	// 		bodyReader = flate.NewReader(resp.Body)
-	// 	default:
-	// 		err = errors.Errorf("unsupport content encoding %q", resp.Header.Get("Content-Encoding"))
-	// 	}
-	// 	if AbortErr(ctx, err) {
-	// 		return
-	// 	}
-	// }
 
 	reader := bufio.NewScanner(bodyReader)
 	reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -82,6 +63,7 @@ func APIHandler(ctx *gin.Context) {
 		return 0, nil, nil
 	})
 
+	var respContent string
 	var lastResp *OpenaiCOmpletionStreamResp
 	for reader.Scan() {
 		line := reader.Bytes()
@@ -108,14 +90,20 @@ func APIHandler(ctx *gin.Context) {
 			continue
 		}
 
+		if len(lastResp.Choices) > 0 {
+			respContent += lastResp.Choices[0].Delta.Content
+		}
+
 		// check if resp is end
 		if !isStream ||
 			len(lastResp.Choices) == 0 ||
 			lastResp.Choices[0].FinishReason != "" {
+			go saveLLMConservation(frontReq, respContent)
 			return
 		}
 	}
 
+	go saveLLMConservation(frontReq, respContent)
 	// scanner quit unexpected, write last line
 	if lastResp != nil &&
 		len(lastResp.Choices) != 0 &&
@@ -136,7 +124,39 @@ func APIHandler(ctx *gin.Context) {
 	}
 }
 
-func proxy(ctx *gin.Context) (resp *http.Response, err error) {
+func saveLLMConservation(req *FrontendReq, respContent string) {
+	logger := log.Logger.Named("save_llm")
+	openaidb, err := db.GetOpenaiDB()
+	if err != nil {
+		logger.Error("get openai db", zap.Error(err))
+		return
+	}
+
+	docu := &db.OpenaiConservation{
+		Model:      req.Model,
+		MaxTokens:  req.MaxTokens,
+		Completion: respContent,
+	}
+	for _, msg := range req.Messages {
+		docu.Prompt = append(docu.Prompt, db.OpenaiMessage{
+			Role:    msg.Role.String(),
+			Content: msg.Content,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	ret, err := openaidb.GetCol("conservations").InsertOne(ctx, docu)
+	if err != nil {
+		logger.Error("insert conservation", zap.Error(err))
+		return
+	}
+
+	logger.Debug("save conservation", zap.Any("id", ret.InsertedID))
+}
+
+func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	newUrl := fmt.Sprintf("%s%s",
 		gconfig.Shared.GetString("openai.api"),
@@ -149,19 +169,18 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 
 	user, err := getUserFromToken(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "get user")
+		return nil, nil, errors.Wrap(err, "get user")
 	}
 
 	body := ctx.Request.Body
-	var frontendReq *FrontendReq
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
 		frontendReq, err = bodyChecker(ctx.Request.Context(), user, ctx.Request.Body)
 		if err != nil {
-			return nil, errors.Wrap(err, "request is illegal")
+			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
 
 		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
-			return nil, errors.Wrap(err, "check is model allowed")
+			return nil, nil, errors.Wrap(err, "check is model allowed")
 		}
 
 		var openaiReq any
@@ -177,7 +196,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
 			req := new(OpenaiChatReq)
 			if err := copier.Copy(req, frontendReq); err != nil {
-				return nil, errors.Wrap(err, "copy to chat req")
+				return nil, nil, errors.Wrap(err, "copy to chat req")
 			}
 
 			openaiReq = req
@@ -185,15 +204,15 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
 			if err := copier.Copy(openaiReq, frontendReq); err != nil {
-				return nil, errors.Wrap(err, "copy to completion req")
+				return nil, nil, errors.Wrap(err, "copy to completion req")
 			}
 		default:
-			return nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
+			return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
 		}
 
 		payload, err := json.Marshal(openaiReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "marshal new body")
+			return nil, nil, errors.Wrap(err, "marshal new body")
 		}
 		// log.Logger.Debug("prepare request", zap.ByteString("req", payload))
 		body = io.NopCloser(bytes.NewReader(payload))
@@ -201,7 +220,7 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 
 	req, err := http.NewRequestWithContext(ctx.Request.Context(), ctx.Request.Method, newUrl, body)
 	if err != nil {
-		return nil, errors.Wrap(err, "new request")
+		return nil, nil, errors.Wrap(err, "new request")
 	}
 	CopyHeader(req.Header, ctx.Request.Header)
 	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
@@ -213,17 +232,17 @@ func proxy(ctx *gin.Context) (resp *http.Response, err error) {
 	log.Logger.Debug("proxy request", zap.String("url", newUrl))
 	resp, err = httpcli.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "do request %q", newUrl)
+		return nil, nil, errors.Wrapf(err, "do request %q", newUrl)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close() // nolint
 		body, _ := io.ReadAll(resp.Body)
-		return nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
+		return nil, nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}
 
 	// do not close resp.Body
-	return resp, nil
+	return frontendReq, resp, nil
 }
 
 func (r *FrontendReq) fillDefault() {
