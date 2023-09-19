@@ -45,7 +45,8 @@ const ChatModels = [
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
     StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
-    StorageKeySystemPrompt = "config_api_static_context";
+    StorageKeySystemPrompt = "config_api_static_context",
+    StorageKeyAllowedModels = "config_chat_models";
 
 
 window.IsChatModel = (model) => {
@@ -60,6 +61,14 @@ window.IsCompletionModel = (model) => {
     return CompletionModels.includes(model);
 };
 
+window.IsChatModelAllowed = (model) => {
+    let allowed_models = GetLocalStorage(StorageKeyAllowedModels);
+    if (!allowed_models) {
+        return false;
+    }
+
+    return allowed_models.includes(model);
+}
 
 window.ShowSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", false);
@@ -332,6 +341,8 @@ function setupHeader() {
                 if (data.allowed_models.includes("*")) {
                     data.allowed_models = ChatModels;
                 }
+
+                window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
 
                 // if user selected one of ChatModels, but it's not in allowed_models, then use the first one.
                 // if user selected one of QaModels, no matter it's in allowed_models or not, do not change it.

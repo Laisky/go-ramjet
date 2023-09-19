@@ -106,8 +106,8 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 			zap.String("model", model),
 			zap.Int("price", price))
 		if price >= 0 && !expensiveModelRateLimiter.AllowN(price) { // check rate limit
-			return errors.Errorf("too many requests for expensive model %q, "+
-				"please try again later or use 3.5-turbo instead", model)
+			return errors.Errorf("%q too many requests for expensive model %q, "+
+				"please try again later or use 3.5-turbo instead", c.UserName, model)
 		}
 	}
 

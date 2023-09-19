@@ -388,7 +388,7 @@ function isAllowChatPrompInput() {
 }
 
 function parseChatResp(chatmodel, payload) {
-    if (window.IsChatModel(chatmodel)) {
+    if (window.IsChatModel(chatmodel) || window.IsQaModel(chatmodel)) {
         return payload.choices[0].delta.content || "";
     } else if (window.IsCompletionModel(chatmodel)) {
         return payload.choices[0].text || "";
@@ -429,6 +429,9 @@ async function sendChat2Server(chatID) {
             chatmodel = params.get("chatmodel");
         }
     }
+
+    // these extras will append to the tail of AI's response
+    let responseExtras;
 
     if (window.IsChatModel(chatmodel)) {
         let messages,
@@ -509,7 +512,7 @@ async function sendChat2Server(chatID) {
                 url = `${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`;
                 break;
             case QAModelCustom:
-                url = `/ramjet/gptchat/ctx/chat?q=${encodeURIComponent(reqPromp)}`;
+                url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPromp)}`;
                 break
             case QAModelShared:
                 // example url:
@@ -545,8 +548,7 @@ async function sendChat2Server(chatID) {
 
             let data = await resp.json();
             if (data && data.text) {
-                // let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
-                let rawHTMLRefs = `
+                responseExtras = `
                     <p style="margin-bottom: 0; margin-top: -1em;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
@@ -556,18 +558,65 @@ async function sendChat2Server(chatID) {
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
-                    </div>`
-                currentAIRespEle.innerHTML = window.Markdown2HTML(data.text) + rawHTMLRefs;
-                appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
+                    </div>`;
+                let messages = [{
+                    role: RoleHuman,
+                    content: `Use the following pieces of context to answer the users question.
+                    the context that help you answer the question is between ">>>>>>>" and "<<<<<<<",
+                    the user' question that you should answer in after "<<<<<<<".
+                    you should directly answer the user's question, and you can use the context to help you answer the question.
+
+                    >>>>>>>
+                    context: ${data.text}
+                    <<<<<<<
+
+                    question: ${reqPromp}
+                    `
+                }];
+                let model = ChatModelTurbo35;  // rewrite chat model
+                if (window.IsChatModelAllowed(ChatModelTurbo35_16K)) {
+                    model = ChatModelTurbo35_16K;
+                }
+
+                currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + window.OpenaiToken(),
+                        "X-Authorization-Type": window.OpenaiTokenType(),
+                    },
+                    method: "POST",
+                    payload: JSON.stringify({
+                        model: model,
+                        stream: true,
+                        max_tokens: parseInt(window.OpenaiMaxTokens()),
+                        temperature: parseFloat(window.OpenaiTemperature()),
+                        presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
+                        frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                        messages: messages,
+                        stop: ["\n\n"]
+                    })
+                });
+
+
+                // let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
+                // let rawHTMLRefs = `
+                //     <p style="margin-bottom: 0; margin-top: -1em;">
+                //         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
+                //             > toggle reference
+                //         </button>
+                //     </p>
+                //     <div>
+                //         <div class="collapse" id="chatRef-${chatID}">
+                //             <div class="card card-body">${combineRefs(data.url)}</div>
+                //         </div>
+                //     </div>`
+                // currentAIRespEle.innerHTML = window.Markdown2HTML(data.text) + rawHTMLRefs;
+                // appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
             }
         } catch (err) {
             abortAIResp(err);
             return;
-        } finally {
-            unlockChatInput();
         }
-
-        return;
     } else {
         showalert("danger", `unknown chat model: ${chatmodel}`);
     }
@@ -623,6 +672,7 @@ async function sendChat2Server(chatID) {
 
             let markdownConverter = new window.showdown.Converter();
             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+            currentAIRespEle.innerHTML += responseExtras;
 
             Prism.highlightAll();
             window.EnableTooltipsEverywhere();
