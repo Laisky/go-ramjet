@@ -431,7 +431,7 @@ async function sendChat2Server(chatID) {
     }
 
     // these extras will append to the tail of AI's response
-    let responseExtras;
+    let responseExtras = "";
 
     if (window.IsChatModel(chatmodel)) {
         let messages,
