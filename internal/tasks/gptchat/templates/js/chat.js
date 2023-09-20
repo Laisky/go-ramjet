@@ -216,6 +216,15 @@ function setupSessionManager() {
         window.EnableTooltipsEverywhere();
     }
 
+    // add widget to scroll bottom
+    {
+        document.querySelector("#chatContainer .chatManager .card-footer .scroll-down")
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                scrollChatToDown();
+            });
+    }
+
     // new session
     {
         chatContainer

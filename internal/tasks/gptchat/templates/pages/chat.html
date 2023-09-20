@@ -19,6 +19,7 @@
 
     #chatContainer .chatManager .conservations {
         padding: 0px;
+        position: relative;
     }
 
     #chatContainer .chatManager .conservations .row {
@@ -56,6 +57,18 @@
         margin-bottom: 5px;
     }
 
+    #chatContainer .chatManager .card-footer {
+        position: relative;
+    }
+
+    #chatContainer .chatManager .card-footer .scroll-down {
+        position: absolute;
+        top: -60px;
+        right: 30px;
+        z-index: 1000;
+        font-size: larger;
+        cursor: pointer;
+    }
 
     #chatContainer .code-toolbar {
         font-size: small;
@@ -137,9 +150,9 @@
                             <button class="btn btn-outline-secondary" type="button"><i class="bi bi-repeat"></i> Reload</button>
                         </div>
                     </div> -->
-
                 </div>
                 <div class="card-footer text-muted">
+                    <i class="bi bi-arrow-down-circle scroll-down"></i>
                     <div class="input-group mb-3" style="margin-bottom: 0px!important;">
                         <textarea dir="auto" class="form-control input prompt" placeholder="CTRL+Enter to send"
                             style="height: 80px"></textarea>
