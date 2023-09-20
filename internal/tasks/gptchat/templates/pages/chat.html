@@ -8,6 +8,28 @@
         z-index: 1500;
     }
 
+    #chatContainer .pinned-refs {
+        z-index: 1000;
+        background-color: #d1d1d1;
+        position: absolute;
+        left: 5px;
+        top: 5px;
+        max-width: 50%;
+        overflow: hidden;
+        text-align: left;
+    }
+
+    #chatContainer .pinned-refs p {
+        padding-left: 5px;
+        padding-right: 5px;
+        margin-bottom: 0px;
+        text-wrap: nowrap;
+    }
+
+    #chatContainer .pinned-refs p .bi-trash {
+        cursor: pointer;
+    }
+
     #chatContainer .chatManager {
         padding: 0px;
     }
@@ -124,7 +146,12 @@
             </div>
         </div>
         <div class="col-md-10 col-12 chatManager" style="padding-left: 0px; max-height: 100%;">
-            <div class="card text-center" style="height: 100%; flex-direction: column;">
+            <div class="card text-center" style="height: 100%; flex-direction: column; position: relative;">
+                <div class="pinned-refs">
+                    <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
+                    <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
+                </div>
+
                 <!-- <div class="alert alert-success alert-dismissible" role="alert">
                     <div>A simple success alert—check it out!</div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>

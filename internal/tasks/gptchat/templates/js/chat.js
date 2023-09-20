@@ -158,6 +158,9 @@ function updateChatHistory() {
     });
 }
 
+/** setup session manager and restore current chat history
+ *
+ */
 function setupSessionManager() {
     // bind remove all sessions
     {
@@ -406,24 +409,69 @@ function parseChatResp(chatmodel, payload) {
     }
 }
 
+const httpsRegexp = /\bhttps:\/\/\S+$/;
+
+/**
+ * extract https urls from reqPrompt and pin them to the chat conservation window
+ *
+ * @param {string} reqPrompt - request prompt
+ * @returns {string} modified request prompt
+ */
+function pinNewMaterial(reqPrompt) {
+    let pinnedUrls = getPinnedMaterials();
+    let urls = reqPrompt.match(httpsRegexp)
+    if (urls) {
+        urls.forEach((url) => {
+            if (!pinnedUrls.includes(url)) {
+                pinnedUrls.push(url);
+            }
+        });
+    }
+
+    let urlEle = "";
+    for (let url of pinnedUrls) {
+        urlEle += `<p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">${url}</a></p>`;
+    }
+
+    let container = document.querySelector("#chatContainer .pinned-refs");
+    container.innerHTML = urlEle;
+
+    // re generate reqPrompt
+    reqPrompt = reqPrompt.replace(httpsRegexp, "");
+    reqPrompt += "\n" + pinnedUrls.join("\n");
+    return reqPrompt;
+}
+
+function getPinnedMaterials() {
+    let urls = [];
+    document.querySelectorAll("#chatContainer .pinned-refs a")
+        .forEach((item) => {
+            urls.push(item.innerHTML);
+        });
+
+    return urls;
+}
 
 async function sendChat2Server(chatID) {
-    let reqPromp;
+    let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
-        reqPromp = window.TrimSpace(chatPromptInput.value || "");
+        reqPrompt = window.TrimSpace(chatPromptInput.value || "");
 
         chatPromptInput.value = "";
-        if (reqPromp == "") {
+        if (reqPrompt == "") {
             return;
         }
 
-        append2Chats(RoleHuman, reqPromp, false, chatID);
-        appendChats2Storage(RoleHuman, reqPromp, chatID);
+        append2Chats(RoleHuman, reqPrompt, false, chatID);
+        appendChats2Storage(RoleHuman, reqPrompt, chatID);
     } else { // if chatID is not empty, it's a reload request
-        reqPromp = chatContainer
+        reqPrompt = chatContainer
             .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
     }
+
+    // extract and pin new material in chat
+    reqPrompt = pinNewMaterial(reqPrompt);
 
     currentAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations #${chatID} .ai-response`);
@@ -450,7 +498,7 @@ async function sendChat2Server(chatID) {
             messages = getLastNChatMessages(nContexts - 1, chatID);
             messages.push({
                 role: RoleHuman,
-                content: reqPromp
+                content: reqPrompt
             });
         } else {
             messages = getLastNChatMessages(nContexts, chatID);
@@ -489,7 +537,7 @@ async function sendChat2Server(chatID) {
                 temperature: parseFloat(window.OpenaiTemperature()),
                 presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
                 frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
-                prompt: reqPromp,
+                prompt: reqPrompt,
                 stop: ["\n\n"]
             })
         });
@@ -518,10 +566,10 @@ async function sendChat2Server(chatID) {
                     return;
                 }
 
-                url = `${url}?p=${project}&q=${encodeURIComponent(reqPromp)}`;
+                url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
                 break;
             case QAModelCustom:
-                url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPromp)}`;
+                url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
                 break
             case QAModelShared:
                 // example url:
@@ -531,7 +579,7 @@ async function sendChat2Server(chatID) {
                 let params = new URLSearchParams(window.location.search);
                 url = `/ramjet/gptchat/ctx/share?uid=${params.get("uid")}`
                     + `&chatbot_name=${params.get("chatbot_name")}`
-                    + `&q=${encodeURIComponent(reqPromp)}`;
+                    + `&q=${encodeURIComponent(reqPrompt)}`;
                 break;
             default:
                 console.error("unknown qa chat model: " + chatmodel);
@@ -579,7 +627,7 @@ async function sendChat2Server(chatID) {
                     context: ${data.text}
                     <<<<<<<
 
-                    question: ${reqPromp}
+                    question: ${reqPrompt}
                     `
                 }];
                 let model = ChatModelTurbo35;  // rewrite chat model
@@ -816,6 +864,16 @@ function setupChatInput() {
             await sendChat2Server();
             chatPromptInput.value = "";
         })
+
+    // bind to remove pinned materials
+    document.querySelectorAll("#chatContainer .pinned-refs p .bi-trash")
+        .forEach((item) => {
+            item.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let ele = evt.target.closest("p");
+                ele.parentNode.removeChild(ele);
+            });
+        });
 }
 
 // append chat to conservation container
