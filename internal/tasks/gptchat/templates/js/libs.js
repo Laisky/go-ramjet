@@ -87,4 +87,52 @@
             return new bootstrap.Tooltip(tooltipTriggerEl)
         })
     };
+
+
+    // convert blob to hex string
+    window.blob2Hex = async (blob) => {
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const hexString = Array.from(uint8Array)
+            .map(byte => byte.toString(16).padStart(2, '0'))
+            .join('');
+
+        return hexString;
+    };
+
+    window.hex2Bytes = (hexString) => {
+        const bytePairs = hexString.match(/.{1,2}/g);
+        const bytes = bytePairs.map(bytePair => parseInt(bytePair, 16));
+        const uint8Array = new Uint8Array(bytes);
+
+        return uint8Array;
+    };
+
+    // convert hex string to blob
+    window.hex2Blob = (hexString) => {
+        const arrayBuffer = hexString.match(/.{1,2}/g)
+            .map(byte => parseInt(byte, 16));
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const blob = new Blob([uint8Array]);
+
+        return blob;
+    };
+
+    // convert string to compressed hex string
+    window.gzip = async (stringVal) => {
+        let blob = new Blob([stringVal], { type: "text/plain" });
+        let s = new CompressionStream("gzip");
+        let ps = blob.stream().pipeThrough(s);
+        let compressedBlob = await new Response(ps).blob();
+        return await blob2Hex(compressedBlob);
+    };
+
+    // convert compressed hex string to decompressed string
+    window.ungzip = async (hexStringVal) => {
+        let blob = hex2Blob(hexStringVal);
+        let s = new DecompressionStream("gzip");
+        let ps = blob.stream().pipeThrough(s);
+        let decompressedBlob = await new Response(ps).blob();
+        return await decompressedBlob.text();
+    };
 })();
