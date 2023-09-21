@@ -100,6 +100,13 @@ function listenSessionSwitch(evt) {
     });
 }
 
+/**
+ * Clears all user sessions and chats from local storage,
+ * and resets the chat UI to its initial state.
+ * @param {Event} evt - The event that triggered the function (optional).
+ *
+ * @returns {void}
+ */
 function clearSessionAndChats(evt) {
     if (evt) {
         evt.stopPropagation();
@@ -107,7 +114,10 @@ function clearSessionAndChats(evt) {
 
     let allkeys = Object.keys(localStorage);
     allkeys.forEach((key) => {
-        if (key.startsWith("chat_user_session_")) {
+        if (
+            key.startsWith("chat_user_session_")  // remove all sessions
+            || key == StorageKeyPinnedMaterials  // remove pinned materials
+        ) {
             localStorage.removeItem(key);
         }
     });

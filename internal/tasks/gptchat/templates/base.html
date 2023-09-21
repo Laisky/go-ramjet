@@ -12,6 +12,10 @@
     <link rel="stylesheet" href="{{.BootstrapIcons}}">
     <link href="{{.PrismCss}}" rel="stylesheet" />
     <style>
+        #headerbar .navbar-nav a.dropdown-toggle.active {
+            -webkit-text-stroke: 1px #0063f6;
+        }
+
         #hiddenChatConfigSideBar .system-prompt .input {
             min-height: 220px;
             font-size: smaller;
@@ -50,7 +54,6 @@
             cursor: pointer;
             margin-right: 5px;
         }
-
     </style>
     {{block "header" .}}
     {{end}}
@@ -87,7 +90,8 @@
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/tutorial/" target="_blank">Tutorial</a>
+                        <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/tutorial/"
+                            target="_blank">Tutorial</a>
                     </li>
                 </ul>
             </div>
@@ -131,25 +135,29 @@
                 <label for="configMaxTokens" class="form-label">
                     max tokens - <span class="max-token-val"></span>
                 </label>
-                <input dir="auto" type="range" class="form-range input max-token" min="100" max="32000" step="100" value="500">
+                <input dir="auto" type="range" class="form-range input max-token" min="100" max="32000" step="100"
+                    value="500">
             </div>
             <div class="mb-3 input-group temperature">
                 <label for="configTemperature" class="form-label">
                     temperature - <span class="temperature-val"></span>
                 </label>
-                <input dir="auto" type="range" class="form-range input temperature" min="0" max="2" step="0.1" value="1">
+                <input dir="auto" type="range" class="form-range input temperature" min="0" max="2" step="0.1"
+                    value="1">
             </div>
             <div class="mb-3 input-group presence_penalty">
                 <label for="configpresence_penalty" class="form-label">
                     presence_penalty - <span class="presence_penalty-val"></span>
                 </label>
-                <input dir="auto" type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1" value="0">
+                <input dir="auto" type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1"
+                    value="0">
             </div>
             <div class="mb-3 input-group frequency_penalty">
                 <label for="configfrequency_penalty" class="form-label">
                     frequency_penalty - <span class="frequency_penalty-val"></span>
                 </label>
-                <input dir="auto" type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0">
+                <input dir="auto" type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1"
+                    value="0">
             </div>
             <div class="mb-3 input-group system-prompt">
                 <label for="configStaticContext" class="form-label">
@@ -230,40 +238,45 @@
         </div>
     </div> -->
 
-<!-- Add this div to your HTML code -->
-<div id="spinner" class="spinner-container" hidden>
-    <div class="spinner"></div>
-</div>
+    <!-- Add this div to your HTML code -->
+    <div id="spinner" class="spinner-container" hidden>
+        <div class="spinner"></div>
+    </div>
 
-<!-- Add this CSS code to your stylesheet -->
-<style>
-    .spinner-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        z-index: 9999;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
+    <!-- Add this CSS code to your stylesheet -->
+    <style>
+        .spinner-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
 
-    .spinner {
-        border: 16px solid #f3f3f3;
-        border-top: 16px solid #3498db;
-        border-radius: 50%;
-        width: 120px;
-        height: 120px;
-        animation: spin 2s linear infinite;
-    }
+        .spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-</style>
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 
 
 

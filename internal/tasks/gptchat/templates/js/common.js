@@ -370,27 +370,42 @@ function setupHeader() {
                 }
 
                 // set selected model
-                document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a")
+                // add active to class
+                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+                    .forEach((elem) => {
+                        elem.classList.remove("active");
+                    });
+                document
+                    .querySelectorAll("#headerbar .chat-models li a, #headerbar .qa-models li a")
                     .forEach((elem) => {
                         elem.classList.remove("active");
 
                         if (elem.dataset.model == selectedModel) {
                             elem.classList.add("active");
+                            elem.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
                         }
                     });
 
                 // listen click events
-                let modelElems = document.querySelectorAll("#headerbar .chat-models li a, .qa-models li a");
+                let modelElems = document
+                    .querySelectorAll("#headerbar .chat-models li a, #headerbar .qa-models li a");
                 modelElems.forEach((elem) => {
-                    elem.addEventListener("click", (e) => {
-                        e.preventDefault();
+                    elem.addEventListener("click", (evt) => {
+                        evt.preventDefault();
                         modelElems.forEach((elem) => {
                             elem.classList.remove("active");
                         });
 
-                        e.target.classList.add("active");
-                        let model = e.target.dataset.model;
+                        evt.target.classList.add("active");
+                        let model = evt.target.dataset.model;
                         SetLocalStorage("config_chat_model", model);
+
+                        // add active to class
+                        document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+                            .forEach((elem) => {
+                                elem.classList.remove("active");
+                            });
+                        evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
                     });
                 });
             });
