@@ -46,6 +46,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
     StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
     StorageKeySystemPrompt = "config_api_static_context",
+    StorageKeyPinnedMaterials = "config_api_pinned_materials",
     StorageKeyAllowedModels = "config_chat_models";
 
 

@@ -349,6 +349,10 @@ function scrollChatToDown() {
     window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
 }
 
+function scrollToChat(chatEle) {
+    chatEle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 /**
 *
 * Get the last N chat messages, which will be sent to the AI as context.
@@ -433,13 +437,34 @@ function pinNewMaterial(reqPrompt) {
         urlEle += `<p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">${url}</a></p>`;
     }
 
-    let container = document.querySelector("#chatContainer .pinned-refs");
-    container.innerHTML = urlEle;
+    // save to storage
+    window.SetLocalStorage(StorageKeyPinnedMaterials, urlEle)
+    restorePinnedMaterials();
 
     // re generate reqPrompt
     reqPrompt = reqPrompt.replace(httpsRegexp, "");
     reqPrompt += "\n" + pinnedUrls.join("\n");
     return reqPrompt;
+}
+
+function restorePinnedMaterials() {
+    let urlEle = window.GetLocalStorage(StorageKeyPinnedMaterials) || "";
+    let container = document.querySelector("#chatContainer .pinned-refs");
+    container.innerHTML = urlEle;
+
+    // bind to remove pinned materials
+    document.querySelectorAll("#chatContainer .pinned-refs p .bi-trash")
+        .forEach((item) => {
+            item.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let container = evt.target.closest(".pinned-refs")
+                let ele = evt.target.closest("p");
+                ele.parentNode.removeChild(ele);
+
+                // update storage
+                window.SetLocalStorage(StorageKeyPinnedMaterials, container.innerHTML);
+            });
+        });
 }
 
 function getPinnedMaterials() {
@@ -718,7 +743,7 @@ async function sendChat2Server(chatID) {
                         currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
                     }
 
-                    scrollChatToDown();
+                    scrollToChat(currentAIRespEle);
                     break
             }
         }
@@ -734,7 +759,7 @@ async function sendChat2Server(chatID) {
             Prism.highlightAll();
             window.EnableTooltipsEverywhere();
 
-            scrollChatToDown();
+            scrollToChat(currentAIRespEle);
             appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
             unlockChatInput();
         }
@@ -865,15 +890,8 @@ function setupChatInput() {
             chatPromptInput.value = "";
         })
 
-    // bind to remove pinned materials
-    document.querySelectorAll("#chatContainer .pinned-refs p .bi-trash")
-        .forEach((item) => {
-            item.addEventListener("click", (evt) => {
-                evt.stopPropagation();
-                let ele = evt.target.closest("p");
-                ele.parentNode.removeChild(ele);
-            });
-        });
+    // restore pinned materials
+    restorePinnedMaterials();
 }
 
 // append chat to conservation container
