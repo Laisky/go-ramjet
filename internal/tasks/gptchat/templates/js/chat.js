@@ -434,7 +434,7 @@ function pinNewMaterial(reqPrompt) {
 
     let urlEle = "";
     for (let url of pinnedUrls) {
-        urlEle += `<p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">${url}</a></p>`;
+        urlEle += `<p><i class="bi bi-trash"></i> <a href="${url}" class="link-primary" target="_blank">${url}</a></p>`;
     }
 
     // save to storage
