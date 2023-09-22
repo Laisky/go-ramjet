@@ -487,6 +487,44 @@ function getPinnedMaterials() {
     return urls;
 }
 
+/**
+ * Sends an image prompt to the server for the selected model and updates the current AI response element with the task information.
+ * @param {string} selectedModel - The selected image model.
+ * @param {HTMLElement} currentAIRespEle - The current AI response element to update with the task information.
+ * @param {string} prompt - The image prompt to send to the server.
+ * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
+ */
+async function sendImagePrompt2Server(selectedModel, currentAIRespEle, prompt) {
+    let url;
+    switch (selectedModel) {
+        case ImageModelDalle2:
+            url = "/ramjet/gptchat/image/dalle";
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
+    }
+
+
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Authorization": "Bearer " + window.OpenaiToken(),
+        },
+        body: JSON.stringify({
+            prompt: prompt
+        })
+    });
+    if (!resp.ok || resp.status != 200) {
+        throw new Error(`[${resp.status}]: ${await resp.text()}`);
+    }
+    const respData = await resp.json();
+
+    currentAIRespEle.dataset.status = "waiting";
+    currentAIRespEle.dataset.taskType = "image";
+    currentAIRespEle.dataset.taskID = respData["task_id"];
+    currentAIRespEle.dataset.imageURL = respData["image_url"];
+}
+
 async function sendChat2Server(chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
@@ -576,7 +614,6 @@ async function sendChat2Server(chatID) {
                 stop: ["\n\n"]
             })
         });
-
     } else if (window.IsQaModel(selectedModel)) {
         // {
         //     "question": "XFS 是干啥的",
@@ -708,6 +745,15 @@ async function sendChat2Server(chatID) {
         } catch (err) {
             abortAIResp(err);
             return;
+        }
+    } else if (window.IsImageModel(selectedModel)) {
+        try {
+            await sendImagePrompt2Server(selectedModel, currentAIRespEle, reqPrompt);
+        } catch (err) {
+            abortAIResp(err);
+            return;
+        } finally {
+            unlockChatInput();
         }
     } else {
         currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">unimplemented model: ${selectedModel}</pre>`;
@@ -906,16 +952,26 @@ function setupChatInput() {
     restorePinnedMaterials();
 }
 
-// append chat to conservation container
-//
-// @param {string} role - RoleHuman/RoleSystem/RoleAI
-// @param {string} text - chat text
-// @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
-function append2Chats(role, text, isHistory = false, chatID) {
+/**
+ * Append chat to conservation container
+ *
+ * @param {string} role - RoleHuman/RoleSystem/RoleAI
+ * @param {string} text - chat text
+ * @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
+ * @param {string} chatID - chat id
+ * @param {string} content_type - content type, default "text". if "image", will use different robot icon
+ */
+function append2Chats(role, text, isHistory = false, chatID, content_type = "text") {
     let chatEle;
 
     if (!chatID) {
         throw "chatID is required";
+    }
+
+    let robot_icon = "🤖️";
+    switch (content_type) {
+        case "image":
+            robot_icon = "🧑‍🎨";
     }
 
     let chatOp = "append";
@@ -937,7 +993,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                             <div class="row">
-                                <div class="col-1">🤖️</div>
+                                <div class="col-1">${robot_icon}</div>
                                 <div class="col-10 text-start ai-response" data-status="waiting">
                                     <p dir="auto" class="card-text placeholder-glow">
                                         <span class="placeholder col-7"></span>
@@ -958,7 +1014,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                     <div class="col-10 text-start"><pre>${text}</pre></div>
                     <div class="col-1">
 
-                        <div class="col-1 d-flex justify-content-between">
+                        <div class="col-1 d-flex">
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash"></i>
                         </div>
@@ -972,14 +1028,14 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 chatEle = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="row">
-                        <div class="col-1">🤖️</div>
+                        <div class="col-1">${robot_icon}</div>
                         <div class="col-11 text-start ai-response" data-status="waiting">${text}</div>
                     </div>
                 </div>`
             } else {
                 chatEle = `
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-1">🤖️</div>
+                        <div class="col-1">${robot_icon}</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
                     </div>`
             }
@@ -1041,13 +1097,13 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 <div class="container-fluid row role-human" data-chatid="${chatID}">
                 <div class="col-1">🤔️</div>
                 <div class="col-10 text-start"><pre>${newText}</pre></div>
-                    <div class="col-1 d-flex justify-content-between">
+                    <div class="col-1 d-flex">
                     <i class="bi bi-pencil-square"></i>
                     <i class="bi bi-trash"></i>
                     </div>
                     </div>
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                    <div class="col-1">🤖️</div>
+                    <div class="col-1">${robot_icon}</div>
                     <div class="col-11 text-start ai-response" data-status="waiting">
                         <p class="card-text placeholder-glow">
                         <span class="placeholder col-7"></span>
