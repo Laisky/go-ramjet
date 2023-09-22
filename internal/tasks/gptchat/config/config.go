@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
@@ -25,20 +26,29 @@ var (
 // SetupConfig setup config
 func SetupConfig() (err error) {
 	Config = new(OpenAI)
-	err = gconfig.Shared.UnmarshalKey("openai", Config)
-	return errors.Wrap(err, "unmarshal openai config")
+	if err = gconfig.Shared.UnmarshalKey("openai", Config); err != nil {
+		return errors.Wrap(err, "unmarshal openai config")
+	}
+
+	// fill default
+	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
+	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitImageModelsIntervalSeconds, 600)
+
+	return nil
 }
 
 // OpenAI openai config
 type OpenAI struct {
-	API               string            `json:"api" mapstructure:"api"`
-	Token             string            `json:"-" mapstructure:"token"`
-	DefaultImageToken string            `json:"-" mapstructure:"default_image_token"`
-	Proxy             string            `json:"-" mapstructure:"proxy"`
-	UserTokens        []UserConfig      `json:"user_tokens" mapstructure:"user_tokens"`
-	GoogleAnalytics   string            `json:"ga" mapstructure:"ga"`
-	StaticLibs        map[string]string `json:"static_libs" mapstructure:"static_libs"`
-	QAChatModels      []qaChatModel     `json:"qa_chat_models" mapstructure:"qa_chat_models"`
+	API                                     string            `json:"api" mapstructure:"api"`
+	Token                                   string            `json:"-" mapstructure:"token"`
+	DefaultImageToken                       string            `json:"-" mapstructure:"default_image_token"`
+	RateLimitExpensiveModelsIntervalSeconds int               `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
+	RateLimitImageModelsIntervalSeconds     int               `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
+	Proxy                                   string            `json:"-" mapstructure:"proxy"`
+	UserTokens                              []UserConfig      `json:"user_tokens" mapstructure:"user_tokens"`
+	GoogleAnalytics                         string            `json:"ga" mapstructure:"ga"`
+	StaticLibs                              map[string]string `json:"static_libs" mapstructure:"static_libs"`
+	QAChatModels                            []qaChatModel     `json:"qa_chat_models" mapstructure:"qa_chat_models"`
 }
 
 type qaChatModel struct {
@@ -68,36 +78,56 @@ type UserConfig struct {
 }
 
 var (
+	onceLimiter                                              sync.Once
 	ratelimiter, expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
 )
 
-func init() {
+// setupRateLimiter setup ratelimiter depends on loaded config
+func setupRateLimiter() {
+	const burstRatio = 1.2
 	var err error
-	if ratelimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     10,
-			NPerSec: 1,
-		}); err != nil {
-		log.Logger.Panic("new ratelimiter", zap.Error(err))
+	logger := log.Logger.Named("gptchat.ratelimiter")
+
+	{
+		if ratelimiter, err = gutils.NewRateLimiter(context.Background(),
+			gutils.RateLimiterArgs{
+				Max:     10,
+				NPerSec: 1,
+			}); err != nil {
+			log.Logger.Panic("new ratelimiter", zap.Error(err))
+		}
+		logger.Info("set overall ratelimiter", zap.Int("burst", 10))
 	}
-	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     61,
-			NPerSec: 1,
-		}); err != nil {
-		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
+
+	{
+		burst := int(float64(Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
+		if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+			gutils.RateLimiterArgs{
+				Max:     burst,
+				NPerSec: 1,
+			}); err != nil {
+			log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
+		}
+		logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
 	}
-	if imageRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     650,
-			NPerSec: 1,
-		}); err != nil {
-		log.Logger.Panic("new imageRateLimiter", zap.Error(err))
+
+	{
+		burst := int(float64(Config.RateLimitImageModelsIntervalSeconds) * burstRatio)
+		if imageRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+			gutils.RateLimiterArgs{
+				Max:     burst,
+				NPerSec: 1,
+			}); err != nil {
+			log.Logger.Panic("new imageRateLimiter", zap.Error(err))
+		}
+		logger.Info("set ratelimiter for image models", zap.Int("burst", burst))
 	}
 }
 
 // IsModelAllowed check if model is allowed
 func (c *UserConfig) IsModelAllowed(model string) error {
+	onceLimiter.Do(setupRateLimiter)
+
 	if len(c.AllowedModels) == 0 {
 		return errors.Errorf("no allowed models for current user %q", c.UserName)
 	}
