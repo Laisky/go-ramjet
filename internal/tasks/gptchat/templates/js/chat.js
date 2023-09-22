@@ -25,6 +25,7 @@ window.ready(() => {
         setupChatInput();
         setupPromptManager();
         setupPrivateDataset();
+        window.setInterval(fetchImageDrawingResultBackground, 1000);
     })();
 });
 
@@ -98,6 +99,40 @@ function listenSessionSwitch(evt) {
     sessionChatHistory(sessionID).forEach((item) => {
         append2Chats(item.role, item.content, true, item.chatID);
     });
+}
+
+/**
+ * Fetches the image drawing result background for the AI response and displays it in the chat container.
+ * @returns {Promise<void>}
+ */
+async function fetchImageDrawingResultBackground() {
+    chatContainer
+        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]')
+        .forEach(async (item) => {
+            const taskId = item.dataset.taskId,
+                imageUrl = item.dataset.imageUrl,
+                chatId = item.closest(".role-ai").dataset.chatid;
+
+            // check any err msg
+            const errFileUrl = imageUrl.replace(".png", ".err.txt");
+            const errFileResp = await fetch(errFileUrl);
+            if (errFileResp.ok || errFileResp.status == 200) {
+                const errText = await errFileResp.text();
+                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
+                item.dataset.status = "done";
+                return;
+            }
+
+            // check is image ready
+            const imgResp = await fetch(imageUrl);
+            if (!imgResp.ok || imgResp.status != 200) {
+                return;
+            }
+
+            // image is ready, show it
+            append2Chats(RoleAI, `![](${imageUrl})`, false, chatId, "image");
+            // item.innerHTML = `<img src="${imageUrl}" style="max-width: 100%;">`;
+        });
 }
 
 /**
@@ -521,8 +556,8 @@ async function sendImagePrompt2Server(selectedModel, currentAIRespEle, prompt) {
 
     currentAIRespEle.dataset.status = "waiting";
     currentAIRespEle.dataset.taskType = "image";
-    currentAIRespEle.dataset.taskID = respData["task_id"];
-    currentAIRespEle.dataset.imageURL = respData["image_url"];
+    currentAIRespEle.dataset.taskId = respData["task_id"];
+    currentAIRespEle.dataset.imageUrl = respData["image_url"];
 }
 
 async function sendChat2Server(chatID) {
@@ -756,7 +791,7 @@ async function sendChat2Server(chatID) {
             unlockChatInput();
         }
     } else {
-        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">unimplemented model: ${selectedModel}</pre>`;
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">unimplemented model: ${selectedModel}</pre>`;
         unlockChatInput();
         return;
     }
@@ -898,9 +933,9 @@ function abortAIResp(err) {
     }
 
     if (currentAIRespEle.dataset.status == "waiting") {// || currentAIRespEle.dataset.status == "writing") {
-        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${window.RenderStr2HTML(errMsg)}</pre>`;
     } else {
-        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${window.RenderStr2HTML(errMsg)}</pre>`;
     }
 
     // window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
@@ -1043,7 +1078,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
             break
     }
 
-    console.log("append chat", role, chatOp, chatID);
+    console.log(`append2Chats: op=${chatOp}, role=${role}, chatID=${chatID}, text=${text}`);
     if (chatOp == "append") {
         if (role == RoleAI) {
             // ai response is always after human, so we need to find the last human chat,
