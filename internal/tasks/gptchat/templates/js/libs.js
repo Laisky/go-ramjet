@@ -62,6 +62,11 @@
     }
 
     window.sha1 = async (str) => {
+        // http do not support crypto
+        if (!crypto.subtle) {  // FIXME
+            return str;
+        }
+
         const encoder = new TextEncoder();
         const data = encoder.encode(str);
         const hash = await crypto.subtle.digest('SHA-1', data);
