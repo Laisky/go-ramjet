@@ -32,14 +32,14 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 	case strings.HasPrefix(userToken, "FREETIER-"): // free user
 		hasher := sha256.New()
 		hasher.Write([]byte(userToken))
-		username := hex.EncodeToString(hasher.Sum(nil))[:16]
+		username := hex.EncodeToString(hasher.Sum(nil))[:12]
 		log.Logger.Debug("use server's freetier openai token",
 			zap.String("token", userToken),
 			zap.String("user", username))
 		for _, u := range config.Config.UserTokens {
 			if u.Token == config.FREETIER_USER_TOKEN {
 				return &config.UserConfig{
-					UserName:      username,
+					UserName:      "FREETIER-" + username,
 					Token:         userToken,
 					OpenaiToken:   config.Config.Token,
 					ImageToken:    config.Config.DefaultImageToken,

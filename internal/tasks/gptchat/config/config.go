@@ -167,9 +167,9 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 			zap.String("model", model),
 			zap.Int("price", price))
 		if price >= 0 && !imageRateLimiter.AllowN(price) { // check rate limit
-			return errors.Errorf("%q too many requests for image model %q, "+
+			return errors.Errorf("too many requests for image model %q, "+
 				"please try after %d seconds",
-				c.UserName, model, (price - imageRateLimiter.Len()))
+				model, (price - imageRateLimiter.Len()))
 		}
 	} else if !c.NoLimitExpensiveModels { // then check expensive models
 		if model != "gpt-3.5-turbo" {
@@ -185,9 +185,9 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 				zap.String("model", model),
 				zap.Int("price", price))
 			if price >= 0 && !expensiveModelRateLimiter.AllowN(price) { // check rate limit
-				return errors.Errorf("%q too many requests for expensive model %q, "+
+				return errors.Errorf("too many requests for expensive model %q, "+
 					"please try after %d seconds",
-					c.UserName, model, (price - expensiveModelRateLimiter.Len()))
+					model, (price - expensiveModelRateLimiter.Len()))
 			}
 		}
 	}

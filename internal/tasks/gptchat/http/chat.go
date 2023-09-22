@@ -180,7 +180,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		}
 
 		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
-			return nil, nil, errors.Wrap(err, "check is model allowed")
+			return nil, nil, errors.Wrapf(err, "check is model  for user %q", user.UserName)
 		}
 
 		var openaiReq any
