@@ -168,7 +168,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 			zap.Int("price", price))
 		if price >= 0 && !imageRateLimiter.AllowN(price) { // check rate limit
 			return errors.Errorf("%q too many requests for image model %q, "+
-				"try after %d seconds",
+				"please try after %d seconds",
 				c.UserName, model, (price - imageRateLimiter.Len()))
 		}
 	} else if !c.NoLimitExpensiveModels { // then check expensive models
@@ -186,7 +186,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 				zap.Int("price", price))
 			if price >= 0 && !expensiveModelRateLimiter.AllowN(price) { // check rate limit
 				return errors.Errorf("%q too many requests for expensive model %q, "+
-					"please after %d seconds",
+					"please try after %d seconds",
 					c.UserName, model, (price - expensiveModelRateLimiter.Len()))
 			}
 		}
