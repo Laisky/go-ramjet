@@ -39,11 +39,11 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		for _, u := range config.Config.UserTokens {
 			if u.Token == config.FREETIER_USER_TOKEN {
 				return &config.UserConfig{
-					UserName:             username,
-					Token:                userToken,
-					OpenaiToken:          config.Config.Token,
-					AllowedModels:        u.AllowedModels,
-					LimitExpensiveModels: u.LimitExpensiveModels,
+					UserName:      username,
+					Token:         userToken,
+					OpenaiToken:   config.Config.Token,
+					ImageToken:    config.Config.DefaultImageToken,
+					AllowedModels: u.AllowedModels,
 				}, nil
 			}
 		}
@@ -60,6 +60,9 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 					// use server's default openai token instead.
 					u.OpenaiToken = config.Config.Token
 				}
+				if u.ImageToken == "" {
+					u.ImageToken = config.Config.DefaultImageToken
+				}
 
 				return &u, nil
 			}
@@ -70,11 +73,15 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
 		return &config.UserConfig{
-			UserName:      username,
-			Token:         userToken,
-			OpenaiToken:   userToken,
-			AllowedModels: []string{"*"},
-			IsPaid:        true,
+			UserName:               username,
+			Token:                  userToken,
+			OpenaiToken:            userToken,
+			ImageToken:             userToken,
+			AllowedModels:          []string{"*"},
+			IsPaid:                 true,
+			NoLimitExpensiveModels: true,
+			NoLimitAllModels:       true,
+			NoLimitImageModels:     true,
 		}, nil
 	}
 }

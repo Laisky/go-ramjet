@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/gin-gonic/gin"
 
@@ -30,10 +31,8 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 	req.Header = ctx.Request.Header
 	req.Header.Del("Accept-Encoding") // do not disable gzip
-	if user, err := getUserFromToken(ctx); err != nil {
-		AbortErr(ctx, err)
-	} else {
-		req.Header.Set("Authorization", user.OpenaiToken)
+	if err = setUserAuth(ctx, req); AbortErr(ctx, err) {
+		return
 	}
 
 	resp, err := httpcli.Do(req) //nolint: bodyclose
@@ -55,4 +54,27 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		ctx.Header(k, v[0])
 	}
 	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
+}
+
+// setUserAuth parse and set user auth to request header
+func setUserAuth(ctx *gin.Context, req *http.Request) error {
+	user, err := getUserFromToken(ctx)
+	if err != nil {
+		return errors.Wrap(err, "get user from token")
+	}
+
+	token := user.OpenaiToken
+
+	// generate image need special token
+	if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
+		token = user.ImageToken
+
+		model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
+		if err = user.IsModelAllowed(model); err != nil {
+			return errors.Wrapf(err, "check model %q", model)
+		}
+	}
+
+	req.Header.Set("Authorization", token)
+	return nil
 }

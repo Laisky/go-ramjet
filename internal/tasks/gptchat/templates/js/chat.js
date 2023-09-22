@@ -25,7 +25,7 @@ window.ready(() => {
         setupChatInput();
         setupPromptManager();
         setupPrivateDataset();
-        window.setInterval(fetchImageDrawingResultBackground, 1000);
+        window.setInterval(fetchImageDrawingResultBackground, 3000);
     })();
 });
 
@@ -109,13 +109,20 @@ async function fetchImageDrawingResultBackground() {
     chatContainer
         .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]')
         .forEach(async (item) => {
+            if (item.dataset.status != "waiting") {
+                return;
+            }
+
             const taskId = item.dataset.taskId,
                 imageUrl = item.dataset.imageUrl,
                 chatId = item.closest(".role-ai").dataset.chatid;
 
             // check any err msg
             const errFileUrl = imageUrl.replace(".png", ".err.txt");
-            const errFileResp = await fetch(errFileUrl);
+            const errFileResp = await fetch(errFileUrl, {
+                method: "GET",
+                cache: "no-cache",
+            });
             if (errFileResp.ok || errFileResp.status == 200) {
                 const errText = await errFileResp.text();
                 item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
@@ -124,14 +131,18 @@ async function fetchImageDrawingResultBackground() {
             }
 
             // check is image ready
-            const imgResp = await fetch(imageUrl);
+            const imgResp = await fetch(imageUrl, {
+                method: "GET",
+                cache: "no-cache",
+            });
             if (!imgResp.ok || imgResp.status != 200) {
                 return;
             }
 
             // image is ready, show it
-            append2Chats(RoleAI, `![](${imageUrl})`, false, chatId, "image");
-            // item.innerHTML = `<img src="${imageUrl}" style="max-width: 100%;">`;
+            item.dataset.status = "done";
+            item.innerHTML = `<img src="${imageUrl}" style="max-width: 80%;">`;
+            appendChats2Storage(RoleAI, item.innerHTML, chatId);
         });
 }
 
@@ -696,6 +707,7 @@ async function sendChat2Server(chatID) {
         try {
             const resp = await fetch(url, {
                 method: "GET",
+                cache: "no-cache",
                 headers: {
                     "Connection": "keep-alive",
                     "Content-Type": "application/json",
@@ -703,7 +715,6 @@ async function sendChat2Server(chatID) {
                     "X-Authorization-Type": window.OpenaiTokenType(),
                     "X-PDFCHAT-PASSWORD": window.GetLocalStorage(StorageKeyCustomDatasetPassword)
                 },
-                cache: "no-cache"
             });
 
             if (!resp.ok || resp.status != 200) {
@@ -1726,7 +1737,8 @@ function setupPrivateDataset() {
                     window.ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/files", {
                         method: "GET",
-                        headers: headers
+                        cache: "no-cache",
+                        headers: headers,
                     })
 
                     if (!resp.ok || resp.status !== 200) {
@@ -1823,7 +1835,8 @@ function setupPrivateDataset() {
                     window.ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/ctx/list", {
                         method: "GET",
-                        headers: headers
+                        cache: "no-cache",
+                        headers: headers,
                     })
 
                     if (!resp.ok || resp.status !== 200) {

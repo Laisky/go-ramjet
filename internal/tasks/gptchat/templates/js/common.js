@@ -337,8 +337,8 @@ function setupHeader() {
         headers.append("Authorization", "Bearer " + window.OpenaiToken());
         fetch("/user/me", {
             method: "GET",
+            cache: "no-cache",
             headers: headers,
-            cache: "no-cache"
         }).then((response) => {
             if (response.status != 200) {
                 return;
