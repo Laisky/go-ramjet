@@ -61,6 +61,15 @@
             .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
     }
 
+    window.sha1 = async (str) => {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(str);
+        const hash = await crypto.subtle.digest('SHA-1', data);
+        return Array.from(new Uint8Array(hash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    };
+
     window.ready = (fn) => {
         if (document.readyState == 'complete') {
             fn();

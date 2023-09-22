@@ -555,6 +555,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
         method: "POST",
         headers: {
             "Authorization": "Bearer " + window.OpenaiToken(),
+            "X-User-Id": await window.sha1(window.OpenaiToken()),
         },
         body: JSON.stringify({
             prompt: prompt
@@ -1653,8 +1654,8 @@ function setupPrivateDataset() {
                     .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
                 let headers = new Headers();
-                // headers.append("Content-Type", "multipart/form-data");
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
 
                 try {
                     window.ShowSpinner();
@@ -1693,6 +1694,7 @@ function setupPrivateDataset() {
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
                 headers.append("Cache-Control", "no-cache");
                 // headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
@@ -1732,6 +1734,7 @@ function setupPrivateDataset() {
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
                 headers.append("Cache-Control", "no-cache");
                 headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
@@ -1830,6 +1833,7 @@ function setupPrivateDataset() {
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
                 headers.append("Cache-Control", "no-cache");
                 headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
 
@@ -1910,6 +1914,7 @@ function setupPrivateDataset() {
 
                             let headers = new Headers();
                             headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                            headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
 
                             try {
                                 window.ShowSpinner();
@@ -1961,6 +1966,7 @@ function setupPrivateDataset() {
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
                 headers.append("Cache-Control", "no-cache");
 
                 let respBody;
@@ -2028,6 +2034,7 @@ function setupPrivateDataset() {
                     let headers = new Headers();
                     headers.append("Content-Type", "application/json");
                     headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
+                    headers.append("X-User-Id", await window.sha1(window.OpenaiToken()));
 
                     try { // build chatbot
                         window.ShowSpinner();
