@@ -61,10 +61,10 @@
             .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
     }
 
-    window.sha1 = async (str) => {
+    window.getSHA1 = async (str) => {
         // http do not support crypto
-        if (!crypto.subtle) {  // FIXME
-            return str;
+        if (!crypto || !crypto.subtle) {  // http do not support crypto
+            return sha1(str);
         }
 
         const encoder = new TextEncoder();
