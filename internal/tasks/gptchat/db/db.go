@@ -6,9 +6,10 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (

@@ -29,7 +29,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 
 	switch {
-	case strings.HasPrefix(userToken, "FREETIER-"): // use server's default openai token
+	case strings.HasPrefix(userToken, "FREETIER-"): // free user
 		hasher := sha256.New()
 		hasher.Write([]byte(userToken))
 		username := hex.EncodeToString(hasher.Sum(nil))[:16]
@@ -53,10 +53,14 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
 			if u.Token == userToken {
-				log.Logger.Debug("use server's default openai token",
-					zap.String("user", u.UserName))
+				log.Logger.Debug("paid user", zap.String("user", u.UserName))
 				u.IsPaid = true
-				u.OpenaiToken = config.Config.Token // use server's default openai token
+				if u.OpenaiToken == "" {
+					// if not set openai token for user,
+					// use server's default openai token instead.
+					u.OpenaiToken = config.Config.Token
+				}
+
 				return &u, nil
 			}
 		}

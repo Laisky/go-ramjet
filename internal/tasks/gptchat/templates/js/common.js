@@ -16,7 +16,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     QAModelImmigrate = "qa-immigrate",
     QAModelCustom = "qa-custom",
     QAModelShared = "qa-shared",
-    CompletionModelDavinci3 = "text-davinci-003";
+    CompletionModelDavinci3 = "text-davinci-003",
+    ImageModelDalle2 = "image-dalle2";
 
 // casual chat models
 
@@ -37,6 +38,9 @@ const ChatModels = [
         QAModelImmigrate,
         QAModelCustom,
         QAModelShared,
+    ],
+    ImageModels = [
+        ImageModelDalle2,
     ],
     CompletionModels = [
         CompletionModelDavinci3,
@@ -60,6 +64,10 @@ window.IsQaModel = (model) => {
 
 window.IsCompletionModel = (model) => {
     return CompletionModels.includes(model);
+};
+
+window.IsImageModel = (model) => {
+    return ImageModels.includes(model);
 };
 
 window.IsChatModelAllowed = (model) => {
@@ -376,7 +384,10 @@ function setupHeader() {
                         elem.classList.remove("active");
                     });
                 document
-                    .querySelectorAll("#headerbar .chat-models li a, #headerbar .qa-models li a")
+                    .querySelectorAll("#headerbar .chat-models li a, "
+                        + "#headerbar .qa-models li a, "
+                        + "#headerbar .image-models li a"
+                    )
                     .forEach((elem) => {
                         elem.classList.remove("active");
 
@@ -388,7 +399,10 @@ function setupHeader() {
 
                 // listen click events
                 let modelElems = document
-                    .querySelectorAll("#headerbar .chat-models li a, #headerbar .qa-models li a");
+                    .querySelectorAll("#headerbar .chat-models li a, "
+                        + "#headerbar .qa-models li a, "
+                        + "#headerbar .image-models li a"
+                    );
                 modelElems.forEach((elem) => {
                     elem.addEventListener("click", (evt) => {
                         evt.preventDefault();

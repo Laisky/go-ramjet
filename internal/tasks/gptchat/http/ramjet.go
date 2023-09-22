@@ -36,12 +36,12 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		req.Header.Set("Authorization", user.OpenaiToken)
 	}
 
-	resp, err := httpcli.Do(req)
+	resp, err := httpcli.Do(req) //nolint: bodyclose
 	if AbortErr(ctx, err) {
 		return
 	}
 
-	defer resp.Body.Close()
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
 	payload, err := io.ReadAll(resp.Body)
 	if AbortErr(ctx, err) {
 		return

@@ -513,19 +513,19 @@ async function sendChat2Server(chatID) {
     currentAIRespEle = currentAIRespEle;
     lockChatInput();
 
-    let chatmodel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+    let selectedModel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
     // get chatmodel from url parameters
     if (window.location.search) {
         let params = new URLSearchParams(window.location.search);
         if (params.has("chatmodel")) {
-            chatmodel = params.get("chatmodel");
+            selectedModel = params.get("chatmodel");
         }
     }
 
     // these extras will append to the tail of AI's response
     let responseExtras = "";
 
-    if (window.IsChatModel(chatmodel)) {
+    if (window.IsChatModel(selectedModel)) {
         let messages,
             nContexts = parseInt(window.ChatNContexts());
 
@@ -547,7 +547,7 @@ async function sendChat2Server(chatID) {
             },
             method: "POST",
             payload: JSON.stringify({
-                model: chatmodel,
+                model: selectedModel,
                 stream: true,
                 max_tokens: parseInt(window.OpenaiMaxTokens()),
                 temperature: parseFloat(window.OpenaiTemperature()),
@@ -557,7 +557,7 @@ async function sendChat2Server(chatID) {
                 stop: ["\n\n"]
             })
         });
-    } else if (window.IsCompletionModel(chatmodel)) {
+    } else if (window.IsCompletionModel(selectedModel)) {
         currentAIRespSSE = new SSE(window.OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
@@ -566,7 +566,7 @@ async function sendChat2Server(chatID) {
             },
             method: "POST",
             payload: JSON.stringify({
-                model: chatmodel,
+                model: selectedModel,
                 stream: true,
                 max_tokens: parseInt(window.OpenaiMaxTokens()),
                 temperature: parseFloat(window.OpenaiTemperature()),
@@ -577,7 +577,7 @@ async function sendChat2Server(chatID) {
             })
         });
 
-    } else if (window.IsQaModel(chatmodel)) {
+    } else if (window.IsQaModel(selectedModel)) {
         // {
         //     "question": "XFS 是干啥的",
         //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
@@ -585,19 +585,19 @@ async function sendChat2Server(chatID) {
         // }
 
         let url, project;
-        switch (chatmodel) {
+        switch (selectedModel) {
             case QAModelBasebit:
             case QAModelSecurity:
             case QAModelImmigrate:
                 window.data['qa_chat_models'].forEach((item) => {
-                    if (item['name'] == chatmodel) {
+                    if (item['name'] == selectedModel) {
                         url = item['url'];
                         project = item['project'];
                     }
                 });
 
                 if (!project) {
-                    console.error("can't find project name for chat model: " + chatmodel);
+                    console.error("can't find project name for chat model: " + selectedModel);
                     return;
                 }
 
@@ -617,7 +617,7 @@ async function sendChat2Server(chatID) {
                     + `&q=${encodeURIComponent(reqPrompt)}`;
                 break;
             default:
-                console.error("unknown qa chat model: " + chatmodel);
+                console.error("unknown qa chat model: " + selectedModel);
         }
 
         currentAIRespEle.scrollIntoView({ behavior: "smooth" });
@@ -710,7 +710,9 @@ async function sendChat2Server(chatID) {
             return;
         }
     } else {
-        showalert("danger", `unknown chat model: ${chatmodel}`);
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8;">unimplemented model: ${selectedModel}</pre>`;
+        unlockChatInput();
+        return;
     }
 
     if (!currentAIRespSSE) {
@@ -729,9 +731,9 @@ async function sendChat2Server(chatID) {
 
         if (!isChatRespDone) {
             let payload = JSON.parse(evt.data),
-                respContent = parseChatResp(chatmodel, payload);
+                respContent = parseChatResp(selectedModel, payload);
 
-            if (payload.choices[0].finish_reason) {
+            if (payload.choices[0].finish_reason || !respContent) {
                 isChatRespDone = true;
             }
 
@@ -971,7 +973,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="row">
                         <div class="col-1">🤖️</div>
-                        <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
+                        <div class="col-11 text-start ai-response" data-status="waiting">${text}</div>
                     </div>
                 </div>`
             } else {
@@ -1046,7 +1048,7 @@ function append2Chats(role, text, isHistory = false, chatID) {
                     </div>
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="col-1">🤖️</div>
-                    <div class="col-11 text-start ai-response" data-status="writing">
+                    <div class="col-11 text-start ai-response" data-status="waiting">
                         <p class="card-text placeholder-glow">
                         <span class="placeholder col-7"></span>
                         <span class="placeholder col-4"></span>
