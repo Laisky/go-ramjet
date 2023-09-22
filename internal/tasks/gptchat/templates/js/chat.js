@@ -142,7 +142,6 @@ async function fetchImageDrawingResultBackground() {
             // image is ready, show it
             item.dataset.status = "done";
             item.innerHTML = `<img src="${imageUrl}" style="max-width: 80%;">`;
-            appendChats2Storage(RoleAI, item.innerHTML, chatId);
         });
 }
 
@@ -535,12 +534,13 @@ function getPinnedMaterials() {
 
 /**
  * Sends an image prompt to the server for the selected model and updates the current AI response element with the task information.
+ * @param {string} chatID - The chat ID.
  * @param {string} selectedModel - The selected image model.
  * @param {HTMLElement} currentAIRespEle - The current AI response element to update with the task information.
  * @param {string} prompt - The image prompt to send to the server.
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
-async function sendImagePrompt2Server(selectedModel, currentAIRespEle, prompt) {
+async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
         case ImageModelDalle2:
@@ -569,6 +569,9 @@ async function sendImagePrompt2Server(selectedModel, currentAIRespEle, prompt) {
     currentAIRespEle.dataset.taskType = "image";
     currentAIRespEle.dataset.taskId = respData["task_id"];
     currentAIRespEle.dataset.imageUrl = respData["image_url"];
+
+    // save img to storage no matter it's done or not
+    appendChats2Storage(RoleAI, `<img src="${respData["image_url"]}" style="max-width: 80%;">`, chatID);
 }
 
 async function sendChat2Server(chatID) {
@@ -794,7 +797,7 @@ async function sendChat2Server(chatID) {
         }
     } else if (window.IsImageModel(selectedModel)) {
         try {
-            await sendImagePrompt2Server(selectedModel, currentAIRespEle, reqPrompt);
+            await sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
         } catch (err) {
             abortAIResp(err);
             return;
