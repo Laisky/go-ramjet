@@ -119,7 +119,7 @@ async function fetchImageDrawingResultBackground() {
 
             // check any err msg
             const errFileUrl = imageUrl.replace(".png", ".err.txt");
-            const errFileResp = await fetch(errFileUrl, {
+            const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
                 method: "GET",
                 cache: "no-cache",
             });
@@ -131,7 +131,7 @@ async function fetchImageDrawingResultBackground() {
             }
 
             // check is image ready
-            const imgResp = await fetch(imageUrl, {
+            const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
                 method: "GET",
                 cache: "no-cache",
             });
@@ -544,7 +544,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
     let url;
     switch (selectedModel) {
         case ImageModelDalle2:
-            url = "/ramjet/gptchat/image/dalle";
+            url = `/ramjet/gptchat/image/dalle`;
             break;
         default:
             throw new Error(`unknown image model: ${selectedModel}`);
