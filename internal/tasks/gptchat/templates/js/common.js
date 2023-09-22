@@ -371,11 +371,12 @@ function setupHeader() {
                 });
                 modelsContainer.innerHTML = modelsEle;
 
-                if (unsupportedModels.length > 0) {
-                    showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
-                        + `maybe you need refresh your browser. if this warning still exists, `
-                        + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
-                }
+                // FIXME
+                // if (unsupportedModels.length > 0) {
+                //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
+                //         + `maybe you need refresh your browser. if this warning still exists, `
+                //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
+                // }
 
                 // set selected model
                 // add active to class
