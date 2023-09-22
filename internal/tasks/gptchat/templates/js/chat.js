@@ -997,8 +997,6 @@ function setupChatInput() {
  * @param {string} content_type - content type, default "text". if "image", will use different robot icon
  */
 function append2Chats(role, text, isHistory = false, chatID, content_type = "text") {
-    let chatEle;
-
     if (!chatID) {
         throw "chatID is required";
     }
@@ -1009,12 +1007,13 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
             robot_icon = "🧑‍🎨";
     }
 
-    let chatOp = "append";
+    let chatEleHtml,
+        chatOp = "append";
     switch (role) {
         case RoleSystem:
             text = window.escapeHtml(text);
 
-            chatEle = `
+            chatEleHtml = `
             <div class="container-fluid row role-human">
                 <div class="col-1">💻</div>
                 <div class="col-11 text-start"><pre>${text}</pre></div>
@@ -1042,7 +1041,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                         </div>`
             }
 
-            chatEle = `
+            chatEleHtml = `
             <div id="${chatID}">
                 <div class="container-fluid row role-human" data-chatid="${chatID}">
                     <div class="col-1">🤔️</div>
@@ -1060,7 +1059,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
         case RoleAI:
             if (!isHistory) {
                 chatOp = "replace";
-                chatEle = `
+                chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                     <div class="row">
                         <div class="col-1">${robot_icon}</div>
@@ -1068,7 +1067,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                     </div>
                 </div>`
             } else {
-                chatEle = `
+                chatEleHtml = `
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-1">${robot_icon}</div>
                         <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
@@ -1083,25 +1082,27 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
         if (role == RoleAI) {
             // ai response is always after human, so we need to find the last human chat,
             // and append ai response after it
-            chatContainer.querySelector(`.chatManager .conservations #${chatID}`).
-                insertAdjacentHTML("beforeend", chatEle);
+            chatContainer.querySelector(`#${chatID}`).insertAdjacentHTML("beforeend", chatEleHtml);
         } else {
             chatContainer.querySelector(`.chatManager .conservations`).
-                insertAdjacentHTML("beforeend", chatEle);
+                insertAdjacentHTML("beforeend", chatEleHtml);
         }
     } else if (chatOp == "replace") {
         // replace html element of ai
-        chatContainer.querySelector(`.chatManager .conservations #${chatID} .role-ai`).
-            outerHTML = chatEle;
+        chatEle.querySelector(`.role-ai`).
+            outerHTML = chatEleHtml;
     }
 
+    let chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID}`)
+    if (!isHistory && role == RoleHuman) {
+        scrollToChat(chatEle);
+    }
 
     // avoid duplicate event listener, only bind event listener for new chat
     if (role == RoleHuman) {
         // bind delete button
         let deleteBtnHandler = (evt) => {
             evt.stopPropagation();
-            let chatEle = chatContainer.querySelector(`#${chatID}`);
             chatEle.parentNode.removeChild(chatEle);
             removeChatInStorage(chatID);
         };
@@ -1123,39 +1124,38 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                         Cancel</button>
                 </div>`;
 
-            let saveBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.save`);
-            let cancelBtn = chatContainer.querySelector(`#${chatID} .role-human .btn.cancel`);
+            let saveBtn = chatEle.querySelector(`.role-human .btn.save`);
+            let cancelBtn = chatEle.querySelector(`.role-human .btn.cancel`);
             saveBtn.addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                let newText = chatContainer.querySelector(`#${chatID} .role-human textarea`).value;
-                chatContainer.querySelector(`#${chatID}`).innerHTML = `
-                <div class="container-fluid row role-human" data-chatid="${chatID}">
-                <div class="col-1">🤔️</div>
-                <div class="col-10 text-start"><pre>${newText}</pre></div>
-                    <div class="col-1 d-flex">
-                    <i class="bi bi-pencil-square"></i>
-                    <i class="bi bi-trash"></i>
-                    </div>
-                    </div>
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                    <div class="col-1">${robot_icon}</div>
-                    <div class="col-11 text-start ai-response" data-status="waiting">
-                        <p class="card-text placeholder-glow">
-                        <span class="placeholder col-7"></span>
-                        <span class="placeholder col-4"></span>
-                        <span class="placeholder col-4"></span>
-                        <span class="placeholder col-6"></span>
-                        <span class="placeholder col-8"></span>
-                        </p>
+                let newText = chatEle.querySelector(`.role-human textarea`).value;
+                chatEle.innerHTML = `
+                    <div class="container-fluid row role-human" data-chatid="${chatID}">
+                    <div class="col-1">🤔️</div>
+                    <div class="col-10 text-start"><pre>${newText}</pre></div>
+                        <div class="col-1 d-flex">
+                        <i class="bi bi-pencil-square"></i>
+                        <i class="bi bi-trash"></i>
                         </div>
                         </div>
-                    `;
-                chatContainer.querySelector(`#${chatID} .role-ai`).dataset.status = "waiting";
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                        <div class="col-1">${robot_icon}</div>
+                        <div class="col-11 text-start ai-response" data-status="waiting">
+                            <p class="card-text placeholder-glow">
+                            <span class="placeholder col-7"></span>
+                            <span class="placeholder col-4"></span>
+                            <span class="placeholder col-4"></span>
+                            <span class="placeholder col-6"></span>
+                            <span class="placeholder col-8"></span>
+                            </p>
+                            </div>
+                            </div>`;
+                chatEle.querySelector(`.role-ai`).dataset.status = "waiting";
 
                 // bind delete and edit button
-                chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+                chatEle.querySelector(`.role-human .bi-trash`)
                     .addEventListener("click", deleteBtnHandler);
-                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+                chatEle.querySelector(`.bi.bi-pencil-square`)
                     .addEventListener("click", editHumanInputHandler);
 
                 await sendChat2Server(chatID);
@@ -1164,22 +1164,20 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
 
             cancelBtn.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                chatContainer.querySelector(`#${chatID}`).innerHTML = oldText;
+                chatEle.innerHTML = oldText;
 
                 // bind delete and edit button
-                chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+                chatEle.querySelector(`.role-human .bi-trash`)
                     .addEventListener("click", deleteBtnHandler);
-                chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+                chatEle.querySelector(`.bi.bi-pencil-square`)
                     .addEventListener("click", editHumanInputHandler);
             });
         };
 
-
-
         // bind delete and edit button
-        chatContainer.querySelector(`#${chatID} .role-human .bi-trash`)
+        chatEle.querySelector(`.role-human .bi-trash`)
             .addEventListener("click", deleteBtnHandler);
-        chatContainer.querySelector(`#${chatID} .bi.bi-pencil-square`)
+        chatEle.querySelector(`.bi.bi-pencil-square`)
             .addEventListener("click", editHumanInputHandler);
     }
 }
