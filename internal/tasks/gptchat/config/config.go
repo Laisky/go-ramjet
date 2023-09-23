@@ -33,6 +33,7 @@ func SetupConfig() (err error) {
 	// fill default
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
 	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitImageModelsIntervalSeconds, 600)
+	Config.DefaultImageTokenType = gutils.OptionalVal(&Config.DefaultImageTokenType, ImageTokenAzure)
 
 	return nil
 }
@@ -42,6 +43,7 @@ type OpenAI struct {
 	API                                     string            `json:"api" mapstructure:"api"`
 	Token                                   string            `json:"-" mapstructure:"token"`
 	DefaultImageToken                       string            `json:"-" mapstructure:"default_image_token"`
+	DefaultImageTokenType                   ImageTokenType    `json:"-" mapstructure:"default_image_token_type"`
 	RateLimitExpensiveModelsIntervalSeconds int               `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
 	RateLimitImageModelsIntervalSeconds     int               `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
 	Proxy                                   string            `json:"-" mapstructure:"proxy"`
@@ -58,24 +60,17 @@ type qaChatModel struct {
 }
 
 // ImageTokenType image token type
-type ImageTokenType uint
+type ImageTokenType string
 
 func (t ImageTokenType) String() string {
-	switch t {
-	case ImageTokenOpenai:
-		return "openai"
-	case ImageTokenAzure:
-		return "azure"
-	default:
-		return "unknown"
-	}
+	return string(t)
 }
 
 const (
 	// ImageTokenAzure azure image token
-	ImageTokenAzure ImageTokenType = iota
+	ImageTokenAzure ImageTokenType = "azure"
 	// ImageTokenOpenai openai image token
-	ImageTokenOpenai
+	ImageTokenOpenai ImageTokenType = "openai"
 )
 
 // UserConfig user config

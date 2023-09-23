@@ -40,10 +40,12 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		for _, u := range config.Config.UserTokens {
 			if u.Token == config.FREETIER_USER_TOKEN {
 				return &config.UserConfig{
-					UserName:      "FREETIER-" + username,
-					Token:         userToken,
-					OpenaiToken:   config.Config.Token,
-					ImageToken:    config.Config.DefaultImageToken,
+					UserName:    "FREETIER-" + username,
+					Token:       userToken,
+					OpenaiToken: config.Config.Token,
+					ImageToken:  config.Config.DefaultImageToken,
+					ImageTokenType: gutils.OptionalVal(&u.ImageTokenType,
+						config.ImageTokenType(config.Config.DefaultImageToken)),
 					AllowedModels: u.AllowedModels,
 					APIBase:       strings.TrimRight(config.Config.API, "/"),
 				}, nil
@@ -61,6 +63,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 				// set default value
 				u.OpenaiToken = gutils.OptionalVal(&u.OpenaiToken, config.Config.Token)
 				u.ImageToken = gutils.OptionalVal(&u.ImageToken, config.Config.DefaultImageToken)
+				u.ImageTokenType = gutils.OptionalVal(&u.ImageTokenType, config.Config.DefaultImageTokenType)
 				u.APIBase = strings.TrimRight(gutils.OptionalVal(&u.APIBase, config.Config.API), "/")
 
 				return &u, nil
@@ -76,6 +79,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			Token:                  userToken,
 			OpenaiToken:            userToken,
 			ImageToken:             userToken,
+			ImageTokenType:         config.Config.DefaultImageTokenType,
 			AllowedModels:          []string{"*"},
 			IsPaid:                 true,
 			NoLimitExpensiveModels: true,
@@ -86,6 +90,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		if strings.HasPrefix(userToken, "sk-") {
 			u.ImageTokenType = config.ImageTokenOpenai
 		}
+
 		return u, nil
 	}
 }
