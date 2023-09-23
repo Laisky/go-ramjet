@@ -42,12 +42,12 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 				return &config.UserConfig{
 					UserName:    "FREETIER-" + username,
 					Token:       userToken,
-					OpenaiToken: config.Config.Token,
-					ImageToken:  config.Config.DefaultImageToken,
+					OpenaiToken: gutils.OptionalVal(&u.OpenaiToken, config.Config.Token),
+					ImageToken:  gutils.OptionalVal(&u.ImageToken, config.Config.DefaultImageToken),
 					ImageTokenType: gutils.OptionalVal(&u.ImageTokenType,
 						config.ImageTokenType(config.Config.DefaultImageToken)),
 					AllowedModels: u.AllowedModels,
-					APIBase:       strings.TrimRight(config.Config.API, "/"),
+					APIBase:       strings.TrimRight(gutils.OptionalVal(&u.APIBase, config.Config.API), "/"),
 				}, nil
 			}
 		}
