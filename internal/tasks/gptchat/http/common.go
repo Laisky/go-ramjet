@@ -74,12 +74,12 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		hashed := sha256.Sum256([]byte(userToken))
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
-		u := &config.UserConfig{
+		u := &config.UserConfig{ // default to openai user
 			UserName:               username,
 			Token:                  userToken,
 			OpenaiToken:            userToken,
 			ImageToken:             userToken,
-			ImageTokenType:         config.Config.DefaultImageTokenType,
+			ImageTokenType:         config.ImageTokenOpenai,
 			AllowedModels:          []string{"*"},
 			IsPaid:                 true,
 			NoLimitExpensiveModels: true,
@@ -87,8 +87,8 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			NoLimitImageModels:     true,
 			APIBase:                "https://api.openai.com",
 		}
-		if strings.HasPrefix(userToken, "sk-") {
-			u.ImageTokenType = config.ImageTokenOpenai
+		if !strings.HasPrefix(userToken, "sk-") {
+			u.ImageTokenType = config.ImageTokenAzure
 		}
 
 		return u, nil
