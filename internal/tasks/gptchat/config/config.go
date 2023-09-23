@@ -57,6 +57,27 @@ type qaChatModel struct {
 	Project string `json:"project" mapstructure:"project"`
 }
 
+// ImageTokenType image token type
+type ImageTokenType uint
+
+func (t ImageTokenType) String() string {
+	switch t {
+	case ImageTokenOpenai:
+		return "openai"
+	case ImageTokenAzure:
+		return "azure"
+	default:
+		return "unknown"
+	}
+}
+
+const (
+	// ImageTokenAzure azure image token
+	ImageTokenAzure ImageTokenType = iota
+	// ImageTokenOpenai openai image token
+	ImageTokenOpenai
+)
+
 // UserConfig user config
 type UserConfig struct {
 	UserName string `json:"username" mapstructure:"username"`
@@ -66,6 +87,11 @@ type UserConfig struct {
 	OpenaiToken string `json:"-" mapstructure:"openai_token"`
 	// ImageToken (optional) token be used to generate image
 	ImageToken string `json:"-" mapstructure:"image_token"`
+	// ImageTokenType (optional) token type, default is azure
+	ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
+	// APIBase (optional) api base url.
+	// if empty, use config.api
+	APIBase string `json:"-" mapstructure:"api_base"`
 	// IsPaid whether is paid user
 	IsPaid        bool     `json:"is_paid" mapstructure:"-"`
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`

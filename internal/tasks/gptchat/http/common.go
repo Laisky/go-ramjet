@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Laisky/errors/v2"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
@@ -44,6 +45,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 					OpenaiToken:   config.Config.Token,
 					ImageToken:    config.Config.DefaultImageToken,
 					AllowedModels: u.AllowedModels,
+					APIBase:       strings.TrimRight(config.Config.API, "/"),
 				}, nil
 			}
 		}
@@ -55,14 +57,11 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			if u.Token == userToken {
 				log.Logger.Debug("paid user", zap.String("user", u.UserName))
 				u.IsPaid = true
-				if u.OpenaiToken == "" {
-					// if not set openai token for user,
-					// use server's default openai token instead.
-					u.OpenaiToken = config.Config.Token
-				}
-				if u.ImageToken == "" {
-					u.ImageToken = config.Config.DefaultImageToken
-				}
+
+				// set default value
+				u.OpenaiToken = gutils.OptionalVal(&u.OpenaiToken, config.Config.Token)
+				u.ImageToken = gutils.OptionalVal(&u.ImageToken, config.Config.DefaultImageToken)
+				u.APIBase = strings.TrimRight(gutils.OptionalVal(&u.APIBase, config.Config.API), "/")
 
 				return &u, nil
 			}
@@ -72,7 +71,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		hashed := sha256.Sum256([]byte(userToken))
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
-		return &config.UserConfig{
+		u := &config.UserConfig{
 			UserName:               username,
 			Token:                  userToken,
 			OpenaiToken:            userToken,
@@ -82,6 +81,11 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			NoLimitExpensiveModels: true,
 			NoLimitAllModels:       true,
 			NoLimitImageModels:     true,
-		}, nil
+			APIBase:                "https://api.openai.com",
+		}
+		if strings.HasPrefix(userToken, "sk-") {
+			u.ImageTokenType = config.ImageTokenOpenai
+		}
+		return u, nil
 	}
 }

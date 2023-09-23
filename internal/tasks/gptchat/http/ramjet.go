@@ -63,18 +63,25 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 		return errors.Wrap(err, "get user from token")
 	}
 
-	token := user.OpenaiToken
+	req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
+	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
 
-	// generate image need special token
-	if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-		token = user.ImageToken
+	// set token
+	{
+		token := user.OpenaiToken
 
-		model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
-		if err = user.IsModelAllowed(model); err != nil {
-			return errors.Wrapf(err, "check model %q", model)
+		// generate image need special token
+		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
+			token = user.ImageToken
+
+			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
+			if err = user.IsModelAllowed(model); err != nil {
+				return errors.Wrapf(err, "check model %q", model)
+			}
 		}
+
+		req.Header.Set("Authorization", token)
 	}
 
-	req.Header.Set("Authorization", token)
 	return nil
 }

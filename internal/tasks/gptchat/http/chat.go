@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
@@ -158,18 +157,18 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
+	user, err := getUserFromToken(ctx)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get user")
+	}
+
 	newUrl := fmt.Sprintf("%s%s",
-		gconfig.Shared.GetString("openai.api"),
+		user.APIBase,
 		path,
 	)
 
 	if ctx.Request.URL.RawQuery != "" {
 		newUrl += "?" + ctx.Request.URL.RawQuery
-	}
-
-	user, err := getUserFromToken(ctx)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "get user")
 	}
 
 	body := ctx.Request.Body
@@ -193,7 +192,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			"gpt-4-0613",
 			"gpt-4-32k",
 			"gpt-4-32k-0613":
-			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/chat/completions")
+			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			req := new(OpenaiChatReq)
 			if err := copier.Copy(req, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to chat req")
@@ -201,7 +200,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 			openaiReq = req
 		case "text-davinci-003":
-			newUrl = fmt.Sprintf("%s/%s", gconfig.Shared.GetString("openai.api"), "v1/completions")
+			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
 			if err := copier.Copy(openaiReq, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to completion req")
