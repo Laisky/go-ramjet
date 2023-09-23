@@ -217,7 +217,10 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
-	req, err := http.NewRequestWithContext(ctx.Request.Context(), ctx.Request.Method, newUrl, body)
+	log.Logger.Debug("send request to openai api",
+		zap.String("url", newUrl), zap.String("method", ctx.Request.Method))
+	req, err := http.NewRequestWithContext(ctx.Request.Context(),
+		ctx.Request.Method, newUrl, body)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "new request")
 	}

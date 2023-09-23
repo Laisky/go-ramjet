@@ -33,7 +33,8 @@ func SetupConfig() (err error) {
 	// fill default
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
 	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitImageModelsIntervalSeconds, 600)
-	Config.DefaultImageTokenType = gutils.OptionalVal(&Config.DefaultImageTokenType, ImageTokenAzure)
+	Config.DefaultImageTokenType = gutils.OptionalVal(&Config.DefaultImageTokenType, ImageTokenOpenai)
+	Config.API = strings.TrimRight(gutils.OptionalVal(&Config.API, "https://api.openai.com"), "/")
 
 	return nil
 }
