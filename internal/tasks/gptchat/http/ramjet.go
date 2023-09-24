@@ -174,14 +174,14 @@ func GetUserInternalBill(ctx context.Context,
 
 // checkUserTotalQuota save and check billing for text-to-image models
 func checkUserTotalQuota(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
 	logger := log.Logger.Named("openai.billing")
 	if !user.EnableExternalImageBilling {
 		logger.Debug("skip billing for user", zap.String("username", user.UserName))
 		return nil
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 
 	openaiDB, err := db.GetOpenaiDB()
 	if err != nil {
