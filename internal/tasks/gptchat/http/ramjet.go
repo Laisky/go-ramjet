@@ -77,14 +77,13 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 	req.Header.Set("X-Laisky-User-Id", user.UserName)
 
 	// set token
+	cost := db.Price(0)
 	{
+		cost = db.PriceTxt2Image
 		token := user.OpenaiToken
 
 		// generate image need special token
 		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-			if err := billTxt2Image(ctx.Request.Context(), user); err != nil {
-				return errors.Wrapf(err, "check txt2image bill for user %q", user.UserName)
-			}
 
 			token = user.ImageToken
 
@@ -95,6 +94,10 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 		}
 
 		req.Header.Set("Authorization", token)
+	}
+
+	if err := checkUserImageQuota(ctx.Request.Context(), user, cost); err != nil {
+		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 
 	return nil
@@ -169,8 +172,8 @@ func GetUserInternalBill(ctx context.Context,
 	return bill, nil
 }
 
-// billTxt2Image save and check billing for text-to-image models
-func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
+// checkUserImageQuota save and check billing for text-to-image models
+func checkUserImageQuota(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
@@ -209,26 +212,28 @@ func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
 	}
 
 	// check balance
-	if externalBalanceResp.Data.RemainQuota <= bill.UsedQuota {
-		return errors.Errorf("user %q has no enough quota", user.UserName)
+	if externalBalanceResp.Data.RemainQuota <= bill.UsedQuota+db.PriceTxt2Image {
+		return errors.Errorf("user %q has not enough quota", user.UserName)
 	}
 
 	// update or create
-	if _, err = billingCol.UpdateOne(ctx,
-		bson.M{
-			"username": user.UserName,
-			"type":     db.BillTypeTxt2Image,
-		},
-		bson.M{
-			"$inc": bson.M{"used_quota": db.PriceTxt2Image.Int()},
-			"$set": bson.M{
+	if cost != 0 {
+		if _, err = billingCol.UpdateOne(ctx,
+			bson.M{
 				"username": user.UserName,
 				"type":     db.BillTypeTxt2Image,
 			},
-		},
-		options.Update().SetUpsert(true),
-	); err != nil {
-		return errors.Wrapf(err, "update billing for user %q", user.UserName)
+			bson.M{
+				"$inc": bson.M{"used_quota": db.PriceTxt2Image.Int()},
+				"$set": bson.M{
+					"username": user.UserName,
+					"type":     db.BillTypeTxt2Image,
+				},
+			},
+			options.Update().SetUpsert(true),
+		); err != nil {
+			return errors.Wrapf(err, "update billing for user %q", user.UserName)
+		}
 	}
 
 	return nil
