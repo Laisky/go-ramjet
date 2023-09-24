@@ -1,3 +1,4 @@
+// Package config implements config.
 package config
 
 import (
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	// FREETIER_USER_TOKEN freetier user token
-	FREETIER_USER_TOKEN = "DEFAULT_PROXY_TOKEN"
+	// FreetierUserToken freetier user token
+	FreetierUserToken = "DEFAULT_PROXY_TOKEN"
 )
 
 var (
@@ -30,28 +31,55 @@ func SetupConfig() (err error) {
 		return errors.Wrap(err, "unmarshal openai config")
 	}
 
+	if Config.Token == "" {
+		return errors.New("openai.token is empty")
+	}
+
 	// fill default
-	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
-	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(&Config.RateLimitImageModelsIntervalSeconds, 600)
-	Config.DefaultImageTokenType = gutils.OptionalVal(&Config.DefaultImageTokenType, ImageTokenOpenai)
-	Config.API = strings.TrimRight(gutils.OptionalVal(&Config.API, "https://api.openai.com"), "/")
+	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
+		&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
+	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(
+		&Config.RateLimitImageModelsIntervalSeconds, 600)
+	Config.DefaultImageToken = gutils.OptionalVal(
+		&Config.DefaultImageToken, Config.Token)
+	Config.DefaultImageTokenType = gutils.OptionalVal(
+		&Config.DefaultImageTokenType, ImageTokenOpenai)
+	Config.API = strings.TrimRight(gutils.OptionalVal(
+		&Config.API, "https://api.openai.com"), "/")
+	Config.DefaultBillingAPI = gutils.OptionalVal(
+		&Config.DefaultBillingAPI, "https://oneapi.laisky.com")
 
 	return nil
 }
 
 // OpenAI openai config
+//
+// nolint: lll
 type OpenAI struct {
-	API                                     string            `json:"api" mapstructure:"api"`
-	Token                                   string            `json:"-" mapstructure:"token"`
-	DefaultImageToken                       string            `json:"-" mapstructure:"default_image_token"`
-	DefaultImageTokenType                   ImageTokenType    `json:"-" mapstructure:"default_image_token_type"`
-	RateLimitExpensiveModelsIntervalSeconds int               `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
-	RateLimitImageModelsIntervalSeconds     int               `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
-	Proxy                                   string            `json:"-" mapstructure:"proxy"`
-	UserTokens                              []UserConfig      `json:"user_tokens" mapstructure:"user_tokens"`
-	GoogleAnalytics                         string            `json:"ga" mapstructure:"ga"`
-	StaticLibs                              map[string]string `json:"static_libs" mapstructure:"static_libs"`
-	QAChatModels                            []qaChatModel     `json:"qa_chat_models" mapstructure:"qa_chat_models"`
+	// API (optional) openai api base url, default is https://api.openai.com
+	API string `json:"api" mapstructure:"api"`
+	// Token (required) openai api request token
+	Token string `json:"-" mapstructure:"token"`
+	// DefaultImageToken (optional) default image token, default equals to token
+	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
+	// DefaultImageTokenType (optional) default image token type, default is openai
+	DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
+	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 60
+	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
+	// RateLimitImageModelsIntervalSeconds (optional) rate limit interval seconds for image models, default is 600
+	RateLimitImageModelsIntervalSeconds int `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
+	// Proxy (optional) proxy url to send request
+	Proxy string `json:"-" mapstructure:"proxy"`
+	// UserTokens (optional) paid user's tenant tokens
+	UserTokens []*UserConfig `json:"user_tokens" mapstructure:"user_tokens"`
+	// GoogleAnalytics (optional) google analytics id
+	GoogleAnalytics string `json:"ga" mapstructure:"ga"`
+	// StaticLibs (optional) replace default static libs' url
+	StaticLibs map[string]string `json:"static_libs" mapstructure:"static_libs"`
+	// QAChatModels (optional) qa chat models
+	QAChatModels []qaChatModel `json:"qa_chat_models" mapstructure:"qa_chat_models"`
+	// DefaultBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
+	DefaultBillingAPI string `json:"default_billing_api" mapstructure:"default_billing_api"`
 }
 
 type qaChatModel struct {
@@ -77,26 +105,49 @@ const (
 // UserConfig user config
 type UserConfig struct {
 	UserName string `json:"username" mapstructure:"username"`
-	// Token (required) client request token
+	// Token (required) client's tenant token, not the openai token
 	Token string `json:"-" mapstructure:"token"`
-	// OpenaiToken (optional) openai token
+	// OpenaiToken (optional) openai token, default is global default token
 	OpenaiToken string `json:"-" mapstructure:"openai_token"`
-	// ImageToken (optional) token be used to generate image
+	// ImageToken (optional) token be used to generate image, default is global default image token
 	ImageToken string `json:"-" mapstructure:"image_token"`
-	// ImageTokenType (optional) token type, default is azure
+	// ImageTokenType (optional) token type, default is global default image token type
 	ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
-	// APIBase (optional) api base url.
-	// if empty, use config.api
+	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"-" mapstructure:"api_base"`
 	// IsPaid whether is paid user
-	IsPaid        bool     `json:"is_paid" mapstructure:"-"`
+	IsPaid bool `json:"is_paid" mapstructure:"is_paid"`
+	// AllowedModels (required) allowed models
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
-	// NoLimitExpensiveModels more strict rate limit for expensive models
+	// NoLimitExpensiveModels (optional) skip rate limiter for expensive models
 	NoLimitExpensiveModels bool `json:"no_limit_expensive_models" mapstructure:"no_limit_expensive_models"`
-	// NoLimitAllModels general rate limiter for all models
+	// NoLimitAllModels (optional) skip rate limiter for all models
 	NoLimitAllModels bool `json:"no_limit_all_models" mapstructure:"no_limit_all_models"`
-	// NoLimitImageModels rate limiter for image models
+	// NoLimitImageModels (optional) skip rate limiter for image models
 	NoLimitImageModels bool `json:"no_limit_image_models" mapstructure:"no_limit_image_models"`
+	// EnableExternalImageBilling (optional) enable external image billing
+	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
+	// ExternalImageBillingUID (optional) external image billing uid
+	ExternalImageBillingUID string `json:"external_image_billing_uid" mapstructure:"external_image_billing_uid"`
+}
+
+// Valid valid and fill default values
+func (c *UserConfig) Valid() error {
+	if c.Token == "" {
+		return errors.New("token is empty")
+	}
+
+	if c.EnableExternalImageBilling {
+		if c.ExternalImageBillingUID == "" {
+			return errors.New("external_image_billing_uid should not be empty if enable_external_image_billing is true")
+		}
+	}
+
+	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
+	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
+	c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
+
+	return nil
 }
 
 var (

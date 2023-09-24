@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/Laisky/errors/v2"
-	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
@@ -26,9 +26,10 @@ func AbortErr(ctx *gin.Context, err error) bool {
 	return true
 }
 
-func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
+func getUserFromToken(ctx *gin.Context) (user *config.UserConfig, err error) {
 	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 
+SWITCH_FOR_USER:
 	switch {
 	case strings.HasPrefix(userToken, "FREETIER-"): // free user
 		hasher := sha256.New()
@@ -37,36 +38,32 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		log.Logger.Debug("use server's freetier openai token",
 			zap.String("token", userToken),
 			zap.String("user", username))
-		for _, u := range config.Config.UserTokens {
-			if u.Token == config.FREETIER_USER_TOKEN {
-				return &config.UserConfig{
-					UserName:    "FREETIER-" + username,
-					Token:       userToken,
-					OpenaiToken: gutils.OptionalVal(&u.OpenaiToken, config.Config.Token),
-					ImageToken:  gutils.OptionalVal(&u.ImageToken, config.Config.DefaultImageToken),
-					ImageTokenType: gutils.OptionalVal(&u.ImageTokenType,
-						config.ImageTokenType(config.Config.DefaultImageToken)),
-					AllowedModels: u.AllowedModels,
-					APIBase:       strings.TrimRight(gutils.OptionalVal(&u.APIBase, config.Config.API), "/"),
-				}, nil
+
+		for _, commFreeUser := range config.Config.UserTokens {
+			if commFreeUser.Token == config.FreetierUserToken {
+				user = &config.UserConfig{}
+				if err = copier.Copy(user, commFreeUser); err != nil {
+					return nil, errors.Wrap(err, "copy free user")
+				}
+
+				user.UserName = "FREETIER-" + username
+				break SWITCH_FOR_USER
 			}
 		}
 
 		return nil, errors.Errorf("can not find freetier user %q in settings",
-			config.FREETIER_USER_TOKEN)
+			config.FreetierUserToken)
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
 			if u.Token == userToken {
 				log.Logger.Debug("paid user", zap.String("user", u.UserName))
 				u.IsPaid = true
+				if err = u.Valid(); err != nil {
+					return nil, errors.Wrap(err, "valid paid user")
+				}
 
-				// set default value
-				u.OpenaiToken = gutils.OptionalVal(&u.OpenaiToken, config.Config.Token)
-				u.ImageToken = gutils.OptionalVal(&u.ImageToken, config.Config.DefaultImageToken)
-				u.ImageTokenType = gutils.OptionalVal(&u.ImageTokenType, config.Config.DefaultImageTokenType)
-				u.APIBase = strings.TrimRight(gutils.OptionalVal(&u.APIBase, config.Config.API), "/")
-
-				return &u, nil
+				user = u
+				break SWITCH_FOR_USER
 			}
 		}
 
@@ -74,7 +71,7 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 		hashed := sha256.Sum256([]byte(userToken))
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
-		u := &config.UserConfig{ // default to openai user
+		user = &config.UserConfig{ // default to openai user
 			UserName:               username,
 			Token:                  userToken,
 			OpenaiToken:            userToken,
@@ -87,10 +84,10 @@ func getUserFromToken(ctx *gin.Context) (*config.UserConfig, error) {
 			NoLimitImageModels:     true,
 			APIBase:                "https://api.openai.com",
 		}
-		if !strings.HasPrefix(userToken, "sk-") {
-			u.ImageTokenType = config.ImageTokenAzure
-		}
-
-		return u, nil
 	}
+
+	if err = user.Valid(); err != nil {
+		return nil, errors.Wrap(err, "valid user")
+	}
+	return user, nil
 }
