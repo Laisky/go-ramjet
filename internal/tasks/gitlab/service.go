@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
@@ -47,7 +49,10 @@ type gitFileResponse struct {
 	Content string `json:"content"`
 }
 
-func (s *Service) GetFile(file string) (*GetFileResponse, error) {
+func (s *Service) GetFile(ctx context.Context, file string) (*GetFileResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	file, err := url.QueryUnescape(file)
 	if err != nil {
 		return nil, err
@@ -59,7 +64,7 @@ func (s *Service) GetFile(file string) (*GetFileResponse, error) {
 	}
 
 	gitUrl := fmt.Sprintf("%s/projects/%s/repository/files/%s?ref=%s", s.gitAPI, query.ID, query.Path, query.Ref)
-	req, err := http.NewRequest(http.MethodGet, gitUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, gitUrl, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
@@ -70,7 +75,7 @@ func (s *Service) GetFile(file string) (*GetFileResponse, error) {
 		return nil, errors.Wrap(err, "do request")
 	}
 
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("status code %d", resp.StatusCode)
 	}

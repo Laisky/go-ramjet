@@ -54,17 +54,17 @@ func BindRolloverIndices() {
 }
 
 func runTask() {
-	var (
-		taskSts []*IdxSetting
-		st      *IdxSetting
-		ctx     = context.Background()
-		sem     = semaphore.NewWeighted(
-			gconfig.Shared.GetInt64("tasks.elasticsearch-v2.concurrent"))
-	)
+	ctx := context.Background()
+	sem := semaphore.NewWeighted(
+		gconfig.Shared.GetInt64("tasks.elasticsearch-v2.concurrent"))
 
-	taskSts = LoadSettings()
+	taskSts, err := LoadSettings()
+	if err != nil {
+		log.Logger.Error("cannot load elasticsearch rollover settings", zap.Error(err))
+		return
+	}
 
-	for _, st = range taskSts {
+	for _, st := range taskSts {
 		go RunDeleteTask(ctx, sem, st)
 		if !st.IsSkipCreate {
 			go RunRolloverTask(ctx, sem, st)
@@ -84,11 +84,11 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 		idxList = []map[string]string{}
 		idxItm  map[string]string
 	)
-	resp, err := httpClient.Get(url)
+	resp, err := httpClient.Get(url) //nolint: bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -107,20 +107,28 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 }
 
 // LoadSettings load task settings
-func LoadSettings() (idxSettings []*IdxSetting) {
-	var (
-		idx    *IdxSetting
-		itemI  interface{}
-		item   map[interface{}]interface{}
-		action string
-	)
-	for _, itemI = range gconfig.Shared.Get("tasks.elasticsearch-v2.configs").([]interface{}) {
-		item = itemI.(map[interface{}]interface{})
-		if action = item["action"].(string); action != "rollover" {
+func LoadSettings() (idxSettings []*IdxSetting, err error) {
+	cfgi, ok := gconfig.Shared.Get("tasks.elasticsearch-v2.configs").([]interface{})
+	if !ok {
+		return nil, errors.New("invalid config")
+	}
+
+	for _, itemI := range cfgi {
+		item, ok := itemI.(map[interface{}]interface{})
+		if !ok {
+			return nil, errors.New("invalid config")
+		}
+
+		action, ok := item["action"].(string)
+		if !ok {
+			return nil, errors.New("invalid config for `action`")
+		}
+		if action != "rollover" {
 			continue
 		}
 
-		idx = &IdxSetting{
+		//nolint: forcetypeassert
+		idx := &IdxSetting{
 			Regexp:        regexp.MustCompile(item["index"].(string)),
 			Expires:       time.Duration(item["expires"].(int)) * time.Second,
 			IdxAlias:      item["index-alias"].(string),
@@ -138,5 +146,5 @@ func LoadSettings() (idxSettings []*IdxSetting) {
 		idxSettings = append(idxSettings, idx)
 	}
 
-	return
+	return idxSettings, nil
 }

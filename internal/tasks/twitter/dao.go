@@ -184,7 +184,7 @@ func (d *ElasticsearchDao) GetLargestID(ctx context.Context) (largestID float64,
 	if err != nil {
 		return largestID, errors.Wrap(err, "do request")
 	}
-	defer resp.Body.Close()
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	var result struct {
 		Aggregations struct {
@@ -224,7 +224,7 @@ func (d *ElasticsearchDao) SaveTweet(ctx context.Context, tweet *Tweet) error {
 	if err != nil {
 		return errors.Wrap(err, "do request")
 	}
-	defer resp.Body.Close()
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	if !gutils.Contains([]int{200, 201}, resp.StatusCode) {
 		respCnt, err := io.ReadAll(resp.Body)

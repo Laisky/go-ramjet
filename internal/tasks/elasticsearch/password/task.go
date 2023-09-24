@@ -78,7 +78,7 @@ func runTask() {
 				zap.Error(err))
 			continue
 		}
-		defer resp.Body.Close() // nolint: errcheck,gosec
+		defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 		if err = gutils.CheckResp(resp); err != nil {
 			log.Logger.Error("request api got error",

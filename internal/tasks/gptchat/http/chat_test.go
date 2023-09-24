@@ -10,6 +10,8 @@ import (
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func TestAPIHandler(t *testing.T) {
@@ -37,7 +39,7 @@ func TestAPIHandler(t *testing.T) {
 	)
 	resp, err := cli.Do(httpreq)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)

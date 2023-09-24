@@ -57,7 +57,7 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "request aliases api error")
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	err = gutils.CheckResp(resp)
 	if err != nil {

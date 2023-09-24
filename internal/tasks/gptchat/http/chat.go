@@ -238,7 +238,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close() // nolint
+		defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint
 		body, _ := io.ReadAll(resp.Body)
 		return nil, nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}

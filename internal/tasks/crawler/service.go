@@ -126,11 +126,11 @@ func extractAllText(raw string) string {
 }
 
 func httpGet(url string) (string, error) {
-	resp, err := httpCli.Get(url)
+	resp, err := httpCli.Get(url) //nolint: bodyclose
 	if err != nil {
 		return "", errors.Wrapf(err, "get url %s", url)
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.Errorf("status code %d", resp.StatusCode)

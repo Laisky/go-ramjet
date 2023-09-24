@@ -93,7 +93,7 @@ func createAlias(api, index, alias string) error {
 			zap.Error(err))
 		return err
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	log.Logger.Debug("got response code", zap.Int("code", resp.StatusCode))
 	if err = gutils.CheckResp(resp); err != nil {

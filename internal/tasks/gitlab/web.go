@@ -18,7 +18,7 @@ func registerWeb() {
 			return
 		}
 
-		rets, err := svc.GetFile(file)
+		rets, err := svc.GetFile(ctx.Request.Context(), file)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, fmt.Sprintf("%+v", err))
 			return

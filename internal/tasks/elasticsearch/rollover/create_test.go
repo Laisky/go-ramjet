@@ -2,6 +2,7 @@ package rollover_test
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -29,6 +30,8 @@ func TestGetIdxRolloverReqBodyByIdxAlias(t *testing.T) {
 }
 
 func TestRolloverNewIndex(t *testing.T) {
+	ctx := context.Background()
+	api, _ := setUp(t)
 	var (
 		st = &rollover.IdxSetting{
 			IdxWriteAlias: "sit-geely-logs-write",
@@ -39,7 +42,7 @@ func TestRolloverNewIndex(t *testing.T) {
 	)
 
 	gconfig.Shared.Set("dry", true)
-	err = rollover.NewIndex(api, st)
+	err = rollover.NewIndex(ctx, api, st)
 	if err != nil {
 		t.Error(err.Error())
 	}

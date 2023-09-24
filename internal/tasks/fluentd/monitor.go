@@ -6,6 +6,7 @@ import (
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/library/log"
@@ -62,7 +63,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, cfg *MonitorCfg, metric *sync.Map) {
 	if err != nil {
 		log.Logger.Error("http get fluentd status error", zap.Error(err))
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	if resp.StatusCode == http.StatusOK {
 		isAlive = true
@@ -87,7 +88,7 @@ func checkFluentdHealth(wg *sync.WaitGroup, cfg *MonitorCfg, metric *sync.Map) {
 // 	if err != nil {
 // 		return errors.Wrap(err, "http post got error")
 // 	}
-//  defer resp.Body.Close()
+//  defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 // 	err = utils.CheckResp(resp)
 // 	if err != nil {

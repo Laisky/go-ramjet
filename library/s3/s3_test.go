@@ -14,6 +14,8 @@ import (
 	"github.com/Laisky/testify/require"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -80,7 +82,7 @@ func TestPutEncryptedObject(t *testing.T) {
 	t.Run("get encrypted object by http", func(t *testing.T) {
 		resp, err := http.Get(fmt.Sprintf("%s/%s/%s", testS3API, testS3Bucket, key))
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)

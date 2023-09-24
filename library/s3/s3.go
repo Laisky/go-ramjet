@@ -1,4 +1,4 @@
-// Package s3 s3 client
+// Package s3 implements s3 client.
 package s3
 
 import (

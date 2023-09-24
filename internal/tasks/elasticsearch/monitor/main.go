@@ -72,7 +72,7 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 		log.Logger.Error("try to get es stats got error", zap.String("url", url), zap.Error(err))
 		return
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -152,7 +152,7 @@ func pushMetricToES(c *ClusterSt, metric interface{}) {
 		log.Logger.Error("try to push es metric got error", zap.Error(err))
 		return
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	err = gutils.CheckResp(resp)
 	if err != nil {

@@ -5,10 +5,11 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-utils/v4"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 
@@ -27,7 +28,7 @@ func RunRolloverTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSettin
 	}
 	defer sem.Release(1)
 
-	if err = NewIndex(st.API, st); err != nil {
+	if err = NewIndex(ctx, st.API, st); err != nil {
 		log.Logger.Error("rollover index got error", zap.String("index", st.IdxAlias), zap.Error(err))
 	}
 }
@@ -68,7 +69,9 @@ func GetIdxRolloverReqBodyByIdxAlias(idxSt *IdxSetting) (jb *bytes.Buffer, err e
 	return jb, nil
 }
 
-func NewIndex(api string, st *IdxSetting) (err error) {
+func NewIndex(ctx context.Context, api string, st *IdxSetting) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	log.Logger.Info("rollover index", zap.String("index", st.IdxAlias))
 	var (
 		url  = api + st.IdxWriteAlias + "/_rollover"
@@ -81,7 +84,7 @@ func NewIndex(api string, st *IdxSetting) (err error) {
 		return errors.Wrap(err, "get index rollover body got error")
 	}
 
-	req, err = http.NewRequest(http.MethodPost, url, jb)
+	req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, jb)
 	if err != nil {
 		return errors.Wrap(err, "try to make rollover index http request got error")
 	}
@@ -92,13 +95,13 @@ func NewIndex(api string, st *IdxSetting) (err error) {
 		return nil
 	}
 
-	resp, err = httpClient.Do(req)
+	resp, err = httpClient.Do(req) //nolint: bodyclose
 	if err != nil {
 		return errors.Wrap(err, "try to request rollover api got error")
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
-	err = utils.CheckResp(resp)
+	err = gutils.CheckResp(resp)
 	if err != nil {
 		return errors.Wrap(err, "rollover api return incorrect")
 	}

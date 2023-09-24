@@ -106,7 +106,7 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
 	}
 
-	resp, err := httpcli.Do(req)
+	resp, err := httpcli.Do(req) //nolint: bodyclose
 	if err != nil {
 		return errors.Wrapf(err, "download cluster fingerprint from %s", furl)
 	}

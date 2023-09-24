@@ -2,6 +2,7 @@
 package monitor
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -24,6 +25,8 @@ var (
 )
 
 func runTask() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	log.Logger.Info("run monitor")
 	defer log.Logger.Info("monitor done")
 
@@ -34,7 +37,7 @@ func runTask() {
 		wg.Add(1)
 		switch gconfig.Shared.GetString("tasks.monitor.tenants." + name + ".type") {
 		case "http":
-			checkHealthByHTTP(wg, name, gconfig.Shared.GetString("tasks.monitor.tenants."+name+".url"), result)
+			go checkHealthByHTTP(ctx, wg, name, gconfig.Shared.GetString("tasks.monitor.tenants."+name+".url"), result)
 		default:
 			log.Logger.Error("unknown type",
 				zap.String("type", gconfig.Shared.GetString("tasks.monitor.tenants."+name+".type")))
@@ -89,10 +92,21 @@ func BindTask() {
 	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.monitor.interval")*time.Second, runTask)
 }
 
-func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
+func checkHealthByHTTP(ctx context.Context, wg *sync.WaitGroup, name, url string, result *sync.Map) {
 	log.Logger.Debug("checkHealthByHTTP", zap.String("name", name), zap.String("url", url))
 	defer wg.Done()
-	resp, err := httpClient.Get(url)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		log.Logger.Warn("try to request url got error",
+			zap.Error(err),
+			zap.String("name", name),
+			zap.String("url", url))
+		result.Store(name, errors.Wrap(err, "try to create new request url got error"))
+		return
+	}
+
+	resp, err := httpClient.Do(req) //nolint: bodyclose
 	if err != nil {
 		log.Logger.Warn("try to request url got error",
 			zap.Error(err),
@@ -101,7 +115,7 @@ func checkHealthByHTTP(wg *sync.WaitGroup, name, url string, result *sync.Map) {
 		result.Store(name, errors.Wrap(err, "try to request url got error"))
 		return
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
 	if err = gutils.CheckResp(resp); err != nil {
 		log.Logger.Warn("request url return error",

@@ -1,6 +1,7 @@
 package rollover_test
 
 import (
+	"context"
 	"regexp"
 	"testing"
 	"time"
@@ -13,7 +14,9 @@ import (
 )
 
 func TestRemoveIndexByName(t *testing.T) {
-	err := rollover.RemoveIndexByName(api, "test-rollover")
+	ctx := context.Background()
+	api, _ := setUp(t)
+	err := rollover.RemoveIndexByName(ctx, api, "test-rollover")
 	if err != nil {
 		t.Errorf("got error %+v", err)
 	}

@@ -8,7 +8,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-utils/v4"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 
@@ -49,7 +49,7 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 
 	log.Logger.Info("try to delete indices", zap.Strings("index", tobeDeleteIdx))
 	for _, idx := range tobeDeleteIdx {
-		err = RemoveIndexByName(st.API, idx)
+		err = RemoveIndexByName(ctx, st.API, idx)
 		if err != nil {
 			log.Logger.Error("try to delete index %v got error",
 				zap.String("index", idx), zap.Error(err))
@@ -59,10 +59,13 @@ func RunDeleteTask(ctx context.Context, sem *semaphore.Weighted, st *IdxSetting)
 }
 
 // RemoveIndexByName delete index by elasticsearch RESTful API
-func RemoveIndexByName(api, index string) (err error) {
+func RemoveIndexByName(ctx context.Context, api, index string) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	log.Logger.Info("remove es index", zap.String("index", index))
+
 	url := api + index
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return errors.Wrap(err, "make request error")
 	}
@@ -72,13 +75,13 @@ func RemoveIndexByName(api, index string) (err error) {
 		return nil
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) //nolint: bodyclose
 	if err != nil {
 		return errors.Wrap(err, "do request got error")
 	}
-	defer resp.Body.Close() // nolint: errcheck,gosec
+	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
-	err = utils.CheckResp(resp)
+	err = gutils.CheckResp(resp)
 	if err != nil {
 		return errors.Wrap(err, "remove index got error")
 	}
