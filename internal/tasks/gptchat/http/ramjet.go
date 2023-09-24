@@ -197,6 +197,22 @@ func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
 		logger.Warn("create index for openai.billing", zap.String("name", name), zap.Error(err))
 	}
 
+	// get current quota
+	bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
+	if err != nil {
+		return errors.Wrapf(err, "get billing for user %q", user.UserName)
+	}
+
+	externalBalanceResp, err := GetUserExternalBillingQuota(ctx, user)
+	if err != nil {
+		return errors.Wrapf(err, "get billing for user %q", user.UserName)
+	}
+
+	// check balance
+	if externalBalanceResp.Data.RemainQuota <= bill.UsedQuota {
+		return errors.Errorf("user %q has no enough quota", user.UserName)
+	}
+
 	// update or create
 	if _, err = billingCol.UpdateOne(ctx,
 		bson.M{
@@ -213,22 +229,6 @@ func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
 		options.Update().SetUpsert(true),
 	); err != nil {
 		return errors.Wrapf(err, "update billing for user %q", user.UserName)
-	}
-
-	// get current quota
-	bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
-	if err != nil {
-		return errors.Wrapf(err, "get billing for user %q", user.UserName)
-	}
-
-	externalBalanceResp, err := GetUserExternalBillingQuota(ctx, user)
-	if err != nil {
-		return errors.Wrapf(err, "get billing for user %q", user.UserName)
-	}
-
-	// check balance
-	if externalBalanceResp.Data.RemainQuota <= bill.UsedQuota {
-		return errors.Errorf("user %q has no enough quota", user.UserName)
 	}
 
 	return nil
