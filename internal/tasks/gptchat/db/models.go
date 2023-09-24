@@ -17,3 +17,37 @@ type OpenaiConservation struct {
 	Prompt     []OpenaiMessage    `bson:"prompt" json:"prompt"`
 	Completion string             `bson:"completion" json:"completion"`
 }
+
+// Price how many quotes for 1 usd
+type Price int
+
+// Int return int value
+func (p Price) Int() int {
+	return int(p)
+}
+
+// USD100 return how many usd in cents
+func (p Price) USDCents() int {
+	return p.Int() / 5000
+}
+
+const (
+	// PriceTxt2Image how many quotes for txt2image
+	PriceTxt2Image Price = 10000 // 0.02 usd
+)
+
+// BillingType billing type
+type BillingType string
+
+const (
+	BillTypeTxt2Image BillingType = "txt2image"
+)
+
+// Billing billing for user
+type Billing struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	BillingType BillingType        `bson:"type" json:"type"`
+	Username    string             `bson:"username" json:"username"`
+	// UsedQuota how many quotes used totally, 1usd = 500000 quotes
+	UsedQuota Price `bson:"used_quota" json:"used_quota"`
+}

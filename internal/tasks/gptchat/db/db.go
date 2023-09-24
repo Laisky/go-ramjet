@@ -17,6 +17,7 @@ var (
 	openaiDB mongo.DB
 )
 
+//nolint:contextcheck  // need background context
 func setupDB() (err error) {
 	mu.Lock()
 	defer mu.Unlock()

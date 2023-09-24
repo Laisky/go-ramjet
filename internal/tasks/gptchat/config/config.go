@@ -35,6 +35,10 @@ func SetupConfig() (err error) {
 		return errors.New("openai.token is empty")
 	}
 
+	if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
+		return errors.New("external_billing_token should not be empty if external_billing_api is set")
+	}
+
 	// fill default
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
@@ -46,8 +50,8 @@ func SetupConfig() (err error) {
 		&Config.DefaultImageTokenType, ImageTokenOpenai)
 	Config.API = strings.TrimRight(gutils.OptionalVal(
 		&Config.API, "https://api.openai.com"), "/")
-	Config.DefaultBillingAPI = gutils.OptionalVal(
-		&Config.DefaultBillingAPI, "https://oneapi.laisky.com")
+	Config.ExternalBillingAPI = gutils.OptionalVal(
+		&Config.ExternalBillingAPI, "https://oneapi.laisky.com")
 
 	return nil
 }
@@ -78,8 +82,10 @@ type OpenAI struct {
 	StaticLibs map[string]string `json:"static_libs" mapstructure:"static_libs"`
 	// QAChatModels (optional) qa chat models
 	QAChatModels []qaChatModel `json:"qa_chat_models" mapstructure:"qa_chat_models"`
-	// DefaultBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
-	DefaultBillingAPI string `json:"default_billing_api" mapstructure:"default_billing_api"`
+	// ExternalBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
+	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
+	// ExternalBillingToken (optional) default billing token
+	ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
 }
 
 type qaChatModel struct {

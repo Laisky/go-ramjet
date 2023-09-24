@@ -2,6 +2,8 @@ package http
 
 import (
 	gconfig "github.com/Laisky/go-config/v2"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 )
 
 // OpenaiMessageRole message role
@@ -161,4 +163,20 @@ type OpenaiCOmpletionStreamResp struct {
 		Index        int    `json:"index"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+// ExternalBillingUserStatus user status
+type ExternalBillingUserStatus int
+
+const (
+	// ExternalBillingUserStatusActive active
+	ExternalBillingUserStatusActive ExternalBillingUserStatus = 1
+)
+
+// ExternalBillingUserResponse return from external billing api
+type ExternalBillingUserResponse struct {
+	Data struct {
+		Status      ExternalBillingUserStatus `json:"status"`
+		RemainQuota db.Price                  `json:"remain_quota"`
+	} `json:"data"`
 }
