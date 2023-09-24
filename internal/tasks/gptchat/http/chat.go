@@ -162,6 +162,10 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		return nil, nil, errors.Wrap(err, "get user")
 	}
 
+	if err := checkUserTotalQuota(ctx.Request.Context(), user, 0); err != nil {
+		return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
+	}
+
 	newUrl := fmt.Sprintf("%s%s",
 		user.APIBase,
 		path,

@@ -96,7 +96,7 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserImageQuota(ctx.Request.Context(), user, cost); err != nil {
+	if err := checkUserTotalQuota(ctx.Request.Context(), user, cost); err != nil {
 		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 
@@ -172,8 +172,8 @@ func GetUserInternalBill(ctx context.Context,
 	return bill, nil
 }
 
-// checkUserImageQuota save and check billing for text-to-image models
-func checkUserImageQuota(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
+// checkUserTotalQuota save and check billing for text-to-image models
+func checkUserTotalQuota(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
