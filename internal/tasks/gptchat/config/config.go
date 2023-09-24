@@ -120,7 +120,7 @@ type UserConfig struct {
 	// ImageTokenType (optional) token type, default is global default image token type
 	ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
 	// APIBase (optional) api base url, default is global default api base
-	APIBase string `json:"-" mapstructure:"api_base"`
+	APIBase string `json:"api_base" mapstructure:"api_base"`
 	// IsPaid whether is paid user
 	IsPaid bool `json:"is_paid" mapstructure:"is_paid"`
 	// AllowedModels (required) allowed models

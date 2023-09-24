@@ -67,7 +67,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 // setUserAuth parse and set user auth to request header
 func setUserAuth(ctx *gin.Context, req *http.Request) error {
-	user, err := getUserFromToken(ctx)
+	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "get user from token")
 	}
@@ -82,7 +82,7 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 
 		// generate image need special token
 		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-			if err := billTxt2Image(ctx, user); err != nil {
+			if err := billTxt2Image(ctx.Request.Context(), user); err != nil {
 				return errors.Wrapf(err, "check txt2image bill for user %q", user.UserName)
 			}
 
@@ -100,16 +100,85 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 	return nil
 }
 
+// GetUserExternalBillingQuota get user external billing quota
+func GetUserExternalBillingQuota(ctx context.Context, user *config.UserConfig) (
+	externalBalanceResp *ExternalBillingUserResponse, err error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	// get balance
+	url := config.Config.ExternalBillingAPI + "/api/token/" + user.ExternalImageBillingUID
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "new request")
+	}
+
+	req.Header.Set("Authorization", "Bearer "+config.Config.ExternalBillingToken)
+	resp, err := httpcli.Do(req) //nolint: bodyclose
+	if err != nil {
+		return nil, errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("get balance failed: %d", resp.StatusCode)
+	}
+
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read body")
+	}
+
+	externalBalanceResp = new(ExternalBillingUserResponse)
+	if err = json.Unmarshal(payload, externalBalanceResp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal")
+	}
+
+	if externalBalanceResp.Data.Status != ExternalBillingUserStatusActive {
+		return nil, errors.Errorf("user %q is not active", user.UserName)
+	}
+
+	return externalBalanceResp, nil
+}
+
+// GetUserInternalBill get user internal bill
+func GetUserInternalBill(ctx context.Context,
+	user *config.UserConfig, billType db.BillingType) (
+	bill *db.Billing, err error) {
+	openaiDB, err := db.GetOpenaiDB()
+	if err != nil {
+		return bill, errors.Wrap(err, "get openai db")
+	}
+
+	billingCol := openaiDB.GetCol("billing")
+
+	// create index
+	bill = &db.Billing{
+		Username:    user.UserName,
+		BillingType: billType,
+	}
+	if err = billingCol.FindOne(ctx, bson.M{
+		"username": user.UserName,
+		"type":     billType,
+	}).Decode(bill); err != nil {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.Wrapf(err, "get billing for user %q", user.UserName)
+		}
+	}
+
+	return bill, nil
+}
+
 // billTxt2Image save and check billing for text-to-image models
 func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	logger := log.Logger.Named("openai.billing")
 	if !user.EnableExternalImageBilling {
 		logger.Debug("skip billing for user", zap.String("username", user.UserName))
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
 
 	openaiDB, err := db.GetOpenaiDB()
 	if err != nil {
@@ -147,45 +216,14 @@ func billTxt2Image(ctx context.Context, user *config.UserConfig) (err error) {
 	}
 
 	// get current quota
-	bill := new(db.Billing)
-	if err = billingCol.FindOne(ctx, bson.M{
-		"username": user.UserName,
-		"type":     db.BillTypeTxt2Image,
-	},
-	).Decode(bill); err != nil {
+	bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
+	if err != nil {
 		return errors.Wrapf(err, "get billing for user %q", user.UserName)
 	}
 
-	// get balance
-	url := config.Config.ExternalBillingAPI + "/api/token/" + user.ExternalImageBillingUID
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	externalBalanceResp, err := GetUserExternalBillingQuota(ctx, user)
 	if err != nil {
-		return errors.Wrap(err, "new request")
-	}
-
-	req.Header.Set("Authorization", "Bearer "+config.Config.ExternalBillingToken)
-	resp, err := httpcli.Do(req) //nolint: bodyclose
-	if err != nil {
-		return errors.Wrap(err, "do request")
-	}
-	defer gutils.LogErr(resp.Body.Close, logger)
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.Errorf("get balance failed: %d", resp.StatusCode)
-	}
-
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return errors.Wrap(err, "read body")
-	}
-
-	externalBalanceResp := new(ExternalBillingUserResponse)
-	if err = json.Unmarshal(payload, externalBalanceResp); err != nil {
-		return errors.Wrap(err, "unmarshal")
-	}
-
-	if externalBalanceResp.Data.Status != ExternalBillingUserStatusActive {
-		return errors.Errorf("user %q is not active", user.UserName)
+		return errors.Wrapf(err, "get billing for user %q", user.UserName)
 	}
 
 	// check balance

@@ -157,7 +157,7 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
-	user, err := getUserFromToken(ctx)
+	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "get user")
 	}

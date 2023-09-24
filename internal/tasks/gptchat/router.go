@@ -27,6 +27,7 @@ func bindHTTP() {
 	})
 	grp.Any("/api/", ihttp.APIHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
+	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
 	grp.GET("/", ihttp.Chat)
 }

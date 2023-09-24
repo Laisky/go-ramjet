@@ -26,8 +26,20 @@ func AbortErr(ctx *gin.Context, err error) bool {
 	return true
 }
 
-func getUserFromToken(ctx *gin.Context) (user *config.UserConfig, err error) {
+func getUserByAuthHeader(ctx *gin.Context) (user *config.UserConfig, err error) {
 	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
+	if userToken == "" {
+		return nil, errors.New("empty token")
+	}
+
+	return getUserByToken(ctx, userToken)
+}
+
+func getUserByToken(ctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
+	userToken = strings.TrimSpace(strings.TrimPrefix(userToken, "Bearer "))
+	if userToken == "" {
+		return nil, errors.New("empty token")
+	}
 
 SWITCH_FOR_USER:
 	switch {
