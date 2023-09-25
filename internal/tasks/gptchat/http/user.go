@@ -28,7 +28,7 @@ func GetCurrentUser(ctx *gin.Context) {
 
 func GetCurrentUserQuota(ctx *gin.Context) {
 	usertoken := ctx.Query("apikey")
-	user, err := getUserByToken(ctx, usertoken)
+	user, err := getUserByToken(usertoken)
 	if AbortErr(ctx, err) {
 		return
 	}

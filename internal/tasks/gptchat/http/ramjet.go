@@ -66,8 +66,8 @@ func RamjetProxyHandler(ctx *gin.Context) {
 }
 
 // setUserAuth parse and set user auth to request header
-func setUserAuth(ctx *gin.Context, req *http.Request) error {
-	user, err := getUserByAuthHeader(ctx)
+func setUserAuth(gctx *gin.Context, req *http.Request) error {
+	user, err := getUserByAuthHeader(gctx)
 	if err != nil {
 		return errors.Wrap(err, "get user from token")
 	}
@@ -75,6 +75,10 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 	req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
 	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
 	req.Header.Set("X-Laisky-User-Id", user.UserName)
+
+	// if set header "Accept-Encoding" manually,
+	// golang's http client will not auto decompress response body
+	req.Header.Del("Accept-Encoding")
 
 	// set token
 	cost := db.Price(0)
@@ -94,7 +98,7 @@ func setUserAuth(ctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserTotalQuota(ctx.Request.Context(), user, cost); err != nil {
+	if err := checkUserTotalQuota(gctx.Request.Context(), user, cost); err != nil {
 		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 

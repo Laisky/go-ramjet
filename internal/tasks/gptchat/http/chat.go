@@ -177,7 +177,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 	body := ctx.Request.Body
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
-		frontendReq, err = bodyChecker(ctx.Request.Context(), user, ctx.Request.Body)
+		frontendReq, err = bodyChecker(ctx, user, ctx.Request.Body)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
@@ -276,7 +276,7 @@ var (
 )
 
 // fetchURLContent fetch url content
-func fetchURLContent(ctx context.Context, url string) (content []byte, err error) {
+func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) {
 	content, ok := urlContentCache.Load(url)
 	if ok {
 		log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
@@ -284,13 +284,14 @@ func fetchURLContent(ctx context.Context, url string) (content []byte, err error
 	}
 
 	log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
-	queryCtx, queryCancel := context.WithTimeout(ctx, 20*time.Second)
+	queryCtx, queryCancel := context.WithTimeout(gctx.Request.Context(), 20*time.Second)
 	defer queryCancel()
 	req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
 	req.Header.Set("User-Agent", "go-ramjet-bot")
+	req.Header.Del("Accept-Encoding")
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
@@ -312,7 +313,7 @@ func fetchURLContent(ctx context.Context, url string) (content []byte, err error
 
 // embeddingUrlContent if user has mentioned some url in message,
 // try to fetch and embed content of url into the tail of message.
-func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.UserConfig) {
+func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserConfig) {
 	if len(r.Messages) == 0 {
 		return
 	}
@@ -343,7 +344,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 	for _, url := range urls {
 		url := url
 		pool.Go(func() (err error) {
-			content, err := fetchURLContent(ctx, url)
+			content, err := fetchURLContent(gctx, url)
 			if err != nil {
 				return errors.Wrap(err, "fetch url content")
 			}
@@ -358,7 +359,7 @@ func (r *FrontendReq) embeddingUrlContent(ctx context.Context, user *config.User
 				ext = ".html" // default
 			}
 
-			auxiliary, err := queryChunks(ctx, queryChunksArgs{
+			auxiliary, err := queryChunks(gctx, queryChunksArgs{
 				user:    user,
 				query:   *lastUserPrompt,
 				ext:     ext,
@@ -405,7 +406,7 @@ type queryChunksArgs struct {
 	content []byte
 }
 
-func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err error) {
+func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err error) {
 	log.Logger.Debug("query ramjet to search chunks",
 		zap.String("ext", args.ext))
 
@@ -428,13 +429,17 @@ func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err 
 
 	queryChunkURL := fmt.Sprintf("%s/gptchat/query/chunks", ramjetURL)
 
-	queryCtx, queryCancel := context.WithTimeout(ctx, 180*time.Second)
+	queryCtx, queryCancel := context.WithTimeout(gctx.Request.Context(), 180*time.Second)
 	defer queryCancel()
 	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, queryChunkURL, bytes.NewReader(postBody))
 	if err != nil {
 		return "", errors.Wrapf(err, "new request %q", queryChunkURL)
 	}
 	req.Header.Set("Authorization", "Bearer "+args.user.OpenaiToken)
+
+	if err := setUserAuth(gctx, req); err != nil {
+		return "", errors.Wrap(err, "set user auth")
+	}
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
@@ -465,7 +470,7 @@ func queryChunks(ctx context.Context, args queryChunksArgs) (result string, err 
 	return respData.Results, nil
 }
 
-func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
+func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
@@ -484,7 +489,7 @@ func bodyChecker(ctx context.Context, user *config.UserConfig, body io.ReadClose
 	}
 
 	if ramjetURL != "" {
-		userReq.embeddingUrlContent(ctx, user)
+		userReq.embeddingUrlContent(gctx, user)
 	}
 
 	return userReq, err

@@ -26,16 +26,16 @@ func AbortErr(ctx *gin.Context, err error) bool {
 	return true
 }
 
-func getUserByAuthHeader(ctx *gin.Context) (user *config.UserConfig, err error) {
-	userToken := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
+func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
+	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
 	if userToken == "" {
 		return nil, errors.New("empty token")
 	}
 
-	return getUserByToken(ctx, userToken)
+	return getUserByToken(userToken)
 }
 
-func getUserByToken(ctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
+func getUserByToken(userToken string) (user *config.UserConfig, err error) {
 	userToken = strings.TrimSpace(strings.TrimPrefix(userToken, "Bearer "))
 	if userToken == "" {
 		return nil, errors.New("empty token")
