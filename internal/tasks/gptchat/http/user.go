@@ -3,11 +3,12 @@ package http
 import (
 	"net/http"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 // GetCurrentUser get current user

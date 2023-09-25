@@ -3,6 +3,8 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"sync"
 
@@ -143,12 +145,19 @@ func (c *UserConfig) Valid() error {
 		return errors.New("token is empty")
 	}
 
+	if c.UserName == "" {
+		hashed := sha256.Sum256([]byte(c.Token))
+		c.UserName = hex.EncodeToString(hashed[:])[:16]
+	}
+
 	if c.EnableExternalImageBilling {
 		if c.ExternalImageBillingUID == "" {
-			return errors.New("external_image_billing_uid should not be empty if enable_external_image_billing is true")
+			return errors.Errorf("%q's external_image_billing_uid should not be empty "+
+				"if enable_external_image_billing is true", c.UserName)
 		}
 	}
 
+	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
 	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
 	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
 	c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
