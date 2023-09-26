@@ -26,7 +26,7 @@ FROM debian:bullseye
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates haveged \
-    libappindicator1 fonts-liberation # for google-chrome \
+    libappindicator1 fonts-liberation xdg-utils # for google-chrome \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
