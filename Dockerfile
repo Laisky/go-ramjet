@@ -22,7 +22,7 @@ RUN go build -a --ldflags '-extldflags "-static"' main.go
 FROM debian:bullseye
 
 RUN apt-get update
-RUN apt-get install -y --no-install-recommends ca-certificates haveged \
+RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     # for google-chrome
     # libappindicator1 fonts-liberation xdg-utils wget \
     # libasound2 libatk-bridge2.0-0 libatspi2.0-0 libcurl3-gnutls libcurl3-nss \
