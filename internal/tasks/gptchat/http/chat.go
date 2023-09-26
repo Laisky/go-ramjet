@@ -309,7 +309,7 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	}
 
 	if bodyContent, err := extractHTMLBody(content); err != nil {
-		log.Logger.Error("extract html body", zap.Error(err))
+		log.Logger.Warn("extract html body", zap.Error(err))
 	} else {
 		content = bodyContent
 	}
