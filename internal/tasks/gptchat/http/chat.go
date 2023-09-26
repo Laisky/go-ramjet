@@ -21,6 +21,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
+	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -307,8 +308,47 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return nil, errors.Wrap(err, "read response body")
 	}
 
+	if bodyContent, err := extractHTMLBody(content); err != nil {
+		log.Logger.Error("extract html body", zap.Error(err))
+	} else {
+		content = bodyContent
+	}
+
 	urlContentCache.Store(url, content) // save cache
 	return content, nil
+}
+
+// findHTMLBody find html body recursively
+func findHTMLBody(n *html.Node) *html.Node {
+	if n.Type == html.ElementNode && n.Data == "body" {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if body := findHTMLBody(c); body != nil {
+			return body
+		}
+	}
+	return nil
+}
+
+// extractHTMLBody extract body from html
+func extractHTMLBody(content []byte) (bodyContent []byte, err error) {
+	parsedHTML, err := html.Parse(bytes.NewReader(content))
+	if err != nil {
+		return nil, errors.Wrap(err, "parse html")
+	}
+
+	body := findHTMLBody(parsedHTML)
+	if body == nil {
+		return nil, errors.New("no body found")
+	}
+
+	var out bytes.Buffer
+	if err := html.Render(&out, body); err != nil {
+		return nil, errors.Wrap(err, "render html")
+	}
+
+	return out.Bytes(), nil
 }
 
 // embeddingUrlContent if user has mentioned some url in message,
