@@ -272,8 +272,8 @@ const (
 )
 
 var (
-	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
 	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
+	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
 )
 
 // fetchURLContent fetch url content
@@ -284,34 +284,30 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return content, nil
 	}
 
-	log.Logger.Debug("dynamic fetch mentioned url", zap.String("url", url))
-	queryCtx, queryCancel := context.WithTimeout(gctx.Request.Context(), 20*time.Second)
-	defer queryCancel()
-	req, err := http.NewRequestWithContext(queryCtx, http.MethodGet, url, nil)
+	ctx, cancel := context.WithTimeout(gctx.Request.Context(), 20*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
 	req.Header.Set("User-Agent", "go-ramjet-bot")
-	req.Header.Del("Accept-Encoding")
-
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", url)
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
+	contentType := resp.Header.Get("Content-Type")
+	switch {
+	case strings.Contains(contentType, "text/html") ||
+		strings.Contains(contentType, "application/xhtml+xml"):
+		content, err = fetchDynamicURLContent(ctx, url)
+	default:
+		content, err = fetchStaticURLContent(ctx, url)
 	}
-
-	if content, err = io.ReadAll(resp.Body); err != nil {
-		return nil, errors.Wrap(err, "read response body")
-	}
-
-	if bodyContent, err := extractHTMLBody(content); err != nil {
-		log.Logger.Warn("extract html body", zap.Error(err))
-	} else {
-		content = bodyContent
+	if err != nil {
+		return nil, errors.Wrapf(err, "fetch url %q", url)
 	}
 
 	urlContentCache.Store(url, content) // save cache

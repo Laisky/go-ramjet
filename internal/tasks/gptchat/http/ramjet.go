@@ -81,7 +81,7 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	req.Header.Del("Accept-Encoding")
 
 	// set token
-	cost := db.Price(0)
+	var cost db.Price
 	{
 		cost = db.PriceTxt2Image
 		token := user.OpenaiToken
