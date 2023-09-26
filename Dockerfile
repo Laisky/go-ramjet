@@ -28,16 +28,17 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     # libasound2 libatk-bridge2.0-0 libatspi2.0-0 libcurl3-gnutls libcurl3-nss \
     # libcurl4 libcurl3 libdrm2 libgbm1 libgtk-3-0 libgtk-4-1 libnspr4 libnss3 \
     # libu2f-udev libvulkan1 libxkbcommon0 \
-    && update-ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
+    && update-ca-certificates
 
 # install google-chrome
 ENV PATH=/usr/local/bin:$PATH
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt install google-chrome-stable_current_amd64.deb \
+    && apt install -y ./google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
+
+RUN rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
 
 COPY --from=gobuild /goapp/main /app/go-ramjet
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
