@@ -35,7 +35,6 @@ WORKDIR /app
 
 # install google-chrome
 ENV PATH=/usr/local/bin:$PATH
-COPY --from=gobuild /goapp/google-chrome-stable_current_amd64.deb .
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
     && apt install google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
