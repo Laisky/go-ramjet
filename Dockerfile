@@ -1,8 +1,7 @@
 FROM golang:1.21.1-bullseye AS gobuild
 
 # install dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends g++ make gcc git \
+RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
     build-essential ca-certificates curl \
     && update-ca-certificates
 
@@ -13,8 +12,6 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
-RUN curl -O https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-
 # static build
 ADD . .
 ENV GOOS=linux
@@ -24,9 +21,13 @@ RUN go build -a --ldflags '-extldflags "-static"' main.go
 # copy executable file and certs to a pure container
 FROM debian:bullseye
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates haveged \
-    libappindicator1 fonts-liberation xdg-utils # for google-chrome \
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends ca-certificates haveged \
+    # for google-chrome
+    # libappindicator1 fonts-liberation xdg-utils wget \
+    # libasound2 libatk-bridge2.0-0 libatspi2.0-0 libcurl3-gnutls libcurl3-nss \
+    # libcurl4 libcurl3 libdrm2 libgbm1 libgtk-3-0 libgtk-4-1 libnspr4 libnss3 \
+    # libu2f-udev libvulkan1 libxkbcommon0 \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -35,7 +36,8 @@ WORKDIR /app
 # install google-chrome
 ENV PATH=/usr/local/bin:$PATH
 COPY --from=gobuild /goapp/google-chrome-stable_current_amd64.deb .
-RUN dpkg -i google-chrome-stable_current_amd64.deb \
+RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt install google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
 
 COPY --from=gobuild /goapp/main /app/go-ramjet
