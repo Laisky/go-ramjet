@@ -31,11 +31,9 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     && update-ca-certificates
 
 # install google-chrome
-ENV PATH=/usr/local/bin:$PATH
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
     && apt install -y ./google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
-
 RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
