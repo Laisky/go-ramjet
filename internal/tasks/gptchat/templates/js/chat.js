@@ -468,7 +468,7 @@ function parseChatResp(chatmodel, payload) {
     }
 }
 
-const httpsRegexp = /\bhttps:\/\/\S+$/;
+const httpsRegexp = /\bhttps:\/\/\S+/;
 
 /**
  * extract https urls from reqPrompt and pin them to the chat conservation window
