@@ -13,6 +13,8 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
+RUN curl -O https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
 # static build
 ADD . .
 ENV GOOS=linux
@@ -32,8 +34,8 @@ WORKDIR /app
 
 # install google-chrome
 ENV PATH=/usr/local/bin:$PATH
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && dpkg -i google-chrome-stable_current_amd64.deb \
+COPY --from=gobuild /goapp/google-chrome-stable_current_amd64.deb .
+RUN dpkg -i google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
 
 COPY --from=gobuild /goapp/main /app/go-ramjet
