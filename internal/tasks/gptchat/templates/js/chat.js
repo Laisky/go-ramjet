@@ -1045,31 +1045,29 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
             if (!isHistory) {
                 waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                            <div class="row">
-                                <div class="col-1">${robot_icon}</div>
-                                <div class="col-10 text-start ai-response" data-status="waiting">
-                                    <p dir="auto" class="card-text placeholder-glow">
-                                        <span class="placeholder col-7"></span>
-                                        <span class="placeholder col-4"></span>
-                                        <span class="placeholder col-4"></span>
-                                        <span class="placeholder col-6"></span>
-                                        <span class="placeholder col-8"></span>
-                                    </p>
-                                </div>
+                            <div class="col-1">${robot_icon}</div>
+                            <div class="col-10 text-start ai-response" data-status="waiting">
+                                <p dir="auto" class="card-text placeholder-glow">
+                                    <span class="placeholder col-7"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-4"></span>
+                                    <span class="placeholder col-6"></span>
+                                    <span class="placeholder col-8"></span>
+                                </p>
                             </div>
                         </div>`
             }
 
             chatEleHtml = `
-            <div id="${chatID}">
-                <div class="container-fluid row role-human" data-chatid="${chatID}">
-                    <div class="col-1">🤔️</div>
-                    <div class="col-10 text-start"><pre>${text}</pre></div>
-                    <div class="col-1">
-
-                        <div class="col-1 d-flex">
-                            <i class="bi bi-pencil-square"></i>
-                            <i class="bi bi-trash"></i>
+                <div id="${chatID}">
+                    <div class="container-fluid row role-human" data-chatid="${chatID}">
+                        <div class="col-1">🤔️</div>
+                        <div class="col-9 text-start"><pre>${text}</pre></div>
+                        <div class="col-2">
+                            <div class="col-1 d-flex control">
+                                <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-trash"></i>
+                            </div>
                         </div>
                     </div>
                     ${waitAI}
@@ -1149,25 +1147,25 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                 let newText = chatEle.querySelector(`.role-human textarea`).value;
                 chatEle.innerHTML = `
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
-                    <div class="col-1">🤔️</div>
-                    <div class="col-10 text-start"><pre>${newText}</pre></div>
-                        <div class="col-1 d-flex">
-                        <i class="bi bi-pencil-square"></i>
-                        <i class="bi bi-trash"></i>
+                        <div class="col-1">🤔️</div>
+                        <div class="col-9 text-start"><pre>${newText}</pre></div>
+                        <div class="col-2 d-flex control">
+                            <i class="bi bi-pencil-square"></i>
+                            <i class="bi bi-trash"></i>
                         </div>
-                        </div>
-                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                    </div>
+                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-1">${robot_icon}</div>
                         <div class="col-11 text-start ai-response" data-status="waiting">
                             <p class="card-text placeholder-glow">
-                            <span class="placeholder col-7"></span>
-                            <span class="placeholder col-4"></span>
-                            <span class="placeholder col-4"></span>
-                            <span class="placeholder col-6"></span>
-                            <span class="placeholder col-8"></span>
+                                <span class="placeholder col-7"></span>
+                                <span class="placeholder col-4"></span>
+                                <span class="placeholder col-4"></span>
+                                <span class="placeholder col-6"></span>
+                                <span class="placeholder col-8"></span>
                             </p>
-                            </div>
-                            </div>`;
+                        </div>
+                    </div>`;
                 chatEle.querySelector(`.role-ai`).dataset.status = "waiting";
 
                 // bind delete and edit button

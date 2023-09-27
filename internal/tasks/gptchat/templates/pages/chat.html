@@ -1,10 +1,11 @@
 {{define "header"}}
 <style>
-    .modal.show .modal-content{
+    .modal.show .modal-content {
         z-index: 1100;
     }
 
-    #singleInputModal, #deleteCheckModal {
+    #singleInputModal,
+    #deleteCheckModal {
         z-index: 1500;
     }
 
@@ -44,13 +45,17 @@
         position: relative;
     }
 
-    #chatContainer .chatManager .conservations .role-human .bi-trash {
-        padding-left: 5px;
+    #chatContainer .chatManager .conservations .row {
+        margin: 0px;
+        padding: 0px;
     }
 
-    #chatContainer .chatManager .conservations .row {
-        margin-right: 0px;
-        padding-right: 0px;
+    #chatContainer .chatManager .conservations .row>* {
+        padding-left: 0px;
+    }
+
+    #chatContainer .chatManager .conservations .role-human .bi-trash {
+        padding-left: 5px;
     }
 
     /* #chatContainer .chatManager .conservations .role-human {
@@ -70,7 +75,11 @@
 
     #chatContainer .chatManager .conservations .role-ai {
         margin-bottom: 5px;
-        /* border-bottom-style: dotted; */
+    }
+
+    #chatContainer .chatManager .conservations .role-ai .ai-response p {
+        margin-bottom: 0.5em;
+        margin-top: 0.5em;
     }
 
     #chatContainer .chatManager .conservations .card-body pre {
@@ -104,6 +113,7 @@
         max-width: 85%;
         min-width: 600px;
     }
+
     #modal-pdfchat .modal-body .input-group,
     #modal-pdfchat .modal-body .mb-3 {
         margin-bottom: 3px !important;
@@ -112,24 +122,27 @@
     #modal-pdfchat div[data-field="buttons"] .btn {
         border-radius: 0px;
     }
+
     #modal-pdfchat div[data-field="dataset"] {
         border: 1px solid rgb(133, 124, 124);
         max-height: 600px;
         overflow: scroll;
     }
+
     #modal-pdfchat div[data-field="dataset"] .row,
     #modal-pdfchat div[data-field="dataset"] .container-fluid {
         padding-left: 0px;
         padding-right: 0px;
     }
+
     #modal-pdfchat div[data-field="dataset"] label[for="flexSwitchCheckChecked"] {
         max-width: 130px;
         word-break: break-all;
     }
+
     #modal-pdfchat div[data-field="dataset"] .dataset-item .bi-trash {
         cursor: pointer;
     }
-
 </style>
 {{end}}
 
@@ -237,7 +250,8 @@
                 </div>
 
 
-                <textarea dir="auto" class="mb-1 form-control prompt-content" rows="5" style="font-size: small;"></textarea>
+                <textarea dir="auto" class="mb-1 form-control prompt-content" rows="5"
+                    style="font-size: small;"></textarea>
                 <div class="prompt-labels" style="max-height: 400px; overflow-y: scroll;">
                     <!-- fill prompts from datasource -->
                 </div>
@@ -272,10 +286,13 @@
                     <div class="input-group mb-3" data-field="buttons">
                         <div class="btn-group" role="group" aria-label="Basic outlined example">
                             <button type="button" class="btn btn-outline-primary" data-fn="upload">Upload File</button>
-                            <button type="button" class="btn btn-outline-primary" data-fn="refresh">List Dataset</button>
+                            <button type="button" class="btn btn-outline-primary" data-fn="refresh">List
+                                Dataset</button>
 
                             <div class="dropdown">
-                                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="true">ChatBot</button>
+                                <button class="btn btn-outline-primary dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    data-bs-auto-close="true">ChatBot</button>
                                 <ul class="dropdown-menu">
                                     <li><a class="dropdown-item" href="#" data-fn="build-bot">Build</a></li>
                                     <li><a class="dropdown-item" href="#" data-fn="share-bot">Share</a></li>
