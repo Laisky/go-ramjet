@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -14,7 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
@@ -98,7 +98,7 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserTotalQuota(gctx.Request.Context(), user, cost); err != nil {
+	if err := checkUserExternalBilling(gctx.Request.Context(), user, cost); err != nil {
 		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 
@@ -174,8 +174,13 @@ func GetUserInternalBill(ctx context.Context,
 	return bill, nil
 }
 
-// checkUserTotalQuota save and check billing for text-to-image models
-func checkUserTotalQuota(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
+// checkUserExternalBilling save and check billing for text-to-image models
+//
+// # Steps
+//  1. get user's current quota from external billing api
+//  2. check if user has enough quota
+//  3. update user's quota
+func checkUserExternalBilling(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
 	logger := log.Logger.Named("openai.billing")
 	if !user.EnableExternalImageBilling {
 		logger.Debug("skip billing for user", zap.String("username", user.UserName))
@@ -185,58 +190,91 @@ func checkUserTotalQuota(ctx context.Context, user *config.UserConfig, cost db.P
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	openaiDB, err := db.GetOpenaiDB()
-	if err != nil {
-		return errors.Wrap(err, "get openai db")
-	}
+	// openaiDB, err := db.GetOpenaiDB()
+	// if err != nil {
+	// 	return errors.Wrap(err, "get openai db")
+	// }
 
-	billingCol := openaiDB.GetCol("billing")
+	// billingCol := openaiDB.GetCol("billing")
 
-	// create index
-	if name, err := billingCol.Indexes().CreateOne(ctx,
-		mongo.IndexModel{Keys: bson.D{
-			{Key: "username", Value: 1},
-			{Key: "type", Value: 1},
-		},
-		}); err != nil {
-		logger.Warn("create index for openai.billing", zap.String("name", name), zap.Error(err))
-	}
+	// // create index
+	// if name, err := billingCol.Indexes().CreateOne(ctx,
+	// 	mongo.IndexModel{Keys: bson.D{
+	// 		{Key: "username", Value: 1},
+	// 		{Key: "type", Value: 1},
+	// 	},
+	// 	}); err != nil {
+	// 	logger.Warn("create index for openai.billing", zap.String("name", name), zap.Error(err))
+	// }
 
-	// get current quota
-	bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
-	if err != nil {
-		return errors.Wrapf(err, "get billing for user %q", user.UserName)
-	}
+	// // get current quota
+	// bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
+	// if err != nil {
+	// 	return errors.Wrapf(err, "get billing for user %q", user.UserName)
+	// }
 
-	externalBalanceResp, err := GetUserExternalBillingQuota(ctx, user)
+	balanceResp, err := GetUserExternalBillingQuota(ctx, user)
 	if err != nil {
 		return errors.Wrapf(err, "get billing for user %q", user.UserName)
 	}
 
 	// check balance
-	if externalBalanceResp.Data.RemainQuota <= bill.UsedQuota+db.PriceTxt2Image {
-		return errors.Errorf("user %q has not enough quota", user.UserName)
+	if balanceResp.Data.RemainQuota <= cost {
+		return errors.Errorf("user %q has not enough quota, remains %d, need %d",
+			user.UserName, balanceResp.Data.RemainQuota, cost)
+	}
+
+	// push cost to remote billing
+	var reqBody bytes.Buffer
+	if err = json.NewEncoder(&reqBody).Encode(
+		map[string]any{
+			"id":             user.ExternalImageBillingUID,
+			"add_used_quota": cost,
+		}); err != nil {
+		return errors.Wrap(err, "marshal request body")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		config.Config.ExternalBillingAPI+"/api/token", &reqBody)
+	if err != nil {
+		return errors.Wrap(err, "push cost to external billing api")
+	}
+	req.Header.Add("Authorization", config.Config.ExternalBillingToken)
+
+	resp, err := httpcli.Do(req) //nolint: bodyclose
+	if err != nil {
+		return errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return errors.Wrap(err, "read body")
+		}
+
+		return errors.Errorf("push cost to external billing api failed [%d]%s",
+			resp.StatusCode, string(respBody))
 	}
 
 	// update or create
-	if cost != 0 {
-		if _, err = billingCol.UpdateOne(ctx,
-			bson.M{
-				"username": user.UserName,
-				"type":     db.BillTypeTxt2Image,
-			},
-			bson.M{
-				"$inc": bson.M{"used_quota": db.PriceTxt2Image.Int()},
-				"$set": bson.M{
-					"username": user.UserName,
-					"type":     db.BillTypeTxt2Image,
-				},
-			},
-			options.Update().SetUpsert(true),
-		); err != nil {
-			return errors.Wrapf(err, "update billing for user %q", user.UserName)
-		}
-	}
+	// if cost != 0 {
+	// 	if _, err = billingCol.UpdateOne(ctx,
+	// 		bson.M{
+	// 			"username": user.UserName,
+	// 			"type":     db.BillTypeTxt2Image,
+	// 		},
+	// 		bson.M{
+	// 			"$inc": bson.M{"used_quota": db.PriceTxt2Image.Int()},
+	// 			"$set": bson.M{
+	// 				"username": user.UserName,
+	// 				"type":     db.BillTypeTxt2Image,
+	// 			},
+	// 		},
+	// 		options.Update().SetUpsert(true),
+	// 	); err != nil {
+	// 		return errors.Wrapf(err, "update billing for user %q", user.UserName)
+	// 	}
+	// }
 
 	return nil
 }
