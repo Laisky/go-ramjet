@@ -7,7 +7,6 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -38,15 +37,12 @@ func GetCurrentUserQuota(ctx *gin.Context) {
 		log.Logger.Error("get user external billing quota", zap.Error(err))
 	}
 
-	internalBill, err := GetUserInternalBill(ctx.Request.Context(), user, db.BillTypeTxt2Image)
-	if err != nil {
-		log.Logger.Error("get user internal billing quota", zap.Error(err))
-	}
+	// internalBill, err := GetUserInternalBill(ctx.Request.Context(), user, db.BillTypeTxt2Image)
+	// if err != nil {
+	// 	log.Logger.Error("get user internal billing quota", zap.Error(err))
+	// }
 
 	ctx.JSON(http.StatusOK, map[string]any{
 		"external": externalBill,
-		"internal": map[string]any{
-			"txt2image": internalBill,
-		},
 	})
 }

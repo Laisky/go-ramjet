@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,10 +226,15 @@ func checkUserExternalBilling(ctx context.Context, user *config.UserConfig, cost
 	}
 
 	// push cost to remote billing
+	externalUID, err := strconv.Atoi(user.ExternalImageBillingUID)
+	if err != nil {
+		return errors.Wrapf(err, "get billing for user %q", user.UserName)
+	}
+
 	var reqBody bytes.Buffer
 	if err = json.NewEncoder(&reqBody).Encode(
 		map[string]any{
-			"id":               user.ExternalImageBillingUID,
+			"id":               externalUID,
 			"add_used_quota":   cost,
 			"add_remain_quota": -cost,
 		}); err != nil {
@@ -256,6 +262,9 @@ func checkUserExternalBilling(ctx context.Context, user *config.UserConfig, cost
 		return errors.Errorf("push cost to external billing api failed [%d]%s",
 			resp.StatusCode, string(respBody))
 	}
+	logger.Info("push cost to external billing api success",
+		zap.String("username", user.UserName),
+		zap.Int("cost", cost.Int()))
 
 	// update or create
 	// if cost != 0 {
