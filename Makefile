@@ -19,3 +19,7 @@ lint:
 .PHONY: changelog
 changelog:
 	./.scripts/generate_changelog.sh
+
+.PHONY
+gen:
+	sass ./internal/tasks/gptchat/templates/scss

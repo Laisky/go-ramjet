@@ -1,0 +1,152 @@
+.modal.show .modal-content {
+    z-index: 1100;
+}
+
+#singleInputModal,
+#deleteCheckModal {
+    z-index: 1500;
+}
+
+#chatContainer {
+    .pinned-refs {
+        z-index: 1000;
+        background-color: #d1d1d1;
+        position: absolute;
+        left: 5px;
+        top: 5px;
+        max-width: 50%;
+        overflow: hidden;
+        text-align: left;
+    }
+
+    .pinned-refs p {
+        padding-left: 5px;
+        padding-right: 5px;
+        margin-bottom: 0px;
+        text-wrap: nowrap;
+    }
+
+    .pinned-refs p .bi-trash {
+        cursor: pointer;
+    }
+
+    .chatManager {
+        padding: 0px;
+
+        .alert {
+            margin-bottom: 1px;
+            z-index: 1099;
+        }
+
+        .conservations {
+            padding: 0px;
+            position: relative;
+
+            .row {
+                margin: 0px;
+                padding: 0px;
+
+                >* {
+                    padding-left: 0px;
+                }
+            }
+
+            .role-human {
+                pre {
+                    margin-bottom: 3px;
+                    font-size: 0.9em;
+                    white-space: pre-wrap;
+                }
+
+                .control {
+                    flex-direction: row-reverse;
+
+                    .bi-trash {
+                        padding-left: 5px;
+                    }
+
+                    .bi-pencil-square,
+                    .bi-trash {
+                        cursor: pointer;
+                    }
+                }
+            }
+
+            .role-ai {
+                margin-bottom: 5px;
+
+                .ai-response p {
+                    margin-bottom: 0.5em;
+                    margin-top: 0.5em;
+                }
+            }
+
+            .card-body pre {
+                overflow-wrap: break-word;
+                white-space: pre-wrap;
+            }
+
+            .btn.reload {
+                max-width: 85px;
+                margin-bottom: 5px;
+            }
+        }
+
+        .card-footer {
+            position: relative;
+
+            .scroll-down {
+                position: absolute;
+                top: -60px;
+                right: 30px;
+                z-index: 1000;
+                font-size: larger;
+                cursor: pointer;
+            }
+        }
+    }
+
+    .code-toolbar {
+        font-size: small;
+    }
+}
+
+#modal-pdfchat {
+    .modal-dialog {
+        max-width: 85%;
+        min-width: 600px;
+    }
+
+    .modal-body {
+
+        .input-group,
+        .mb-3 {
+            margin-bottom: 3px !important;
+        }
+    }
+
+    div[data-field="buttons"] .btn {
+        border-radius: 0px;
+    }
+
+    div[data-field="dataset"] {
+        border: 1px solid rgb(133, 124, 124);
+        max-height: 600px;
+        overflow: scroll;
+
+        .row,
+        .container-fluid {
+            padding-left: 0px;
+            padding-right: 0px;
+        }
+
+        label[for="flexSwitchCheckChecked"] {
+            max-width: 130px;
+            word-break: break-all;
+        }
+
+        .dataset-item .bi-trash {
+            cursor: pointer;
+        }
+    }
+}

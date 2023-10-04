@@ -21,13 +21,14 @@ import (
 	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
 	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
 	ipartials "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/partials"
+	icss "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/scss"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
 	httpcli     *http.Client
 	staticFiles struct {
-		LibJs, SiteJs, DataJs *staticFile
+		LibJs, SiteJs, DataJs, CSS *staticFile
 	}
 )
 
@@ -51,16 +52,11 @@ func SetupHTTPCli() (err error) {
 		return errors.Wrap(err, "new http client")
 	}
 
-	// FIXME: remove this
-	// httpcli.Transport = &http.Transport{
-	// 	DisableCompression: true,
-	// }
-
 	return nil
 }
 
 type staticFile struct {
-	Name        string
+	Name, Ext   string
 	Content     []byte
 	Hash        string
 	ContentType string
@@ -69,11 +65,13 @@ type staticFile struct {
 func prepareStaticFiles() {
 	staticFiles.LibJs = &staticFile{
 		Name:        "libs",
+		Ext:         ".js",
 		ContentType: "application/javascript",
 		Content:     ijs.Libs,
 	}
 	staticFiles.SiteJs = &staticFile{
 		Name:        "sites",
+		Ext:         ".js",
 		ContentType: "application/javascript",
 		Content: bytes.Join([][]byte{
 			ijs.Common, ijs.Chat,
@@ -81,8 +79,15 @@ func prepareStaticFiles() {
 	}
 	staticFiles.DataJs = &staticFile{
 		Name:        "data",
+		Ext:         ".js",
 		ContentType: "application/javascript",
 		Content:     ijs.ChatPrompts,
+	}
+	staticFiles.CSS = &staticFile{
+		Name:        "sites",
+		Ext:         ".css",
+		ContentType: "text/css",
+		Content:     icss.SitesCSS,
 	}
 
 	hasher := sha1.New()
@@ -90,11 +95,12 @@ func prepareStaticFiles() {
 		staticFiles.LibJs,
 		staticFiles.SiteJs,
 		staticFiles.DataJs,
+		staticFiles.CSS,
 	} {
 		hasher.Reset()
 		hasher.Write(v.Content)
 		v.Hash = fmt.Sprintf("%x", hasher.Sum(nil))[:7]
-		v.Name = fmt.Sprintf("%s-%s.js", v.Name, v.Hash)
+		v.Name = fmt.Sprintf("%s-%s%s", v.Name, v.Hash, v.Ext)
 	}
 }
 
@@ -104,6 +110,7 @@ func RegisterStatic(g gin.IRouter) {
 		staticFiles.LibJs,
 		staticFiles.SiteJs,
 		staticFiles.DataJs,
+		staticFiles.CSS,
 	} {
 		sf := sf
 		g.GET(fmt.Sprintf("/%s", sf.Name), func(ctx *gin.Context) {
@@ -157,9 +164,9 @@ func Chat(ctx *gin.Context) {
 		SeeJs, ShowdownJs, BootstrapIcons,
 		PrismJs, PrismCss,
 		FuseJs string
-		LibJs, SiteJs, DataJs string
-		Version               string
-		GaCode                string
+		LibJs, SiteJs, DataJs, SiteCss string
+		Version                        string
+		GaCode                         string
 	}{
 		DataJSON:       injectDataPayload,
 		BootstrapJs:    iconfig.Config.StaticLibs["bootstrap_js"],
@@ -173,6 +180,7 @@ func Chat(ctx *gin.Context) {
 		DataJs:         staticFiles.DataJs.Name,
 		LibJs:          staticFiles.LibJs.Name,
 		SiteJs:         staticFiles.SiteJs.Name,
+		SiteCss:        staticFiles.CSS.Name,
 		Version:        ts,
 		GaCode:         iconfig.Config.GoogleAnalytics,
 	}

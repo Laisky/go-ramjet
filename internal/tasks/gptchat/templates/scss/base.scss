@@ -1,0 +1,49 @@
+#headerbar .navbar-nav a.dropdown-toggle.active {
+    -webkit-text-stroke: 1px #0063f6;
+}
+
+#hiddenChatConfigSideBar {
+    .system-prompt .input {
+        min-height: 220px;
+        font-size: smaller;
+    }
+
+    .input-group {
+        margin-bottom: 0px !important;
+        padding-top: 1px;
+    }
+
+    .input-group label[for="configStaticContext"] {
+        width: 100%;
+    }
+
+    i.bi {
+        font-size: small;
+    }
+
+    .prompt-shortcuts {
+        span.badge {
+            margin-right: 5px;
+            cursor: pointer;
+            height: 22px;
+
+            .bi.bi-trash {
+                margin-left: 5px;
+            }
+        }
+    }
+
+    .system-prompt {
+
+        .bi.save-prompt,
+        .bi.open-prompt-market {
+            cursor: pointer;
+            margin-left: 5px;
+        }
+    }
+}
+
+#prompt-market .prompt-labels span {
+    cursor: pointer;
+    margin-right: 5px;
+}

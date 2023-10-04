@@ -11,50 +11,7 @@
     <link href="{{.BootstrapCss}}" rel="stylesheet" />
     <link rel="stylesheet" href="{{.BootstrapIcons}}">
     <link href="{{.PrismCss}}" rel="stylesheet" />
-    <style>
-        #headerbar .navbar-nav a.dropdown-toggle.active {
-            -webkit-text-stroke: 1px #0063f6;
-        }
-
-        #hiddenChatConfigSideBar .system-prompt .input {
-            min-height: 220px;
-            font-size: smaller;
-        }
-
-        #hiddenChatConfigSideBar .input-group {
-            margin-bottom: 0px !important;
-            padding-top: 1px;
-        }
-
-        #hiddenChatConfigSideBar .input-group label[for="configStaticContext"] {
-            width: 100%;
-        }
-
-        #hiddenChatConfigSideBar i.bi {
-            font-size: small;
-        }
-
-        #hiddenChatConfigSideBar .prompt-shortcuts span.badge {
-            margin-right: 5px;
-            cursor: pointer;
-            height: 22px;
-        }
-
-        #hiddenChatConfigSideBar .prompt-shortcuts span.badge .bi.bi-trash {
-            margin-left: 5px;
-        }
-
-        #hiddenChatConfigSideBar .system-prompt .bi.save-prompt,
-        #hiddenChatConfigSideBar .system-prompt .bi.open-prompt-market {
-            cursor: pointer;
-            margin-left: 5px;
-        }
-
-        #prompt-market .prompt-labels span {
-            cursor: pointer;
-            margin-right: 5px;
-        }
-    </style>
+    <link href="/static/{{.SiteCss}}" rel="stylesheet" />
     {{block "header" .}}
     {{end}}
 </head>

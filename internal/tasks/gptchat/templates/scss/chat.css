@@ -1,0 +1,121 @@
+.modal.show .modal-content {
+  z-index: 1100;
+}
+
+#singleInputModal,
+#deleteCheckModal {
+  z-index: 1500;
+}
+
+#chatContainer .pinned-refs {
+  z-index: 1000;
+  background-color: #d1d1d1;
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  max-width: 50%;
+  overflow: hidden;
+  text-align: left;
+}
+#chatContainer .pinned-refs p {
+  padding-left: 5px;
+  padding-right: 5px;
+  margin-bottom: 0px;
+  text-wrap: nowrap;
+}
+#chatContainer .pinned-refs p .bi-trash {
+  cursor: pointer;
+}
+#chatContainer .chatManager {
+  padding: 0px;
+}
+#chatContainer .chatManager .alert {
+  margin-bottom: 1px;
+  z-index: 1099;
+}
+#chatContainer .chatManager .conservations {
+  padding: 0px;
+  position: relative;
+}
+#chatContainer .chatManager .conservations .row {
+  margin: 0px;
+  padding: 0px;
+}
+#chatContainer .chatManager .conservations .row > * {
+  padding-left: 0px;
+}
+#chatContainer .chatManager .conservations .role-human pre {
+  margin-bottom: 3px;
+  font-size: 0.9em;
+  white-space: pre-wrap;
+}
+#chatContainer .chatManager .conservations .role-human .control {
+  flex-direction: row-reverse;
+}
+#chatContainer .chatManager .conservations .role-human .control .bi-trash {
+  padding-left: 5px;
+}
+#chatContainer .chatManager .conservations .role-human .control .bi-pencil-square,
+#chatContainer .chatManager .conservations .role-human .control .bi-trash {
+  cursor: pointer;
+}
+#chatContainer .chatManager .conservations .role-ai {
+  margin-bottom: 5px;
+}
+#chatContainer .chatManager .conservations .role-ai .ai-response p {
+  margin-bottom: 0.5em;
+  margin-top: 0.5em;
+}
+#chatContainer .chatManager .conservations .card-body pre {
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+#chatContainer .chatManager .conservations .btn.reload {
+  max-width: 85px;
+  margin-bottom: 5px;
+}
+#chatContainer .chatManager .card-footer {
+  position: relative;
+}
+#chatContainer .chatManager .card-footer .scroll-down {
+  position: absolute;
+  top: -60px;
+  right: 30px;
+  z-index: 1000;
+  font-size: larger;
+  cursor: pointer;
+}
+#chatContainer .code-toolbar {
+  font-size: small;
+}
+
+#modal-pdfchat .modal-dialog {
+  max-width: 85%;
+  min-width: 600px;
+}
+#modal-pdfchat .modal-body .input-group,
+#modal-pdfchat .modal-body .mb-3 {
+  margin-bottom: 3px !important;
+}
+#modal-pdfchat div[data-field=buttons] .btn {
+  border-radius: 0px;
+}
+#modal-pdfchat div[data-field=dataset] {
+  border: 1px solid rgb(133, 124, 124);
+  max-height: 600px;
+  overflow: scroll;
+}
+#modal-pdfchat div[data-field=dataset] .row,
+#modal-pdfchat div[data-field=dataset] .container-fluid {
+  padding-left: 0px;
+  padding-right: 0px;
+}
+#modal-pdfchat div[data-field=dataset] label[for=flexSwitchCheckChecked] {
+  max-width: 130px;
+  word-break: break-all;
+}
+#modal-pdfchat div[data-field=dataset] .dataset-item .bi-trash {
+  cursor: pointer;
+}
+
+/*# sourceMappingURL=chat.css.map */

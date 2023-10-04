@@ -1063,11 +1063,9 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-1">🤔️</div>
                         <div class="col-9 text-start"><pre>${text}</pre></div>
-                        <div class="col-2">
-                            <div class="col-1 d-flex control">
-                                <i class="bi bi-pencil-square"></i>
-                                <i class="bi bi-trash"></i>
-                            </div>
+                        <div class="col-2 d-flex control">
+                            <i class="bi bi-pencil-square"></i>
+                            <i class="bi bi-trash"></i>
                         </div>
                     </div>
                     ${waitAI}

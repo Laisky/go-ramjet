@@ -1,3 +1,12 @@
+FROM node:20 AS nodebuild
+
+RUN npm install -g sass
+WORKDIR /app
+ADD . .
+RUN sass ./internal/tasks/gptchat/templates/scss
+
+# =====================================
+
 FROM golang:1.21.1-bullseye AS gobuild
 
 # install dependencies
@@ -14,9 +23,12 @@ RUN go mod download
 
 # static build
 ADD . .
+COPY --from=nodebuild /app/internal/tasks/gptchat/templates/scss/*.css ./internal/tasks/gptchat/templates/scss/.
 ENV GOOS=linux
 ENV GOARCH=amd64
 RUN go build -a --ldflags '-extldflags "-static"' main.go
+
+# =====================================
 
 # copy executable file and certs to a pure container
 FROM debian:bullseye
