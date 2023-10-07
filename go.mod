@@ -4,10 +4,10 @@ go 1.21
 
 require (
 	github.com/Laisky/errors/v2 v2.0.1
-	github.com/Laisky/gin-middlewares/v5 v5.0.2-0.20230929031132-ab88e35f23b3
+	github.com/Laisky/gin-middlewares/v5 v5.0.3-0.20231007055404-1e0c1ed0f4f5
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.5.2
+	github.com/Laisky/go-utils/v4 v4.5.3-0.20231007034844-0e17fe3e4a58
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
