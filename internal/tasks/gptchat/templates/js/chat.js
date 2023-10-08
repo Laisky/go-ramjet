@@ -756,7 +756,7 @@ async function sendChat2Server(chatID) {
                     `
                 }];
                 let model = ChatModelTurbo35;  // rewrite chat model
-                if (window.IsChatModelAllowed(ChatModelTurbo35_16K)) {
+                if (window.IsChatModelAllowed(ChatModelTurbo35_16K) && !window.OpenaiToken().startsWith("FREETIER-")) {
                     model = ChatModelTurbo35_16K;
                 }
 
