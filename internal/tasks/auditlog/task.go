@@ -25,6 +25,7 @@ func bindTask() {
 		gconfig.Shared.GetString("tasks.auditlog.db.db"),
 		gconfig.Shared.GetString("tasks.auditlog.db.user"),
 		gconfig.Shared.GetString("tasks.auditlog.db.passwd"),
+		gconfig.Shared.GetString("tasks.auditlog.db.col_normal_log"),
 		gconfig.Shared.GetString("tasks.auditlog.db.col_log"),
 		gconfig.Shared.GetString("tasks.auditlog.db.col_task"),
 	)

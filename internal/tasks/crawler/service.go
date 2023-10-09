@@ -62,9 +62,9 @@ func (s *Service) Search(ctx context.Context, text string) (rets []SearchResult,
 
 func (s *Service) CrawlAllPages(ctx context.Context, sitemaps []string) error {
 	startAt := gutils.Clock.GetUTCNow()
-	for _, u := range loadAllURLs(sitemaps) {
+	for _, u := range loadAllURLs(ctx, sitemaps) {
 		log.Logger.Debug("crawl", zap.String("url", u))
-		raw, err := httpGet(u)
+		raw, err := httpGet(ctx, u)
 		if err != nil {
 			log.Logger.Error("crawl page", zap.String("url", u), zap.Error(err))
 			continue
@@ -86,10 +86,10 @@ func (s *Service) CrawlAllPages(ctx context.Context, sitemaps []string) error {
 
 var regexpLoadURLFromSitemap = regexp.MustCompile(`<loc>(.*?)</loc>`)
 
-func loadAllURLs(sitemaps []string) []string {
+func loadAllURLs(ctx context.Context, sitemaps []string) []string {
 	urls := mapset.NewSet[string]()
 	for _, s := range sitemaps {
-		cnt, err := httpGet(s)
+		cnt, err := httpGet(ctx, s)
 		if err != nil {
 			log.Logger.Error("get sitemap", zap.String("url", s), zap.Error(err))
 			continue
@@ -125,8 +125,13 @@ func extractAllText(raw string) string {
 	return result
 }
 
-func httpGet(url string) (string, error) {
-	resp, err := httpCli.Get(url) //nolint: bodyclose
+func httpGet(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", errors.Wrapf(err, "new request")
+	}
+
+	resp, err := httpCli.Do(req) //nolint: bodyclose
 	if err != nil {
 		return "", errors.Wrapf(err, "get url %s", url)
 	}

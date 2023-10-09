@@ -30,6 +30,8 @@ func (r *router) bindHTTP() {
 	grp := web.Server.Group("/auditlog")
 	grp.POST("/log", r.receiveLog)
 	grp.GET("/log", r.listLogs)
+	grp.POST("/normal-log", r.receiveNormalLog)
+	grp.GET("/noamrl-log", r.listNormalLogs)
 }
 
 func (r *router) abortErr(ctx *gin.Context, err error) bool {
@@ -45,12 +47,8 @@ func (r *router) abortErr(ctx *gin.Context, err error) bool {
 }
 
 func (r *router) receiveLog(ctx *gin.Context) {
-	var (
-		err error
-		log = new(Log)
-	)
-	err = ctx.BindJSON(log)
-	if r.abortErr(ctx, err) {
+	log := new(Log)
+	if err := ctx.BindJSON(log); r.abortErr(ctx, err) {
 		return
 	}
 
@@ -60,8 +58,7 @@ func (r *router) receiveLog(ctx *gin.Context) {
 	ctxSave, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
-	err = r.svc.SaveLog(ctxSave, log)
-	if r.abortErr(ctx, err) {
+	if err := r.svc.SaveLog(ctxSave, log); r.abortErr(ctx, err) {
 		return
 	}
 
@@ -72,6 +69,33 @@ func (r *router) receiveLog(ctx *gin.Context) {
 
 func (r *router) listLogs(ctx *gin.Context) {
 	logs, err := r.svc.ListLogs(ctx.Request.Context())
+	if r.abortErr(ctx, err) {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"msg":  "ok",
+		"logs": logs,
+	})
+}
+
+func (r *router) receiveNormalLog(ctx *gin.Context) {
+	log := new(NormalLog)
+	if err := ctx.BindJSON(log); r.abortErr(ctx, err) {
+		return
+	}
+
+	if err := r.svc.SaveNormalLog(ctx.Request.Context(), log); r.abortErr(ctx, err) {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"msg": "ok",
+	})
+}
+
+func (r *router) listNormalLogs(ctx *gin.Context) {
+	logs, err := r.svc.ListNormalLogs(ctx.Request.Context())
 	if r.abortErr(ctx, err) {
 		return
 	}

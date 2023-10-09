@@ -78,7 +78,7 @@ func (s *service) SaveLog(ctx context.Context, logEnt *Log) (err error) {
 func (s *service) ListLogs(ctx context.Context) ([]Log, error) {
 	logs := make([]Log, 0)
 	cur, err := s.db.logCol().Find(ctx, bson.M{},
-		options.Find().SetLimit(500),
+		options.Find().SetLimit(100),
 		options.Find().SetSort(map[string]int{"_id": -1}),
 	)
 	if err != nil {
@@ -169,4 +169,33 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 		zap.Uint32("version", data.Version),
 	)
 	return nil
+}
+
+// SaveNormalLog save log to db
+func (s *service) SaveNormalLog(ctx context.Context, logEnt *NormalLog) (err error) {
+	ret, err := s.db.normalLogCol().InsertOne(ctx, logEnt)
+	if err != nil {
+		return errors.Wrap(err, "insert normal log")
+	}
+
+	s.logger.Debug("save normal log", zap.Any("log", ret.InsertedID))
+	return nil
+}
+
+// ListNormalLogs list all logs
+func (s *service) ListNormalLogs(ctx context.Context) ([]NormalLog, error) {
+	logs := make([]NormalLog, 0)
+	cur, err := s.db.normalLogCol().Find(ctx, bson.M{},
+		options.Find().SetLimit(200),
+		options.Find().SetSort(map[string]int{"_id": -1}),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "find normal logs")
+	}
+
+	if err = cur.All(ctx, &logs); err != nil {
+		return nil, errors.Wrap(err, "get normal logs")
+	}
+
+	return logs, nil
 }

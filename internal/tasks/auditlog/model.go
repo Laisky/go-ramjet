@@ -30,10 +30,21 @@ const (
 	TaskTypeClusterFingerprint TaskType = "cluster_fingerprint"
 )
 
+// Task task for audit
 type Task struct {
 	ID   primitive.ObjectID `bson:"_id,omitempty" json:"-"`
 	Type TaskType           `bson:"type" json:"type"`
 	Data string             `bson:"data" json:"data"`
+}
+
+// NormalLog for normal log
+type NormalLog struct {
+	ID     primitive.ObjectID `bson:"_id,omitempty" json:"-"`
+	Level  string             `bson:"level" json:"level"`
+	Time   time.Time          `bson:"time" json:"time"`
+	Logger string             `bson:"logger" json:"logger"`
+	Caller string             `bson:"caller" json:"caller"`
+	Msg    string             `bson:"msg" json:"msg"`
 }
 
 // Log for audit log
@@ -125,23 +136,37 @@ func (l *Log) ValidRootCA(rootcaPool *x509.CertPool) (err error) {
 type AuditDB struct {
 	db mongo.DB
 	dbName,
-	logColName, taskColName string
+	logColName,
+	normalLogColName,
+	taskColName string
 }
 
 // NewDB new db
 func NewDB(ctx context.Context, addr, dbName, user, pwd,
-	logColName, taskColName string) (b *AuditDB, err error) {
+	normalLogColName, logColName, taskColName string) (b *AuditDB, err error) {
+	if addr == "" ||
+		dbName == "" ||
+		user == "" ||
+		pwd == "" ||
+		normalLogColName == "" ||
+		logColName == "" ||
+		taskColName == "" {
+		return nil, errors.New("empty db config")
+	}
+
 	log.Logger.Info("connect to db",
 		zap.String("user", user),
 		zap.String("addr", addr),
 		zap.String("dbName", dbName),
 		zap.String("logColName", logColName),
+		zap.String("normalLogColName", normalLogColName),
 		zap.String("taskColName", taskColName),
 	)
 	b = &AuditDB{
-		dbName:      dbName,
-		logColName:  logColName,
-		taskColName: taskColName,
+		dbName:           dbName,
+		logColName:       logColName,
+		taskColName:      taskColName,
+		normalLogColName: normalLogColName,
 	}
 	b.db, err = mongo.NewDB(ctx, mongo.DialInfo{
 		Addr:   addr,
@@ -158,6 +183,10 @@ func NewDB(ctx context.Context, addr, dbName, user, pwd,
 
 func (b *AuditDB) logCol() *mongoLib.Collection {
 	return b.db.DB(b.dbName).Collection(b.logColName)
+}
+
+func (b *AuditDB) normalLogCol() *mongoLib.Collection {
+	return b.db.DB(b.dbName).Collection(b.normalLogColName)
 }
 
 func (b *AuditDB) taskCol() *mongoLib.Collection {
