@@ -731,7 +731,7 @@ async function sendChat2Server(chatID) {
             let data = await resp.json();
             if (data && data.text) {
                 responseExtras = `
-                    <p style="margin-bottom: 0; margin-top: -1em;">
+                    <p style="margin-bottom: 0;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
                         </button>
@@ -779,22 +779,6 @@ async function sendChat2Server(chatID) {
                         stop: ["\n\n"]
                     })
                 });
-
-
-                // let rawHTMLResp = `${data.text}\n\n📖: \n\n${combineRefs(data.url)}`;
-                // let rawHTMLRefs = `
-                //     <p style="margin-bottom: 0; margin-top: -1em;">
-                //         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
-                //             > toggle reference
-                //         </button>
-                //     </p>
-                //     <div>
-                //         <div class="collapse" id="chatRef-${chatID}">
-                //             <div class="card card-body">${combineRefs(data.url)}</div>
-                //         </div>
-                //     </div>`
-                // currentAIRespEle.innerHTML = window.Markdown2HTML(data.text) + rawHTMLRefs;
-                // appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
             }
         } catch (err) {
             abortAIResp(err);
