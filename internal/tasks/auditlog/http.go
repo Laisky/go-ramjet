@@ -31,7 +31,7 @@ func (r *router) bindHTTP() {
 	grp.POST("/log", r.receiveLog)
 	grp.GET("/log", r.listLogs)
 	grp.POST("/normal-log", r.receiveNormalLog)
-	grp.GET("/noamrl-log", r.listNormalLogs)
+	grp.GET("/normal-log", r.listNormalLogs)
 }
 
 func (r *router) abortErr(ctx *gin.Context, err error) bool {
