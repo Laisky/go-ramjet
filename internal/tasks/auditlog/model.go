@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gutils "github.com/Laisky/go-utils/v4"
 	gcrypto "github.com/Laisky/go-utils/v4/crypto"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
@@ -38,14 +39,14 @@ type Task struct {
 }
 
 // NormalLog for normal log
-type NormalLog struct {
-	ID     primitive.ObjectID `bson:"_id,omitempty" json:"-"`
-	Level  string             `bson:"level" json:"level"`
-	Time   time.Time          `bson:"time" json:"time"`
-	Logger string             `bson:"logger" json:"logger"`
-	Caller string             `bson:"caller" json:"caller"`
-	Msg    string             `bson:"msg" json:"msg"`
-}
+// type NormalLog struct {
+// 	ID     primitive.ObjectID `bson:"_id,omitempty" json:"-"`
+// 	Level  string             `bson:"level" json:"level"`
+// 	Time   time.Time          `bson:"time" json:"time"`
+// 	Logger string             `bson:"logger" json:"logger"`
+// 	Caller string             `bson:"caller" json:"caller"`
+// 	Msg    string             `bson:"msg" json:"msg"`
+// }
 
 // Log for audit log
 //
@@ -144,6 +145,11 @@ type AuditDB struct {
 // NewDB new db
 func NewDB(ctx context.Context, addr, dbName, user, pwd,
 	normalLogColName, logColName, taskColName string) (b *AuditDB, err error) {
+	normalLogColName = gutils.OptionalVal(&normalLogColName, "normal-logs")
+	dbName = gutils.OptionalVal(&dbName, "auditlog")
+	logColName = gutils.OptionalVal(&logColName, "logs")
+	taskColName = gutils.OptionalVal(&taskColName, "tasks")
+
 	if addr == "" ||
 		dbName == "" ||
 		user == "" ||

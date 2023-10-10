@@ -80,11 +80,12 @@ func (r *router) listLogs(ctx *gin.Context) {
 }
 
 func (r *router) receiveNormalLog(ctx *gin.Context) {
-	log := new(NormalLog)
-	if err := ctx.BindJSON(log); r.abortErr(ctx, err) {
+	log := map[string]any{}
+	if err := ctx.BindJSON(&log); r.abortErr(ctx, err) {
 		return
 	}
 
+	delete(log, "_id")
 	if err := r.svc.SaveNormalLog(ctx.Request.Context(), log); r.abortErr(ctx, err) {
 		return
 	}

@@ -45,7 +45,7 @@ func bindTask() {
 		glog.WithAlertToken(gconfig.Shared.GetString("tasks.auditlog.alert.token")),
 	)
 	if err != nil {
-		logger.Panic("new alert", zap.Error(err))
+		logger.Warn("new alert pusher", zap.Error(err))
 	}
 
 	svc, err := newService(logger, db, rootcaPool, alert)

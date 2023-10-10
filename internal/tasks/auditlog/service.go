@@ -172,7 +172,7 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 }
 
 // SaveNormalLog save log to db
-func (s *service) SaveNormalLog(ctx context.Context, logEnt *NormalLog) (err error) {
+func (s *service) SaveNormalLog(ctx context.Context, logEnt map[string]any) (err error) {
 	ret, err := s.db.normalLogCol().InsertOne(ctx, logEnt)
 	if err != nil {
 		return errors.Wrap(err, "insert normal log")
@@ -183,8 +183,8 @@ func (s *service) SaveNormalLog(ctx context.Context, logEnt *NormalLog) (err err
 }
 
 // ListNormalLogs list all logs
-func (s *service) ListNormalLogs(ctx context.Context) ([]NormalLog, error) {
-	logs := make([]NormalLog, 0)
+func (s *service) ListNormalLogs(ctx context.Context) ([]bson.M, error) {
+	logs := make([]bson.M, 0)
 	cur, err := s.db.normalLogCol().Find(ctx, bson.M{},
 		options.Find().SetLimit(200),
 		options.Find().SetSort(map[string]int{"_id": -1}),
