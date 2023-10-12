@@ -33,7 +33,7 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 		chromedp.Sleep(5 * time.Second), // Wait for the page to load
 		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
 	}); err != nil {
-		panic(err)
+		return nil, errors.Wrapf(err, "run chrome task %q", url)
 	}
 	content = []byte(htmlContent)
 
