@@ -26,7 +26,7 @@ import (
 func RamjetProxyHandler(ctx *gin.Context) {
 	defer gutils.LogErr(ctx.Request.Body.Close, log.Logger)
 	url := ctx.Request.URL
-	targetUrl := ramjetURL + "/" + strings.TrimPrefix(
+	targetUrl := config.Config.RamjetURL + "/" + strings.TrimPrefix(
 		strings.TrimPrefix(url.Path, "/"), "gptchat/ramjet/")
 	targetUrl += "?" + url.RawQuery
 

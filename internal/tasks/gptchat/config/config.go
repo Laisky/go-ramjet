@@ -38,7 +38,8 @@ func SetupConfig() (err error) {
 	}
 
 	if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
-		return errors.New("external_billing_token should not be empty if external_billing_api is set")
+		return errors.New("external_billing_token should not be empty " +
+			"if external_billing_api is set")
 	}
 
 	// fill default
@@ -50,10 +51,17 @@ func SetupConfig() (err error) {
 		&Config.DefaultImageToken, Config.Token)
 	Config.DefaultImageTokenType = gutils.OptionalVal(
 		&Config.DefaultImageTokenType, ImageTokenOpenai)
-	Config.API = strings.TrimRight(gutils.OptionalVal(
-		&Config.API, "https://api.openai.com"), "/")
+	Config.API = gutils.OptionalVal(
+		&Config.API, "https://api.openai.com")
 	Config.ExternalBillingAPI = gutils.OptionalVal(
 		&Config.ExternalBillingAPI, "https://oneapi.laisky.com")
+	Config.RamjetURL = gutils.OptionalVal(
+		&Config.RamjetURL, "https://app.laisky.com")
+
+	// format normalize
+	Config.API = strings.TrimRight(Config.API, "/")
+	Config.ExternalBillingAPI = strings.TrimRight(Config.ExternalBillingAPI, "/")
+	Config.RamjetURL = strings.TrimRight(Config.RamjetURL, "/")
 
 	return nil
 }
@@ -88,6 +96,8 @@ type OpenAI struct {
 	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
 	// ExternalBillingToken (optional) default billing token
 	ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
+	// RamjetURL (optional) ramjet url
+	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 }
 
 type qaChatModel struct {
@@ -157,10 +167,14 @@ func (c *UserConfig) Valid() error {
 		}
 	}
 
+	// fill default
 	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
 	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
 	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
 	c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
+
+	// format normalize
+	c.APIBase = strings.TrimRight(c.APIBase, "/")
 
 	return nil
 }

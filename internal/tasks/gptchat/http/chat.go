@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	urllib "net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,8 +31,6 @@ import (
 var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
-
-var ramjetURL = strings.TrimSuffix(os.Getenv("GPTCHAT_CHUNK_SEARCH_URL"), "/")
 
 // APIHandler handle api request
 func APIHandler(ctx *gin.Context) {
@@ -464,7 +461,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 		return "", errors.Wrap(err, "marshal post body")
 	}
 
-	queryChunkURL := fmt.Sprintf("%s/gptchat/query/chunks", ramjetURL)
+	queryChunkURL := fmt.Sprintf("%s/gptchat/query/chunks", config.Config.RamjetURL)
 
 	queryCtx, queryCancel := context.WithTimeout(gctx.Request.Context(), 180*time.Second)
 	defer queryCancel()
@@ -525,7 +522,7 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
 
-	if ramjetURL != "" {
+	if config.Config.RamjetURL != "" {
 		userReq.embeddingUrlContent(gctx, user)
 	}
 
