@@ -7,7 +7,7 @@ require (
 	github.com/Laisky/gin-middlewares/v5 v5.0.3-0.20231007055404-1e0c1ed0f4f5
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.5.3-0.20231010024449-b47629fc5e1d
+	github.com/Laisky/go-utils/v4 v4.5.3-0.20231013025446-3e010e9407e4
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
@@ -39,6 +39,8 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/ClickHouse/ch-go v0.53.0 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.8.3 // indirect
+	github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320 // indirect
+	github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a // indirect
 	github.com/Laisky/errors v0.9.2 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.0 // indirect
 	github.com/Laisky/go-utils/v3 v3.5.0 // indirect

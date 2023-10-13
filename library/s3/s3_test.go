@@ -60,7 +60,7 @@ func TestPutEncryptedObject(t *testing.T) {
 	ctx, cli := newTestCli(t)
 	require.NoError(t, err)
 
-	key := "test_encrypted_object_" + gutils.UUID1()
+	key := "test_encrypted_object_" + gutils.UUID7()
 	raw, err := gutils.SecRandomBytesWithLength(4 * 1024 * 1024)
 	require.NoError(t, err)
 

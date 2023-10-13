@@ -70,6 +70,10 @@ github.com/ClickHouse/ch-go v0.53.0/go.mod h1:B9htMJ0hii/zrC2hljUKdnagRBuLqtRG/G
 github.com/ClickHouse/clickhouse-go v1.5.4/go.mod h1:EaI/sW7Azgz9UATzd5ZdZHRUhHgv5+JMS9NSr2smCJI=
 github.com/ClickHouse/clickhouse-go/v2 v2.8.3 h1:R6na3RNq/4vEEwfwkxQYrWOf21T9HMhGmE8mhkhq7TI=
 github.com/ClickHouse/clickhouse-go/v2 v2.8.3/go.mod h1:teXfZNM90iQ99Jnuht+dxQXCuhDZ8nvvMoTJOFrcmcg=
+github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320 h1:lddR7TsA0fUX8Kh+oc01z4GwmCoBveT79zhNLK43xLk=
+github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320/go.mod h1:eTC6ev1JFq+zoOOS5WKuHdBwtihV/9/Ouv3fZ3ufS0A=
+github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a h1:mThF075zgPGTHRfPcRtaHSIKMDAG6Xd82HNazP5yP4I=
+github.com/GoWebProd/uuid7 v0.0.0-20230623091058-5f5954faed6a/go.mod h1:ss8O0hJvHSgtrR6mG2N1LW4gYWwkSX3sVLiS9wA6m/8=
 github.com/Laisky/errors v0.9.2 h1:XT0HJceuw9mk0HMGE4VlbBizSgdJ56Bvyq7qhCa/rcI=
 github.com/Laisky/errors v0.9.2/go.mod h1:4qFjpg18okeh2zj2ZWPmLAAycAXSYm2Q5TbRkjnlUpI=
 github.com/Laisky/errors/v2 v2.0.1 h1:yqCBrRzaP012AMB+7fVlXrP34OWRHrSO/hZ38CFdH84=
@@ -84,8 +88,8 @@ github.com/Laisky/go-gin-prometheus v1.0.0 h1:eWb9jmUqNL2tz0bwt6vWjJHEpglSHJT6qt
 github.com/Laisky/go-gin-prometheus v1.0.0/go.mod h1:3yC0gDd4f79ikEM1eGHLTWSRG0tluOV2mmx/liYLtIA=
 github.com/Laisky/go-utils/v3 v3.5.0 h1:CsPA/mcIHqBnA6I8rF/zDn9iRDE6BFQePrC7c36eNk8=
 github.com/Laisky/go-utils/v3 v3.5.0/go.mod h1:UY8fpnM/YqroAC3cxF2rwaehfX4vQktz9MJYrTxU9kg=
-github.com/Laisky/go-utils/v4 v4.5.3-0.20231010024449-b47629fc5e1d h1:AyIP5C0xXsSL08C7eOXO4kK5GqiNeqLkj7i+Lk5BoN0=
-github.com/Laisky/go-utils/v4 v4.5.3-0.20231010024449-b47629fc5e1d/go.mod h1:4Nex2Mkk/o6g+A3qemQajnQOEca0EOXyaycZSDWT0Jk=
+github.com/Laisky/go-utils/v4 v4.5.3-0.20231013025446-3e010e9407e4 h1:Ika8/CTrTfi5BcVu9V24kgWOqLVGuT6mMUcl2Xnm73A=
+github.com/Laisky/go-utils/v4 v4.5.3-0.20231013025446-3e010e9407e4/go.mod h1:Z0mnyQ2Rd4fNqrFN/ATGbhnE3BnmkclMinBCn5QcSV4=
 github.com/Laisky/graphql v1.0.6 h1:NEULGxfxo+wbsW2OmqBXOMNUGgqo8uFjWNabwuNK10g=
 github.com/Laisky/graphql v1.0.6/go.mod h1:zaKVqXmMQTnTkFJ2AA53oyBWMzlGCnzr3aodKTrtOxI=
 github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4 h1:aEmpytQAWVtHQvwB0yRstYdRJevXtJPOQ8JJxyE4HIY=
