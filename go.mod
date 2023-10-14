@@ -28,7 +28,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/yanyiwu/gojieba v1.3.0
 	go.mongodb.org/mongo-driver v1.12.1
-	golang.org/x/net v0.16.0
+	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.4.0
 	google.golang.org/protobuf v1.31.0
 	gorm.io/driver/clickhouse v0.5.1
