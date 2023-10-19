@@ -96,6 +96,10 @@ SWITCH_FOR_USER:
 			NoLimitImageModels:     true,
 			APIBase:                config.Config.API,
 		}
+
+		if strings.HasPrefix(userToken, "laisky-") {
+			user.APIBase = "https://oneapi.laisky.com"
+		}
 	}
 
 	if err = user.Valid(); err != nil {
