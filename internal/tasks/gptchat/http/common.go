@@ -94,7 +94,7 @@ SWITCH_FOR_USER:
 			NoLimitExpensiveModels: true,
 			NoLimitAllModels:       true,
 			NoLimitImageModels:     true,
-			APIBase:                "https://api.openai.com",
+			APIBase:                config.Config.API,
 		}
 	}
 
