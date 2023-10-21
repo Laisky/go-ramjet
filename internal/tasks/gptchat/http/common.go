@@ -1,12 +1,17 @@
 package http
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Laisky/errors/v2"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -32,10 +37,52 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 		return nil, errors.New("empty token")
 	}
 
-	return getUserByToken(userToken)
+	return getUserByToken(gctx.Request.Context(), userToken)
 }
 
-func getUserByToken(userToken string) (user *config.UserConfig, err error) {
+type oneapiUserResponse struct {
+	TokenID  int    `json:"token_id"`
+	UID      int    `json:"uid"`
+	Username string `json:"username"`
+}
+
+var (
+	cacheGetOneapiUserIDByToken sync.Map
+)
+
+func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err error) {
+	// load from cache
+	if v, ok := cacheGetOneapiUserIDByToken.Load(token); ok {
+		return v.(string), nil
+	}
+
+	url := config.Config.ExternalBillingAPI + "/api/user/get-by-token"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", errors.Wrap(err, "new request")
+	}
+
+	req.Header.Add("Authorization", token)
+	resp, err := httpcli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("bad status code %d", resp.StatusCode)
+	}
+
+	var respData oneapiUserResponse
+	if err = json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		return "", errors.Wrap(err, "decode response")
+	}
+
+	uid = strconv.Itoa(respData.UID)
+	cacheGetOneapiUserIDByToken.Store(token, uid)
+	return uid, nil
+}
+
+func getUserByToken(ctx context.Context, userToken string) (user *config.UserConfig, err error) {
 	userToken = strings.TrimSpace(strings.TrimPrefix(userToken, "Bearer "))
 	if userToken == "" {
 		return nil, errors.New("empty token")
@@ -65,6 +112,33 @@ SWITCH_FOR_USER:
 
 		return nil, errors.Errorf("can not find freetier user %q in settings",
 			config.FreetierUserToken)
+	case strings.HasPrefix(userToken, "laisky-"):
+		username := strings.TrimPrefix(userToken, "laisky-")[:8]
+		log.Logger.Debug("use laisky's oneapi token", zap.String("user", username))
+		user = &config.UserConfig{ // default to openai user
+			UserName:               username,
+			Token:                  userToken,
+			OpenaiToken:            userToken,
+			ImageToken:             config.Config.DefaultImageToken,
+			ImageTokenType:         config.Config.DefaultImageTokenType,
+			AllowedModels:          []string{"*"},
+			IsPaid:                 true,
+			NoLimitExpensiveModels: true,
+			NoLimitAllModels:       true,
+			APIBase:                "https://oneapi.laisky.com",
+		}
+
+		if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
+			log.Logger.Error("get oneapi uid", zap.Error(err))
+			user.EnableExternalImageBilling = false
+			user.NoLimitImageModels = false
+		} else {
+			log.Logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
+			user.EnableExternalImageBilling = true
+			user.ExternalImageBillingUID = oneapiUid
+			user.NoLimitImageModels = true
+		}
+
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
 			if u.Token == userToken {
@@ -95,10 +169,6 @@ SWITCH_FOR_USER:
 			NoLimitAllModels:       true,
 			NoLimitImageModels:     true,
 			APIBase:                config.Config.API,
-		}
-
-		if strings.HasPrefix(userToken, "laisky-") {
-			user.APIBase = "https://oneapi.laisky.com"
 		}
 	}
 

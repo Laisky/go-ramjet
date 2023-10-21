@@ -84,11 +84,11 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	// set token
 	var cost db.Price
 	{
-		cost = db.PriceTxt2Image
 		token := user.OpenaiToken
 
 		// generate image need special token
 		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
+			cost = db.PriceTxt2Image
 			token = user.ImageToken
 			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
 			if err = user.IsModelAllowed(model); err != nil {
