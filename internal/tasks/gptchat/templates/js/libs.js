@@ -149,4 +149,14 @@
         let decompressedBlob = await new Response(ps).blob();
         return await decompressedBlob.text();
     };
+
+    // sanitize html
+    window.sanitizeHTML = (str) => {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    };
 })();

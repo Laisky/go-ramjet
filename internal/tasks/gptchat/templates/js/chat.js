@@ -794,7 +794,9 @@ async function sendChat2Server(chatID) {
             unlockChatInput();
         }
     } else {
-        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">unimplemented model: ${selectedModel}</pre>`;
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p>`
+            + `<pre style="background-color: #f8e8e8; text-wrap: pretty;">`
+            + `unimplemented model: ${sanitizeHTML(selectedModel)}</pre>`;
         unlockChatInput();
         return;
     }
@@ -1111,6 +1113,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
             let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
                 text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
 
+            text = window.sanitizeHTML(text);
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
