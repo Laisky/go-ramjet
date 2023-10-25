@@ -1,3 +1,4 @@
+// Package config provides config for go-ramjet
 package config
 
 import (

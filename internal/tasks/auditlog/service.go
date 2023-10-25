@@ -128,7 +128,7 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 	if err = s.db.taskCol().FindOne(ctx,
 		bson.M{"type": string(TaskTypeClusterFingerprint)}).
 		Decode(task); err != nil {
-		if err == mongoLib.ErrNoDocuments {
+		if errors.Is(err, mongoLib.ErrNoDocuments) {
 			task = &Task{
 				Type: TaskTypeClusterFingerprint,
 			}

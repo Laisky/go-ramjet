@@ -42,9 +42,10 @@ type SearchResult struct {
 func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
 	// search in title
 	titleRets := make([]SearchResult, 0)
-	if cursor, err := d.DB.docusCol().
-		Find(ctx, bson.M{"title": bson.M{"$regex": "(?i)" + text}},
-			options.Find().SetLimit(10)); err != nil {
+	titleRegex := regexp.QuoteMeta(text)
+	if cursor, err := d.DB.docusCol().Find(ctx,
+		bson.M{"title": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &titleRets); err != nil {
 		return nil, errors.Wrap(err, "search")
@@ -52,9 +53,9 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 
 	// search in content
 	contentRets := make([]SearchResult, 0)
-	if cursor, err := d.DB.docusCol().
-		Find(ctx, bson.M{"text": bson.M{"$regex": "(?i)" + text}},
-			options.Find().SetLimit(10)); err != nil {
+	if cursor, err := d.DB.docusCol().Find(ctx,
+		bson.M{"text": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &contentRets); err != nil {
 		return nil, errors.Wrap(err, "search")
