@@ -11,11 +11,17 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-// fetchDynamicURLContent
+var (
+	// chromedpSema chromedp cost too much memory, so limit it
+	chromedpSema = semaphore.NewWeighted(2)
+)
+
+// fetchDynamicURLContent fetch dynamic url content, will render js by chromedp
 func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, err error) {
 	log.Logger.Debug("fetch dynamic url", zap.String("url", url))
 	headers := map[string]any{
@@ -24,6 +30,12 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 
 	chromeCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
+
+	if err = chromedpSema.Acquire(ctx, 1); err != nil {
+		return nil, errors.Wrap(err, "acquire chromedp sema")
+	} else {
+		defer chromedpSema.Release(1)
+	}
 
 	var htmlContent string
 	if err = chromedp.Run(chromeCtx, chromedp.Tasks{
@@ -47,6 +59,7 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 	return content, nil
 }
 
+// fetchStaticURLContent fetch static url content
 func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err error) {
 	log.Logger.Debug("fetch static url", zap.String("url", url))
 
