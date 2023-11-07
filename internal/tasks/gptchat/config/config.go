@@ -283,7 +283,9 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 				model, (price - imageRateLimiter.Len()))
 		}
 	} else if !c.NoLimitExpensiveModels { // then check expensive models
-		if model != "gpt-3.5-turbo" {
+		if !gutils.Contains([]string{ // enum all cheap models
+			"gpt-3.5-turbo",
+		}, model) {
 			// rate limit only support limit by second,
 			// so we consume 60 tokens once to make it limit by minute
 			price := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")

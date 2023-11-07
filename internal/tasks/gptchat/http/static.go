@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -45,6 +46,9 @@ func SetupHTTPCli() (err error) {
 	if gconfig.Shared.GetString("openai.proxy") != "" {
 		log.Logger.Info("use proxy for openai")
 		httpargs = append(httpargs, gutils.WithHTTPClientProxy(iconfig.Config.Proxy))
+	} else if os.Getenv("HTTP_PROXY") != "" {
+		log.Logger.Info("set proxy for openai from env")
+		httpargs = append(httpargs, gutils.WithHTTPClientProxy(os.Getenv("HTTP_PROXY")))
 	}
 
 	httpcli, err = gutils.NewHTTPClient(httpargs...)
