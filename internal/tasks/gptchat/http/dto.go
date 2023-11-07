@@ -180,3 +180,41 @@ type ExternalBillingUserResponse struct {
 		RemainQuota db.Price                  `json:"remain_quota"`
 	} `json:"data"`
 }
+
+// OpenaiCreateImageRequest request to openai image api
+type OpenaiCreateImageRequest struct {
+	Model          string `json:"model"`
+	Prompt         string `json:"prompt"`
+	N              int    `json:"n"`
+	Size           string `json:"size"`
+	Quality        string `json:"quality"`
+	ResponseFormat string `json:"response_format"`
+	Style          string `json:"style"`
+}
+
+// NewOpenaiCreateImageRequest create new request
+func NewOpenaiCreateImageRequest(prompt string) *OpenaiCreateImageRequest {
+	return &OpenaiCreateImageRequest{
+		Model:          "dall-e-3",
+		Prompt:         prompt,
+		N:              1,
+		Size:           "1024x1024",
+		Quality:        "hd",
+		ResponseFormat: "b64_json",
+		Style:          "vivid",
+	}
+}
+
+// OpenaiCreateImageResponse return from openai image api
+type OpenaiCreateImageResponse struct {
+	Created int64 `json:"created"`
+	Data    []struct {
+		Url     string `json:"url"`
+		B64Json string `json:"b64_json"`
+	} `json:"data"`
+}
+
+type ImageHandlerRequest struct {
+	Prompt string `json:"prompt" binding:"required,min=1"`
+	Model  string `json:"model" binding:"required,min=1"`
+}

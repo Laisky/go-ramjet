@@ -34,7 +34,7 @@ func AbortErr(ctx *gin.Context, err error) bool {
 func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
 	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
 	if userToken == "" {
-		return nil, errors.New("empty token")
+		return nil, errors.New("authorization token is empty")
 	}
 
 	return getUserByToken(gctx.Request.Context(), userToken)

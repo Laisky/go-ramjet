@@ -98,12 +98,21 @@ type OpenAI struct {
 	ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
 	// RamjetURL (optional) ramjet url
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
+	// S3 (optional) s3 config
+	S3 s3Config `json:"s3" mapstructure:"s3"`
 }
 
 type qaChatModel struct {
 	Name    string `json:"name" mapstructure:"name"`
 	URL     string `json:"url" mapstructure:"url"`
 	Project string `json:"project" mapstructure:"project"`
+}
+
+type s3Config struct {
+	Endpoint  string `json:"endpoint" mapstructure:"endpoint"`
+	Bucket    string `json:"bucket" mapstructure:"bucket"`
+	AccessID  string `json:"access_id" mapstructure:"access_id"`
+	AccessKey string `json:"-" mapstructure:"access_key"`
 }
 
 // ImageTokenType image token type

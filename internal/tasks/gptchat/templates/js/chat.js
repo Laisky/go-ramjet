@@ -544,7 +544,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
     let url;
     switch (selectedModel) {
         case ImageModelDalle2:
-            url = `/ramjet/gptchat/image/dalle`;
+            url = `/api/v1/images/generations`;
             break;
         default:
             throw new Error(`unknown image model: ${selectedModel}`);
@@ -558,6 +558,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
             "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
         },
         body: JSON.stringify({
+            model: selectedModel,
             prompt: prompt
         })
     });

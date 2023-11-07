@@ -32,8 +32,8 @@ var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
 )
 
-// APIHandler handle api request
-func APIHandler(ctx *gin.Context) {
+// ChatHandler handle api request
+func ChatHandler(ctx *gin.Context) {
 	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
 	// logger := log.Logger.Named("chat")
 
