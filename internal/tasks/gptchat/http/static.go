@@ -146,7 +146,7 @@ func Chat(ctx *gin.Context) {
 	injectData := map[string]any{
 		"openai": map[string]any{
 			"direct": iconfig.Config.API,
-			"proxy":  "/api/v1/chat",
+			"proxy":  "/api",
 		},
 		"static_libs": map[string]any{
 			"chat_prompts": staticFiles.DataJs.Name,

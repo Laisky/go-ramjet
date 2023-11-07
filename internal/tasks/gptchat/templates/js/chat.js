@@ -544,7 +544,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
     let url;
     switch (selectedModel) {
         case ImageModelDalle2:
-            url = `/api/v1/images/generations`;
+            url = `/images/generations`;
             break;
         default:
             throw new Error(`unknown image model: ${selectedModel}`);
