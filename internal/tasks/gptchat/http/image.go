@@ -59,6 +59,18 @@ func ImageHandler(ctx *gin.Context) {
 			err = errors.Errorf("unknown image token type %s", user.ImageTokenType)
 		}
 		if err != nil {
+			// upload error msg
+			if _, err := s3.GetCli().PutObject(ctx,
+				config.Config.S3.Bucket,
+				imageObjkeyPrefix(taskID)+".err.txt",
+				bytes.NewReader([]byte(err.Error())),
+				int64(len(err.Error())),
+				minio.PutObjectOptions{
+					ContentType: "text/plain",
+				}); err != nil {
+				logger.Error("upload error msg", zap.Error(err))
+			}
+
 			logger.Error("failed to draw image", zap.Error(err))
 			return
 		}
@@ -96,7 +108,7 @@ func drawImageByOpenaiDalle(ctx context.Context,
 	req.Header.Add("Authorization", "Bearer "+user.ImageToken)
 
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil {
+	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
 		return errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)

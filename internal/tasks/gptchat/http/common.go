@@ -53,7 +53,7 @@ var (
 func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err error) {
 	// load from cache
 	if v, ok := cacheGetOneapiUserIDByToken.Load(token); ok {
-		return v.(string), nil
+		return v.(string), nil //nolint: forcetypeassert
 	}
 
 	url := config.Config.ExternalBillingAPI + "/api/user/get-by-token"
@@ -63,7 +63,7 @@ func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err 
 	}
 
 	req.Header.Add("Authorization", token)
-	resp, err := httpcli.Do(req)
+	resp, err := httpcli.Do(req) //nolint: bodyclose
 	if err != nil {
 		return "", errors.Wrap(err, "do request")
 	}
