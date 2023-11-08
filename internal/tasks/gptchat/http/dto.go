@@ -218,7 +218,7 @@ type OpenaiCreateImageRequest struct {
 	Prompt         string `json:"prompt"`
 	N              int    `json:"n"`
 	Size           string `json:"size"`
-	Quality        string `json:"quality"`
+	Quality        string `json:"quality,omitempty"`
 	ResponseFormat string `json:"response_format"`
 	Style          string `json:"style"`
 }
