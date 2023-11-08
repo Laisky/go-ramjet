@@ -628,6 +628,21 @@ async function sendChat2Server(chatID) {
             messages = getLastNChatMessages(nContexts, chatID);
         }
 
+        // there are pinned files, add them to user's prompt
+        if (Object.keys(chatVisionFileStore).length != 0) {
+            messages[messages.length - 1].files = [];
+            for (let key in chatVisionFileStore) {
+                messages[messages.length - 1].files.push({
+                    type: "image",
+                    name: key,
+                    content: chatVisionFileStore[key]
+                });
+            }
+
+            chatVisionFileStore = {};
+            updateChatVisionFileStore();
+        }
+
         currentAIRespSSE = new SSE(window.OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
@@ -991,7 +1006,81 @@ function setupChatInput() {
 
     // restore pinned materials
     restorePinnedMaterials();
+
+    // bind input element's drag-drop
+    {
+        chatPromptInput.addEventListener("dragover", chatInputDragFileHandler);
+        chatPromptInput.addEventListener("drop", chatInputDropFileHandler);
+        chatPromptInput.addEventListener("dragleave", (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+            evt.target.style.backgroundColor = "";
+        });
+    }
 }
+
+// map[filename]fileContent
+//
+// should invoke updateChatVisionFileStore after update this object
+var chatVisionFileStore = {};
+
+async function updateChatVisionFileStore() {
+    let pinnedFiles = chatContainer.querySelector(".pinned-files");
+    pinnedFiles.innerHTML = "";
+    for (let key in chatVisionFileStore) {
+        pinnedFiles.insertAdjacentHTML("beforeend", `<p><i class="bi bi-trash"></i> ${key}</p>`);
+    }
+}
+
+async function chatInputDropFileHandler(evt) {
+    evt.stopPropagation();
+    evt.preventDefault();
+    evt.target.style.backgroundColor = "";
+
+    if (!evt.dataTransfer || !evt.dataTransfer.items) {
+        return;
+    }
+
+    for (let i = 0; i < evt.dataTransfer.items.length; i++) {
+        let item = evt.dataTransfer.items[i];
+        if (item.kind != "file") {
+            return;
+        }
+
+        let file = item.getAsFile();
+        if (!file) {
+            return;
+        }
+
+        // get file content as Blob
+        let reader = new FileReader();
+        reader.onload = async (e) => {
+            let arrayBuffer = e.target.result;
+            let byteArray = new Uint8Array(arrayBuffer);
+
+            let chunkSize = 0xffff; // Use chunks to avoid call stack limit
+            let chunks = [];
+            for (let i = 0; i < byteArray.length; i += chunkSize) {
+                chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
+            }
+            let base64String = btoa(chunks.join(''));
+
+            chatVisionFileStore[file.name] = base64String;
+            updateChatVisionFileStore();
+        };
+        reader.readAsArrayBuffer(file);
+    }
+}
+
+async function chatInputDragFileHandler(evt) {
+    evt.stopPropagation();
+    evt.preventDefault();
+    evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+
+    // change backgroud-color
+    evt.target.style.backgroundColor = "#42ffa8";
+}
+
 
 /**
  * Append chat to conservation container

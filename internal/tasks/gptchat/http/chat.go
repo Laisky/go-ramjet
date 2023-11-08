@@ -197,7 +197,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			"gpt-4-32k",
 			"gpt-4-32k-0613":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-			req := new(OpenaiChatReq)
+			req := new(OpenaiChatReq[string])
 			if err := copier.Copy(req, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to chat req")
 			}

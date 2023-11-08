@@ -18,7 +18,7 @@ func TestAPIHandler(t *testing.T) {
 	req := &FrontendReq{
 		Model:  "gpt-3.5-turbo",
 		Stream: true,
-		Messages: []OpenaiReqMessage{
+		Messages: []FrontendReqMessage{
 			{
 				Role:    OpenaiMessageRoleUser,
 				Content: "write a SSE client in golang",

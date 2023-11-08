@@ -14,8 +14,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-10 col-12 chatManager" style="padding-left: 0px; max-height: 100%;">
-            <div class="card text-center" style="height: 100%; flex-direction: column; position: relative;">
+        <div class="col-md-10 col-12 chatManager">
+            <div class="card text-center">
                 <div class="pinned-refs">
                     <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
                     <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
@@ -26,7 +26,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div> -->
 
-                <div class="card-body conservations" style="min-height: 300px; overflow-y: scroll;">
+                <div class="card-body conservations">
                     <!-- chats is here -->
 
                     <!-- <div class="container-fluid row role-ai" style="background-color: #f4f4f4;">
@@ -46,12 +46,15 @@
                             <button class="btn btn-outline-secondary" type="button"><i class="bi bi-repeat"></i> Reload</button>
                         </div>
                     </div> -->
+                    <div class="pinned-files">
+                        <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
+                        <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
+                    </div>
                 </div>
                 <div class="card-footer text-muted">
                     <i class="bi bi-arrow-down-circle scroll-down"></i>
-                    <div class="input-group mb-3" style="margin-bottom: 0px!important;">
-                        <textarea dir="auto" class="form-control input prompt" placeholder="CTRL+Enter to send"
-                            style="height: 80px"></textarea>
+                    <div class="input-group mb-3">
+                        <textarea dir="auto" class="form-control input prompt" placeholder="CTRL+Enter to send"></textarea>
                         <button class="btn btn-outline-secondary send" type="button">Send</button>
                     </div>
                 </div>

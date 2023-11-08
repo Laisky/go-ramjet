@@ -54,38 +54,71 @@ func MaxMessages() int {
 	return defaultMaxMessages
 }
 
-// OpenaiReqMessage request message to openai chat api
-type OpenaiReqMessage struct {
-	Role    OpenaiMessageRole `json:"role"`
-	Content string            `json:"content"`
-}
-
 // FrontendReq request from frontend
 type FrontendReq struct {
-	Model            string             `json:"model"`
-	MaxTokens        uint               `json:"max_tokens"`
-	Messages         []OpenaiReqMessage `json:"messages,omitempty"`
-	PresencePenalty  float64            `json:"presence_penalty"`
-	FrequencyPenalty float64            `json:"frequency_penalty"`
-	Stream           bool               `json:"stream"`
-	Temperature      float64            `json:"temperature"`
-	TopP             float64            `json:"top_p"`
-	N                int                `json:"n"`
-	Prompt           string             `json:"prompt,omitempty"`
+	Model            string               `json:"model"`
+	MaxTokens        uint                 `json:"max_tokens"`
+	Messages         []FrontendReqMessage `json:"messages,omitempty"`
+	PresencePenalty  float64              `json:"presence_penalty"`
+	FrequencyPenalty float64              `json:"frequency_penalty"`
+	Stream           bool                 `json:"stream"`
+	Temperature      float64              `json:"temperature"`
+	TopP             float64              `json:"top_p"`
+	N                int                  `json:"n"`
+	Prompt           string               `json:"prompt,omitempty"`
 	// StaticContext    string             `json:"static_context,omitempty"`
 }
 
+// FrontendReqMessage request message from frontend
+type FrontendReqMessage struct {
+	Role    OpenaiMessageRole `json:"role"`
+	Content string            `json:"content"`
+	// Files send files with message
+	Files []frontendReqMessageFiles `json:"files"`
+}
+
+type frontendReqMessageFiles struct {
+	Type    string `json:"type" binding:"required,oneof=image"`
+	Name    string `json:"name"`
+	Content []byte `json:"content"`
+}
+
 // OpenaiChatReq request to openai chat api
-type OpenaiChatReq struct {
-	Model            string             `json:"model"`
-	MaxTokens        uint               `json:"max_tokens"`
-	Messages         []OpenaiReqMessage `json:"messages,omitempty"`
-	PresencePenalty  float64            `json:"presence_penalty"`
-	FrequencyPenalty float64            `json:"frequency_penalty"`
-	Stream           bool               `json:"stream"`
-	Temperature      float64            `json:"temperature"`
-	TopP             float64            `json:"top_p"`
-	N                int                `json:"n"`
+type OpenaiChatReq[T string | OpenaiVisionMessageContent] struct {
+	Model            string                `json:"model"`
+	MaxTokens        uint                  `json:"max_tokens"`
+	Messages         []OpenaiReqMessage[T] `json:"messages,omitempty"`
+	PresencePenalty  float64               `json:"presence_penalty"`
+	FrequencyPenalty float64               `json:"frequency_penalty"`
+	Stream           bool                  `json:"stream"`
+	Temperature      float64               `json:"temperature"`
+	TopP             float64               `json:"top_p"`
+	N                int                   `json:"n"`
+}
+
+// OpenaiReqMessage request message to openai chat api
+//
+// chat completion message and vision message have different content
+type OpenaiReqMessage[T string | OpenaiVisionMessageContent] struct {
+	Role    OpenaiMessageRole `json:"role"`
+	Content T                 `json:"content"`
+}
+
+// OpenaiVisionMessageContentType vision message content type
+type OpenaiVisionMessageContentType string
+
+const (
+	// OpenaiVisionMessageContentTypeText text
+	OpenaiVisionMessageContentTypeText OpenaiVisionMessageContentType = "text"
+	// OpenaiVisionMessageContentTypeImageUrl image url
+	OpenaiVisionMessageContentTypeImageUrl OpenaiVisionMessageContentType = "image_url"
+)
+
+// OpenaiVisionMessageContent vision message content
+type OpenaiVisionMessageContent struct {
+	Type     OpenaiVisionMessageContentType `json:"type"`
+	Text     string                         `json:"text,omitempty"`
+	ImageUrl string                         `json:"image_url,omitempty"`
 }
 
 // OpenaiCompletionReq request to openai chat api
@@ -195,11 +228,11 @@ type OpenaiCreateImageRequest struct {
 // NewOpenaiCreateImageRequest create new request
 func NewOpenaiCreateImageRequest(prompt string) *OpenaiCreateImageRequest {
 	return &OpenaiCreateImageRequest{
-		Model:          "dall-e-3",
-		Prompt:         prompt,
-		N:              1,
-		Size:           "1024x1024",
-		Quality:        "hd",
+		Model:  "dall-e-3",
+		Prompt: prompt,
+		N:      1,
+		Size:   "1024x1024",
+		// Quality:        "hd",  // price double
 		ResponseFormat: "b64_json",
 		Style:          "vivid",
 	}
