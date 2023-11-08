@@ -637,6 +637,10 @@ async function sendChat2Server(chatID) {
                     name: key,
                     content: chatVisionFileStore[key]
                 });
+                // embedded image to user prompt
+                chatContainer
+                    .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
+                    .insertAdjacentHTML("beforeend", `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`);
             }
 
             chatVisionFileStore = {};
