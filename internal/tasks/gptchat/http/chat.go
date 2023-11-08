@@ -154,7 +154,11 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger.Debug("save conservation", zap.Any("id", ret.InsertedID))
 }
 
-func isChatWithVision(frontendReq *FrontendReq) (bool, *OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
+func isChatWithVision(user *config.UserConfig, frontendReq *FrontendReq) (bool, *OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
+	if err := user.IsModelAllowed("gpt-4-vision-preview"); err != nil {
+		return false, nil, errors.Wrap(err, "check is model allowed")
+	}
+
 	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 	if len(lastMessage.Files) == 0 { // gpt-vision
 		return false, nil, nil
@@ -222,6 +226,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		switch frontendReq.Model {
 		case "gpt-4",
 			"gpt-4-1106-preview",
+			"gpt-4-vision-preview",
 			"gpt-4-0613",
 			"gpt-4-32k",
 			"gpt-4-32k-0613",
@@ -231,7 +236,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			"gpt-3.5-turbo-16k-0613":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			var ok bool
-			if ok, openaiReq, err = isChatWithVision(frontendReq); err != nil {
+			if ok, openaiReq, err = isChatWithVision(user, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "check is chat with vision")
 			} else if !ok {
 				req := new(OpenaiChatReq[string])

@@ -630,6 +630,10 @@ async function sendChat2Server(chatID) {
 
         // there are pinned files, add them to user's prompt
         if (Object.keys(chatVisionFileStore).length != 0) {
+            if (!selectedModel.contains("vision")) {
+                abortAIResp(new Error("you must select a vision model"));
+            }
+
             messages[messages.length - 1].files = [];
             for (let key in chatVisionFileStore) {
                 messages[messages.length - 1].files.push({
