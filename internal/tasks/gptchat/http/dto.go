@@ -65,8 +65,6 @@ type FrontendReq struct {
 	Temperature      float64              `json:"temperature"`
 	TopP             float64              `json:"top_p"`
 	N                int                  `json:"n"`
-	Prompt           string               `json:"prompt,omitempty"`
-	// StaticContext    string             `json:"static_context,omitempty"`
 }
 
 // FrontendReqMessage request message from frontend
@@ -84,7 +82,7 @@ type frontendReqMessageFiles struct {
 }
 
 // OpenaiChatReq request to openai chat api
-type OpenaiChatReq[T string | OpenaiVisionMessageContent] struct {
+type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	Model            string                `json:"model"`
 	MaxTokens        uint                  `json:"max_tokens"`
 	Messages         []OpenaiReqMessage[T] `json:"messages,omitempty"`
@@ -99,7 +97,7 @@ type OpenaiChatReq[T string | OpenaiVisionMessageContent] struct {
 // OpenaiReqMessage request message to openai chat api
 //
 // chat completion message and vision message have different content
-type OpenaiReqMessage[T string | OpenaiVisionMessageContent] struct {
+type OpenaiReqMessage[T string | []OpenaiVisionMessageContent] struct {
 	Role    OpenaiMessageRole `json:"role"`
 	Content T                 `json:"content"`
 }

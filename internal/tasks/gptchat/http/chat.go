@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,7 +45,7 @@ func ChatHandler(ctx *gin.Context) {
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	CopyHeader(ctx.Writer.Header(), resp.Header)
-	isStream := resp.Header.Get("Content-Type") == "text/event-stream"
+	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
 	bodyReader := resp.Body
 
 	reader := bufio.NewScanner(bodyReader)
@@ -153,6 +154,38 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger.Debug("save conservation", zap.Any("id", ret.InsertedID))
 }
 
+func isChatWithVision(frontendReq *FrontendReq) (bool, *OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
+	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+	if len(lastMessage.Files) == 0 { // gpt-vision
+		return false, nil, nil
+	}
+
+	frontendReq.Model = "gpt-4-vision-preview"
+	req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
+	if err := copier.Copy(req, frontendReq); err != nil {
+		return false, nil, errors.Wrap(err, "copy to chat req")
+	}
+
+	req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
+		{
+			Role: OpenaiMessageRoleUser,
+			Content: []OpenaiVisionMessageContent{
+				{
+					Type: OpenaiVisionMessageContentTypeText,
+					Text: lastMessage.Content},
+			},
+		},
+	}
+	for _, f := range lastMessage.Files {
+		req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
+			Type:     OpenaiVisionMessageContentTypeImageUrl,
+			ImageUrl: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
+		})
+	}
+
+	return true, req, nil
+}
+
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	user, err := getUserByAuthHeader(ctx)
@@ -187,22 +220,27 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 		var openaiReq any
 		switch frontendReq.Model {
-		case "gpt-3.5-turbo",
-			"gpt-3.5-turbo-16k",
-			"gpt-3.5-turbo-0613",
-			"gpt-3.5-turbo-16k-0613",
-			"gpt-4",
+		case "gpt-4",
 			"gpt-4-1106-preview",
 			"gpt-4-0613",
 			"gpt-4-32k",
-			"gpt-4-32k-0613":
+			"gpt-4-32k-0613",
+			"gpt-3.5-turbo",
+			"gpt-3.5-turbo-16k",
+			"gpt-3.5-turbo-0613",
+			"gpt-3.5-turbo-16k-0613":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-			req := new(OpenaiChatReq[string])
-			if err := copier.Copy(req, frontendReq); err != nil {
-				return nil, nil, errors.Wrap(err, "copy to chat req")
-			}
+			var ok bool
+			if ok, openaiReq, err = isChatWithVision(frontendReq); err != nil {
+				return nil, nil, errors.Wrap(err, "check is chat with vision")
+			} else if !ok {
+				req := new(OpenaiChatReq[string])
+				if err := copier.Copy(req, frontendReq); err != nil {
+					return nil, nil, errors.Wrap(err, "copy to chat req")
+				}
 
-			openaiReq = req
+				openaiReq = req
+			}
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
@@ -516,6 +554,10 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		return nil, errors.Wrap(err, "parse request")
 	}
 	userReq.fillDefault()
+
+	if len(userReq.Messages) == 0 {
+		return nil, errors.New("no messages")
+	}
 
 	trimMessages(userReq)
 	maxTokens := uint(MaxTokens())
