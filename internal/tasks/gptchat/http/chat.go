@@ -155,8 +155,8 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 }
 
 func isChatWithVision(user *config.UserConfig, frontendReq *FrontendReq) (bool, *OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
-	if err := user.IsModelAllowed("gpt-4-vision-preview"); err != nil {
-		return false, nil, errors.Wrap(err, "check is model allowed")
+	if frontendReq.Model != "gpt-4-vision-preview" {
+		return false, nil, nil
 	}
 
 	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
@@ -164,7 +164,6 @@ func isChatWithVision(user *config.UserConfig, frontendReq *FrontendReq) (bool, 
 		return false, nil, nil
 	}
 
-	frontendReq.Model = "gpt-4-vision-preview"
 	req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
 	if err := copier.Copy(req, frontendReq); err != nil {
 		return false, nil, errors.Wrap(err, "copy to chat req")
@@ -218,10 +217,6 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
 
-		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
-			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
-		}
-
 		var openaiReq any
 		switch frontendReq.Model {
 		case "gpt-4",
@@ -254,6 +249,10 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			}
 		default:
 			return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
+		}
+
+		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
+			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
 		}
 
 		payload, err := json.Marshal(openaiReq)
