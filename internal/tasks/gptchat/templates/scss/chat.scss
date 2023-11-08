@@ -103,13 +103,18 @@
                     max-width: 85px;
                     margin-bottom: 5px;
                 }
+            }
+
+            .card-footer {
+                position: relative;
+                padding: 0px;
 
                 .pinned-files {
                     z-index: 1000;
                     background-color: #d1d1d1;
                     position: absolute;
                     left: 5px;
-                    bottom: 5px;
+                    top: -30px;
                     max-width: 50%;
                     overflow: hidden;
                     text-align: left;
@@ -125,15 +130,10 @@
                         }
                     }
                 }
-            }
-
-            .card-footer {
-                position: relative;
-                padding: 0px;
 
                 .scroll-down {
                     position: absolute;
-                    top: -60px;
+                    top: -30px;
                     right: 30px;
                     z-index: 1000;
                     font-size: larger;

@@ -86,32 +86,32 @@
   max-width: 85px;
   margin-bottom: 5px;
 }
-#chatContainer .chatManager .card .card-body.conservations .pinned-files {
+#chatContainer .chatManager .card .card-footer {
+  position: relative;
+  padding: 0px;
+}
+#chatContainer .chatManager .card .card-footer .pinned-files {
   z-index: 1000;
   background-color: #d1d1d1;
   position: absolute;
   left: 5px;
-  bottom: 5px;
+  top: -30px;
   max-width: 50%;
   overflow: hidden;
   text-align: left;
 }
-#chatContainer .chatManager .card .card-body.conservations .pinned-files p {
+#chatContainer .chatManager .card .card-footer .pinned-files p {
   padding-left: 5px;
   padding-right: 5px;
   margin-bottom: 0px;
   text-wrap: nowrap;
 }
-#chatContainer .chatManager .card .card-body.conservations .pinned-files p .bi-trash {
+#chatContainer .chatManager .card .card-footer .pinned-files p .bi-trash {
   cursor: pointer;
-}
-#chatContainer .chatManager .card .card-footer {
-  position: relative;
-  padding: 0px;
 }
 #chatContainer .chatManager .card .card-footer .scroll-down {
   position: absolute;
-  top: -60px;
+  top: -30px;
   right: 30px;
   z-index: 1000;
   font-size: larger;
