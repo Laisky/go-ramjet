@@ -154,41 +154,6 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger.Debug("save conservation", zap.Any("id", ret.InsertedID))
 }
 
-func isChatWithVision(user *config.UserConfig, frontendReq *FrontendReq) (bool, *OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
-	if frontendReq.Model != "gpt-4-vision-preview" {
-		return false, nil, nil
-	}
-
-	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
-	if len(lastMessage.Files) == 0 { // gpt-vision
-		return false, nil, nil
-	}
-
-	req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
-	if err := copier.Copy(req, frontendReq); err != nil {
-		return false, nil, errors.Wrap(err, "copy to chat req")
-	}
-
-	req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
-		{
-			Role: OpenaiMessageRoleUser,
-			Content: []OpenaiVisionMessageContent{
-				{
-					Type: OpenaiVisionMessageContentTypeText,
-					Text: lastMessage.Content},
-			},
-		},
-	}
-	for _, f := range lastMessage.Files {
-		req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
-			Type:     OpenaiVisionMessageContentTypeImageUrl,
-			ImageUrl: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
-		})
-	}
-
-	return true, req, nil
-}
-
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	user, err := getUserByAuthHeader(ctx)
@@ -221,7 +186,6 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		switch frontendReq.Model {
 		case "gpt-4",
 			"gpt-4-1106-preview",
-			"gpt-4-vision-preview",
 			"gpt-4-0613",
 			"gpt-4-32k",
 			"gpt-4-32k-0613",
@@ -229,18 +193,64 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			"gpt-3.5-turbo-16k",
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-16k-0613":
-			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-			var ok bool
-			if ok, openaiReq, err = isChatWithVision(user, frontendReq); err != nil {
-				return nil, nil, errors.Wrap(err, "check is chat with vision")
-			} else if !ok {
-				req := new(OpenaiChatReq[string])
-				if err := copier.Copy(req, frontendReq); err != nil {
-					return nil, nil, errors.Wrap(err, "copy to chat req")
+			if frontendReq.Model == "gpt-4-1106-preview" {
+				// only openai support gpt-4-turbo
+				newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
+				if !user.BYOK {
+					user.OpenaiToken = config.Config.DefaultOpenaiToken
 				}
-
-				openaiReq = req
+			} else {
+				newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			}
+
+			req := new(OpenaiChatReq[string])
+			if err := copier.Copy(req, frontendReq); err != nil {
+				return nil, nil, errors.Wrap(err, "copy to chat req")
+			}
+
+			openaiReq = req
+		case "gpt-4-vision-preview":
+			// only openai support vision
+			newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
+			if !user.BYOK {
+				user.OpenaiToken = config.Config.DefaultOpenaiToken
+			}
+
+			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+			if len(lastMessage.Files) == 0 { // gpt-vision
+				return nil, nil, errors.New("no image")
+			}
+
+			req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
+			if err := copier.Copy(req, frontendReq); err != nil {
+				return nil, nil, errors.Wrap(err, "copy to chat req")
+			}
+
+			req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
+				{
+					Role: OpenaiMessageRoleUser,
+					Content: []OpenaiVisionMessageContent{
+						{
+							Type: OpenaiVisionMessageContentTypeText,
+							Text: lastMessage.Content},
+					},
+				},
+			}
+
+			totalFileSize := 0
+			for _, f := range lastMessage.Files {
+				totalFileSize += len(f.Content)
+				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
+					Type:     OpenaiVisionMessageContentTypeImageUrl,
+					ImageUrl: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
+				})
+			}
+
+			if totalFileSize > 5*1024*1024 {
+				return nil, nil, errors.Errorf("total file size should less than 5MB, got %d", totalFileSize)
+			}
+
+			openaiReq = req
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
@@ -277,7 +287,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 	// golang's http client will not auto decompress response body
 	req.Header.Del("Accept-Encoding")
 
-	log.Logger.Debug("proxy request", zap.String("url", newUrl))
+	log.Logger.Debug("try send request to upstream server", zap.String("url", newUrl))
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "do request %q", newUrl)
@@ -495,7 +505,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 		"max_chunks": 200,
 	}
 
-	if args.user.IsPaid {
+	if args.user.IsFree {
 		reqData["max_chunks"] = 1500
 	}
 

@@ -100,7 +100,9 @@ SWITCH_FOR_USER:
 
 		for _, commFreeUser := range config.Config.UserTokens {
 			if commFreeUser.Token == config.FreetierUserToken {
-				user = &config.UserConfig{}
+				user = &config.UserConfig{
+					IsFree: true,
+				}
 				if err = copier.Copy(user, commFreeUser); err != nil {
 					return nil, errors.Wrap(err, "copy free user")
 				}
@@ -122,7 +124,6 @@ SWITCH_FOR_USER:
 			ImageToken:             config.Config.DefaultImageToken,
 			ImageTokenType:         config.Config.DefaultImageTokenType,
 			AllowedModels:          []string{"*"},
-			IsPaid:                 true,
 			NoLimitExpensiveModels: true,
 			NoLimitAllModels:       true,
 			APIBase:                "https://oneapi.laisky.com",
@@ -138,12 +139,10 @@ SWITCH_FOR_USER:
 			user.ExternalImageBillingUID = oneapiUid
 			user.NoLimitImageModels = true
 		}
-
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
 			if u.Token == userToken {
 				log.Logger.Debug("paid user", zap.String("user", u.UserName))
-				u.IsPaid = true
 				if err = u.Valid(); err != nil {
 					return nil, errors.Wrap(err, "valid paid user")
 				}
@@ -164,10 +163,10 @@ SWITCH_FOR_USER:
 			ImageToken:             userToken,
 			ImageTokenType:         config.ImageTokenOpenai,
 			AllowedModels:          []string{"*"},
-			IsPaid:                 true,
 			NoLimitExpensiveModels: true,
 			NoLimitAllModels:       true,
 			NoLimitImageModels:     true,
+			BYOK:                   true,
 			APIBase:                config.Config.API,
 		}
 	}

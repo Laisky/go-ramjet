@@ -57,6 +57,8 @@ func SetupConfig() (err error) {
 		&Config.ExternalBillingAPI, "https://oneapi.laisky.com")
 	Config.RamjetURL = gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com")
+	Config.DefaultOpenaiToken = gutils.OptionalVal(
+		&Config.DefaultOpenaiToken, Config.Token)
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
@@ -74,6 +76,10 @@ type OpenAI struct {
 	API string `json:"api" mapstructure:"api"`
 	// Token (required) openai api request token
 	Token string `json:"-" mapstructure:"token"`
+	// DefaultOpenaiToken (optional) default openai token, default equals to token
+	//
+	// Dangerous: will escape paying wall, use it carefully
+	DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
 	// DefaultImageToken (optional) default image token, default equals to token
 	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
 	// DefaultImageTokenType (optional) default image token type, default is openai
@@ -142,8 +148,10 @@ type UserConfig struct {
 	ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
-	// IsPaid whether is paid user
-	IsPaid bool `json:"is_paid" mapstructure:"is_paid"`
+	// IsFree (optional) is free user, default is false
+	IsFree bool `json:"is_free" mapstructure:"is_free"`
+	// BYOK (optional) user's bring his own token, default is false
+	BYOK bool `json:"byok" mapstructure:"byok"`
 	// AllowedModels (required) allowed models
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 	// NoLimitExpensiveModels (optional) skip rate limiter for expensive models
