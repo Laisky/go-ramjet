@@ -24,7 +24,7 @@ import (
 )
 
 func ImageHandler(ctx *gin.Context) {
-	taskID := gutils.UUID7()
+	taskID := gutils.RandomStringWithLength(36)
 	logger := gmw.GetLogger(ctx).Named("image").With(
 		zap.String("task_id", taskID),
 	)
