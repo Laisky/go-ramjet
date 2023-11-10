@@ -57,6 +57,12 @@
 #chatContainer .chatManager .card .card-body.conservations .row > * {
   padding-left: 0px;
 }
+#chatContainer .chatManager .card .card-body.conservations img {
+  border-width: 5px 5px 5px 5px;
+  box-shadow: 1px 1px 5px #333;
+  -webkit-box-shadow: 1px 1px 5px #333;
+  -moz-box-shadow: 1px 1px 5px #333;
+}
 #chatContainer .chatManager .card .card-body.conservations .role-human pre {
   margin-bottom: 3px;
   font-size: 0.9em;

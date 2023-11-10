@@ -97,7 +97,7 @@ function listenSessionSwitch(evt) {
     let sessionID = evt.target.dataset.session;
     chatContainer.querySelector(".conservations").innerHTML = "";
     sessionChatHistory(sessionID).forEach((item) => {
-        append2Chats(item.role, item.content, true, item.chatID);
+        append2Chats(item.chatID, item.role, item.content, true);
     });
 }
 
@@ -268,7 +268,7 @@ function setupSessionManager() {
 
         // restore conservation history
         activeSessionChatHistory().forEach((item) => {
-            append2Chats(item.role, item.content, true, item.chatID);
+            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
         window.EnableTooltipsEverywhere();
@@ -354,7 +354,7 @@ function removeChatInStorage(chatid) {
 
 
 // append or update chat history by chatid and role
-function appendChats2Storage(role, content, chatid) {
+function appendChats2Storage(role, chatid, content, attachHTML) {
     if (!chatid) {
         throw "chatid is required";
     }
@@ -368,6 +368,7 @@ function appendChats2Storage(role, content, chatid) {
         if (item.chatID == chatid && item.role == role) {
             found = true;
             item.content = content;
+            item.attachHTML = attachHTML;
         }
     });
 
@@ -379,8 +380,9 @@ function appendChats2Storage(role, content, chatid) {
                 if (item.role != RoleAI) {
                     history.splice(idx + 1, 0, {
                         role: RoleAI,
-                        content: content,
                         chatID: chatid,
+                        content: content,
+                        attachHTML: attachHTML,
                     });
                 }
             }
@@ -391,8 +393,9 @@ function appendChats2Storage(role, content, chatid) {
     if (!found) {
         history.push({
             role: role,
-            content: content,
             chatID: chatid,
+            content: content,
+            attachHTML: attachHTML,
         });
     }
 
@@ -573,7 +576,7 @@ async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, p
     currentAIRespEle.dataset.imageUrl = respData["image_url"];
 
     // save img to storage no matter it's done or not
-    appendChats2Storage(RoleAI, `<img src="${respData["image_url"]}" style="max-width: 80%;">`, chatID);
+    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}" style="max-width: 80%;">`);
 }
 
 async function sendChat2Server(chatID) {
@@ -587,8 +590,8 @@ async function sendChat2Server(chatID) {
             return;
         }
 
-        append2Chats(RoleHuman, reqPrompt, false, chatID);
-        appendChats2Storage(RoleHuman, reqPrompt, chatID);
+        append2Chats(chatID, RoleHuman, reqPrompt, false);
+        appendChats2Storage(RoleHuman, chatID, reqPrompt);
     } else { // if chatID is not empty, it's a reload request
         reqPrompt = chatContainer
             .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
@@ -642,10 +645,23 @@ async function sendChat2Server(chatID) {
                     name: key,
                     content: chatVisionFileStore[key]
                 });
-                // embedded image to user prompt
+
+                // insert image to user hisotry
+                let text = chatContainer
+                .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
+                appendChats2Storage(
+                    RoleHuman, chatID,
+                    text,
+                    `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`,
+                    );
+
+                // insert image to user input
                 chatContainer
                     .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
-                    .insertAdjacentHTML("beforeend", `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`);
+                    .insertAdjacentHTML(
+                        "beforeend",
+                        `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`,
+                    );
             }
 
             chatVisionFileStore = {};
@@ -883,7 +899,7 @@ async function sendChat2Server(chatID) {
             window.EnableTooltipsEverywhere();
 
             scrollToChat(currentAIRespEle);
-            appendChats2Storage(RoleAI, currentAIRespEle.innerHTML, chatID);
+            appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML);
             unlockChatInput();
         }
     });
@@ -1170,23 +1186,18 @@ async function updateChatVisionFileStore() {
 /**
  * Append chat to conservation container
  *
+ * @param {string} chatID - chat id
  * @param {string} role - RoleHuman/RoleSystem/RoleAI
  * @param {string} text - chat text
  * @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
- * @param {string} chatID - chat id
- * @param {string} content_type - content type, default "text". if "image", will use different robot icon
+ * @param {string} attachHTML - html to attach to chat
  */
-function append2Chats(role, text, isHistory = false, chatID, content_type = "text") {
+function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
     if (!chatID) {
         throw "chatID is required";
     }
 
-    let robot_icon = "🤖️";
-    switch (content_type) {
-        case "image":
-            robot_icon = "🧑‍🎨";
-    }
-
+    const robot_icon = "🤖️";
     let chatEleHtml,
         chatOp = "append";
     switch (role) {
@@ -1219,11 +1230,20 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                         </div>`
             }
 
+            if (attachHTML) {
+                attachHTML = `<p>${attachHTML}</p>`;
+            }else {
+                attachHTML = "";
+            }
+
             chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-1">🤔️</div>
-                        <div class="col-9 text-start"><pre>${text}</pre></div>
+                        <div class="col-9 text-start">
+                            <pre>${text}</pre>
+                            ${attachHTML}
+                        </div>
                         <div class="col-2 d-flex control">
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash"></i>
@@ -1233,21 +1253,13 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                 </div>`
             break
         case RoleAI:
-            if (!isHistory) {
-                chatOp = "replace";
-                chatEleHtml = `
+            chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                    <div class="row">
                         <div class="col-1">${robot_icon}</div>
                         <div class="col-11 text-start ai-response" data-status="waiting">${text}</div>
-                    </div>
                 </div>`
-            } else {
-                chatEleHtml = `
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-1">${robot_icon}</div>
-                        <div class="col-11 text-start ai-response" data-status="writing">${text}</div>
-                    </div>`
+            if (!isHistory) {
+                chatOp = "replace";
             }
 
             break
@@ -1335,7 +1347,7 @@ function append2Chats(role, text, isHistory = false, chatID, content_type = "tex
                     .addEventListener("click", editHumanInputHandler);
 
                 await sendChat2Server(chatID);
-                appendChats2Storage(RoleHuman, newText, chatID);
+                appendChats2Storage(RoleHuman, chatID, newText);
             });
 
             cancelBtn.addEventListener("click", (evt) => {
