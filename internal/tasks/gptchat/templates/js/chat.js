@@ -7,7 +7,7 @@ const RoleHuman = "user",
 
 let chatContainer = document.getElementById("chatContainer"),
     configContainer = document.getElementById("hiddenChatConfigSideBar"),
-    chatPromptInput = chatContainer.querySelector(".input.prompt"),
+    chatPromptInputEle = chatContainer.querySelector(".input.prompt"),
     chatPromptInputBtn = chatContainer.querySelector(".btn.send"),
 
     currentAIRespSSE, currentAIRespEle;
@@ -580,9 +580,9 @@ async function sendChat2Server(chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
-        reqPrompt = window.TrimSpace(chatPromptInput.value || "");
+        reqPrompt = window.TrimSpace(chatPromptInputEle.value || "");
 
-        chatPromptInput.value = "";
+        chatPromptInputEle.value = "";
         if (reqPrompt == "") {
             return;
         }
@@ -978,19 +978,19 @@ function setupChatInput() {
     // bind input press enter
     {
         let isComposition = false;
-        chatPromptInput.
+        chatPromptInputEle.
             addEventListener("compositionstart", (evt) => {
                 evt.stopPropagation();
                 isComposition = true;
             })
-        chatPromptInput.
+        chatPromptInputEle.
             addEventListener("compositionend", (evt) => {
                 evt.stopPropagation();
                 isComposition = false;
             })
 
 
-        chatPromptInput.
+        chatPromptInputEle.
             addEventListener("keydown", async (evt) => {
                 evt.stopPropagation();
                 if (evt.key != 'Enter'
@@ -1001,7 +1001,7 @@ function setupChatInput() {
                 }
 
                 await sendChat2Server();
-                chatPromptInput.value = "";
+                chatPromptInputEle.value = "";
             })
     }
 
@@ -1010,7 +1010,7 @@ function setupChatInput() {
         addEventListener("click", async (evt) => {
             evt.stopPropagation();
             await sendChat2Server();
-            chatPromptInput.value = "";
+            chatPromptInputEle.value = "";
         })
 
     // restore pinned materials
@@ -1018,6 +1018,8 @@ function setupChatInput() {
 
     // bind input element's drag-drop
     {
+
+
         let dropfileModalEle = document.querySelector("#modal-dropfile.modal"),
             dropfileModal = new bootstrap.Modal(dropfileModalEle);
 
@@ -1027,7 +1029,7 @@ function setupChatInput() {
             dropfileModal.hide();
         }
 
-        let fileDragDropFileHandler = async (evt) => {
+        let fileDragDropHandler = async (evt) => {
             evt.stopPropagation();
             evt.preventDefault();
             dropfileModal.hide();
@@ -1039,12 +1041,12 @@ function setupChatInput() {
             for (let i = 0; i < evt.dataTransfer.items.length; i++) {
                 let item = evt.dataTransfer.items[i];
                 if (item.kind != "file") {
-                    return;
+                    continue;
                 }
 
                 let file = item.getAsFile();
                 if (!file) {
-                    return;
+                    continue;
                 }
 
                 // get file content as Blob
@@ -1078,13 +1080,63 @@ function setupChatInput() {
             evt.stopPropagation();
             evt.preventDefault();
             evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+            dropfileModal.show();
         }
 
-        document.body.addEventListener("dragover", async evt => {
-            dropfileModal.show();
-        });
-        dropfileModalEle.addEventListener("dragover", fileDragOverHandler);
-        dropfileModalEle.addEventListener("drop", fileDragDropFileHandler);
+        // read paste file
+        let filePasteHandler = async (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            if (!evt.clipboardData || !evt.clipboardData.items) {
+                return;
+            }
+
+            for (let i = 0; i < evt.clipboardData.items.length; i++) {
+                let item = evt.clipboardData.items[i];
+                if (item.kind != "file") {
+                    continue;
+                }
+
+                let file = item.getAsFile();
+                if (!file) {
+                    continue;
+                }
+
+                // get file content as Blob
+                let reader = new FileReader();
+                reader.onload = async (e) => {
+                    let arrayBuffer = e.target.result;
+                    if (arrayBuffer.byteLength > 1024 * 1024 * 3) {
+                        showalert("danger", "file size should less than 3M");
+                        return;
+                    }
+
+                    let byteArray = new Uint8Array(arrayBuffer);
+                    let chunkSize = 0xffff; // Use chunks to avoid call stack limit
+                    let chunks = [];
+                    for (let i = 0; i < byteArray.length; i += chunkSize) {
+                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
+                    }
+                    let base64String = btoa(chunks.join(''));
+
+                    // only support 1 image for current version
+                    chatVisionFileStore = {};
+
+                    chatVisionFileStore[file.name] = base64String;
+                    updateChatVisionFileStore();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        chatPromptInputEle.addEventListener("paste", filePasteHandler);
+
+        document.body.addEventListener("dragover", fileDragOverHandler);
+        document.body.addEventListener("drop", fileDragDropHandler);
+        document.body.addEventListener("paste", filePasteHandler);
+
+        dropfileModalEle.addEventListener("drop", fileDragDropHandler);
         dropfileModalEle.addEventListener("dragleave", fileDragLeave);
     }
 }
@@ -1098,10 +1150,21 @@ async function updateChatVisionFileStore() {
     let pinnedFiles = chatContainer.querySelector(".pinned-files");
     pinnedFiles.innerHTML = "";
     for (let key in chatVisionFileStore) {
-        pinnedFiles.insertAdjacentHTML("beforeend", `<p><i class="bi bi-trash"></i> ${key}</p>`);
+        pinnedFiles.insertAdjacentHTML("beforeend", `<p data-key="${key}"><i class="bi bi-trash"></i> ${key}</p>`);
     }
-}
 
+    // click to remove pinned file
+    chatContainer.querySelectorAll(".pinned-files .bi.bi-trash")
+        .forEach((item) => {
+            item.addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let ele = evt.target.closest("p");
+                let key = ele.dataset.key;
+                delete chatVisionFileStore[key];
+                ele.parentNode.removeChild(ele);
+            });
+        });
+}
 
 
 /**
