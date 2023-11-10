@@ -1085,9 +1085,6 @@ function setupChatInput() {
 
         // read paste file
         let filePasteHandler = async (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-
             if (!evt.clipboardData || !evt.clipboardData.items) {
                 return;
             }
@@ -1102,6 +1099,9 @@ function setupChatInput() {
                 if (!file) {
                     continue;
                 }
+
+                evt.stopPropagation();
+                evt.preventDefault();
 
                 // get file content as Blob
                 let reader = new FileReader();
