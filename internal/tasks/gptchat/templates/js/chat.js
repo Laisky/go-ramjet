@@ -1018,13 +1018,74 @@ function setupChatInput() {
 
     // bind input element's drag-drop
     {
-        chatPromptInput.addEventListener("dragover", chatInputDragFileHandler);
-        chatPromptInput.addEventListener("drop", chatInputDropFileHandler);
-        chatPromptInput.addEventListener("dragleave", (evt) => {
+        let dropfileModalEle = document.querySelector("#modal-dropfile.modal"),
+            dropfileModal = new bootstrap.Modal(dropfileModalEle);
+
+        let fileDragLeave = async (evt) => {
             evt.stopPropagation();
             evt.preventDefault();
-            evt.target.style.backgroundColor = "";
+            dropfileModal.hide();
+        }
+
+        let fileDragDropFileHandler = async (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+            dropfileModal.hide();
+
+            if (!evt.dataTransfer || !evt.dataTransfer.items) {
+                return;
+            }
+
+            for (let i = 0; i < evt.dataTransfer.items.length; i++) {
+                let item = evt.dataTransfer.items[i];
+                if (item.kind != "file") {
+                    return;
+                }
+
+                let file = item.getAsFile();
+                if (!file) {
+                    return;
+                }
+
+                // get file content as Blob
+                let reader = new FileReader();
+                reader.onload = async (e) => {
+                    let arrayBuffer = e.target.result;
+                    if (arrayBuffer.byteLength > 1024 * 1024 * 3) {
+                        showalert("danger", "file size should less than 3M");
+                        return;
+                    }
+
+                    let byteArray = new Uint8Array(arrayBuffer);
+                    let chunkSize = 0xffff; // Use chunks to avoid call stack limit
+                    let chunks = [];
+                    for (let i = 0; i < byteArray.length; i += chunkSize) {
+                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
+                    }
+                    let base64String = btoa(chunks.join(''));
+
+                    // only support 1 image for current version
+                    chatVisionFileStore = {};
+
+                    chatVisionFileStore[file.name] = base64String;
+                    updateChatVisionFileStore();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        let fileDragOverHandler = async (evt) => {
+            evt.stopPropagation();
+            evt.preventDefault();
+            evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+        }
+
+        document.body.addEventListener("dragover", async evt => {
+            dropfileModal.show();
         });
+        dropfileModalEle.addEventListener("dragover", fileDragOverHandler);
+        dropfileModalEle.addEventListener("drop", fileDragDropFileHandler);
+        dropfileModalEle.addEventListener("dragleave", fileDragLeave);
     }
 }
 
@@ -1041,61 +1102,6 @@ async function updateChatVisionFileStore() {
     }
 }
 
-async function chatInputDropFileHandler(evt) {
-    evt.stopPropagation();
-    evt.preventDefault();
-    evt.target.style.backgroundColor = "";
-
-    if (!evt.dataTransfer || !evt.dataTransfer.items) {
-        return;
-    }
-
-    for (let i = 0; i < evt.dataTransfer.items.length; i++) {
-        let item = evt.dataTransfer.items[i];
-        if (item.kind != "file") {
-            return;
-        }
-
-        let file = item.getAsFile();
-        if (!file) {
-            return;
-        }
-
-        // get file content as Blob
-        let reader = new FileReader();
-        reader.onload = async (e) => {
-            let arrayBuffer = e.target.result;
-            if (arrayBuffer.byteLength > 1024 * 1024 * 3) {
-                showalert("danger", "file size should less than 3M");
-                return;
-            }
-
-            let byteArray = new Uint8Array(arrayBuffer);
-            let chunkSize = 0xffff; // Use chunks to avoid call stack limit
-            let chunks = [];
-            for (let i = 0; i < byteArray.length; i += chunkSize) {
-                chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
-            }
-            let base64String = btoa(chunks.join(''));
-
-            // only support 1 image for current version
-            chatVisionFileStore = {};
-
-            chatVisionFileStore[file.name] = base64String;
-            updateChatVisionFileStore();
-        };
-        reader.readAsArrayBuffer(file);
-    }
-}
-
-async function chatInputDragFileHandler(evt) {
-    evt.stopPropagation();
-    evt.preventDefault();
-    evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
-
-    // change backgroud-color
-    evt.target.style.backgroundColor = "#42ffa8";
-}
 
 
 /**
