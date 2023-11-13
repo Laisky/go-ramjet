@@ -103,9 +103,9 @@
 #chatContainer .chatManager .card .card-footer .pinned-files {
   z-index: 1000;
   background-color: #d1d1d1;
-  position: absolute;
-  left: 5px;
-  top: -30px;
+  position: fixed;
+  bottom: 85px;
+  left: 15px;
   max-width: 50%;
   overflow: hidden;
   text-align: left;
@@ -120,9 +120,9 @@
   cursor: pointer;
 }
 #chatContainer .chatManager .card .card-footer .scroll-down {
-  position: absolute;
-  top: -30px;
-  right: 30px;
+  position: fixed;
+  bottom: 85px;
+  right: 15px;
   z-index: 1000;
   font-size: larger;
   cursor: pointer;
