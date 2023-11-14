@@ -1,5 +1,17 @@
-#headerbar .navbar-nav a.dropdown-toggle.active {
-    -webkit-text-stroke: 1px #0063f6;
+#headerbar {
+    padding: 0px;
+
+    .navbar-nav {
+        margin-bottom: 0 !important;
+
+        // .dropdown-menu {
+        //     position: absolute;
+        // }
+
+        a.dropdown-toggle.active {
+            -webkit-text-stroke: 1px #0063f6;
+        }
+    }
 }
 
 #hiddenChatConfigSideBar {

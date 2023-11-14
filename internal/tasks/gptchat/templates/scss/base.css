@@ -1,3 +1,9 @@
+#headerbar {
+  padding: 0px;
+}
+#headerbar .navbar-nav {
+  margin-bottom: 0 !important;
+}
 #headerbar .navbar-nav a.dropdown-toggle.active {
   -webkit-text-stroke: 1px #0063f6;
 }

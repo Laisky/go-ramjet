@@ -34,6 +34,33 @@
         }
     }
 
+    .sessionManager {
+        padding: 0px;
+
+        .card {
+            height: 100%;
+
+            .card-header {
+                padding: 0px;
+
+                button {
+                    padding: 0px;
+                }
+            }
+
+            .card-body {
+                min-height: 300px;
+                padding: 0px;
+
+                .list-group {
+                    button {
+                        padding: 0px;
+                    }
+                }
+            }
+        }
+    }
+
     .chatManager {
         padding: 0px;
         padding-left: 0px;

@@ -30,6 +30,25 @@
 #chatContainer .pinned-refs p .bi-trash {
   cursor: pointer;
 }
+#chatContainer .sessionManager {
+  padding: 0px;
+}
+#chatContainer .sessionManager .card {
+  height: 100%;
+}
+#chatContainer .sessionManager .card .card-header {
+  padding: 0px;
+}
+#chatContainer .sessionManager .card .card-header button {
+  padding: 0px;
+}
+#chatContainer .sessionManager .card .card-body {
+  min-height: 300px;
+  padding: 0px;
+}
+#chatContainer .sessionManager .card .card-body .list-group button {
+  padding: 0px;
+}
 #chatContainer .chatManager {
   padding: 0px;
   padding-left: 0px;

@@ -17,11 +17,11 @@
 </head>
 
 <body>
-    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar" style="padding: 0px;">
+    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">OpenAI</a>
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0" style="margin-bottom: 0!important;">
+            <div class="navbar-expand">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                             aria-expanded="false">
@@ -30,20 +30,11 @@
                         <ul class="dropdown-menu chat-models">
                             <li><a class="dropdown-item" href="#">loading...</a></li>
                             <!-- <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
-                            <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
-                            <li>
-                                <hr class="dropdown-divider">
-                            </li>
-                            <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
-                        </ul>
+                    <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
+                    <li>
+                        <hr class="dropdown-divider">
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                            Q&A
-                        </a>
-                        <ul class="dropdown-menu qa-models">
-                            <li><a class="dropdown-item" href="#" data-model="qa-custom">custom</a></li>
+                    <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -55,6 +46,19 @@
                             <li><a class="dropdown-item" href="#" data-model="dall-e-3">dall-e-3</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            Q&A
+                        </a>
+                        <ul class="dropdown-menu qa-models">
+                            <li><a class="dropdown-item" href="#" data-model="qa-custom">custom</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
                         <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/tutorial/"
                             target="_blank">Tutorial</a>
@@ -251,7 +255,7 @@
 
     <script>
         window.Version = "{{.Version}}";
-        window.data = JSON.parse({{.DataJSON }});
+        window.data = JSON.parse({{ .DataJSON }});
     </script>
 
     <script defer src="{{.BootstrapJs}}"></script>
