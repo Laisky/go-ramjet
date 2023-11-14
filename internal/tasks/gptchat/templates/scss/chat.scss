@@ -37,26 +37,26 @@
     .sessionManager {
         padding: 0px;
 
+        button {
+            padding: 0px;
+            width: 100%;
+        }
+
         .card {
             height: 100%;
 
             .card-header {
                 padding: 0px;
 
-                button {
-                    padding: 0px;
-                }
             }
 
             .card-body {
                 min-height: 300px;
                 padding: 0px;
+            }
 
-                .list-group {
-                    button {
-                        padding: 0px;
-                    }
-                }
+            .card-footer {
+                padding: 0px;
             }
         }
     }
