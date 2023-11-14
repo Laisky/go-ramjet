@@ -648,12 +648,12 @@ async function sendChat2Server(chatID) {
 
                 // insert image to user hisotry
                 let text = chatContainer
-                .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
+                    .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
                 appendChats2Storage(
                     RoleHuman, chatID,
                     text,
                     `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`,
-                    );
+                );
 
                 // insert image to user input
                 chatContainer
@@ -963,7 +963,11 @@ function abortAIResp(err) {
 
     let errMsg;
     if (err.data) {
-        errMsg = JSON.parse(err.data);
+        try {
+            errMsg = JSON.parse(err.data);
+        } catch (e) {
+            errMsg = err.data;
+        }
     } else {
         errMsg = err.toString();
     }
@@ -1232,7 +1236,7 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
 
             if (attachHTML) {
                 attachHTML = `<p>${attachHTML}</p>`;
-            }else {
+            } else {
                 attachHTML = "";
             }
 
