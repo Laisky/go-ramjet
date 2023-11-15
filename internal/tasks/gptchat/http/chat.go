@@ -193,15 +193,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			"gpt-3.5-turbo-16k",
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-16k-0613":
-			if frontendReq.Model == "gpt-4-1106-preview" {
-				// only openai support gpt-4-turbo
-				newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
-				if !user.BYOK {
-					user.OpenaiToken = config.Config.DefaultOpenaiToken
-				}
-			} else {
-				newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-			}
+			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
 			req := new(OpenaiChatReq[string])
 			if err := copier.Copy(req, frontendReq); err != nil {
@@ -210,11 +202,15 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 			openaiReq = req
 		case "gpt-4-vision-preview":
+			// FIXME: add billing
+
 			// only openai support vision
 			newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
 			if !user.BYOK {
 				user.OpenaiToken = config.Config.DefaultOpenaiToken
 			}
+
+			// newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision

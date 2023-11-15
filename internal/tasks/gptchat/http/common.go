@@ -115,7 +115,11 @@ SWITCH_FOR_USER:
 		return nil, errors.Errorf("can not find freetier user %q in settings",
 			config.FreetierUserToken)
 	case strings.HasPrefix(userToken, "laisky-"):
-		username := strings.TrimPrefix(userToken, "laisky-")[:8]
+		if len(userToken) < 15 {
+			return nil, errors.Errorf("invalid laisky's oneapi token %q", userToken)
+		}
+
+		username := userToken[:15]
 		log.Logger.Debug("use laisky's oneapi token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
 			UserName:               username,
