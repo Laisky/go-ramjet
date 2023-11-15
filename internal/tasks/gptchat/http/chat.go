@@ -205,12 +205,11 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			// FIXME: add billing
 
 			// only openai support vision
+			// newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
 			if !user.BYOK {
 				user.OpenaiToken = config.Config.DefaultOpenaiToken
 			}
-
-			// newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision
@@ -237,8 +236,11 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			for _, f := range lastMessage.Files {
 				totalFileSize += len(f.Content)
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
-					Type:     OpenaiVisionMessageContentTypeImageUrl,
-					ImageUrl: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
+					Type: OpenaiVisionMessageContentTypeImageUrl,
+					ImageUrl: openaiVisionMessageContentImageUrl{
+						URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
+						Detail: "low",
+					},
 				})
 			}
 
