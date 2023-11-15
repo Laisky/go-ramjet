@@ -44,7 +44,7 @@ func SetupConfig() (err error) {
 
 	// fill default
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitExpensiveModelsIntervalSeconds, 60)
+		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
 	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitImageModelsIntervalSeconds, 600)
 	Config.DefaultImageToken = gutils.OptionalVal(
@@ -156,10 +156,10 @@ type UserConfig struct {
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 	// NoLimitExpensiveModels (optional) skip rate limiter for expensive models
 	NoLimitExpensiveModels bool `json:"no_limit_expensive_models" mapstructure:"no_limit_expensive_models"`
-	// NoLimitAllModels (optional) skip rate limiter for all models
-	NoLimitAllModels bool `json:"no_limit_all_models" mapstructure:"no_limit_all_models"`
 	// NoLimitImageModels (optional) skip rate limiter for image models
 	NoLimitImageModels bool `json:"no_limit_image_models" mapstructure:"no_limit_image_models"`
+	// NoLimitOpenaiModels (optional) skip rate limiter for models that only supported by openai
+	NoLimitOpenaiModels bool `json:"no_limit_openai_models" mapstructure:"no_limit_openai_models"`
 	// EnableExternalImageBilling (optional) enable external image billing
 	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
 	// ExternalImageBillingUID (optional) external image billing uid
@@ -197,8 +197,8 @@ func (c *UserConfig) Valid() error {
 }
 
 var (
-	onceLimiter                                              sync.Once
-	ratelimiter, expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
+	onceLimiter                                                    sync.Once
+	globalRatelimiter, expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
 )
 
 // setupRateLimiter setup ratelimiter depends on loaded config
@@ -208,7 +208,7 @@ func setupRateLimiter() {
 	logger := log.Logger.Named("gptchat.ratelimiter")
 
 	{
-		if ratelimiter, err = gutils.NewRateLimiter(context.Background(),
+		if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
 			gutils.RateLimiterArgs{
 				Max:     10,
 				NPerSec: 1,
@@ -247,6 +247,11 @@ func setupRateLimiter() {
 func (c *UserConfig) IsModelAllowed(model string) error {
 	onceLimiter.Do(setupRateLimiter)
 
+	if c.BYOK { // bypass if user bring their own token
+		log.Logger.Debug("bypass rate limit for BYOK user")
+		return nil
+	}
+
 	if len(c.AllowedModels) == 0 {
 		return errors.Errorf("no allowed models for current user %q", c.UserName)
 	}
@@ -267,50 +272,46 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		return errors.Errorf("model %q is not allowed for user %q", model, c.UserName)
 	}
 
-	if !c.NoLimitAllModels && !ratelimiter.Allow() { // check rate limit
+	if !globalRatelimiter.Allow() { // check rate limit
 		return errors.Errorf("too many requests, please try again later")
 	}
 
-	if strings.HasPrefix(model, "image-") { // check image models first
+	// rate limit only support limit by second,
+	// so we consume 60 tokens once to make it limit by minute
+	var (
+		ratelimitCost int
+		ratelimiter   = expensiveModelRateLimiter
+	)
+	switch model {
+	case "gpt-3.5-turbo":
+		// bypass cheap model
+	case "dall-e-3":
 		if c.NoLimitImageModels {
 			return nil
 		}
 
-		price := gconfig.Shared.GetInt("openai.rate_limit_image_models_interval_secs")
-		if price == 0 {
-			price = 600 // default
+		ratelimiter = imageRateLimiter
+		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_image_models_interval_secs")
+	case "gpt-4-1106-preview", "gpt-4-vision-preview": // only openai supports
+		if c.NoLimitOpenaiModels {
+			return nil
 		}
 
-		// if price less than 0, means no limit
-		log.Logger.Debug("check image model rate limit",
-			zap.String("model", model),
-			zap.Int("price", price))
-		if price >= 0 && !imageRateLimiter.AllowN(price) { // check rate limit
-			return errors.Errorf("too many requests for image model %q, "+
-				"please try after %d seconds",
-				model, (price - imageRateLimiter.Len()))
+		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+	default: // expensive model
+		if c.NoLimitExpensiveModels {
+			return nil
 		}
-	} else if !c.NoLimitExpensiveModels { // then check expensive models
-		if !gutils.Contains([]string{ // enum all cheap models
-			"gpt-3.5-turbo",
-		}, model) {
-			// rate limit only support limit by second,
-			// so we consume 60 tokens once to make it limit by minute
-			price := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
-			if price == 0 {
-				price = 60 // default
-			}
 
-			// if price less than 0, means no limit
-			log.Logger.Debug("check expensive model rate limit",
-				zap.String("model", model),
-				zap.Int("price", price))
-			if price >= 0 && !expensiveModelRateLimiter.AllowN(price) { // check rate limit
-				return errors.Errorf("too many requests for expensive model %q, "+
-					"please try after %d seconds",
-					model, (price - expensiveModelRateLimiter.Len()))
-			}
-		}
+		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+	}
+
+	// if price less than 0, means no limit
+	log.Logger.Debug("check rate limit",
+		zap.String("model", model), zap.Int("price", ratelimitCost))
+	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
+		return errors.Errorf("too many requests for model %q, please try after %d seconds",
+			model, (ratelimitCost - ratelimiter.Len()))
 	}
 
 	return nil

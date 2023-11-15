@@ -125,7 +125,6 @@ SWITCH_FOR_USER:
 			ImageTokenType:         config.Config.DefaultImageTokenType,
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
-			NoLimitAllModels:       true,
 			APIBase:                "https://oneapi.laisky.com",
 		}
 
@@ -164,7 +163,7 @@ SWITCH_FOR_USER:
 			ImageTokenType:         config.ImageTokenOpenai,
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
-			NoLimitAllModels:       true,
+			NoLimitOpenaiModels:    true,
 			NoLimitImageModels:     true,
 			BYOK:                   true,
 			APIBase:                config.Config.API,

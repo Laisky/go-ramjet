@@ -33,7 +33,7 @@ func (p Price) USDCents() int {
 
 const (
 	// PriceTxt2Image how many quotes for txt2image
-	PriceTxt2Image Price = 10000 // 0.02 usd
+	PriceTxt2Image Price = 20000 // 0.04 usd
 )
 
 // BillingType billing type
