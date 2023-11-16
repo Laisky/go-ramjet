@@ -304,8 +304,10 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			}
 			logger = logger.With(zap.String("resolution", resolution))
 
-			totalFileSize := 0
-			totalPrice := 0
+			var (
+				totalFileSize = 0
+				totalCost     = 0
+			)
 			for i, f := range lastMessage.Files {
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
 					Type: OpenaiVisionMessageContentTypeImageUrl,
@@ -320,7 +322,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				} else if price, err := CountVisionImagePrice(width, height, VisionImageResolution(resolution)); err != nil {
 					return nil, nil, errors.Wrap(err, "count image price")
 				} else {
-					totalPrice += price
+					totalCost += price
 				}
 
 				if i >= 1 {
@@ -333,11 +335,11 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				}
 			}
 
-			if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.Price(totalPrice)); err != nil {
+			if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.Price(totalCost), "gpt4-vision"); err != nil {
 				return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
 			}
 
-			logger = logger.With(zap.Int("price", totalPrice))
+			logger = logger.With(zap.Int("price", totalCost))
 			openaiReq = req
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")

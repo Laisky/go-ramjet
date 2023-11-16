@@ -82,13 +82,17 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	req.Header.Del("Accept-Encoding")
 
 	// set token
-	var cost db.Price
+	var (
+		cost       db.Price
+		costReason string
+	)
 	{
 		token := user.OpenaiToken
 
 		// generate image need special token
 		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
 			cost = db.PriceTxt2Image
+			costReason = "txt2image"
 			token = user.ImageToken
 			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
 			if err = user.IsModelAllowed(model); err != nil {
@@ -99,7 +103,7 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserExternalBilling(gctx.Request.Context(), user, cost); err != nil {
+	if err := checkUserExternalBilling(gctx.Request.Context(), user, cost, costReason); err != nil {
 		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 
@@ -181,7 +185,8 @@ func GetUserInternalBill(ctx context.Context,
 //  1. get user's current quota from external billing api
 //  2. check if user has enough quota
 //  3. update user's quota
-func checkUserExternalBilling(ctx context.Context, user *config.UserConfig, cost db.Price) (err error) {
+func checkUserExternalBilling(ctx context.Context,
+	user *config.UserConfig, cost db.Price, costReason string) (err error) {
 	logger := log.Logger.Named("openai.billing")
 	if !user.EnableExternalImageBilling {
 		logger.Debug("skip billing for user", zap.String("username", user.UserName))
@@ -237,6 +242,7 @@ func checkUserExternalBilling(ctx context.Context, user *config.UserConfig, cost
 			"id":               externalUID,
 			"add_used_quota":   cost,
 			"add_remain_quota": -cost,
+			"add_reason":       costReason,
 		}); err != nil {
 		return errors.Wrap(err, "marshal request body")
 	}
