@@ -239,10 +239,9 @@ func checkUserExternalBilling(ctx context.Context,
 	var reqBody bytes.Buffer
 	if err = json.NewEncoder(&reqBody).Encode(
 		map[string]any{
-			"id":               externalUID,
-			"add_used_quota":   cost,
-			"add_remain_quota": -cost,
-			"add_reason":       costReason,
+			"id":             externalUID,
+			"add_used_quota": cost,
+			"add_reason":     costReason,
 		}); err != nil {
 		return errors.Wrap(err, "marshal request body")
 	}
