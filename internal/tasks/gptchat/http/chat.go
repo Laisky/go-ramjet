@@ -6,7 +6,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image/jpeg"
+	"image/png"
 	"io"
+	"math"
 	"net/http"
 	urllib "net/url"
 	"path/filepath"
@@ -16,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
@@ -117,6 +121,8 @@ func ChatHandler(ctx *gin.Context) {
 		if AbortErr(ctx, err) {
 			return
 		}
+	} else if lastResp != nil && gutils.IsEmpty(lastResp) {
+		return // bypass empty response
 	} else {
 		AbortErr(ctx, errors.Errorf("unsupport resp body %q", reader.Text()))
 	}
@@ -154,7 +160,63 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger.Debug("save conservation", zap.Any("id", ret.InsertedID))
 }
 
+// VisionTokenPrice vision token price($/500000)
+const VisionTokenPrice = 5000
+
+// VisionImageResolution image resolution
+type VisionImageResolution string
+
+const (
+	// VisionImageResolutionLow low resolution
+	VisionImageResolutionLow VisionImageResolution = "low"
+	// VisionImageResolutionHigh high resolution
+	VisionImageResolutionHigh VisionImageResolution = "high"
+)
+
+// CountVisionImagePrice count vision image tokens
+//
+// https://openai.com/pricing
+func CountVisionImagePrice(width int, height int, resolution VisionImageResolution) (int, error) {
+	switch resolution {
+	case VisionImageResolutionLow:
+		return 85, nil // fixed price
+	case VisionImageResolutionHigh:
+		h := math.Ceil(float64(height) / 512)
+		w := math.Ceil(float64(width) / 512)
+		n := w * h
+		total := 85 + 170*n
+		return int(total) * VisionTokenPrice, nil
+	default:
+		return 0, errors.Errorf("unsupport resolution %q", resolution)
+	}
+}
+
+func imageSize(cnt []byte) (width, height int, err error) {
+	contentType := http.DetectContentType(cnt)
+	switch contentType {
+	case "image/jpeg", "image/jpg":
+		img, err := jpeg.Decode(bytes.NewReader(cnt))
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "decode jpeg")
+		}
+
+		bounds := img.Bounds()
+		return bounds.Dx(), bounds.Dy(), nil
+	case "image/png":
+		img, err := png.Decode(bytes.NewReader(cnt))
+		if err != nil {
+			return 0, 0, errors.Wrap(err, "decode png")
+		}
+
+		bounds := img.Bounds()
+		return bounds.Dx(), bounds.Dy(), nil
+	default:
+		return 0, 0, errors.Errorf("unsupport image content type %q", contentType)
+	}
+}
+
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
+	logger := gmw.GetLogger(ctx).With(zap.String("method", ctx.Request.Method))
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
@@ -180,6 +242,10 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 		frontendReq, err = bodyChecker(ctx, user, ctx.Request.Body)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "request is illegal")
+		}
+
+		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
+			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
 		}
 
 		var openaiReq any
@@ -232,22 +298,46 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				},
 			}
 
+			resolution := string(VisionImageResolutionLow)
+			if user.BYOK || user.NoLimitOpenaiModels {
+				resolution = string(VisionImageResolutionHigh)
+			}
+			logger = logger.With(zap.String("resolution", resolution))
+
 			totalFileSize := 0
-			for _, f := range lastMessage.Files {
-				totalFileSize += len(f.Content)
+			totalPrice := 0
+			for i, f := range lastMessage.Files {
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
 					Type: OpenaiVisionMessageContentTypeImageUrl,
 					ImageUrl: openaiVisionMessageContentImageUrl{
 						URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
-						Detail: "low",
+						Detail: resolution,
 					},
 				})
+
+				if width, height, err := imageSize(f.Content); err != nil {
+					return nil, nil, errors.Wrap(err, "get image size")
+				} else if price, err := CountVisionImagePrice(width, height, VisionImageResolution(resolution)); err != nil {
+					return nil, nil, errors.Wrap(err, "count image price")
+				} else {
+					totalPrice += price
+				}
+
+				if i >= 1 {
+					break // only support 2 images for cost saving
+				}
+
+				totalFileSize += len(f.Content)
+				if totalFileSize > 6*1024*1024 {
+					return nil, nil, errors.Errorf("total file size should less than 6MB, got %d", totalFileSize)
+				}
 			}
 
-			if totalFileSize > 5*1024*1024 {
-				return nil, nil, errors.Errorf("total file size should less than 5MB, got %d", totalFileSize)
+			if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.Price(totalPrice)); err != nil {
+				return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
 			}
 
+			logger = logger.With(zap.Int("price", totalPrice))
 			openaiReq = req
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
@@ -259,20 +349,13 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 			return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
 		}
 
-		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
-			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
-		}
-
 		payload, err := json.Marshal(openaiReq)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "marshal new body")
 		}
-		// log.Logger.Debug("prepare request", zap.ByteString("req", payload))
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
-	log.Logger.Debug("send request to openai api",
-		zap.String("url", newUrl), zap.String("method", ctx.Request.Method))
 	req, err := http.NewRequestWithContext(ctx.Request.Context(),
 		ctx.Request.Method, newUrl, body)
 	if err != nil {
@@ -285,14 +368,14 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 	// golang's http client will not auto decompress response body
 	req.Header.Del("Accept-Encoding")
 
-	log.Logger.Debug("try send request to upstream server", zap.String("url", newUrl))
+	logger.Debug("try send request to upstream server", zap.String("url", newUrl))
 	resp, err = httpcli.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "do request %q", newUrl)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint
+		defer gutils.LogErr(resp.Body.Close, logger) // nolint
 		body, _ := io.ReadAll(resp.Body)
 		return nil, nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
 	}

@@ -79,3 +79,67 @@ func Test_extractHTMLBody(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "<body>\n\t\t\t<h1>Hello, world!</h1>\n\t\t\t<p>This is an example of an HTML5 document.</p>\n\t\t\n\t</body>", string(got))
 }
+
+func TestCountVisionImagePrice(t *testing.T) {
+	tests := []struct {
+		name       string
+		width      int
+		height     int
+		resolution VisionImageResolution
+		want       int
+		wantErr    bool
+	}{
+		{
+			name:       "100x100 low",
+			width:      100,
+			height:     100,
+			resolution: VisionImageResolutionLow,
+			want:       85,
+			wantErr:    false,
+		},
+		{
+			name:       "256x256 high",
+			width:      256,
+			height:     256,
+			resolution: VisionImageResolutionHigh,
+			want:       255 * VisionTokenPrice,
+			wantErr:    false,
+		},
+		{
+			name:       "1024x1024 high",
+			width:      1024,
+			height:     1024,
+			resolution: VisionImageResolutionHigh,
+			want:       765 * VisionTokenPrice,
+			wantErr:    false,
+		},
+		{
+			name:       "1024x2048 high",
+			width:      1024,
+			height:     2048,
+			resolution: VisionImageResolutionHigh,
+			want:       1105 * VisionTokenPrice,
+			wantErr:    false,
+		},
+		{
+			name:       "unsupported resolution",
+			width:      1024,
+			height:     1024,
+			resolution: "unsupported",
+			want:       0,
+			wantErr:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CountVisionImagePrice(tt.width, tt.height, tt.resolution)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%q error = %v, wantErr %v", tt.name, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("%q = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
