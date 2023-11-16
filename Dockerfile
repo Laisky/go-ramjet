@@ -43,7 +43,8 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     && update-ca-certificates
 
 # install google-chrome
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+# RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+RUN wget https://s3.laisky.com/public/google-chrome-stable_current_amd64.deb \
     && apt install -y ./google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
 RUN rm -rf /var/lib/apt/lists/*
