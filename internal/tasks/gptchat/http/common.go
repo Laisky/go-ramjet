@@ -91,9 +91,11 @@ func getUserByToken(ctx context.Context, userToken string) (user *config.UserCon
 SWITCH_FOR_USER:
 	switch {
 	case strings.HasPrefix(userToken, "FREETIER-"): // free user
-		hasher := sha256.New()
-		hasher.Write([]byte(userToken))
-		username := hex.EncodeToString(hasher.Sum(nil))[:12]
+		if len(userToken) < 15 {
+			return nil, errors.Errorf("invalid freetier token %q", userToken)
+		}
+
+		username := userToken[:15]
 		log.Logger.Debug("use server's freetier openai token",
 			zap.String("token", userToken),
 			zap.String("user", username))
