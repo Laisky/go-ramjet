@@ -138,8 +138,19 @@ window.OpenaiToken = () => {
         apikey = new URLSearchParams(window.location.search).get("apikey");
         // only remove apikey from url params
         let url = new URL(window.location.href);
-        url.searchParams.delete("apikey");
-        window.history.pushState({}, document.title, url);
+
+        // fix: sometimes url.searchParams.delete() works too quickly,
+        // that let another caller rewrite apikey to FREE-TIER,
+        // so we delay 1s to delete apikey from url params.
+        window.setTimeout(() => {
+            let v = new URLSearchParams(window.location.search).get("apikey");
+            if (!v) {
+                return;
+            }
+
+            url.searchParams.delete("apikey");
+            window.history.pushState({}, document.title, url);
+        }, 1000);
     }
 
     // get token from localstorage
@@ -257,6 +268,7 @@ window.ConfirmModal = (title, callback) => {
 
 (function () {
     (function main() {
+        window.OpenaiToken();
         checkVersion();
         setupHeader();
         setupConfirmModal();
