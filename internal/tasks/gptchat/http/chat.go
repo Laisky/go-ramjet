@@ -163,16 +163,6 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 // VisionTokenPrice vision token price($/500000)
 const VisionTokenPrice = 5000
 
-// VisionImageResolution image resolution
-type VisionImageResolution string
-
-const (
-	// VisionImageResolutionLow low resolution
-	VisionImageResolutionLow VisionImageResolution = "low"
-	// VisionImageResolutionHigh high resolution
-	VisionImageResolutionHigh VisionImageResolution = "high"
-)
-
 // CountVisionImagePrice count vision image tokens
 //
 // https://openai.com/pricing
@@ -268,15 +258,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 			openaiReq = req
 		case "gpt-4-vision-preview":
-			// FIXME: add billing
-
-			// only openai support vision
-			// newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-			newUrl = fmt.Sprintf("%s/%s", "https://api.openai.com", "v1/chat/completions")
-			if !user.BYOK {
-				user.OpenaiToken = config.Config.DefaultOpenaiToken
-			}
-
+			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision
 				return nil, nil, errors.New("no image")
@@ -298,32 +280,22 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				},
 			}
 
-			resolution := string(VisionImageResolutionLow)
-			if user.BYOK || user.NoLimitOpenaiModels {
-				resolution = string(VisionImageResolutionHigh)
-			}
-			logger = logger.With(zap.String("resolution", resolution))
-
-			var (
-				totalFileSize = 0
-				totalCost     = 0
-			)
+			totalFileSize := 0
 			for i, f := range lastMessage.Files {
+				resolution := VisionImageResolutionLow
+				// if user has permission and image size is large than 1MB,
+				// use high resolution
+				if (user.BYOK || user.NoLimitExpensiveModels) && len(f.Content) > 1024*1024 {
+					resolution = VisionImageResolutionHigh
+				}
+
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
 					Type: OpenaiVisionMessageContentTypeImageUrl,
-					ImageUrl: openaiVisionMessageContentImageUrl{
+					ImageUrl: OpenaiVisionMessageContentImageUrl{
 						URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
 						Detail: resolution,
 					},
 				})
-
-				if width, height, err := imageSize(f.Content); err != nil {
-					return nil, nil, errors.Wrap(err, "get image size")
-				} else if price, err := CountVisionImagePrice(width, height, VisionImageResolution(resolution)); err != nil {
-					return nil, nil, errors.Wrap(err, "count image price")
-				} else {
-					totalCost += price
-				}
 
 				if i >= 1 {
 					break // only support 2 images for cost saving
@@ -335,11 +307,6 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				}
 			}
 
-			if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.Price(totalCost), "gpt4-vision"); err != nil {
-				return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
-			}
-
-			logger = logger.With(zap.Int("price", totalCost))
 			openaiReq = req
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")

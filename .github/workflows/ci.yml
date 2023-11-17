@@ -46,6 +46,9 @@ jobs:
           path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}
 
+      - name: Add SHORT_SHA env property with commit short sha
+        run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-7`" >> $GITHUB_ENV
+
       -
         name: Build and push latest
         uses: docker/build-push-action@v4
@@ -59,4 +62,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ppcelery/go-ramjet:${{ github.sha }}
+          tags: ppcelery/go-ramjet:${{ env.SHORT_SHA }}

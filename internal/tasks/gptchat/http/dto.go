@@ -112,16 +112,27 @@ const (
 	OpenaiVisionMessageContentTypeImageUrl OpenaiVisionMessageContentType = "image_url"
 )
 
-type openaiVisionMessageContentImageUrl struct {
-	URL    string `json:"url"`
-	Detail string `json:"detail,omitempty"`
+// VisionImageResolution image resolution
+type VisionImageResolution string
+
+const (
+	// VisionImageResolutionLow low resolution
+	VisionImageResolutionLow VisionImageResolution = "low"
+	// VisionImageResolutionHigh high resolution
+	VisionImageResolutionHigh VisionImageResolution = "high"
+)
+
+// OpenaiVisionMessageContentImageUrl image url
+type OpenaiVisionMessageContentImageUrl struct {
+	URL    string                `json:"url"`
+	Detail VisionImageResolution `json:"detail,omitempty"`
 }
 
 // OpenaiVisionMessageContent vision message content
 type OpenaiVisionMessageContent struct {
 	Type     OpenaiVisionMessageContentType     `json:"type"`
 	Text     string                             `json:"text,omitempty"`
-	ImageUrl openaiVisionMessageContentImageUrl `json:"image_url,omitempty"`
+	ImageUrl OpenaiVisionMessageContentImageUrl `json:"image_url,omitempty"`
 }
 
 // OpenaiCompletionReq request to openai chat api

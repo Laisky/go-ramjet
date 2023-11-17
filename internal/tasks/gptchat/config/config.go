@@ -293,7 +293,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		ratelimiter = imageRateLimiter
 		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_image_models_interval_secs")
 	case "gpt-4-vision-preview": // only openai supports
-		if c.NoLimitOpenaiModels {
+		if c.NoLimitExpensiveModels {
 			return nil
 		}
 
