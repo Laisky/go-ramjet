@@ -109,7 +109,7 @@ SWITCH_FOR_USER:
 					return nil, errors.Wrap(err, "copy free user")
 				}
 
-				user.UserName = "FREETIER-" + username
+				user.UserName = username
 				break SWITCH_FOR_USER
 			}
 		}
