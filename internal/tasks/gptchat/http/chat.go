@@ -258,6 +258,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 
 			openaiReq = req
 		case "gpt-4-vision-preview":
+			return nil, nil, errors.New("unsupport model") // FIXME
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision

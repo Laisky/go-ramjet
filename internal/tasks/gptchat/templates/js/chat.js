@@ -97,7 +97,7 @@ function listenSessionSwitch(evt) {
     let sessionID = evt.target.dataset.session;
     chatContainer.querySelector(".conservations").innerHTML = "";
     sessionChatHistory(sessionID).forEach((item) => {
-        append2Chats(item.chatID, item.role, item.content, true);
+        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
     });
 }
 
