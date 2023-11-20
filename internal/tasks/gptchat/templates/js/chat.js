@@ -353,7 +353,12 @@ function removeChatInStorage(chatid) {
 }
 
 
-// append or update chat history by chatid and role
+/** append or update chat history by chatid and role
+    * @param {string} chatid - chat id
+    * @param {string} role - user or assistant
+    * @param {string} content - chat content
+    * @param {string} attachHTML - chat content's attach html
+*/
 function appendChats2Storage(role, chatid, content, attachHTML) {
     if (!chatid) {
         throw "chatid is required";
@@ -536,14 +541,14 @@ function getPinnedMaterials() {
 }
 
 /**
- * Sends an image prompt to the server for the selected model and updates the current AI response element with the task information.
+ * Sends an txt2image prompt to the server for the selected model and updates the current AI response element with the task information.
  * @param {string} chatID - The chat ID.
  * @param {string} selectedModel - The selected image model.
  * @param {HTMLElement} currentAIRespEle - The current AI response element to update with the task information.
  * @param {string} prompt - The image prompt to send to the server.
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
-async function sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
         case ImageModelDalle2:
@@ -632,27 +637,25 @@ async function sendChat2Server(chatID) {
         }
 
         // there are pinned files, add them to user's prompt
-        if (Object.keys(chatVisionFileStore).length != 0) {
+        if (Object.keys(chatVisionSelectedFileStore).length != 0) {
             if (!selectedModel.includes("vision")) {
                 abortAIResp(new Error(`you must select a vision model, current model is ${selectedModel}`));
                 return
             }
 
             messages[messages.length - 1].files = [];
-            for (let key in chatVisionFileStore) {
+            for (let key in chatVisionSelectedFileStore) {
                 messages[messages.length - 1].files.push({
                     type: "image",
                     name: key,
-                    content: chatVisionFileStore[key]
+                    content: chatVisionSelectedFileStore[key]
                 });
 
                 // insert image to user hisotry
                 let text = chatContainer
                     .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
-                appendChats2Storage(
-                    RoleHuman, chatID,
-                    text,
-                    `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`,
+                appendChats2Storage(RoleHuman, chatID, text,
+                    `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" style="max-width: 80%;" data-name="${key}">`,
                 );
 
                 // insert image to user input
@@ -660,12 +663,12 @@ async function sendChat2Server(chatID) {
                     .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
                     .insertAdjacentHTML(
                         "beforeend",
-                        `<img src="data:image/png;base64,${chatVisionFileStore[key]}" style="max-width: 80%;">`,
+                        `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" style="max-width: 80%;" data-name="${key}">`,
                     );
             }
 
-            chatVisionFileStore = {};
-            updateChatVisionFileStore();
+            chatVisionSelectedFileStore = {};
+            updateChatVisionSelectedFileStore();
         }
 
         currentAIRespSSE = new SSE(window.OpenaiAPI(), {
@@ -827,7 +830,7 @@ async function sendChat2Server(chatID) {
         }
     } else if (window.IsImageModel(selectedModel)) {
         try {
-            await sendImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
+            await sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
         } catch (err) {
             abortAIResp(err);
             return;
@@ -1087,10 +1090,9 @@ function setupChatInput() {
                     let base64String = btoa(chunks.join(''));
 
                     // only support 1 image for current version
-                    chatVisionFileStore = {};
-
-                    chatVisionFileStore[file.name] = base64String;
-                    updateChatVisionFileStore();
+                    chatVisionSelectedFileStore = {};
+                    chatVisionSelectedFileStore[file.name] = base64String;
+                    updateChatVisionSelectedFileStore();
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -1141,10 +1143,9 @@ function setupChatInput() {
                     let base64String = btoa(chunks.join(''));
 
                     // only support 1 image for current version
-                    chatVisionFileStore = {};
-
-                    chatVisionFileStore[file.name] = base64String;
-                    updateChatVisionFileStore();
+                    chatVisionSelectedFileStore = {};
+                    chatVisionSelectedFileStore[file.name] = base64String;
+                    updateChatVisionSelectedFileStore();
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -1161,15 +1162,15 @@ function setupChatInput() {
     }
 }
 
-// map[filename]fileContent
+// map[filename]fileContent_in_base64
 //
-// should invoke updateChatVisionFileStore after update this object
-var chatVisionFileStore = {};
+// should invoke updateChatVisionSelectedFileStore after update this object
+var chatVisionSelectedFileStore = {};
 
-async function updateChatVisionFileStore() {
+async function updateChatVisionSelectedFileStore() {
     let pinnedFiles = chatContainer.querySelector(".pinned-files");
     pinnedFiles.innerHTML = "";
-    for (let key in chatVisionFileStore) {
+    for (let key in chatVisionSelectedFileStore) {
         pinnedFiles.insertAdjacentHTML("beforeend", `<p data-key="${key}"><i class="bi bi-trash"></i> ${key}</p>`);
     }
 
@@ -1180,7 +1181,7 @@ async function updateChatVisionFileStore() {
                 evt.stopPropagation();
                 let ele = evt.target.closest("p");
                 let key = ele.dataset.key;
-                delete chatVisionFileStore[key];
+                delete chatVisionSelectedFileStore[key];
                 ele.parentNode.removeChild(ele);
             });
         });
@@ -1304,6 +1305,17 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             let oldText = chatContainer.querySelector(`#${chatID}`).innerHTML,
                 text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
 
+            // attach image to vision-selected-store when edit human input
+            let attachEles = chatContainer
+                .querySelectorAll(`.chatManager .conservations #${chatID} .role-human .text-start img`) || [];
+            chatVisionSelectedFileStore = {};
+            attachEles.forEach((ele) => {
+                let b64fileContent = ele.getAttribute("src").replace("data:image/png;base64,", "");
+                let key = ele.dataset.name || "unknown.png";
+                chatVisionSelectedFileStore[key] = b64fileContent;
+            });
+            updateChatVisionSelectedFileStore();
+
             text = window.sanitizeHTML(text);
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
@@ -1351,7 +1363,7 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
                     .addEventListener("click", editHumanInputHandler);
 
                 await sendChat2Server(chatID);
-                appendChats2Storage(RoleHuman, chatID, newText);
+                appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
             });
 
             cancelBtn.addEventListener("click", (evt) => {
