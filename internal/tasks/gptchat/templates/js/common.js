@@ -378,6 +378,10 @@ function setupHeader() {
                     SetLocalStorage("config_chat_model", selectedModel);
                 }
 
+                // add hint to input text
+                chatPromptInputEle.attributes
+                    .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+
                 let unsupportedModels = [];
                 data.allowed_models.forEach((model) => {
                     if (!ChatModels.includes(model)) {
@@ -439,6 +443,9 @@ function setupHeader() {
                                 elem.classList.remove("active");
                             });
                         evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+
+                        // add hint to input text
+                        chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
                     });
                 });
             });
