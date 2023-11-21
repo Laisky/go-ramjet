@@ -107,7 +107,7 @@
 #chatContainer .chatManager .card .card-body.conservations .role-ai {
   margin-bottom: 5px;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-ai div.col-1 {
+#chatContainer .chatManager .card .card-body.conservations .role-ai .icon {
   margin-top: 0.5em;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-ai .ai-response p {
