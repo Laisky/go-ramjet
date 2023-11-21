@@ -92,10 +92,15 @@
                 }
 
                 img {
+                    max-width: 90%;
                     border-width: 5px 5px 5px 5px;
                     box-shadow: 1px 1px 5px #333;
                     -webkit-box-shadow: 1px 1px 5px #333;
                     -moz-box-shadow: 1px 1px 5px #333;
+                }
+
+                .icon {
+                    width: 50px
                 }
 
                 .role-human {
@@ -106,6 +111,7 @@
                     }
 
                     .control {
+                        width: 50px;
                         flex-direction: row-reverse;
 
                         .bi-trash {

@@ -29,11 +29,23 @@
                 <div class="card-body conservations">
                     <!-- chats is here -->
 
-                    <!-- <div class="container-fluid row role-ai" style="background-color: #f4f4f4;">
-                        <div class="row">
-                            <div class="col-1">🤖️</div>
-                            <div class="col-11 text-start" data-status="waiting">
-                                <p class="card-text placeholder-glow">
+                    <!-- <div id="${chatID}">
+                        <div class="container-fluid row role-human" data-chatid="${chatID}">
+                            <div class="col-auto" style="width:50px;">🤔️</div>
+                            <div class="col text-start">
+                                <pre>${text}</pre>
+                                ${attachHTML}
+                            </div>
+                            <div class="col-auto d-flex control">
+                                <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-trash"></i>
+                            </div>
+                        </div>
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;"
+                            data-chatid="${chatID}">
+                            <div class="col-auto icon" style="width:50px;">${robot_icon}</div>
+                            <div class="col text-start ai-response" data-status="waiting">
+                                <p dir="auto" class="card-text placeholder-glow">
                                     <span class="placeholder col-7"></span>
                                     <span class="placeholder col-4"></span>
                                     <span class="placeholder col-4"></span>
@@ -41,11 +53,9 @@
                                     <span class="placeholder col-8"></span>
                                 </p>
                             </div>
-                        </div>
-                        <div class="row d-flex align-items-center justify-content-center">
-                            <button class="btn btn-outline-secondary" type="button"><i class="bi bi-repeat"></i> Reload</button>
-                        </div>
-                    </div> -->
+                        </div> -->
+                    </div>
+
                 </div>
                 <div class="card-footer text-muted">
                     <div class="pinned-files">
@@ -54,7 +64,8 @@
                     </div>
                     <i class="bi bi-arrow-down-circle scroll-down"></i>
                     <div class="input-group mb-3">
-                        <textarea dir="auto" class="form-control input prompt" placeholder="please wait a monent..."></textarea>
+                        <textarea dir="auto" class="form-control input prompt"
+                            placeholder="please wait a monent..."></textarea>
                         <button class="btn btn-outline-secondary send" type="button">Send</button>
                     </div>
                 </div>

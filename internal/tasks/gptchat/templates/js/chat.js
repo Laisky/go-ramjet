@@ -141,7 +141,7 @@ async function fetchImageDrawingResultBackground() {
 
             // image is ready, show it
             item.dataset.status = "done";
-            item.innerHTML = `<img src="${imageUrl}" style="max-width: 80%;">`;
+            item.innerHTML = `<img src="${imageUrl}">`;
         });
 }
 
@@ -581,7 +581,7 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     currentAIRespEle.dataset.imageUrl = respData["image_url"];
 
     // save img to storage no matter it's done or not
-    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}" style="max-width: 80%;">`);
+    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
 }
 
 async function sendChat2Server(chatID) {
@@ -639,7 +639,9 @@ async function sendChat2Server(chatID) {
         // there are pinned files, add them to user's prompt
         if (Object.keys(chatVisionSelectedFileStore).length != 0) {
             if (!selectedModel.includes("vision")) {
-                abortAIResp(new Error(`you must select a vision model, current model is ${selectedModel}`));
+                // if selected model is not vision model, just ignore it
+                chatVisionSelectedFileStore = {};
+                updateChatVisionSelectedFileStore();
                 return
             }
 
@@ -655,7 +657,7 @@ async function sendChat2Server(chatID) {
                 let text = chatContainer
                     .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
                 appendChats2Storage(RoleHuman, chatID, text,
-                    `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" style="max-width: 80%;" data-name="${key}">`,
+                    `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" data-name="${key}">`,
                 );
 
                 // insert image to user input
@@ -663,7 +665,7 @@ async function sendChat2Server(chatID) {
                     .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
                     .insertAdjacentHTML(
                         "beforeend",
-                        `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" style="max-width: 80%;" data-name="${key}">`,
+                        `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" data-name="${key}">`,
                     );
             }
 
@@ -1211,8 +1213,8 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
 
             chatEleHtml = `
             <div class="container-fluid row role-human">
-                <div class="col-1">💻</div>
-                <div class="col-11 text-start"><pre>${text}</pre></div>
+                <div class="col-auto icon">💻</div>
+                <div class="col text-start"><pre>${text}</pre></div>
             </div>`
             break
         case RoleHuman:
@@ -1222,8 +1224,8 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             if (!isHistory) {
                 waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                            <div class="col-1">${robot_icon}</div>
-                            <div class="col-10 text-start ai-response" data-status="waiting">
+                            <div class="col-auto icon">${robot_icon}</div>
+                            <div class="col text-start ai-response" data-status="waiting">
                                 <p dir="auto" class="card-text placeholder-glow">
                                     <span class="placeholder col-7"></span>
                                     <span class="placeholder col-4"></span>
@@ -1244,12 +1246,12 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
-                        <div class="col-1">🤔️</div>
-                        <div class="col-9 text-start">
+                        <div class="col-auto icon">🤔️</div>
+                        <div class="col text-start">
                             <pre>${text}</pre>
                             ${attachHTML}
                         </div>
-                        <div class="col-2 d-flex control">
+                        <div class="col-auto d-flex control">
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash"></i>
                         </div>
@@ -1260,8 +1262,8 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
         case RoleAI:
             chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-1">${robot_icon}</div>
-                        <div class="col-11 text-start ai-response" data-status="waiting">${text}</div>
+                        <div class="col-auto icon">${robot_icon}</div>
+                        <div class="col text-start ai-response" data-status="waiting">${text}</div>
                 </div>`
             if (!isHistory) {
                 chatOp = "replace";
@@ -1335,16 +1337,16 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
                 let newText = chatEle.querySelector(`.role-human textarea`).value;
                 chatEle.innerHTML = `
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
-                        <div class="col-1">🤔️</div>
-                        <div class="col-9 text-start"><pre>${newText}</pre></div>
-                        <div class="col-2 d-flex control">
+                        <div class="col-auto icon">🤔️</div>
+                        <div class="col text-start"><pre>${newText}</pre></div>
+                        <div class="col-auto d-flex control">
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash"></i>
                         </div>
                     </div>
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-1">${robot_icon}</div>
-                        <div class="col-11 text-start ai-response" data-status="waiting">
+                        <div class="col-auto icon">${robot_icon}</div>
+                        <div class="col text-start ai-response" data-status="waiting">
                             <p class="card-text placeholder-glow">
                                 <span class="placeholder col-7"></span>
                                 <span class="placeholder col-4"></span>
