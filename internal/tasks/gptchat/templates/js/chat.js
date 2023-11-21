@@ -1310,7 +1310,6 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             // attach image to vision-selected-store when edit human input
             let attachEles = chatContainer
                 .querySelectorAll(`.chatManager .conservations #${chatID} .role-human .text-start img`) || [];
-            chatVisionSelectedFileStore = {};
             attachEles.forEach((ele) => {
                 let b64fileContent = ele.getAttribute("src").replace("data:image/png;base64,", "");
                 let key = ele.dataset.name || "unknown.png";
