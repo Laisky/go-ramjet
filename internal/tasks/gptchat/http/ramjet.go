@@ -73,7 +73,7 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		return errors.Wrap(err, "get user from token")
 	}
 
-	req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
+	// req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
 	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
 	req.Header.Set("X-Laisky-User-Id", user.UserName)
 

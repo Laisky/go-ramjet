@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -52,12 +53,15 @@ func ImageHandler(ctx *gin.Context) {
 		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
 		defer cancel()
 
-		switch user.ImageTokenType {
-		case config.ImageTokenOpenai:
+		switch {
+		case strings.Contains(user.ImageUrl, "openai.com"):
 			err = drawImageByOpenaiDalle(taskCtx, user, req.Prompt, taskID)
+		case strings.Contains(user.ImageUrl, "azure.com"):
+			err = drawImageByAzureDalle(taskCtx, user, req.Prompt, taskID)
 		default:
-			err = errors.Errorf("unknown image token type %s", user.ImageTokenType)
+			err = errors.Errorf("unknown txt2image service url %s", user.ImageUrl)
 		}
+
 		if err != nil {
 			// upload error msg
 			if _, err := s3.GetCli().PutObject(ctx,
@@ -99,7 +103,7 @@ func drawImageByOpenaiDalle(ctx context.Context,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://api.openai.com/v1/images/generations", bytes.NewReader(reqBody))
+		user.ImageUrl, bytes.NewReader(reqBody))
 	if err != nil {
 		return errors.Wrap(err, "new request")
 	}
@@ -130,6 +134,76 @@ func drawImageByOpenaiDalle(ctx context.Context,
 	imgContent, err := base64.StdEncoding.DecodeString(resp.Data[0].B64Json)
 	if err != nil {
 		return errors.Wrap(err, "decode image")
+	}
+
+	if err = uploadImage2Minio(ctx, taskID, prompt, imgContent); err != nil {
+		return errors.Wrap(err, "upload image")
+	}
+
+	return nil
+}
+
+func drawImageByAzureDalle(ctx context.Context,
+	user *config.UserConfig, prompt, taskID string) (err error) {
+	logger := gmw.GetLogger(ctx).Named("azure")
+	logger.Debug("draw image by azure dalle")
+
+	reqBody, err := json.Marshal(OpenaiCreateImageRequest{
+		Prompt: prompt,
+		Size:   "1024x1024",
+		N:      1,
+	})
+	if err != nil {
+		return errors.Wrap(err, "marshal request body")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		user.ImageUrl, bytes.NewReader(reqBody))
+	if err != nil {
+		return errors.Wrap(err, "new request")
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Api-Key", user.ImageToken)
+
+	resp := new(AzureCreateImageResponse)
+	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+		return errors.Wrap(err, "do request")
+	} else {
+		defer gutils.LogErr(httpresp.Body.Close, logger)
+		if httpresp.StatusCode != http.StatusOK {
+			payload, _ := io.ReadAll(req.Body)
+			return errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
+		}
+
+		if err = json.NewDecoder(httpresp.Body).Decode(resp); err != nil {
+			return errors.Wrap(err, "decode response")
+		}
+
+		if len(resp.Data) == 0 {
+			return errors.New("empty response")
+		}
+	}
+
+	// download image
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, resp.Data[0].Url, nil)
+	if err != nil {
+		return errors.Wrap(err, "new request")
+	}
+	imgResp, err := httpcli.Do(req) //nolint: bodyclose
+	if err != nil {
+		return errors.Wrap(err, "download azure image")
+	}
+	defer gutils.LogErr(imgResp.Body.Close, logger)
+
+	if imgResp.StatusCode != http.StatusOK {
+		return errors.Errorf("download azure image got bad status code %d", imgResp.StatusCode)
+	}
+
+	logger.Debug("succeed get image from azure")
+	imgContent, err := io.ReadAll(imgResp.Body)
+	if err != nil {
+		return errors.Wrap(err, "read image")
 	}
 
 	if err = uploadImage2Minio(ctx, taskID, prompt, imgContent); err != nil {

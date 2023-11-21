@@ -230,13 +230,13 @@ type ExternalBillingUserResponse struct {
 
 // OpenaiCreateImageRequest request to openai image api
 type OpenaiCreateImageRequest struct {
-	Model          string `json:"model"`
+	Model          string `json:"model,omitempty"`
 	Prompt         string `json:"prompt"`
 	N              int    `json:"n"`
 	Size           string `json:"size"`
 	Quality        string `json:"quality,omitempty"`
-	ResponseFormat string `json:"response_format"`
-	Style          string `json:"style"`
+	ResponseFormat string `json:"response_format,omitempty"`
+	Style          string `json:"style,omitempty"`
 }
 
 // NewOpenaiCreateImageRequest create new request
@@ -258,6 +258,15 @@ type OpenaiCreateImageResponse struct {
 	Data    []struct {
 		Url     string `json:"url"`
 		B64Json string `json:"b64_json"`
+	} `json:"data"`
+}
+
+// AzureCreateImageResponse return from azure image api
+type AzureCreateImageResponse struct {
+	Created int64 `json:"created"`
+	Data    []struct {
+		RevisedPrompt string `json:"revised_prompt"`
+		Url           string `json:"url"`
 	} `json:"data"`
 }
 

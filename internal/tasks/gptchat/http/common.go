@@ -124,11 +124,12 @@ SWITCH_FOR_USER:
 		username := userToken[:15]
 		log.Logger.Debug("use laisky's oneapi token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
-			UserName:               username,
-			Token:                  userToken,
-			OpenaiToken:            userToken,
-			ImageToken:             config.Config.DefaultImageToken,
-			ImageTokenType:         config.Config.DefaultImageTokenType,
+			UserName:    username,
+			Token:       userToken,
+			OpenaiToken: userToken,
+			// ImageToken:             config.Config.DefaultImageToken,
+			// ImageTokenType:         config.Config.DefaultImageTokenType,
+			// ImageUrl:               config.Config.DefaultImageUrl,
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
 			APIBase:                "https://oneapi.laisky.com",
@@ -162,11 +163,11 @@ SWITCH_FOR_USER:
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
-			UserName:               username,
-			Token:                  userToken,
-			OpenaiToken:            userToken,
-			ImageToken:             userToken,
-			ImageTokenType:         config.ImageTokenOpenai,
+			UserName:    username,
+			Token:       userToken,
+			OpenaiToken: userToken,
+			ImageToken:  userToken,
+			// ImageTokenType:         config.ImageTokenOpenai,
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
 			NoLimitOpenaiModels:    true,

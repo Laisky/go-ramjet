@@ -49,8 +49,10 @@ func SetupConfig() (err error) {
 		&Config.RateLimitImageModelsIntervalSeconds, 600)
 	Config.DefaultImageToken = gutils.OptionalVal(
 		&Config.DefaultImageToken, Config.Token)
-	Config.DefaultImageTokenType = gutils.OptionalVal(
-		&Config.DefaultImageTokenType, ImageTokenOpenai)
+	// Config.DefaultImageTokenType = gutils.OptionalVal(
+	// 	&Config.DefaultImageTokenType, ImageTokenOpenai)
+	Config.DefaultImageUrl = gutils.OptionalVal(
+		&Config.DefaultImageUrl, "https://api.openai.com/v1/images/generations")
 	Config.API = gutils.OptionalVal(
 		&Config.API, "https://api.openai.com")
 	Config.ExternalBillingAPI = gutils.OptionalVal(
@@ -82,8 +84,14 @@ type OpenAI struct {
 	DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
 	// DefaultImageToken (optional) default image token, default equals to token
 	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
+
 	// DefaultImageTokenType (optional) default image token type, default is openai
-	DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
+	// DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
+
+	// DefaultImageUrl (optional) default image url
+	//
+	// default to https://api.openai.com/v1/images/generations
+	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
 	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 60
 	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
 	// RateLimitImageModelsIntervalSeconds (optional) rate limit interval seconds for image models, default is 600
@@ -142,10 +150,15 @@ type UserConfig struct {
 	Token string `json:"-" mapstructure:"token"`
 	// OpenaiToken (optional) openai token, default is global default token
 	OpenaiToken string `json:"-" mapstructure:"openai_token"`
-	// ImageToken (optional) token be used to generate image, default is global default image token
+	// ImageToken (optional) token be used to generate image,
+	// default is global default image token
 	ImageToken string `json:"-" mapstructure:"image_token"`
+	// ImageUrl (optional) image url, default is global default image url
+	ImageUrl string `json:"-" mapstructure:"image_url"`
+
 	// ImageTokenType (optional) token type, default is global default image token type
-	ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
+	// ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
+
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
 	// IsFree (optional) is free user, default is false
@@ -188,7 +201,8 @@ func (c *UserConfig) Valid() error {
 	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
 	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
 	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
-	c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
+	// c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
+	c.ImageUrl = gutils.OptionalVal(&c.ImageUrl, Config.DefaultImageUrl)
 
 	// format normalize
 	c.APIBase = strings.TrimRight(c.APIBase, "/")
