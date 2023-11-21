@@ -85,7 +85,8 @@
   -moz-box-shadow: 1px 1px 5px #333;
 }
 #chatContainer .chatManager .card .card-body.conservations .icon {
-  width: 50px;
+  width: 35px;
+  padding: 0px;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-human pre {
   margin-bottom: 3px;
@@ -93,7 +94,7 @@
   white-space: pre-wrap;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-human .control {
-  width: 50px;
+  margin-right: 5px;
   flex-direction: row-reverse;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-trash {

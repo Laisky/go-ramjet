@@ -100,7 +100,8 @@
                 }
 
                 .icon {
-                    width: 50px
+                    width: 35px;
+                    padding: 0px;
                 }
 
                 .role-human {
@@ -111,7 +112,8 @@
                     }
 
                     .control {
-                        width: 50px;
+                        // width: 50px;
+                        margin-right: 5px;
                         flex-direction: row-reverse;
 
                         .bi-trash {
