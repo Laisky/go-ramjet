@@ -92,6 +92,67 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	Temperature      float64               `json:"temperature"`
 	TopP             float64               `json:"top_p"`
 	N                int                   `json:"n"`
+	Tools            []OpenaiChatReqTool   `json:"tools,omitempty"`
+}
+
+// OpenaiChatReqTool define tools
+//
+//	{
+//		"type": "function",
+//		"function": {
+//		  "name": "get_current_weather",
+//		  "description": "Get the current weather in a given location",
+//		  "parameters": {
+//			"type": "object",
+//			"properties": {
+//			  "location": {
+//				"type": "string",
+//				"description": "The city and state, e.g. San Francisco, CA"
+//			  },
+//			  "unit": {
+//				"type": "string",
+//				"enum": [
+//				  "celsius",
+//				  "fahrenheit"
+//				]
+//			  }
+//			},
+//			"required": [
+//			  "location"
+//			]
+//		  }
+//		}
+//	}
+type OpenaiChatReqTool struct {
+	Type       string                      `json:"type"`
+	Function   OpenaiChatReqToolFunction   `json:"function"`
+	Parameters OpenaiChatReqToolParameters `json:"parameters"`
+}
+
+type OpenaiChatReqToolFunction struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type OpenaiChatReqToolParameters struct {
+	Type       string                      `json:"type"`
+	Properties OpenaiChatReqToolProperties `json:"properties"`
+	Required   []string                    `json:"required"`
+}
+
+type OpenaiChatReqToolProperties struct {
+	Location OpenaiChatReqToolLocation `json:"location"`
+	Unit     OpenaiChatReqToolUnit     `json:"unit"`
+}
+
+type OpenaiChatReqToolLocation struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+type OpenaiChatReqToolUnit struct {
+	Type string   `json:"type"`
+	Enum []string `json:"enum"`
 }
 
 // OpenaiReqMessage request message to openai chat api
@@ -188,7 +249,7 @@ type OpenaiCompletionResp struct {
 	} `json:"choices"`
 }
 
-// OpenaiCOmpletionStreamResp stream chunk return from openai chat api
+// OpenaiCompletionStreamResp stream chunk return from openai chat api
 //
 //	{
 //	    "id":"chatcmpl-6tCPrEY0j5l157mOIddZi4I0tIFhv",
@@ -197,19 +258,39 @@ type OpenaiCompletionResp struct {
 //	    "model":"gpt-3.5-turbo-0301",
 //	    "choices":[{"delta":{"role":"assistant"}, "index":0, "finish_reason":null}]
 //	}
-type OpenaiCOmpletionStreamResp struct {
+type OpenaiCompletionStreamResp struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	Created int64  `json:"created"`
 	Model   string `json:"model"`
 	Choices []struct {
 		Delta struct {
-			Role    OpenaiMessageRole `json:"role"`
-			Content string            `json:"content"`
+			Role      OpenaiMessageRole                    `json:"role"`
+			Content   string                               `json:"content"`
+			ToolCalls []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
 		} `json:"delta"`
 		Index        int    `json:"index"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+// OpenaiCompletionStreamRespToolCall tool call
+//
+//	{
+//		"id": "call_abc123",
+//		"type": "function",
+//		"function": {
+//		  "name": "get_current_weather",
+//		  "arguments": "{\n\"location\": \"Boston, MA\"\n}"
+//		}
+//	}
+type OpenaiCompletionStreamRespToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 // ExternalBillingUserStatus user status

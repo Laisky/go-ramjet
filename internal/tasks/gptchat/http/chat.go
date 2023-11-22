@@ -39,14 +39,21 @@ var (
 
 // ChatHandler handle api request
 func ChatHandler(ctx *gin.Context) {
-	defer ctx.Request.Body.Close() // nolint: errcheck,gosec
-	// logger := log.Logger.Named("chat")
+	toolcalls := sendAndParseChat(ctx)
+	if toolcalls == nil {
+		return
+	}
 
+	AbortErr(ctx, errors.New("tool calls not implemented"))
+}
+
+func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespToolCall) {
+	logger := gmw.GetLogger(ctx)
 	frontReq, resp, err := send2openai(ctx) //nolint:bodyclose
 	if AbortErr(ctx, err) {
 		return
 	}
-	defer gutils.LogErr(resp.Body.Close, log.Logger)
+	defer gutils.LogErr(resp.Body.Close, logger)
 
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
@@ -66,7 +73,7 @@ func ChatHandler(ctx *gin.Context) {
 	})
 
 	var respContent string
-	var lastResp *OpenaiCOmpletionStreamResp
+	var lastResp *OpenaiCompletionStreamResp
 	for reader.Scan() {
 		line := reader.Bytes()
 		// logger.Debug("got response line", zap.ByteString("line", line))
@@ -81,18 +88,17 @@ func ChatHandler(ctx *gin.Context) {
 			return
 		}
 
-		lastResp = new(OpenaiCOmpletionStreamResp)
+		lastResp = new(OpenaiCompletionStreamResp)
 		if err = json.Unmarshal(chunk, lastResp); err != nil {
-			//nolint: lll
-			// TODO completion's stream response is not support
-			//
-			// 2023-03-16T08:02:37Z	DEBUG	go-ramjet.chat	http/chat.go:68	got response line	{"line": "\ndata: {\"id\": \"cmpl-6ucrBZjC3aU8Nu4izkaSywzdVb8h1\", \"object\": \"text_completion\", \"created\": 1678953753, \"choices\": [{\"text\": \"\\n\", \"index\": 0, \"logprobs\": null, \"finish_reason\": null}], \"model\": \"text-davinci-003\"}"}
-			// 2023-03-16T08:02:37Z	DEBUG	go-ramjet.chat	http/chat.go:68	got response line	{"line": "\ndata: {\"id\": \"cmpl-6ucrBZjC3aU8Nu4izkaSywzdVb8h1\", \"object\": \"text_completion\", \"created\": 1678953753, \"choices\": [{\"text\": \"});\", \"index\": 0, \"logprobs\": null, \"finish_reason\": null}], \"model\": \"text-davinci-003\"}"}
-
+			logger.Warn("unmarshal resp", zap.ByteString("chunk", chunk), zap.Error(err))
 			continue
 		}
 
 		if len(lastResp.Choices) > 0 {
+			if len(lastResp.Choices[0].Delta.ToolCalls) != 0 {
+				return lastResp.Choices[0].Delta.ToolCalls
+			}
+
 			respContent += lastResp.Choices[0].Delta.Content
 		}
 
@@ -126,6 +132,8 @@ func ChatHandler(ctx *gin.Context) {
 	} else {
 		AbortErr(ctx, errors.Errorf("unsupport resp body %q", reader.Text()))
 	}
+
+	return nil
 }
 
 func saveLLMConservation(req *FrontendReq, respContent string) {

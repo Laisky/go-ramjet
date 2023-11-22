@@ -49,7 +49,7 @@ func TestAPIHandler(t *testing.T) {
 			continue
 		}
 
-		resp := new(OpenaiCOmpletionStreamResp)
+		resp := new(OpenaiCompletionStreamResp)
 		// t.Logf("line: %q", string(line))
 		err = json.Unmarshal(line, resp)
 		require.NoError(t, err)
