@@ -110,12 +110,12 @@ func DrawByLcmHandler(ctx *gin.Context) {
 				return errors.Wrap(err, "decode image")
 			}
 
-			return uploadImage2Minio(taskCtx, drawImageByTxtObjkeyPrefix(taskID), req.Prompt, img)
+			return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID), req.Prompt, img)
 		}(); err != nil {
 			// upload error msg
 			if _, err := s3.GetCli().PutObject(taskCtx,
 				config.Config.S3.Bucket,
-				drawImageByTxtObjkeyPrefix(taskID)+".err.txt",
+				drawImageByImageObjkeyPrefix(taskID)+".err.txt",
 				bytes.NewReader([]byte(err.Error())),
 				int64(len(err.Error())),
 				minio.PutObjectOptions{
@@ -136,7 +136,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		"image_url": fmt.Sprintf("https://%s/%s/%s",
 			config.Config.S3.Endpoint,
 			config.Config.S3.Bucket,
-			drawImageByTxtObjkeyPrefix(taskID)+".png",
+			drawImageByImageObjkeyPrefix(taskID)+".png",
 		),
 	})
 }
