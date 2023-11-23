@@ -309,8 +309,8 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				}
 
 				totalFileSize += len(f.Content)
-				if totalFileSize > 6*1024*1024 {
-					return nil, nil, errors.Errorf("total file size should less than 6MB, got %d", totalFileSize)
+				if totalFileSize > 10*1024*1024 {
+					return nil, nil, errors.Errorf("total file size should less than 10MB, got %d", totalFileSize)
 				}
 			}
 
