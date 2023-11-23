@@ -600,6 +600,9 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     }
     const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
 
+    // insert image to user input & hisotry
+    appendImg2UserInput(chatID, imageBase64, "image.png");
+
     chatVisionSelectedFileStore = {};
     updateChatVisionSelectedFileStore();
 
@@ -627,6 +630,23 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
 
     // save img to storage no matter it's done or not
     appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
+}
+
+function appendImg2UserInput(chatID, imgDataBase64, imgName) {
+    // insert image to user hisotry
+    let text = chatContainer
+        .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
+    appendChats2Storage(RoleHuman, chatID, text,
+        `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`,
+    );
+
+    // insert image to user input
+    chatContainer
+        .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
+        .insertAdjacentHTML(
+            "beforeend",
+            `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`,
+        );
 }
 
 async function sendChat2Server(chatID) {
@@ -698,20 +718,8 @@ async function sendChat2Server(chatID) {
                     content: chatVisionSelectedFileStore[key]
                 });
 
-                // insert image to user hisotry
-                let text = chatContainer
-                    .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
-                appendChats2Storage(RoleHuman, chatID, text,
-                    `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" data-name="${key}">`,
-                );
-
-                // insert image to user input
-                chatContainer
-                    .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
-                    .insertAdjacentHTML(
-                        "beforeend",
-                        `<img src="data:image/png;base64,${chatVisionSelectedFileStore[key]}" data-name="${key}">`,
-                    );
+                // insert image to user input & hisotry
+                appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key);
             }
 
             chatVisionSelectedFileStore = {};
