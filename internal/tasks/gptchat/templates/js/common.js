@@ -50,7 +50,8 @@ const ChatModels = [
     ],
     CompletionModels = [
         CompletionModelDavinci3,
-    ];
+    ],
+    AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
 
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
@@ -368,15 +369,12 @@ function setupHeader() {
             response.json().then((data) => {
                 let modelsEle = "";
                 if (data.allowed_models.includes("*")) {
-                    data.allowed_models = ChatModels;
+                    data.allowed_models = AllModels;
                 }
 
                 window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
 
-                // if user selected one of ChatModels, but it's not in allowed_models, then use the first one.
-                // if user selected one of QaModels, no matter it's in allowed_models or not, do not change it.
-                if (!ChatModels.includes(selectedModel)
-                    || !data.allowed_models.includes(selectedModel)) {
+                if (!data.allowed_models.includes(selectedModel)) {
                     selectedModel = data.allowed_models[0];
                     SetLocalStorage("config_chat_model", selectedModel);
                 }
