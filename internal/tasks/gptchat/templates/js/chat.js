@@ -1300,7 +1300,7 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             }
 
             if (attachHTML) {
-                attachHTML = `<p>${attachHTML}</p>`;
+                attachHTML = `${attachHTML}`;
             } else {
                 attachHTML = "";
             }
