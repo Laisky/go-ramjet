@@ -19,7 +19,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
     QAModelCustom = "qa-custom",
     QAModelShared = "qa-shared",
     CompletionModelDavinci3 = "text-davinci-003",
-    ImageModelDalle2 = "dall-e-3";
+    ImageModelDalle2 = "dall-e-3",
+    ImageModelImg2Img = "img-to-img";
 
 // casual chat models
 
@@ -45,6 +46,7 @@ const ChatModels = [
     ],
     ImageModels = [
         ImageModelDalle2,
+        ImageModelImg2Img,
     ],
     CompletionModels = [
         CompletionModelDavinci3,

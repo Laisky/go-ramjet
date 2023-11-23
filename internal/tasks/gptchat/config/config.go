@@ -114,6 +114,11 @@ type OpenAI struct {
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
 	S3 s3Config `json:"s3" mapstructure:"s3"`
+
+	// LcmBasicAuthUsername (optional) lcm basic auth username
+	LcmBasicAuthUsername string `json:"lcm_basic_auth_username" mapstructure:"lcm_basic_auth_username"`
+	// LcmBasicAuthPassword (optional) lcm basic auth password
+	LcmBasicAuthPassword string `json:"lcm_basic_auth_password" mapstructure:"lcm_basic_auth_password"`
 }
 
 type qaChatModel struct {

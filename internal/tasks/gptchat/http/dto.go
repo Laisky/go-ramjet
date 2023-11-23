@@ -351,7 +351,37 @@ type AzureCreateImageResponse struct {
 	} `json:"data"`
 }
 
-type ImageHandlerRequest struct {
+// DrawImageByTextRequest draw image by text and prompt
+type DrawImageByTextRequest struct {
 	Prompt string `json:"prompt" binding:"required,min=1"`
 	Model  string `json:"model" binding:"required,min=1"`
+}
+
+// DrawImageByImageRequest draw image by image and prompt
+type DrawImageByImageRequest struct {
+	Prompt      string `json:"prompt" binding:"required,min=1"`
+	Model       string `json:"model" binding:"required,min=1"`
+	ImageBase64 string `json:"image_base64" binding:"required,min=1"`
+}
+
+// DrawImageByLcmRequest draw image by image and prompt with lcm
+type DrawImageByLcmRequest struct {
+	// Data consist of 6 strings:
+	//  1. prompt,
+	//  2. base64 encoded image with fixed prefix "data:image/png;base64,"
+	//  3. steps
+	//  4. cfg
+	//  5. sketch strength
+	//  6. seed
+	Data    [6]any `json:"data"`
+	FnIndex int    `json:"fn_index"`
+}
+
+// DrawImageByLcmResponse draw image by image and prompt with lcm
+type DrawImageByLcmResponse struct {
+	// Data base64 encoded image with fixed prefix "data:image/png;base64,"
+	Data            []string `json:"data"`
+	IsGenerating    bool     `json:"is_generating"`
+	Duration        float64  `json:"duration"`
+	AverageDuration float64  `json:"average_duration"`
 }

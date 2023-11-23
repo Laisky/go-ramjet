@@ -584,6 +584,51 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
 }
 
+async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+    let url;
+    switch (selectedModel) {
+        case ImageModelImg2Img:
+            url = `/images/generations/lcm`;
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
+    }
+
+    // get first image in store
+    if (Object.keys(chatVisionSelectedFileStore).length == 0) {
+        throw new Error("no image selected");
+    }
+    const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
+
+    chatVisionSelectedFileStore = {};
+    updateChatVisionSelectedFileStore();
+
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Authorization": "Bearer " + window.OpenaiToken(),
+            "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
+        },
+        body: JSON.stringify({
+            model: selectedModel,
+            prompt: prompt,
+            image_base64: imageBase64
+        })
+    });
+    if (!resp.ok || resp.status != 200) {
+        throw new Error(`[${resp.status}]: ${await resp.text()}`);
+    }
+    const respData = await resp.json();
+
+    currentAIRespEle.dataset.status = "waiting";
+    currentAIRespEle.dataset.taskType = "image";
+    currentAIRespEle.dataset.taskId = respData["task_id"];
+    currentAIRespEle.dataset.imageUrl = respData["image_url"];
+
+    // save img to storage no matter it's done or not
+    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
+}
+
 async function sendChat2Server(chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
@@ -832,7 +877,16 @@ async function sendChat2Server(chatID) {
         }
     } else if (window.IsImageModel(selectedModel)) {
         try {
-            await sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
+            switch (selectedModel) {
+                case ImageModelDalle2:
+                    await sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
+                    break
+                case ImageModelImg2Img:
+                    await sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt);
+                    break
+                default:
+                    throw new Error(`unknown image model: ${selectedModel}`);
+            }
         } catch (err) {
             abortAIResp(err);
             return;
