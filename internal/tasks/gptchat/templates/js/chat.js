@@ -114,35 +114,68 @@ async function fetchImageDrawingResultBackground() {
             }
 
             const taskId = item.dataset.taskId,
-                imageUrl = item.dataset.imageUrl,
+                imageUrls = JSON.parse(item.dataset.imageUrls) || [],
                 chatId = item.closest(".role-ai").dataset.chatid;
 
-            // check any err msg
-            const errFileUrl = imageUrl.replace(".png", ".err.txt");
-            const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
-                method: "GET",
-                cache: "no-cache",
-            });
-            if (errFileResp.ok || errFileResp.status == 200) {
-                const errText = await errFileResp.text();
-                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
-                item.dataset.status = "done";
-                return;
-            }
+            imageUrls.forEach(async (imageUrl) => {
+                // check any err msg
+                const errFileUrl = imageUrl.replace(".png", ".err.txt");
+                const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
+                    method: "GET",
+                    cache: "no-cache",
+                });
+                if (errFileResp.ok || errFileResp.status == 200) {
+                    const errText = await errFileResp.text();
+                    item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
+                    checkIsImageAllSubtaskDone(item, imageUrl, false);
+                    return;
+                }
 
-            // check is image ready
-            const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
-                method: "GET",
-                cache: "no-cache",
-            });
-            if (!imgResp.ok || imgResp.status != 200) {
-                return;
-            }
+                // check is image ready
+                const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
+                    method: "GET",
+                    cache: "no-cache",
+                });
+                if (!imgResp.ok || imgResp.status != 200) {
+                    return;
+                }
 
-            // image is ready, show it
-            item.dataset.status = "done";
-            item.innerHTML = `<img src="${imageUrl}">`;
+                // check is all tasks finished
+                checkIsImageAllSubtaskDone(item, imageUrl, true);
+            });
         });
+}
+
+/** append chat to chat container
+ *
+ * @param {element} item ai respnse
+ * @param {string} imageUrl current subtask's image url
+ * @param {boolean} succeed is current subtask succeed
+ */
+function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
+    let imageUrls = JSON.parse(item.dataset.imageUrls);
+    imageUrls = imageUrls.filter((url) => url !== imageUrl);
+    item.dataset.imageUrls = JSON.stringify(imageUrls);
+
+    if (succeed) {
+        let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
+        succeedImageUrls.push(imageUrl);
+        item.dataset.succeedImageUrls = JSON.stringify(succeedImageUrls);
+    }
+
+    if (imageUrls.length == 0) {
+        item.dataset.status = "done";
+        let imgHTML = "";
+        let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
+        succeedImageUrls.forEach((url) => {
+            imgHTML += `<img src="${url}">`;
+        });
+        item.innerHTML = imgHTML;
+
+        if (succeedImageUrls.length > 1) {
+            item.classList.add("multi-images");
+        }
+    }
 }
 
 /**
@@ -578,10 +611,15 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     currentAIRespEle.dataset.status = "waiting";
     currentAIRespEle.dataset.taskType = "image";
     currentAIRespEle.dataset.taskId = respData["task_id"];
-    currentAIRespEle.dataset.imageUrl = respData["image_url"];
+    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData["image_urls"]);
+
+    let attachHTML = "";
+    respData["image_urls"].forEach((url) => {
+        attachHTML += `<img src="${url}">`;
+    });
 
     // save img to storage no matter it's done or not
-    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
+    appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
 async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
@@ -626,10 +664,15 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     currentAIRespEle.dataset.status = "waiting";
     currentAIRespEle.dataset.taskType = "image";
     currentAIRespEle.dataset.taskId = respData["task_id"];
-    currentAIRespEle.dataset.imageUrl = respData["image_url"];
+    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData["image_urls"]);
 
     // save img to storage no matter it's done or not
-    appendChats2Storage(RoleAI, chatID, `<img src="${respData["image_url"]}">`);
+    let attachHTML = "";
+    respData["image_urls"].forEach((url) => {
+        attachHTML += `<img src="${url}">`;
+    });
+
+    appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
 function appendImg2UserInput(chatID, imgDataBase64, imgName) {

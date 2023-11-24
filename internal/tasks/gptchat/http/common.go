@@ -163,11 +163,11 @@ SWITCH_FOR_USER:
 		username := hex.EncodeToString(hashed[:])[:16]
 		log.Logger.Debug("use user's own token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
-			UserName:    username,
-			Token:       userToken,
-			OpenaiToken: userToken,
-			ImageToken:  userToken,
-			// ImageTokenType:         config.ImageTokenOpenai,
+			UserName:               username,
+			Token:                  userToken,
+			OpenaiToken:            userToken,
+			ImageToken:             userToken,
+			ImageUrl:               "https://api.openai.com/v1/images/generations",
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
 			NoLimitOpenaiModels:    true,

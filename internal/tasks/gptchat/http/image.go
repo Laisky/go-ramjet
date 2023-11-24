@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,94 +52,106 @@ func DrawByLcmHandler(ctx *gin.Context) {
 	// 	return
 	// }
 
-	upstreamReqBody, err := json.Marshal(DrawImageByLcmRequest{
-		Data: [6]any{
-			strings.TrimSpace(req.Prompt),
-			"data:image/png;base64," + req.ImageBase64,
-			4,
-			1,
-			0.9,
-			rand.Intn(10000),
-		},
-		FnIndex: 1,
-	})
-	if AbortErr(ctx, errors.Wrap(err, "marshal request body")) {
-		return
-	}
+	const nSubTask = 2
 
-	go func() {
-		logger.Debug("start image drawing task")
-		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
-		defer cancel()
+	for i := 0; i < nSubTask; i++ {
+		i := i
+		subtask := strconv.Itoa(i)
+		go func() {
+			time.Sleep(time.Second * time.Duration(i) * 3)
+			logger.Debug("start image drawing task", zap.String("subtask", subtask))
+			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
+			defer cancel()
 
-		if err := func() (err error) {
-			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
-				"https://draw2.laisky.com/run/predict", bytes.NewReader(upstreamReqBody))
-			if AbortErr(ctx, errors.Wrap(err, "new request")) {
+			if err := func() (err error) {
+				upstreamReqBody, err := json.Marshal(DrawImageByLcmRequest{
+					Data: [6]any{
+						strings.TrimSpace(req.Prompt),
+						"data:image/png;base64," + req.ImageBase64,
+						4,
+						1,
+						0.9,
+						1000 + rand.Intn(1000),
+					},
+					FnIndex: 1,
+				})
+				if err != nil {
+					return errors.Wrap(err, "marshal request body")
+				}
+
+				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
+					"https://draw2.laisky.com/run/predict", bytes.NewReader(upstreamReqBody))
+				if AbortErr(ctx, errors.Wrap(err, "new request")) {
+					return
+				}
+
+				upstreamReq.Header.Add("Content-Type", "application/json")
+				if config.Config.LcmBasicAuthUsername != "" {
+					upstreamReq.SetBasicAuth(
+						config.Config.LcmBasicAuthUsername,
+						config.Config.LcmBasicAuthPassword,
+					)
+				}
+
+				resp, err := httpcli.Do(upstreamReq)
+				if err != nil {
+					return errors.Wrap(err, "do request")
+				}
+				defer gutils.LogErr(resp.Body.Close, logger)
+
+				if resp.StatusCode != http.StatusOK {
+					payload, _ := io.ReadAll(resp.Body)
+					return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
+				}
+
+				respBody := new(DrawImageByLcmResponse)
+				if err = json.NewDecoder(resp.Body).Decode(respBody); err != nil {
+					return errors.Wrap(err, "decode response")
+				}
+
+				if len(respBody.Data) == 0 {
+					return errors.New("empty response")
+				}
+
+				img, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(respBody.Data[0], "data:image/png;base64,"))
+				if err != nil {
+					return errors.Wrap(err, "decode image")
+				}
+
+				return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Prompt, img)
+			}(); err != nil {
+				// upload error msg
+				if _, err := s3.GetCli().PutObject(taskCtx,
+					config.Config.S3.Bucket,
+					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask+".err.txt",
+					bytes.NewReader([]byte(err.Error())),
+					int64(len(err.Error())),
+					minio.PutObjectOptions{
+						ContentType: "text/plain",
+					}); err != nil {
+					logger.Error("upload error msg", zap.Error(err))
+				}
+
+				logger.Error("failed to draw image", zap.Error(err))
 				return
 			}
 
-			upstreamReq.Header.Add("Content-Type", "application/json")
-			if config.Config.LcmBasicAuthUsername != "" {
-				upstreamReq.SetBasicAuth(
-					config.Config.LcmBasicAuthUsername,
-					config.Config.LcmBasicAuthPassword,
-				)
-			}
+			logger.Info("succeed draw image done")
+		}()
+	}
 
-			resp, err := httpcli.Do(upstreamReq)
-			if err != nil {
-				return errors.Wrap(err, "do request")
-			}
-			defer gutils.LogErr(resp.Body.Close, logger)
-
-			if resp.StatusCode != http.StatusOK {
-				payload, _ := io.ReadAll(resp.Body)
-				return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
-			}
-
-			respBody := new(DrawImageByLcmResponse)
-			if err = json.NewDecoder(resp.Body).Decode(respBody); err != nil {
-				return errors.Wrap(err, "decode response")
-			}
-
-			if len(respBody.Data) == 0 {
-				return errors.New("empty response")
-			}
-
-			img, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(respBody.Data[0], "data:image/png;base64,"))
-			if err != nil {
-				return errors.Wrap(err, "decode image")
-			}
-
-			return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID), req.Prompt, img)
-		}(); err != nil {
-			// upload error msg
-			if _, err := s3.GetCli().PutObject(taskCtx,
-				config.Config.S3.Bucket,
-				drawImageByImageObjkeyPrefix(taskID)+".err.txt",
-				bytes.NewReader([]byte(err.Error())),
-				int64(len(err.Error())),
-				minio.PutObjectOptions{
-					ContentType: "text/plain",
-				}); err != nil {
-				logger.Error("upload error msg", zap.Error(err))
-			}
-
-			logger.Error("failed to draw image", zap.Error(err))
-			return
-		}
-
-		logger.Info("succeed draw image done")
-	}()
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"task_id": taskID,
-		"image_url": fmt.Sprintf("https://%s/%s/%s",
+	imageUrls := []string{}
+	for i := 0; i < nSubTask; i++ {
+		imageUrls = append(imageUrls, fmt.Sprintf("https://%s/%s/%s-%d.%s",
 			config.Config.S3.Endpoint,
 			config.Config.S3.Bucket,
-			drawImageByImageObjkeyPrefix(taskID)+".png",
-		),
+			drawImageByImageObjkeyPrefix(taskID), i, "png",
+		))
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"task_id":    taskID,
+		"image_urls": imageUrls,
 	})
 }
 
@@ -184,7 +197,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 			// upload error msg
 			if _, err := s3.GetCli().PutObject(taskCtx,
 				config.Config.S3.Bucket,
-				drawImageByTxtObjkeyPrefix(taskID)+".err.txt",
+				drawImageByTxtObjkeyPrefix(taskID)+"-0.err.txt",
 				bytes.NewReader([]byte(err.Error())),
 				int64(len(err.Error())),
 				minio.PutObjectOptions{
@@ -202,11 +215,13 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"task_id": taskID,
-		"image_url": fmt.Sprintf("https://%s/%s/%s",
-			config.Config.S3.Endpoint,
-			config.Config.S3.Bucket,
-			drawImageByTxtObjkeyPrefix(taskID)+".png",
-		),
+		"image_urls": []string{
+			fmt.Sprintf("https://%s/%s/%s-0.%s",
+				config.Config.S3.Endpoint,
+				config.Config.S3.Bucket,
+				drawImageByTxtObjkeyPrefix(taskID), "png",
+			),
+		},
 	})
 }
 
@@ -254,7 +269,7 @@ func drawImageByOpenaiDalle(ctx context.Context,
 		return errors.Wrap(err, "decode image")
 	}
 
-	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID), prompt, imgContent); err != nil {
+	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID)+"-0", prompt, imgContent); err != nil {
 		return errors.Wrap(err, "upload image")
 	}
 
@@ -324,7 +339,7 @@ func drawImageByAzureDalle(ctx context.Context,
 		return errors.Wrap(err, "read image")
 	}
 
-	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID), prompt, imgContent); err != nil {
+	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID)+"-0", prompt, imgContent); err != nil {
 		return errors.Wrap(err, "upload image")
 	}
 
