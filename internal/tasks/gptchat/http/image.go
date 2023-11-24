@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -57,7 +58,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 			4,
 			1,
 			0.9,
-			1337,
+			rand.Intn(10000),
 		},
 		FnIndex: 1,
 	})

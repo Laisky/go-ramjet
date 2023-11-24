@@ -1193,8 +1193,8 @@ function setupChatInput() {
                 let reader = new FileReader();
                 reader.onload = async (e) => {
                     let arrayBuffer = e.target.result;
-                    if (arrayBuffer.byteLength > 1024 * 1024 * 3) {
-                        showalert("danger", "file size should less than 3M");
+                    if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
+                        showalert("danger", "file size should less than 10M");
                         return;
                     }
 
