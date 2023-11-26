@@ -227,7 +227,7 @@ async function updateChatHistory() {
 
         // move from localstorage to kv
         console.log("move from localstorage to kv: ", key);
-        await window.KvSet(key, json.parse(localStorage[key]));
+        await window.KvSet(key, JSON.parse(localStorage[key]));
         localStorage.removeItem(key);
     }));
 }
