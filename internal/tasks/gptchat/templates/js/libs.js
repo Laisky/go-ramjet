@@ -29,6 +29,27 @@
         }
     };
 
+    window.DateStr = () => {
+        let now = new Date();
+
+        let year = now.getUTCFullYear();
+        let month = now.getUTCMonth() + 1; // Months are 0-based, so we add 1
+        let day = now.getUTCDate();
+        let hours = now.getUTCHours();
+        let minutes = now.getUTCMinutes();
+        let seconds = now.getUTCSeconds();
+
+        // Pad the month, day, hours, minutes and seconds with leading zeros, if required
+        month = (month < 10 ? "0" : "") + month;
+        day = (day < 10 ? "0" : "") + day;
+        hours = (hours < 10 ? "0" : "") + hours;
+        minutes = (minutes < 10 ? "0" : "") + minutes;
+        seconds = (seconds < 10 ? "0" : "") + seconds;
+
+        // Compose the date string
+        return `${year}${month}${day}${hours}${minutes}${seconds}`;
+    };
+
     // set data into indexeddb
     window.KvSet = async (key, val) => {
         try {

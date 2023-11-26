@@ -614,7 +614,7 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
 
     // insert image to user input & hisotry
-    await appendImg2UserInput(chatID, imageBase64, "image.png");
+    await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
 
     chatVisionSelectedFileStore = {};
     updateChatVisionSelectedFileStore();
@@ -1389,11 +1389,13 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
 
             // attach image to vision-selected-store when edit human input
             let attachEles = chatContainer
-                .querySelectorAll(`.chatManager .conservations #${chatID} .role-human .text-start img`) || [];
+                .querySelectorAll(`.chatManager .conservations #${chatID} .role-human .text-start img`) || [],
+                attachHTML = "";
             attachEles.forEach((ele) => {
                 let b64fileContent = ele.getAttribute("src").replace("data:image/png;base64,", "");
-                let key = ele.dataset.name || "unknown.png";
+                let key = ele.dataset.name || `${DateStr()}.png`;
                 chatVisionSelectedFileStore[key] = b64fileContent;
+                attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
             });
             updateChatVisionSelectedFileStore();
 
