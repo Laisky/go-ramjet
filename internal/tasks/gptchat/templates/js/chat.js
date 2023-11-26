@@ -54,7 +54,17 @@ function storageSessionKey(sessionID) {
 }
 
 async function sessionChatHistory(sessionID) {
-    return (await window.KvGet(storageSessionKey(sessionID))) || new Array;
+    let data =  (await window.KvGet(storageSessionKey(sessionID)));
+    if (!data) {
+        return [];
+    }
+
+    // fix legacy bug for marshal data twice
+    if (typeof data == "string") {
+        data = JSON.parse(data);
+    }
+
+    return data;
 }
 
 async function activeSessionChatHistory() {
@@ -216,7 +226,7 @@ async function updateChatHistory() {
 
         // move from localstorage to kv
         console.log("move from localstorage to kv: ", key);
-        await window.KvSet(key, localStorage[key]);
+        await window.KvSet(key, json.parse(localStorage[key]));
         localStorage.removeItem(key);
     }));
 }
@@ -276,6 +286,8 @@ async function setupSessionManager() {
         });
 
         // restore conservation history
+        let data = await activeSessionChatHistory();
+        console.log(data);
         (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });

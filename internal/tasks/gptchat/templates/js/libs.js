@@ -52,10 +52,11 @@
 
     // set data into indexeddb
     window.KvSet = async (key, val) => {
+        const marshaledVal = JSON.stringify(val);
         try {
             await kv.put({
                 _id: key,
-                val: JSON.stringify(val),
+                val: marshaledVal,
             });
         } catch (error) {
             if (error.status === 409) {
@@ -66,7 +67,7 @@
                 await kv.put({
                     _id: key,
                     _rev: doc._rev,
-                    val: JSON.stringify(val),
+                    val: marshaledVal,
                 });
             } else {
                 throw error;
