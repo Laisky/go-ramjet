@@ -62,6 +62,7 @@ async function sessionChatHistory(sessionID) {
     // fix legacy bug for marshal data twice
     if (typeof data == "string") {
         data = JSON.parse(data);
+        await window.KvSet(storageSessionKey(sessionID), data);
     }
 
     return data;
