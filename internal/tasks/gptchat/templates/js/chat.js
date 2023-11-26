@@ -54,7 +54,7 @@ function storageSessionKey(sessionID) {
 }
 
 async function sessionChatHistory(sessionID) {
-    return await window.KvGet(storageSessionKey(sessionID)) || new Array;
+    return (await window.KvGet(storageSessionKey(sessionID))) || new Array;
 }
 
 async function activeSessionChatHistory() {
