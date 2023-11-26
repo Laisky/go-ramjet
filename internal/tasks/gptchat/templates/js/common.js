@@ -60,6 +60,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     StorageKeyPinnedMaterials = "config_api_pinned_materials",
     StorageKeyAllowedModels = "config_chat_models";
 
+const KvKeyPrefixSessionHistory = "chat_user_session_";
 
 window.IsChatModel = (model) => {
     return ChatModels.includes(model);

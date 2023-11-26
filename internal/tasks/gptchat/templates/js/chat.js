@@ -13,15 +13,14 @@ let chatContainer = document.getElementById("chatContainer"),
     currentAIRespSSE, currentAIRespEle;
 
 window.ready(() => {
-    (function main() {
+    (async function main() {
         // -------------------------------------
         // for compatibility
-        updateChatHistory();
+        await updateChatHistory();
         // -------------------------------------
 
-        setupLocalStorage();
         setupConfig();
-        setupSessionManager();
+        await setupSessionManager();
         setupChatInput();
         setupPromptManager();
         setupPrivateDataset();
@@ -48,31 +47,23 @@ function showalert(type, msg) {
         .insertAdjacentHTML("afterbegin", alertEle);
 }
 
-function setupLocalStorage() {
-    if (localStorage.getItem("chat_user_session_1")) {
-        return
-    }
-
-    // purge localstorage
-    localStorage.clear();
-}
-
 
 function storageSessionKey(sessionID) {
-    return "chat_user_session_" + sessionID;
+    sessionID = sessionID ? sessionID : "1";
+    return `${KvKeyPrefixSessionHistory}${sessionID}`;
 }
 
-function sessionChatHistory(sessionID) {
-    return window.GetLocalStorage(storageSessionKey(sessionID)) || new Array;
+async function sessionChatHistory(sessionID) {
+    return await window.KvGet(storageSessionKey(sessionID)) || new Array;
 }
 
-function activeSessionChatHistory() {
+async function activeSessionChatHistory() {
     let sid = activeSessionID();
     if (!sid) {
         return new Array;
     }
 
-    return sessionChatHistory(sid);
+    return await sessionChatHistory(sid);
 }
 
 function activeSessionID() {
@@ -81,10 +72,10 @@ function activeSessionID() {
         return activeSession.dataset.session;
     }
 
-    return null;
+    return 1;
 }
 
-function listenSessionSwitch(evt) {
+async function listenSessionSwitch(evt) {
     // deactive all sessions
     chatContainer
         .querySelectorAll(".sessionManager .sessions .list-group-item.active")
@@ -96,7 +87,7 @@ function listenSessionSwitch(evt) {
     // restore session hisgoty
     let sessionID = evt.target.dataset.session;
     chatContainer.querySelector(".conservations").innerHTML = "";
-    sessionChatHistory(sessionID).forEach((item) => {
+    (await sessionChatHistory(sessionID)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
     });
 }
@@ -106,44 +97,46 @@ function listenSessionSwitch(evt) {
  * @returns {Promise<void>}
  */
 async function fetchImageDrawingResultBackground() {
-    chatContainer
-        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]')
-        .forEach(async (item) => {
-            if (item.dataset.status != "waiting") {
+    let elements = chatContainer
+        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || [];
+
+
+    await Promise.all(Array.from(elements).map(async (item) => {
+        if (item.dataset.status != "waiting") {
+            return;
+        }
+
+        const taskId = item.dataset.taskId,
+            imageUrls = JSON.parse(item.dataset.imageUrls) || [],
+            chatId = item.closest(".role-ai").dataset.chatid;
+
+        await Promise.all(imageUrls.map(async (imageUrl) => {
+            // check any err msg
+            const errFileUrl = imageUrl.replace(".png", ".err.txt");
+            const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
+                method: "GET",
+                cache: "no-cache",
+            });
+            if (errFileResp.ok || errFileResp.status == 200) {
+                const errText = await errFileResp.text();
+                item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
+                checkIsImageAllSubtaskDone(item, imageUrl, false);
                 return;
             }
 
-            const taskId = item.dataset.taskId,
-                imageUrls = JSON.parse(item.dataset.imageUrls) || [],
-                chatId = item.closest(".role-ai").dataset.chatid;
-
-            imageUrls.forEach(async (imageUrl) => {
-                // check any err msg
-                const errFileUrl = imageUrl.replace(".png", ".err.txt");
-                const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
-                    method: "GET",
-                    cache: "no-cache",
-                });
-                if (errFileResp.ok || errFileResp.status == 200) {
-                    const errText = await errFileResp.text();
-                    item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
-                    checkIsImageAllSubtaskDone(item, imageUrl, false);
-                    return;
-                }
-
-                // check is image ready
-                const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
-                    method: "GET",
-                    cache: "no-cache",
-                });
-                if (!imgResp.ok || imgResp.status != 200) {
-                    return;
-                }
-
-                // check is all tasks finished
-                checkIsImageAllSubtaskDone(item, imageUrl, true);
+            // check is image ready
+            const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
+                method: "GET",
+                cache: "no-cache",
             });
-        });
+            if (!imgResp.ok || imgResp.status != 200) {
+                return;
+            }
+
+            // check is all tasks finished
+            checkIsImageAllSubtaskDone(item, imageUrl, true);
+        }));
+    }));
 }
 
 /** append chat to chat container
@@ -185,20 +178,20 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
  *
  * @returns {void}
  */
-function clearSessionAndChats(evt) {
+async function clearSessionAndChats(evt) {
     if (evt) {
         evt.stopPropagation();
     }
 
-    let allkeys = Object.keys(localStorage);
-    allkeys.forEach((key) => {
+    let allkeys = await KvList();
+    await Promise.all(allkeys.map(async (key) => {
         if (
-            key.startsWith("chat_user_session_")  // remove all sessions
+            key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
             || key == StorageKeyPinnedMaterials  // remove pinned materials
         ) {
-            localStorage.removeItem(key);
+            await KvDel(key);
         }
-    });
+    }));
 
     chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
     chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
@@ -211,45 +204,27 @@ function clearSessionAndChats(evt) {
         .querySelector(".sessionManager .sessions .session")
         .addEventListener("click", listenSessionSwitch);
 
-    window.SetLocalStorage(storageSessionKey(1), []);
+    await window.KvSet(storageSessionKey(1), []);
 }
 
 // update legacy chat history, add chatID to each chat
-function updateChatHistory() {
-    Object.keys(localStorage).forEach((key) => {
-        if (!key.startsWith("chat_user_session_")) {
+async function updateChatHistory() {
+    await Promise.all(Object.keys(localStorage).map(async (key) => {
+        if (!key.startsWith(KvKeyPrefixSessionHistory)) {
             return;
         }
 
-        let sessionID = parseInt(key.replace("chat_user_session_", ""));
-
-        let latestChatID,
-            history = sessionChatHistory(sessionID);
-        history.forEach((item) => {
-            if (!item.chatID && item.role != RoleAI) {
-                // compatability with old version,
-                // that old version's history doesn't have chatID.
-                item.chatID = newChatID();
-            }
-
-            if (item.role == RoleAI) {
-                // compatability with old version,
-                // some old version's AI history has different chatID with user's,
-                // so we overwrite it with latestChatID.
-                item.chatID = latestChatID;
-            }
-
-            latestChatID = item.chatID;
-        });
-
-        window.SetLocalStorage(key, history);
-    });
+        // move from localstorage to kv
+        console.log("move from localstorage to kv: ", key);
+        await window.KvSet(key, localStorage[key]);
+        localStorage.removeItem(key);
+    }));
 }
 
 /** setup session manager and restore current chat history
  *
  */
-function setupSessionManager() {
+async function setupSessionManager() {
     // bind remove all sessions
     {
         chatContainer
@@ -261,8 +236,9 @@ function setupSessionManager() {
     // restore all sessions from localStorage
     {
         let anyHistorySession = false;
-        Object.keys(localStorage).forEach((key, idx) => {
-            if (!key.startsWith("chat_user_session_")) {
+        let allKeys = await KvList();
+        allKeys.forEach((key) => {
+            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
                 return;
             }
 
@@ -270,17 +246,17 @@ function setupSessionManager() {
         })
 
         if (!anyHistorySession) {
-            window.SetLocalStorage("chat_user_session_1", []);
+            await window.KvSet(storageSessionKey(1), []);
         }
 
         let firstSession = true;
-        Object.keys(localStorage).forEach((key) => {
-            if (!key.startsWith("chat_user_session_")) {
+        allKeys.forEach((key) => {
+            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
                 return;
             }
 
             anyHistorySession = true;
-            let sessionID = parseInt(key.replace("chat_user_session_", ""));
+            let sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ""));
 
             let active = "";
             if (firstSession) {
@@ -300,7 +276,7 @@ function setupSessionManager() {
         });
 
         // restore conservation history
-        activeSessionChatHistory().forEach((item) => {
+        (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
@@ -320,11 +296,11 @@ function setupSessionManager() {
     {
         chatContainer
             .querySelector(".sessionManager .btn.new-session")
-            .addEventListener("click", (evt) => {
+            .addEventListener("click", async (evt) => {
                 let maxSessionID = 0;
-                Object.keys(localStorage).forEach((key) => {
-                    if (key.startsWith("chat_user_session_")) {
-                        let sessionID = parseInt(key.replace("chat_user_session_", ""));
+                (await KvList()).forEach((key) => {
+                    if (key.startsWith(KvKeyPrefixSessionHistory)) {
+                        let sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ""));
                         if (sessionID > maxSessionID) {
                             maxSessionID = sessionID;
                         }
@@ -349,7 +325,7 @@ function setupSessionManager() {
                                     Session ${newSessionID}
                                 </button>
                             </div>`);
-                window.SetLocalStorage(storageSessionKey(newSessionID), []);
+                await window.KvSet(storageSessionKey(newSessionID), []);
 
                 // bind session switch listener for new session
                 chatContainer
@@ -366,23 +342,22 @@ function setupSessionManager() {
                 item.addEventListener("click", listenSessionSwitch);
             });
     }
-
 }
 
 
 // remove chat in storage by chatid
-function removeChatInStorage(chatid) {
+async function removeChatInStorage(chatid) {
     if (!chatid) {
         throw "chatid is required";
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = activeSessionChatHistory();
+        history = await activeSessionChatHistory();
 
     // remove all chats with the same chatid
     history = history.filter((item) => item.chatID !== chatid);
 
-    window.localStorage.setItem(storageActiveSessionKey, JSON.stringify(history));
+    await window.KvSet(storageActiveSessionKey, JSON.stringify(history));
 }
 
 
@@ -392,13 +367,13 @@ function removeChatInStorage(chatid) {
     * @param {string} content - chat content
     * @param {string} attachHTML - chat content's attach html
 */
-function appendChats2Storage(role, chatid, content, attachHTML) {
+async function appendChats2Storage(role, chatid, content, attachHTML) {
     if (!chatid) {
         throw "chatid is required";
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = activeSessionChatHistory();
+        history = await activeSessionChatHistory();
 
     // if chat is already in history, find and update it.
     let found = false;
@@ -437,7 +412,7 @@ function appendChats2Storage(role, chatid, content, attachHTML) {
         });
     }
 
-    window.SetLocalStorage(storageActiveSessionKey, history);
+    await window.KvSet(storageActiveSessionKey, history);
 }
 
 
@@ -457,8 +432,8 @@ function scrollToChat(chatEle) {
 * @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
 * @returns {Array} An array of chat messages.
 */
-function getLastNChatMessages(N, ignoredChatID) {
-    let messages = activeSessionChatHistory().filter((ele) => {
+async function getLastNChatMessages(N, ignoredChatID) {
+    let messages = (await activeSessionChatHistory()).filter((ele) => {
         if (ele.role != RoleHuman) {
             // Ignore AI's chat, only use human's chat as context.
             return false;
@@ -619,7 +594,7 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     });
 
     // save img to storage no matter it's done or not
-    appendChats2Storage(RoleAI, chatID, attachHTML);
+    await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
 async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
@@ -639,7 +614,7 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
 
     // insert image to user input & hisotry
-    appendImg2UserInput(chatID, imageBase64, "image.png");
+    await appendImg2UserInput(chatID, imageBase64, "image.png");
 
     chatVisionSelectedFileStore = {};
     updateChatVisionSelectedFileStore();
@@ -672,14 +647,14 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
         attachHTML += `<img src="${url}">`;
     });
 
-    appendChats2Storage(RoleAI, chatID, attachHTML);
+    await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-function appendImg2UserInput(chatID, imgDataBase64, imgName) {
+async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     let text = chatContainer
         .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
-    appendChats2Storage(RoleHuman, chatID, text,
+    await appendChats2Storage(RoleHuman, chatID, text,
         `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`,
     );
 
@@ -704,7 +679,7 @@ async function sendChat2Server(chatID) {
         }
 
         append2Chats(chatID, RoleHuman, reqPrompt, false);
-        appendChats2Storage(RoleHuman, chatID, reqPrompt);
+        await appendChats2Storage(RoleHuman, chatID, reqPrompt);
     } else { // if chatID is not empty, it's a reload request
         reqPrompt = chatContainer
             .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML;
@@ -735,13 +710,13 @@ async function sendChat2Server(chatID) {
             nContexts = parseInt(window.ChatNContexts());
 
         if (chatID) {  // reload current chat by latest context
-            messages = getLastNChatMessages(nContexts - 1, chatID);
+            messages = await getLastNChatMessages(nContexts - 1, chatID);
             messages.push({
                 role: RoleHuman,
                 content: reqPrompt
             });
         } else {
-            messages = getLastNChatMessages(nContexts, chatID);
+            messages = await getLastNChatMessages(nContexts, chatID);
         }
 
         // there are pinned files, add them to user's prompt
@@ -762,7 +737,7 @@ async function sendChat2Server(chatID) {
                 });
 
                 // insert image to user input & hisotry
-                appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key);
+                await appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key);
             }
 
             chatVisionSelectedFileStore = {};
@@ -957,7 +932,7 @@ async function sendChat2Server(chatID) {
     }
 
     let rawHTMLResp = "";
-    currentAIRespSSE.addEventListener("message", (evt) => {
+    currentAIRespSSE.addEventListener("message", async (evt) => {
         evt.stopPropagation();
 
         // console.log("got: ", evt.data);
@@ -1009,7 +984,7 @@ async function sendChat2Server(chatID) {
             window.EnableTooltipsEverywhere();
 
             scrollToChat(currentAIRespEle);
-            appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML);
+            await appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML);
             unlockChatInput();
         }
     });
@@ -1304,7 +1279,7 @@ async function updateChatVisionSelectedFileStore() {
  * @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
  * @param {string} attachHTML - html to attach to chat
  */
-function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
+async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
     if (!chatID) {
         throw "chatID is required";
     }
@@ -1469,7 +1444,7 @@ function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
                     .addEventListener("click", editHumanInputHandler);
 
                 await sendChat2Server(chatID);
-                appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
+                await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
             });
 
             cancelBtn.addEventListener("click", (evt) => {
@@ -1616,9 +1591,10 @@ function setupConfig() {
     // bind reset button
     {
         configContainer.querySelector(".btn.reset")
-            .addEventListener("click", (evt) => {
+            .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
                 localStorage.clear();
+                await KvClear();
                 location.reload();
             })
     }

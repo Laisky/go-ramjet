@@ -1,6 +1,12 @@
 "use strict";
 
 (function () {
+    let kv;  // indexeddb
+    (() => {
+        // setup pouch db
+        kv = new PouchDB("mydatabase");
+    })();
+
     window.ActiveElementsByID = (elements, id) => {
         for (let i = 0; i < elements.length; i++) {
             let item = elements[i];
@@ -22,6 +28,71 @@
             }
         }
     };
+
+    // set data into indexeddb
+    window.KvSet = async (key, val) => {
+        try {
+            await kv.put({
+                _id: key,
+                val: JSON.stringify(val),
+            });
+        } catch (error) {
+            if (error.status === 409) {
+                // Fetch the current document
+                let doc = await kv.get(key);
+
+                // Save the new document with the _rev of the current document
+                await kv.put({
+                    _id: key,
+                    _rev: doc._rev,
+                    val: JSON.stringify(val),
+                });
+            } else {
+                throw error;
+            }
+        }
+    };
+    // get data from indexeddb
+    window.KvGet = async (key) => {
+        try {
+            let doc = await kv.get(key);
+            return JSON.parse(doc.val);
+        } catch (error) {
+            if (error.status === 404) {
+                // Ignore not found error
+                return null;
+            }
+            throw error;
+        }
+    };
+    // delete data from indexeddb
+    window.KvDel = async (key) => {
+        try {
+            const doc = await kv.get(key);
+            await kv.remove(doc);
+        } catch (error) {
+            if (error.status === 404) {
+                // Ignore not found error
+                return;
+            }
+            throw error;
+        }
+    };
+    // list all keys from indexeddb
+    window.KvList = async () => {
+        let docs = await kv.allDocs({ include_docs: true });
+        let keys = [];
+        for (let i = 0; i < docs.rows.length; i++) {
+            keys.push(docs.rows[i].doc._id);
+        }
+        return keys;
+    };
+    // clear all data from indexeddb
+    window.KvClear = async () => {
+        await kv.destroy();
+        kv = new PouchDB("mydatabase");
+    };
+
 
     window.SetLocalStorage = (key, val) => {
         localStorage.setItem(key, JSON.stringify(val));

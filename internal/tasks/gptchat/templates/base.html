@@ -259,15 +259,16 @@
         window.data = JSON.parse({{ .DataJSON }});
     </script>
 
-    <script defer src="{{.BootstrapJs}}"></script>
-    <script defer src="{{.SeeJs}}"></script>
-    <script defer src="{{.ShowdownJs}}"></script>
-    <script defer src="{{.PrismJs}}"></script>
-    <script defer src="{{.FuseJs}}"></script>
-    <script defer src="/static/{{.DataJs}}"></script>
-    <script defer src="/static/{{.LibJs}}"></script>
-    <script defer src="/static/{{.SiteJs}}"></script>
-    <script src="https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js" type="text/javascript"></script>
+    <script defer src="{{.BootstrapJs}}" type="text/javascript"></script>
+    <script defer src="{{.SeeJs}}" type="text/javascript"></script>
+    <script defer src="{{.ShowdownJs}}" type="text/javascript"></script>
+    <script defer src="{{.PrismJs}}" type="text/javascript"></script>
+    <script defer src="{{.FuseJs}}" type="text/javascript"></script>
+    <script defer src="https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js" type="text/javascript"></script>
+    <script defer src="https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js" type="text/javascript"></script>
+    <script defer src="/static/{{.DataJs}}" type="text/javascript"></script>
+    <script defer src="/static/{{.LibJs}}" type="text/javascript"></script>
+    <script defer src="/static/{{.SiteJs}}" type="text/javascript"></script>
 
     {{block "ga" .}}
     {{end}}
