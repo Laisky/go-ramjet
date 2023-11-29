@@ -54,7 +54,7 @@ function storageSessionKey(sessionID) {
 }
 
 async function sessionChatHistory(sessionID) {
-    let data =  (await window.KvGet(storageSessionKey(sessionID)));
+    let data = (await window.KvGet(storageSessionKey(sessionID)));
     if (!data) {
         return [];
     }
@@ -157,9 +157,14 @@ async function fetchImageDrawingResultBackground() {
  * @param {boolean} succeed is current subtask succeed
  */
 function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
-    let imageUrls = JSON.parse(item.dataset.imageUrls);
-    imageUrls = imageUrls.filter((url) => url !== imageUrl);
-    item.dataset.imageUrls = JSON.stringify(imageUrls);
+    let processingImageUrls = JSON.parse(item.dataset.imageUrls) || [];
+    if (!processingImageUrls.includes(imageUrl)) {
+        return;
+    }
+
+    // remove current subtask from imageUrls(tasks)
+    processingImageUrls = processingImageUrls.filter((url) => url !== imageUrl);
+    item.dataset.imageUrls = JSON.stringify(processingImageUrls);
 
     if (succeed) {
         let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
@@ -167,7 +172,7 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
         item.dataset.succeedImageUrls = JSON.stringify(succeedImageUrls);
     }
 
-    if (imageUrls.length == 0) {
+    if (processingImageUrls.length == 0) {
         item.dataset.status = "done";
         let imgHTML = "";
         let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
