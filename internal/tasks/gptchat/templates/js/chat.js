@@ -38,7 +38,7 @@ function newChatID() {
 // type: primary, secondary, success, danger, warning, info, light, dark
 function showalert(type, msg) {
     let alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
-            <div>${msg}</div>
+            <div>${sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>`;
 
@@ -48,8 +48,9 @@ function showalert(type, msg) {
 }
 
 
+// check sessionID's type, secure convert to int, default is 1
 function storageSessionKey(sessionID) {
-    sessionID = sessionID ? sessionID : "1";
+    sessionID = parseInt(sessionID) || 1;
     return `${KvKeyPrefixSessionHistory}${sessionID}`;
 }
 
