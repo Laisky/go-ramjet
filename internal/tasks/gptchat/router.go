@@ -28,6 +28,7 @@ func bindHTTP() {
 	grp.Any("/api", ihttp.ChatHandler)
 	grp.POST("/images/generations", ihttp.DrawByDalleHandler)
 	grp.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
+	grp.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)

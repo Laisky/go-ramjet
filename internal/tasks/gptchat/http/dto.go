@@ -377,6 +377,12 @@ type DrawImageByLcmRequest struct {
 	FnIndex int    `json:"fn_index"`
 }
 
+type DrawImageBySdxlturboRequest struct {
+	Model    string `json:"model" binding:"required,min=1"`
+	Text     string `json:"text" binding:"required,min=1"`
+	ImageB64 string `json:"image"`
+}
+
 // DrawImageByLcmResponse draw image by image and prompt with lcm
 type DrawImageByLcmResponse struct {
 	// Data base64 encoded image with fixed prefix "data:image/png;base64,"
