@@ -181,10 +181,10 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 	// 	return
 	// }
 
-	nSubTask := 1
-	if req.ImageB64 != "" {
-		nSubTask = 2 // img2img generates 2 images
-	}
+	nSubTask := 2
+	// if req.ImageB64 != "" {
+	// 	nSubTask = 2 // img2img generates 2 images
+	// }
 
 	for i := 0; i < nSubTask; i++ {
 		i := i
@@ -249,7 +249,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 				return
 			}
 
-			logger.Info("succeed draw image done")
+			logger.Info("succeed draw one image")
 		}()
 	}
 
