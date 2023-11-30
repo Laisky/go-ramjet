@@ -630,13 +630,14 @@ async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEl
     let imageBase64 = "";
     if (Object.keys(chatVisionSelectedFileStore).length != 0) {
         imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
+
+        // insert image to user input & hisotry
+        await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
+
+        chatVisionSelectedFileStore = {};
+        updateChatVisionSelectedFileStore();
     }
 
-    // insert image to user input & hisotry
-    await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
-
-    chatVisionSelectedFileStore = {};
-    updateChatVisionSelectedFileStore();
 
     const resp = await fetch(url, {
         method: "POST",
