@@ -181,7 +181,10 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 	// 	return
 	// }
 
-	const nSubTask = 2
+	nSubTask := 1
+	if req.ImageB64 != "" {
+		nSubTask = 2 // img2img generates 2 images
+	}
 
 	for i := 0; i < nSubTask; i++ {
 		i := i
