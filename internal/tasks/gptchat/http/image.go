@@ -53,7 +53,6 @@ func DrawByLcmHandler(ctx *gin.Context) {
 	// }
 
 	const nSubTask = 2
-
 	for i := 0; i < nSubTask; i++ {
 		i := i
 		subtask := strconv.Itoa(i)
@@ -190,7 +189,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 		i := i
 		subtask := strconv.Itoa(i)
 		go func() {
-			time.Sleep(time.Second * time.Duration(i))
+			// time.Sleep(time.Second * time.Duration(i))
 			logger.Debug("start image drawing task", zap.String("subtask", subtask))
 			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
 			defer cancel()
