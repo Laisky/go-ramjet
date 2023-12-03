@@ -213,6 +213,12 @@ func imageSize(cnt []byte) (width, height int, err error) {
 	}
 }
 
+var (
+	// hdResolutionMarker enable hd resolution for gpt-4-vision only
+	// if user has permission and mention "hd" in prompt
+	hdResolutionMarker = regexp.MustCompile(`\bhd\b`)
+)
+
 func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
 	logger := gmw.GetLogger(ctx).With(zap.String("method", ctx.Request.Method))
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
@@ -282,7 +288,8 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 					Content: []OpenaiVisionMessageContent{
 						{
 							Type: OpenaiVisionMessageContentTypeText,
-							Text: lastMessage.Content},
+							Text: lastMessage.Content,
+						},
 					},
 				},
 			}
@@ -292,7 +299,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 				resolution := VisionImageResolutionLow
 				// if user has permission and image size is large than 1MB,
 				// use high resolution
-				if (user.BYOK || user.NoLimitExpensiveModels) && len(f.Content) > 1024*1024 {
+				if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(lastMessage.Content) {
 					resolution = VisionImageResolutionHigh
 				}
 
