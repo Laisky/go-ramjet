@@ -118,12 +118,14 @@ async function fetchImageDrawingResultBackground() {
             return;
         }
 
-        const imageUrls = JSON.parse(item.dataset.imageUrls) || [];
+        const taskId = item.dataset.taskId,
+            imageUrls = JSON.parse(item.dataset.imageUrls) || [],
+            chatId = item.closest(".role-ai").dataset.chatid;
 
         try {
             await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
-                const errFileUrl = imageUrl.replace(".png", ".err.txt");
+                const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf("-")) + ".err.txt";
                 const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
                     method: "GET",
                     cache: "no-cache",
@@ -234,7 +236,7 @@ async function updateChatHistory() {
         }
 
         // move from localstorage to kv
-        console.log("move from localstorage to kv: ", key);
+        // console.log("move from localstorage to kv: ", key);
         await window.KvSet(key, JSON.parse(localStorage[key]));
         localStorage.removeItem(key);
     }));
@@ -296,7 +298,6 @@ async function setupSessionManager() {
 
         // restore conservation history
         let data = await activeSessionChatHistory();
-        console.log(data);
         (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
@@ -1014,7 +1015,6 @@ async function sendChat2Server(chatID) {
     currentAIRespSSE.addEventListener("message", async (evt) => {
         evt.stopPropagation();
 
-        // console.log("got: ", evt.data);
         let isChatRespDone = false;
         if (evt.data == "[DONE]") {
             isChatRespDone = true

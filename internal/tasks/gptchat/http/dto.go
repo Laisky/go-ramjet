@@ -381,6 +381,12 @@ type DrawImageBySdxlturboRequest struct {
 	Model    string `json:"model" binding:"required,min=1"`
 	Text     string `json:"text" binding:"required,min=1"`
 	ImageB64 string `json:"image"`
+	// N how many images to generate
+	N int `json:"n"`
+}
+
+type DrawImageBySdxlturboResponse struct {
+	B64Images []string `json:"images"`
 }
 
 // DrawImageByLcmResponse draw image by image and prompt with lcm

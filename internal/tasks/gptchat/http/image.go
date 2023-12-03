@@ -156,15 +156,17 @@ func DrawByLcmHandler(ctx *gin.Context) {
 
 func DrawBySdxlturboHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
-	logger := gmw.GetLogger(ctx).Named("image").With(
-		zap.String("task_id", taskID),
-	)
-	gmw.SetLogger(ctx, logger)
 
 	req := new(DrawImageBySdxlturboRequest)
 	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
 		return
 	}
+
+	logger := gmw.GetLogger(ctx).Named("image").With(
+		zap.String("task_id", taskID),
+		zap.Int("n", req.N),
+	)
+	gmw.SetLogger(ctx, logger)
 
 	user, err := getUserByAuthHeader(ctx)
 	if AbortErr(ctx, err) {
@@ -175,85 +177,89 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 		return
 	}
 
-	// free
-	// if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
-	// 	return
-	// }
+	req.N = 2
+	go func() {
+		// time.Sleep(time.Second * time.Duration(i))
+		logger.Debug("start image drawing task")
+		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		defer cancel()
 
-	nSubTask := 2
-	// if req.ImageB64 != "" {
-	// 	nSubTask = 2 // img2img generates 2 images
-	// }
+		if err := func() (err error) {
+			upstreamReqBody, err := json.Marshal(req)
+			if err != nil {
+				return errors.Wrap(err, "marshal request body")
+			}
 
-	for i := 0; i < nSubTask; i++ {
-		i := i
-		subtask := strconv.Itoa(i)
-		go func() {
-			// time.Sleep(time.Second * time.Duration(i))
-			logger.Debug("start image drawing task", zap.String("subtask", subtask))
-			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
-			defer cancel()
+			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
+				"http://100.102.187.66:7861/predict", bytes.NewReader(upstreamReqBody))
+			if AbortErr(ctx, errors.Wrap(err, "new request")) {
+				return
+			}
 
-			if err := func() (err error) {
-				upstreamReqBody, err := json.Marshal(req)
-				if err != nil {
-					return errors.Wrap(err, "marshal request body")
-				}
+			upstreamReq.Header.Add("Content-Type", "application/json")
+			if config.Config.LcmBasicAuthUsername != "" {
+				upstreamReq.SetBasicAuth(
+					config.Config.LcmBasicAuthUsername,
+					config.Config.LcmBasicAuthPassword,
+				)
+			}
 
-				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
-					"http://100.102.187.66:7861/predict", bytes.NewReader(upstreamReqBody))
-				if AbortErr(ctx, errors.Wrap(err, "new request")) {
-					return
-				}
+			resp, err := httpcli.Do(upstreamReq)
+			if err != nil {
+				return errors.Wrap(err, "do request")
+			}
+			defer gutils.LogErr(resp.Body.Close, logger)
 
-				upstreamReq.Header.Add("Content-Type", "application/json")
-				if config.Config.LcmBasicAuthUsername != "" {
-					upstreamReq.SetBasicAuth(
-						config.Config.LcmBasicAuthUsername,
-						config.Config.LcmBasicAuthPassword,
-					)
-				}
+			if resp.StatusCode != http.StatusOK {
+				payload, _ := io.ReadAll(resp.Body)
+				return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
+			}
 
-				resp, err := httpcli.Do(upstreamReq)
-				if err != nil {
-					return errors.Wrap(err, "do request")
-				}
-				defer gutils.LogErr(resp.Body.Close, logger)
+			resoData := new(DrawImageBySdxlturboResponse)
+			if err = json.NewDecoder(resp.Body).Decode(resoData); err != nil {
+				return errors.Wrap(err, "decode response")
+			}
 
-				if resp.StatusCode != http.StatusOK {
-					payload, _ := io.ReadAll(resp.Body)
-					return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
-				}
-
-				img, err := io.ReadAll(resp.Body)
+			var pool errgroup.Group
+			for i, img := range resoData.B64Images {
+				subtask := strconv.Itoa(i)
+				imgBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(img, "data:image/png;base64,"))
 				if err != nil {
 					return errors.Wrap(err, "decode image")
 				}
 
-				return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, img)
-			}(); err != nil {
-				// upload error msg
-				if _, err := s3.GetCli().PutObject(taskCtx,
-					config.Config.S3.Bucket,
-					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask+".err.txt",
-					bytes.NewReader([]byte(err.Error())),
-					int64(len(err.Error())),
-					minio.PutObjectOptions{
-						ContentType: "text/plain",
-					}); err != nil {
-					logger.Error("upload error msg", zap.Error(err))
-				}
-
-				logger.Error("failed to draw image", zap.Error(err))
-				return
+				pool.Go(func() error {
+					return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, imgBytes)
+				})
 			}
 
-			logger.Info("succeed draw one image")
-		}()
-	}
+			if err := pool.Wait(); err != nil {
+				return errors.Wrap(err, "upload image result to s3")
+			}
+
+			return nil
+		}(); err != nil {
+			// upload error msg
+			if _, err := s3.GetCli().PutObject(taskCtx,
+				config.Config.S3.Bucket,
+				drawImageByImageObjkeyPrefix(taskID)+".err.txt",
+				bytes.NewReader([]byte(err.Error())),
+				int64(len(err.Error())),
+				minio.PutObjectOptions{
+					ContentType: "text/plain",
+				}); err != nil {
+				logger.Error("upload error msg", zap.Error(err))
+			}
+
+			logger.Error("failed to draw image", zap.Error(err))
+			return
+		}
+
+		logger.Info("succeed draw one image")
+	}()
 
 	imageUrls := []string{}
-	for i := 0; i < nSubTask; i++ {
+	for i := 0; i < req.N; i++ {
 		imageUrls = append(imageUrls, fmt.Sprintf("https://%s/%s/%s-%d.%s",
 			config.Config.S3.Endpoint,
 			config.Config.S3.Bucket,
@@ -269,15 +275,16 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
-	logger := gmw.GetLogger(ctx).Named("image").With(
-		zap.String("task_id", taskID),
-	)
-	gmw.SetLogger(ctx, logger)
 
 	req := new(DrawImageByTextRequest)
 	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
 		return
 	}
+
+	logger := gmw.GetLogger(ctx).Named("image").With(
+		zap.String("task_id", taskID),
+	)
+	gmw.SetLogger(ctx, logger)
 
 	user, err := getUserByAuthHeader(ctx)
 	if AbortErr(ctx, err) {
