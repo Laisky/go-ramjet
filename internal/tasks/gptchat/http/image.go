@@ -79,7 +79,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 				}
 
 				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
-					"https://draw2.laisky.com/run/predict", bytes.NewReader(upstreamReqBody))
+					"http://100.102.187.66:7860/run/predict", bytes.NewReader(upstreamReqBody))
 				if AbortErr(ctx, errors.Wrap(err, "new request")) {
 					return
 				}
@@ -201,7 +201,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 				}
 
 				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
-					"https://sdxl-turbo.laisky.com/predict", bytes.NewReader(upstreamReqBody))
+					"http://100.102.187.66:7861/predict", bytes.NewReader(upstreamReqBody))
 				if AbortErr(ctx, errors.Wrap(err, "new request")) {
 					return
 				}
