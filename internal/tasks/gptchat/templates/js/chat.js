@@ -118,36 +118,38 @@ async function fetchImageDrawingResultBackground() {
             return;
         }
 
-        const taskId = item.dataset.taskId,
-            imageUrls = JSON.parse(item.dataset.imageUrls) || [],
-            chatId = item.closest(".role-ai").dataset.chatid;
+        const imageUrls = JSON.parse(item.dataset.imageUrls) || [];
 
-        await Promise.all(imageUrls.map(async (imageUrl) => {
-            // check any err msg
-            const errFileUrl = imageUrl.replace(".png", ".err.txt");
-            const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
-                method: "GET",
-                cache: "no-cache",
-            });
-            if (errFileResp.ok || errFileResp.status == 200) {
-                const errText = await errFileResp.text();
-                item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
-                checkIsImageAllSubtaskDone(item, imageUrl, false);
-                return;
-            }
+        try {
+            await Promise.all(imageUrls.map(async (imageUrl) => {
+                // check any err msg
+                const errFileUrl = imageUrl.replace(".png", ".err.txt");
+                const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
+                    method: "GET",
+                    cache: "no-cache",
+                });
+                if (errFileResp.ok || errFileResp.status == 200) {
+                    const errText = await errFileResp.text();
+                    item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
+                    checkIsImageAllSubtaskDone(item, imageUrl, false);
+                    return;
+                }
 
-            // check is image ready
-            const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
-                method: "GET",
-                cache: "no-cache",
-            });
-            if (!imgResp.ok || imgResp.status != 200) {
-                return;
-            }
+                // check is image ready
+                const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
+                    method: "GET",
+                    cache: "no-cache",
+                });
+                if (!imgResp.ok || imgResp.status != 200) {
+                    return;
+                }
 
-            // check is all tasks finished
-            checkIsImageAllSubtaskDone(item, imageUrl, true);
-        }));
+                // check is all tasks finished
+                checkIsImageAllSubtaskDone(item, imageUrl, true);
+            }));
+        } catch (err) {
+            console.warn("fetch img result, " + err);
+        };
     }));
 }
 
