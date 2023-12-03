@@ -59,7 +59,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		go func() {
 			time.Sleep(time.Second * time.Duration(i) * 3)
 			logger.Debug("start image drawing task", zap.String("subtask", subtask))
-			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
+			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
 			defer cancel()
 
 			if err := func() (err error) {
@@ -191,7 +191,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 		go func() {
 			// time.Sleep(time.Second * time.Duration(i))
 			logger.Debug("start image drawing task", zap.String("subtask", subtask))
-			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
+			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
 			defer cancel()
 
 			if err := func() (err error) {
@@ -293,7 +293,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 	go func() {
 		logger.Debug("start image drawing task")
-		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
+		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
 		defer cancel()
 
 		switch {
