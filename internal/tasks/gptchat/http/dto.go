@@ -259,19 +259,23 @@ type OpenaiCompletionResp struct {
 //	    "choices":[{"delta":{"role":"assistant"}, "index":0, "finish_reason":null}]
 //	}
 type OpenaiCompletionStreamResp struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Delta struct {
-			Role      OpenaiMessageRole                    `json:"role"`
-			Content   string                               `json:"content"`
-			ToolCalls []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
-		} `json:"delta"`
-		Index        int    `json:"index"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
+	ID      string                             `json:"id"`
+	Object  string                             `json:"object"`
+	Created int64                              `json:"created"`
+	Model   string                             `json:"model"`
+	Choices []OpenaiCompletionStreamRespChoice `json:"choices"`
+}
+
+type OpenaiCompletionStreamRespChoice struct {
+	Delta        OpenaiCompletionStreamRespDelta `json:"delta"`
+	Index        int                             `json:"index"`
+	FinishReason string                          `json:"finish_reason"`
+}
+
+type OpenaiCompletionStreamRespDelta struct {
+	Role      OpenaiMessageRole                    `json:"role"`
+	Content   string                               `json:"content"`
+	ToolCalls []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
 }
 
 // OpenaiCompletionStreamRespToolCall tool call

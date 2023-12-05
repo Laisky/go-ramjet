@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"image/jpeg"
 	"image/png"
@@ -35,6 +37,8 @@ import (
 
 var (
 	dataReg = regexp.MustCompile(`data: (\{.*\})`)
+	// llmRespCache cache llm response to quick response
+	llmRespCache = gutils.NewExpCache[string](context.Background(), time.Hour)
 )
 
 // ChatHandler handle api request
@@ -49,11 +53,53 @@ func ChatHandler(ctx *gin.Context) {
 
 func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespToolCall) {
 	logger := gmw.GetLogger(ctx)
-	frontReq, resp, err := send2openai(ctx) //nolint:bodyclose
+	frontReq, openaiReq, err := convert2OpenaiRequest(ctx) //nolint:bodyclose
+	if AbortErr(ctx, err) {
+		return
+	}
+
+	// read cache
+	if cacheKey, err := req2CacheKey(frontReq); err != nil {
+		logger.Warn("marshal req for cache key", zap.Error(err))
+	} else if respContent, ok := llmRespCache.Load(cacheKey); ok {
+		res := &OpenaiCompletionStreamResp{
+			Choices: []OpenaiCompletionStreamRespChoice{
+				{
+					Delta: OpenaiCompletionStreamRespDelta{
+						Content: respContent,
+					},
+					FinishReason: "stop",
+				},
+			},
+		}
+		if data, err := json.Marshal(res); err != nil {
+			logger.Warn("marshal resp", zap.Error(err))
+		} else {
+			data = append([]byte("data: "), data...)
+			data = append(data, []byte("\n\n")...)
+
+			if _, err = io.Copy(ctx.Writer, bytes.NewReader(data)); err != nil {
+				logger.Warn("resp from cache", zap.Error(err))
+			} else {
+				logger.Debug("hit cache for llm response")
+				return
+			}
+		}
+	}
+
+	// send request to openai
+	logger.Debug("try send request to upstream server", zap.String("url", openaiReq.RemoteAddr))
+	resp, err := httpcli.Do(openaiReq)
 	if AbortErr(ctx, err) {
 		return
 	}
 	defer gutils.LogErr(resp.Body.Close, logger)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		AbortErr(ctx, errors.Errorf("[%d]%s", resp.StatusCode, body))
+		return
+	}
 
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
@@ -136,8 +182,27 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	return nil
 }
 
+func req2CacheKey(req *FrontendReq) (string, error) {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return "", errors.Wrap(err, "marshal req")
+	}
+
+	hashed := sha1.Sum(data)
+	return hex.EncodeToString(hashed[:]), nil
+}
+
 func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger := log.Logger.Named("save_llm")
+
+	// save to cache
+	if cacheKey, err := req2CacheKey(req); err != nil {
+		logger.Warn("marshal req for cache key", zap.Error(err))
+	} else {
+		llmRespCache.Store(cacheKey, respContent)
+	}
+
+	// save to db
 	openaidb, err := db.GetOpenaiDB()
 	if err != nil {
 		logger.Error("get openai db", zap.Error(err))
@@ -219,8 +284,8 @@ var (
 	hdResolutionMarker = regexp.MustCompile(`\bhd\b`)
 )
 
-func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Response, err error) {
-	logger := gmw.GetLogger(ctx).With(zap.String("method", ctx.Request.Method))
+func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiReq *http.Request, err error) {
+	// logger := gmw.GetLogger(ctx).With(zap.String("method", ctx.Request.Method))
 	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
 	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
@@ -351,20 +416,7 @@ func send2openai(ctx *gin.Context) (frontendReq *FrontendReq, resp *http.Respons
 	// golang's http client will not auto decompress response body
 	req.Header.Del("Accept-Encoding")
 
-	logger.Debug("try send request to upstream server", zap.String("url", newUrl))
-	resp, err = httpcli.Do(req)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "do request %q", newUrl)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		defer gutils.LogErr(resp.Body.Close, logger) // nolint
-		body, _ := io.ReadAll(resp.Body)
-		return nil, nil, errors.Errorf("[%d]%s", resp.StatusCode, string(body))
-	}
-
-	// do not close resp.Body
-	return frontendReq, resp, nil
+	return frontendReq, req, nil
 }
 
 func (r *FrontendReq) fillDefault() {
