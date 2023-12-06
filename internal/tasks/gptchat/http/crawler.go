@@ -25,7 +25,11 @@ var (
 func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, err error) {
 	log.Logger.Debug("fetch dynamic url", zap.String("url", url))
 	headers := map[string]any{
-		"User-Agent": "go-ramjet-bot",
+		"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537",
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+		"Accept-Language": "en-US,en;q=0.8",
+		"Accept-Encoding": "gzip, deflate, sdch",
+		"Connection":      "keep-alive",
 	}
 
 	chromeCtx, cancel := chromedp.NewContext(ctx)

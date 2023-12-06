@@ -27,6 +27,7 @@ require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/minio/minio-go/v7 v7.0.63
 	github.com/spf13/cobra v1.8.0
+	github.com/stretchr/testify v1.8.4
 	github.com/stripe/stripe-go/v76 v76.7.0
 	github.com/yanyiwu/gojieba v1.3.0
 	go.mongodb.org/mongo-driver v1.12.1
