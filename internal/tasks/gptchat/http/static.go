@@ -71,7 +71,9 @@ func prepareStaticFiles() {
 		Name:        "libs",
 		Ext:         ".js",
 		ContentType: "application/javascript",
-		Content:     ijs.Libs,
+		Content: bytes.Join([][]byte{
+			ijs.Libs,
+		}, []byte("\n")),
 	}
 	staticFiles.SiteJs = &staticFile{
 		Name:        "sites",

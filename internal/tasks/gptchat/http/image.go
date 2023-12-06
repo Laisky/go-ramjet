@@ -92,7 +92,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 					)
 				}
 
-				resp, err := httpcli.Do(upstreamReq)
+				resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
 				if err != nil {
 					return errors.Wrap(err, "do request")
 				}
@@ -204,7 +204,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 				)
 			}
 
-			resp, err := httpcli.Do(upstreamReq)
+			resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
 			if err != nil {
 				return errors.Wrap(err, "do request")
 			}

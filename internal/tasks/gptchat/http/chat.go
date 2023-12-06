@@ -89,7 +89,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	// send request to openai
 	logger.Debug("try send request to upstream server", zap.String("url", openaiReq.RemoteAddr))
-	resp, err := httpcli.Do(openaiReq)
+	resp, err := httpcli.Do(openaiReq) //nolint: bodyclose
 	if AbortErr(ctx, err) {
 		return
 	}

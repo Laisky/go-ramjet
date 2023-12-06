@@ -43,6 +43,7 @@ func SetupConfig() (err error) {
 	}
 
 	// fill default
+	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
 	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(
@@ -74,6 +75,8 @@ func SetupConfig() (err error) {
 //
 // nolint: lll
 type OpenAI struct {
+	// Gateway (optional) gateway url, default to https://chat.laisky.com
+	Gateway string `json:"gateway" mapstructure:"gateway"`
 	// API (optional) openai api base url, default is https://api.openai.com
 	API string `json:"api" mapstructure:"api"`
 	// Token (required) openai api request token
@@ -114,6 +117,9 @@ type OpenAI struct {
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
 	S3 s3Config `json:"s3" mapstructure:"s3"`
+
+	// PaymentStripeKey (optional) stripe key
+	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`
 
 	// LcmBasicAuthUsername (optional) lcm basic auth username
 	LcmBasicAuthUsername string `json:"lcm_basic_auth_username" mapstructure:"lcm_basic_auth_username"`

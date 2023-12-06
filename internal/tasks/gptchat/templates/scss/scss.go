@@ -9,6 +9,9 @@ var CSSBase []byte
 //go:embed chat.css
 var ChatCss []byte
 
+//go:embed payment.css
+var Payment []byte
+
 var SitesCSS []byte
 
 func init() {

@@ -6,7 +6,9 @@ import (
 
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/stripe/stripe-go/v76"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	ihttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
 	istatic "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/static"
 	"github.com/Laisky/go-ramjet/library/log"
@@ -33,4 +35,9 @@ func bindHTTP() {
 	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
 	grp.GET("/", ihttp.Chat)
+
+	// payment
+	stripe.Key = config.Config.PaymentStripeKey
+	grp.POST("/create-payment-intent", ihttp.PaymentHandler)
+	grp.GET("/payment/:ext", ihttp.PaymentStaticHandler)
 }

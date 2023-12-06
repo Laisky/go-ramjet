@@ -14,3 +14,6 @@ var Libs []byte
 
 //go:embed chat-prompts.js
 var ChatPrompts []byte
+
+//go:embed payment.js
+var Payment []byte
