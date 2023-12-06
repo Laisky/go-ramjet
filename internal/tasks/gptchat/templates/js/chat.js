@@ -443,7 +443,7 @@ function scrollChatToDown() {
 }
 
 function scrollToChat(chatEle) {
-    chatEle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 /**
