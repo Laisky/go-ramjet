@@ -85,6 +85,7 @@
   box-shadow: 1px 1px 5px #333;
   -webkit-box-shadow: 1px 1px 5px #333;
   -moz-box-shadow: 1px 1px 5px #333;
+  margin: 2px;
 }
 #chatContainer .chatManager .card .card-body.conservations .icon {
   width: 35px;
