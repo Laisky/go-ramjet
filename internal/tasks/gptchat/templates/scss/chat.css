@@ -76,6 +76,7 @@
 }
 #chatContainer .chatManager .card .card-body.conservations .row > * {
   padding-left: 0px;
+  overflow-x: auto;
 }
 #chatContainer .chatManager .card .card-body.conservations img {
   max-width: 90%;
