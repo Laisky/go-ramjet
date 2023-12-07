@@ -53,6 +53,15 @@
             .card-body {
                 min-height: 300px;
                 padding: 0px;
+
+                .list-group {
+                    border-radius: 0%;
+
+                    .session {
+                        display: flex;
+                        justify-content: space-between;
+                    }
+                }
             }
 
             .card-footer {
@@ -120,7 +129,7 @@
                         flex-direction: row-reverse;
 
                         .bi-trash {
-                            margin-right: 15px;
+                            margin-right: 5px;
                         }
 
                         .bi-pencil-square,

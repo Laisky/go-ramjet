@@ -47,6 +47,13 @@
   min-height: 300px;
   padding: 0px;
 }
+#chatContainer .sessionManager .card .card-body .list-group {
+  border-radius: 0%;
+}
+#chatContainer .sessionManager .card .card-body .list-group .session {
+  display: flex;
+  justify-content: space-between;
+}
 #chatContainer .sessionManager .card .card-footer {
   padding: 0px;
 }
@@ -101,7 +108,7 @@
   flex-direction: row-reverse;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-trash {
-  margin-right: 15px;
+  margin-right: 5px;
 }
 #chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-pencil-square,
 #chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-trash {

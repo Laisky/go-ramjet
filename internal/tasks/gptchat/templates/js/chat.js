@@ -216,16 +216,18 @@ async function clearSessionAndChats(evt) {
 
     chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
     chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
-            <div class="list-group" style="border-radius: 0%;">
-                <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-                    Session 1
-                </button>
-            </div>`;
+        <div class="list-group">
+            <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
+                <div>1</div>
+                <div><i class="bi bi-trash"></i></div>
+            </button>
+        </div>`;
     chatContainer
         .querySelector(".sessionManager .sessions .session")
         .addEventListener("click", listenSessionSwitch);
 
     await window.KvSet(storageSessionKey(1), []);
+    bindSessionDeleteBtn();
 }
 
 // update legacy chat history, add chatID to each chat
@@ -240,6 +242,32 @@ async function updateChatHistory() {
         await window.KvSet(key, JSON.parse(localStorage[key]));
         localStorage.removeItem(key);
     }));
+}
+
+function bindSessionDeleteBtn() {
+    let btns = chatContainer.querySelectorAll(".sessionManager .sessions .session .bi-trash") || [];
+    btns.forEach((item) => {
+        if (item.dataset["bindClicked"]) {
+            return;
+        } else {
+            item.dataset["bindClicked"] = true;
+        }
+
+        item.addEventListener("click", async (evt) => {
+            evt.stopPropagation();
+
+            // if there is only one session, don't delete it
+            if (chatContainer.querySelectorAll(".sessionManager .sessions .session").length == 1) {
+                return;
+            }
+
+            let sessionID = evt.target.closest(".session").dataset.session;
+            if (confirm("Are you sure to delete this session?")) {
+                window.KvDel(storageSessionKey(sessionID));
+                evt.target.closest(".list-group").remove();
+            }
+        });
+    });
 }
 
 /** setup session manager and restore current chat history
@@ -289,11 +317,12 @@ async function setupSessionManager() {
                 .querySelector(".sessionManager .sessions")
                 .insertAdjacentHTML(
                     "beforeend",
-                    `<div class="list-group" style="border-radius: 0%;">
-                            <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
-                                Session ${sessionID}
-                            </button>
-                        </div>`);
+                    `<div class="list-group">
+                        <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
+                            <div>${sessionID}</div>
+                            <div><i class="bi bi-trash"></i></div>
+                        </button>
+                    </div>`);
         });
 
         // restore conservation history
@@ -342,17 +371,20 @@ async function setupSessionManager() {
                     .querySelector(".sessionManager .sessions")
                     .insertAdjacentHTML(
                         "afterbegin",
-                        `<div class="list-group" style="border-radius: 0%;">
-                                <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
-                                    Session ${newSessionID}
-                                </button>
-                            </div>`);
+                        `<div class="list-group">
+                            <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
+                                <div>${newSessionID}</div>
+                                <div><i class="bi bi-trash"></i></div>
+                            </button>
+                        </div>`);
                 await window.KvSet(storageSessionKey(newSessionID), []);
 
                 // bind session switch listener for new session
                 chatContainer
                     .querySelector(`.sessionManager .sessions [data-session="${newSessionID}"]`)
                     .addEventListener("click", listenSessionSwitch);
+
+                bindSessionDeleteBtn();
             });
     }
 
@@ -364,6 +396,8 @@ async function setupSessionManager() {
                 item.addEventListener("click", listenSessionSwitch);
             });
     }
+
+    bindSessionDeleteBtn();
 }
 
 
@@ -1456,6 +1490,11 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
         // bind delete button
         let deleteBtnHandler = (evt) => {
             evt.stopPropagation();
+
+            if (!confirm("Are you sure to delete this chat?")) {
+                return;
+            }
+
             chatEle.parentNode.removeChild(chatEle);
             removeChatInStorage(chatID);
         };
