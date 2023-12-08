@@ -333,8 +333,7 @@ function setupConfirmModal() {
  *
  */
 async function setupHeader() {
-    let headerBarEle = document.getElementById("headerbar"),
-        allowedModels = window.GetLocalStorage(StorageKeyAllowedModels) || [];
+    let headerBarEle = document.getElementById("headerbar");
 
     // setup chat models
     {
@@ -443,6 +442,8 @@ async function setupHeader() {
             });
         });
     }
+
+    const allowedModels = window.GetLocalStorage(StorageKeyAllowedModels) || [];
 
     // setup chat qa models
     {
