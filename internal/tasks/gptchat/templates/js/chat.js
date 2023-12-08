@@ -1060,7 +1060,12 @@ async function sendChat2Server(chatID) {
         let isChatRespDone = false;
         if (evt.data == "[DONE]") {
             isChatRespDone = true
+        } else if (evt.data == "[HEARTBEAT]") {
+            return;
         }
+
+        // remove prefix [HEARTBEAT]
+        evt.data = evt.data.replace(/^\[HEARTBEAT\]+/, "");
 
         if (!isChatRespDone) {
             let payload = JSON.parse(evt.data),
@@ -1094,6 +1099,10 @@ async function sendChat2Server(chatID) {
         }
 
         if (isChatRespDone) {
+            if (!currentAIRespSSE) {
+                return;
+            }
+
             currentAIRespSSE.close();
             currentAIRespSSE = null;
 

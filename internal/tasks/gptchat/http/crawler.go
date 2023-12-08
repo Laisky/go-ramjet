@@ -29,7 +29,9 @@ var (
 
 // fetchDynamicURLContent fetch dynamic url content, will render js by chromedp
 func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, err error) {
-	log.Logger.Debug("fetch dynamic url", zap.String("url", url))
+	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
+		With(zap.String("url", url))
+	logger.Debug("fetch dynamic url")
 	headers := map[string]any{
 		"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537",
 		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -38,7 +40,8 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 		"Connection":      "keep-alive",
 	}
 
-	chromeCtx, cancel := chromedp.NewContext(ctx)
+	// give chrome more time to run in background
+	chromeCtx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
 	if err = chromedpSema.Acquire(ctx, 1); err != nil {
@@ -47,17 +50,52 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 		defer chromedpSema.Release(1)
 	}
 
-	var htmlContent string
-	if err = chromedp.Run(chromeCtx, chromedp.Tasks{
-		network.Enable(),
-		chromedp.Navigate(url),
-		network.SetExtraHTTPHeaders(network.Headers(headers)),
-		chromedp.Sleep(5 * time.Second), // Wait for the page to load
-		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
-	}); err != nil {
-		return nil, errors.Wrapf(err, "run chrome task %q", url)
+	var (
+		finishCh = make(chan struct{})
+		mu       sync.Mutex
+	)
+	go func() {
+		defer close(finishCh)
+		var htmlContent string
+		if err = chromedp.Run(chromeCtx, chromedp.Tasks{
+			network.Enable(),
+			chromedp.Navigate(url),
+			network.SetExtraHTTPHeaders(network.Headers(headers)),
+			chromedp.Sleep(5 * time.Second), // Wait for the page to load
+			chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
+		}); err != nil {
+			logger.Debug("fetch url first time failed, will try next time", zap.Error(err))
+			if err = chromedp.Run(chromeCtx, chromedp.Tasks{
+				network.Enable(),
+				chromedp.Navigate(url),
+				network.SetExtraHTTPHeaders(network.Headers(headers)),
+				chromedp.Sleep(time.Second * 30), // Wait longer
+				chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
+			}); err != nil {
+				logger.Warn("fetch url failed", zap.Error(err))
+				return
+			}
+		}
+
+		mu.Lock()
+		content = []byte(htmlContent)
+		mu.Unlock()
+
+		logger.Info("fetch url success")
+		urlContentCache.Store(url, content) // save cache
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-finishCh:
 	}
-	content = []byte(htmlContent)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(content) == 0 {
+		return nil, errors.Errorf("no content find by chromedp")
+	}
 
 	if bodyContent, err := extractHTMLBody(content); err != nil {
 		log.Logger.Warn("extract html body", zap.Error(err))
@@ -65,7 +103,6 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 		content = bodyContent
 	}
 
-	urlContentCache.Store(url, content) // save cache
 	return content, nil
 }
 

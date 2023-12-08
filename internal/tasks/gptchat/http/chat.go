@@ -451,7 +451,7 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return content, nil
 	}
 
-	ctx, cancel := context.WithTimeout(gctx.Request.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(gctx.Request.Context(), 25*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
@@ -694,6 +694,28 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 	if maxTokens != 0 && userReq.MaxTokens > maxTokens {
 		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
 	}
+
+	stopch := make(chan struct{})
+	defer close(stopch)
+	go func() {
+		for {
+			select {
+			case <-stopch:
+				return
+			case <-gctx.Request.Context().Done():
+				return
+			default:
+			}
+
+			if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
+				log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
+				return
+			}
+
+			gctx.Writer.Flush()
+			time.Sleep(time.Second)
+		}
+	}()
 
 	if config.Config.RamjetURL != "" {
 		userReq.embeddingUrlContent(gctx, user)
