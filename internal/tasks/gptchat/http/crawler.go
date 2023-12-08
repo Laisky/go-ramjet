@@ -1,16 +1,22 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
+	"regexp"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"golang.org/x/net/html"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/library/log"
@@ -84,9 +90,128 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
 	}
 
-	if content, err = io.ReadAll(resp.Body); err != nil {
-		return nil, errors.Wrap(err, "read response body")
+	if content, err = _extractHtmlBody(resp.Body); err != nil {
+		return nil, errors.Wrapf(err, "extract html body %q", url)
 	}
 
 	return content, nil
+}
+
+func googleSearch(ctx context.Context, query string) (content []byte, err error) {
+	logger := gmw.GetLogger(ctx).Named("google_search")
+	searchContent, err := fetchDynamicURLContent(ctx, "https://www.google.com/search?q="+query)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fetch %q", query)
+	}
+
+	doc, err := html.Parse(bytes.NewReader(searchContent))
+	if err != nil {
+		return nil, errors.Wrap(err, "parse html")
+	}
+
+	ok, urls, err := _googleExtractor(doc)
+	if err != nil {
+		return nil, errors.Wrap(err, "extract google search result")
+	}
+	if !ok || len(urls) == 0 {
+		return nil, errors.Errorf("no search result")
+	}
+
+	var (
+		mu   sync.Mutex
+		pool errgroup.Group
+	)
+	for _, url := range urls {
+		url := url
+		pool.Go(func() error {
+			pageCnt, err := fetchStaticURLContent(ctx, url)
+			if err != nil {
+				return errors.Wrapf(err, "fetch %q", url)
+			}
+
+			mu.Lock()
+			content = append(content, pageCnt...)
+			content = append(content, '\n')
+			defer mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err = pool.Wait(); err != nil {
+		logger.Warn("fetch google search result", zap.Error(err))
+	}
+
+	if len(content) == 0 {
+		return nil, errors.Errorf("no content find by google search")
+	}
+
+	return content, nil
+}
+
+var (
+	regexpHref = regexp.MustCompile(`href="([^"]*)"`)
+)
+
+func _googleExtractor(n *html.Node) (ok bool, urls []string, err error) {
+	if n.Type == html.ElementNode && n.Data == "div" {
+		for _, attr := range n.Attr {
+			if attr.Key == "id" && attr.Val == "search" {
+				var buf bytes.Buffer
+				if err = html.Render(&buf, n); err != nil {
+					return false, nil, errors.WithStack(err)
+				}
+
+				matches := regexpHref.FindAllStringSubmatch(buf.String(), -1)
+				for _, match := range matches {
+					urls = append(urls, match[1])
+				}
+
+				return true, urls, nil
+			}
+		}
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if ok, urls, err = _googleExtractor(c); err != nil {
+			return false, nil, errors.WithStack(err)
+		} else if ok {
+			return true, urls, nil
+		}
+	}
+
+	return false, nil, nil
+}
+
+func _extractHtmlBody(body io.Reader) (bodyContent []byte, err error) {
+	doc, err := html.Parse(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse html")
+	}
+
+	var (
+		f        func(*html.Node)
+		bodyNode *html.Node
+	)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "body" {
+			bodyNode = n
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+
+	if bodyNode == nil {
+		return nil, errors.New("no body node")
+	}
+
+	var buf bytes.Buffer
+	if err = html.Render(&buf, bodyNode); err != nil {
+		return nil, errors.Wrap(err, "render html")
+	}
+
+	return buf.Bytes(), nil
 }
