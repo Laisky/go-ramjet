@@ -333,12 +333,13 @@ function setupConfirmModal() {
  *
  */
 function setupHeader() {
-    let headerBarEle = document.getElementById("headerbar");
+    let headerBarEle = document.getElementById("headerbar"),
+        allowedModels = window.GetLocalStorage(StorageKeyAllowedModels) || [];
 
     // setup chat qa models
     {
         let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
-        window.GetLocalStorage(StorageKeyAllowedModels).forEach((model) => {
+        allowedModels.forEach((model) => {
             if (!QaModels.includes(model)) {
                 return;
             }
@@ -357,7 +358,7 @@ function setupHeader() {
     // setup chat image models
     {
         let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
-        window.GetLocalStorage(StorageKeyAllowedModels).forEach((model) => {
+        allowedModels.forEach((model) => {
             if (!ImageModels.includes(model)) {
                 return;
             }
