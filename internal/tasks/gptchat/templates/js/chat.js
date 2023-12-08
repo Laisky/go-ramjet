@@ -828,6 +828,12 @@ async function sendChat2Server(chatID) {
             messages = await getLastNChatMessages(nContexts, chatID);
         }
 
+        // if selected model is vision model, but no image selected, abort
+        if (selectedModel.includes("vision") && Object.keys(chatVisionSelectedFileStore).length == 0) {
+            abortAIResp("you should select at least one image for vision model");
+            return
+        }
+
         // there are pinned files, add them to user's prompt
         if (Object.keys(chatVisionSelectedFileStore).length != 0) {
             if (!selectedModel.includes("vision")) {

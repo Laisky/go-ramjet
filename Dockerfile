@@ -7,7 +7,7 @@ RUN sass ./internal/tasks/gptchat/templates/scss
 
 # =====================================
 
-FROM golang:1.21.4-bullseye AS gobuild
+FROM golang:1.21.5-bullseye AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
