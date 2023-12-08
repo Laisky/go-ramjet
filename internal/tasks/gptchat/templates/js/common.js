@@ -333,7 +333,8 @@ function setupConfirmModal() {
  *
  */
 async function setupHeader() {
-    let headerBarEle = document.getElementById("headerbar");
+    let headerBarEle = document.getElementById("headerbar"),
+    allowedModels = [];
 
     // setup chat models
     {
@@ -365,6 +366,7 @@ async function setupHeader() {
         }
 
         window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
+        allowedModels = data.allowed_models;
 
         if (!data.allowed_models.includes(selectedModel)) {
             selectedModel = data.allowed_models[0];
@@ -442,8 +444,6 @@ async function setupHeader() {
             });
         });
     }
-
-    const allowedModels = window.GetLocalStorage(StorageKeyAllowedModels) || [];
 
     // setup chat qa models
     {
