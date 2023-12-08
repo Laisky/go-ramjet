@@ -467,6 +467,7 @@ async function setupHeader() {
     // setup chat image models
     {
         let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
+        imageModelsContainer.innerHTML = "";
         allowedModels.forEach((model) => {
             if (!ImageModels.includes(model)) {
                 return;
