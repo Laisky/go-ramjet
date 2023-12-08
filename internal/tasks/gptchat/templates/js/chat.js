@@ -100,6 +100,9 @@ async function listenSessionSwitch(evt) {
     (await sessionChatHistory(sessionID)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
     });
+
+    Prism.highlightAll();
+    window.EnableTooltipsEverywhere();
 }
 
 /**
@@ -329,6 +332,7 @@ async function setupSessionManager() {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
+        Prism.highlightAll();
         window.EnableTooltipsEverywhere();
     }
 
@@ -1097,11 +1101,23 @@ async function sendChat2Server(chatID) {
             currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
             currentAIRespEle.innerHTML += responseExtras;
 
+            // setup prism
+            {
+                // add line number
+                currentAIRespEle.querySelectorAll("pre").forEach((item) => {
+                    item.classList.add("line-numbers");
+                });
+            }
+
+            // should save html before prism formatted,
+            // because prism.js do not support formatted html.
+            const rawResp = currentAIRespEle.innerHTML;
+
             Prism.highlightAll();
             window.EnableTooltipsEverywhere();
 
             scrollToChat(currentAIRespEle);
-            await appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML);
+            await appendChats2Storage(RoleAI, chatID, rawResp);
             unlockChatInput();
         }
     });
