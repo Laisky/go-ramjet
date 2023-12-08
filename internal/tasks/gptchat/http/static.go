@@ -96,16 +96,14 @@ func prepareStaticFiles() {
 		Content:     icss.SitesCSS,
 	}
 
-	hasher := sha1.New()
 	for _, v := range []*staticFile{
 		staticFiles.LibJs,
 		staticFiles.SiteJs,
 		staticFiles.DataJs,
 		staticFiles.CSS,
 	} {
-		hasher.Reset()
-		hasher.Write(v.Content)
-		v.Hash = fmt.Sprintf("%x", hasher.Sum(nil))[:7]
+		hashed := sha1.Sum(v.Content)
+		v.Hash = fmt.Sprintf("%x", hashed)[:7]
 		v.Name = fmt.Sprintf("%s-%s%s", v.Name, v.Hash, v.Ext)
 	}
 }
