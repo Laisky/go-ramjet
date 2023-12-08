@@ -12,7 +12,7 @@ let chatContainer = document.getElementById("chatContainer"),
 
     currentAIRespSSE, currentAIRespEle;
 
-async function setupChatJs () {
+async function setupChatJs() {
     // -------------------------------------
     // for compatibility
     await updateChatHistory();
@@ -92,10 +92,10 @@ async function listenSessionSwitch(evt) {
         .forEach((item) => {
             item.classList.remove("active");
         });
-    evt.target.classList.add("active");
+    evt.currentTarget.classList.add("active");
 
     // restore session hisgoty
-    let sessionID = evt.target.dataset.session;
+    let sessionID = evt.currentTarget.dataset.session;
     chatContainer.querySelector(".conservations").innerHTML = "";
     (await sessionChatHistory(sessionID)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
@@ -216,8 +216,8 @@ async function clearSessionAndChats(evt) {
     chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
         <div class="list-group">
             <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-                <div>1</div>
-                <div><i class="bi bi-trash"></i></div>
+                <div class="col">1</div>
+                <i class="bi bi-trash col-auto"></i>
             </button>
         </div>`;
     chatContainer
@@ -259,10 +259,10 @@ function bindSessionDeleteBtn() {
                 return;
             }
 
-            let sessionID = evt.target.closest(".session").dataset.session;
+            let sessionID = evt.currentTarget.closest(".session").dataset.session;
             if (confirm("Are you sure to delete this session?")) {
                 window.KvDel(storageSessionKey(sessionID));
-                evt.target.closest(".list-group").remove();
+                evt.currentTarget.closest(".list-group").remove();
             }
         });
     });
@@ -317,8 +317,8 @@ async function setupSessionManager() {
                     "beforeend",
                     `<div class="list-group">
                         <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
-                            <div>${sessionID}</div>
-                            <div><i class="bi bi-trash"></i></div>
+                            <div class="col">${sessionID}</div>
+                            <i class="bi bi-trash col-auto"></i>
                         </button>
                     </div>`);
         });
@@ -371,8 +371,8 @@ async function setupSessionManager() {
                         "afterbegin",
                         `<div class="list-group">
                             <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
-                                <div>${newSessionID}</div>
-                                <div><i class="bi bi-trash"></i></div>
+                                <div class="col">${newSessionID}</div>
+                                <i class="bi bi-trash col-auto"></i>
                             </button>
                         </div>`);
                 await window.KvSet(storageSessionKey(newSessionID), []);
@@ -582,8 +582,8 @@ function restorePinnedMaterials() {
         .forEach((item) => {
             item.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                let container = evt.target.closest(".pinned-refs")
-                let ele = evt.target.closest("p");
+                let container = evt.currentTarget.closest(".pinned-refs")
+                let ele = evt.currentTarget.closest("p");
                 ele.parentNode.removeChild(ele);
 
                 // update storage
@@ -1372,7 +1372,7 @@ async function updateChatVisionSelectedFileStore() {
         .forEach((item) => {
             item.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                let ele = evt.target.closest("p");
+                let ele = evt.currentTarget.closest("p");
                 let key = ele.dataset.key;
                 delete chatVisionSelectedFileStore[key];
                 ele.parentNode.removeChild(ele);
@@ -1613,8 +1613,8 @@ function setupConfig() {
     //             // evt.stopPropagation();
     //             configContainer
     //                 .querySelector(".token-type .show-val")
-    //                 .innerHTML = evt.target.dataset.value;
-    //             window.SetLocalStorage("config_api_token_type", evt.target.dataset.value);
+    //                 .innerHTML = evt.currentTarget.dataset.value;
+    //             window.SetLocalStorage("config_api_token_type", evt.currentTarget.dataset.value);
     //         })
     //     });
     // }
@@ -1626,7 +1626,7 @@ function setupConfig() {
         apitokenInput.value = window.OpenaiToken();
         apitokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_token_value", evt.target.value);
+            window.SetLocalStorage("config_api_token_value", evt.currentTarget.value);
         })
     }
 
@@ -1638,8 +1638,8 @@ function setupConfig() {
         configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_chat_n_contexts", evt.target.value);
-            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.target.value;
+            window.SetLocalStorage("config_chat_n_contexts", evt.currentTarget.value);
+            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.currentTarget.value;
         })
     }
 
@@ -1651,8 +1651,8 @@ function setupConfig() {
         configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_max_tokens", evt.target.value);
-            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.target.value;
+            window.SetLocalStorage("config_api_max_tokens", evt.currentTarget.value);
+            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.currentTarget.value;
         })
     }
 
@@ -1664,8 +1664,8 @@ function setupConfig() {
         configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_temperature", evt.target.value);
-            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.target.value;
+            window.SetLocalStorage("config_api_temperature", evt.currentTarget.value);
+            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.currentTarget.value;
         })
     }
 
@@ -1677,8 +1677,8 @@ function setupConfig() {
         configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_presence_penalty", evt.target.value);
-            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.target.value;
+            window.SetLocalStorage("config_api_presence_penalty", evt.currentTarget.value);
+            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.currentTarget.value;
         })
     }
 
@@ -1690,8 +1690,8 @@ function setupConfig() {
         configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_frequency_penalty", evt.target.value);
-            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.target.value;
+            window.SetLocalStorage("config_api_frequency_penalty", evt.currentTarget.value);
+            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.currentTarget.value;
         })
     }
 
@@ -1702,7 +1702,7 @@ function setupConfig() {
         staticConfigInput.value = window.OpenaiChatStaticContext();
         staticConfigInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage(StorageKeySystemPrompt, evt.target.value);
+            window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.value);
         })
     }
 
@@ -1780,7 +1780,7 @@ function appendPromptShortcut(shortcut, storage = false) {
         evt.stopPropagation();
 
         window.ConfirmModal("delete saved prompt", async () => {
-            evt.target.parentElement.remove();
+            evt.currentTarget.parentElement.remove();
 
             // remove localstorage shortcut
             let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
@@ -1811,8 +1811,8 @@ function setupPromptManager() {
             .addEventListener("click", (evt) => {
                 evt.stopPropagation();
                 let promptInput = configContainer.querySelector(".system-prompt .input");
-                promptInput.value = evt.target.dataset.prompt;
-                window.SetLocalStorage(StorageKeySystemPrompt, evt.target.dataset.prompt);
+                promptInput.value = evt.currentTarget.dataset.prompt;
+                window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
             });
 
         let shortcuts = loadPromptShortcutsFromStorage();
@@ -1981,7 +1981,7 @@ function setupPrivateDataset() {
         datakeyEle
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
-                window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.target.value);
+                window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.currentTarget.value);
             });
     }
 
@@ -1995,11 +1995,11 @@ function setupPrivateDataset() {
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
 
-                if (evt.target.files.length === 0) {
+                if (evt.currentTarget.files.length === 0) {
                     return;
                 }
 
-                let filename = evt.target.files[0].name,
+                let filename = evt.currentTarget.files[0].name,
                     fileext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
 
 
@@ -2093,7 +2093,7 @@ function setupPrivateDataset() {
                         method: "DELETE",
                         headers: headers,
                         body: JSON.stringify({
-                            datasets: [evt.target.closest(".dataset-item").getAttribute("data-filename")]
+                            datasets: [evt.currentTarget.closest(".dataset-item").getAttribute("data-filename")]
                         })
                     })
 
@@ -2109,7 +2109,7 @@ function setupPrivateDataset() {
                 }
 
                 // remove dataset item
-                evt.target.closest(".dataset-item").remove();
+                evt.currentTarget.closest(".dataset-item").remove();
             });
         });
     };
@@ -2218,7 +2218,7 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
 
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
@@ -2286,16 +2286,16 @@ function setupPrivateDataset() {
                         ele.addEventListener("change", async (evt) => {
                             evt.stopPropagation();
 
-                            if (!evt.target.checked) {
+                            if (!evt.currentTarget.checked) {
                                 // at least one chatbot should be selected
-                                evt.target.checked = true;
+                                evt.currentTarget.checked = true;
                                 return;
                             } else {
                                 // uncheck other chatbot
                                 datasetListEle
                                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                                     .forEach((ele) => {
-                                        if (ele != evt.target) {
+                                        if (ele != evt.currentTarget) {
                                             ele.checked = false;
                                         }
                                     });
@@ -2307,7 +2307,7 @@ function setupPrivateDataset() {
 
                             try {
                                 window.ShowSpinner();
-                                const chatbotName = evt.target.closest(".chatbot-item").getAttribute("data-name");
+                                const chatbotName = evt.currentTarget.closest(".chatbot-item").getAttribute("data-name");
                                 const resp = await fetch("/ramjet/gptchat/ctx/active", {
                                     method: "POST",
                                     headers: headers,
@@ -2342,7 +2342,7 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
 
                 let checkedChatbotEle = pdfchatModalEle
                     .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
@@ -2395,7 +2395,7 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.target.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
 
                 let selectedDatasets = [];
                 pdfchatModalEle.

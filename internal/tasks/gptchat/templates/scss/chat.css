@@ -52,7 +52,6 @@
 }
 #chatContainer .sessionManager .card .card-body .list-group .session {
   display: flex;
-  justify-content: space-between;
 }
 #chatContainer .sessionManager .card .card-footer {
   padding: 0px;
