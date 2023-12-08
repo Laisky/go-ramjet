@@ -277,7 +277,7 @@ window.ConfirmModal = (title, callback) => {
     (async function main() {
         window.OpenaiToken();
         checkVersion();
-        setupHeader();
+        await setupHeader();
         setupConfirmModal();
         setupSingleInputModal();
 
@@ -332,9 +332,117 @@ function setupConfirmModal() {
 /** setup header bar
  *
  */
-function setupHeader() {
+async function setupHeader() {
     let headerBarEle = document.getElementById("headerbar"),
         allowedModels = window.GetLocalStorage(StorageKeyAllowedModels) || [];
+
+    // setup chat models
+    {
+        // set default chat model
+        if (!GetLocalStorage("config_chat_model")) {
+            SetLocalStorage("config_chat_model", ChatModelTurbo35);
+        }
+
+        let selectedModel = GetLocalStorage("config_chat_model");
+
+        // get users' models
+        let headers = new Headers();
+        headers.append("Authorization", "Bearer " + window.OpenaiToken());
+        const response = await fetch("/user/me", {
+            method: "GET",
+            cache: "no-cache",
+            headers: headers,
+        });
+
+        if (response.status != 200) {
+            throw new Error("failed to get user info, please refresh your browser.");
+        }
+
+        let modelsContainer = document.querySelector("#headerbar .chat-models");
+        const data = await response.json()
+        let modelsEle = "";
+        if (data.allowed_models.includes("*")) {
+            data.allowed_models = AllModels;
+        }
+
+        window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
+
+        if (!data.allowed_models.includes(selectedModel)) {
+            selectedModel = data.allowed_models[0];
+            SetLocalStorage("config_chat_model", selectedModel);
+        }
+
+        // add hint to input text
+        chatPromptInputEle.attributes
+            .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+
+        let unsupportedModels = [];
+        data.allowed_models.forEach((model) => {
+            if (!ChatModels.includes(model)) {
+                unsupportedModels.push(model);
+                return;
+            }
+
+            modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+        });
+        modelsContainer.innerHTML = modelsEle;
+
+        // FIXME
+        // if (unsupportedModels.length > 0) {
+        //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
+        //         + `maybe you need refresh your browser. if this warning still exists, `
+        //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
+        // }
+
+        // set selected model
+        // add active to class
+        document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+            .forEach((elem) => {
+                elem.classList.remove("active");
+            });
+        document
+            .querySelectorAll("#headerbar .chat-models li a, "
+                + "#headerbar .qa-models li a, "
+                + "#headerbar .image-models li a"
+            )
+            .forEach((elem) => {
+                elem.classList.remove("active");
+
+                if (elem.dataset.model == selectedModel) {
+                    elem.classList.add("active");
+                    elem.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+                }
+            });
+
+        // listen click events
+        let modelElems = document
+            .querySelectorAll("#headerbar .chat-models li a, "
+                + "#headerbar .qa-models li a, "
+                + "#headerbar .image-models li a"
+            );
+        modelElems.forEach((elem) => {
+            elem.addEventListener("click", (evt) => {
+                evt.preventDefault();
+                modelElems.forEach((elem) => {
+                    elem.classList.remove("active");
+                });
+
+                evt.target.classList.add("active");
+                let model = evt.target.dataset.model;
+                SetLocalStorage("config_chat_model", model);
+
+                // add active to class
+                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+                    .forEach((elem) => {
+                        elem.classList.remove("active");
+                    });
+                evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+
+                // add hint to input text
+                chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
+            });
+        });
+    }
 
     // setup chat qa models
     {
@@ -371,116 +479,6 @@ function setupHeader() {
             a.textContent = model;
             li.appendChild(a);
             imageModelsContainer.appendChild(li);
-        });
-
-    }
-
-    // setup chat models
-    {
-        // set default chat model
-        if (!GetLocalStorage("config_chat_model")) {
-            SetLocalStorage("config_chat_model", ChatModelTurbo35);
-        }
-
-        let selectedModel = GetLocalStorage("config_chat_model");
-
-        // get users' models
-        let headers = new Headers();
-        headers.append("Authorization", "Bearer " + window.OpenaiToken());
-        fetch("/user/me", {
-            method: "GET",
-            cache: "no-cache",
-            headers: headers,
-        }).then((response) => {
-            if (response.status != 200) {
-                return;
-            }
-
-            let modelsContainer = document.querySelector("#headerbar .chat-models");
-            response.json().then((data) => {
-                let modelsEle = "";
-                if (data.allowed_models.includes("*")) {
-                    data.allowed_models = AllModels;
-                }
-
-                window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
-
-                if (!data.allowed_models.includes(selectedModel)) {
-                    selectedModel = data.allowed_models[0];
-                    SetLocalStorage("config_chat_model", selectedModel);
-                }
-
-                // add hint to input text
-                chatPromptInputEle.attributes
-                    .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
-
-                let unsupportedModels = [];
-                data.allowed_models.forEach((model) => {
-                    if (!ChatModels.includes(model)) {
-                        unsupportedModels.push(model);
-                        return;
-                    }
-
-                    modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
-                });
-                modelsContainer.innerHTML = modelsEle;
-
-                // FIXME
-                // if (unsupportedModels.length > 0) {
-                //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
-                //         + `maybe you need refresh your browser. if this warning still exists, `
-                //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
-                // }
-
-                // set selected model
-                // add active to class
-                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
-                    .forEach((elem) => {
-                        elem.classList.remove("active");
-                    });
-                document
-                    .querySelectorAll("#headerbar .chat-models li a, "
-                        + "#headerbar .qa-models li a, "
-                        + "#headerbar .image-models li a"
-                    )
-                    .forEach((elem) => {
-                        elem.classList.remove("active");
-
-                        if (elem.dataset.model == selectedModel) {
-                            elem.classList.add("active");
-                            elem.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
-                        }
-                    });
-
-                // listen click events
-                let modelElems = document
-                    .querySelectorAll("#headerbar .chat-models li a, "
-                        + "#headerbar .qa-models li a, "
-                        + "#headerbar .image-models li a"
-                    );
-                modelElems.forEach((elem) => {
-                    elem.addEventListener("click", (evt) => {
-                        evt.preventDefault();
-                        modelElems.forEach((elem) => {
-                            elem.classList.remove("active");
-                        });
-
-                        evt.target.classList.add("active");
-                        let model = evt.target.dataset.model;
-                        SetLocalStorage("config_chat_model", model);
-
-                        // add active to class
-                        document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
-                            .forEach((elem) => {
-                                elem.classList.remove("active");
-                            });
-                        evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
-
-                        // add hint to input text
-                        chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
-                    });
-                });
-            });
         });
     }
 }
