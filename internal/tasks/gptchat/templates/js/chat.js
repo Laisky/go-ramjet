@@ -12,21 +12,19 @@ let chatContainer = document.getElementById("chatContainer"),
 
     currentAIRespSSE, currentAIRespEle;
 
-window.ready(() => {
-    (async function main() {
-        // -------------------------------------
-        // for compatibility
-        await updateChatHistory();
-        // -------------------------------------
+async function setupChatJs () {
+    // -------------------------------------
+    // for compatibility
+    await updateChatHistory();
+    // -------------------------------------
 
-        setupConfig();
-        await setupSessionManager();
-        setupChatInput();
-        setupPromptManager();
-        setupPrivateDataset();
-        window.setInterval(fetchImageDrawingResultBackground, 3000);
-    })();
-});
+    setupConfig();
+    await setupSessionManager();
+    setupChatInput();
+    setupPromptManager();
+    setupPrivateDataset();
+    window.setInterval(fetchImageDrawingResultBackground, 3000);
+}
 
 
 function newChatID() {

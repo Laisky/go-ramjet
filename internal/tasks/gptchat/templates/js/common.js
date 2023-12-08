@@ -64,6 +64,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
 
 const KvKeyPrefixSessionHistory = "chat_user_session_";
 
+
 window.IsChatModel = (model) => {
     return ChatModels.includes(model);
 };
@@ -272,18 +273,17 @@ window.ConfirmModal = (title, callback) => {
     window.deleteCheckModal.show();
 };
 
-
-
 (function () {
-    (function main() {
+    (async function main() {
         window.OpenaiToken();
         checkVersion();
         setupHeader();
         setupConfirmModal();
         setupSingleInputModal();
+
+        await setupChatJs();
     })();
 })();
-
 
 function checkVersion() {
     SetLocalStorage("version", Version);
@@ -328,23 +328,50 @@ function setupConfirmModal() {
         });
 }
 
+
+/** setup header bar
+ *
+ */
 function setupHeader() {
+    let headerBarEle = document.getElementById("headerbar");
+
     // setup chat qa models
     {
-        let qaModels = window.data["qa_chat_models"] || [],
-            headerBarEle = document.getElementById("headerbar"),
-            qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
+        let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
+        window.GetLocalStorage(StorageKeyAllowedModels).forEach((model) => {
+            if (!QaModels.includes(model)) {
+                return;
+            }
 
-        qaModels.forEach((model) => {
             let li = document.createElement("li");
             let a = document.createElement("a");
             a.href = "#";
             a.classList.add("dropdown-item");
-            a.dataset.model = model.name;
-            a.textContent = model.name;
+            a.dataset.model = model;
+            a.textContent = model;
             li.appendChild(a);
             qaModelsContainer.appendChild(li);
         });
+    }
+
+    // setup chat image models
+    {
+        let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
+        window.GetLocalStorage(StorageKeyAllowedModels).forEach((model) => {
+            if (!ImageModels.includes(model)) {
+                return;
+            }
+
+            let li = document.createElement("li");
+            let a = document.createElement("a");
+            a.href = "#";
+            a.classList.add("dropdown-item");
+            a.dataset.model = model;
+            a.textContent = model;
+            li.appendChild(a);
+            imageModelsContainer.appendChild(li);
+        });
+
     }
 
     // setup chat models
