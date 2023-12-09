@@ -415,35 +415,7 @@ async function setupHeader() {
                 }
             });
 
-        // listen click events
-        let modelElems = document
-            .querySelectorAll("#headerbar .chat-models li a, "
-                + "#headerbar .qa-models li a, "
-                + "#headerbar .image-models li a"
-            );
-        modelElems.forEach((elem) => {
-            elem.addEventListener("click", (evt) => {
-                evt.preventDefault();
-                modelElems.forEach((elem) => {
-                    elem.classList.remove("active");
-                });
-
-                evt.target.classList.add("active");
-                let model = evt.target.dataset.model;
-                SetLocalStorage("config_chat_model", model);
-
-                // add active to class
-                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
-                    .forEach((elem) => {
-                        elem.classList.remove("active");
-                    });
-                evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
-
-                // add hint to input text
-                chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
-            });
-        });
-    }
+    
 
     // setup chat qa models
     {
@@ -483,4 +455,34 @@ async function setupHeader() {
             imageModelsContainer.appendChild(li);
         });
     }
+
+       // listen click events
+        let modelElems = document
+            .querySelectorAll("#headerbar .chat-models li a, "
+                + "#headerbar .qa-models li a, "
+                + "#headerbar .image-models li a"
+            );
+        modelElems.forEach((elem) => {
+            elem.addEventListener("click", (evt) => {
+                evt.preventDefault();
+                modelElems.forEach((elem) => {
+                    elem.classList.remove("active");
+                });
+
+                evt.target.classList.add("active");
+                let model = evt.target.dataset.model;
+                SetLocalStorage("config_chat_model", model);
+
+                // add active to class
+                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+                    .forEach((elem) => {
+                        elem.classList.remove("active");
+                    });
+                evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+
+                // add hint to input text
+                chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
+            });
+        });
+    } 
 }
