@@ -334,7 +334,7 @@ function setupConfirmModal() {
  */
 async function setupHeader() {
     let headerBarEle = document.getElementById("headerbar"),
-    allowedModels = [];
+        allowedModels = [];
 
     // setup chat models
     {
@@ -395,6 +395,45 @@ async function setupHeader() {
         //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
         // }
 
+        // setup chat qa models
+        {
+            let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
+            allowedModels.forEach((model) => {
+                if (!QaModels.includes(model)) {
+                    return;
+                }
+
+                let li = document.createElement("li");
+                let a = document.createElement("a");
+                a.href = "#";
+                a.classList.add("dropdown-item");
+                a.dataset.model = model;
+                a.textContent = model;
+                li.appendChild(a);
+                qaModelsContainer.appendChild(li);
+            });
+        }
+
+        // setup chat image models
+        {
+            let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
+            imageModelsContainer.innerHTML = "";
+            allowedModels.forEach((model) => {
+                if (!ImageModels.includes(model)) {
+                    return;
+                }
+
+                let li = document.createElement("li");
+                let a = document.createElement("a");
+                a.href = "#";
+                a.classList.add("dropdown-item");
+                a.dataset.model = model;
+                a.textContent = model;
+                li.appendChild(a);
+                imageModelsContainer.appendChild(li);
+            });
+        }
+
         // set selected model
         // add active to class
         document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
@@ -415,48 +454,7 @@ async function setupHeader() {
                 }
             });
 
-    
-
-    // setup chat qa models
-    {
-        let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
-        allowedModels.forEach((model) => {
-            if (!QaModels.includes(model)) {
-                return;
-            }
-
-            let li = document.createElement("li");
-            let a = document.createElement("a");
-            a.href = "#";
-            a.classList.add("dropdown-item");
-            a.dataset.model = model;
-            a.textContent = model;
-            li.appendChild(a);
-            qaModelsContainer.appendChild(li);
-        });
-    }
-
-    // setup chat image models
-    {
-        let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
-        imageModelsContainer.innerHTML = "";
-        allowedModels.forEach((model) => {
-            if (!ImageModels.includes(model)) {
-                return;
-            }
-
-            let li = document.createElement("li");
-            let a = document.createElement("a");
-            a.href = "#";
-            a.classList.add("dropdown-item");
-            a.dataset.model = model;
-            a.textContent = model;
-            li.appendChild(a);
-            imageModelsContainer.appendChild(li);
-        });
-    }
-
-       // listen click events
+        // listen click events
         let modelElems = document
             .querySelectorAll("#headerbar .chat-models li a, "
                 + "#headerbar .qa-models li a, "
@@ -484,5 +482,5 @@ async function setupHeader() {
                 chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
             });
         });
-    } 
+    }
 }

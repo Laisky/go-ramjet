@@ -1,4 +1,4 @@
-# GO-Ramjet
+# Go-Ramjet
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Laisky/go-ramjet)](https://goreportcard.com/report/github.com/Laisky/go-ramjet)
