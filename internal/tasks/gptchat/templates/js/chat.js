@@ -1190,11 +1190,7 @@ function abortAIResp(err) {
 
     let errMsg;
     if (err.data) {
-        try {
-            errMsg = JSON.parse(err.data);
-        } catch (e) {
-            errMsg = err.data;
-        }
+        errMsg = err.data;
     } else {
         errMsg = err.toString();
     }
@@ -1202,6 +1198,10 @@ function abortAIResp(err) {
     if (errMsg == "[object CustomEvent]" && navigator.userAgent.includes("Firefox")) {
         // firefox will throw this error when SSE is closed, just ignore it.
         return;
+    }
+
+    if (typeof errMsg != "string") {
+        errMsg = JSON.stringify(errMsg);
     }
 
     // if errMsg contains
