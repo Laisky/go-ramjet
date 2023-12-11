@@ -55,7 +55,9 @@ function storageSessionKey(sessionID) {
 async function sessionChatHistory(sessionID) {
     let data = (await window.KvGet(storageSessionKey(sessionID)));
     if (!data) {
-        return [];
+        return {
+            "context": []
+        };
     }
 
     // fix legacy bug for marshal data twice
@@ -67,6 +69,10 @@ async function sessionChatHistory(sessionID) {
     return data;
 }
 
+/** get active session's chat history and config
+ *
+ * @returns {Promise<Object>} {context: [{role: "", chatID: "", content: "", attachHTML: ""}], ...}
+ */
 async function activeSessionChatHistory() {
     let sid = activeSessionID();
     if (!sid) {
@@ -296,7 +302,9 @@ async function setupSessionManager() {
         })
 
         if (!anyHistorySession) {
-            await window.KvSet(storageSessionKey(1), []);
+            await window.KvSet(storageSessionKey(1), {
+                "context": []
+            });
         }
 
         let firstSession = true;
@@ -327,8 +335,7 @@ async function setupSessionManager() {
         });
 
         // restore conservation history
-        let data = await activeSessionChatHistory();
-        (await activeSessionChatHistory()).forEach((item) => {
+        (await activeSessionChatHistory()).context.forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
@@ -410,12 +417,12 @@ async function removeChatInStorage(chatid) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = await activeSessionChatHistory();
+        s = await activeSessionChatHistory();
 
     // remove all chats with the same chatid
-    history = history.filter((item) => item.chatID !== chatid);
+    s.context = s.contxt.filter((item) => item.chatID !== chatid);
 
-    await window.KvSet(storageActiveSessionKey, JSON.stringify(history));
+    await window.KvSet(storageActiveSessionKey, s);
 }
 
 
@@ -431,11 +438,11 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = await activeSessionChatHistory();
+        s = await activeSessionChatHistory();
 
     // if chat is already in history, find and update it.
     let found = false;
-    history.forEach((item, idx) => {
+    s.context.forEach((item, idx) => {
         if (item.chatID == chatid && item.role == role) {
             found = true;
             item.content = content;
@@ -445,7 +452,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if ai response is not in history, add it after user's chat which has same chatid
     if (!found && role == RoleAI) {
-        history.forEach((item, idx) => {
+        s.context.forEach((item, idx) => {
             if (item.chatID == chatid) {
                 found = true;
                 if (item.role != RoleAI) {
@@ -462,7 +469,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if chat is not in history, add it
     if (!found) {
-        history.push({
+        s.context.push({
             role: role,
             chatID: chatid,
             content: content,
@@ -470,7 +477,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
         });
     }
 
-    await window.KvSet(storageActiveSessionKey, history);
+    await window.KvSet(storageActiveSessionKey, s);
 }
 
 
@@ -491,7 +498,7 @@ function scrollToChat(chatEle) {
 * @returns {Array} An array of chat messages.
 */
 async function getLastNChatMessages(N, ignoredChatID) {
-    let messages = (await activeSessionChatHistory()).filter((ele) => {
+    let messages = (await activeSessionChatHistory()).context.filter((ele) => {
         if (ele.role != RoleHuman) {
             // Ignore AI's chat, only use human's chat as context.
             return false;
@@ -1657,7 +1664,7 @@ function setupConfig() {
         apitokenInput.value = window.OpenaiToken();
         apitokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_token_value", evt.currentTarget.value);
+            window.SetLocalStorage(KvKeyApiToken, evt.currentTarget.value);
         })
     }
 

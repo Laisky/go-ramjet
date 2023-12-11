@@ -62,7 +62,9 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     StorageKeyPinnedMaterials = "config_api_pinned_materials",
     StorageKeyAllowedModels = "config_chat_models";
 
-const KvKeyPrefixSessionHistory = "chat_user_session_";
+const KvKeyPrefixSessionHistory = "chat_user_session_",
+KvKeyVersion = "version",
+KvKeyApiToken =KvKeyApiToken;
 
 
 window.IsChatModel = (model) => {
@@ -164,7 +166,7 @@ window.OpenaiToken = () => {
 
     // get token from localstorage
     if (!apikey) {
-        apikey = window.GetLocalStorage("config_api_token_value");
+        apikey = window.GetLocalStorage(KvKeyApiToken);
         if (!apikey || apikey == "DEFAULT_PROXY_TOKEN") {
             // if v is empty, this is a new user.
             // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
@@ -173,7 +175,7 @@ window.OpenaiToken = () => {
         }
     }
 
-    window.SetLocalStorage("config_api_token_value", apikey);
+    window.SetLocalStorage(KvKeyApiToken, apikey);
     return apikey
 };
 
@@ -276,7 +278,7 @@ window.ConfirmModal = (title, callback) => {
 (function () {
     (async function main() {
         window.OpenaiToken();
-        checkVersion();
+        await dataMigrate();
         await setupHeader();
         setupConfirmModal();
         setupSingleInputModal();
@@ -285,13 +287,8 @@ window.ConfirmModal = (title, callback) => {
     })();
 })();
 
-function checkVersion() {
-    SetLocalStorage("version", Version);
-    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
-    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
-        SetLocalStorage("last_reload_at", (new Date()).toISOString());
-        // window.location.reload();
-    }
+async function dataMigrate() {
+
 }
 
 
