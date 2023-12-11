@@ -63,8 +63,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     StorageKeyAllowedModels = "config_chat_models";
 
 const KvKeyPrefixSessionHistory = "chat_user_session_",
-    KvKeyApiToken = "config_api_token_value";
-
+    KvKeyPrefixSessionConfig = "chat_user_session_config_";
 
 window.IsChatModel = (model) => {
     return ChatModels.includes(model);
@@ -114,13 +113,10 @@ window.OpenaiUserIdentify = () => {
 };
 
 window.OpenaiTokenType = () => {
-    let t = window.GetLocalStorage("config_api_token_type");
-    if (!t) {
-        t = OpenaiTokenTypeProxy;
-        window.SetLocalStorage("config_api_token_type", t);
-    }
-
-    return t;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["token_type"];
 };
 
 /**
@@ -139,7 +135,10 @@ window.RandomString = (length) => {
 }
 
 window.OpenaiToken = () => {
-    let apikey;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig(),
+     apikey;
 
     // get token from url params first
     {
@@ -165,77 +164,63 @@ window.OpenaiToken = () => {
 
     // get token from localstorage
     if (!apikey) {
-        apikey = window.GetLocalStorage(KvKeyApiToken);
-        if (!apikey || apikey == "DEFAULT_PROXY_TOKEN") {
-            // if v is empty, this is a new user.
-            // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
-            // generate an unique token for this user.
-            apikey = "FREETIER-" + RandomString(32);
-        }
+        let sid = activeSessionID(),
+            skey = `KvKeyPrefixSessionConfig${sid}`,
+            sconfig = window.KvGet(skey) || newSessionConfig();
+        apikey = sconfig["token_type"];
     }
 
-    window.SetLocalStorage(KvKeyApiToken, apikey);
-    return apikey
+    sconfig["api_token"] = apikey;
+    window.KvSet(skey, sconfig);
 };
 
-window.OpenaiMaxTokens = () => {
-    let v = window.GetLocalStorage("config_api_max_tokens");
-    if (!v) {
-        v = "500";
-        window.SetLocalStorage("config_api_max_tokens", v);
-    }
+window.OpenaiSelectedModel = () => {
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["selected_model"];
+}
 
-    return v;
+window.OpenaiMaxTokens = () => {
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["max_tokens"];
 };
 
 window.OpenaiTemperature = () => {
-    let v = window.GetLocalStorage("config_api_temperature");
-    if (!v) {
-        v = "1";
-        window.SetLocalStorage("config_api_temperature", v);
-    }
-
-    return v;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["temperature"];
 };
 
 window.OpenaiPresencePenalty = () => {
-    let v = window.GetLocalStorage("config_api_presence_penalty");
-    if (!v) {
-        v = "0";
-        window.SetLocalStorage("config_api_presence_penalty", v);
-    }
-
-    return v;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["presence_penalty"];
 };
 
 window.OpenaiFrequencyPenalty = () => {
-    let v = window.GetLocalStorage("config_api_frequency_penalty");
-    if (!v) {
-        v = "0";
-        window.SetLocalStorage("config_api_frequency_penalty", v);
-    }
-
-    return v;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["frequency_penalty"];
 };
 
 window.ChatNContexts = () => {
-    let v = window.GetLocalStorage("config_chat_n_contexts");
-    if (!v) {
-        v = "3";
-        window.SetLocalStorage("config_chat_n_contexts", v);
-    }
-
-    return v;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["n_contexts"];
 };
 
 window.OpenaiChatStaticContext = () => {
-    let v = window.GetLocalStorage(StorageKeySystemPrompt);
-    if (!v) {
-        v = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
-        window.SetLocalStorage(StorageKeySystemPrompt, v);
-    }
-
-    return v;
+    let sid = activeSessionID(),
+        skey = `KvKeyPrefixSessionConfig${sid}`,
+        sconfig = window.KvGet(skey) || newSessionConfig();
+    return sconfig["system_prompt"];
 };
 
 
@@ -277,7 +262,7 @@ window.ConfirmModal = (title, callback) => {
 (function () {
     (async function main() {
         window.OpenaiToken();
-        checkVersion();
+        await dataMigrate();
         await setupHeader();
         setupConfirmModal();
         setupSingleInputModal();
@@ -286,12 +271,27 @@ window.ConfirmModal = (title, callback) => {
     })();
 })();
 
-function checkVersion() {
-    SetLocalStorage("version", Version);
-    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
-    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
-        SetLocalStorage("last_reload_at", (new Date()).toISOString());
-        // window.location.reload();
+async function dataMigrate() {
+    // move config from localstorage to session config
+    {
+        let sid = activeSessionID(),
+            skey = `KvKeyPrefixSessionConfig${sid}`,
+            sconfig = window.KvGet(skey);
+
+        if (!sconfig) {
+            sconfig = newSessionConfig();
+
+            sconfig["token_type"] = GetLocalStorage("config_api_token_value");
+            sconfig["max_tokens"] = GetLocalStorage("config_api_max_tokens");
+            sconfig["temperature"] = GetLocalStorage("config_api_temperature");
+            sconfig["presence_penalty"] = GetLocalStorage("config_api_presence_penalty");
+            sconfig["frequency_penalty"] = GetLocalStorage("config_api_frequency_penalty");
+            sconfig["n_contexts"] = GetLocalStorage("config_api_n_contexts");
+            sconfig["system_prompt"] = GetLocalStorage("config_api_static_context");
+            sconfig["selected_model"] = GetLocalStorage("config_chat_model");
+
+            window.KvSet(skey, sconfig);
+        }
     }
 }
 
@@ -340,11 +340,7 @@ async function setupHeader() {
     // setup chat models
     {
         // set default chat model
-        if (!GetLocalStorage("config_chat_model")) {
-            SetLocalStorage("config_chat_model", ChatModelTurbo35);
-        }
-
-        let selectedModel = GetLocalStorage("config_chat_model");
+        let selectedModel = window.OpenaiSelectedModel();
 
         // get users' models
         let headers = new Headers();

@@ -210,6 +210,7 @@ async function clearSessionAndChats(evt) {
         if (
             key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
             || key == StorageKeyPinnedMaterials  // remove pinned materials
+            || key.startsWith(KvKeyPrefixSessionConfig)  // remove all sessions' config
         ) {
             await KvDel(key);
         }
@@ -806,7 +807,7 @@ async function sendChat2Server(chatID) {
     currentAIRespEle = currentAIRespEle;
     lockChatInput();
 
-    let selectedModel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+    let selectedModel = window.OpenaiSelectedModel();
     // get chatmodel from url parameters
     if (window.location.search) {
         let params = new URLSearchParams(window.location.search);
@@ -1616,6 +1617,20 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
     }
 }
 
+function newSessionConfig() {
+    return {
+        "api_token": "DEFAULT_PROXY_TOKEN",
+        "token_type": OpenaiTokenTypeProxy,
+        "max_tokens": 500,
+        "temperature": 1,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "n_contexts": 3,
+        "system_prompt": "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
+        "selected_model": ChatModelTurbo35,
+    };
+}
+
 
 function setupConfig() {
     let tokenTypeParent = configContainer.
@@ -1657,7 +1672,13 @@ function setupConfig() {
         apitokenInput.value = window.OpenaiToken();
         apitokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage(KvKeyApiToken, evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["api_token"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
         })
     }
 
@@ -1669,7 +1690,14 @@ function setupConfig() {
         configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_chat_n_contexts", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["n_contexts"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
+
             configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.currentTarget.value;
         })
     }
@@ -1682,7 +1710,14 @@ function setupConfig() {
         configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_max_tokens", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["max_tokens"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
+
             configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.currentTarget.value;
         })
     }
@@ -1695,7 +1730,14 @@ function setupConfig() {
         configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_temperature", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["temperature"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
+
             configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.currentTarget.value;
         })
     }
@@ -1708,7 +1750,14 @@ function setupConfig() {
         configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_presence_penalty", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["presence_penalty"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
+
             configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.currentTarget.value;
         })
     }
@@ -1721,7 +1770,14 @@ function setupConfig() {
         configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
         maxtokenInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_frequency_penalty", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["frequency_penalty"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
+
             configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.currentTarget.value;
         })
     }
@@ -1733,7 +1789,13 @@ function setupConfig() {
         staticConfigInput.value = window.OpenaiChatStaticContext();
         staticConfigInput.addEventListener("input", (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `KvKeyPrefixSessionConfig${sid}`,
+                sconfig = window.KvGet(skey) || newSessionConfig();
+
+            sconfig["system_prompt"] = evt.currentTarget.value;
+            window.KvSet(skey, sconfig);
         })
     }
 
