@@ -55,9 +55,7 @@ function storageSessionKey(sessionID) {
 async function sessionChatHistory(sessionID) {
     let data = (await window.KvGet(storageSessionKey(sessionID)));
     if (!data) {
-        return {
-            "context": []
-        };
+        return [];
     }
 
     // fix legacy bug for marshal data twice
@@ -69,10 +67,6 @@ async function sessionChatHistory(sessionID) {
     return data;
 }
 
-/** get active session's chat history and config
- *
- * @returns {Promise<Object>} {context: [{role: "", chatID: "", content: "", attachHTML: ""}], ...}
- */
 async function activeSessionChatHistory() {
     let sid = activeSessionID();
     if (!sid) {
@@ -302,9 +296,7 @@ async function setupSessionManager() {
         })
 
         if (!anyHistorySession) {
-            await window.KvSet(storageSessionKey(1), {
-                "context": []
-            });
+            await window.KvSet(storageSessionKey(1), []);
         }
 
         let firstSession = true;
@@ -335,7 +327,8 @@ async function setupSessionManager() {
         });
 
         // restore conservation history
-        (await activeSessionChatHistory()).context.forEach((item) => {
+        let data = await activeSessionChatHistory();
+        (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
@@ -417,12 +410,12 @@ async function removeChatInStorage(chatid) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        s = await activeSessionChatHistory();
+        history = await activeSessionChatHistory();
 
     // remove all chats with the same chatid
-    s.context = s.contxt.filter((item) => item.chatID !== chatid);
+    history = history.filter((item) => item.chatID !== chatid);
 
-    await window.KvSet(storageActiveSessionKey, s);
+    await window.KvSet(storageActiveSessionKey, history);
 }
 
 
@@ -438,11 +431,11 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        s = await activeSessionChatHistory();
+        history = await activeSessionChatHistory();
 
     // if chat is already in history, find and update it.
     let found = false;
-    s.context.forEach((item, idx) => {
+    history.forEach((item, idx) => {
         if (item.chatID == chatid && item.role == role) {
             found = true;
             item.content = content;
@@ -452,7 +445,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if ai response is not in history, add it after user's chat which has same chatid
     if (!found && role == RoleAI) {
-        s.context.forEach((item, idx) => {
+        history.forEach((item, idx) => {
             if (item.chatID == chatid) {
                 found = true;
                 if (item.role != RoleAI) {
@@ -469,7 +462,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if chat is not in history, add it
     if (!found) {
-        s.context.push({
+        history.push({
             role: role,
             chatID: chatid,
             content: content,
@@ -477,7 +470,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
         });
     }
 
-    await window.KvSet(storageActiveSessionKey, s);
+    await window.KvSet(storageActiveSessionKey, history);
 }
 
 
@@ -498,7 +491,7 @@ function scrollToChat(chatEle) {
 * @returns {Array} An array of chat messages.
 */
 async function getLastNChatMessages(N, ignoredChatID) {
-    let messages = (await activeSessionChatHistory()).context.filter((ele) => {
+    let messages = (await activeSessionChatHistory()).filter((ele) => {
         if (ele.role != RoleHuman) {
             // Ignore AI's chat, only use human's chat as context.
             return false;

@@ -63,8 +63,7 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     StorageKeyAllowedModels = "config_chat_models";
 
 const KvKeyPrefixSessionHistory = "chat_user_session_",
-KvKeyVersion = "version",
-KvKeyApiToken =KvKeyApiToken;
+    KvKeyApiToken = "config_api_token_value";
 
 
 window.IsChatModel = (model) => {
@@ -278,7 +277,7 @@ window.ConfirmModal = (title, callback) => {
 (function () {
     (async function main() {
         window.OpenaiToken();
-        await dataMigrate();
+        checkVersion();
         await setupHeader();
         setupConfirmModal();
         setupSingleInputModal();
@@ -287,8 +286,13 @@ window.ConfirmModal = (title, callback) => {
     })();
 })();
 
-async function dataMigrate() {
-
+function checkVersion() {
+    SetLocalStorage("version", Version);
+    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
+    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
+        SetLocalStorage("last_reload_at", (new Date()).toISOString());
+        // window.location.reload();
+    }
 }
 
 
