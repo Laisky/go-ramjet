@@ -62,26 +62,27 @@ const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     StorageKeyPinnedMaterials = "config_api_pinned_materials",
     StorageKeyAllowedModels = "config_chat_models";
 
-const KvKeyPrefixSessionHistory = "chat_user_session_";
+// should not has same prefix
+const KvKeyPrefixSessionHistory = "chat_user_session_",
+    KvKeyPrefixSessionConfig = "chat_user_config_";
 
-
-window.IsChatModel = (model) => {
+var IsChatModel = (model) => {
     return ChatModels.includes(model);
 };
 
-window.IsQaModel = (model) => {
+var IsQaModel = (model) => {
     return QaModels.includes(model);
 };
 
-window.IsCompletionModel = (model) => {
+var IsCompletionModel = (model) => {
     return CompletionModels.includes(model);
 };
 
-window.IsImageModel = (model) => {
+var IsImageModel = (model) => {
     return ImageModels.includes(model);
 };
 
-window.IsChatModelAllowed = (model) => {
+var IsChatModelAllowed = (model) => {
     let allowed_models = GetLocalStorage(StorageKeyAllowedModels);
     if (!allowed_models) {
         return false;
@@ -90,36 +91,33 @@ window.IsChatModelAllowed = (model) => {
     return allowed_models.includes(model);
 }
 
-window.ShowSpinner = () => {
+var ShowSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", false);
 };
-window.HideSpinner = () => {
+var HideSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", true);
 };
 
 
-window.OpenaiAPI = () => {
-    switch (window.OpenaiTokenType()) {
+var OpenaiAPI = async () => {
+    switch (await OpenaiTokenType()) {
         case OpenaiTokenTypeProxy:
-            return window.data.openai.proxy;
+            return data.openai.proxy;
         case OpenaiTokenTypeDirect:
-            return window.data.openai.direct;
+            return data.openai.direct;
     }
 };
 
-window.OpenaiUserIdentify = () => {
-    t = window.OpenaiToken();
+var OpenaiUserIdentify = async () => {
+    t = (await OpenaiToken());
     return t;
 };
 
-window.OpenaiTokenType = () => {
-    let t = window.GetLocalStorage("config_api_token_type");
-    if (!t) {
-        t = OpenaiTokenTypeProxy;
-        window.SetLocalStorage("config_api_token_type", t);
-    }
-
-    return t;
+var OpenaiTokenType = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["token_type"];
 };
 
 /**
@@ -127,7 +125,7 @@ window.OpenaiTokenType = () => {
  * @param {number} length - The length of the string to generate.
  * @returns {string} - The generated random string.
  */
-window.RandomString = (length) => {
+var RandomString = (length) => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < length; i++) {
@@ -137,121 +135,108 @@ window.RandomString = (length) => {
     return result;
 }
 
-window.OpenaiToken = () => {
-    let apikey;
+var OpenaiToken = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey),
+        apikey;
 
     // get token from url params first
     {
-        apikey = new URLSearchParams(window.location.search).get("apikey");
+        apikey = new URLSearchParams(location.search).get("apikey");
 
         if (apikey) {
             // fix: sometimes url.searchParams.delete() works too quickly,
             // that let another caller rewrite apikey to FREE-TIER,
             // so we delay 1s to delete apikey from url params.
-            window.setTimeout(() => {
-                let v = new URLSearchParams(window.location.search).get("apikey");
+            setTimeout(() => {
+                let v = new URLSearchParams(location.search).get("apikey");
                 if (!v) {
                     return;
                 }
 
                 // remove apikey from url params
-                let url = new URL(window.location.href);
+                let url = new URL(location.href);
                 url.searchParams.delete("apikey");
                 window.history.pushState({}, document.title, url);
-            }, 1000);
+            }, 500);
         }
     }
 
-    // get token from localstorage
+    // get token from storage
     if (!apikey) {
-        apikey = window.GetLocalStorage("config_api_token_value");
-        if (!apikey || apikey == "DEFAULT_PROXY_TOKEN") {
-            // if v is empty, this is a new user.
-            // if v == "DEFAULT_PROXY_TOKEN", this is an legacy user.
-            // generate an unique token for this user.
-            apikey = "FREETIER-" + RandomString(32);
-        }
+        apikey = sconfig["api_token"];
     }
 
-    window.SetLocalStorage("config_api_token_value", apikey);
-    return apikey
+    sconfig["api_token"] = apikey;
+    await KvSet(skey, sconfig);
+    return apikey;
 };
 
-window.OpenaiMaxTokens = () => {
-    let v = window.GetLocalStorage("config_api_max_tokens");
-    if (!v) {
-        v = "500";
-        window.SetLocalStorage("config_api_max_tokens", v);
-    }
+var OpenaiSelectedModel = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["selected_model"];
+}
 
-    return v;
+var OpenaiMaxTokens = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["max_tokens"];
 };
 
-window.OpenaiTemperature = () => {
-    let v = window.GetLocalStorage("config_api_temperature");
-    if (!v) {
-        v = "1";
-        window.SetLocalStorage("config_api_temperature", v);
-    }
-
-    return v;
+var OpenaiTemperature = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["temperature"];
 };
 
-window.OpenaiPresencePenalty = () => {
-    let v = window.GetLocalStorage("config_api_presence_penalty");
-    if (!v) {
-        v = "0";
-        window.SetLocalStorage("config_api_presence_penalty", v);
-    }
-
-    return v;
+var OpenaiPresencePenalty = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["presence_penalty"];
 };
 
-window.OpenaiFrequencyPenalty = () => {
-    let v = window.GetLocalStorage("config_api_frequency_penalty");
-    if (!v) {
-        v = "0";
-        window.SetLocalStorage("config_api_frequency_penalty", v);
-    }
-
-    return v;
+var OpenaiFrequencyPenalty = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["frequency_penalty"];
 };
 
-window.ChatNContexts = () => {
-    let v = window.GetLocalStorage("config_chat_n_contexts");
-    if (!v) {
-        v = "3";
-        window.SetLocalStorage("config_chat_n_contexts", v);
-    }
-
-    return v;
+var ChatNContexts = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["n_contexts"];
 };
 
-window.OpenaiChatStaticContext = () => {
-    let v = window.GetLocalStorage(StorageKeySystemPrompt);
-    if (!v) {
-        v = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
-        window.SetLocalStorage(StorageKeySystemPrompt, v);
-    }
-
-    return v;
+var OpenaiChatStaticContext = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["system_prompt"];
 };
 
 
-window.SingleInputModal = (title, message, callback) => {
+var SingleInputModal = (title, message, callback) => {
     const modal = document.getElementById("singleInputModal");
-    window.singleInputCallback = async () => {
+    singleInputCallback = async () => {
         try {
-            window.ShowSpinner();
+            ShowSpinner();
             await callback(modal.querySelector(".modal-body input").value)
         } finally {
-            window.HideSpinner();
+            HideSpinner();
         }
     };
 
     modal.querySelector(".modal-title").innerHTML = title;
     modal.querySelector(".modal-body label.form-label").innerHTML = message;
-    window.singleInputModal.show();
+    singleInputModal.show();
 };
 
 // show modal to confirm,
@@ -260,71 +245,108 @@ window.SingleInputModal = (title, message, callback) => {
 // params:
 //   - title: modal title
 //   - callback: async callback function
-window.ConfirmModal = (title, callback) => {
-    window.deleteCheckCallback = async () => {
+var ConfirmModal = (title, callback) => {
+    deleteCheckCallback = async () => {
         try {
-            window.ShowSpinner();
+            ShowSpinner();
             await callback()
         } finally {
-            window.HideSpinner();
+            HideSpinner();
         }
     };
     document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
-    window.deleteCheckModal.show();
+    deleteCheckModal.show();
 };
 
-(function () {
-    (async function main() {
-        window.OpenaiToken();
-        checkVersion();
-        await setupHeader();
-        setupConfirmModal();
-        setupSingleInputModal();
 
-        await setupChatJs();
-    })();
-})();
+window.AppEntrypoint = async () => {
+    await dataMigrate();
+    (await OpenaiToken());
+    await setupHeader();
+    setupConfirmModal();
+    setupSingleInputModal();
 
-function checkVersion() {
-    SetLocalStorage("version", Version);
-    let lastReloadAt = GetLocalStorage("last_reload_at") || Version;
-    if (((new Date()).getTime() - (new Date(lastReloadAt)).getTime()) > 86400000) { // 1 day
-        SetLocalStorage("last_reload_at", (new Date()).toISOString());
-        // window.location.reload();
+    await setupChatJs();
+};
+
+async function dataMigrate() {
+    // update legacy chat history, add chatID to each chat
+    {
+        await Promise.all(Object.keys(localStorage).map(async (key) => {
+            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
+                return;
+            }
+
+            // move from localstorage to kv
+            // console.log("move from localstorage to kv: ", key);
+            await KvSet(key, JSON.parse(localStorage[key]));
+            localStorage.removeItem(key);
+        }));
+    }
+
+    // move config from localstorage to session config
+    {
+        let sid = activeSessionID(),
+            skey = `${KvKeyPrefixSessionConfig}${sid}`,
+            sconfig = await KvGet(skey);
+
+        if (!sconfig) {
+            sconfig = newSessionConfig();
+
+            sconfig["api_token"] = GetLocalStorage("config_api_token_value") || sconfig["api_token"];
+            sconfig["token_type"] = GetLocalStorage("config_api_token_type") || sconfig["token_type"];
+            sconfig["max_tokens"] = GetLocalStorage("config_api_max_tokens") || sconfig["max_tokens"];
+            sconfig["temperature"] = GetLocalStorage("config_api_temperature") || sconfig["temperature"];
+            sconfig["presence_penalty"] = GetLocalStorage("config_api_presence_penalty") || sconfig["presence_penalty"];
+            sconfig["frequency_penalty"] = GetLocalStorage("config_api_frequency_penalty") || sconfig["frequency_penalty"];
+            sconfig["n_contexts"] = GetLocalStorage("config_api_n_contexts") || sconfig["n_contexts"];
+            sconfig["system_prompt"] = GetLocalStorage("config_api_static_context") || sconfig["system_prompt"];
+            sconfig["selected_model"] = GetLocalStorage("config_chat_model") || sconfig["selected_model"];
+
+            await KvSet(skey, sconfig);
+        }
     }
 }
 
+var singleInputCallback, singleInputModal;
 
 function setupSingleInputModal() {
-    window.singleInputCallback = null;
-    window.singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
+    singleInputCallback = null;
+    singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
     document.getElementById("singleInputModal")
         .querySelector(".modal-body .yes")
         .addEventListener("click", async (e) => {
             e.preventDefault();
 
-            if (window.singleInputCallback) {
-                await window.singleInputCallback();
+            if (singleInputCallback) {
+                await singleInputCallback();
             }
 
-            window.singleInputModal.hide();
+            singleInputModal.hide();
         });
 }
 
+/**
+ * setup confirm modal callback, shoule be an async function
+ */
+var deleteCheckCallback,
+    /**
+     * global shared modal to act as confirm dialog
+     */
+    deleteCheckModal;
 
 function setupConfirmModal() {
-    window.deleteCheckCallback = null;
-    window.deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
+    deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
     document.getElementById("deleteCheckModal")
         .querySelector(".modal-body .yes")
         .addEventListener("click", async (e) => {
             e.preventDefault();
 
-            if (window.deleteCheckCallback) {
-                await window.deleteCheckCallback();
+            if (deleteCheckCallback) {
+                await deleteCheckCallback();
             }
 
-            window.deleteCheckModal.hide();
+            deleteCheckModal.hide();
         });
 }
 
@@ -339,15 +361,11 @@ async function setupHeader() {
     // setup chat models
     {
         // set default chat model
-        if (!GetLocalStorage("config_chat_model")) {
-            SetLocalStorage("config_chat_model", ChatModelTurbo35);
-        }
-
-        let selectedModel = GetLocalStorage("config_chat_model");
+        let selectedModel = await OpenaiSelectedModel();
 
         // get users' models
         let headers = new Headers();
-        headers.append("Authorization", "Bearer " + window.OpenaiToken());
+        headers.append("Authorization", "Bearer " + (await OpenaiToken()));
         const response = await fetch("/user/me", {
             method: "GET",
             cache: "no-cache",
@@ -365,7 +383,7 @@ async function setupHeader() {
             data.allowed_models = AllModels;
         }
 
-        window.SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
+        SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
         allowedModels = data.allowed_models;
 
         if (!data.allowed_models.includes(selectedModel)) {

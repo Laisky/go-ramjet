@@ -5,30 +5,24 @@ const RoleHuman = "user",
     RoleAI = "assistant";
 
 
-let chatContainer = document.getElementById("chatContainer"),
+var chatContainer = document.getElementById("chatContainer"),
     configContainer = document.getElementById("hiddenChatConfigSideBar"),
     chatPromptInputEle = chatContainer.querySelector(".input.prompt"),
     chatPromptInputBtn = chatContainer.querySelector(".btn.send"),
-
     currentAIRespSSE, currentAIRespEle;
 
 async function setupChatJs() {
-    // -------------------------------------
-    // for compatibility
-    await updateChatHistory();
-    // -------------------------------------
-
-    setupConfig();
     await setupSessionManager();
+    await setupConfig();
     setupChatInput();
     setupPromptManager();
     setupPrivateDataset();
-    window.setInterval(fetchImageDrawingResultBackground, 3000);
+    setInterval(fetchImageDrawingResultBackground, 3000);
 }
 
 
 function newChatID() {
-    return "chat-" + window.RandomString(16);
+    return "chat-" + RandomString(16);
 }
 
 // show alert
@@ -52,8 +46,13 @@ function storageSessionKey(sessionID) {
     return `${KvKeyPrefixSessionHistory}${sessionID}`;
 }
 
+/**
+ *
+ * @param {*} sessionID
+ * @returns {Array} An array of chat messages.
+ */
 async function sessionChatHistory(sessionID) {
-    let data = (await window.KvGet(storageSessionKey(sessionID)));
+    let data = (await KvGet(storageSessionKey(sessionID)));
     if (!data) {
         return [];
     }
@@ -61,12 +60,16 @@ async function sessionChatHistory(sessionID) {
     // fix legacy bug for marshal data twice
     if (typeof data == "string") {
         data = JSON.parse(data);
-        await window.KvSet(storageSessionKey(sessionID), data);
+        await KvSet(storageSessionKey(sessionID), data);
     }
 
     return data;
 }
 
+/**
+ *
+ * @returns {Array} An array of chat messages.
+ */
 async function activeSessionChatHistory() {
     let sid = activeSessionID();
     if (!sid) {
@@ -92,17 +95,18 @@ async function listenSessionSwitch(evt) {
         .forEach((item) => {
             item.classList.remove("active");
         });
-    evt.currentTarget.classList.add("active");
+    evtTarget(evt).classList.add("active");
 
     // restore session hisgoty
-    let sessionID = evt.currentTarget.dataset.session;
+    let sessionID = evtTarget(evt).dataset.session;
     chatContainer.querySelector(".conservations").innerHTML = "";
     (await sessionChatHistory(sessionID)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
     });
 
     Prism.highlightAll();
-    window.EnableTooltipsEverywhere();
+    updateConfigFromStorage();
+    EnableTooltipsEverywhere();
 }
 
 /**
@@ -127,7 +131,7 @@ async function fetchImageDrawingResultBackground() {
             await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
                 const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf("-")) + ".err.txt";
-                const errFileResp = await fetch(`${errFileUrl}?rr=${window.RandomString(12)}`, {
+                const errFileResp = await fetch(`${errFileUrl}?rr=${RandomString(12)}`, {
                     method: "GET",
                     cache: "no-cache",
                 });
@@ -139,7 +143,7 @@ async function fetchImageDrawingResultBackground() {
                 }
 
                 // check is image ready
-                const imgResp = await fetch(`${imageUrl}?rr=${window.RandomString(12)}`, {
+                const imgResp = await fetch(`${imageUrl}?rr=${RandomString(12)}`, {
                     method: "GET",
                     cache: "no-cache",
                 });
@@ -197,23 +201,36 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
  * Clears all user sessions and chats from local storage,
  * and resets the chat UI to its initial state.
  * @param {Event} evt - The event that triggered the function (optional).
+ * @param {string} sessionID - The session ID to clear (optional).
  *
  * @returns {void}
  */
-async function clearSessionAndChats(evt) {
+async function clearSessionAndChats(evt, sessionID) {
     if (evt) {
         evt.stopPropagation();
     }
 
-    let allkeys = await KvList();
-    await Promise.all(allkeys.map(async (key) => {
-        if (
-            key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
-            || key == StorageKeyPinnedMaterials  // remove pinned materials
-        ) {
-            await KvDel(key);
-        }
-    }));
+    // remove pinned materials
+    window.localStorage.removeItem(StorageKeyPinnedMaterials);
+
+    if (!sessionID) {  // remove all session
+        await Promise.all((await KvList()).map(async (key) => {
+            if (
+                key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
+                || key.startsWith(KvKeyPrefixSessionConfig)  // remove all sessions' config
+            ) {
+                await KvDel(key);
+            }
+        }));
+    } else { // only remove one session's chat, keep config
+        await Promise.all((await KvList()).map(async (key) => {
+            if (
+                key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
+            ) {
+                await KvDel(key);
+            }
+        }));
+    }
 
     chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
     chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
@@ -227,22 +244,8 @@ async function clearSessionAndChats(evt) {
         .querySelector(".sessionManager .sessions .session")
         .addEventListener("click", listenSessionSwitch);
 
-    await window.KvSet(storageSessionKey(1), []);
+    await KvSet(storageSessionKey(1), []);
     bindSessionDeleteBtn();
-}
-
-// update legacy chat history, add chatID to each chat
-async function updateChatHistory() {
-    await Promise.all(Object.keys(localStorage).map(async (key) => {
-        if (!key.startsWith(KvKeyPrefixSessionHistory)) {
-            return;
-        }
-
-        // move from localstorage to kv
-        // console.log("move from localstorage to kv: ", key);
-        await window.KvSet(key, JSON.parse(localStorage[key]));
-        localStorage.removeItem(key);
-    }));
 }
 
 function bindSessionDeleteBtn() {
@@ -262,10 +265,10 @@ function bindSessionDeleteBtn() {
                 return;
             }
 
-            let sessionID = evt.currentTarget.closest(".session").dataset.session;
+            let sessionID = evtTarget(evt).closest(".session").dataset.session;
             if (confirm("Are you sure to delete this session?")) {
-                window.KvDel(storageSessionKey(sessionID));
-                evt.currentTarget.closest(".list-group").remove();
+                KvDel(storageSessionKey(sessionID));
+                evtTarget(evt).closest(".list-group").remove();
             }
         });
     });
@@ -282,30 +285,27 @@ async function setupSessionManager() {
             .addEventListener("click", clearSessionAndChats);
     }
 
-
-    // restore all sessions from localStorage
+    // restore all sessions from storage
     {
-        let anyHistorySession = false;
-        let allKeys = await KvList();
-        allKeys.forEach((key) => {
-            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
-                return;
+        let allSessionKeys = [];
+        (await KvList()).forEach((key) => {
+            if (key.startsWith(KvKeyPrefixSessionHistory)) {
+                allSessionKeys.push(key);
             }
-
-            anyHistorySession = true;
         })
 
-        if (!anyHistorySession) {
-            await window.KvSet(storageSessionKey(1), []);
+        if (allSessionKeys.length == 0) { // there is no session, create one
+            // create session history
+            let skey = storageSessionKey(1);
+            allSessionKeys.push(skey);
+            await KvSet(skey, []);
+
+            // create session config
+            await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
         }
 
         let firstSession = true;
-        allKeys.forEach((key) => {
-            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
-                return;
-            }
-
-            anyHistorySession = true;
+        allSessionKeys.forEach((key) => {
             let sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ""));
 
             let active = "";
@@ -327,13 +327,12 @@ async function setupSessionManager() {
         });
 
         // restore conservation history
-        let data = await activeSessionChatHistory();
         (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
         });
 
         Prism.highlightAll();
-        window.EnableTooltipsEverywhere();
+        EnableTooltipsEverywhere();
     }
 
     // add widget to scroll bottom
@@ -379,7 +378,10 @@ async function setupSessionManager() {
                                 <i class="bi bi-trash col-auto"></i>
                             </button>
                         </div>`);
-                await window.KvSet(storageSessionKey(newSessionID), []);
+
+                // save new session history and config
+                await KvSet(storageSessionKey(newSessionID), []);
+                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, newSessionConfig());
 
                 // bind session switch listener for new session
                 chatContainer
@@ -387,6 +389,7 @@ async function setupSessionManager() {
                     .addEventListener("click", listenSessionSwitch);
 
                 bindSessionDeleteBtn();
+                updateConfigFromStorage();
             });
     }
 
@@ -410,12 +413,12 @@ async function removeChatInStorage(chatid) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = await activeSessionChatHistory();
+        session = await activeSessionChatHistory();
 
     // remove all chats with the same chatid
-    history = history.filter((item) => item.chatID !== chatid);
+    session = session.filter((item) => item.chatID !== chatid);
 
-    await window.KvSet(storageActiveSessionKey, JSON.stringify(history));
+    await KvSet(storageActiveSessionKey, session);
 }
 
 
@@ -431,11 +434,11 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
     }
 
     let storageActiveSessionKey = storageSessionKey(activeSessionID()),
-        history = await activeSessionChatHistory();
+        session = await activeSessionChatHistory();
 
     // if chat is already in history, find and update it.
     let found = false;
-    history.forEach((item, idx) => {
+    session.forEach((item, idx) => {
         if (item.chatID == chatid && item.role == role) {
             found = true;
             item.content = content;
@@ -445,11 +448,11 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if ai response is not in history, add it after user's chat which has same chatid
     if (!found && role == RoleAI) {
-        history.forEach((item, idx) => {
+        session.forEach((item, idx) => {
             if (item.chatID == chatid) {
                 found = true;
                 if (item.role != RoleAI) {
-                    history.splice(idx + 1, 0, {
+                    session.splice(idx + 1, 0, {
                         role: RoleAI,
                         chatID: chatid,
                         content: content,
@@ -462,7 +465,7 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
 
     // if chat is not in history, add it
     if (!found) {
-        history.push({
+        session.push({
             role: role,
             chatID: chatid,
             content: content,
@@ -470,12 +473,12 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
         });
     }
 
-    await window.KvSet(storageActiveSessionKey, history);
+    await KvSet(storageActiveSessionKey, session);
 }
 
 
 function scrollChatToDown() {
-    window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
+    ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
 }
 
 function scrollToChat(chatEle) {
@@ -533,9 +536,9 @@ function isAllowChatPrompInput() {
 }
 
 function parseChatResp(chatmodel, payload) {
-    if (window.IsChatModel(chatmodel) || window.IsQaModel(chatmodel)) {
+    if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
         return payload.choices[0].delta.content || "";
-    } else if (window.IsCompletionModel(chatmodel)) {
+    } else if (IsCompletionModel(chatmodel)) {
         return payload.choices[0].text || "";
     } else {
         showalert("error", `Unknown chat model ${chatmodel}`);
@@ -567,7 +570,7 @@ function pinNewMaterial(reqPrompt) {
     }
 
     // save to storage
-    window.SetLocalStorage(StorageKeyPinnedMaterials, urlEle)
+    SetLocalStorage(StorageKeyPinnedMaterials, urlEle)
     restorePinnedMaterials();
 
     // re generate reqPrompt
@@ -577,7 +580,7 @@ function pinNewMaterial(reqPrompt) {
 }
 
 function restorePinnedMaterials() {
-    let urlEle = window.GetLocalStorage(StorageKeyPinnedMaterials) || "";
+    let urlEle = GetLocalStorage(StorageKeyPinnedMaterials) || "";
     let container = document.querySelector("#chatContainer .pinned-refs");
     container.innerHTML = urlEle;
 
@@ -586,12 +589,12 @@ function restorePinnedMaterials() {
         .forEach((item) => {
             item.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                let container = evt.currentTarget.closest(".pinned-refs")
-                let ele = evt.currentTarget.closest("p");
+                let container = evtTarget(evt).closest(".pinned-refs")
+                let ele = evtTarget(evt).closest("p");
                 ele.parentNode.removeChild(ele);
 
                 // update storage
-                window.SetLocalStorage(StorageKeyPinnedMaterials, container.innerHTML);
+                SetLocalStorage(StorageKeyPinnedMaterials, container.innerHTML);
             });
         });
 }
@@ -628,8 +631,8 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     const resp = await fetch(url, {
         method: "POST",
         headers: {
-            "Authorization": "Bearer " + window.OpenaiToken(),
-            "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
+            "Authorization": "Bearer " + (await OpenaiToken()),
+            "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -681,8 +684,8 @@ async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEl
     const resp = await fetch(url, {
         method: "POST",
         headers: {
-            "Authorization": "Bearer " + window.OpenaiToken(),
-            "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
+            "Authorization": "Bearer " + (await OpenaiToken()),
+            "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -735,8 +738,8 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     const resp = await fetch(url, {
         method: "POST",
         headers: {
-            "Authorization": "Bearer " + window.OpenaiToken(),
-            "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
+            "Authorization": "Bearer " + (await OpenaiToken()),
+            "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -784,7 +787,7 @@ async function sendChat2Server(chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
-        reqPrompt = window.TrimSpace(chatPromptInputEle.value || "");
+        reqPrompt = TrimSpace(chatPromptInputEle.value || "");
 
         chatPromptInputEle.value = "";
         if (reqPrompt == "") {
@@ -806,10 +809,10 @@ async function sendChat2Server(chatID) {
     currentAIRespEle = currentAIRespEle;
     lockChatInput();
 
-    let selectedModel = (GetLocalStorage("config_chat_model") || ChatModelTurbo35);
+    let selectedModel = await OpenaiSelectedModel();
     // get chatmodel from url parameters
-    if (window.location.search) {
-        let params = new URLSearchParams(window.location.search);
+    if (location.search) {
+        let params = new URLSearchParams(location.search);
         if (params.has("chatmodel")) {
             selectedModel = params.get("chatmodel");
         }
@@ -818,9 +821,9 @@ async function sendChat2Server(chatID) {
     // these extras will append to the tail of AI's response
     let responseExtras = "";
 
-    if (window.IsChatModel(selectedModel)) {
+    if (IsChatModel(selectedModel)) {
         let messages,
-            nContexts = parseInt(window.ChatNContexts());
+            nContexts = parseInt(await ChatNContexts());
 
         if (chatID) {  // reload current chat by latest context
             messages = await getLastNChatMessages(nContexts - 1, chatID);
@@ -863,46 +866,46 @@ async function sendChat2Server(chatID) {
             updateChatVisionSelectedFileStore();
         }
 
-        currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+        currentAIRespSSE = new SSE(await OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + window.OpenaiToken(),
-                "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
-                "X-Laisky-Authorization-Type": window.OpenaiTokenType(),
+                "Authorization": "Bearer " + (await OpenaiToken()),
+                "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+                "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
             },
             method: "POST",
             payload: JSON.stringify({
                 model: selectedModel,
                 stream: true,
-                max_tokens: parseInt(window.OpenaiMaxTokens()),
-                temperature: parseFloat(window.OpenaiTemperature()),
-                presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
-                frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                max_tokens: parseInt(await OpenaiMaxTokens()),
+                temperature: parseFloat(await OpenaiTemperature()),
+                presence_penalty: parseFloat(await OpenaiPresencePenalty()),
+                frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
                 messages: messages,
                 stop: ["\n\n"]
             })
         });
-    } else if (window.IsCompletionModel(selectedModel)) {
-        currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+    } else if (IsCompletionModel(selectedModel)) {
+        currentAIRespSSE = new SSE(await OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + window.OpenaiToken(),
-                "X-Laisky-Authorization-Type": window.OpenaiTokenType(),
-                "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
+                "Authorization": "Bearer " + (await OpenaiToken()),
+                "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
+                "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
             },
             method: "POST",
             payload: JSON.stringify({
                 model: selectedModel,
                 stream: true,
-                max_tokens: parseInt(window.OpenaiMaxTokens()),
-                temperature: parseFloat(window.OpenaiTemperature()),
-                presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
-                frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                max_tokens: parseInt(await OpenaiMaxTokens()),
+                temperature: parseFloat(await OpenaiTemperature()),
+                presence_penalty: parseFloat(await OpenaiPresencePenalty()),
+                frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
                 prompt: reqPrompt,
                 stop: ["\n\n"]
             })
         });
-    } else if (window.IsQaModel(selectedModel)) {
+    } else if (IsQaModel(selectedModel)) {
         // {
         //     "question": "XFS 是干啥的",
         //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
@@ -914,7 +917,7 @@ async function sendChat2Server(chatID) {
             case QAModelBasebit:
             case QAModelSecurity:
             case QAModelImmigrate:
-                window.data['qa_chat_models'].forEach((item) => {
+                data['qa_chat_models'].forEach((item) => {
                     if (item['name'] == selectedModel) {
                         url = item['url'];
                         project = item['project'];
@@ -936,7 +939,7 @@ async function sendChat2Server(chatID) {
                 //
                 // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
 
-                let params = new URLSearchParams(window.location.search);
+                let params = new URLSearchParams(location.search);
                 url = `/ramjet/gptchat/ctx/share?uid=${params.get("uid")}`
                     + `&chatbot_name=${params.get("chatbot_name")}`
                     + `&q=${encodeURIComponent(reqPrompt)}`;
@@ -953,10 +956,10 @@ async function sendChat2Server(chatID) {
                 headers: {
                     "Connection": "keep-alive",
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer " + window.OpenaiToken(),
-                    "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
-                    "X-Laisky-Authorization-Type": window.OpenaiTokenType(),
-                    "X-PDFCHAT-PASSWORD": window.GetLocalStorage(StorageKeyCustomDatasetPassword)
+                    "Authorization": "Bearer " + (await OpenaiToken()),
+                    "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+                    "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
+                    "X-PDFCHAT-PASSWORD": GetLocalStorage(StorageKeyCustomDatasetPassword)
                 },
             });
 
@@ -992,25 +995,25 @@ async function sendChat2Server(chatID) {
                     `
                 }];
                 let model = ChatModelTurbo35;  // rewrite chat model
-                if (window.IsChatModelAllowed(ChatModelTurbo35_16K) && !window.OpenaiToken().startsWith("FREETIER-")) {
+                if (IsChatModelAllowed(ChatModelTurbo35_16K) && !(await OpenaiToken()).startsWith("FREETIER-")) {
                     model = ChatModelTurbo35_16K;
                 }
 
-                currentAIRespSSE = new SSE(window.OpenaiAPI(), {
+                currentAIRespSSE = new SSE(await OpenaiAPI(), {
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": "Bearer " + window.OpenaiToken(),
-                        "X-Laisky-User-Id": await window.getSHA1(window.OpenaiToken()),
-                        "X-Laisky-Authorization-Type": window.OpenaiTokenType(),
+                        "Authorization": "Bearer " + (await OpenaiToken()),
+                        "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+                        "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
                     },
                     method: "POST",
                     payload: JSON.stringify({
                         model: model,
                         stream: true,
-                        max_tokens: parseInt(window.OpenaiMaxTokens()),
-                        temperature: parseFloat(window.OpenaiTemperature()),
-                        presence_penalty: parseFloat(window.OpenaiPresencePenalty()),
-                        frequency_penalty: parseFloat(window.OpenaiFrequencyPenalty()),
+                        max_tokens: parseInt(await OpenaiMaxTokens()),
+                        temperature: parseFloat(await OpenaiTemperature()),
+                        presence_penalty: parseFloat(await OpenaiPresencePenalty()),
+                        frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
                         messages: messages,
                         stop: ["\n\n"]
                     })
@@ -1020,7 +1023,7 @@ async function sendChat2Server(chatID) {
             abortAIResp(err);
             return;
         }
-    } else if (window.IsImageModel(selectedModel)) {
+    } else if (IsImageModel(selectedModel)) {
         try {
             switch (selectedModel) {
                 case ImageModelDalle2:
@@ -1090,7 +1093,7 @@ async function sendChat2Server(chatID) {
                 case "writing":
                     if (respContent) {
                         rawHTMLResp += respContent;
-                        currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+                        currentAIRespEle.innerHTML = Markdown2HTML(rawHTMLResp);
                     }
 
                     scrollToChat(currentAIRespEle);
@@ -1106,8 +1109,8 @@ async function sendChat2Server(chatID) {
             currentAIRespSSE.close();
             currentAIRespSSE = null;
 
-            let markdownConverter = new window.showdown.Converter();
-            currentAIRespEle.innerHTML = window.Markdown2HTML(rawHTMLResp);
+            let markdownConverter = new showdown.Converter();
+            currentAIRespEle.innerHTML = Markdown2HTML(rawHTMLResp);
             currentAIRespEle.innerHTML += responseExtras;
 
             // setup prism
@@ -1123,7 +1126,7 @@ async function sendChat2Server(chatID) {
             const rawResp = currentAIRespEle.innerHTML;
 
             Prism.highlightAll();
-            window.EnableTooltipsEverywhere();
+            EnableTooltipsEverywhere();
 
             scrollToChat(currentAIRespEle);
             await appendChats2Storage(RoleAI, chatID, rawResp);
@@ -1170,7 +1173,7 @@ function wrapRefLines(input) {
 
 // function replaceChatInStorage(role, chatID, content) {
 //     let storageKey = storageSessionKey(activeSessionID()),
-//         chats = window.GetLocalStorage(storageKey) || [];
+//         chats = GetLocalStorage(storageKey) || [];
 
 //     chats.forEach((item) => {
 //         if (item.chatID == chatID && item.role == role) {
@@ -1178,7 +1181,7 @@ function wrapRefLines(input) {
 //         }
 //     });
 
-//     window.SetLocalStorage(storageKey, chats);
+//     SetLocalStorage(storageKey, chats);
 // }
 
 function abortAIResp(err) {
@@ -1210,12 +1213,12 @@ function abortAIResp(err) {
     }
 
     if (currentAIRespEle.dataset.status == "waiting") {// || currentAIRespEle.dataset.status == "writing") {
-        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
     } else {
-        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${window.RenderStr2HTML(errMsg)}</pre>`;
+        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
     }
 
-    // window.ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
+    // ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
     currentAIRespEle.scrollIntoView({ behavior: "smooth" });
     unlockChatInput();
 }
@@ -1265,8 +1268,6 @@ function setupChatInput() {
 
     // bind input element's drag-drop
     {
-
-
         let dropfileModalEle = document.querySelector("#modal-dropfile.modal"),
             dropfileModal = new bootstrap.Modal(dropfileModalEle);
 
@@ -1403,7 +1404,7 @@ async function updateChatVisionSelectedFileStore() {
         .forEach((item) => {
             item.addEventListener("click", (evt) => {
                 evt.stopPropagation();
-                let ele = evt.currentTarget.closest("p");
+                let ele = evtTarget(evt).closest("p");
                 let key = ele.dataset.key;
                 delete chatVisionSelectedFileStore[key];
                 ele.parentNode.removeChild(ele);
@@ -1431,7 +1432,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
         chatOp = "append";
     switch (role) {
         case RoleSystem:
-            text = window.escapeHtml(text);
+            text = escapeHtml(text);
 
             chatEleHtml = `
             <div class="container-fluid row role-human">
@@ -1440,7 +1441,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             </div>`
             break
         case RoleHuman:
-            text = window.escapeHtml(text);
+            text = escapeHtml(text);
 
             let waitAI = "";
             if (!isHistory) {
@@ -1546,7 +1547,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             });
             updateChatVisionSelectedFileStore();
 
-            text = window.sanitizeHTML(text);
+            text = sanitizeHTML(text);
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
@@ -1616,16 +1617,48 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
     }
 }
 
+function newSessionConfig() {
+    return {
+        "api_token": "DEFAULT_PROXY_TOKEN",
+        "token_type": OpenaiTokenTypeProxy,
+        "max_tokens": 500,
+        "temperature": 1,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "n_contexts": 3,
+        "system_prompt": "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
+        "selected_model": ChatModelTurbo35,
+    };
+}
 
-function setupConfig() {
+async function updateConfigFromStorage() {
+    console.debug(`updateConfigFromStorage for session ${activeSessionID()}`);
+    configContainer.querySelector(".input.api-token").value = await OpenaiToken();
+    configContainer.querySelector(".input.contexts").value = await ChatNContexts();
+    configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = await ChatNContexts();
+    configContainer.querySelector(".input.max-token").value = await OpenaiMaxTokens();
+    configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = await OpenaiMaxTokens();
+    configContainer.querySelector(".input.temperature").value = await OpenaiTemperature();
+    configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = await OpenaiTemperature();
+    configContainer.querySelector(".input.presence_penalty").value = await OpenaiPresencePenalty();
+    configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = await OpenaiPresencePenalty();
+    configContainer.querySelector(".input.frequency_penalty").value = await OpenaiFrequencyPenalty();
+    configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = await OpenaiFrequencyPenalty();
+    configContainer.querySelector(".system-prompt .input").value = await OpenaiChatStaticContext();
+}
+
+async function setupConfig() {
     let tokenTypeParent = configContainer.
         querySelector(".input-group.token-type");
+
+
+    updateConfigFromStorage()
 
     // set token type
     // {
     //     let selectItems = tokenTypeParent
     //         .querySelectorAll("a.dropdown-item");
-    //     switch (window.OpenaiTokenType()) {
+    //     switch ((await OpenaiTokenType())) {
     //         case "proxy":
     //             configContainer
     //                 .querySelector(".token-type .show-val").innerHTML = "proxy";
@@ -1644,8 +1677,8 @@ function setupConfig() {
     //             // evt.stopPropagation();
     //             configContainer
     //                 .querySelector(".token-type .show-val")
-    //                 .innerHTML = evt.currentTarget.dataset.value;
-    //             window.SetLocalStorage("config_api_token_type", evt.currentTarget.dataset.value);
+    //                 .innerHTML = evtTarget(evt).dataset.value;
+    //             SetLocalStorage("config_api_token_type", evtTarget(evt).dataset.value);
     //         })
     //     });
     // }
@@ -1654,10 +1687,15 @@ function setupConfig() {
     {
         let apitokenInput = configContainer
             .querySelector(".input.api-token");
-        apitokenInput.value = window.OpenaiToken();
-        apitokenInput.addEventListener("input", (evt) => {
+        apitokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_token_value", evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["api_token"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
         })
     }
 
@@ -1665,12 +1703,17 @@ function setupConfig() {
     {
         let maxtokenInput = configContainer
             .querySelector(".input.contexts");
-        maxtokenInput.value = window.ChatNContexts();
-        configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = window.ChatNContexts();
-        maxtokenInput.addEventListener("input", (evt) => {
+        maxtokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_chat_n_contexts", evt.currentTarget.value);
-            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evt.currentTarget.value;
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["n_contexts"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+
+            configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = evtTarget(evt).value;
         })
     }
 
@@ -1678,12 +1721,17 @@ function setupConfig() {
     {
         let maxtokenInput = configContainer
             .querySelector(".input.max-token");
-        maxtokenInput.value = window.OpenaiMaxTokens();
-        configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = window.OpenaiMaxTokens();
-        maxtokenInput.addEventListener("input", (evt) => {
+        maxtokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_max_tokens", evt.currentTarget.value);
-            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evt.currentTarget.value;
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["max_tokens"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+
+            configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = evtTarget(evt).value;
         })
     }
 
@@ -1691,12 +1739,17 @@ function setupConfig() {
     {
         let maxtokenInput = configContainer
             .querySelector(".input.temperature");
-        maxtokenInput.value = window.OpenaiTemperature();
-        configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = window.OpenaiTemperature();
-        maxtokenInput.addEventListener("input", (evt) => {
+        maxtokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_temperature", evt.currentTarget.value);
-            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evt.currentTarget.value;
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["temperature"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+
+            configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = evtTarget(evt).value;
         })
     }
 
@@ -1704,12 +1757,17 @@ function setupConfig() {
     {
         let maxtokenInput = configContainer
             .querySelector(".input.presence_penalty");
-        maxtokenInput.value = window.OpenaiPresencePenalty();
-        configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = window.OpenaiPresencePenalty();
-        maxtokenInput.addEventListener("input", (evt) => {
+        maxtokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_presence_penalty", evt.currentTarget.value);
-            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evt.currentTarget.value;
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["presence_penalty"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+
+            configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = evtTarget(evt).value;
         })
     }
 
@@ -1717,12 +1775,17 @@ function setupConfig() {
     {
         let maxtokenInput = configContainer
             .querySelector(".input.frequency_penalty");
-        maxtokenInput.value = window.OpenaiFrequencyPenalty();
-        configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = window.OpenaiFrequencyPenalty();
-        maxtokenInput.addEventListener("input", (evt) => {
+        maxtokenInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage("config_api_frequency_penalty", evt.currentTarget.value);
-            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evt.currentTarget.value;
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["frequency_penalty"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+
+            configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = evtTarget(evt).value;
         })
     }
 
@@ -1730,10 +1793,15 @@ function setupConfig() {
     {
         let staticConfigInput = configContainer
             .querySelector(".system-prompt .input");
-        staticConfigInput.value = window.OpenaiChatStaticContext();
-        staticConfigInput.addEventListener("input", (evt) => {
+        staticConfigInput.addEventListener("input", async (evt) => {
             evt.stopPropagation();
-            window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.value);
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["system_prompt"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
         })
     }
 
@@ -1767,11 +1835,11 @@ function setupConfig() {
 
     }
 
-    window.EnableTooltipsEverywhere();
+    EnableTooltipsEverywhere();
 }
 
 function loadPromptShortcutsFromStorage() {
-    let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+    let shortcuts = GetLocalStorage(StorageKeyPromptShortCuts);
     if (!shortcuts) {
         // default prompts
         shortcuts = [
@@ -1780,7 +1848,7 @@ function loadPromptShortcutsFromStorage() {
                 description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
             }
         ];
-        window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+        SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
     }
 
     return shortcuts;
@@ -1797,7 +1865,7 @@ function appendPromptShortcut(shortcut, storage = false) {
     if (storage) {
         let shortcuts = loadPromptShortcutsFromStorage();
         shortcuts.push(shortcut);
-        window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+        SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
     }
 
     // new element
@@ -1810,13 +1878,13 @@ function appendPromptShortcut(shortcut, storage = false) {
     ele.querySelector("i.bi-trash").addEventListener("click", (evt) => {
         evt.stopPropagation();
 
-        window.ConfirmModal("delete saved prompt", async () => {
-            evt.currentTarget.parentElement.remove();
+        ConfirmModal("delete saved prompt", async () => {
+            evtTarget(evt).parentElement.remove();
 
             // remove localstorage shortcut
-            let shortcuts = window.GetLocalStorage(StorageKeyPromptShortCuts);
+            let shortcuts = GetLocalStorage(StorageKeyPromptShortCuts);
             shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
-            window.SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
+            SetLocalStorage(StorageKeyPromptShortCuts, shortcuts);
         });
     });
 
@@ -1825,8 +1893,8 @@ function appendPromptShortcut(shortcut, storage = false) {
     ele.addEventListener("click", (evt) => {
         evt.stopPropagation();
         let promptInput = configContainer.querySelector(".system-prompt .input");
-        window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
-        promptInput.value = evt.currentTarget.dataset.prompt;
+        SetLocalStorage(StorageKeySystemPrompt, evtTarget(evt).dataset.prompt);
+        promptInput.value = evtTarget(evt).dataset.prompt;
     });
 
     // add to html
@@ -1842,8 +1910,8 @@ function setupPromptManager() {
             .addEventListener("click", (evt) => {
                 evt.stopPropagation();
                 let promptInput = configContainer.querySelector(".system-prompt .input");
-                promptInput.value = evt.currentTarget.dataset.prompt;
-                window.SetLocalStorage(StorageKeySystemPrompt, evt.currentTarget.dataset.prompt);
+                promptInput.value = evtTarget(evt).dataset.prompt;
+                SetLocalStorage(StorageKeySystemPrompt, evtTarget(evt).dataset.prompt);
             });
 
         let shortcuts = loadPromptShortcutsFromStorage();
@@ -1925,7 +1993,7 @@ function setupPromptManager() {
         promptInput = promptMarketModal.querySelector("textarea.prompt-content"),
         promptTitle = promptMarketModal.querySelector("input.prompt-title");
     {
-        window.chatPrompts.forEach((prompt) => {
+        chatPrompts.forEach((prompt) => {
             let ele = document.createElement("span");
             ele.classList.add("badge", "text-bg-info");
             ele.dataset.description = prompt.description;
@@ -1937,8 +2005,8 @@ function setupPromptManager() {
             ele.addEventListener("click", (evt) => {
                 evt.stopPropagation();
 
-                promptInput.value = evt.currentTarget.dataset.description;
-                promptTitle.value = evt.currentTarget.dataset.title;
+                promptInput.value = evtTarget(evt).dataset.description;
+                promptTitle.value = evtTarget(evt).dataset.title;
             });
 
             promptMarketModal.querySelector(".prompt-labels").appendChild(ele);
@@ -2001,18 +2069,18 @@ function setupPrivateDataset() {
         let datakeyEle = pdfchatModalEle
             .querySelector('div[data-field="data-key"] input');
 
-        datakeyEle.value = window.GetLocalStorage(StorageKeyCustomDatasetPassword);
+        datakeyEle.value = GetLocalStorage(StorageKeyCustomDatasetPassword);
 
         // set default datakey
         if (!datakeyEle.value) {
-            datakeyEle.value = window.RandomString(16);
-            window.SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value);
+            datakeyEle.value = RandomString(16);
+            SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value);
         }
 
         datakeyEle
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
-                window.SetLocalStorage(StorageKeyCustomDatasetPassword, evt.currentTarget.value);
+                SetLocalStorage(StorageKeyCustomDatasetPassword, evtTarget(evt).value);
             });
     }
 
@@ -2026,11 +2094,11 @@ function setupPrivateDataset() {
             .addEventListener("change", (evt) => {
                 evt.stopPropagation();
 
-                if (evt.currentTarget.files.length === 0) {
+                if (evtTarget(evt).files.length === 0) {
                     return;
                 }
 
-                let filename = evt.currentTarget.files[0].name,
+                let filename = evtTarget(evt).files[0].name,
                     fileext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
 
 
@@ -2074,11 +2142,11 @@ function setupPrivateDataset() {
                     .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
 
                 try {
-                    window.ShowSpinner();
+                    ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/files", {
                         method: "POST",
                         headers: headers,
@@ -2094,7 +2162,7 @@ function setupPrivateDataset() {
                     showalert("danger", `upload dataset failed, ${err.message}`);
                     throw err;
                 } finally {
-                    window.HideSpinner();
+                    HideSpinner();
                 }
             });
     }
@@ -2113,18 +2181,18 @@ function setupPrivateDataset() {
                 evt.stopPropagation();
 
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
                 headers.append("Cache-Control", "no-cache");
-                // headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                // headers.append("X-PDFCHAT-PASSWORD", GetLocalStorage(StorageKeyCustomDatasetPassword));
 
                 try {
-                    window.ShowSpinner();
+                    ShowSpinner();
                     const resp = await fetch(`/ramjet/gptchat/files`, {
                         method: "DELETE",
                         headers: headers,
                         body: JSON.stringify({
-                            datasets: [evt.currentTarget.closest(".dataset-item").getAttribute("data-filename")]
+                            datasets: [evtTarget(evt).closest(".dataset-item").getAttribute("data-filename")]
                         })
                     })
 
@@ -2136,11 +2204,11 @@ function setupPrivateDataset() {
                     showalert("danger", `delete dataset failed, ${err.message}`);
                     throw err;
                 } finally {
-                    window.HideSpinner();
+                    HideSpinner();
                 }
 
                 // remove dataset item
-                evt.currentTarget.closest(".dataset-item").remove();
+                evtTarget(evt).closest(".dataset-item").remove();
             });
         });
     };
@@ -2153,14 +2221,14 @@ function setupPrivateDataset() {
                 evt.stopPropagation();
 
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
                 headers.append("Cache-Control", "no-cache");
-                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                headers.append("X-PDFCHAT-PASSWORD", GetLocalStorage(StorageKeyCustomDatasetPassword));
 
                 let body;
                 try {
-                    window.ShowSpinner();
+                    ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/files", {
                         method: "GET",
                         cache: "no-cache",
@@ -2176,7 +2244,7 @@ function setupPrivateDataset() {
                     showalert("danger", `fetch dataset failed, ${err.message}`);
                     throw err;
                 } finally {
-                    window.HideSpinner();
+                    HideSpinner();
                 }
 
                 let datasetListEle = pdfchatModalEle
@@ -2249,17 +2317,17 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evtTarget(evt).closest(".dropdown")).hide();
 
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
                 headers.append("Cache-Control", "no-cache");
-                headers.append("X-PDFCHAT-PASSWORD", window.GetLocalStorage(StorageKeyCustomDatasetPassword));
+                headers.append("X-PDFCHAT-PASSWORD", GetLocalStorage(StorageKeyCustomDatasetPassword));
 
                 let body;
                 try {
-                    window.ShowSpinner();
+                    ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/ctx/list", {
                         method: "GET",
                         cache: "no-cache",
@@ -2275,7 +2343,7 @@ function setupPrivateDataset() {
                     showalert("danger", `fetch chatbot list failed, ${err.message}`);
                     throw err;
                 } finally {
-                    window.HideSpinner();
+                    HideSpinner();
                 }
 
                 let datasetListEle = pdfchatModalEle
@@ -2317,33 +2385,33 @@ function setupPrivateDataset() {
                         ele.addEventListener("change", async (evt) => {
                             evt.stopPropagation();
 
-                            if (!evt.currentTarget.checked) {
+                            if (!evtTarget(evt).checked) {
                                 // at least one chatbot should be selected
-                                evt.currentTarget.checked = true;
+                                evtTarget(evt).checked = true;
                                 return;
                             } else {
                                 // uncheck other chatbot
                                 datasetListEle
                                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                                     .forEach((ele) => {
-                                        if (ele != evt.currentTarget) {
+                                        if (ele != evtTarget(evt)) {
                                             ele.checked = false;
                                         }
                                     });
                             }
 
                             let headers = new Headers();
-                            headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                            headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                            headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                            headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
 
                             try {
-                                window.ShowSpinner();
-                                const chatbotName = evt.currentTarget.closest(".chatbot-item").getAttribute("data-name");
+                                ShowSpinner();
+                                const chatbotName = evtTarget(evt).closest(".chatbot-item").getAttribute("data-name");
                                 const resp = await fetch("/ramjet/gptchat/ctx/active", {
                                     method: "POST",
                                     headers: headers,
                                     body: JSON.stringify({
-                                        data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                                        data_key: GetLocalStorage(StorageKeyCustomDatasetPassword),
                                         chatbot_name: chatbotName
                                     })
                                 })
@@ -2358,7 +2426,7 @@ function setupPrivateDataset() {
                                 showalert("danger", `active chatbot failed, ${err.message}`);
                                 throw err;
                             } finally {
-                                window.HideSpinner();
+                                HideSpinner();
                             }
 
                         });
@@ -2373,7 +2441,7 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evtTarget(evt).closest(".dropdown")).hide();
 
                 let checkedChatbotEle = pdfchatModalEle
                     .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
@@ -2385,19 +2453,19 @@ function setupPrivateDataset() {
                 let chatbot_name = checkedChatbotEle.closest(".chatbot-item").getAttribute("data-name");
 
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
                 headers.append("Cache-Control", "no-cache");
 
                 let respBody;
                 try {
-                    window.ShowSpinner();
+                    ShowSpinner();
                     const resp = await fetch("/ramjet/gptchat/ctx/share", {
                         method: "POST",
                         headers: headers,
                         body: JSON.stringify({
                             chatbot_name: chatbot_name,
-                            data_key: window.GetLocalStorage(StorageKeyCustomDatasetPassword),
+                            data_key: GetLocalStorage(StorageKeyCustomDatasetPassword),
                         })
                     });
 
@@ -2410,13 +2478,13 @@ function setupPrivateDataset() {
                     showalert("danger", `fetch chatbot list failed, ${err.message}`);
                     throw err;
                 } finally {
-                    window.HideSpinner();
+                    HideSpinner();
                 }
 
                 // open new tab page
-                const sharedChatbotUrl = `${window.location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
+                const sharedChatbotUrl = `${location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
                 showalert("info", `open ${sharedChatbotUrl}`);
-                window.open(sharedChatbotUrl, "_blank");
+                open(sharedChatbotUrl, "_blank");
             });
     }
 
@@ -2426,7 +2494,7 @@ function setupPrivateDataset() {
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evt.currentTarget.closest(".dropdown")).hide();
+                new bootstrap.Dropdown(evtTarget(evt).closest(".dropdown")).hide();
 
                 let selectedDatasets = [];
                 pdfchatModalEle.
@@ -2444,7 +2512,7 @@ function setupPrivateDataset() {
                 }
 
                 // ask chatbot's name
-                window.SingleInputModal("build bot", "chatbot name", async (botname) => {
+                SingleInputModal("build bot", "chatbot name", async (botname) => {
                     // botname should be 1-32 ascii characters
                     if (!botname.match(/^[a-zA-Z0-9_\-]{1,32}$/)) {
                         showalert("warning", "chatbot name should be 1-32 ascii characters");
@@ -2453,11 +2521,11 @@ function setupPrivateDataset() {
 
                     let headers = new Headers();
                     headers.append("Content-Type", "application/json");
-                    headers.append("Authorization", `Bearer ${window.OpenaiToken()}`);
-                    headers.append("X-Laisky-User-Id", await window.getSHA1(window.OpenaiToken()));
+                    headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
+                    headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
 
                     try { // build chatbot
-                        window.ShowSpinner();
+                        ShowSpinner();
                         const resp = await fetch("/ramjet/gptchat/ctx/build", {
                             method: "POST",
                             headers: headers,
@@ -2478,7 +2546,7 @@ function setupPrivateDataset() {
                         showalert("danger", `build dataset failed, ${err.message}`);
                         throw err;
                     } finally {
-                        window.HideSpinner();
+                        HideSpinner();
                     }
                 });
             });
