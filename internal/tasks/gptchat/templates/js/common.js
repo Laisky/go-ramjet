@@ -388,7 +388,12 @@ async function setupHeader() {
 
         if (!data.allowed_models.includes(selectedModel)) {
             selectedModel = data.allowed_models[0];
-            SetLocalStorage("config_chat_model", selectedModel);
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+            sconfig["selected_model"] = selectedModel;
+            await KvSet(skey, sconfig);
         }
 
         // add hint to input text
@@ -452,26 +457,6 @@ async function setupHeader() {
             });
         }
 
-        // set selected model
-        // add active to class
-        document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
-            .forEach((elem) => {
-                elem.classList.remove("active");
-            });
-        document
-            .querySelectorAll("#headerbar .chat-models li a, "
-                + "#headerbar .qa-models li a, "
-                + "#headerbar .image-models li a"
-            )
-            .forEach((elem) => {
-                elem.classList.remove("active");
-
-                if (elem.dataset.model == selectedModel) {
-                    elem.classList.add("active");
-                    elem.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
-                }
-            });
-
         // listen click events
         let modelElems = document
             .querySelectorAll("#headerbar .chat-models li a, "
@@ -479,15 +464,20 @@ async function setupHeader() {
                 + "#headerbar .image-models li a"
             );
         modelElems.forEach((elem) => {
-            elem.addEventListener("click", (evt) => {
+            elem.addEventListener("click", async (evt) => {
                 evt.preventDefault();
                 modelElems.forEach((elem) => {
                     elem.classList.remove("active");
                 });
 
                 evt.target.classList.add("active");
-                let model = evt.target.dataset.model;
-                SetLocalStorage("config_chat_model", model);
+                let selectedModel = evt.target.dataset.model;
+
+                let sid = activeSessionID(),
+                    skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                    sconfig = await KvGet(skey);
+                sconfig["selected_model"] = selectedModel;
+                await KvSet(skey, sconfig);
 
                 // add active to class
                 document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
@@ -497,7 +487,7 @@ async function setupHeader() {
                 evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
 
                 // add hint to input text
-                chatPromptInputEle.attributes.placeholder.value = `[${model}] CTRL+Enter to send`;
+                chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
             });
         });
     }

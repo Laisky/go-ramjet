@@ -206,6 +206,7 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
  * @returns {void}
  */
 async function clearSessionAndChats(evt, sessionID) {
+    console.debug("clearSessionAndChats", evt, sessionID);
     if (evt) {
         evt.stopPropagation();
     }
@@ -213,7 +214,10 @@ async function clearSessionAndChats(evt, sessionID) {
     // remove pinned materials
     window.localStorage.removeItem(StorageKeyPinnedMaterials);
 
+
     if (!sessionID) {  // remove all session
+        let sessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`);
+
         await Promise.all((await KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
@@ -222,30 +226,36 @@ async function clearSessionAndChats(evt, sessionID) {
                 await KvDel(key);
             }
         }));
+
+        // restore session config
+        await KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig);
+        await KvSet(storageSessionKey(1), []);
     } else { // only remove one session's chat, keep config
         await Promise.all((await KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory)  // remove all sessions
+                && key.endsWith(`_${sessionID}`)  // remove specified session
             ) {
-                await KvDel(key);
+                await KvSet(key, []);
             }
         }));
     }
 
-    chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
-    chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
-        <div class="list-group">
-            <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-                <div class="col">1</div>
-                <i class="bi bi-trash col-auto"></i>
-            </button>
-        </div>`;
-    chatContainer
-        .querySelector(".sessionManager .sessions .session")
-        .addEventListener("click", listenSessionSwitch);
+    // chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
+    // chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
+    //     <div class="list-group">
+    //         <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
+    //             <div class="col">1</div>
+    //             <i class="bi bi-trash col-auto"></i>
+    //         </button>
+    //     </div>`;
+    // chatContainer
+    //     .querySelector(".sessionManager .sessions .session")
+    //     .addEventListener("click", listenSessionSwitch);
+    // bindSessionDeleteBtn();
+    // await KvSet(storageSessionKey(1), []);
 
-    await KvSet(storageSessionKey(1), []);
-    bindSessionDeleteBtn();
+    location.reload();
 }
 
 function bindSessionDeleteBtn() {
@@ -371,7 +381,7 @@ async function setupSessionManager() {
                 chatContainer
                     .querySelector(".sessionManager .sessions")
                     .insertAdjacentHTML(
-                        "afterbegin",
+                        "beforeend",
                         `<div class="list-group">
                             <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
                                 <div class="col">${newSessionID}</div>
@@ -381,7 +391,10 @@ async function setupSessionManager() {
 
                 // save new session history and config
                 await KvSet(storageSessionKey(newSessionID), []);
-                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, newSessionConfig());
+                let oldSessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`),
+                    sconfig = newSessionConfig();
+                sconfig["api_token"] = oldSessionConfig["api_token"];  // keep api token
+                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
 
                 // bind session switch listener for new session
                 chatContainer
@@ -1633,6 +1646,8 @@ function newSessionConfig() {
 
 async function updateConfigFromStorage() {
     console.debug(`updateConfigFromStorage for session ${activeSessionID()}`);
+
+    // update config
     configContainer.querySelector(".input.api-token").value = await OpenaiToken();
     configContainer.querySelector(".input.contexts").value = await ChatNContexts();
     configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = await ChatNContexts();
@@ -1645,6 +1660,27 @@ async function updateConfigFromStorage() {
     configContainer.querySelector(".input.frequency_penalty").value = await OpenaiFrequencyPenalty();
     configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = await OpenaiFrequencyPenalty();
     configContainer.querySelector(".system-prompt .input").value = await OpenaiChatStaticContext();
+
+    // update selected model
+    // set active status for models
+    let selectedModel = await OpenaiSelectedModel();
+    document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+        .forEach((elem) => {
+            elem.classList.remove("active");
+        });
+    document
+        .querySelectorAll("#headerbar .chat-models li a, "
+            + "#headerbar .qa-models li a, "
+            + "#headerbar .image-models li a"
+        )
+        .forEach((elem) => {
+            elem.classList.remove("active");
+
+            if (elem.dataset.model == selectedModel) {
+                elem.classList.add("active");
+                elem.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+            }
+        });
 }
 
 async function setupConfig() {
@@ -1820,8 +1856,7 @@ async function setupConfig() {
     {
         configContainer.querySelector(".btn.clear-chats")
             .addEventListener("click", (evt) => {
-                clearSessionAndChats(evt);
-                location.reload();
+                clearSessionAndChats(evt, activeSessionID());
             });
     }
 
