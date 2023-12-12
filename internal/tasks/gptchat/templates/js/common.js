@@ -270,6 +270,15 @@ window.AppEntrypoint = async () => {
 };
 
 async function dataMigrate() {
+    // set openai token
+    {
+        let sconfig = await KvGet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`) || newSessionConfig();
+        if (!sconfig["api_token"] || sconfig["api_token"] == "DEFAULT_PROXY_TOKEN") {
+            sconfig["api_token"] = "FREETIER-" + RandomString(32);
+            await KvSet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`, sconfig);
+        }
+    }
+
     // update legacy chat history, add chatID to each chat
     {
         await Promise.all(Object.keys(localStorage).map(async (key) => {

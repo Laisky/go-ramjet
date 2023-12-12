@@ -1632,7 +1632,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
 
 function newSessionConfig() {
     return {
-        "api_token": "DEFAULT_PROXY_TOKEN",
+        "api_token": "FREETIER-"+ RandomString(32),
         "token_type": OpenaiTokenTypeProxy,
         "max_tokens": 500,
         "temperature": 1,
