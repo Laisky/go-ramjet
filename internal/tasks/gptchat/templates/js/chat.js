@@ -528,10 +528,11 @@ async function getLastNChatMessages(N, ignoredChatID) {
         messages = messages.slice(-N);
     }
 
-    if (GetLocalStorage(StorageKeySystemPrompt)) {
+    let systemPrompt = await OpenaiChatStaticContext();
+    if (systemPrompt) {
         messages = [{
             role: RoleSystem,
-            content: GetLocalStorage(StorageKeySystemPrompt)
+            content: systemPrompt
         }].concat(messages);
     }
 
@@ -1925,10 +1926,11 @@ function appendPromptShortcut(shortcut, storage = false) {
 
     // add click event
     // replace system prompt
-    ele.addEventListener("click", (evt) => {
+    ele.addEventListener("click", async (evt) => {
         evt.stopPropagation();
         let promptInput = configContainer.querySelector(".system-prompt .input");
-        SetLocalStorage(StorageKeySystemPrompt, evtTarget(evt).dataset.prompt);
+
+        await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
         promptInput.value = evtTarget(evt).dataset.prompt;
     });
 
@@ -1942,11 +1944,11 @@ function setupPromptManager() {
         // bind default prompt shortcuts
         configContainer
             .querySelector(".prompt-shortcuts .badge")
-            .addEventListener("click", (evt) => {
+            .addEventListener("click", async (evt) => {
                 evt.stopPropagation();
                 let promptInput = configContainer.querySelector(".system-prompt .input");
                 promptInput.value = evtTarget(evt).dataset.prompt;
-                SetLocalStorage(StorageKeySystemPrompt, evtTarget(evt).dataset.prompt);
+                await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
             });
 
         let shortcuts = loadPromptShortcutsFromStorage();

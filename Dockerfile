@@ -40,7 +40,7 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     # libasound2 libatk-bridge2.0-0 libatspi2.0-0 libcurl3-gnutls libcurl3-nss \
     # libcurl4 libcurl3 libdrm2 libgbm1 libgtk-3-0 libgtk-4-1 libnspr4 libnss3 \
     # libu2f-udev libvulkan1 libxkbcommon0 \
-    && update-ca-certificates
+    && update-ca-certificates 2>/dev/null || true
 
 # install google-chrome
 # RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \

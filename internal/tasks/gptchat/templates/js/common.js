@@ -58,7 +58,6 @@ const ChatModels = [
 const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
     // custom dataset's end-to-end password
     StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
-    StorageKeySystemPrompt = "config_api_static_context",
     StorageKeyPinnedMaterials = "config_api_pinned_materials",
     StorageKeyAllowedModels = "config_chat_models";
 
@@ -215,10 +214,21 @@ var ChatNContexts = async () => {
     return sconfig["n_contexts"];
 };
 
-var OpenaiChatStaticContext = async () => {
+/** get or set chat static context
+ *
+ * @param {string} prompt
+ * @returns {string} prompt
+ */
+var OpenaiChatStaticContext = async (prompt) => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
+
+    if (prompt) {
+        sconfig["system_prompt"] = prompt;
+        await KvSet(skey, sconfig);
+    }
+
     return sconfig["system_prompt"];
 };
 

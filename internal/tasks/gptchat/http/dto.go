@@ -382,9 +382,11 @@ type DrawImageByLcmRequest struct {
 }
 
 type DrawImageBySdxlturboRequest struct {
-	Model    string `json:"model" binding:"required,min=1"`
-	Text     string `json:"text" binding:"required,min=1"`
-	ImageB64 string `json:"image"`
+	Model string `json:"model" binding:"required,min=1"`
+	// Text prompt
+	Text           string `json:"text" binding:"required,min=1"`
+	NegativePrompt string `json:"negative_prompt"`
+	ImageB64       string `json:"image"`
 	// N how many images to generate
 	N int `json:"n"`
 }
