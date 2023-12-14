@@ -87,6 +87,8 @@ type OpenAI struct {
 	DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
 	// DefaultImageToken (optional) default image token, default equals to token
 	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
+	// GoogleGeminiToken (optional) google gemini token
+	GoogleGeminiToken string `json:"-" mapstructure:"google_gemini_token"`
 
 	// DefaultImageTokenType (optional) default image token type, default is openai
 	// DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
