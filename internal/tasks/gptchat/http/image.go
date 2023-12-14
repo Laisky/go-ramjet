@@ -294,6 +294,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if err = user.IsModelAllowed(req.Model); AbortErr(ctx, err) {
 		return
 	}
+
 	if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
 		return
 	}

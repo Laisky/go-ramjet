@@ -403,3 +403,47 @@ type DrawImageByLcmResponse struct {
 	Duration        float64  `json:"duration"`
 	AverageDuration float64  `json:"average_duration"`
 }
+
+// GeminiChatRequestInstanceExample example
+type GeminiChatRequestInstanceExample struct {
+	Input  map[string]string `json:"input"`
+	Output map[string]string `json:"output"`
+}
+
+type GeminiAuthor string
+
+const (
+	GeminiAuthorBot  GeminiAuthor = "bot"
+	GeminiAuthorUser GeminiAuthor = "user"
+)
+
+// GeminiChatRequestInstanceMessage message
+type GeminiChatRequestInstanceMessage struct {
+	Author  GeminiAuthor `json:"author"`
+	Content string       `json:"content"`
+}
+
+// GeminiChatRequestInstance request instance
+type GeminiChatRequestInstance struct {
+	// Context (optional) system prompt
+	Context string `json:"context"`
+	// Examples (optional) list of examples
+	Examples []GeminiChatRequestInstanceExample `json:"examples"`
+	Messages []GeminiChatRequestInstanceMessage `json:"messages"`
+}
+
+// GeminiChatRequestParameters parameters for gemini chat api
+type GeminiChatRequestParameters struct {
+	Temperature     float64 `json:"temperature"`
+	MaxOutputTokens int     `json:"maxOutputTokens"`
+	TopP            float64 `json:"topP"`
+	TopK            int     `json:"topK"`
+}
+
+// GeminiChatRequest request to gemini chat api
+//
+// https://cloud.google.com/vertex-ai/docs/generative-ai/chat/test-chat-prompts
+type GeminiChatRequest struct {
+	Instances  []GeminiChatRequestInstance `json:"instances"`
+	Parameters GeminiChatRequestParameters `json:"parameters"`
+}
