@@ -137,8 +137,9 @@ async function fetchImageDrawingResultBackground() {
                 });
                 if (errFileResp.ok || errFileResp.status == 200) {
                     const errText = await errFileResp.text();
-                    item.insertAdjacentHTML("beforeend", `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`);
+                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
                     checkIsImageAllSubtaskDone(item, imageUrl, false);
+                    await appendChats2Storage(RoleAI, chatId, item.innerHTML);
                     return;
                 }
 
@@ -176,16 +177,18 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
     processingImageUrls = processingImageUrls.filter((url) => url !== imageUrl);
     item.dataset.imageUrls = JSON.stringify(processingImageUrls);
 
+    let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
     if (succeed) {
-        let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
         succeedImageUrls.push(imageUrl);
         item.dataset.succeedImageUrls = JSON.stringify(succeedImageUrls);
+    } else {  // task failed
+        processingImageUrls = [];
+        item.dataset.imageUrls = JSON.stringify(processingImageUrls);
     }
 
-    if (processingImageUrls.length == 0) {
+    if (processingImageUrls.length == 0 && succeedImageUrls.length > 0) {
         item.dataset.status = "done";
         let imgHTML = "";
-        let succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || "[]");
         succeedImageUrls.forEach((url) => {
             imgHTML += `<img src="${url}">`;
         });
@@ -1069,6 +1072,7 @@ async function sendChat2Server(chatID) {
         currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p>`
             + `<pre style="background-color: #f8e8e8; text-wrap: pretty;">`
             + `unimplemented model: ${sanitizeHTML(selectedModel)}</pre>`;
+        appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML);
         unlockChatInput();
         return;
     }
@@ -1241,6 +1245,7 @@ function abortAIResp(err) {
 
     // ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
     currentAIRespEle.scrollIntoView({ behavior: "smooth" });
+    appendChats2Storage(RoleAI, currentAIRespEle.closest(".role-ai").dataset.chatid, currentAIRespEle.innerHTML);
     unlockChatInput();
 }
 

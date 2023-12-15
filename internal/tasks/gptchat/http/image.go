@@ -120,18 +120,20 @@ func DrawByLcmHandler(ctx *gin.Context) {
 				return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Prompt, img)
 			}(); err != nil {
 				// upload error msg
+				msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
+				objkey := drawImageByImageObjkeyPrefix(taskID) + ".err.txt"
 				if _, err := s3.GetCli().PutObject(taskCtx,
 					config.Config.S3.Bucket,
-					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask+".err.txt",
-					bytes.NewReader([]byte(err.Error())),
-					int64(len(err.Error())),
+					objkey,
+					bytes.NewReader(msg),
+					int64(len(msg)),
 					minio.PutObjectOptions{
 						ContentType: "text/plain",
 					}); err != nil {
 					logger.Error("upload error msg", zap.Error(err))
 				}
 
-				logger.Error("failed to draw image", zap.Error(err))
+				logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
 				return
 			}
 
@@ -240,18 +242,20 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 			return nil
 		}(); err != nil {
 			// upload error msg
+			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Text, err.Error()))
+			objkey := drawImageByImageObjkeyPrefix(taskID) + ".err.txt"
 			if _, err := s3.GetCli().PutObject(taskCtx,
 				config.Config.S3.Bucket,
-				drawImageByImageObjkeyPrefix(taskID)+".err.txt",
-				bytes.NewReader([]byte(err.Error())),
-				int64(len(err.Error())),
+				objkey,
+				bytes.NewReader(msg),
+				int64(len(msg)),
 				minio.PutObjectOptions{
 					ContentType: "text/plain",
 				}); err != nil {
 				logger.Error("upload error msg", zap.Error(err))
 			}
 
-			logger.Error("failed to draw image", zap.Error(err))
+			logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
 			return
 		}
 
@@ -312,18 +316,20 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 		if err != nil {
 			// upload error msg
+			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
+			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
 			if _, err := s3.GetCli().PutObject(taskCtx,
 				config.Config.S3.Bucket,
-				drawImageByTxtObjkeyPrefix(taskID)+"-0.err.txt",
-				bytes.NewReader([]byte(err.Error())),
-				int64(len(err.Error())),
+				objkey,
+				bytes.NewReader(msg),
+				int64(len(msg)),
 				minio.PutObjectOptions{
 					ContentType: "text/plain",
 				}); err != nil {
 				logger.Error("upload error msg", zap.Error(err))
 			}
 
-			logger.Error("failed to draw image", zap.Error(err))
+			logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
 			return
 		}
 
