@@ -182,20 +182,21 @@ SWITCH_FOR_USER:
 			BYOK:                   true,
 			APIBase:                config.Config.API,
 		}
-	}
 
-	userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
-	if userApiBase != "" {
-		user.APIBase = userApiBase
+		// only BYOK user can set api base
+		userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
+		if userApiBase != "" {
+			user.APIBase = userApiBase
 
-		// set image url
-		switch {
-		case strings.Contains(userApiBase, "openai.azure.com"):
-			user.ImageUrl = userApiBase
-		case strings.Contains(userApiBase, "api.openai.com"):
-			user.ImageUrl = "https://api.openai.com/v1/images/generations"
-		default:
-			user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
+			// set image url
+			switch {
+			case strings.Contains(userApiBase, "openai.azure.com"):
+				user.ImageUrl = userApiBase
+			case strings.Contains(userApiBase, "api.openai.com"):
+				user.ImageUrl = "https://api.openai.com/v1/images/generations"
+			default:
+				user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
+			}
 		}
 	}
 
