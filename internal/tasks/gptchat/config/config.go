@@ -335,8 +335,9 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 	log.Logger.Debug("check rate limit",
 		zap.String("model", model), zap.Int("price", ratelimitCost))
 	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
-		return errors.Errorf("too many requests for expensive model %q, please try after %d seconds, "+
-			"or you can try free model gpt-3.5-turbo",
+		return errors.Errorf("This model(%q) restricts usage for free users. "+
+			"Please wait for %d seconds before trying again, "+
+			"or consider using the free gpt-3.5-turbo.",
 			model, (ratelimitCost - ratelimiter.Len()))
 	}
 
