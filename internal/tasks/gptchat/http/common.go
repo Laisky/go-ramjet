@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v4"
@@ -39,7 +41,7 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 		return nil, errors.New("authorization token is empty")
 	}
 
-	return getUserByToken(gctx.Request.Context(), userToken)
+	return getUserByToken(gctx, userToken)
 }
 
 type oneapiUserResponse struct {
@@ -84,7 +86,10 @@ func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err 
 	return uid, nil
 }
 
-func getUserByToken(ctx context.Context, userToken string) (user *config.UserConfig, err error) {
+func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
+	ctx, cancel := context.WithTimeout(gctx.Request.Context(), time.Second*10)
+	defer cancel()
+
 	userToken = strings.TrimSpace(strings.TrimPrefix(userToken, "Bearer "))
 	if userToken == "" {
 		return nil, errors.New("empty token")
@@ -179,8 +184,24 @@ SWITCH_FOR_USER:
 		}
 	}
 
+	userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
+	if userApiBase != "" {
+		user.APIBase = userApiBase
+
+		// set image url
+		switch {
+		case strings.Contains(userApiBase, "openai.azure.com"):
+			user.ImageUrl = userApiBase
+		case strings.Contains(userApiBase, "api.openai.com"):
+			user.ImageUrl = "https://api.openai.com/v1/images/generations"
+		default:
+			user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
+		}
+	}
+
 	if err = user.Valid(); err != nil {
 		return nil, errors.Wrap(err, "valid user")
 	}
+
 	return user, nil
 }

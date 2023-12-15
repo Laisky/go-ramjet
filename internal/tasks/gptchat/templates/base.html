@@ -30,11 +30,11 @@
                         <ul class="dropdown-menu chat-models">
                             <li><a class="dropdown-item" href="#">loading...</a></li>
                             <!-- <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo">3.5-turbo</a></li>
-                    <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
-                    <li>
-                        <hr class="dropdown-divider">
-                    </li>
-                    <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
+                            <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -95,6 +95,13 @@
                         <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
                     </ul> -->
                     <input dir="auto" type="text" class="form-control input api-token" value="">
+                </div>
+            </div>
+            <div class="input-group mb-3">
+                <label for="api-base" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="For Azure users, please provide the complete Azure address, for example, https://xxx.openai.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2023-12-01-preview">api-base <i class="bi bi-info-circle"></i>:</label>
+                <div class="input-group mb-3" style="padding: 0px;">
+                    <input dir="auto" type="text" class="form-control input api-base" value="https://api.openai.com" placeholder="https://api.openai.com">
                 </div>
             </div>
             <div class="mb-3 input-group contexts">

@@ -164,7 +164,7 @@ var OpenaiToken = async () => {
 
     // get token from storage
     if (!apikey) {
-        apikey = sconfig["api_token"];
+        apikey = sconfig["api_token"] || "FREETIER-" + RandomString(32);
     }
 
     sconfig["api_token"] = apikey;
@@ -172,18 +172,25 @@ var OpenaiToken = async () => {
     return apikey;
 };
 
+var OpenaiApiBase = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+    return sconfig["api_base"] || "https://api.openai.com";
+};
+
 var OpenaiSelectedModel = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["selected_model"];
+    return sconfig["selected_model"] || ChatModelTurbo35;
 }
 
 var OpenaiMaxTokens = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["max_tokens"];
+    return sconfig["max_tokens"] || 500;
 };
 
 var OpenaiTemperature = async () => {
@@ -197,21 +204,21 @@ var OpenaiPresencePenalty = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["presence_penalty"];
+    return sconfig["presence_penalty"] || 0;
 };
 
 var OpenaiFrequencyPenalty = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["frequency_penalty"];
+    return sconfig["frequency_penalty"] || 0;
 };
 
 var ChatNContexts = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["n_contexts"];
+    return sconfig["n_contexts"] || 3;
 };
 
 /** get or set chat static context
@@ -229,7 +236,7 @@ var OpenaiChatStaticContext = async (prompt) => {
         await KvSet(skey, sconfig);
     }
 
-    return sconfig["system_prompt"];
+    return sconfig["system_prompt"] || "";
 };
 
 

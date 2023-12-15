@@ -304,12 +304,10 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		defer cancel()
 
 		switch {
-		case strings.Contains(user.ImageUrl, "openai.com"):
-			err = drawImageByOpenaiDalle(taskCtx, user, req.Prompt, taskID)
-		case strings.Contains(user.ImageUrl, "azure.com"):
+		case strings.Contains(user.ImageUrl, "openai.azure.com"):
 			err = drawImageByAzureDalle(taskCtx, user, req.Prompt, taskID)
 		default:
-			err = errors.Errorf("unknown txt2image service url %s", user.ImageUrl)
+			err = drawImageByOpenaiDalle(taskCtx, user, req.Prompt, taskID)
 		}
 
 		if err != nil {

@@ -647,6 +647,7 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
         headers: {
             "Authorization": "Bearer " + (await OpenaiToken()),
             "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+            "X-Laisky-Api-Base": await OpenaiApiBase(),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -700,6 +701,7 @@ async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEl
         headers: {
             "Authorization": "Bearer " + (await OpenaiToken()),
             "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+            "X-Laisky-Api-Base": await OpenaiApiBase(),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -754,6 +756,7 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
         headers: {
             "Authorization": "Bearer " + (await OpenaiToken()),
             "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+            "X-Laisky-Api-Base": await OpenaiApiBase(),
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -886,6 +889,7 @@ async function sendChat2Server(chatID) {
                 "Authorization": "Bearer " + (await OpenaiToken()),
                 "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
                 "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
+                "X-Laisky-Api-Base": await OpenaiApiBase(),
             },
             method: "POST",
             payload: JSON.stringify({
@@ -906,6 +910,7 @@ async function sendChat2Server(chatID) {
                 "Authorization": "Bearer " + (await OpenaiToken()),
                 "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
                 "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
+                "X-Laisky-Api-Base": await OpenaiApiBase(),
             },
             method: "POST",
             payload: JSON.stringify({
@@ -973,6 +978,7 @@ async function sendChat2Server(chatID) {
                     "Authorization": "Bearer " + (await OpenaiToken()),
                     "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
                     "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
+                    "X-Laisky-Api-Base": await OpenaiApiBase(),
                     "X-PDFCHAT-PASSWORD": GetLocalStorage(StorageKeyCustomDatasetPassword)
                 },
             });
@@ -1019,6 +1025,7 @@ async function sendChat2Server(chatID) {
                         "Authorization": "Bearer " + (await OpenaiToken()),
                         "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
                         "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
+                        "X-Laisky-Api-Base": await OpenaiApiBase(),
                     },
                     method: "POST",
                     payload: JSON.stringify({
@@ -1633,7 +1640,8 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
 
 function newSessionConfig() {
     return {
-        "api_token": "FREETIER-"+ RandomString(32),
+        "api_token": "FREETIER-" + RandomString(32),
+        "api_base": "https://api.openai.com",
         "token_type": OpenaiTokenTypeProxy,
         "max_tokens": 500,
         "temperature": 1,
@@ -1650,6 +1658,7 @@ async function updateConfigFromStorage() {
 
     // update config
     configContainer.querySelector(".input.api-token").value = await OpenaiToken();
+    configContainer.querySelector(".input.api-base").value = await OpenaiApiBase();
     configContainer.querySelector(".input.contexts").value = await ChatNContexts();
     configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = await ChatNContexts();
     configContainer.querySelector(".input.max-token").value = await OpenaiMaxTokens();
@@ -1732,6 +1741,22 @@ async function setupConfig() {
                 sconfig = await KvGet(skey);
 
             sconfig["api_token"] = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+        })
+    }
+
+    // bind api_base
+    {
+        let apibaseInput = configContainer
+            .querySelector(".input.api-base");
+        apibaseInput.addEventListener("input", async (evt) => {
+            evt.stopPropagation();
+
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+
+            sconfig["api_base"] = evtTarget(evt).value;
             await KvSet(skey, sconfig);
         })
     }
@@ -2181,6 +2206,7 @@ function setupPrivateDataset() {
                 let headers = new Headers();
                 headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
                 headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
+                headers.append("X-Laisky-Api-Base", await OpenaiApiBase());
 
                 try {
                     ShowSpinner();
@@ -2440,6 +2466,7 @@ function setupPrivateDataset() {
                             let headers = new Headers();
                             headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
                             headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
+                            headers.append("X-Laisky-Api-Base", await OpenaiApiBase());
 
                             try {
                                 ShowSpinner();
@@ -2493,6 +2520,7 @@ function setupPrivateDataset() {
                 headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
                 headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
                 headers.append("Cache-Control", "no-cache");
+                headers.append("X-Laisky-Api-Base", await OpenaiApiBase());
 
                 let respBody;
                 try {
@@ -2560,6 +2588,7 @@ function setupPrivateDataset() {
                     headers.append("Content-Type", "application/json");
                     headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
                     headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
+                    headers.append("X-Laisky-Api-Base", await OpenaiApiBase());
 
                     try { // build chatbot
                         ShowSpinner();
