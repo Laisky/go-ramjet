@@ -326,7 +326,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo",
 			"gpt-3.5-turbo-16k",
 			"gpt-3.5-turbo-0613",
-			"gpt-3.5-turbo-16k-0613":
+			"gpt-3.5-turbo-16k-0613",
+			"gemini-pro":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
 			req := new(OpenaiChatReq[string])

@@ -68,7 +68,7 @@ async function sessionChatHistory(sessionID) {
 
 /**
  *
- * @returns {Array} An array of chat messages.
+ * @returns {Array} An array of chat messages, oldest first.
  */
 async function activeSessionChatHistory() {
     let sid = activeSessionID();
@@ -510,6 +510,20 @@ function scrollToChat(chatEle) {
 * @returns {Array} An array of chat messages.
 */
 async function getLastNChatMessages(N, ignoredChatID) {
+    console.debug("getLastNChatMessages", N, ignoredChatID);
+
+    let systemPrompt = await OpenaiChatStaticContext(),
+        selectedModel = await OpenaiSelectedModel();
+
+    if (selectedModel == ChatModelGeminiPro) {
+        // one-api's gemoni-pro do not support context
+        return [{
+            role: RoleSystem,
+            content: systemPrompt
+        }];
+    }
+
+
     let messages = (await activeSessionChatHistory()).filter((ele) => {
         if (ele.role != RoleHuman) {
             // Ignore AI's chat, only use human's chat as context.
@@ -531,7 +545,6 @@ async function getLastNChatMessages(N, ignoredChatID) {
         messages = messages.slice(-N);
     }
 
-    let systemPrompt = await OpenaiChatStaticContext();
     if (systemPrompt) {
         messages = [{
             role: RoleSystem,
