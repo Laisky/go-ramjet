@@ -11,38 +11,19 @@
     z-index: 1500;
 }
 
-#chatContainer {
-    .pinned-refs {
-        z-index: 1000;
-        background-color: #d1d1d1;
-        position: absolute;
-        left: 5px;
-        top: 5px;
-        max-width: 50%;
-        overflow: hidden;
-        text-align: left;
 
-        p {
-            padding-left: 5px;
-            padding-right: 5px;
-            margin-bottom: 0px;
-            text-wrap: nowrap;
+#offcanvasSession {
+    padding: 0px;
 
-            .bi-trash {
-                cursor: pointer;
-            }
-        }
-    }
-
-    .sessionManager {
+    .offcanvas-body {
         padding: 0px;
 
         button {
-            padding: 0px;
             width: 100%;
+            border-style: none;
         }
 
-        .card {
+        #sessionManager.card {
             height: 100%;
 
             .card-header {
@@ -66,6 +47,32 @@
 
             .card-footer {
                 padding: 0px;
+            }
+        }
+    }
+}
+
+
+
+#chatContainer {
+    .pinned-refs {
+        z-index: 1000;
+        background-color: #d1d1d1;
+        position: absolute;
+        left: 5px;
+        top: 5px;
+        max-width: 50%;
+        overflow: hidden;
+        text-align: left;
+
+        p {
+            padding-left: 5px;
+            padding-right: 5px;
+            margin-bottom: 0px;
+            text-wrap: nowrap;
+
+            .bi-trash {
+                cursor: pointer;
             }
         }
     }

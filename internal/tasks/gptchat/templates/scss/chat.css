@@ -11,6 +11,36 @@
   z-index: 1500;
 }
 
+#offcanvasSession {
+  padding: 0px;
+}
+#offcanvasSession .offcanvas-body {
+  padding: 0px;
+}
+#offcanvasSession .offcanvas-body button {
+  width: 100%;
+  border-style: none;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card {
+  height: 100%;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-header {
+  padding: 0px;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-body {
+  min-height: 300px;
+  padding: 0px;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group {
+  border-radius: 0%;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group .session {
+  display: flex;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-footer {
+  padding: 0px;
+}
+
 #chatContainer .pinned-refs {
   z-index: 1000;
   background-color: #d1d1d1;
@@ -29,32 +59,6 @@
 }
 #chatContainer .pinned-refs p .bi-trash {
   cursor: pointer;
-}
-#chatContainer .sessionManager {
-  padding: 0px;
-}
-#chatContainer .sessionManager button {
-  padding: 0px;
-  width: 100%;
-}
-#chatContainer .sessionManager .card {
-  height: 100%;
-}
-#chatContainer .sessionManager .card .card-header {
-  padding: 0px;
-}
-#chatContainer .sessionManager .card .card-body {
-  min-height: 300px;
-  padding: 0px;
-}
-#chatContainer .sessionManager .card .card-body .list-group {
-  border-radius: 0%;
-}
-#chatContainer .sessionManager .card .card-body .list-group .session {
-  display: flex;
-}
-#chatContainer .sessionManager .card .card-footer {
-  padding: 0px;
 }
 #chatContainer .chatManager {
   padding: 0px;

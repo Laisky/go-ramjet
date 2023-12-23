@@ -7,6 +7,10 @@
 #headerbar .navbar-nav a.dropdown-toggle.active {
   -webkit-text-stroke: 1px #0063f6;
 }
+#headerbar button[data-bs-toggle=offcanvas] {
+  border-style: none;
+  background: none;
+}
 
 #hiddenChatConfigSideBar .system-prompt .input {
   min-height: 220px;

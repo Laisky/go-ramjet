@@ -80,7 +80,7 @@ async function activeSessionChatHistory() {
 }
 
 function activeSessionID() {
-    let activeSession = chatContainer.querySelector(".sessionManager .card-body button.active");
+    let activeSession = document.querySelector("#sessionManager .card-body button.active");
     if (activeSession) {
         return activeSession.dataset.session;
     }
@@ -90,8 +90,8 @@ function activeSessionID() {
 
 async function listenSessionSwitch(evt) {
     // deactive all sessions
-    chatContainer
-        .querySelectorAll(".sessionManager .sessions .list-group-item.active")
+    document
+        .querySelectorAll("#sessionManager .sessions .list-group-item.active")
         .forEach((item) => {
             item.classList.remove("active");
         });
@@ -244,25 +244,11 @@ async function clearSessionAndChats(evt, sessionID) {
         }));
     }
 
-    // chatContainer.querySelector(".chatManager .conservations").innerHTML = "";
-    // chatContainer.querySelector(".sessionManager .sessions").innerHTML = `
-    //     <div class="list-group">
-    //         <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-    //             <div class="col">1</div>
-    //             <i class="bi bi-trash col-auto"></i>
-    //         </button>
-    //     </div>`;
-    // chatContainer
-    //     .querySelector(".sessionManager .sessions .session")
-    //     .addEventListener("click", listenSessionSwitch);
-    // bindSessionDeleteBtn();
-    // await KvSet(storageSessionKey(1), []);
-
     location.reload();
 }
 
 function bindSessionDeleteBtn() {
-    let btns = chatContainer.querySelectorAll(".sessionManager .sessions .session .bi-trash") || [];
+    let btns = document.querySelectorAll("#sessionManager .sessions .session .bi-trash") || [];
     btns.forEach((item) => {
         if (item.dataset["bindClicked"]) {
             return;
@@ -274,7 +260,7 @@ function bindSessionDeleteBtn() {
             evt.stopPropagation();
 
             // if there is only one session, don't delete it
-            if (chatContainer.querySelectorAll(".sessionManager .sessions .session").length == 1) {
+            if (document.querySelectorAll("#sessionManager .sessions .session").length == 1) {
                 return;
             }
 
@@ -293,8 +279,8 @@ function bindSessionDeleteBtn() {
 async function setupSessionManager() {
     // bind remove all sessions
     {
-        chatContainer
-            .querySelector(".sessionManager .btn.purge")
+        document
+            .querySelector("#sessionManager .btn.purge")
             .addEventListener("click", clearSessionAndChats);
     }
 
@@ -327,8 +313,8 @@ async function setupSessionManager() {
                 active = "active";
             }
 
-            chatContainer
-                .querySelector(".sessionManager .sessions")
+            document
+                .querySelector("#sessionManager .sessions")
                 .insertAdjacentHTML(
                     "beforeend",
                     `<div class="list-group">
@@ -359,8 +345,8 @@ async function setupSessionManager() {
 
     // new session
     {
-        chatContainer
-            .querySelector(".sessionManager .btn.new-session")
+        document
+            .querySelector("#sessionManager .btn.new-session")
             .addEventListener("click", async (evt) => {
                 let maxSessionID = 0;
                 (await KvList()).forEach((key) => {
@@ -373,7 +359,7 @@ async function setupSessionManager() {
                 });
 
                 // deactive all sessions
-                chatContainer.querySelectorAll(".sessionManager .sessions .list-group-item.active").forEach((item) => {
+                document.querySelectorAll("#sessionManager .sessions .list-group-item.active").forEach((item) => {
                     item.classList.remove("active");
                 });
 
@@ -381,8 +367,8 @@ async function setupSessionManager() {
                 chatContainer
                     .querySelector(".chatManager .conservations").innerHTML = "";
                 let newSessionID = maxSessionID + 1;
-                chatContainer
-                    .querySelector(".sessionManager .sessions")
+                document
+                    .querySelector("#sessionManager .sessions")
                     .insertAdjacentHTML(
                         "beforeend",
                         `<div class="list-group">
@@ -400,8 +386,8 @@ async function setupSessionManager() {
                 await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
 
                 // bind session switch listener for new session
-                chatContainer
-                    .querySelector(`.sessionManager .sessions [data-session="${newSessionID}"]`)
+                document
+                    .querySelector(`#sessionManager .sessions [data-session="${newSessionID}"]`)
                     .addEventListener("click", listenSessionSwitch);
 
                 bindSessionDeleteBtn();
@@ -411,8 +397,8 @@ async function setupSessionManager() {
 
     // bind session switch
     {
-        chatContainer
-            .querySelectorAll(".sessionManager .sessions .list-group .session")
+        document
+            .querySelectorAll("#sessionManager .sessions .list-group .session")
             .forEach((item) => {
                 item.addEventListener("click", listenSessionSwitch);
             });

@@ -1,20 +1,7 @@
 {{define "body"}}
 <div class="container-fluid" id="chatContainer">
     <div class="row" style="height: 100vh; padding-top: 40px;">
-        <div class="col-1 d-none d-md-none d-lg-block sessionManager">
-            <div class="card text-center">
-                <div class="card-header text-muted">
-                    <button type="button" class="btn btn-outline-secondary new-session">New Session</button>
-                </div>
-                <div class="card-body sessions">
-                    <!-- sessions are here -->
-                </div>
-                <div class="card-footer text-muted">
-                    <button type="button" class="btn btn-secondary purge">Clear All</button>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-lg-11 chatManager">
+        <div class="col chatManager">
             <div class="card text-center">
                 <div class="pinned-refs">
                     <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
@@ -75,6 +62,27 @@
 </div>
 
 <!-- some extra modals -->
+
+<div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSession" aria-labelledby="offcanvasSessionLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="offcanvasSessionLabel">Session</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="card text-center" id="sessionManager">
+            <div class="card-header text-muted">
+                <button type="button" class="btn btn-outline-secondary new-session">New Session</button>
+            </div>
+            <div class="card-body sessions">
+                <!-- sessions are here -->
+            </div>
+            <div class="card-footer text-muted">
+                <button type="button" class="btn btn-secondary purge">Clear All</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <div class="modal" tabindex="-1" id="save-system-prompt">
     <div class="modal-dialog modal-dialog-centered">

@@ -12,6 +12,11 @@
             -webkit-text-stroke: 1px #0063f6;
         }
     }
+
+    button[data-bs-toggle="offcanvas"] {
+        border-style: none;
+        background: none;
+    }
 }
 
 #hiddenChatConfigSideBar {
