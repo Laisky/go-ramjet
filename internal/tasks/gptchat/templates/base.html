@@ -17,11 +17,11 @@
 </head>
 
 <body>
-    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar">
+    <nav class="fixed-top navbar navbar-expand bg-light" id="headerbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">OpenAI</a>
-            <div class="navbar-expand">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <div class="container-fluid left">
+                <a class="navbar-brand" href="#">OpenAI</a>
+                <ul class="navbar-nav">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
                             aria-expanded="false">
@@ -60,25 +60,39 @@
                     </li>
                 </ul>
             </div>
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/tutorial/"
-                            target="_blank">Tutorial</a>
-                    </li>
-                </ul>
-            </div>
 
-            <div>
-                <button type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSession"
-                    aria-controls="offcanvasSession">
-                    <i class="bi bi-stack"></i>
-                </button>
-                <button type="button" data-bs-toggle="offcanvas" data-bs-target="#hiddenChatConfigSideBar"
-                    aria-controls="hiddenChatConfigSideBar">
-                    <i class="bi bi-tools"></i>
-                </button>
-            </div>
+
+            <ul class="navbar-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                        aria-expanded="false">
+                        <i class="bi bi-toggles2"></i>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="#" type="button" data-bs-toggle="offcanvas"
+                                data-bs-target="#offcanvasSession" aria-controls="offcanvasSession">
+                                <i class="bi bi-stack" data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="manage sessions"></i>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" type="button" data-bs-toggle="offcanvas"
+                                data-bs-target="#hiddenChatConfigSideBar" aria-controls="hiddenChatConfigSideBar">
+                                <i class="bi bi-tools" data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="preferences setting"></i>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="https://wiki.laisky.com/projects/gpt/tutorial/"
+                                target="_blank">
+                                <i class="bi bi-patch-question-fill" data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="tutorial"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
         </div>
     </nav>
 
