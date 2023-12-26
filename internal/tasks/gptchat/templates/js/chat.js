@@ -22,7 +22,7 @@ async function setupChatJs() {
 
 
 function newChatID() {
-    return "chat-" + RandomString(16);
+    return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
 }
 
 // show alert
