@@ -336,7 +336,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			}
 
 			openaiReq = req
-		case "gpt-4-vision-preview":
+		case "gpt-4-vision-preview",
+			"gemini-pro-vision":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision
