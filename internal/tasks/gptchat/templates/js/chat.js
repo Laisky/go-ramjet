@@ -1339,8 +1339,7 @@ function setupChatInput() {
                     }
                     let base64String = btoa(chunks.join(''));
 
-                    // only support 1 image for current version
-                    chatVisionSelectedFileStore = {};
+                    // chatVisionSelectedFileStore = {};  // only support 1 image for current version
                     chatVisionSelectedFileStore[file.name] = base64String;
                     updateChatVisionSelectedFileStore();
                 };

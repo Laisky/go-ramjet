@@ -378,8 +378,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 					},
 				})
 
-				if i >= 1 {
-					break // only support 2 images for cost saving
+				if i >= 6 {
+					break // only support 6 images for cost saving
 				}
 
 				totalFileSize += len(f.Content)
