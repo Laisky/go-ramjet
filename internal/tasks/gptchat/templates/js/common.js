@@ -417,17 +417,19 @@ async function setupHeader() {
 
         let modelsContainer = document.querySelector("#headerbar .chat-models"),
             modelsEle = "";
-        const data = await response.json()
-        if (data.allowed_models.includes("*")) {
-            data.allowed_models = Array.from(AllModels);
+        const respData = await response.json()
+        if (respData.allowed_models.includes("*")) {
+            respData.allowed_models = Array.from(AllModels);
+        } else {
+            respData.allowed_models.push(QAModelCustom, QAModelShared);
         }
 
-        data.allowed_models.sort();
-        SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
-        allowedModels = data.allowed_models;
+        respData.allowed_models.sort();
+        SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models);
+        allowedModels = respData.allowed_models;
 
-        if (!data.allowed_models.includes(selectedModel)) {
-            selectedModel = data.allowed_models[0];
+        if (!respData.allowed_models.includes(selectedModel)) {
+            selectedModel = respData.allowed_models[0];
 
             let sid = activeSessionID(),
                 skey = `${KvKeyPrefixSessionConfig}${sid}`,
@@ -441,7 +443,7 @@ async function setupHeader() {
             .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
 
         let unsupportedModels = [];
-        data.allowed_models.forEach((model) => {
+        respData.allowed_models.forEach((model) => {
             if (!ChatModels.includes(model)) {
                 unsupportedModels.push(model);
                 return;
@@ -467,9 +469,14 @@ async function setupHeader() {
     {
         let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models"),
             modelsEle = "";
+
+        let allowedQaModels = [QAModelCustom, QAModelShared];
+        data.qa_chat_models.forEach((item) => {
+            allowedQaModels.push(item.name);
+        })
+
         allowedModels.forEach((model) => {
-            if (!QaModels.includes(model)
-                || (!data.qa_chat_models.includes(model) && model != QAModelCustom && model != QAModelShared)) {
+            if (!QaModels.includes(model) || !allowedQaModels.includes(model)) {
                 return;
             }
 
