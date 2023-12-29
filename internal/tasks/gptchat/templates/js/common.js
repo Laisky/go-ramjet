@@ -34,12 +34,11 @@ const ChatModels = [
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision,
-    CompletionModelDavinci3,
     ChatModelTurbo35_16K,
     // ChatModelTurbo35_0613,
     // ChatModelTurbo35_0613_16K,
     // ChatModelGPT4_0613,
-    ChatModelGPT4_32K,
+    // ChatModelGPT4_32K,
     // ChatModelGPT4_0613_32K,
 ],
     QaModels = [
@@ -56,6 +55,16 @@ const ChatModels = [
     ],
     CompletionModels = [
         CompletionModelDavinci3,
+    ],
+    FreeModels = [
+        ChatModelTurbo35,
+        ChatModelGeminiPro,
+        ChatModelGeminiProVision,
+        QAModelBasebit,
+        QAModelSecurity,
+        QAModelImmigrate,
+        ImageModelSdxlTurbo,
+        ImageModelImg2Img,
     ],
     AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
 
@@ -406,13 +415,14 @@ async function setupHeader() {
             throw new Error("failed to get user info, please refresh your browser.");
         }
 
-        let modelsContainer = document.querySelector("#headerbar .chat-models");
+        let modelsContainer = document.querySelector("#headerbar .chat-models"),
+            modelsEle = "";
         const data = await response.json()
-        let modelsEle = "";
         if (data.allowed_models.includes("*")) {
-            data.allowed_models = AllModels;
+            data.allowed_models = Array.from(AllModels);
         }
 
+        data.allowed_models.sort();
         SetLocalStorage(StorageKeyAllowedModels, data.allowed_models);
         allowedModels = data.allowed_models;
 
@@ -437,88 +447,91 @@ async function setupHeader() {
                 return;
             }
 
-            modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
         });
         modelsContainer.innerHTML = modelsEle;
+    }
 
-        // FIXME
-        // if (unsupportedModels.length > 0) {
-        //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
-        //         + `maybe you need refresh your browser. if this warning still exists, `
-        //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
-        // }
+    // FIXME
+    // if (unsupportedModels.length > 0) {
+    //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
+    //         + `maybe you need refresh your browser. if this warning still exists, `
+    //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
+    // }
 
-        // setup chat qa models
-        {
-            let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models");
-            allowedModels.forEach((model) => {
-                if (!QaModels.includes(model)) {
-                    return;
-                }
+    // setup chat qa models
+    {
+        let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models"),
+            modelsEle = "";
+        allowedModels.forEach((model) => {
+            if (!QaModels.includes(model)
+                || (!data.qa_chat_models.includes(model) && model != QAModelCustom && model != QAModelShared)) {
+                return;
+            }
 
-                let li = document.createElement("li");
-                let a = document.createElement("a");
-                a.href = "#";
-                a.classList.add("dropdown-item");
-                a.dataset.model = model;
-                a.textContent = model;
-                li.appendChild(a);
-                qaModelsContainer.appendChild(li);
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
+        });
+        qaModelsContainer.innerHTML = modelsEle;
+    }
+
+    // setup chat image models
+    {
+        let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models"),
+            modelsEle = "";
+        allowedModels.forEach((model) => {
+            if (!ImageModels.includes(model)) {
+                return;
+            }
+
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
+        });
+        imageModelsContainer.innerHTML = modelsEle;
+    }
+
+    // listen click events
+    let modelElems = document
+        .querySelectorAll("#headerbar .chat-models li a, "
+            + "#headerbar .qa-models li a, "
+            + "#headerbar .image-models li a"
+        );
+    modelElems.forEach((elem) => {
+        elem.addEventListener("click", async (evt) => {
+            evt.preventDefault();
+            modelElems.forEach((elem) => {
+                elem.classList.remove("active");
             });
-        }
 
-        // setup chat image models
-        {
-            let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models");
-            imageModelsContainer.innerHTML = "";
-            allowedModels.forEach((model) => {
-                if (!ImageModels.includes(model)) {
-                    return;
-                }
+            evt.target.classList.add("active");
+            let selectedModel = evt.target.dataset.model;
 
-                let li = document.createElement("li");
-                let a = document.createElement("a");
-                a.href = "#";
-                a.classList.add("dropdown-item");
-                a.dataset.model = model;
-                a.textContent = model;
-                li.appendChild(a);
-                imageModelsContainer.appendChild(li);
-            });
-        }
+            let sid = activeSessionID(),
+                skey = `${KvKeyPrefixSessionConfig}${sid}`,
+                sconfig = await KvGet(skey);
+            sconfig["selected_model"] = selectedModel;
+            await KvSet(skey, sconfig);
 
-        // listen click events
-        let modelElems = document
-            .querySelectorAll("#headerbar .chat-models li a, "
-                + "#headerbar .qa-models li a, "
-                + "#headerbar .image-models li a"
-            );
-        modelElems.forEach((elem) => {
-            elem.addEventListener("click", async (evt) => {
-                evt.preventDefault();
-                modelElems.forEach((elem) => {
+            // add active to class
+            document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+                .forEach((elem) => {
                     elem.classList.remove("active");
                 });
+            evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
 
-                evt.target.classList.add("active");
-                let selectedModel = evt.target.dataset.model;
-
-                let sid = activeSessionID(),
-                    skey = `${KvKeyPrefixSessionConfig}${sid}`,
-                    sconfig = await KvGet(skey);
-                sconfig["selected_model"] = selectedModel;
-                await KvSet(skey, sconfig);
-
-                // add active to class
-                document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
-                    .forEach((elem) => {
-                        elem.classList.remove("active");
-                    });
-                evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
-
-                // add hint to input text
-                chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
-            });
+            // add hint to input text
+            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
         });
-    }
+    });
+
 }

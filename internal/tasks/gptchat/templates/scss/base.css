@@ -1,6 +1,9 @@
 #headerbar {
   padding: 0px;
 }
+#headerbar .bi.bi-coin {
+  color: #ffc82c;
+}
 #headerbar > .container-fluid {
   display: flex;
   justify-content: space-between;
