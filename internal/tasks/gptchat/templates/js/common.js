@@ -234,7 +234,7 @@ var ChatNContexts = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["n_contexts"] || 3;
+    return sconfig["n_contexts"] || 6;
 };
 
 /** get or set chat static context
