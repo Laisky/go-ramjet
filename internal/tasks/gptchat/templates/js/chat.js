@@ -1016,7 +1016,7 @@ async function sendChat2Server(chatID) {
                     question: ${reqPrompt}
                     `
                 }];
-                let model = ChatModelTurbo35;  // rewrite chat model
+                let model = ChatModelTurbo351106;  // rewrite chat model
                 if (IsChatModelAllowed(ChatModelTurbo35_16K) && !(await OpenaiToken()).startsWith("FREETIER-")) {
                     model = ChatModelTurbo35_16K;
                 }
@@ -1652,7 +1652,7 @@ function newSessionConfig() {
         "frequency_penalty": 0,
         "n_contexts": 3,
         "system_prompt": "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
-        "selected_model": ChatModelTurbo35,
+        "selected_model": ChatModelTurbo351106,
     };
 }
 

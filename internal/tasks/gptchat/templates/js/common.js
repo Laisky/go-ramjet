@@ -3,7 +3,8 @@
 const OpenaiTokenTypeProxy = "proxy",
     OpenaiTokenTypeDirect = "direct";
 
-const ChatModelTurbo35 = "gpt-3.5-turbo",
+const ChatModelTurbo351106 = "gpt-3.5-turbo-1106",
+    // ChatModelTurbo35 = "gpt-3.5-turbo",
     // ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
     // ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
     // ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
@@ -28,7 +29,8 @@ const ChatModelTurbo35 = "gpt-3.5-turbo",
 // casual chat models
 
 const ChatModels = [
-    ChatModelTurbo35,
+    // ChatModelTurbo35,
+    ChatModelTurbo351106,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
     ChatModelGPT4Vision,
@@ -57,7 +59,8 @@ const ChatModels = [
         CompletionModelDavinci3,
     ],
     FreeModels = [
-        ChatModelTurbo35,
+        // ChatModelTurbo35,
+        ChatModelTurbo351106,
         ChatModelGeminiPro,
         ChatModelGeminiProVision,
         QAModelBasebit,
@@ -196,7 +199,7 @@ var OpenaiSelectedModel = async () => {
     let sid = activeSessionID(),
         skey = `${KvKeyPrefixSessionConfig}${sid}`,
         sconfig = await KvGet(skey);
-    return sconfig["selected_model"] || ChatModelTurbo35;
+    return sconfig["selected_model"] || ChatModelTurbo351106;
 }
 
 var OpenaiMaxTokens = async () => {
@@ -423,13 +426,16 @@ async function setupHeader() {
         } else {
             respData.allowed_models.push(QAModelCustom, QAModelShared);
         }
+        respData.allowed_models = respData.allowed_models.filter((model) => {
+            return AllModels.includes(model);
+        });
 
         respData.allowed_models.sort();
         SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models);
         allowedModels = respData.allowed_models;
 
         if (!respData.allowed_models.includes(selectedModel)) {
-            selectedModel = respData.allowed_models[0];
+            selectedModel = ChatModelTurbo351106;
 
             let sid = activeSessionID(),
                 skey = `${KvKeyPrefixSessionConfig}${sid}`,

@@ -26,7 +26,7 @@ const (
 const (
 	// defaultMaxTokens   = 2000
 	defaultMaxMessages = 7
-	defaultChatModel   = "gpt-3.5-turbo"
+	defaultChatModel   = "gpt-3.5-turbo-1106"
 )
 
 // ChatModel return chat model

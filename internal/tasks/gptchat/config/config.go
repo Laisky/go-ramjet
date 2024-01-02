@@ -308,7 +308,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		ratelimiter   = expensiveModelRateLimiter
 	)
 	switch model {
-	case "gpt-3.5-turbo", "img-to-img", "sdxl-turbo", "gemini-pro", "gemini-pro-vision":
+	case "gpt-3.5-turbo-1106", "img-to-img", "sdxl-turbo", "gemini-pro", "gemini-pro-vision":
 		// bypass cheap model
 	case "dall-e-3":
 		if c.NoLimitImageModels {
@@ -337,7 +337,7 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
 		return errors.Errorf("This model(%q) restricts usage for free users. "+
 			"Please wait for %d seconds before trying again, "+
-			"or consider using the free gpt-3.5-turbo.",
+			"or consider using the free gpt-3.5-turbo-1106.",
 			model, (ratelimitCost - ratelimiter.Len()))
 	}
 

@@ -325,6 +325,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4-32k-0613",
 			"gpt-3.5-turbo",
 			"gpt-3.5-turbo-16k",
+			"gpt-3.5-turbo-1106",
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-16k-0613",
 			"gemini-pro":
