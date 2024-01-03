@@ -24,9 +24,7 @@ const (
 )
 
 const (
-	// defaultMaxTokens   = 2000
-	defaultMaxMessages = 7
-	defaultChatModel   = "gpt-3.5-turbo-1106"
+	defaultChatModel = "gpt-3.5-turbo-1106"
 )
 
 // ChatModel return chat model
@@ -37,21 +35,6 @@ func ChatModel() string {
 	}
 
 	return defaultChatModel
-}
-
-// MaxTokens return max tokens
-func MaxTokens() int {
-	return gconfig.Shared.GetInt("openai.max_tokens")
-}
-
-// MaxMessages return max messages
-func MaxMessages() int {
-	v := gconfig.Shared.GetInt("openai.max_messages")
-	if v != 0 {
-		return v
-	}
-
-	return defaultMaxMessages
 }
 
 // FrontendReq request from frontend

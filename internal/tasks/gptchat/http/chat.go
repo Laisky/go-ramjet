@@ -423,7 +423,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 }
 
 func (r *FrontendReq) fillDefault() {
-	r.MaxTokens = gutils.OptionalVal(&r.MaxTokens, uint(MaxTokens()))
+	r.MaxTokens = gutils.OptionalVal(&r.MaxTokens, 500)
 	r.Temperature = gutils.OptionalVal(&r.Temperature, 1)
 	r.TopP = gutils.OptionalVal(&r.TopP, 1)
 	r.N = gutils.OptionalVal(&r.N, 1)
@@ -692,12 +692,6 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		return nil, errors.New("no messages")
 	}
 
-	trimMessages(userReq)
-	maxTokens := uint(MaxTokens())
-	if maxTokens != 0 && userReq.MaxTokens > maxTokens {
-		return nil, errors.Errorf("max_tokens should less than %d", maxTokens)
-	}
-
 	stopch := make(chan struct{})
 	defer close(stopch)
 	go func() {
@@ -725,23 +719,4 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 	}
 
 	return userReq, err
-}
-
-func trimMessages(data *FrontendReq) {
-	maxMessages := MaxMessages()
-	maxTokens := MaxTokens()
-
-	if maxMessages != 0 && len(data.Messages) > maxMessages {
-		data.Messages = data.Messages[len(data.Messages)-maxMessages:]
-	}
-
-	if maxTokens != 0 {
-		for i := range data.Messages {
-			cnt := data.Messages[i].Content
-			if len(cnt) > maxTokens {
-				cnt = cnt[len(cnt)-maxTokens:]
-				data.Messages[i].Content = cnt
-			}
-		}
-	}
 }

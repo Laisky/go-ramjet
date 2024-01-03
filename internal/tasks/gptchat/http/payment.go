@@ -20,9 +20,9 @@ func PaymentStaticHandler(c *gin.Context) {
 	case "index.html":
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(ipages.Payment))
 	case "css":
-		c.Data(http.StatusOK, "text/css; charset=utf-8", []byte(icss.Payment))
+		c.Data(http.StatusOK, "text/css; charset=utf-8", icss.Payment)
 	case "js":
-		c.Data(http.StatusOK, "application/javascript; charset=utf-8", []byte(ijs.Payment))
+		c.Data(http.StatusOK, "application/javascript; charset=utf-8", ijs.Payment)
 	default:
 		AbortErr(c, errors.New("only support html/css/js"))
 	}

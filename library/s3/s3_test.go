@@ -40,7 +40,7 @@ func TestXxx(t *testing.T) {
 
 	t.Run("list objects", func(t *testing.T) {
 		output, err := cli.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-			MaxKeys: 10000,
+			MaxKeys: aws.Int32(10000),
 			Bucket:  aws.String(testS3Bucket),
 		})
 		require.NoError(t, err)
