@@ -443,7 +443,7 @@ const (
 
 var (
 	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
-	urlRegexp       = regexp.MustCompile(`https?://[^\s]+`)
+	urlRegexp       = regexp.MustCompile(`https://[^\s]+`)
 )
 
 // fetchURLContent fetch url content
