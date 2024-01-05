@@ -37,6 +37,13 @@ func ChatModel() string {
 	return defaultChatModel
 }
 
+type LLMConservationReq struct {
+	Model     string               `json:"model" binding:"required,min=1"`
+	MaxTokens uint                 `json:"max_tokens" binding:"required,min=1"`
+	Messages  []FrontendReqMessage `json:"messages" binding:"required,min=1"`
+	Response  string               `json:"response" binding:"required,min=1"`
+}
+
 // FrontendReq request from frontend
 type FrontendReq struct {
 	Model            string               `json:"model"`

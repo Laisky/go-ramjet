@@ -27,6 +27,7 @@ func bindHTTP() {
 		ctx.Header("Cache-Control", "max-age=86400")
 		ctx.Data(http.StatusOK, "image/png", istatic.Favicon)
 	})
+	grp.POST("/audit/conservation", ihttp.SaveLlmConservationHandler)
 	grp.Any("/api", ihttp.ChatHandler)
 	grp.POST("/images/generations", ihttp.DrawByDalleHandler)
 	grp.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)

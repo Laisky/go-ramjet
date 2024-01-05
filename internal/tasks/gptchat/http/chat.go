@@ -192,6 +192,21 @@ func req2CacheKey(req *FrontendReq) (string, error) {
 	return hex.EncodeToString(hashed[:]), nil
 }
 
+// SaveLlmConservationHandler save llm conservation
+func SaveLlmConservationHandler(ctx *gin.Context) {
+	req := new(LLMConservationReq)
+	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
+		return
+	}
+
+	freq := new(FrontendReq)
+	if err := copier.Copy(freq, req); AbortErr(ctx, err) {
+		return
+	}
+
+	go saveLLMConservation(freq, req.Response)
+}
+
 func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger := log.Logger.Named("save_llm")
 
