@@ -14,6 +14,7 @@ import (
 	"math"
 	"net/http"
 	urllib "net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -152,12 +153,17 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		if !isStream ||
 			len(lastResp.Choices) == 0 ||
 			lastResp.Choices[0].FinishReason != "" {
-			go saveLLMConservation(frontReq, respContent)
+			if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
+				go saveLLMConservation(frontReq, respContent)
+			}
 			return
 		}
 	}
 
-	go saveLLMConservation(frontReq, respContent)
+	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
+		go saveLLMConservation(frontReq, respContent)
+	}
+
 	// scanner quit unexpected, write last line
 	if lastResp != nil &&
 		len(lastResp.Choices) != 0 &&
