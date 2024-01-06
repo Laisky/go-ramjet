@@ -1270,7 +1270,7 @@ function setupChatInput() {
                 evt.stopPropagation();
                 if (evt.key != 'Enter'
                     || isComposition
-                    || (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey))
+                    || (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey))
                     || !isAllowChatPrompInput()) {
                     return;
                 }
