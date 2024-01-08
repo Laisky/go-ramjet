@@ -102,9 +102,9 @@ async function listenSessionSwitch(evt) {
     chatContainer.querySelector(".conservations").innerHTML = "";
     (await sessionChatHistory(sessionID)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
+        renderAfterAIResponse(item.chatID);
     });
 
-    Prism.highlightAll();
     updateConfigFromStorage();
     EnableTooltipsEverywhere();
 }
@@ -328,10 +328,9 @@ async function setupSessionManager() {
         // restore conservation history
         (await activeSessionChatHistory()).forEach((item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
+            renderAfterAIResponse(item.chatID);
         });
 
-        Prism.highlightAll();
-        EnableTooltipsEverywhere();
     }
 
     // add widget to scroll bottom
@@ -427,10 +426,10 @@ async function removeChatInStorage(chatid) {
 /** append or update chat history by chatid and role
     * @param {string} chatid - chat id
     * @param {string} role - user or assistant
-    * @param {string} content - chat content
+    * @param {string} renderedContent - chat content
     * @param {string} attachHTML - chat content's attach html
 */
-async function appendChats2Storage(role, chatid, content, attachHTML) {
+async function appendChats2Storage(role, chatid, renderedContent, attachHTML, rawContent) {
     if (!chatid) {
         throw "chatid is required";
     }
@@ -443,8 +442,9 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
     session.forEach((item, idx) => {
         if (item.chatID == chatid && item.role == role) {
             found = true;
-            item.content = content;
+            item.content = renderedContent;
             item.attachHTML = attachHTML;
+            item.rawContent = rawContent;
         }
     });
 
@@ -457,8 +457,9 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
                     session.splice(idx + 1, 0, {
                         role: RoleAI,
                         chatID: chatid,
-                        content: content,
+                        content: renderedContent,
                         attachHTML: attachHTML,
+                        rawContent: rawContent,
                     });
                 }
             }
@@ -470,8 +471,9 @@ async function appendChats2Storage(role, chatid, content, attachHTML) {
         session.push({
             role: role,
             chatID: chatid,
-            content: content,
+            content: renderedContent,
             attachHTML: attachHTML,
+            rawContent: rawContent,
         });
     }
 
@@ -1080,7 +1082,8 @@ async function sendChat2Server(chatID) {
         return;
     }
 
-    let rawHTMLResp = "";
+    // origin response from ai
+    let aiRawResp = "";
     currentAIRespSSE.addEventListener("message", async (evt) => {
         evt.stopPropagation();
 
@@ -1108,7 +1111,7 @@ async function sendChat2Server(chatID) {
 
                     if (respContent) {
                         currentAIRespEle.innerHTML = respContent;
-                        rawHTMLResp += respContent;
+                        aiRawResp += respContent;
                     } else {
                         currentAIRespEle.innerHTML = "";
                     }
@@ -1116,8 +1119,8 @@ async function sendChat2Server(chatID) {
                     break
                 case "writing":
                     if (respContent) {
-                        rawHTMLResp += respContent;
-                        currentAIRespEle.innerHTML = Markdown2HTML(rawHTMLResp);
+                        aiRawResp += respContent;
+                        currentAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
                     }
 
                     scrollToChat(currentAIRespEle);
@@ -1133,9 +1136,10 @@ async function sendChat2Server(chatID) {
             currentAIRespSSE.close();
             currentAIRespSSE = null;
 
-            let markdownConverter = new showdown.Converter();
-            currentAIRespEle.innerHTML = Markdown2HTML(rawHTMLResp);
+            currentAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
             currentAIRespEle.innerHTML += responseExtras;
+            currentAIRespEle
+                .insertAdjacentHTML("afterbegin", `<i class="bi bi-copy" data-content="${encodeURIComponent(aiRawResp)}" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>`);
 
             // setup prism
             {
@@ -1147,13 +1151,12 @@ async function sendChat2Server(chatID) {
 
             // should save html before prism formatted,
             // because prism.js do not support formatted html.
-            const rawResp = currentAIRespEle.innerHTML;
+            const markdownContent = currentAIRespEle.innerHTML;
 
-            Prism.highlightAll();
-            EnableTooltipsEverywhere();
+            renderAfterAIResponse(chatID);
 
             scrollToChat(currentAIRespEle);
-            await appendChats2Storage(RoleAI, chatID, rawResp);
+            await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp);
             unlockChatInput();
         }
     });
@@ -1163,6 +1166,32 @@ async function sendChat2Server(chatID) {
         abortAIResp(err);
     };
     currentAIRespSSE.stream();
+}
+
+/** append chat to chat conservation window
+ *
+ * @param {string} chatID - chat id
+ */
+function renderAfterAIResponse(chatID) {
+    // Prism.highlightAll();
+    let chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`);
+
+    if (!chatEle) {
+        return;
+    }
+
+    Prism.highlightAllUnder(chatEle);
+    EnableTooltipsEverywhere();
+
+    if (chatEle.querySelector(`.bi.bi-copy`)) {  // not every ai response has copy button
+        chatEle.querySelector(`.bi.bi-copy`)
+            .addEventListener("click", (evt) => {
+                evt.stopPropagation();
+                let content = decodeURIComponent(evtTarget(evt).dataset.content);
+                // copy to clipboard
+                navigator.clipboard.writeText(content);
+            });
+    }
 }
 
 function combineRefs(arr) {
@@ -1445,8 +1474,9 @@ async function updateChatVisionSelectedFileStore() {
  * @param {string} text - chat text
  * @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
  * @param {string} attachHTML - html to attach to chat
+ * @param {string} rawAiResp - raw ai response
  */
-async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
+async function append2Chats(chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
     if (!chatID) {
         throw "chatID is required";
     }
@@ -1507,10 +1537,19 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
                 </div>`
             break
         case RoleAI:
+            // let insertText;
+            // if (rawAiResp) {
+            //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
+            // }else {
+            //     insertText = text
+            // }
+
             chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robot_icon}</div>
-                        <div class="col text-start ai-response" data-status="waiting">${text}</div>
+                        <div class="col text-start ai-response" data-status="waiting">
+                            ${text}
+                        </div>
                 </div>`
             if (!isHistory) {
                 chatOp = "replace";
@@ -1534,7 +1573,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML) {
             outerHTML = chatEleHtml;
     }
 
-    let chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID}`)
+    let chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID}`);
     if (!isHistory && role == RoleHuman) {
         scrollToChat(chatEle);
     }

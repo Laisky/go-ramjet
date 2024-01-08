@@ -713,14 +713,18 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		return nil, errors.New("no messages")
 	}
 
-	stopch := make(chan struct{})
-	defer close(stopch)
+	heartCtx, heartCancel := context.WithCancel(gctx.Request.Context())
+	var allCleaned = make(chan struct{})
+	defer func() {
+		heartCancel()
+		<-allCleaned
+	}()
+
 	go func() {
+		defer close(allCleaned)
 		for {
 			select {
-			case <-stopch:
-				return
-			case <-gctx.Request.Context().Done():
+			case <-heartCtx.Done():
 				return
 			default:
 			}
