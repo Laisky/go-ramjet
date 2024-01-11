@@ -1019,9 +1019,9 @@ async function sendChat2Server(chatID) {
                     `
                 }];
                 let model = ChatModelTurbo35_1106;  // rewrite chat model
-                if (IsChatModelAllowed(ChatModelTurbo35_1106) && !(await OpenaiToken()).startsWith("FREETIER-")) {
-                    model = ChatModelTurbo35_1106;
-                }
+                // if (IsChatModelAllowed(ChatModelTurbo35_1106) && !(await OpenaiToken()).startsWith("FREETIER-")) {
+                //     model = ChatModelTurbo35_1106;
+                // }
 
                 currentAIRespSSE = new SSE(await OpenaiAPI(), {
                     headers: {

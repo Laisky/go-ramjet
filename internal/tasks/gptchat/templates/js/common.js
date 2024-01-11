@@ -434,8 +434,18 @@ async function setupHeader() {
         SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models);
         allowedModels = respData.allowed_models;
 
-        if (!respData.allowed_models.includes(selectedModel)) {
-            selectedModel = ChatModelTurbo35_1106;
+        if (!allowedModels.includes(selectedModel)) {
+            selectedModel = "";
+            AllModels.forEach((model) => {
+                if (selectedModel != "" || !allowedModels.includes(model)) {
+                    return;
+                }
+
+                if (model.startsWith("gpt-") || model.startsWith("gemini-")) {
+                    selectedModel = model;
+                    return;
+                }
+            });
 
             let sid = activeSessionID(),
                 skey = `${KvKeyPrefixSessionConfig}${sid}`,
