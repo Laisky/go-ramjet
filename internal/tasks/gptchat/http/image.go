@@ -470,11 +470,15 @@ func drawImageByAzureDalle(ctx context.Context,
 }
 
 func drawImageByTxtObjkeyPrefix(taskid string) string {
-	return fmt.Sprintf("create-images/%s/%s/%s", taskid[:2], taskid[2:4], taskid)
+	year := time.Now().Format("2006")
+	month := time.Now().Format("01")
+	return fmt.Sprintf("create-images/%s/%s/%s", year, month, taskid)
 }
 
 func drawImageByImageObjkeyPrefix(taskid string) string {
-	return fmt.Sprintf("image-by-image/%s/%s/%s", taskid[:2], taskid[2:4], taskid)
+	year := time.Now().Format("2006")
+	month := time.Now().Format("01")
+	return fmt.Sprintf("image-by-image/%s/%s/%s", year, month, taskid)
 }
 
 func uploadImage2Minio(ctx context.Context, objkeyPrefix, prompt string, img_content []byte) (err error) {
