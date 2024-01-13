@@ -303,14 +303,29 @@ window.AppEntrypoint = async () => {
 };
 
 async function dataMigrate() {
-    // set openai token
-    {
-        let sconfig = await KvGet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`) || newSessionConfig();
+    // list all session configs
+    await Promise.all((await KvList()).map(async (key) => {
+        if (!key.startsWith(KvKeyPrefixSessionConfig)) {
+            return;
+        }
+
+        let sconfig = await KvGet(key);
+
+        // set default api_token
         if (!sconfig["api_token"] || sconfig["api_token"] == "DEFAULT_PROXY_TOKEN") {
             sconfig["api_token"] = "FREETIER-" + RandomString(32);
-            await KvSet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`, sconfig);
         }
-    }
+
+        // set default chat controller
+        if (!sconfig["chat_switch"]) {
+            sconfig["chat_switch"] = {
+                "disable_https_crawler": false
+            }
+        }
+
+        console.debug("migrate session config: ", key, sconfig);
+        await KvSet(key, sconfig);
+    }));
 
     // update legacy chat history, add chatID to each chat
     {

@@ -220,6 +220,23 @@
                         height: 80px;
                     }
                 }
+
+                .input-group.chat-controller {
+                    padding-left: 5px;
+
+                    i.bi {
+                        color: #084196;
+                    }
+
+                    .form-check-reverse {
+                        margin-bottom: 0px;
+
+                        .form-check-input {
+                            margin-right: 0px;
+                            margin-left: 5px;
+                        }
+                    }
+                }
             }
         }
     }

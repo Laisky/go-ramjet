@@ -177,6 +177,19 @@
 #chatContainer .chatManager .card .card-footer .input-group textarea {
   height: 80px;
 }
+#chatContainer .chatManager .card .card-footer .input-group.chat-controller {
+  padding-left: 5px;
+}
+#chatContainer .chatManager .card .card-footer .input-group.chat-controller i.bi {
+  color: #084196;
+}
+#chatContainer .chatManager .card .card-footer .input-group.chat-controller .form-check-reverse {
+  margin-bottom: 0px;
+}
+#chatContainer .chatManager .card .card-footer .input-group.chat-controller .form-check-reverse .form-check-input {
+  margin-right: 0px;
+  margin-left: 5px;
+}
 #chatContainer .code-toolbar {
   font-size: small;
 }

@@ -55,6 +55,12 @@ type FrontendReq struct {
 	Temperature      float64              `json:"temperature"`
 	TopP             float64              `json:"top_p"`
 	N                int                  `json:"n"`
+
+	// LaiskyExtra some special config for laisky
+	LaiskyExtra struct {
+		// DisableHttpsCrawler disable https crawler
+		DisableHttpsCrawler bool `json:"disable_https_crawler"`
+	} `json:"laisky_extra"`
 }
 
 // FrontendReqMessage request message from frontend

@@ -75,7 +75,11 @@
                 }
             }
         };
-        // get data from indexeddb
+        /** get data from indexeddb
+         *
+         * @param {*} key
+         * @returns null if not found
+         */
         window.KvGet = async (key) => {
             try {
                 let doc = await kv.get(key);

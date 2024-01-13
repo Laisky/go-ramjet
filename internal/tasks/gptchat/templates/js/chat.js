@@ -571,16 +571,25 @@ const httpsRegexp = /\bhttps:\/\/\S+/;
  * @param {string} reqPrompt - request prompt
  * @returns {string} modified request prompt
  */
-function pinNewMaterial(reqPrompt) {
-    let pinnedUrls = getPinnedMaterials();
-    let urls = reqPrompt.match(httpsRegexp)
-    if (urls) {
-        urls.forEach((url) => {
-            if (!pinnedUrls.includes(url)) {
-                pinnedUrls.push(url);
-            }
-        });
+async function userPromptEnhence(reqPrompt) {
+    let pinnedUrls = getPinnedMaterials(),
+        sconfig = await getChatSessionConfig(),
+        urls = reqPrompt.match(httpsRegexp);
+
+    if (sconfig["chat_switch"]["disable_https_crawler"]) {
+        console.debug("https create new material is disabled, skip prompt enhance")
+        return;
     }
+
+    if (!urls || urls.length == 0) {
+        return reqPrompt;
+    }
+
+    urls.forEach((url) => {
+        if (!pinnedUrls.includes(url)) {
+            pinnedUrls.push(url);
+        }
+    });
 
     let urlEle = "";
     for (let url of pinnedUrls) {
@@ -588,6 +597,7 @@ function pinNewMaterial(reqPrompt) {
     }
 
     // save to storage
+    // FIXME save to session config
     SetLocalStorage(StorageKeyPinnedMaterials, urlEle)
     restorePinnedMaterials();
 
@@ -823,7 +833,7 @@ async function sendChat2Server(chatID) {
     }
 
     // extract and pin new material in chat
-    reqPrompt = pinNewMaterial(reqPrompt);
+    reqPrompt = await userPromptEnhence(reqPrompt);
 
     currentAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations #${chatID} .ai-response`);
@@ -840,11 +850,12 @@ async function sendChat2Server(chatID) {
     }
 
     // these extras will append to the tail of AI's response
-    let responseExtras = "";
+    let responseExtras = "",
+        sconfig = await getChatSessionConfig();
 
     if (IsChatModel(selectedModel)) {
         let messages,
-            nContexts = parseInt(await ChatNContexts());
+            nContexts = parseInt(sconfig["n_contexts"]);
 
         if (chatID) {  // reload current chat by latest context
             messages = await getLastNChatMessages(nContexts - 1, chatID);
@@ -890,40 +901,43 @@ async function sendChat2Server(chatID) {
         currentAIRespSSE = new SSE(await OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + (await OpenaiToken()),
-                "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
-                "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
-                "X-Laisky-Api-Base": await OpenaiApiBase(),
+                "Authorization": "Bearer " + sconfig["api_token"],
+                "X-Laisky-User-Id": await getSHA1(sconfig["api_token"]),
+                "X-Laisky-Authorization-Type": sconfig["token_type"],
+                "X-Laisky-Api-Base": sconfig["api_base"],
             },
             method: "POST",
             payload: JSON.stringify({
                 model: selectedModel,
                 stream: true,
-                max_tokens: parseInt(await OpenaiMaxTokens()),
-                temperature: parseFloat(await OpenaiTemperature()),
-                presence_penalty: parseFloat(await OpenaiPresencePenalty()),
-                frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
+                max_tokens: parseInt(sconfig["max_tokens"]),
+                temperature: parseFloat(sconfig["temperature"]),
+                presence_penalty: parseFloat(sconfig["presence_penalty"]),
+                frequency_penalty: parseFloat(sconfig["frequency_penalty"]),
                 messages: messages,
-                stop: ["\n\n"]
+                stop: ["\n\n"],
+                "laisky_extra": {
+                    "chat_switch": sconfig["chat_switch"],
+                }
             })
         });
     } else if (IsCompletionModel(selectedModel)) {
         currentAIRespSSE = new SSE(await OpenaiAPI(), {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": "Bearer " + (await OpenaiToken()),
-                "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
-                "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
-                "X-Laisky-Api-Base": await OpenaiApiBase(),
+                "Authorization": "Bearer " + (sconfig["api_token"]),
+                "X-Laisky-Authorization-Type": (sconfig["token_type"]),
+                "X-Laisky-User-Id": await getSHA1((sconfig["api_token"])),
+                "X-Laisky-Api-Base": sconfig["api_base"],
             },
             method: "POST",
             payload: JSON.stringify({
                 model: selectedModel,
                 stream: true,
-                max_tokens: parseInt(await OpenaiMaxTokens()),
-                temperature: parseFloat(await OpenaiTemperature()),
-                presence_penalty: parseFloat(await OpenaiPresencePenalty()),
-                frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
+                max_tokens: parseInt(sconfig["max_tokens"]),
+                temperature: parseFloat(sconfig["temperature"]),
+                presence_penalty: parseFloat(sconfig["presence_penalty"]),
+                frequency_penalty: parseFloat(sconfig["frequency_penalty"]),
                 prompt: reqPrompt,
                 stop: ["\n\n"]
             })
@@ -979,10 +993,10 @@ async function sendChat2Server(chatID) {
                 headers: {
                     "Connection": "keep-alive",
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer " + (await OpenaiToken()),
-                    "X-Laisky-User-Id": await getSHA1((await OpenaiToken())),
-                    "X-Laisky-Authorization-Type": (await OpenaiTokenType()),
-                    "X-Laisky-Api-Base": await OpenaiApiBase(),
+                    "Authorization": "Bearer " + sconfig["api_token"],
+                    "X-Laisky-User-Id": await getSHA1(sconfig["api_token"]),
+                    "X-Laisky-Authorization-Type": (sconfig["token_type"]),
+                    "X-Laisky-Api-Base": sconfig["api_base"],
                     "X-PDFCHAT-PASSWORD": GetLocalStorage(StorageKeyCustomDatasetPassword)
                 },
             });
@@ -1438,6 +1452,24 @@ function setupChatInput() {
         dropfileModalEle.addEventListener("drop", fileDragDropHandler);
         dropfileModalEle.addEventListener("dragleave", fileDragLeave);
     }
+
+    // bind chat switch
+    {
+        chatContainer.querySelector("#switchChatEnableHttpsCrawler").addEventListener("change", async (evt) => {
+            evt.stopPropagation();
+            let switchEle = evtTarget(evt);
+            let sconfig = await getChatSessionConfig();
+            sconfig["chat_switch"]["disable_https_crawler"] = !switchEle.checked;
+
+            // clear pinned https urls
+            if (!switchEle.checked) {
+                SetLocalStorage(StorageKeyPinnedMaterials, "")
+                restorePinnedMaterials();
+            }
+
+            await saveChatSessionConfig(sconfig);
+        });
+    }
 }
 
 // map[filename]fileContent_in_base64
@@ -1680,6 +1712,26 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
     }
 }
 
+var getChatSessionConfig = async () => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+
+    if (!sconfig) {
+        console.info(`create new session config for session ${sid}`);
+        sconfig = newSessionConfig();
+    }
+
+    return sconfig;
+}
+
+var saveChatSessionConfig = async (sconfig) => {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`;
+
+    await KvSet(skey, sconfig);
+}
+
 function newSessionConfig() {
     return {
         "api_token": "FREETIER-" + RandomString(32),
@@ -1692,30 +1744,39 @@ function newSessionConfig() {
         "n_contexts": 6,
         "system_prompt": "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
         "selected_model": ChatModelTurbo35_1106,
+        "chat_switch": {
+            "disable_https_crawler": false
+        }
     };
 }
 
 async function updateConfigFromStorage() {
     console.debug(`updateConfigFromStorage for session ${activeSessionID()}`);
 
+    const sconfig = await getChatSessionConfig();
+
     // update config
-    configContainer.querySelector(".input.api-token").value = await OpenaiToken();
-    configContainer.querySelector(".input.api-base").value = await OpenaiApiBase();
-    configContainer.querySelector(".input.contexts").value = await ChatNContexts();
-    configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = await ChatNContexts();
-    configContainer.querySelector(".input.max-token").value = await OpenaiMaxTokens();
-    configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = await OpenaiMaxTokens();
-    configContainer.querySelector(".input.temperature").value = await OpenaiTemperature();
-    configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = await OpenaiTemperature();
-    configContainer.querySelector(".input.presence_penalty").value = await OpenaiPresencePenalty();
-    configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = await OpenaiPresencePenalty();
-    configContainer.querySelector(".input.frequency_penalty").value = await OpenaiFrequencyPenalty();
-    configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = await OpenaiFrequencyPenalty();
-    configContainer.querySelector(".system-prompt .input").value = await OpenaiChatStaticContext();
+    configContainer.querySelector(".input.api-token").value = sconfig["api_token"];
+    configContainer.querySelector(".input.api-base").value = sconfig["api_base"];
+    configContainer.querySelector(".input.contexts").value = sconfig["n_contexts"];
+    configContainer.querySelector(".input-group.contexts .contexts-val").innerHTML = sconfig["n_contexts"];
+    configContainer.querySelector(".input.max-token").value = sconfig["max_tokens"];
+    configContainer.querySelector(".input-group.max-token .max-token-val").innerHTML = sconfig["max_tokens"];
+    configContainer.querySelector(".input.temperature").value = sconfig["temperature"];
+    configContainer.querySelector(".input-group.temperature .temperature-val").innerHTML = sconfig["temperature"];
+    configContainer.querySelector(".input.presence_penalty").value = sconfig["presence_penalty"];
+    configContainer.querySelector(".input-group.presence_penalty .presence_penalty-val").innerHTML = sconfig["presence_penalty"];
+    configContainer.querySelector(".input.frequency_penalty").value = sconfig["frequency_penalty"];
+    configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = sconfig["frequency_penalty"];
+    configContainer.querySelector(".system-prompt .input").value = sconfig["system_prompt"];
+
+    // update chat controller
+    chatContainer.querySelector("#switchChatEnableHttpsCrawler")
+        .checked = !sconfig["chat_switch"]["disable_https_crawler"];
 
     // update selected model
     // set active status for models
-    let selectedModel = await OpenaiSelectedModel();
+    let selectedModel = sconfig["selected_model"];
     document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
         .forEach((elem) => {
             elem.classList.remove("active");
@@ -2236,6 +2297,8 @@ function setupPrivateDataset() {
                     return;
                 }
 
+                let sconfig = await getChatSessionConfig();
+
                 // build post form
                 let form = new FormData();
                 form.append("file", pdfchatModalEle
@@ -2246,8 +2309,8 @@ function setupPrivateDataset() {
                     .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
                 let headers = new Headers();
-                headers.append("Authorization", `Bearer ${(await OpenaiToken())}`);
-                headers.append("X-Laisky-User-Id", await getSHA1((await OpenaiToken())));
+                headers.append("Authorization", `Bearer ${sconfig["api_token"]}`);
+                headers.append("X-Laisky-User-Id", await getSHA1(sconfig["api_token"]));
                 headers.append("X-Laisky-Api-Base", await OpenaiApiBase());
 
                 try {

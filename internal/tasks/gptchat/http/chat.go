@@ -739,7 +739,7 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		}
 	}()
 
-	if config.Config.RamjetURL != "" {
+	if config.Config.RamjetURL != "" && !userReq.LaiskyExtra.DisableHttpsCrawler {
 		userReq.embeddingUrlContent(gctx, user)
 	}
 
