@@ -51,9 +51,29 @@
             return `${year}${month}${day}${hours}${minutes}${seconds}`;
         };
 
+        // {key: [callback1, callback2]}
+        let kvListeners = {};
+
+        window.KvOp = Object.freeze({
+            SET: 1,
+            DEL: 2,
+        })
+
+        // callback: function(keyPrefix, op, oldVal, newVal)
+        window.KvAddListener = (keyPrefix, callback) => {
+            if (!kvListeners[keyPrefix]) {
+                kvListeners[keyPrefix] = [];
+            }
+
+            if (kvListeners[keyPrefix].indexOf(callback) == -1) {
+                kvListeners[keyPrefix].push(callback);
+            }
+        };
         // set data into indexeddb
         window.KvSet = async (key, val) => {
+            console.debug(`KvSet: ${key}`);
             const marshaledVal = JSON.stringify(val);
+            let oldVal = null;
             try {
                 await kv.put({
                     _id: key,
@@ -63,6 +83,7 @@
                 if (error.status === 409) {
                     // Fetch the current document
                     let doc = await kv.get(key);
+                    oldVal = JSON.parse(doc.val);
 
                     // Save the new document with the _rev of the current document
                     await kv.put({
@@ -74,6 +95,16 @@
                     throw error;
                 }
             }
+
+            // notify listeners
+            Object.keys(kvListeners).forEach((keyPrefix) => {
+                if (key.startsWith(keyPrefix)) {
+                    for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+                        let callback = kvListeners[keyPrefix][i];
+                        callback(key, KvOp.SET, oldVal, val);
+                    }
+                }
+            });
         };
         /** get data from indexeddb
          *
@@ -81,6 +112,7 @@
          * @returns null if not found
          */
         window.KvGet = async (key) => {
+            console.debug(`KvGet: ${key}`);
             try {
                 let doc = await kv.get(key);
                 return JSON.parse(doc.val);
@@ -95,19 +127,32 @@
         };
         // delete data from indexeddb
         window.KvDel = async (key) => {
+            console.debug(`KvDel: ${key}`);
+            let oldVal = null;
             try {
                 const doc = await kv.get(key);
+                oldVal = JSON.parse(doc.val);
                 await kv.remove(doc);
             } catch (error) {
-                if (error.status === 404) {
-                    // Ignore not found error
-                    return;
+                // ignore not found error
+                if (error.status != 404) {
+                    throw error;
                 }
-                throw error;
             }
+
+            // notify listeners
+            Object.keys(kvListeners).forEach((keyPrefix) => {
+                if (key.startsWith(keyPrefix)) {
+                    for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+                        let callback = kvListeners[keyPrefix][i];
+                        callback(key, KvOp.DEL, oldVal, null);
+                    }
+                }
+            });
         };
         // list all keys from indexeddb
         window.KvList = async () => {
+            console.debug(`KvList`);
             let docs = await kv.allDocs({ include_docs: true });
             let keys = [];
             for (let i = 0; i < docs.rows.length; i++) {
@@ -117,10 +162,20 @@
         };
         // clear all data from indexeddb
         window.KvClear = async () => {
+            console.debug(`KvClear`);
             await kv.destroy();
             kv = new PouchDB("mydatabase");
-        };
 
+            // notify listeners
+            Object.keys(kvListeners).forEach((keyPrefix) => {
+                if (key.startsWith(keyPrefix)) {
+                    for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+                        let callback = kvListeners[keyPrefix][i];
+                        callback(key, KvOp.DEL, null, null);
+                    }
+                }
+            });
+        };
 
         window.SetLocalStorage = (key, val) => {
             localStorage.setItem(key, JSON.stringify(val));

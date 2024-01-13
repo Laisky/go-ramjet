@@ -474,8 +474,8 @@ async function setupHeader() {
         }
 
         // add hint to input text
-        chatPromptInputEle.attributes
-            .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+        // chatPromptInputEle.attributes
+        //     .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
 
         let unsupportedModels = [];
         respData.allowed_models.forEach((model) => {

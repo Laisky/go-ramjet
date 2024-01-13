@@ -14,7 +14,7 @@ var chatContainer = document.getElementById("chatContainer"),
 async function setupChatJs() {
     await setupSessionManager();
     await setupConfig();
-    setupChatInput();
+    await setupChatInput();
     setupPromptManager();
     setupPrivateDataset();
     setInterval(fetchImageDrawingResultBackground, 3000);
@@ -1292,7 +1292,9 @@ function abortAIResp(err) {
 }
 
 
-function setupChatInput() {
+async function setupChatInput() {
+    let sconfig = await getChatSessionConfig();
+
     // bind input press enter
     {
         let isComposition = false;
@@ -1321,6 +1323,23 @@ function setupChatInput() {
                 await sendChat2Server();
                 chatPromptInputEle.value = "";
             })
+    }
+
+    // change hint when models change
+    {
+        window.KvAddListener(KvKeyPrefixSessionConfig, (key, op, oldVal, newVal) => {
+            if (op != KvOp.Set) {
+                return;
+            }
+
+            let expectedKey = `KvKeyPrefixSessionConfig${activeSessionID()}`
+            if (key != expectedKey) {
+                return;
+            }
+
+            let sconfig = newVal;
+            chatPromptInputEle.attributes.placeholder.value = `[${sconfig["selected_model"]}] CTRL+Enter to send`;
+        })
     }
 
     // bind input button
@@ -1750,6 +1769,9 @@ function newSessionConfig() {
     };
 }
 
+/**
+ * initialize every chat component by active session config
+ */
 async function updateConfigFromSessionConfig() {
     console.debug(`updateConfigFromSessionConfig for session ${activeSessionID()}`);
 
@@ -1769,6 +1791,9 @@ async function updateConfigFromSessionConfig() {
     configContainer.querySelector(".input.frequency_penalty").value = sconfig["frequency_penalty"];
     configContainer.querySelector(".input-group.frequency_penalty .frequency_penalty-val").innerHTML = sconfig["frequency_penalty"];
     configContainer.querySelector(".system-prompt .input").value = sconfig["system_prompt"];
+
+    // update chat input hint
+    chatPromptInputEle.attributes.placeholder.value = `[${sconfig["selected_model"]}] CTRL+Enter to send`;
 
     // update chat controller
     chatContainer.querySelector("#switchChatEnableHttpsCrawler")
