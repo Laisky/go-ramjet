@@ -105,7 +105,7 @@ async function listenSessionSwitch(evt) {
         renderAfterAIResponse(item.chatID);
     });
 
-    updateConfigFromStorage();
+    updateConfigFromSessionConfig();
     EnableTooltipsEverywhere();
 }
 
@@ -390,7 +390,7 @@ async function setupSessionManager() {
                     .addEventListener("click", listenSessionSwitch);
 
                 bindSessionDeleteBtn();
-                updateConfigFromStorage();
+                updateConfigFromSessionConfig();
             });
     }
 
@@ -578,7 +578,7 @@ async function userPromptEnhence(reqPrompt) {
 
     if (sconfig["chat_switch"]["disable_https_crawler"]) {
         console.debug("https create new material is disabled, skip prompt enhance")
-        return;
+        return reqPrompt;
     }
 
     if (!urls || urls.length == 0) {
@@ -1750,8 +1750,8 @@ function newSessionConfig() {
     };
 }
 
-async function updateConfigFromStorage() {
-    console.debug(`updateConfigFromStorage for session ${activeSessionID()}`);
+async function updateConfigFromSessionConfig() {
+    console.debug(`updateConfigFromSessionConfig for session ${activeSessionID()}`);
 
     const sconfig = await getChatSessionConfig();
 
@@ -1798,10 +1798,11 @@ async function updateConfigFromStorage() {
 
 async function setupConfig() {
     let tokenTypeParent = configContainer.
-        querySelector(".input-group.token-type");
+        querySelector(".input-group.token-type"),
+        sconfig = await getChatSessionConfig();
 
 
-    updateConfigFromStorage()
+    updateConfigFromSessionConfig()
 
     // set token type
     // {

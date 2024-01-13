@@ -315,6 +315,10 @@ async function dataMigrate() {
         if (!sconfig["api_token"] || sconfig["api_token"] == "DEFAULT_PROXY_TOKEN") {
             sconfig["api_token"] = "FREETIER-" + RandomString(32);
         }
+        // set default api_base
+        if (!sconfig["api_base"]) {
+            sconfig["api_base"] = "https://api.openai.com";
+        }
 
         // set default chat controller
         if (!sconfig["chat_switch"]) {
