@@ -113,28 +113,6 @@ var HideSpinner = () => {
     document.getElementById("spinner").toggleAttribute("hidden", true);
 };
 
-
-var OpenaiAPI = async () => {
-    switch (await OpenaiTokenType()) {
-        case OpenaiTokenTypeProxy:
-            return data.openai.proxy;
-        case OpenaiTokenTypeDirect:
-            return data.openai.direct;
-    }
-};
-
-var OpenaiUserIdentify = async () => {
-    t = (await OpenaiToken());
-    return t;
-};
-
-var OpenaiTokenType = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["token_type"];
-};
-
 /**
  * Generates a random string of the specified length.
  * @param {number} length - The length of the string to generate.
@@ -294,7 +272,6 @@ var ConfirmModal = (title, callback) => {
 
 window.AppEntrypoint = async () => {
     await dataMigrate();
-    (await OpenaiToken());
     await setupHeader();
     setupConfirmModal();
     setupSingleInputModal();
@@ -303,6 +280,45 @@ window.AppEntrypoint = async () => {
 };
 
 async function dataMigrate() {
+    let sid = activeSessionID(),
+        skey = `${KvKeyPrefixSessionConfig}${sid}`,
+        sconfig = await KvGet(skey);
+
+    // move config from localstorage to session config
+    {
+
+        if (!sconfig) {
+            sconfig = newSessionConfig();
+
+            sconfig["api_token"] = GetLocalStorage("config_api_token_value") || sconfig["api_token"];
+            sconfig["token_type"] = GetLocalStorage("config_api_token_type") || sconfig["token_type"];
+            sconfig["max_tokens"] = GetLocalStorage("config_api_max_tokens") || sconfig["max_tokens"];
+            sconfig["temperature"] = GetLocalStorage("config_api_temperature") || sconfig["temperature"];
+            sconfig["presence_penalty"] = GetLocalStorage("config_api_presence_penalty") || sconfig["presence_penalty"];
+            sconfig["frequency_penalty"] = GetLocalStorage("config_api_frequency_penalty") || sconfig["frequency_penalty"];
+            sconfig["n_contexts"] = GetLocalStorage("config_api_n_contexts") || sconfig["n_contexts"];
+            sconfig["system_prompt"] = GetLocalStorage("config_api_static_context") || sconfig["system_prompt"];
+            sconfig["selected_model"] = GetLocalStorage("config_chat_model") || sconfig["selected_model"];
+
+            await KvSet(skey, sconfig);
+        }
+    }
+
+
+    // set api token from url params
+    {
+        let apikey = new URLSearchParams(location.search).get("apikey");
+
+        if (apikey) {
+            // remove apikey from url params
+            let url = new URL(location.href);
+            url.searchParams.delete("apikey");
+            window.history.pushState({}, document.title, url);
+            sconfig["api_token"] = apikey;
+            await KvSet(skey, sconfig);
+        }
+    }
+
     // list all session configs
     await Promise.all((await KvList()).map(async (key) => {
         if (!key.startsWith(KvKeyPrefixSessionConfig)) {
@@ -345,28 +361,6 @@ async function dataMigrate() {
         }));
     }
 
-    // move config from localstorage to session config
-    {
-        let sid = activeSessionID(),
-            skey = `${KvKeyPrefixSessionConfig}${sid}`,
-            sconfig = await KvGet(skey);
-
-        if (!sconfig) {
-            sconfig = newSessionConfig();
-
-            sconfig["api_token"] = GetLocalStorage("config_api_token_value") || sconfig["api_token"];
-            sconfig["token_type"] = GetLocalStorage("config_api_token_type") || sconfig["token_type"];
-            sconfig["max_tokens"] = GetLocalStorage("config_api_max_tokens") || sconfig["max_tokens"];
-            sconfig["temperature"] = GetLocalStorage("config_api_temperature") || sconfig["temperature"];
-            sconfig["presence_penalty"] = GetLocalStorage("config_api_presence_penalty") || sconfig["presence_penalty"];
-            sconfig["frequency_penalty"] = GetLocalStorage("config_api_frequency_penalty") || sconfig["frequency_penalty"];
-            sconfig["n_contexts"] = GetLocalStorage("config_api_n_contexts") || sconfig["n_contexts"];
-            sconfig["system_prompt"] = GetLocalStorage("config_api_static_context") || sconfig["system_prompt"];
-            sconfig["selected_model"] = GetLocalStorage("config_chat_model") || sconfig["selected_model"];
-
-            await KvSet(skey, sconfig);
-        }
-    }
 }
 
 var singleInputCallback, singleInputModal;
@@ -417,7 +411,8 @@ function setupConfirmModal() {
  */
 async function setupHeader() {
     let headerBarEle = document.getElementById("headerbar"),
-        allowedModels = [];
+        allowedModels = [],
+        sconfig = await getChatSessionConfig();
 
     // setup chat models
     {
@@ -426,7 +421,7 @@ async function setupHeader() {
 
         // get users' models
         let headers = new Headers();
-        headers.append("Authorization", "Bearer " + (await OpenaiToken()));
+        headers.append("Authorization", "Bearer " + sconfig["api_token"]);
         const response = await fetch("/user/me", {
             method: "GET",
             cache: "no-cache",
