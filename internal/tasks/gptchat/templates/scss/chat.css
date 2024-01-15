@@ -165,7 +165,7 @@
 }
 #chatContainer .chatManager .card .card-footer .scroll-down {
   position: fixed;
-  bottom: 85px;
+  bottom: 101px;
   right: 15px;
   z-index: 1000;
   font-size: larger;

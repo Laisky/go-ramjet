@@ -10,7 +10,6 @@ const chatPromptInputEle = chatContainer.querySelector('.input.prompt')
 const chatPromptInputBtn = chatContainer.querySelector('.btn.send')
 let currentAIRespSSE; let currentAIRespEle
 
-
 // eslint-disable-next-line no-unused-vars
 async function setupChatJs () {
     await setupSessionManager()
@@ -654,7 +653,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
             'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-            'X-Laisky-Api-Base': await OpenaiApiBase()
+            'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -708,7 +707,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
             'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-            'X-Laisky-Api-Base': await OpenaiApiBase()
+            'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -763,7 +762,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
             'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-            'X-Laisky-Api-Base': await OpenaiApiBase()
+            'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
             model: selectedModel,
@@ -1022,9 +1021,9 @@ async function sendChat2Server (chatID) {
                     question: ${reqPrompt}
                     `
                 }]
-                const model = ChatModelTurbo35_1106 // rewrite chat model
-                // if (IsChatModelAllowed(ChatModelTurbo35_1106) && !sconfig["api_token"].startsWith("FREETIER-")) {
-                //     model = ChatModelTurbo35_1106;
+                const model = ChatModelTurbo35V1106 // rewrite chat model
+                // if (IsChatModelAllowed(ChatModelTurbo35V1106) && !sconfig["api_token"].startsWith("FREETIER-")) {
+                //     model = ChatModelTurbo35V1106;
                 // }
 
                 currentAIRespSSE = new SSE('/api', {
@@ -1032,7 +1031,7 @@ async function sendChat2Server (chatID) {
                         'Content-Type': 'application/json',
                         Authorization: 'Bearer ' + sconfig.api_token,
                         'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-                        'X-Laisky-Api-Base': await OpenaiApiBase()
+                        'X-Laisky-Api-Base': sconfig.api_base
                     },
                     method: 'POST',
                     payload: JSON.stringify({
@@ -1739,14 +1738,13 @@ function newSessionConfig () {
     return {
         api_token: 'FREETIER-' + RandomString(32),
         api_base: 'https://api.openai.com',
-        token_type: OpenaiTokenTypeProxy,
         max_tokens: 500,
         temperature: 1,
         presence_penalty: 0,
         frequency_penalty: 0,
         n_contexts: 6,
         system_prompt: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
-        selected_model: ChatModelTurbo35_1106,
+        selected_model: ChatModelTurbo35V1106,
         chat_switch: {
             disable_https_crawler: false
         }
@@ -2284,7 +2282,7 @@ function setupPrivateDataset () {
                 const headers = new Headers()
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                 headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('X-Laisky-Api-Base', await OpenaiApiBase())
+                headers.append('X-Laisky-Api-Base', sconfig.api_base)
 
                 try {
                     ShowSpinner()
@@ -2544,7 +2542,7 @@ function setupPrivateDataset () {
                             const headers = new Headers()
                             headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                             headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                            headers.append('X-Laisky-Api-Base', await OpenaiApiBase())
+                            headers.append('X-Laisky-Api-Base', sconfig.api_base)
 
                             try {
                                 ShowSpinner()
@@ -2597,7 +2595,7 @@ function setupPrivateDataset () {
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                 headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
                 headers.append('Cache-Control', 'no-cache')
-                headers.append('X-Laisky-Api-Base', await OpenaiApiBase())
+                headers.append('X-Laisky-Api-Base', sconfig.api_base)
 
                 let respBody
                 try {
@@ -2666,7 +2664,7 @@ function setupPrivateDataset () {
                     headers.append('Content-Type', 'application/json')
                     headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                     headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                    headers.append('X-Laisky-Api-Base', await OpenaiApiBase())
+                    headers.append('X-Laisky-Api-Base', sconfig.api_base)
 
                     try { // build chatbot
                         ShowSpinner()

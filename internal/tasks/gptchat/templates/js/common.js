@@ -1,254 +1,250 @@
-"use strict";
+'use strict'
 
-const OpenaiTokenTypeProxy = "proxy",
-    OpenaiTokenTypeDirect = "direct";
-
-const ChatModelTurbo35_1106 = "gpt-3.5-turbo-1106",
-    // ChatModelTurbo35 = "gpt-3.5-turbo",
-    // ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
-    // ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
-    // ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
-    // ChatModelGPT4 = "gpt-4",
-    ChatModelGPT4Turbo = "gpt-4-1106-preview",
-    ChatModelGPT4Vision = "gpt-4-vision-preview",
-    // ChatModelGPT4_0613 = "gpt-4-0613",
-    // ChatModelGPT4_32K = "gpt-4-32k",
-    // ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
-    ChatModelGeminiPro = "gemini-pro",
-    ChatModelGeminiProVision = "gemini-pro-vision",
-    QAModelBasebit = "qa-bbt-xego",
-    QAModelSecurity = "qa-security",
-    QAModelImmigrate = "qa-immigrate",
-    QAModelCustom = "qa-custom",
-    QAModelShared = "qa-shared",
-    CompletionModelDavinci3 = "text-davinci-003",
-    ImageModelDalle2 = "dall-e-3",
-    ImageModelSdxlTurbo = "sdxl-turbo",
-    ImageModelImg2Img = "img-to-img";
+const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106'
+// ChatModelTurbo35 = "gpt-3.5-turbo",
+// ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
+// ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
+// ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
+// ChatModelGPT4 = "gpt-4",
+const ChatModelGPT4Turbo = 'gpt-4-1106-preview'
+const ChatModelGPT4Vision = 'gpt-4-vision-preview'
+// ChatModelGPT4_0613 = "gpt-4-0613",
+// ChatModelGPT4_32K = "gpt-4-32k",
+// ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
+const ChatModelGeminiPro = 'gemini-pro'
+const ChatModelGeminiProVision = 'gemini-pro-vision'
+const QAModelBasebit = 'qa-bbt-xego'
+const QAModelSecurity = 'qa-security'
+const QAModelImmigrate = 'qa-immigrate'
+const QAModelCustom = 'qa-custom'
+const QAModelShared = 'qa-shared'
+const CompletionModelDavinci3 = 'text-davinci-003'
+const ImageModelDalle2 = 'dall-e-3'
+const ImageModelSdxlTurbo = 'sdxl-turbo'
+const ImageModelImg2Img = 'img-to-img'
 
 // casual chat models
 
 const ChatModels = [
     // ChatModelTurbo35,
-    ChatModelTurbo35_1106,
+    ChatModelTurbo35V1106,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
-    ChatModelGeminiProVision,
+    ChatModelGeminiProVision
     // ChatModelTurbo35_16K,
     // ChatModelTurbo35_0613,
     // ChatModelTurbo35_0613_16K,
     // ChatModelGPT4_0613,
     // ChatModelGPT4_32K,
     // ChatModelGPT4_0613_32K,
-],
-    QaModels = [
-        QAModelBasebit,
-        QAModelSecurity,
-        QAModelImmigrate,
-        QAModelCustom,
-        QAModelShared,
-    ],
-    ImageModels = [
-        ImageModelDalle2,
-        ImageModelSdxlTurbo,
-        ImageModelImg2Img,
-    ],
-    CompletionModels = [
-        CompletionModelDavinci3,
-    ],
-    FreeModels = [
-        // ChatModelTurbo35,
-        ChatModelTurbo35_1106,
-        ChatModelGeminiPro,
-        ChatModelGeminiProVision,
-        QAModelBasebit,
-        QAModelSecurity,
-        QAModelImmigrate,
-        ImageModelSdxlTurbo,
-        ImageModelImg2Img,
-    ],
-    AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
+]
+const QaModels = [
+    QAModelBasebit,
+    QAModelSecurity,
+    QAModelImmigrate,
+    QAModelCustom,
+    QAModelShared
+]
+const ImageModels = [
+    ImageModelDalle2,
+    ImageModelSdxlTurbo,
+    ImageModelImg2Img
+]
+const CompletionModels = [
+    CompletionModelDavinci3
+]
+const FreeModels = [
+    // ChatModelTurbo35,
+    ChatModelTurbo35V1106,
+    ChatModelGeminiPro,
+    ChatModelGeminiProVision,
+    QAModelBasebit,
+    QAModelSecurity,
+    QAModelImmigrate,
+    ImageModelSdxlTurbo,
+    ImageModelImg2Img
+]
+const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels)
 
-const StorageKeyPromptShortCuts = "config_prompt_shortcuts",
-    // custom dataset's end-to-end password
-    StorageKeyCustomDatasetPassword = "config_chat_dataset_key",
-    StorageKeyPinnedMaterials = "config_api_pinned_materials",
-    StorageKeyAllowedModels = "config_chat_models";
+const StorageKeyPromptShortCuts = 'config_prompt_shortcuts'
+// custom dataset's end-to-end password
+const StorageKeyCustomDatasetPassword = 'config_chat_dataset_key'
+const StorageKeyPinnedMaterials = 'config_api_pinned_materials'
+const StorageKeyAllowedModels = 'config_chat_models'
 
 // should not has same prefix
-const KvKeyPrefixSessionHistory = "chat_user_session_",
-    KvKeyPrefixSessionConfig = "chat_user_config_";
+const KvKeyPrefixSessionHistory = 'chat_user_session_'
+const KvKeyPrefixSessionConfig = 'chat_user_config_'
 
-var IsChatModel = (model) => {
-    return ChatModels.includes(model);
-};
-
-var IsQaModel = (model) => {
-    return QaModels.includes(model);
-};
-
-var IsCompletionModel = (model) => {
-    return CompletionModels.includes(model);
-};
-
-var IsImageModel = (model) => {
-    return ImageModels.includes(model);
-};
-
-var IsChatModelAllowed = (model) => {
-    let allowed_models = GetLocalStorage(StorageKeyAllowedModels);
-    if (!allowed_models) {
-        return false;
-    }
-
-    return allowed_models.includes(model);
+const IsChatModel = (model) => {
+    return ChatModels.includes(model)
 }
 
-var ShowSpinner = () => {
-    document.getElementById("spinner").toggleAttribute("hidden", false);
-};
-var HideSpinner = () => {
-    document.getElementById("spinner").toggleAttribute("hidden", true);
-};
+const IsQaModel = (model) => {
+    return QaModels.includes(model)
+}
+
+const IsCompletionModel = (model) => {
+    return CompletionModels.includes(model)
+}
+
+const IsImageModel = (model) => {
+    return ImageModels.includes(model)
+}
+
+const IsChatModelAllowed = (model) => {
+    const allowed_models = GetLocalStorage(StorageKeyAllowedModels)
+    if (!allowed_models) {
+        return false
+    }
+
+    return allowed_models.includes(model)
+}
+
+const ShowSpinner = () => {
+    document.getElementById('spinner').toggleAttribute('hidden', false)
+}
+const HideSpinner = () => {
+    document.getElementById('spinner').toggleAttribute('hidden', true)
+}
 
 /**
  * Generates a random string of the specified length.
  * @param {number} length - The length of the string to generate.
  * @returns {string} - The generated random string.
  */
-var RandomString = (length) => {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
+const RandomString = (length) => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let result = ''
     for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
+        result += characters.charAt(Math.floor(Math.random() * characters.length))
     }
 
-    return result;
+    return result
 }
 
-var OpenaiToken = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey),
-        apikey;
+const OpenaiToken = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    let apikey
 
     // get token from url params first
     {
-        apikey = new URLSearchParams(location.search).get("apikey");
+        apikey = new URLSearchParams(location.search).get('apikey')
 
         if (apikey) {
             // fix: sometimes url.searchParams.delete() works too quickly,
             // that let another caller rewrite apikey to FREE-TIER,
             // so we delay 1s to delete apikey from url params.
             setTimeout(() => {
-                let v = new URLSearchParams(location.search).get("apikey");
+                const v = new URLSearchParams(location.search).get('apikey')
                 if (!v) {
-                    return;
+                    return
                 }
 
                 // remove apikey from url params
-                let url = new URL(location.href);
-                url.searchParams.delete("apikey");
-                window.history.pushState({}, document.title, url);
-            }, 500);
+                const url = new URL(location.href)
+                url.searchParams.delete('apikey')
+                window.history.pushState({}, document.title, url)
+            }, 500)
         }
     }
 
     // get token from storage
     if (!apikey) {
-        apikey = sconfig["api_token"] || "FREETIER-" + RandomString(32);
+        apikey = sconfig.api_token || 'FREETIER-' + RandomString(32)
     }
 
-    sconfig["api_token"] = apikey;
-    await KvSet(skey, sconfig);
-    return apikey;
-};
-
-var OpenaiApiBase = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["api_base"] || "https://api.openai.com";
-};
-
-var OpenaiSelectedModel = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["selected_model"] || ChatModelTurbo35_1106;
+    sconfig.api_token = apikey
+    await KvSet(skey, sconfig)
+    return apikey
 }
 
-var OpenaiMaxTokens = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["max_tokens"] || 500;
-};
+const OpenaiApiBase = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.api_base || 'https://api.openai.com'
+}
 
-var OpenaiTemperature = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["temperature"];
-};
+const OpenaiSelectedModel = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.selected_model || ChatModelTurbo35V1106
+}
 
-var OpenaiPresencePenalty = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["presence_penalty"] || 0;
-};
+const OpenaiMaxTokens = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.max_tokens || 500
+}
 
-var OpenaiFrequencyPenalty = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["frequency_penalty"] || 0;
-};
+const OpenaiTemperature = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.temperature
+}
 
-var ChatNContexts = async () => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
-    return sconfig["n_contexts"] || 6;
-};
+const OpenaiPresencePenalty = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.presence_penalty || 0
+}
+
+const OpenaiFrequencyPenalty = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.frequency_penalty || 0
+}
+
+const ChatNContexts = async () => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
+    return sconfig.n_contexts || 6
+}
 
 /** get or set chat static context
  *
  * @param {string} prompt
  * @returns {string} prompt
  */
-var OpenaiChatStaticContext = async (prompt) => {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
+const OpenaiChatStaticContext = async (prompt) => {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    const sconfig = await KvGet(skey)
 
     if (prompt) {
-        sconfig["system_prompt"] = prompt;
-        await KvSet(skey, sconfig);
+        sconfig.system_prompt = prompt
+        await KvSet(skey, sconfig)
     }
 
-    return sconfig["system_prompt"] || "";
-};
+    return sconfig.system_prompt || ''
+}
 
-
-var SingleInputModal = (title, message, callback) => {
-    const modal = document.getElementById("singleInputModal");
+const SingleInputModal = (title, message, callback) => {
+    const modal = document.getElementById('singleInputModal')
     singleInputCallback = async () => {
         try {
-            ShowSpinner();
-            await callback(modal.querySelector(".modal-body input").value)
+            ShowSpinner()
+            await callback(modal.querySelector('.modal-body input').value)
         } finally {
-            HideSpinner();
+            HideSpinner()
         }
-    };
+    }
 
-    modal.querySelector(".modal-title").innerHTML = title;
-    modal.querySelector(".modal-body label.form-label").innerHTML = message;
-    singleInputModal.show();
-};
+    modal.querySelector('.modal-title').innerHTML = title
+    modal.querySelector('.modal-body label.form-label').innerHTML = message
+    singleInputModal.show()
+}
 
 // show modal to confirm,
 // callback will be called if user click yes
@@ -256,236 +252,230 @@ var SingleInputModal = (title, message, callback) => {
 // params:
 //   - title: modal title
 //   - callback: async callback function
-var ConfirmModal = (title, callback) => {
+const ConfirmModal = (title, callback) => {
     deleteCheckCallback = async () => {
         try {
-            ShowSpinner();
+            ShowSpinner()
             await callback()
         } finally {
-            HideSpinner();
+            HideSpinner()
         }
-    };
-    document.getElementById("deleteCheckModal").querySelector(".modal-title").innerHTML = title;
-    deleteCheckModal.show();
-};
-
+    }
+    document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title
+    deleteCheckModal.show()
+}
 
 window.AppEntrypoint = async () => {
-    await dataMigrate();
-    await setupHeader();
-    setupConfirmModal();
-    setupSingleInputModal();
+    await dataMigrate()
+    await setupHeader()
+    setupConfirmModal()
+    setupSingleInputModal()
 
-    await setupChatJs();
-};
+    await setupChatJs()
+}
 
-async function dataMigrate() {
-    let sid = activeSessionID(),
-        skey = `${KvKeyPrefixSessionConfig}${sid}`,
-        sconfig = await KvGet(skey);
+async function dataMigrate () {
+    const sid = activeSessionID()
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+    let sconfig = await KvGet(skey)
 
     // move config from localstorage to session config
     {
-
         if (!sconfig) {
-            sconfig = newSessionConfig();
+            sconfig = newSessionConfig()
 
-            sconfig["api_token"] = GetLocalStorage("config_api_token_value") || sconfig["api_token"];
-            sconfig["token_type"] = GetLocalStorage("config_api_token_type") || sconfig["token_type"];
-            sconfig["max_tokens"] = GetLocalStorage("config_api_max_tokens") || sconfig["max_tokens"];
-            sconfig["temperature"] = GetLocalStorage("config_api_temperature") || sconfig["temperature"];
-            sconfig["presence_penalty"] = GetLocalStorage("config_api_presence_penalty") || sconfig["presence_penalty"];
-            sconfig["frequency_penalty"] = GetLocalStorage("config_api_frequency_penalty") || sconfig["frequency_penalty"];
-            sconfig["n_contexts"] = GetLocalStorage("config_api_n_contexts") || sconfig["n_contexts"];
-            sconfig["system_prompt"] = GetLocalStorage("config_api_static_context") || sconfig["system_prompt"];
-            sconfig["selected_model"] = GetLocalStorage("config_chat_model") || sconfig["selected_model"];
+            sconfig.api_token = GetLocalStorage('config_api_token_value') || sconfig.api_token
+            sconfig.token_type = GetLocalStorage('config_api_token_type') || sconfig.token_type
+            sconfig.max_tokens = GetLocalStorage('config_api_max_tokens') || sconfig.max_tokens
+            sconfig.temperature = GetLocalStorage('config_api_temperature') || sconfig.temperature
+            sconfig.presence_penalty = GetLocalStorage('config_api_presence_penalty') || sconfig.presence_penalty
+            sconfig.frequency_penalty = GetLocalStorage('config_api_frequency_penalty') || sconfig.frequency_penalty
+            sconfig.n_contexts = GetLocalStorage('config_api_n_contexts') || sconfig.n_contexts
+            sconfig.system_prompt = GetLocalStorage('config_api_static_context') || sconfig.system_prompt
+            sconfig.selected_model = GetLocalStorage('config_chat_model') || sconfig.selected_model
 
-            await KvSet(skey, sconfig);
+            await KvSet(skey, sconfig)
         }
     }
 
-
     // set api token from url params
     {
-        let apikey = new URLSearchParams(location.search).get("apikey");
+        const apikey = new URLSearchParams(location.search).get('apikey')
 
         if (apikey) {
             // remove apikey from url params
-            let url = new URL(location.href);
-            url.searchParams.delete("apikey");
-            window.history.pushState({}, document.title, url);
-            sconfig["api_token"] = apikey;
-            await KvSet(skey, sconfig);
+            const url = new URL(location.href)
+            url.searchParams.delete('apikey')
+            window.history.pushState({}, document.title, url)
+            sconfig.api_token = apikey
+            await KvSet(skey, sconfig)
         }
     }
 
     // list all session configs
     await Promise.all((await KvList()).map(async (key) => {
         if (!key.startsWith(KvKeyPrefixSessionConfig)) {
-            return;
+            return
         }
 
-        let sconfig = await KvGet(key);
+        const sconfig = await KvGet(key)
 
         // set default api_token
-        if (!sconfig["api_token"] || sconfig["api_token"] == "DEFAULT_PROXY_TOKEN") {
-            sconfig["api_token"] = "FREETIER-" + RandomString(32);
+        if (!sconfig.api_token || sconfig.api_token == 'DEFAULT_PROXY_TOKEN') {
+            sconfig.api_token = 'FREETIER-' + RandomString(32)
         }
         // set default api_base
-        if (!sconfig["api_base"]) {
-            sconfig["api_base"] = "https://api.openai.com";
+        if (!sconfig.api_base) {
+            sconfig.api_base = 'https://api.openai.com'
         }
 
         // set default chat controller
-        if (!sconfig["chat_switch"]) {
-            sconfig["chat_switch"] = {
-                "disable_https_crawler": false
+        if (!sconfig.chat_switch) {
+            sconfig.chat_switch = {
+                disable_https_crawler: false
             }
         }
 
-        console.debug("migrate session config: ", key, sconfig);
-        await KvSet(key, sconfig);
-    }));
+        console.debug('migrate session config: ', key, sconfig)
+        await KvSet(key, sconfig)
+    }))
 
     // update legacy chat history, add chatID to each chat
     {
         await Promise.all(Object.keys(localStorage).map(async (key) => {
             if (!key.startsWith(KvKeyPrefixSessionHistory)) {
-                return;
+                return
             }
 
             // move from localstorage to kv
             // console.log("move from localstorage to kv: ", key);
-            await KvSet(key, JSON.parse(localStorage[key]));
-            localStorage.removeItem(key);
-        }));
+            await KvSet(key, JSON.parse(localStorage[key]))
+            localStorage.removeItem(key)
+        }))
     }
-
 }
 
-var singleInputCallback, singleInputModal;
+let singleInputCallback, singleInputModal
 
-function setupSingleInputModal() {
-    singleInputCallback = null;
-    singleInputModal = new bootstrap.Modal(document.getElementById("singleInputModal"));
-    document.getElementById("singleInputModal")
-        .querySelector(".modal-body .yes")
-        .addEventListener("click", async (e) => {
-            e.preventDefault();
+function setupSingleInputModal () {
+    singleInputCallback = null
+    singleInputModal = new bootstrap.Modal(document.getElementById('singleInputModal'))
+    document.getElementById('singleInputModal')
+        .querySelector('.modal-body .yes')
+        .addEventListener('click', async (e) => {
+            e.preventDefault()
 
             if (singleInputCallback) {
-                await singleInputCallback();
+                await singleInputCallback()
             }
 
-            singleInputModal.hide();
-        });
+            singleInputModal.hide()
+        })
 }
 
 /**
  * setup confirm modal callback, shoule be an async function
  */
-var deleteCheckCallback,
+let deleteCheckCallback,
     /**
      * global shared modal to act as confirm dialog
      */
-    deleteCheckModal;
+    deleteCheckModal
 
-function setupConfirmModal() {
-    deleteCheckModal = new bootstrap.Modal(document.getElementById("deleteCheckModal"));
-    document.getElementById("deleteCheckModal")
-        .querySelector(".modal-body .yes")
-        .addEventListener("click", async (e) => {
-            e.preventDefault();
+function setupConfirmModal () {
+    deleteCheckModal = new bootstrap.Modal(document.getElementById('deleteCheckModal'))
+    document.getElementById('deleteCheckModal')
+        .querySelector('.modal-body .yes')
+        .addEventListener('click', async (e) => {
+            e.preventDefault()
 
             if (deleteCheckCallback) {
-                await deleteCheckCallback();
+                await deleteCheckCallback()
             }
 
-            deleteCheckModal.hide();
-        });
+            deleteCheckModal.hide()
+        })
 }
-
 
 /** setup header bar
  *
  */
-async function setupHeader() {
-    let headerBarEle = document.getElementById("headerbar"),
-        allowedModels = [],
-        sconfig = await getChatSessionConfig();
+async function setupHeader () {
+    const headerBarEle = document.getElementById('headerbar')
+    let allowedModels = []
+    const sconfig = await getChatSessionConfig()
 
     // setup chat models
     {
         // set default chat model
-        let selectedModel = await OpenaiSelectedModel();
+        let selectedModel = await OpenaiSelectedModel()
 
         // get users' models
-        let headers = new Headers();
-        headers.append("Authorization", "Bearer " + sconfig["api_token"]);
-        const response = await fetch("/user/me", {
-            method: "GET",
-            cache: "no-cache",
-            headers: headers,
-        });
+        const headers = new Headers()
+        headers.append('Authorization', 'Bearer ' + sconfig.api_token)
+        const response = await fetch('/user/me', {
+            method: 'GET',
+            cache: 'no-cache',
+            headers
+        })
 
         if (response.status != 200) {
-            throw new Error("failed to get user info, please refresh your browser.");
+            throw new Error('failed to get user info, please refresh your browser.')
         }
 
-        let modelsContainer = document.querySelector("#headerbar .chat-models"),
-            modelsEle = "";
+        const modelsContainer = document.querySelector('#headerbar .chat-models')
+        let modelsEle = ''
         const respData = await response.json()
-        if (respData.allowed_models.includes("*")) {
-            respData.allowed_models = Array.from(AllModels);
+        if (respData.allowed_models.includes('*')) {
+            respData.allowed_models = Array.from(AllModels)
         } else {
-            respData.allowed_models.push(QAModelCustom, QAModelShared);
+            respData.allowed_models.push(QAModelCustom, QAModelShared)
         }
         respData.allowed_models = respData.allowed_models.filter((model) => {
-            return AllModels.includes(model);
-        });
+            return AllModels.includes(model)
+        })
 
-        respData.allowed_models.sort();
-        SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models);
-        allowedModels = respData.allowed_models;
+        respData.allowed_models.sort()
+        SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models)
+        allowedModels = respData.allowed_models
 
         if (!allowedModels.includes(selectedModel)) {
-            selectedModel = "";
+            selectedModel = ''
             AllModels.forEach((model) => {
-                if (selectedModel != "" || !allowedModels.includes(model)) {
-                    return;
+                if (selectedModel != '' || !allowedModels.includes(model)) {
+                    return
                 }
 
-                if (model.startsWith("gpt-") || model.startsWith("gemini-")) {
-                    selectedModel = model;
-                    return;
+                if (model.startsWith('gpt-') || model.startsWith('gemini-')) {
+                    selectedModel = model
                 }
-            });
+            })
 
-            let sid = activeSessionID(),
-                skey = `${KvKeyPrefixSessionConfig}${sid}`,
-                sconfig = await KvGet(skey);
-            sconfig["selected_model"] = selectedModel;
-            await KvSet(skey, sconfig);
+            const sid = activeSessionID()
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`
+            const sconfig = await KvGet(skey)
+            sconfig.selected_model = selectedModel
+            await KvSet(skey, sconfig)
         }
 
         // add hint to input text
         // chatPromptInputEle.attributes
         //     .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
 
-        let unsupportedModels = [];
+        const unsupportedModels = []
         respData.allowed_models.forEach((model) => {
             if (!ChatModels.includes(model)) {
-                unsupportedModels.push(model);
-                return;
+                unsupportedModels.push(model)
+                return
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
             }
-        });
-        modelsContainer.innerHTML = modelsEle;
+        })
+        modelsContainer.innerHTML = modelsEle
     }
 
     // FIXME
@@ -497,78 +487,77 @@ async function setupHeader() {
 
     // setup chat qa models
     {
-        let qaModelsContainer = headerBarEle.querySelector(".dropdown-menu.qa-models"),
-            modelsEle = "";
+        const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models')
+        let modelsEle = ''
 
-        let allowedQaModels = [QAModelCustom, QAModelShared];
+        const allowedQaModels = [QAModelCustom, QAModelShared]
         data.qa_chat_models.forEach((item) => {
-            allowedQaModels.push(item.name);
+            allowedQaModels.push(item.name)
         })
 
         allowedModels.forEach((model) => {
             if (!QaModels.includes(model) || !allowedQaModels.includes(model)) {
-                return;
+                return
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
             }
-        });
-        qaModelsContainer.innerHTML = modelsEle;
+        })
+        qaModelsContainer.innerHTML = modelsEle
     }
 
     // setup chat image models
     {
-        let imageModelsContainer = headerBarEle.querySelector(".dropdown-menu.image-models"),
-            modelsEle = "";
+        const imageModelsContainer = headerBarEle.querySelector('.dropdown-menu.image-models')
+        let modelsEle = ''
         allowedModels.forEach((model) => {
             if (!ImageModels.includes(model)) {
-                return;
+                return
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
             }
-        });
-        imageModelsContainer.innerHTML = modelsEle;
+        })
+        imageModelsContainer.innerHTML = modelsEle
     }
 
     // listen click events
-    let modelElems = document
-        .querySelectorAll("#headerbar .chat-models li a, "
-            + "#headerbar .qa-models li a, "
-            + "#headerbar .image-models li a"
-        );
+    const modelElems = document
+        .querySelectorAll('#headerbar .chat-models li a, ' +
+            '#headerbar .qa-models li a, ' +
+            '#headerbar .image-models li a'
+        )
     modelElems.forEach((elem) => {
-        elem.addEventListener("click", async (evt) => {
-            evt.preventDefault();
+        elem.addEventListener('click', async (evt) => {
+            evt.preventDefault()
             modelElems.forEach((elem) => {
-                elem.classList.remove("active");
-            });
+                elem.classList.remove('active')
+            })
 
-            evt.target.classList.add("active");
-            let selectedModel = evt.target.dataset.model;
+            evt.target.classList.add('active')
+            const selectedModel = evt.target.dataset.model
 
-            let sid = activeSessionID(),
-                skey = `${KvKeyPrefixSessionConfig}${sid}`,
-                sconfig = await KvGet(skey);
-            sconfig["selected_model"] = selectedModel;
-            await KvSet(skey, sconfig);
+            const sid = activeSessionID()
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`
+            const sconfig = await KvGet(skey)
+            sconfig.selected_model = selectedModel
+            await KvSet(skey, sconfig)
 
             // add active to class
-            document.querySelectorAll("#headerbar .navbar-nav a.dropdown-toggle")
+            document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
                 .forEach((elem) => {
-                    elem.classList.remove("active");
-                });
-            evt.target.closest(".dropdown").querySelector("a.dropdown-toggle").classList.add("active");
+                    elem.classList.remove('active')
+                })
+            evt.target.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active')
 
             // add hint to input text
-            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
-        });
-    });
-
+            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`
+        })
+    })
 }
