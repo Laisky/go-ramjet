@@ -65,13 +65,15 @@ type Task struct {
 //	        "signature": "3282c1160a47c84xxx"
 //		}
 type Log struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"-"`
-	Level       string             `bson:"level" json:"level"`
-	Time        time.Time          `bson:"time" json:"time"`
-	Logger      string             `bson:"logger" json:"logger"`
-	Caller      string             `bson:"caller" json:"caller"`
-	Msg         string             `bson:"msg" json:"msg"`
-	ClusterUUID string             `bson:"cluster_uuid" json:"cluster_uuid"`
+	ID    primitive.ObjectID `bson:"_id,omitempty" json:"-"`
+	Level string             `bson:"level" json:"level"`
+	// DeployEnv where the log from
+	DeployEnv   string    `bson:"deploy_env" json:"deploy_env"`
+	Time        time.Time `bson:"time" json:"time"`
+	Logger      string    `bson:"logger" json:"logger"`
+	Caller      string    `bson:"caller" json:"caller"`
+	Msg         string    `bson:"msg" json:"msg"`
+	ClusterUUID string    `bson:"cluster_uuid" json:"cluster_uuid"`
 	// Ts used for generate signature
 	Ts        string `bson:"ts" json:"ts"`
 	CertChain string `bson:"cert_chain" json:"cert_chain"`

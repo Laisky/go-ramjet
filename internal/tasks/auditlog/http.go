@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	gutils "github.com/Laisky/go-utils/v4"
 	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,9 @@ func (r *router) receiveLog(ctx *gin.Context) {
 		return
 	}
 
+	log.DeployEnv = ctx.Query("env")
+	log.DeployEnv = gutils.OptionalVal(&log.DeployEnv, "debug")
+
 	// notice: use longlived background context,
 	// 	   so that the request will not be aborted to avoid data loss
 	// 	   when the client disconnects.
@@ -68,7 +72,9 @@ func (r *router) receiveLog(ctx *gin.Context) {
 }
 
 func (r *router) listLogs(ctx *gin.Context) {
-	logs, err := r.svc.ListLogs(ctx.Request.Context())
+	logs, err := r.svc.ListLogs(ctx.Request.Context(),
+		ctx.Query("env"),
+	)
 	if r.abortErr(ctx, err) {
 		return
 	}

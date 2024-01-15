@@ -75,9 +75,17 @@ func (s *service) SaveLog(ctx context.Context, logEnt *Log) (err error) {
 }
 
 // ListLogs list all logs
-func (s *service) ListLogs(ctx context.Context) ([]Log, error) {
+func (s *service) ListLogs(ctx context.Context,
+	deployEnv string,
+) ([]Log, error) {
+	filter := bson.M{}
+
+	if deployEnv != "" {
+		filter["deploy_env"] = deployEnv
+	}
+
 	logs := make([]Log, 0)
-	cur, err := s.db.logCol().Find(ctx, bson.M{},
+	cur, err := s.db.logCol().Find(ctx, filter,
 		options.Find().SetLimit(100),
 		options.Find().SetSort(map[string]int{"_id": -1}),
 	)
