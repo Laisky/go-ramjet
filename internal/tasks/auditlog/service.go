@@ -191,9 +191,16 @@ func (s *service) SaveNormalLog(ctx context.Context, logEnt map[string]any) (err
 }
 
 // ListNormalLogs list all logs
-func (s *service) ListNormalLogs(ctx context.Context) ([]bson.M, error) {
+func (s *service) ListNormalLogs(ctx context.Context,
+	deployEnv string,
+) ([]bson.M, error) {
+	filter := bson.M{}
+	if deployEnv != "" {
+		filter["deploy_env"] = deployEnv
+	}
+
 	logs := make([]bson.M, 0)
-	cur, err := s.db.normalLogCol().Find(ctx, bson.M{},
+	cur, err := s.db.normalLogCol().Find(ctx, filter,
 		options.Find().SetLimit(200),
 		options.Find().SetSort(map[string]int{"_id": -1}),
 	)

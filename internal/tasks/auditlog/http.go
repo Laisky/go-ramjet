@@ -91,6 +91,11 @@ func (r *router) receiveNormalLog(ctx *gin.Context) {
 		return
 	}
 
+	log["deploy_env"] = "debug"
+	if ctx.Query("env") != "" {
+		log["deploy_env"] = ctx.Query("env")
+	}
+
 	delete(log, "_id")
 	if err := r.svc.SaveNormalLog(ctx.Request.Context(), log); r.abortErr(ctx, err) {
 		return
@@ -102,7 +107,9 @@ func (r *router) receiveNormalLog(ctx *gin.Context) {
 }
 
 func (r *router) listNormalLogs(ctx *gin.Context) {
-	logs, err := r.svc.ListNormalLogs(ctx.Request.Context())
+	logs, err := r.svc.ListNormalLogs(ctx.Request.Context(),
+		ctx.Query("env"),
+	)
 	if r.abortErr(ctx, err) {
 		return
 	}
