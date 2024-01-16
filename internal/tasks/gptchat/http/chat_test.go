@@ -7,11 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/testify/require"
-
-	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func TestAPIHandler(t *testing.T) {
@@ -142,4 +141,13 @@ func TestCountVisionImagePrice(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_bodyChecker(t *testing.T) {
+	raw := `{"model":"gpt-3.5-turbo-1106","stream":true,"max_tokens":500,"temperature":1,"presence_penalty":0,"frequency_penalty":0,"messages":[{"role":"system","content":"The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."},{"role":"user","chatID":"chat-1705284240927-Hv8nTi","content":"1+2"},{"role":"user","content":"what is the temperature in shanghai,"}],"stop":["\n\n"],"laisky_extra":{"chat_switch":{"disable_https_crawler":false,"enable_google_search":true}}}`
+	req := new(FrontendReq)
+	err := json.Unmarshal([]byte(raw), req)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-3.5-turbo-1106", req.Model)
+	require.True(t, req.LaiskyExtra.ChatSwitch.EnableGoogleSearch)
 }

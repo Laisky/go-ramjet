@@ -1510,6 +1510,14 @@ async function setupChatInput () {
 
             await saveChatSessionConfig(sconfig)
         })
+
+        chatContainer.querySelector('#switchChatEnableGoogleSearch').addEventListener('change', async (evt) => {
+            evt.stopPropagation()
+            const switchEle = evtTarget(evt)
+            const sconfig = await getChatSessionConfig()
+            sconfig.chat_switch.enable_google_search = switchEle.checked
+            await saveChatSessionConfig(sconfig)
+        })
     }
 }
 
@@ -1784,7 +1792,8 @@ function newSessionConfig () {
         system_prompt: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
         selected_model: ChatModelTurbo35V1106,
         chat_switch: {
-            disable_https_crawler: false
+            disable_https_crawler: false,
+            enable_google_search: false
         }
     }
 }
@@ -1818,6 +1827,8 @@ async function updateConfigFromSessionConfig () {
     // update chat controller
     chatContainer.querySelector('#switchChatEnableHttpsCrawler')
         .checked = !sconfig.chat_switch.disable_https_crawler
+    chatContainer.querySelector('#switchChatEnableGoogleSearch')
+        .checked = sconfig.chat_switch.enable_google_search
 
     // update selected model
     // set active status for models

@@ -162,22 +162,22 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 	}
 
 	urls = gutils.FilterSlice(urls, func(v string) bool {
-		if !strings.HasPrefix(v, "https://") {
-			return false
-		}
-
-		return true
+		return strings.HasPrefix(v, "https://")
 	})
 
-	if len(urls) > 4 {
-		urls = gutils.RandomChoice(urls, 4)
-	}
+	// if len(urls) > 4 {
+	// 	urls = gutils.RandomChoice(urls, 4)
+	// }
 
 	var (
 		mu   sync.Mutex
 		pool errgroup.Group
 	)
-	for _, url := range urls {
+	for i, url := range urls {
+		if i > 4 {
+			break
+		}
+
 		url := url
 		pool.Go(func() error {
 			pageCnt, err := fetchStaticURLContent(ctx, url)
@@ -188,6 +188,10 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 			texts, err := _extrachHtmlText(pageCnt)
 			if err != nil {
 				return errors.Wrapf(err, "extract html text %q", url)
+			}
+
+			if len(texts) > 1000 {
+				texts = texts[:1000]
 			}
 
 			mu.Lock()
@@ -285,15 +289,18 @@ func _extrachHtmlText(raw []byte) (result string, err error) {
 
 	var (
 		f     func(*html.Node)
-		words []string
+		words string
 	)
 	f = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.DataAtom == atom.Script {
+		switch n.DataAtom {
+		case atom.Script, atom.Style, atom.Meta, atom.Link, atom.Head, atom.Title:
 			return
 		}
 
 		if n.Type == html.TextNode {
-			words = append(words, strings.TrimSpace(n.Data))
+			cnt := strings.Trim(n.Data, `,.，。！'"：“‘`)
+			cnt = strings.TrimSpace(cnt)
+			words += cnt + "\n"
 		}
 
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -302,5 +309,9 @@ func _extrachHtmlText(raw []byte) (result string, err error) {
 	}
 	f(doc)
 
-	return strings.TrimSpace(strings.Join(words, "\n")), nil
+	words = regexpHTMLTag.ReplaceAllString(words, "")
+	return strings.Join(
+		gutils.FilterSlice(strings.Split(words, "\n"), func(v string) bool {
+			return strings.TrimSpace(v) != ""
+		}), ", "), nil
 }

@@ -68,11 +68,34 @@ func TestGoogleSearch(t *testing.T) {
 	SetupHTTPCli()
 
 	ctx := context.Background()
-	query := "how to install tpm on my motherboard"
+	query := "how about the weather in shanghai"
 
 	content, err := googleSearch(ctx, query)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 
 	t.Logf("result:\n%s", string(content))
+}
+
+func Test_extractHtmlText(t *testing.T) {
+	raw := []byte(`
+		<html>
+			<head>
+				<title>Test HTML</title>
+			</head>
+			<body>
+				<h1>Hello, World!</h1>
+				<p>This is a test HTML document.</p>
+				<script>
+					console.log("This is a script tag");
+				</script>
+			</body>
+		</html>
+	`)
+
+	expected := "Hello, World!\nThis is a test HTML document."
+
+	result, err := _extrachHtmlText(raw)
+	require.NoError(t, err)
+	require.Equal(t, expected, result)
 }

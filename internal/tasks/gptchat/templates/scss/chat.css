@@ -216,6 +216,7 @@
 }
 #chatContainer .chatManager .card .card-footer .input-group.chat-controller .form-check-reverse {
   margin-bottom: 0px;
+  padding-right: 5px;
 }
 #chatContainer .chatManager .card .card-footer .input-group.chat-controller .form-check-reverse .form-check-input {
   margin-right: 0px;
