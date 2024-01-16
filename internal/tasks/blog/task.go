@@ -3,7 +3,6 @@ package blog
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -171,7 +170,7 @@ func bindKeywordTask() {
 
 func bindRSSTask() {
 	log.Logger.Info("bind rss task...")
-	fmt.Println(">>", gconfig.Shared.GetDuration("tasks.blog.interval"))
+	// fmt.Println(">>", gconfig.Shared.GetDuration("tasks.blog.interval"))
 	go store.TaskStore.TickerAfterRun(gconfig.Shared.GetDuration("tasks.blog.interval")*time.Second, runRSSTask)
 }
 

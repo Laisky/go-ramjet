@@ -68,11 +68,11 @@ func TestGoogleSearch(t *testing.T) {
 	SetupHTTPCli()
 
 	ctx := context.Background()
-	query := "site%3Amedium.com+applied+mpc"
+	query := "how to install tpm on my motherboard"
 
 	content, err := googleSearch(ctx, query)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 
-	fmt.Println(string(content))
+	t.Logf("result:\n%s", string(content))
 }

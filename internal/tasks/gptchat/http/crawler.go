@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
@@ -134,24 +136,41 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 	return content, nil
 }
 
-func googleSearch(ctx context.Context, query string) (content []byte, err error) {
+var (
+	regexpHTMLText = regexp.MustCompile(`<p>([\S ]+?)</p>`)
+	regexpHTMLTag  = regexp.MustCompile(`</?\w+>`)
+)
+
+func googleSearch(ctx context.Context, query string) (result string, err error) {
 	logger := gmw.GetLogger(ctx).Named("google_search")
 	searchContent, err := fetchDynamicURLContent(ctx, "https://www.google.com/search?q="+query)
 	if err != nil {
-		return nil, errors.Wrapf(err, "fetch %q", query)
+		return "", errors.Wrapf(err, "fetch %q", query)
 	}
 
 	doc, err := html.Parse(bytes.NewReader(searchContent))
 	if err != nil {
-		return nil, errors.Wrap(err, "parse html")
+		return "", errors.Wrap(err, "parse html")
 	}
 
 	ok, urls, err := _googleExtractor(doc)
 	if err != nil {
-		return nil, errors.Wrap(err, "extract google search result")
+		return "", errors.Wrap(err, "extract google search result")
 	}
 	if !ok || len(urls) == 0 {
-		return nil, errors.Errorf("no search result")
+		return "", errors.Errorf("no search result")
+	}
+
+	urls = gutils.FilterSlice(urls, func(v string) bool {
+		if !strings.HasPrefix(v, "https://") {
+			return false
+		}
+
+		return true
+	})
+
+	if len(urls) > 4 {
+		urls = gutils.RandomChoice(urls, 4)
 	}
 
 	var (
@@ -166,9 +185,13 @@ func googleSearch(ctx context.Context, query string) (content []byte, err error)
 				return errors.Wrapf(err, "fetch %q", url)
 			}
 
+			texts, err := _extrachHtmlText(pageCnt)
+			if err != nil {
+				return errors.Wrapf(err, "extract html text %q", url)
+			}
+
 			mu.Lock()
-			content = append(content, pageCnt...)
-			content = append(content, '\n')
+			result += texts + "\n"
 			defer mu.Unlock()
 
 			return nil
@@ -179,11 +202,11 @@ func googleSearch(ctx context.Context, query string) (content []byte, err error)
 		logger.Warn("fetch google search result", zap.Error(err))
 	}
 
-	if len(content) == 0 {
-		return nil, errors.Errorf("no content find by google search")
+	if len(result) == 0 {
+		return "", errors.Errorf("no content find by google search")
 	}
 
-	return content, nil
+	return result, nil
 }
 
 var (
@@ -251,4 +274,33 @@ func _extractHtmlBody(body io.Reader) (bodyContent []byte, err error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// _extrachHtmlText load all readable text content from html
+func _extrachHtmlText(raw []byte) (result string, err error) {
+	doc, err := html.Parse(bytes.NewReader(raw))
+	if err != nil {
+		return "", errors.Wrap(err, "parse html")
+	}
+
+	var (
+		f     func(*html.Node)
+		words []string
+	)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.DataAtom == atom.Script {
+			return
+		}
+
+		if n.Type == html.TextNode {
+			words = append(words, strings.TrimSpace(n.Data))
+		}
+
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+
+	return strings.TrimSpace(strings.Join(words, "\n")), nil
 }

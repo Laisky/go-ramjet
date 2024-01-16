@@ -7,7 +7,7 @@ require (
 	github.com/Laisky/gin-middlewares/v5 v5.0.3
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.7.0
+	github.com/Laisky/go-utils/v4 v4.8.1-0.20240116051208-cb19d41c819b
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
@@ -45,6 +45,7 @@ require (
 	github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320 // indirect
 	github.com/GoWebProd/uuid7 v0.0.0-20231130161441-17ee54b097d4 // indirect
 	github.com/Laisky/errors v0.9.2 // indirect
+	github.com/Laisky/fast-skiplist v0.0.0-20210907063351-e00546c800a6 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.1 // indirect
 	github.com/Laisky/go-utils/v3 v3.5.0 // indirect
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
@@ -78,6 +79,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
+	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
