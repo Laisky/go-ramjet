@@ -94,8 +94,8 @@
   position: fixed;
   height: 100%;
   width: 44px;
-  border-right: #e2e3e5;
-  border-right-style: dashed;
+  border: none;
+  border-right: 1px dashed #e2e3e5;
 }
 #chatContainer .chatManager .card .conservations .sessions button {
   padding: 5px;
