@@ -74,21 +74,42 @@
   margin-bottom: 1px;
   z-index: 1099;
 }
-#chatContainer .chatManager .card .card-body.conservations {
+#chatContainer .chatManager .card .conservations {
   padding: 0px;
   position: relative;
   min-height: 300px;
   overflow-y: scroll;
+  display: flex;
+  flex-direction: row;
 }
-#chatContainer .chatManager .card .card-body.conservations .row {
+#chatContainer .chatManager .card .conservations .row {
   margin: 0px;
   padding: 0px;
 }
-#chatContainer .chatManager .card .card-body.conservations .row > * {
+#chatContainer .chatManager .card .conservations .row > * {
   padding-left: 0px;
   overflow-x: auto;
 }
-#chatContainer .chatManager .card .card-body.conservations img {
+#chatContainer .chatManager .card .conservations .sessions {
+  position: fixed;
+  height: 100%;
+  width: 44px;
+  border-right: #e2e3e5;
+  border-right-style: dashed;
+}
+#chatContainer .chatManager .card .conservations .sessions button {
+  padding: 5px;
+  border: none;
+  border-radius: 0px;
+  border-bottom: 1px solid #a59d9d;
+}
+#chatContainer .chatManager .card .conservations .chats {
+  margin-left: 44px;
+  padding: 0px;
+  width: 100%;
+  overflow-y: scroll;
+}
+#chatContainer .chatManager .card .conservations .chats img {
   max-width: 90%;
   max-height: 500px;
   border-width: 5px 5px 5px 5px;
@@ -97,46 +118,46 @@
   -moz-box-shadow: 1px 1px 5px #333;
   margin: 2px;
 }
-#chatContainer .chatManager .card .card-body.conservations .icon {
+#chatContainer .chatManager .card .conservations .chats .icon {
   width: 35px;
   padding: 0px;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-human pre {
+#chatContainer .chatManager .card .conservations .chats .role-human pre {
   margin-bottom: 3px;
   font-size: 0.9em;
   white-space: pre-wrap;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-human .control {
+#chatContainer .chatManager .card .conservations .chats .role-human .control {
   margin-right: 5px;
   flex-direction: row-reverse;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-trash {
+#chatContainer .chatManager .card .conservations .chats .role-human .control .bi-trash {
   margin-right: 5px;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-pencil-square,
-#chatContainer .chatManager .card .card-body.conservations .role-human .control .bi-trash {
+#chatContainer .chatManager .card .conservations .chats .role-human .control .bi-pencil-square,
+#chatContainer .chatManager .card .conservations .chats .role-human .control .bi-trash {
   cursor: pointer;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-ai {
+#chatContainer .chatManager .card .conservations .chats .role-ai {
   margin-bottom: 5px;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-ai .icon {
+#chatContainer .chatManager .card .conservations .chats .role-ai .icon {
   margin-top: 0.5em;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-ai .ai-response .bi.bi-copy {
+#chatContainer .chatManager .card .conservations .chats .role-ai .ai-response .bi.bi-copy {
   position: absolute;
   right: 16px;
   cursor: pointer;
 }
-#chatContainer .chatManager .card .card-body.conservations .role-ai .ai-response p {
+#chatContainer .chatManager .card .conservations .chats .role-ai .ai-response p {
   margin-bottom: 0.5em;
   margin-top: 0.5em;
 }
-#chatContainer .chatManager .card .card-body.conservations .card-body pre {
+#chatContainer .chatManager .card .conservations .chats .card-body pre {
   overflow-wrap: break-word;
   white-space: pre-wrap;
 }
-#chatContainer .chatManager .card .card-body.conservations .btn.reload {
+#chatContainer .chatManager .card .conservations .chats .btn.reload {
   max-width: 85px;
   margin-bottom: 5px;
 }
@@ -179,6 +200,7 @@
 }
 #chatContainer .chatManager .card .card-footer .input-group.chat-controller {
   padding-left: 5px;
+  background-color: #f4f4f4;
 }
 #chatContainer .chatManager .card .card-footer .input-group.chat-controller i.bi {
   color: #084196;

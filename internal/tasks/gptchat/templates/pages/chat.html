@@ -14,21 +14,34 @@
                 </div> -->
 
                 <div class="card-body conservations">
-                    <!-- chats is here -->
-
-                    <!-- <div id="${chatID}">
-                        <div class="container-fluid row role-human" data-chatid="${chatID}">
-                            <div class="col-auto" style="width:50px;">🤔️</div>
-                            <div class="col text-start">
-                                <pre>${text}</pre>
-                                ${attachHTML}
-                            </div>
-                            <div class="col-auto d-flex control">
-                                <i class="bi bi-pencil-square"></i>
-                                <i class="bi bi-trash"></i>
-                            </div>
+                    <div class="sessions">
+                        <!-- <div class="list-group">
+                            <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
+                                <div class="col">12</div>
+                            </button>
                         </div>
-                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;"
+                        <div class="list-group">
+                            <button type="button" class="list-group-item list-group-item-action session" aria-current="true" data-session="2">
+                                <div class="col">23</div>
+                            </button>
+                        </div> -->
+                    </div>
+                    <div class="chats">
+                        <!-- chats is here -->
+
+                        <!-- <div id="${chatID}">
+                            <div class="container-fluid row role-human" data-chatid="${chatID}">
+                                <div class="col-auto" style="width:50px;">🤔️</div>
+                                <div class="col text-start">
+                                    <pre>${text}</pre>
+                                    ${attachHTML}
+                                </div>
+                                <div class="col-auto d-flex control">
+                                    <i class="bi bi-pencil-square"></i>
+                                    <i class="bi bi-trash"></i>
+                                </div>
+                            </div>
+                            <div class="container-fluid row role-ai" style="background-color: #f4f4f4;"
                             data-chatid="${chatID}">
                             <div class="col-auto icon" style="width:50px;">${robot_icon}</div>
                             <div class="col text-start ai-response" data-status="waiting">
@@ -43,6 +56,7 @@
                         </div>
                     </div> -->
 
+                    </div>
                 </div>
                 <div class="card-footer text-muted">
                     <div class="pinned-files">
@@ -57,7 +71,8 @@
                     </div>
                     <div class="input-group mb-3 chat-controller">
                         <div class="form-check-reverse form-switch">
-                            <label class="form-check-label" for="switchChatEnableHttpsCrawler" data-bs-toggle="tooltip" data-bs-placement="top" title="fetch content from https url"><i
+                            <label class="form-check-label" for="switchChatEnableHttpsCrawler" data-bs-toggle="tooltip"
+                                data-bs-placement="top" title="fetch content from https url"><i
                                     class="bi bi-link-45deg"></i></label>
                             <input class="form-check-input" type="checkbox" role="switch"
                                 id="switchChatEnableHttpsCrawler" checked>

@@ -88,17 +88,28 @@ function activeSessionID () {
 
 async function listenSessionSwitch (evt) {
     // deactive all sessions
+    evt = evtTarget(evt)
+    if (!evt.classList.contains('list-group-item')) {
+        evt = evt.closest('.list-group-item')
+    }
+
+    const activeSid = evt.dataset.session
     document
-        .querySelectorAll('#sessionManager .sessions .list-group-item.active')
+        .querySelectorAll(`
+            #sessionManager .sessions .list-group-item,
+            #chatContainer .sessions .list-group-item
+        `)
         .forEach((item) => {
-            item.classList.remove('active')
+            if (item.dataset.session === activeSid) {
+                item.classList.add('active')
+            } else {
+                item.classList.remove('active')
+            }
         })
-    evtTarget(evt).classList.add('active')
 
     // restore session hisgoty
-    const sessionID = evtTarget(evt).dataset.session
-    chatContainer.querySelector('.conservations').innerHTML = '';
-    (await sessionChatHistory(sessionID)).forEach((item) => {
+    chatContainer.querySelector('.conservations .chats').innerHTML = '';
+    (await sessionChatHistory(activeSid)).forEach((item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML)
         renderAfterAIResponse(item.chatID)
     })
@@ -319,6 +330,15 @@ async function setupSessionManager () {
                             <i class="bi bi-trash col-auto"></i>
                         </button>
                     </div>`)
+            chatContainer
+                .querySelector('.sessions')
+                .insertAdjacentHTML(
+                    'beforeend',
+                    `<div class="list-group">
+                        <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
+                            <div class="col">${sessionID}</div>
+                        </button>
+                    </div>`)
         });
 
         // restore conservation history
@@ -353,13 +373,16 @@ async function setupSessionManager () {
                 })
 
                 // deactive all sessions
-                document.querySelectorAll('#sessionManager .sessions .list-group-item.active').forEach((item) => {
+                document.querySelectorAll(`
+                    #sessionManager .sessions .list-group-item.active,
+                    #chatContainer .sessions .list-group-item.active
+                `).forEach((item) => {
                     item.classList.remove('active')
                 })
 
                 // add new active session
                 chatContainer
-                    .querySelector('.chatManager .conservations').innerHTML = ''
+                    .querySelector('.chatManager .conservations .chats').innerHTML = ''
                 const newSessionID = maxSessionID + 1
                 document
                     .querySelector('#sessionManager .sessions')
@@ -369,6 +392,15 @@ async function setupSessionManager () {
                             <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
                                 <div class="col">${newSessionID}</div>
                                 <i class="bi bi-trash col-auto"></i>
+                            </button>
+                        </div>`)
+                chatContainer
+                    .querySelector('.sessions')
+                    .insertAdjacentHTML(
+                        'beforeend',
+                        `<div class="list-group">
+                            <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
+                                <div class="col">${newSessionID}</div>
                             </button>
                         </div>`)
 
@@ -381,7 +413,10 @@ async function setupSessionManager () {
 
                 // bind session switch listener for new session
                 document
-                    .querySelector(`#sessionManager .sessions [data-session="${newSessionID}"]`)
+                    .querySelector(`
+                        #sessionManager .sessions [data-session="${newSessionID}"],
+                        #chatContainer .sessions [data-session="${newSessionID}"]
+                    `)
                     .addEventListener('click', listenSessionSwitch)
 
                 bindSessionDeleteBtn()
@@ -392,7 +427,10 @@ async function setupSessionManager () {
     // bind session switch
     {
         document
-            .querySelectorAll('#sessionManager .sessions .list-group .session')
+            .querySelectorAll(`
+                #sessionManager .sessions .list-group .session,
+                #chatContainer .sessions .list-group .session
+            `)
             .forEach((item) => {
                 item.addEventListener('click', listenSessionSwitch)
             })
@@ -474,7 +512,7 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
 }
 
 function scrollChatToDown () {
-    ScrollDown(chatContainer.querySelector('.chatManager .conservations'))
+    ScrollDown(chatContainer.querySelector('.chatManager .conservations .chats'))
 }
 
 function scrollToChat (chatEle) {
@@ -792,14 +830,14 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
 async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
-        .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML
+        .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML
     await appendChats2Storage(RoleHuman, chatID, text,
         `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
     )
 
     // insert image to user input
     chatContainer
-        .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start`)
+        .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start`)
         .insertAdjacentHTML(
             'beforeend',
             `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
@@ -821,14 +859,14 @@ async function sendChat2Server (chatID) {
         await appendChats2Storage(RoleHuman, chatID, reqPrompt)
     } else { // if chatID is not empty, it's a reload request
         reqPrompt = chatContainer
-            .querySelector(`.chatManager .conservations #${chatID} .role-human .text-start pre`).innerHTML
+            .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML
     }
 
     // extract and pin new material in chat
     reqPrompt = await userPromptEnhence(reqPrompt)
 
     currentAIRespEle = chatContainer
-        .querySelector(`.chatManager .conservations #${chatID} .ai-response`)
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
     currentAIRespEle = currentAIRespEle
     lockChatInput()
 
@@ -1176,7 +1214,7 @@ async function sendChat2Server (chatID) {
  */
 function renderAfterAIResponse (chatID) {
     // Prism.highlightAll();
-    const chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID} .ai-response`)
+    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
 
     if (!chatEle) {
         return
@@ -1273,7 +1311,7 @@ function abortAIResp (err) {
         currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`
     }
 
-    // ScrollDown(chatContainer.querySelector(".chatManager .conservations"));
+    // ScrollDown(chatContainer.querySelector(".chatManager .conservations .chats"));
     currentAIRespEle.scrollIntoView({ behavior: 'smooth' })
     appendChats2Storage(RoleAI, currentAIRespEle.closest('.role-ai').dataset.chatid, currentAIRespEle.innerHTML)
     unlockChatInput()
@@ -1598,7 +1636,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             // and append ai response after it
             chatContainer.querySelector(`#${chatID}`).insertAdjacentHTML('beforeend', chatEleHtml)
         } else {
-            chatContainer.querySelector('.chatManager .conservations')
+            chatContainer.querySelector('.chatManager .conservations .chats')
                 .insertAdjacentHTML('beforeend', chatEleHtml)
         }
     } else if (chatOp == 'replace') {
@@ -1607,7 +1645,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             .outerHTML = chatEleHtml
     }
 
-    const chatEle = chatContainer.querySelector(`.chatManager .conservations #${chatID}`)
+    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`)
     if (!isHistory && role == RoleHuman) {
         scrollToChat(chatEle)
     }
@@ -1634,7 +1672,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
 
             // attach image to vision-selected-store when edit human input
             const attachEles = chatContainer
-                .querySelectorAll(`.chatManager .conservations #${chatID} .role-human .text-start img`) || []
+                .querySelectorAll(`.chatManager .conservations .chats #${chatID} .role-human .text-start img`) || []
             let attachHTML = ''
             attachEles.forEach((ele) => {
                 const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '')

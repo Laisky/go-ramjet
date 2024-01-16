@@ -92,11 +92,13 @@
                 z-index: 1099;
             }
 
-            .card-body.conservations {
+            .conservations {
                 padding: 0px;
                 position: relative;
                 min-height: 300px;
                 overflow-y: scroll;
+                display: flex;
+                flex-direction: row;
 
                 .row {
                     margin: 0px;
@@ -108,73 +110,96 @@
                     }
                 }
 
-                img {
-                    max-width: 90%;
-                    max-height: 500px;
-                    border-width: 5px 5px 5px 5px;
-                    box-shadow: 1px 1px 5px #333;
-                    -webkit-box-shadow: 1px 1px 5px #333;
-                    -moz-box-shadow: 1px 1px 5px #333;
-                    margin: 2px;
+                .sessions {
+                    position: fixed;
+                    height: 100%;
+                    // background-color: #f4f4f4;
+                    width: 44px;
+                    border-right: #e2e3e5;
+                    border-right-style: dashed;
+
+                    button {
+                        padding: 5px;
+                        border: none;
+                        border-radius: 0px;
+                        border-bottom: 1px solid #a59d9d;
+                    }
                 }
 
-                .icon {
-                    width: 35px;
+                .chats {
+                    margin-left: 44px;
                     padding: 0px;
-                }
+                    width: 100%;
+                    overflow-y: scroll;
 
-                .role-human {
-                    pre {
-                        margin-bottom: 3px;
-                        font-size: 0.9em;
+                    img {
+                        max-width: 90%;
+                        max-height: 500px;
+                        border-width: 5px 5px 5px 5px;
+                        box-shadow: 1px 1px 5px #333;
+                        -webkit-box-shadow: 1px 1px 5px #333;
+                        -moz-box-shadow: 1px 1px 5px #333;
+                        margin: 2px;
+                    }
+
+                    .icon {
+                        width: 35px;
+                        padding: 0px;
+                    }
+
+                    .role-human {
+                        pre {
+                            margin-bottom: 3px;
+                            font-size: 0.9em;
+                            white-space: pre-wrap;
+                        }
+
+                        .control {
+                            // width: 50px;
+                            margin-right: 5px;
+                            flex-direction: row-reverse;
+
+                            .bi-trash {
+                                margin-right: 5px;
+                            }
+
+                            .bi-pencil-square,
+                            .bi-trash {
+                                cursor: pointer;
+                            }
+                        }
+                    }
+
+                    .role-ai {
+                        margin-bottom: 5px;
+
+                        .icon {
+                            margin-top: 0.5em;
+                        }
+
+                        .ai-response {
+                            .bi.bi-copy {
+                                position: absolute;
+                                right: 16px;
+                                cursor: pointer;
+                            }
+
+                            p {
+                                margin-bottom: 0.5em;
+                                margin-top: 0.5em;
+                            }
+                        }
+                    }
+
+                    .card-body pre {
+                        overflow-wrap: break-word;
                         white-space: pre-wrap;
                     }
 
-                    .control {
-                        // width: 50px;
-                        margin-right: 5px;
-                        flex-direction: row-reverse;
-
-                        .bi-trash {
-                            margin-right: 5px;
-                        }
-
-                        .bi-pencil-square,
-                        .bi-trash {
-                            cursor: pointer;
-                        }
+                    .btn.reload {
+                        max-width: 85px;
+                        margin-bottom: 5px;
                     }
-                }
-
-                .role-ai {
-                    margin-bottom: 5px;
-
-                    .icon {
-                        margin-top: 0.5em;
-                    }
-
-                    .ai-response {
-                        .bi.bi-copy {
-                            position: absolute;
-                            right: 16px;
-                            cursor: pointer;
-                        }
-
-                        p {
-                            margin-bottom: 0.5em;
-                            margin-top: 0.5em;
-                        }
-                    }
-                }
-
-                .card-body pre {
-                    overflow-wrap: break-word;
-                    white-space: pre-wrap;
-                }
-
-                .btn.reload {
-                    max-width: 85px;
-                    margin-bottom: 5px;
                 }
             }
 
@@ -223,6 +248,7 @@
 
                 .input-group.chat-controller {
                     padding-left: 5px;
+                    background-color: #f4f4f4;
 
                     i.bi {
                         color: #084196;
