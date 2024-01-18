@@ -270,19 +270,20 @@ function bindSessionEditBtn () {
             }
 
             item.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                evt = evtTarget(evt)
-                const sid = evt.closest('.session').dataset.session
+                evt.stopPropagation();
+                evt = evtTarget(evt);
+                const sid = evt.closest('.session').dataset.session;
+                const sconfig = await getChatSessionConfig(sid);
+                const oldSessionName = sconfig.session_name || sid;
 
                 SingleInputModal('Edit session', 'Session name', async (newSessionName) => {
                     if (!newSessionName) {
-                        return
+                        return;
                     }
 
                     // update session config
-                    const sconfig = await getChatSessionConfig(sid)
-                    sconfig.session_name = newSessionName
-                    await KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig)
+                    sconfig.session_name = newSessionName;
+                    await KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig);
 
                     // update session name
                     document
@@ -290,7 +291,7 @@ function bindSessionEditBtn () {
                     chatContainer
                         .querySelector(`.sessions [data-session="${sid}"] .col`)
                         .innerHTML = newSessionName;
-                }, item.closest('.session').dataset.session)
+                }, oldSessionName);
             })
         })
 }
