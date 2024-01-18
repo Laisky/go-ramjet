@@ -78,9 +78,14 @@ async function activeSessionChatHistory () {
 }
 
 function activeSessionID () {
-    const activeSession = document.querySelector('#sessionManager .card-body button.active')
+    let activeSession = document.querySelector('#sessionManager .card-body button.active')
     if (activeSession) {
         return activeSession.dataset.session
+    }
+
+    activeSession = GetLocalStorage(StorageKeySelectedSession)
+    if (activeSession) {
+        return activeSession
     }
 
     return 1
@@ -114,6 +119,7 @@ async function listenSessionSwitch (evt) {
         renderAfterAIResponse(item.chatID)
     })
 
+    SetLocalStorage(StorageKeySelectedSession, activeSid)
     updateConfigFromSessionConfig()
     EnableTooltipsEverywhere()
 }
@@ -284,6 +290,8 @@ function bindSessionDeleteBtn () {
  *
  */
 async function setupSessionManager () {
+    const selectedSessionID = activeSessionID()
+
     // bind remove all sessions
     {
         document
@@ -310,13 +318,11 @@ async function setupSessionManager () {
             await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig())
         }
 
-        let firstSession = true
         allSessionKeys.forEach((key) => {
             const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''))
 
             let active = ''
-            if (firstSession) {
-                firstSession = false
+            if (sessionID == selectedSessionID) {
                 active = 'active'
             }
 
@@ -410,6 +416,7 @@ async function setupSessionManager () {
                 const sconfig = newSessionConfig()
                 sconfig.api_token = oldSessionConfig.api_token // keep api token
                 await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig)
+                SetLocalStorage(StorageKeySelectedSession, newSessionID)
 
                 // bind session switch listener for new session
                 document

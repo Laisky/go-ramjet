@@ -73,6 +73,7 @@ const StorageKeyPromptShortCuts = 'config_prompt_shortcuts'
 const StorageKeyCustomDatasetPassword = 'config_chat_dataset_key'
 const StorageKeyPinnedMaterials = 'config_api_pinned_materials'
 const StorageKeyAllowedModels = 'config_chat_models'
+const StorageKeySelectedSession = 'config_selected_session'
 
 // should not has same prefix
 const KvKeyPrefixSessionHistory = 'chat_user_session_'
@@ -278,6 +279,11 @@ async function dataMigrate () {
     const sid = activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     let sconfig = await KvGet(skey)
+
+    // set selected session
+    if (!GetLocalStorage(StorageKeySelectedSession)) {
+        SetLocalStorage(StorageKeySelectedSession, sid)
+    }
 
     // move config from localstorage to session config
     {
