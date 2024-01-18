@@ -219,33 +219,35 @@ const ChatNContexts = async () => {
  * @returns {string} prompt
  */
 const OpenaiChatStaticContext = async (prompt) => {
-    const sid = activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
+    const sid = activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
 
     if (prompt) {
-        sconfig.system_prompt = prompt
-        await KvSet(skey, sconfig)
+        sconfig.system_prompt = prompt;
+        await KvSet(skey, sconfig);
     }
 
-    return sconfig.system_prompt || ''
+    return sconfig.system_prompt || '';
 }
 
-const SingleInputModal = (title, message, callback) => {
-    const modal = document.getElementById('singleInputModal')
+const SingleInputModal = (title, message, callback, defaultVal) => {
+    const modal = document.getElementById('singleInputModal');
     singleInputCallback = async () => {
         try {
-            ShowSpinner()
-            await callback(modal.querySelector('.modal-body input').value)
+            ShowSpinner();
+            await callback(modal.querySelector('.modal-body input').value);
         } finally {
-            HideSpinner()
+            HideSpinner();
         }
     }
 
-    modal.querySelector('.modal-title').innerHTML = title
-    modal.querySelector('.modal-body label.form-label').innerHTML = message
-    singleInputModal.show()
-}
+    modal.querySelector('.modal-title').innerHTML = title;
+    modal.querySelector('.modal-body label.form-label').innerHTML = message;
+    modal.querySelector('.modal-body input').value = defaultVal || '';
+    singleInputModal.show();
+    modal.querySelector('.modal-body input').focus();
+};
 
 // show modal to confirm,
 // callback will be called if user click yes
@@ -256,83 +258,83 @@ const SingleInputModal = (title, message, callback) => {
 const ConfirmModal = (title, callback) => {
     deleteCheckCallback = async () => {
         try {
-            ShowSpinner()
-            await callback()
+            ShowSpinner();
+            await callback();
         } finally {
-            HideSpinner()
+            HideSpinner();
         }
-    }
-    document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title
-    deleteCheckModal.show()
-}
+    };
+    document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title;
+    deleteCheckModal.show();
+};
 
 window.AppEntrypoint = async () => {
-    await dataMigrate()
-    await setupHeader()
-    setupConfirmModal()
-    setupSingleInputModal()
+    await dataMigrate();
+    await setupHeader();
+    setupConfirmModal();
+    setupSingleInputModal();
 
-    await setupChatJs()
-}
+    await setupChatJs();
+};
 
 async function dataMigrate () {
-    const sid = activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    let sconfig = await KvGet(skey)
+    const sid = activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    let sconfig = await KvGet(skey);
 
     // set selected session
     if (!GetLocalStorage(StorageKeySelectedSession)) {
-        SetLocalStorage(StorageKeySelectedSession, sid)
+        SetLocalStorage(StorageKeySelectedSession, sid);
     }
 
     // move config from localstorage to session config
     {
         if (!sconfig) {
-            sconfig = newSessionConfig()
+            sconfig = newSessionConfig();
 
-            sconfig.api_token = GetLocalStorage('config_api_token_value') || sconfig.api_token
-            sconfig.token_type = GetLocalStorage('config_api_token_type') || sconfig.token_type
-            sconfig.max_tokens = GetLocalStorage('config_api_max_tokens') || sconfig.max_tokens
-            sconfig.temperature = GetLocalStorage('config_api_temperature') || sconfig.temperature
-            sconfig.presence_penalty = GetLocalStorage('config_api_presence_penalty') || sconfig.presence_penalty
-            sconfig.frequency_penalty = GetLocalStorage('config_api_frequency_penalty') || sconfig.frequency_penalty
-            sconfig.n_contexts = GetLocalStorage('config_api_n_contexts') || sconfig.n_contexts
-            sconfig.system_prompt = GetLocalStorage('config_api_static_context') || sconfig.system_prompt
-            sconfig.selected_model = GetLocalStorage('config_chat_model') || sconfig.selected_model
+            sconfig.api_token = GetLocalStorage('config_api_token_value') || sconfig.api_token;
+            sconfig.token_type = GetLocalStorage('config_api_token_type') || sconfig.token_type;
+            sconfig.max_tokens = GetLocalStorage('config_api_max_tokens') || sconfig.max_tokens;
+            sconfig.temperature = GetLocalStorage('config_api_temperature') || sconfig.temperature;
+            sconfig.presence_penalty = GetLocalStorage('config_api_presence_penalty') || sconfig.presence_penalty;
+            sconfig.frequency_penalty = GetLocalStorage('config_api_frequency_penalty') || sconfig.frequency_penalty;
+            sconfig.n_contexts = GetLocalStorage('config_api_n_contexts') || sconfig.n_contexts;
+            sconfig.system_prompt = GetLocalStorage('config_api_static_context') || sconfig.system_prompt;
+            sconfig.selected_model = GetLocalStorage('config_chat_model') || sconfig.selected_model;
 
-            await KvSet(skey, sconfig)
+            await KvSet(skey, sconfig);
         }
     }
 
     // set api token from url params
     {
-        const apikey = new URLSearchParams(location.search).get('apikey')
+        const apikey = new URLSearchParams(location.search).get('apikey');
 
         if (apikey) {
             // remove apikey from url params
-            const url = new URL(location.href)
-            url.searchParams.delete('apikey')
-            window.history.pushState({}, document.title, url)
-            sconfig.api_token = apikey
-            await KvSet(skey, sconfig)
+            const url = new URL(location.href);
+            url.searchParams.delete('apikey');
+            window.history.pushState({}, document.title, url);
+            sconfig.api_token = apikey;
+            await KvSet(skey, sconfig);
         }
     }
 
     // list all session configs
     await Promise.all((await KvList()).map(async (key) => {
         if (!key.startsWith(KvKeyPrefixSessionConfig)) {
-            return
+            return;
         }
 
-        const sconfig = await KvGet(key)
+        const sconfig = await KvGet(key);
 
         // set default api_token
         if (!sconfig.api_token || sconfig.api_token == 'DEFAULT_PROXY_TOKEN') {
-            sconfig.api_token = 'FREETIER-' + RandomString(32)
+            sconfig.api_token = 'FREETIER-' + RandomString(32);
         }
         // set default api_base
         if (!sconfig.api_base) {
-            sconfig.api_base = 'https://api.openai.com'
+            sconfig.api_base = 'https://api.openai.com';
         }
 
         // set default chat controller
@@ -342,8 +344,8 @@ async function dataMigrate () {
             }
         }
 
-        console.debug('migrate session config: ', key, sconfig)
-        await KvSet(key, sconfig)
+        console.debug('migrate session config: ', key, sconfig);
+        await KvSet(key, sconfig);
     }))
 
     // update legacy chat history, add chatID to each chat

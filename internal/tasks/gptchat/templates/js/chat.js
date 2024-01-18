@@ -260,6 +260,41 @@ async function clearSessionAndChats (evt, sessionID) {
     location.reload()
 }
 
+function bindSessionEditBtn () {
+    document.querySelectorAll('#sessionManager .sessions .session .bi.bi-pencil-square')
+        .forEach((item) => {
+            if (item.dataset.bindClicked) {
+                return
+            } else {
+                item.dataset.bindClicked = true
+            }
+
+            item.addEventListener('click', async (evt) => {
+                evt.stopPropagation()
+                evt = evtTarget(evt)
+                const sid = evt.closest('.session').dataset.session
+
+                SingleInputModal('Edit session', 'Session name', async (newSessionName) => {
+                    if (!newSessionName) {
+                        return
+                    }
+
+                    // update session config
+                    const sconfig = await getChatSessionConfig(sid)
+                    sconfig.session_name = newSessionName
+                    await KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig)
+
+                    // update session name
+                    document
+                        .querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
+                    chatContainer
+                        .querySelector(`.sessions [data-session="${sid}"] .col`)
+                        .innerHTML = newSessionName;
+                }, item.closest('.session').dataset.session)
+            })
+        })
+}
+
 function bindSessionDeleteBtn () {
     const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || []
     btns.forEach((item) => {
@@ -278,10 +313,11 @@ function bindSessionDeleteBtn () {
             }
 
             const sessionID = evtTarget(evt).closest('.session').dataset.session
-            if (confirm('Are you sure to delete this session?')) {
-                KvDel(storageSessionKey(sessionID))
+            ConfirmModal('Are you sure to delete this session?', () => {
+                KvDel(`${KvKeyPrefixSessionHistory}${sessionID}`)
+                KvDel(`${KvKeyPrefixSessionConfig}${sessionID}`)
                 evtTarget(evt).closest('.list-group').remove()
-            }
+            })
         })
     })
 }
@@ -318,10 +354,12 @@ async function setupSessionManager () {
             await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig())
         }
 
-        allSessionKeys.forEach((key) => {
+        await Promise.all(allSessionKeys.map(async (key) => {
             const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''))
 
-            let active = ''
+            let active = '';
+            const sconfig = await getChatSessionConfig(sessionID);
+            const sessionName = sconfig.session_name || sessionID;
             if (sessionID == selectedSessionID) {
                 active = 'active'
             }
@@ -332,7 +370,8 @@ async function setupSessionManager () {
                     'beforeend',
                     `<div class="list-group">
                         <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
-                            <div class="col">${sessionID}</div>
+                            <div class="col">${sessionName}</div>
+                            <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash col-auto"></i>
                         </button>
                     </div>`)
@@ -342,10 +381,10 @@ async function setupSessionManager () {
                     'beforeend',
                     `<div class="list-group">
                         <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
-                            <div class="col">${sessionID}</div>
+                            <div class="col">${sessionName}</div>
                         </button>
                     </div>`)
-        });
+        }));
 
         // restore conservation history
         (await activeSessionChatHistory()).forEach((item) => {
@@ -397,6 +436,7 @@ async function setupSessionManager () {
                         `<div class="list-group">
                             <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
                                 <div class="col">${newSessionID}</div>
+                                <i class="bi bi-pencil-square"></i>
                                 <i class="bi bi-trash col-auto"></i>
                             </button>
                         </div>`)
@@ -426,6 +466,7 @@ async function setupSessionManager () {
                     `)
                     .addEventListener('click', listenSessionSwitch)
 
+                bindSessionEditBtn()
                 bindSessionDeleteBtn()
                 updateConfigFromSessionConfig()
             })
@@ -443,6 +484,7 @@ async function setupSessionManager () {
             })
     }
 
+    bindSessionEditBtn()
     bindSessionDeleteBtn()
 }
 
@@ -1671,12 +1713,10 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         const deleteBtnHandler = (evt) => {
             evt.stopPropagation()
 
-            if (!confirm('Are you sure to delete this chat?')) {
-                return
-            }
-
-            chatEle.parentNode.removeChild(chatEle)
-            removeChatInStorage(chatID)
+            ConfirmModal('Delete Chat', 'Are you sure to delete this chat?', () => {
+                chatEle.parentNode.removeChild(chatEle)
+                removeChatInStorage(chatID)
+            })
         }
 
         const editHumanInputHandler = (evt) => {
@@ -1767,8 +1807,11 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     }
 }
 
-var getChatSessionConfig = async () => {
-    const sid = activeSessionID()
+var getChatSessionConfig = async (sid) => {
+    if (!sid) {
+        sid = activeSessionID()
+    }
+
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     let sconfig = await KvGet(skey)
 

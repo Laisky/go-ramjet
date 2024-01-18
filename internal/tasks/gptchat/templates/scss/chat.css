@@ -34,8 +34,14 @@
 #offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group {
   border-radius: 0%;
 }
-#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group .session {
+#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group button.session {
+  padding: 2px;
+  cursor: auto;
   display: flex;
+}
+#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group button.session i.bi {
+  cursor: pointer;
+  padding-left: 5px;
 }
 #offcanvasSession .offcanvas-body #sessionManager.card .card-footer {
   padding: 0px;
@@ -178,7 +184,7 @@
   z-index: 1000;
   background-color: #d1d1d1;
   position: fixed;
-  bottom: 85px;
+  bottom: 101px;
   left: 15px;
   max-width: 50%;
   overflow: hidden;

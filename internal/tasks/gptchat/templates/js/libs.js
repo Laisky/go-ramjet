@@ -125,6 +125,21 @@
                 throw error
             }
         }
+        /** rename key in indexeddb
+         *
+         * @param {*} oldKey
+         * @param {*} newKey
+         */
+        window.KvRename = async (oldKey, newKey) => {
+            console.debug(`KvRename: ${oldKey} -> ${newKey}`)
+            const oldVal = await KvGet(oldKey)
+            if (!oldVal) {
+                return
+            }
+
+            await KvSet(newKey, oldVal)
+            await KvDel(oldKey)
+        }
         // delete data from indexeddb
         window.KvDel = async (key) => {
             console.debug(`KvDel: ${key}`)
@@ -152,34 +167,37 @@
         }
         // list all keys from indexeddb
         window.KvList = async () => {
-            console.debug('KvList')
-            const docs = await kv.allDocs({ include_docs: true })
-            const keys = []
+            console.debug('KvList');
+            const docs = await kv.allDocs({ include_docs: true });
+            const keys = [];
             for (let i = 0; i < docs.rows.length; i++) {
-                keys.push(docs.rows[i].doc._id)
+                keys.push(docs.rows[i].doc._id);
             }
-            return keys
-        }
+            return keys;
+        };
         // clear all data from indexeddb
         window.KvClear = async () => {
-            console.debug('KvClear')
-            await kv.destroy()
-            kv = new PouchDB('mydatabase')
+            console.debug('KvClear');
 
             // notify listeners
-            Object.keys(kvListeners).forEach((keyPrefix) => {
-                if (key.startsWith(keyPrefix)) {
-                    for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
-                        const callback = kvListeners[keyPrefix][i]
-                        callback(key, KvOp.DEL, null, null)
+            (await KvList()).forEach((key) => {
+                Object.keys(kvListeners).forEach((keyPrefix) => {
+                    if (key.startsWith(keyPrefix)) {
+                        for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+                            const callback = kvListeners[keyPrefix][i]
+                            callback(key, KvOp.DEL, null, null)
+                        }
                     }
-                }
-            })
-        }
+                })
+            });
+
+            await kv.destroy();
+            kv = new PouchDB('mydatabase');
+        };
 
         window.SetLocalStorage = (key, val) => {
-            localStorage.setItem(key, JSON.stringify(val))
-        }
+            localStorage.setItem(key, JSON.stringify(val));
+        };
         window.GetLocalStorage = (key) => {
             const v = localStorage.getItem(key)
             if (v) {
