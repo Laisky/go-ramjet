@@ -37,11 +37,11 @@ function showalert (type, msg) {
     const alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
             <div>${sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>`
+        </div>`;
 
     // append as first child
-    chatContainer.querySelector('.chatManager')
-        .insertAdjacentHTML('afterbegin', alertEle)
+    chatContainer.querySelector('.chatManager .alerts-container .alerts')
+        .insertAdjacentHTML('afterbegin', alertEle);
 }
 
 // check sessionID's type, secure convert to int, default is 1

@@ -73,6 +73,22 @@
   padding: 0px;
   padding-left: 0px;
   max-height: 100%;
+  position: relative;
+}
+#chatContainer .chatManager .alerts-container {
+  width: 100%;
+  padding-top: 20px;
+  position: absolute;
+  display: flex;
+  justify-content: space-around;
+  z-index: 50;
+}
+#chatContainer .chatManager .alerts-container .alerts {
+  width: 80%;
+  min-height: 50px;
+}
+#chatContainer .chatManager .alerts-container .alerts .alert {
+  margin-bottom: 5px;
 }
 #chatContainer .chatManager .card {
   height: 100%;
