@@ -6,8 +6,8 @@ const RoleAI = 'assistant'
 
 const chatContainer = document.getElementById('chatContainer')
 const configContainer = document.getElementById('hiddenChatConfigSideBar')
-const chatPromptInputEle = chatContainer.querySelector('.input.prompt')
-const chatPromptInputBtn = chatContainer.querySelector('.btn.send')
+const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt')
+const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send')
 
 let currentAIRespSSE, currentAIRespEle
 
@@ -1357,6 +1357,50 @@ function abortAIResp (err) {
     unlockChatInput()
 }
 
+async function bindUserInputSelectFilesBtn () {
+    chatContainer.querySelector('.user-input .btn.upload')
+        .addEventListener('click', async (evt) => {
+            // click to select images
+            evt.stopPropagation();
+
+            const inputEle = document.createElement('input');
+            inputEle.type = 'file';
+            inputEle.multiple = true;
+            inputEle.accept = 'image/*';
+
+            inputEle.addEventListener('change', async (evt) => {
+                const files = evtTarget(evt).files;
+                for (const file of files) {
+                   readFileForVision(file);
+                }
+            });
+
+            inputEle.click();
+        });
+}
+
+/** auto display or hide user input select files button according to selected model
+ *
+ */
+async function autoToggleUserImageUploadBtn () {
+    const sconfig = await getChatSessionConfig();
+    const isVision = sconfig.selected_model.includes('vision');
+
+    const btnEle = chatContainer.querySelector('.user-input .btn.upload');
+    if ((isVision && btnEle) || (!isVision && !btnEle)) {
+        // everything is ok
+        return;
+    }
+
+    const uploadEleHtml = '<button class="btn btn-outline-secondary upload" type="button"><i class="bi bi-images"></i></button>';
+    if (isVision) {
+        chatPromptInputBtn.insertAdjacentHTML('beforebegin', uploadEleHtml);
+        bindUserInputSelectFilesBtn();
+    } else {
+        btnEle.remove();
+    }
+}
+
 async function setupChatInput () {
     // bind input press enter
     {
@@ -1390,7 +1434,7 @@ async function setupChatInput () {
     // change hint when models change
     {
         KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
-            if (op != KvOp.Set) {
+            if (op != KvOp.SET) {
                 return;
             }
 
@@ -1411,6 +1455,16 @@ async function setupChatInput () {
             await sendChat2Server();
             chatPromptInputEle.value = '';
         });
+
+    // bindImageUploadButton
+    await autoToggleUserImageUploadBtn();
+    KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+        if (op != KvOp.SET) {
+            return;
+        }
+
+        await autoToggleUserImageUploadBtn();
+    });
 
     // restore pinned materials
     await restorePinnedMaterials();
@@ -1447,27 +1501,7 @@ async function setupChatInput () {
                 }
 
                 // get file content as Blob
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const arrayBuffer = e.target.result;
-                    if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
-                        showalert('danger', 'file size should less than 10M');
-                        return;
-                    }
-
-                    const byteArray = new Uint8Array(arrayBuffer);
-                    const chunkSize = 0xffff; // Use chunks to avoid call stack limit
-                    const chunks = [];
-                    for (let i = 0; i < byteArray.length; i += chunkSize) {
-                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
-                    }
-                    const base64String = btoa(chunks.join(''));
-
-                    // chatVisionSelectedFileStore = {};  // only support 1 image for current version
-                    chatVisionSelectedFileStore[file.name] = base64String;
-                    updateChatVisionSelectedFileStore();
-                };
-                reader.readAsArrayBuffer(file);
+                readFileForVision(file);
             }
         };
 
@@ -1476,52 +1510,6 @@ async function setupChatInput () {
             evt.preventDefault();
             evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
             dropfileModal.show();
-        };
-
-        // read paste file
-        const filePasteHandler = async (evt) => {
-            if (!evt.clipboardData || !evt.clipboardData.items) {
-                return;
-            }
-
-            for (let i = 0; i < evt.clipboardData.items.length; i++) {
-                const item = evt.clipboardData.items[i];
-                if (item.kind != 'file') {
-                    continue;
-                }
-
-                const file = item.getAsFile();
-                if (!file) {
-                    continue;
-                }
-
-                evt.stopPropagation();
-                evt.preventDefault();
-
-                // get file content as Blob
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const arrayBuffer = e.target.result;
-                    if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
-                        showalert('danger', 'file size should less than 10M');
-                        return;
-                    }
-
-                    const byteArray = new Uint8Array(arrayBuffer);
-                    const chunkSize = 0xffff; // Use chunks to avoid call stack limit
-                    const chunks = [];
-                    for (let i = 0; i < byteArray.length; i += chunkSize) {
-                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
-                    }
-                    const base64String = btoa(chunks.join(''));
-
-                    // only support 1 image for current version
-                    chatVisionSelectedFileStore = {};
-                    chatVisionSelectedFileStore[file.name] = base64String;
-                    updateChatVisionSelectedFileStore();
-                };
-                reader.readAsArrayBuffer(file);
-            }
         };
 
         chatPromptInputEle.addEventListener('paste', filePasteHandler);
@@ -1563,6 +1551,62 @@ async function setupChatInput () {
                 await saveChatSessionConfig(sconfig)
             })
     }
+}
+
+// read paste file
+async function filePasteHandler (evt) {
+    if (!evt.clipboardData || !evt.clipboardData.items) {
+        return;
+    }
+
+    for (let i = 0; i < evt.clipboardData.items.length; i++) {
+        const item = evt.clipboardData.items[i];
+        if (item.kind != 'file') {
+            continue;
+        }
+
+        const file = item.getAsFile();
+        if (!file) {
+            continue;
+        }
+
+        evt.stopPropagation();
+        evt.preventDefault();
+
+        // get file content as Blob
+        readFileForVision(file);
+    }
+};
+
+/** read file content and append to vision store
+ *
+ * @param {*} file - file object
+ */
+function readFileForVision (file) {
+    // get file content as Blob
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const arrayBuffer = e.target.result;
+        if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
+            showalert('danger', 'file size should less than 10M');
+            return;
+        }
+
+        const byteArray = new Uint8Array(arrayBuffer);
+        const chunkSize = 0xffff; // Use chunks to avoid call stack limit
+        const chunks = [];
+        for (let i = 0; i < byteArray.length; i += chunkSize) {
+            chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
+        }
+        const base64String = btoa(chunks.join(''));
+
+        // only support 1 image for current version
+        chatVisionSelectedFileStore = {};
+        chatVisionSelectedFileStore[file.name] = base64String;
+        updateChatVisionSelectedFileStore();
+    };
+
+    reader.readAsArrayBuffer(file);
 }
 
 async function updateChatVisionSelectedFileStore () {
@@ -1812,6 +1856,7 @@ window.getChatSessionConfig = async (sid) => {
 
     return sconfig;
 };
+const getChatSessionConfig = window.getChatSessionConfig;
 
 window.saveChatSessionConfig = async (sconfig) => {
     const sid = await activeSessionID();

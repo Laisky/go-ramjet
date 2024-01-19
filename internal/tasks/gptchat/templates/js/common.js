@@ -275,7 +275,7 @@ window.AppEntrypoint = async () => {
     await setupChatJs();
 };
 
-async function dataMigrate() {
+async function dataMigrate () {
     const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
     let sconfig = await KvGet(skey);
@@ -384,7 +384,7 @@ async function dataMigrate() {
 
 let singleInputCallback, singleInputModal
 
-function setupSingleInputModal() {
+function setupSingleInputModal () {
     singleInputCallback = null
     singleInputModal = new bootstrap.Modal(document.getElementById('singleInputModal'))
     document.getElementById('singleInputModal')
@@ -409,7 +409,7 @@ let deleteCheckCallback,
      */
     deleteCheckModal
 
-function setupConfirmModal() {
+function setupConfirmModal () {
     deleteCheckModal = new bootstrap.Modal(document.getElementById('deleteCheckModal'))
     document.getElementById('deleteCheckModal')
         .querySelector('.modal-body .yes')
@@ -427,10 +427,10 @@ function setupConfirmModal() {
 /** setup header bar
  *
  */
-async function setupHeader() {
+async function setupHeader () {
     const headerBarEle = document.getElementById('headerbar')
     let allowedModels = []
-    const sconfig = await getChatSessionConfig()
+    const sconfig = await getChatSessionConfig();
 
     // setup chat models
     {
