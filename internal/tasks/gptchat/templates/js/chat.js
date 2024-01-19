@@ -126,7 +126,8 @@ async function listenSessionSwitch (evt) {
     })
 
     await KvSet(KvKeyPrefixSelectedSession, activeSid);
-    updateConfigFromSessionConfig();
+    await updateConfigFromSessionConfig();
+    await autoToggleUserImageUploadBtn();
     EnableTooltipsEverywhere();
 }
 
@@ -319,14 +320,17 @@ function bindSessionDeleteBtn () {
                 return;
             }
 
-            const sessionID = evtTarget(evt).closest('.session').dataset.session;
+            const sid = evtTarget(evt).closest('.session').dataset.session;
             ConfirmModal('Are you sure to delete this session?', () => {
-                KvDel(`${KvKeyPrefixSessionHistory}${sessionID}`);
-                KvDel(`${KvKeyPrefixSessionConfig}${sessionID}`);
-                evtTarget(evt).closest('.list-group').remove();
-            })
-        })
-    })
+                KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
+                KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
+                document
+                    .querySelector(`#sessionManager .sessions [data-session="${sid}"]`).remove();
+                chatContainer
+                    .querySelector(`.sessions [data-session="${sid}"]`).remove();
+            });
+        });
+    });
 }
 
 /** setup session manager and restore current chat history
@@ -473,9 +477,9 @@ async function setupSessionManager () {
                     `)
                     .addEventListener('click', listenSessionSwitch)
 
-                bindSessionEditBtn()
-                bindSessionDeleteBtn()
-                updateConfigFromSessionConfig()
+                bindSessionEditBtn();
+                bindSessionDeleteBtn();
+                await updateConfigFromSessionConfig();
             })
     }
 
@@ -1371,7 +1375,7 @@ async function bindUserInputSelectFilesBtn () {
             inputEle.addEventListener('change', async (evt) => {
                 const files = evtTarget(evt).files;
                 for (const file of files) {
-                   readFileForVision(file);
+                    readFileForVision(file);
                 }
             });
 
@@ -1938,7 +1942,7 @@ async function updateConfigFromSessionConfig () {
 }
 
 async function setupConfig () {
-    updateConfigFromSessionConfig()
+    await updateConfigFromSessionConfig();
 
     //  config_api_token_value
     {
