@@ -8,6 +8,7 @@
   display: flex;
   justify-content: space-between;
   flex-wrap: nowrap;
+  padding: 0px;
 }
 #headerbar > .container-fluid .container-fluid.left {
   display: flex;

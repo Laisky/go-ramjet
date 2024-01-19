@@ -1604,8 +1604,12 @@ function readFileForVision (file) {
         }
         const base64String = btoa(chunks.join(''));
 
-        // only support 1 image for current version
-        chatVisionSelectedFileStore = {};
+        // only support 5 image for current version
+        if (Object.keys(chatVisionSelectedFileStore).length > 5) {
+            showalert('warning', 'only support 5 images for current version');
+            return;
+        }
+
         chatVisionSelectedFileStore[file.name] = base64String;
         updateChatVisionSelectedFileStore();
     };
