@@ -24,6 +24,7 @@ module.exports = {
     rules: {
         indent: ['error', 4],
         'no-lone-blocks': 'off',
-        semi: 'off'
+        semi: 'off',
+        egegeg: 'off'
     }
 }

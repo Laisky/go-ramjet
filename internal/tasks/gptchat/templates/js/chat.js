@@ -8,20 +8,26 @@ const chatContainer = document.getElementById('chatContainer')
 const configContainer = document.getElementById('hiddenChatConfigSideBar')
 const chatPromptInputEle = chatContainer.querySelector('.input.prompt')
 const chatPromptInputBtn = chatContainer.querySelector('.btn.send')
-let currentAIRespSSE; let currentAIRespEle
+
+let currentAIRespSSE, currentAIRespEle
+
+// map[filename]fileContent_in_base64
+//
+// should invoke updateChatVisionSelectedFileStore after update this object
+let chatVisionSelectedFileStore = {}
 
 // eslint-disable-next-line no-unused-vars
 async function setupChatJs () {
-    await setupSessionManager()
-    await setupConfig()
-    await setupChatInput()
-    setupPromptManager()
-    setupPrivateDataset()
-    setInterval(fetchImageDrawingResultBackground, 3000)
+    await setupSessionManager();
+    await setupConfig();
+    await setupChatInput();
+    await setupPromptManager();
+    await setupPrivateDataset();
+    setInterval(fetchImageDrawingResultBackground, 3000);
 }
 
 function newChatID () {
-    return `chat-${(new Date()).getTime()}-${RandomString(6)}`
+    return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
 }
 
 // show alert
@@ -39,7 +45,7 @@ function showalert (type, msg) {
 }
 
 // check sessionID's type, secure convert to int, default is 1
-function storageSessionKey (sessionID) {
+function kvSessionKey (sessionID) {
     sessionID = parseInt(sessionID) || 1
     return `${KvKeyPrefixSessionHistory}${sessionID}`
 }
@@ -50,7 +56,7 @@ function storageSessionKey (sessionID) {
  * @returns {Array} An array of chat messages.
  */
 async function sessionChatHistory (sessionID) {
-    let data = (await KvGet(storageSessionKey(sessionID)))
+    let data = (await KvGet(kvSessionKey(sessionID)))
     if (!data) {
         return []
     }
@@ -58,7 +64,7 @@ async function sessionChatHistory (sessionID) {
     // fix legacy bug for marshal data twice
     if (typeof data === 'string') {
         data = JSON.parse(data)
-        await KvSet(storageSessionKey(sessionID), data)
+        await KvSet(kvSessionKey(sessionID), data)
     }
 
     return data
@@ -69,7 +75,7 @@ async function sessionChatHistory (sessionID) {
  * @returns {Array} An array of chat messages, oldest first.
  */
 async function activeSessionChatHistory () {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     if (!sid) {
         return new Array()
     }
@@ -77,28 +83,28 @@ async function activeSessionChatHistory () {
     return await sessionChatHistory(sid)
 }
 
-function activeSessionID () {
-    let activeSession = document.querySelector('#sessionManager .card-body button.active')
+async function activeSessionID () {
+    let activeSession = document.querySelector('#sessionManager .card-body button.active');
     if (activeSession) {
-        return activeSession.dataset.session
+        return activeSession.dataset.session;
     }
 
-    activeSession = GetLocalStorage(StorageKeySelectedSession)
+    activeSession = await KvGet(KvKeyPrefixSelectedSession)
     if (activeSession) {
-        return activeSession
+        return activeSession;
     }
 
-    return 1
+    return 1;
 }
 
 async function listenSessionSwitch (evt) {
     // deactive all sessions
-    evt = evtTarget(evt)
+    evt = evtTarget(evt);
     if (!evt.classList.contains('list-group-item')) {
-        evt = evt.closest('.list-group-item')
+        evt = evt.closest('.list-group-item');
     }
 
-    const activeSid = evt.dataset.session
+    const activeSid = evt.dataset.session;
     document
         .querySelectorAll(`
             #sessionManager .sessions .list-group-item,
@@ -106,22 +112,22 @@ async function listenSessionSwitch (evt) {
         `)
         .forEach((item) => {
             if (item.dataset.session === activeSid) {
-                item.classList.add('active')
+                item.classList.add('active');
             } else {
-                item.classList.remove('active')
+                item.classList.remove('active');
             }
         })
 
     // restore session hisgoty
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
     (await sessionChatHistory(activeSid)).forEach((item) => {
-        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML)
-        renderAfterAIResponse(item.chatID)
+        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
+        renderAfterAIResponse(item.chatID);
     })
 
-    SetLocalStorage(StorageKeySelectedSession, activeSid)
-    updateConfigFromSessionConfig()
-    EnableTooltipsEverywhere()
+    await KvSet(KvKeyPrefixSelectedSession, activeSid);
+    updateConfigFromSessionConfig();
+    EnableTooltipsEverywhere();
 }
 
 /**
@@ -130,49 +136,49 @@ async function listenSessionSwitch (evt) {
  */
 async function fetchImageDrawingResultBackground () {
     const elements = chatContainer
-        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || []
+        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || [];
 
     await Promise.all(Array.from(elements).map(async (item) => {
         if (item.dataset.status !== 'waiting') {
-            return
+            return;
         }
 
-        const taskId = item.dataset.taskId
-        const imageUrls = JSON.parse(item.dataset.imageUrls) || []
-        const chatId = item.closest('.role-ai').dataset.chatid
+        const taskId = item.dataset.taskId;
+        const imageUrls = JSON.parse(item.dataset.imageUrls) || [];
+        const chatId = item.closest('.role-ai').dataset.chatid;
 
         try {
             await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
-                const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt'
+                const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
                 const errFileResp = await fetch(`${errFileUrl}?rr=${RandomString(12)}`, {
                     method: 'GET',
                     cache: 'no-cache'
-                })
+                });
                 if (errFileResp.ok || errFileResp.status === 200) {
-                    const errText = await errFileResp.text()
-                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`
-                    checkIsImageAllSubtaskDone(item, imageUrl, false)
-                    await appendChats2Storage(RoleAI, chatId, item.innerHTML)
-                    return
+                    const errText = await errFileResp.text();
+                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
+                    checkIsImageAllSubtaskDone(item, imageUrl, false);
+                    await appendChats2Storage(RoleAI, chatId, item.innerHTML);
+                    return;
                 }
 
                 // check is image ready
                 const imgResp = await fetch(`${imageUrl}?rr=${RandomString(12)}`, {
                     method: 'GET',
                     cache: 'no-cache'
-                })
+                });
                 if (!imgResp.ok || imgResp.status != 200) {
-                    return
+                    return;
                 }
 
                 // check is all tasks finished
-                checkIsImageAllSubtaskDone(item, imageUrl, true)
+                checkIsImageAllSubtaskDone(item, imageUrl, true);
             }))
         } catch (err) {
-            console.warn('fetch img result, ' + err)
+            console.warn('fetch img result, ' + err);
         };
-    }))
+    }));
 }
 
 /** append chat to chat container
@@ -182,34 +188,34 @@ async function fetchImageDrawingResultBackground () {
  * @param {boolean} succeed is current subtask succeed
  */
 function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
-    let processingImageUrls = JSON.parse(item.dataset.imageUrls) || []
+    let processingImageUrls = JSON.parse(item.dataset.imageUrls) || [];
     if (!processingImageUrls.includes(imageUrl)) {
-        return
+        return;
     }
 
     // remove current subtask from imageUrls(tasks)
     processingImageUrls = processingImageUrls.filter((url) => url !== imageUrl)
-    item.dataset.imageUrls = JSON.stringify(processingImageUrls)
+    item.dataset.imageUrls = JSON.stringify(processingImageUrls);
 
-    const succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || '[]')
+    const succeedImageUrls = JSON.parse(item.dataset.succeedImageUrls || '[]');
     if (succeed) {
-        succeedImageUrls.push(imageUrl)
-        item.dataset.succeedImageUrls = JSON.stringify(succeedImageUrls)
+        succeedImageUrls.push(imageUrl);
+        item.dataset.succeedImageUrls = JSON.stringify(succeedImageUrls);
     } else { // task failed
-        processingImageUrls = []
-        item.dataset.imageUrls = JSON.stringify(processingImageUrls)
+        processingImageUrls = [];
+        item.dataset.imageUrls = JSON.stringify(processingImageUrls);
     }
 
     if (processingImageUrls.length == 0 && succeedImageUrls.length > 0) {
-        item.dataset.status = 'done'
-        let imgHTML = ''
+        item.dataset.status = 'done';
+        let imgHTML = '';
         succeedImageUrls.forEach((url) => {
-            imgHTML += `<img src="${url}">`
-        })
-        item.innerHTML = imgHTML
+            imgHTML += `<img src="${url}">`;
+        });
+        item.innerHTML = imgHTML;
 
         if (succeedImageUrls.length > 1) {
-            item.classList.add('multi-images')
+            item.classList.add('multi-images');
         }
     }
 }
@@ -225,48 +231,48 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
 async function clearSessionAndChats (evt, sessionID) {
     console.debug('clearSessionAndChats', evt, sessionID)
     if (evt) {
-        evt.stopPropagation()
+        evt.stopPropagation();
     }
 
     // remove pinned materials
-    localStorage.removeItem(StorageKeyPinnedMaterials)
+    await KvDel(KvKeyPinnedMaterials);
 
     if (!sessionID) { // remove all session
-        const sessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${activeSessionID()}`)
+        const sessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${(await activeSessionID())}`);
 
         await Promise.all((await KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory) || // remove all sessions
                 key.startsWith(KvKeyPrefixSessionConfig) // remove all sessions' config
             ) {
-                await KvDel(key)
+                await KvDel(key);
             }
-        }))
+        }));
 
         // restore session config
-        await KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig)
-        await KvSet(storageSessionKey(1), [])
+        await KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig);
+        await KvSet(kvSessionKey(1), []);
     } else { // only remove one session's chat, keep config
         await Promise.all((await KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory) && // remove all sessions
                 key.endsWith(`_${sessionID}`) // remove specified session
             ) {
-                await KvSet(key, [])
+                await KvSet(key, []);
             }
-        }))
+        }));
     }
 
-    location.reload()
+    location.reload();
 }
 
 function bindSessionEditBtn () {
     document.querySelectorAll('#sessionManager .sessions .session .bi.bi-pencil-square')
         .forEach((item) => {
             if (item.dataset.bindClicked) {
-                return
+                return;
             } else {
-                item.dataset.bindClicked = true
+                item.dataset.bindClicked = true;
             }
 
             item.addEventListener('click', async (evt) => {
@@ -297,27 +303,27 @@ function bindSessionEditBtn () {
 }
 
 function bindSessionDeleteBtn () {
-    const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || []
+    const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || [];
     btns.forEach((item) => {
         if (item.dataset.bindClicked) {
-            return
+            return;
         } else {
-            item.dataset.bindClicked = true
+            item.dataset.bindClicked = true;
         }
 
         item.addEventListener('click', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
             // if there is only one session, don't delete it
             if (document.querySelectorAll('#sessionManager .sessions .session').length == 1) {
-                return
+                return;
             }
 
-            const sessionID = evtTarget(evt).closest('.session').dataset.session
+            const sessionID = evtTarget(evt).closest('.session').dataset.session;
             ConfirmModal('Are you sure to delete this session?', () => {
-                KvDel(`${KvKeyPrefixSessionHistory}${sessionID}`)
-                KvDel(`${KvKeyPrefixSessionConfig}${sessionID}`)
-                evtTarget(evt).closest('.list-group').remove()
+                KvDel(`${KvKeyPrefixSessionHistory}${sessionID}`);
+                KvDel(`${KvKeyPrefixSessionConfig}${sessionID}`);
+                evtTarget(evt).closest('.list-group').remove();
             })
         })
     })
@@ -327,13 +333,13 @@ function bindSessionDeleteBtn () {
  *
  */
 async function setupSessionManager () {
-    const selectedSessionID = activeSessionID()
+    const selectedSessionID = await activeSessionID();
 
     // bind remove all sessions
     {
         document
             .querySelector('#sessionManager .btn.purge')
-            .addEventListener('click', clearSessionAndChats)
+            .addEventListener('click', clearSessionAndChats);
     }
 
     // restore all sessions from storage
@@ -341,18 +347,18 @@ async function setupSessionManager () {
         const allSessionKeys = [];
         (await KvList()).forEach((key) => {
             if (key.startsWith(KvKeyPrefixSessionHistory)) {
-                allSessionKeys.push(key)
+                allSessionKeys.push(key);
             }
-        })
+        });
 
         if (allSessionKeys.length == 0) { // there is no session, create one
             // create session history
-            const skey = storageSessionKey(1)
-            allSessionKeys.push(skey)
-            await KvSet(skey, [])
+            const skey = kvSessionKey(1);
+            allSessionKeys.push(skey);
+            await KvSet(skey, []);
 
             // create session config
-            await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig())
+            await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
         }
 
         await Promise.all(allSessionKeys.map(async (key) => {
@@ -397,7 +403,7 @@ async function setupSessionManager () {
     // add widget to scroll bottom
     {
         document.querySelector('#chatContainer .chatManager .card-footer .scroll-down')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 scrollChatToDown()
             })
@@ -452,12 +458,12 @@ async function setupSessionManager () {
                         </div>`)
 
                 // save new session history and config
-                await KvSet(storageSessionKey(newSessionID), [])
+                await KvSet(kvSessionKey(newSessionID), [])
                 const oldSessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`)
                 const sconfig = newSessionConfig()
                 sconfig.api_token = oldSessionConfig.api_token // keep api token
                 await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig)
-                SetLocalStorage(StorageKeySelectedSession, newSessionID)
+                await KvSet(KvKeyPrefixSelectedSession, newSessionID)
 
                 // bind session switch listener for new session
                 document
@@ -495,7 +501,7 @@ async function removeChatInStorage (chatid) {
         throw 'chatid is required'
     }
 
-    const storageActiveSessionKey = storageSessionKey(activeSessionID())
+    const storageActiveSessionKey = kvSessionKey(await activeSessionID())
     let session = await activeSessionChatHistory()
 
     // remove all chats with the same chatid
@@ -515,7 +521,7 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
         throw 'chatid is required'
     }
 
-    const storageActiveSessionKey = storageSessionKey(activeSessionID())
+    const storageActiveSessionKey = kvSessionKey(await activeSessionID())
     const session = await activeSessionChatHistory()
 
     // if chat is already in history, find and update it.
@@ -651,57 +657,57 @@ const httpsRegexp = /\bhttps:\/\/\S+/
  * @returns {string} modified request prompt
  */
 async function userPromptEnhence (reqPrompt) {
-    const pinnedUrls = getPinnedMaterials()
-    const sconfig = await getChatSessionConfig()
-    const urls = reqPrompt.match(httpsRegexp)
+    const pinnedUrls = getPinnedMaterials();
+    const sconfig = await getChatSessionConfig();
+    const urls = reqPrompt.match(httpsRegexp);
 
     if (sconfig.chat_switch.disable_https_crawler) {
-        console.debug('https create new material is disabled, skip prompt enhance')
-        return reqPrompt
+        console.debug('https create new material is disabled, skip prompt enhance');
+        return reqPrompt;
     }
 
     if (!urls || urls.length == 0) {
-        return reqPrompt
+        return reqPrompt;
     }
 
     urls.forEach((url) => {
         if (!pinnedUrls.includes(url)) {
-            pinnedUrls.push(url)
+            pinnedUrls.push(url);
         }
-    })
+    });
 
-    let urlEle = ''
+    let urlEle = '';
     for (const url of pinnedUrls) {
-        urlEle += `<p><i class="bi bi-trash"></i> <a href="${url}" class="link-primary" target="_blank">${url}</a></p>`
+        urlEle += `<p><i class="bi bi-trash"></i> <a href="${url}" class="link-primary" target="_blank">${url}</a></p>`;
     }
 
     // save to storage
     // FIXME save to session config
-    SetLocalStorage(StorageKeyPinnedMaterials, urlEle)
-    restorePinnedMaterials()
+    await KvSet(KvKeyPinnedMaterials, urlEle);
+    await restorePinnedMaterials();
 
     // re generate reqPrompt
-    reqPrompt = reqPrompt.replace(httpsRegexp, '')
-    reqPrompt += '\n' + pinnedUrls.join('\n')
-    return reqPrompt
+    reqPrompt = reqPrompt.replace(httpsRegexp, '');
+    reqPrompt += '\n' + pinnedUrls.join('\n');
+    return reqPrompt;
 }
 
-function restorePinnedMaterials () {
-    const urlEle = GetLocalStorage(StorageKeyPinnedMaterials) || ''
-    const container = document.querySelector('#chatContainer .pinned-refs')
-    container.innerHTML = urlEle
+async function restorePinnedMaterials () {
+    const urlEle = await KvGet(KvKeyPinnedMaterials) || '';
+    const container = document.querySelector('#chatContainer .pinned-refs');
+    container.innerHTML = urlEle;
 
     // bind to remove pinned materials
     document.querySelectorAll('#chatContainer .pinned-refs p .bi-trash')
         .forEach((item) => {
-            item.addEventListener('click', (evt) => {
-                evt.stopPropagation()
-                const container = evtTarget(evt).closest('.pinned-refs')
-                const ele = evtTarget(evt).closest('p')
-                ele.parentNode.removeChild(ele)
+            item.addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+                const container = evtTarget(evt).closest('.pinned-refs');
+                const ele = evtTarget(evt).closest('p');
+                ele.parentNode.removeChild(ele);
 
                 // update storage
-                SetLocalStorage(StorageKeyPinnedMaterials, container.innerHTML)
+                await KvSet(KvKeyPinnedMaterials, container.innerHTML);
             })
         })
 }
@@ -710,10 +716,10 @@ function getPinnedMaterials () {
     const urls = []
     document.querySelectorAll('#chatContainer .pinned-refs a')
         .forEach((item) => {
-            urls.push(item.innerHTML)
+            urls.push(item.innerHTML);
         })
 
-    return urls
+    return urls;
 }
 
 /**
@@ -725,17 +731,17 @@ function getPinnedMaterials () {
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
 async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
-    let url
+    let url;
 
     switch (selectedModel) {
     case ImageModelDalle2:
-        url = '/images/generations'
-        break
+        url = '/images/generations';
+        break;
     default:
-        throw new Error(`unknown image model: ${selectedModel}`)
+        throw new Error(`unknown image model: ${selectedModel}`);
     }
 
-    const sconfig = await getChatSessionConfig()
+    const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
         method: 'POST',
         headers: {
@@ -747,24 +753,24 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
             model: selectedModel,
             prompt
         })
-    })
+    });
     if (!resp.ok || resp.status != 200) {
-        throw new Error(`[${resp.status}]: ${await resp.text()}`)
+        throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
-    const respData = await resp.json()
+    const respData = await resp.json();
 
-    currentAIRespEle.dataset.status = 'waiting'
-    currentAIRespEle.dataset.taskType = 'image'
-    currentAIRespEle.dataset.taskId = respData.task_id
-    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls)
+    currentAIRespEle.dataset.status = 'waiting';
+    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskId = respData.task_id;
+    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
-    let attachHTML = ''
+    let attachHTML = '';
     respData.image_urls.forEach((url) => {
-        attachHTML += `<img src="${url}">`
+        attachHTML += `<img src="${url}">`;
     })
 
     // save img to storage no matter it's done or not
-    await appendChats2Storage(RoleAI, chatID, attachHTML)
+    await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
 async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
@@ -1074,7 +1080,7 @@ async function sendChat2Server (chatID) {
                     Authorization: 'Bearer ' + sconfig.api_token,
                     'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
                     'X-Laisky-Api-Base': sconfig.api_base,
-                    'X-PDFCHAT-PASSWORD': GetLocalStorage(StorageKeyCustomDatasetPassword)
+                    'X-PDFCHAT-PASSWORD': await KvGet(KvKeyCustomDatasetPassword)
                 }
             })
 
@@ -1110,9 +1116,6 @@ async function sendChat2Server (chatID) {
                     `
                 }]
                 const model = ChatModelTurbo35V1106 // rewrite chat model
-                // if (IsChatModelAllowed(ChatModelTurbo35V1106) && !sconfig["api_token"].startsWith("FREETIER-")) {
-                //     model = ChatModelTurbo35V1106;
-                // }
 
                 currentAIRespSSE = new SSE('/api', {
                     headers: {
@@ -1275,7 +1278,7 @@ function renderAfterAIResponse (chatID) {
 
     if (chatEle.querySelector('.bi.bi-copy')) { // not every ai response has copy button
         chatEle.querySelector('.bi.bi-copy')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 const content = decodeURIComponent(evtTarget(evt).dataset.content)
                 // copy to clipboard
@@ -1313,19 +1316,6 @@ function wrapRefLines (input) {
     }
     return result
 }
-
-// function replaceChatInStorage(role, chatID, content) {
-//     let storageKey = storageSessionKey(activeSessionID()),
-//         chats = GetLocalStorage(storageKey) || [];
-
-//     chats.forEach((item) => {
-//         if (item.chatID == chatID && item.role == role) {
-//             item.content = content;
-//         }
-//     });
-
-//     SetLocalStorage(storageKey, chats);
-// }
 
 function abortAIResp (err) {
     console.error(`abort AI resp: ${err}`)
@@ -1372,209 +1362,208 @@ async function setupChatInput () {
     {
         let isComposition = false
         chatPromptInputEle
-            .addEventListener('compositionstart', (evt) => {
-                evt.stopPropagation()
-                isComposition = true
-            })
+            .addEventListener('compositionstart', async (evt) => {
+                evt.stopPropagation();
+                isComposition = true;
+            });
         chatPromptInputEle
-            .addEventListener('compositionend', (evt) => {
-                evt.stopPropagation()
-                isComposition = false
-            })
+            .addEventListener('compositionend', async (evt) => {
+                evt.stopPropagation();
+                isComposition = false;
+            });
 
         chatPromptInputEle
             .addEventListener('keydown', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
                 if (evt.key != 'Enter' ||
                     isComposition ||
                     (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey)) ||
                     !isAllowChatPrompInput()) {
-                    return
+                    return;
                 }
 
-                await sendChat2Server()
-                chatPromptInputEle.value = ''
-            })
+                await sendChat2Server();
+                chatPromptInputEle.value = '';
+            });
     }
 
     // change hint when models change
     {
-        KvAddListener(KvKeyPrefixSessionConfig, (key, op, oldVal, newVal) => {
+        KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
             if (op != KvOp.Set) {
-                return
+                return;
             }
 
-            const expectedKey = `KvKeyPrefixSessionConfig${activeSessionID()}`
+            const expectedKey = `KvKeyPrefixSessionConfig${(await activeSessionID())}`;
             if (key != expectedKey) {
-                return
+                return;
             }
 
-            const sconfig = newVal
-            chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`
-        })
+            const sconfig = newVal;
+            chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
+        });
     }
 
     // bind input button
     chatPromptInputBtn
         .addEventListener('click', async (evt) => {
-            evt.stopPropagation()
-            await sendChat2Server()
-            chatPromptInputEle.value = ''
-        })
+            evt.stopPropagation();
+            await sendChat2Server();
+            chatPromptInputEle.value = '';
+        });
 
     // restore pinned materials
-    restorePinnedMaterials()
+    await restorePinnedMaterials();
 
     // bind input element's drag-drop
     {
-        const dropfileModalEle = document.querySelector('#modal-dropfile.modal')
-        const dropfileModal = new bootstrap.Modal(dropfileModalEle)
+        const dropfileModalEle = document.querySelector('#modal-dropfile.modal');
+        const dropfileModal = new bootstrap.Modal(dropfileModalEle);
 
         const fileDragLeave = async (evt) => {
-            evt.stopPropagation()
-            evt.preventDefault()
-            dropfileModal.hide()
-        }
+            evt.stopPropagation();
+            evt.preventDefault();
+            dropfileModal.hide();
+        };
 
         const fileDragDropHandler = async (evt) => {
-            evt.stopPropagation()
-            evt.preventDefault()
-            dropfileModal.hide()
+            evt.stopPropagation();
+            evt.preventDefault();
+            dropfileModal.hide();
 
             if (!evt.dataTransfer || !evt.dataTransfer.items) {
-                return
+                return;
             }
 
             for (let i = 0; i < evt.dataTransfer.items.length; i++) {
-                const item = evt.dataTransfer.items[i]
+                const item = evt.dataTransfer.items[i];
                 if (item.kind != 'file') {
-                    continue
+                    continue;
                 }
 
-                const file = item.getAsFile()
+                const file = item.getAsFile();
                 if (!file) {
-                    continue
+                    continue;
                 }
 
                 // get file content as Blob
-                const reader = new FileReader()
+                const reader = new FileReader();
                 reader.onload = async (e) => {
-                    const arrayBuffer = e.target.result
+                    const arrayBuffer = e.target.result;
                     if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
-                        showalert('danger', 'file size should less than 10M')
-                        return
+                        showalert('danger', 'file size should less than 10M');
+                        return;
                     }
 
-                    const byteArray = new Uint8Array(arrayBuffer)
-                    const chunkSize = 0xffff // Use chunks to avoid call stack limit
-                    const chunks = []
+                    const byteArray = new Uint8Array(arrayBuffer);
+                    const chunkSize = 0xffff; // Use chunks to avoid call stack limit
+                    const chunks = [];
                     for (let i = 0; i < byteArray.length; i += chunkSize) {
-                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)))
+                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
                     }
-                    const base64String = btoa(chunks.join(''))
+                    const base64String = btoa(chunks.join(''));
 
                     // chatVisionSelectedFileStore = {};  // only support 1 image for current version
-                    chatVisionSelectedFileStore[file.name] = base64String
-                    updateChatVisionSelectedFileStore()
-                }
-                reader.readAsArrayBuffer(file)
+                    chatVisionSelectedFileStore[file.name] = base64String;
+                    updateChatVisionSelectedFileStore();
+                };
+                reader.readAsArrayBuffer(file);
             }
-        }
+        };
 
         const fileDragOverHandler = async (evt) => {
-            evt.stopPropagation()
-            evt.preventDefault()
-            evt.dataTransfer.dropEffect = 'copy' // Explicitly show this is a copy.
-            dropfileModal.show()
-        }
+            evt.stopPropagation();
+            evt.preventDefault();
+            evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+            dropfileModal.show();
+        };
 
         // read paste file
         const filePasteHandler = async (evt) => {
             if (!evt.clipboardData || !evt.clipboardData.items) {
-                return
+                return;
             }
 
             for (let i = 0; i < evt.clipboardData.items.length; i++) {
-                const item = evt.clipboardData.items[i]
+                const item = evt.clipboardData.items[i];
                 if (item.kind != 'file') {
-                    continue
+                    continue;
                 }
 
-                const file = item.getAsFile()
+                const file = item.getAsFile();
                 if (!file) {
-                    continue
+                    continue;
                 }
 
-                evt.stopPropagation()
-                evt.preventDefault()
+                evt.stopPropagation();
+                evt.preventDefault();
 
                 // get file content as Blob
-                const reader = new FileReader()
+                const reader = new FileReader();
                 reader.onload = async (e) => {
-                    const arrayBuffer = e.target.result
+                    const arrayBuffer = e.target.result;
                     if (arrayBuffer.byteLength > 1024 * 1024 * 10) {
-                        showalert('danger', 'file size should less than 10M')
-                        return
+                        showalert('danger', 'file size should less than 10M');
+                        return;
                     }
 
-                    const byteArray = new Uint8Array(arrayBuffer)
-                    const chunkSize = 0xffff // Use chunks to avoid call stack limit
-                    const chunks = []
+                    const byteArray = new Uint8Array(arrayBuffer);
+                    const chunkSize = 0xffff; // Use chunks to avoid call stack limit
+                    const chunks = [];
                     for (let i = 0; i < byteArray.length; i += chunkSize) {
-                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)))
+                        chunks.push(String.fromCharCode.apply(null, byteArray.subarray(i, i + chunkSize)));
                     }
-                    const base64String = btoa(chunks.join(''))
+                    const base64String = btoa(chunks.join(''));
 
                     // only support 1 image for current version
-                    chatVisionSelectedFileStore = {}
-                    chatVisionSelectedFileStore[file.name] = base64String
-                    updateChatVisionSelectedFileStore()
-                }
-                reader.readAsArrayBuffer(file)
+                    chatVisionSelectedFileStore = {};
+                    chatVisionSelectedFileStore[file.name] = base64String;
+                    updateChatVisionSelectedFileStore();
+                };
+                reader.readAsArrayBuffer(file);
             }
-        }
+        };
 
-        chatPromptInputEle.addEventListener('paste', filePasteHandler)
+        chatPromptInputEle.addEventListener('paste', filePasteHandler);
 
-        document.body.addEventListener('dragover', fileDragOverHandler)
-        document.body.addEventListener('drop', fileDragDropHandler)
-        document.body.addEventListener('paste', filePasteHandler)
+        document.body.addEventListener('dragover', fileDragOverHandler);
+        document.body.addEventListener('drop', fileDragDropHandler);
+        document.body.addEventListener('paste', filePasteHandler);
 
-        dropfileModalEle.addEventListener('drop', fileDragDropHandler)
-        dropfileModalEle.addEventListener('dragleave', fileDragLeave)
+        dropfileModalEle.addEventListener('drop', fileDragDropHandler);
+        dropfileModalEle.addEventListener('dragleave', fileDragLeave);
     }
 
     // bind chat switch
     {
-        chatContainer.querySelector('#switchChatEnableHttpsCrawler').addEventListener('change', async (evt) => {
-            evt.stopPropagation()
-            const switchEle = evtTarget(evt)
-            const sconfig = await getChatSessionConfig()
-            sconfig.chat_switch.disable_https_crawler = !switchEle.checked
+        chatContainer
+            .querySelector('#switchChatEnableHttpsCrawler')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation();
+                const switchEle = evtTarget(evt);
+                const sconfig = await getChatSessionConfig();
+                sconfig.chat_switch.disable_https_crawler = !switchEle.checked;
 
-            // clear pinned https urls
-            if (!switchEle.checked) {
-                SetLocalStorage(StorageKeyPinnedMaterials, '')
-                restorePinnedMaterials()
-            }
+                // clear pinned https urls
+                if (!switchEle.checked) {
+                    await KvSet(KvKeyPinnedMaterials, '');
+                    await await restorePinnedMaterials();
+                }
 
-            await saveChatSessionConfig(sconfig)
-        })
+                await saveChatSessionConfig(sconfig);
+            });
 
-        chatContainer.querySelector('#switchChatEnableGoogleSearch').addEventListener('change', async (evt) => {
-            evt.stopPropagation()
-            const switchEle = evtTarget(evt)
-            const sconfig = await getChatSessionConfig()
-            sconfig.chat_switch.enable_google_search = switchEle.checked
-            await saveChatSessionConfig(sconfig)
-        })
+        chatContainer
+            .querySelector('#switchChatEnableGoogleSearch')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation()
+                const switchEle = evtTarget(evt)
+                const sconfig = await getChatSessionConfig()
+                sconfig.chat_switch.enable_google_search = switchEle.checked
+                await saveChatSessionConfig(sconfig)
+            })
     }
 }
-
-// map[filename]fileContent_in_base64
-//
-// should invoke updateChatVisionSelectedFileStore after update this object
-var chatVisionSelectedFileStore = {}
 
 async function updateChatVisionSelectedFileStore () {
     const pinnedFiles = chatContainer.querySelector('.pinned-files')
@@ -1586,7 +1575,7 @@ async function updateChatVisionSelectedFileStore () {
     // click to remove pinned file
     chatContainer.querySelectorAll('.pinned-files .bi.bi-trash')
         .forEach((item) => {
-            item.addEventListener('click', (evt) => {
+            item.addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 const ele = evtTarget(evt).closest('p')
                 const key = ele.dataset.key
@@ -1788,7 +1777,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                 await appendChats2Storage(RoleHuman, chatID, newText, attachHTML)
             })
 
-            cancelBtn.addEventListener('click', (evt) => {
+            cancelBtn.addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 chatEle.innerHTML = oldText
 
@@ -1808,28 +1797,28 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     }
 }
 
-var getChatSessionConfig = async (sid) => {
+window.getChatSessionConfig = async (sid) => {
     if (!sid) {
-        sid = activeSessionID()
+        sid = await activeSessionID();
     }
 
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    let sconfig = await KvGet(skey)
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    let sconfig = await KvGet(skey);
 
     if (!sconfig) {
-        console.info(`create new session config for session ${sid}`)
-        sconfig = newSessionConfig()
+        console.info(`create new session config for session ${sid}`);
+        sconfig = newSessionConfig();
     }
 
-    return sconfig
-}
+    return sconfig;
+};
 
-var saveChatSessionConfig = async (sconfig) => {
-    const sid = activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
+window.saveChatSessionConfig = async (sconfig) => {
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
 
-    await KvSet(skey, sconfig)
-}
+    await KvSet(skey, sconfig);
+};
 
 function newSessionConfig () {
     return {
@@ -1853,54 +1842,54 @@ function newSessionConfig () {
  * initialize every chat component by active session config
  */
 async function updateConfigFromSessionConfig () {
-    console.debug(`updateConfigFromSessionConfig for session ${activeSessionID()}`)
+    console.debug(`updateConfigFromSessionConfig for session ${(await activeSessionID())}`);
 
-    const sconfig = await getChatSessionConfig()
+    const sconfig = await getChatSessionConfig();
 
     // update config
-    configContainer.querySelector('.input.api-token').value = sconfig.api_token
-    configContainer.querySelector('.input.api-base').value = sconfig.api_base
-    configContainer.querySelector('.input.contexts').value = sconfig.n_contexts
-    configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = sconfig.n_contexts
-    configContainer.querySelector('.input.max-token').value = sconfig.max_tokens
-    configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = sconfig.max_tokens
-    configContainer.querySelector('.input.temperature').value = sconfig.temperature
-    configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = sconfig.temperature
-    configContainer.querySelector('.input.presence_penalty').value = sconfig.presence_penalty
-    configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = sconfig.presence_penalty
-    configContainer.querySelector('.input.frequency_penalty').value = sconfig.frequency_penalty
-    configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = sconfig.frequency_penalty
-    configContainer.querySelector('.system-prompt .input').value = sconfig.system_prompt
+    configContainer.querySelector('.input.api-token').value = sconfig.api_token;
+    configContainer.querySelector('.input.api-base').value = sconfig.api_base;
+    configContainer.querySelector('.input.contexts').value = sconfig.n_contexts;
+    configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = sconfig.n_contexts;
+    configContainer.querySelector('.input.max-token').value = sconfig.max_tokens;
+    configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = sconfig.max_tokens;
+    configContainer.querySelector('.input.temperature').value = sconfig.temperature;
+    configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = sconfig.temperature;
+    configContainer.querySelector('.input.presence_penalty').value = sconfig.presence_penalty;
+    configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = sconfig.presence_penalty;
+    configContainer.querySelector('.input.frequency_penalty').value = sconfig.frequency_penalty;
+    configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = sconfig.frequency_penalty;
+    configContainer.querySelector('.system-prompt .input').value = sconfig.system_prompt;
 
     // update chat input hint
-    chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`
+    chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
 
     // update chat controller
     chatContainer.querySelector('#switchChatEnableHttpsCrawler')
-        .checked = !sconfig.chat_switch.disable_https_crawler
+        .checked = !sconfig.chat_switch.disable_https_crawler;
     chatContainer.querySelector('#switchChatEnableGoogleSearch')
-        .checked = sconfig.chat_switch.enable_google_search
+        .checked = sconfig.chat_switch.enable_google_search;
 
     // update selected model
     // set active status for models
-    const selectedModel = sconfig.selected_model
+    const selectedModel = sconfig.selected_model;
     document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
         .forEach((elem) => {
-            elem.classList.remove('active')
-        })
+            elem.classList.remove('active');
+        });
     document
         .querySelectorAll('#headerbar .chat-models li a, ' +
             '#headerbar .qa-models li a, ' +
             '#headerbar .image-models li a'
         )
         .forEach((elem) => {
-            elem.classList.remove('active')
+            elem.classList.remove('active');
 
             if (elem.dataset.model == selectedModel) {
-                elem.classList.add('active')
-                elem.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active')
+                elem.classList.add('active');
+                elem.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
             }
-        })
+        });
 }
 
 async function setupConfig () {
@@ -1913,7 +1902,7 @@ async function setupConfig () {
         apitokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -1929,7 +1918,7 @@ async function setupConfig () {
         apibaseInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -1945,7 +1934,7 @@ async function setupConfig () {
         maxtokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -1963,7 +1952,7 @@ async function setupConfig () {
         maxtokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -1981,7 +1970,7 @@ async function setupConfig () {
         maxtokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -1999,7 +1988,7 @@ async function setupConfig () {
         maxtokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -2017,7 +2006,7 @@ async function setupConfig () {
         maxtokenInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -2035,7 +2024,7 @@ async function setupConfig () {
         staticConfigInput.addEventListener('input', async (evt) => {
             evt.stopPropagation()
 
-            const sid = activeSessionID()
+            const sid = await activeSessionID()
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
             const sconfig = await KvGet(skey)
 
@@ -2058,15 +2047,15 @@ async function setupConfig () {
     // bind clear-chats button
     {
         configContainer.querySelector('.btn.clear-chats')
-            .addEventListener('click', (evt) => {
-                clearSessionAndChats(evt, activeSessionID())
+            .addEventListener('click', async (evt) => {
+                clearSessionAndChats(evt, await activeSessionID())
             })
     }
 
     // bind submit button
     {
         configContainer.querySelector('.btn.submit')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 location.reload()
             })
@@ -2075,8 +2064,8 @@ async function setupConfig () {
     EnableTooltipsEverywhere()
 }
 
-function loadPromptShortcutsFromStorage () {
-    let shortcuts = GetLocalStorage(StorageKeyPromptShortCuts)
+async function loadPromptShortcutsFromStorage () {
+    let shortcuts = await KvGet(KvKeyPromptShortCuts)
     if (!shortcuts) {
         // default prompts
         shortcuts = [
@@ -2085,115 +2074,115 @@ function loadPromptShortcutsFromStorage () {
                 description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
             }
         ]
-        SetLocalStorage(StorageKeyPromptShortCuts, shortcuts)
+        await KvSet(KvKeyPromptShortCuts, shortcuts)
     }
 
     return shortcuts
 }
 
-// append prompt shortcuts to html and localstorage
+// append prompt shortcuts to html and kv
 //
 // @param {Object} shortcut - shortcut object
-// @param {bool} storage - whether to save to localstorage
-function appendPromptShortcut (shortcut, storage = false) {
-    const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts')
+// @param {bool} storage - whether to save to kv
+async function appendPromptShortcut (shortcut, storage = false) {
+    const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
 
     // add to local storage
     if (storage) {
-        const shortcuts = loadPromptShortcutsFromStorage()
-        shortcuts.push(shortcut)
-        SetLocalStorage(StorageKeyPromptShortCuts, shortcuts)
+        const shortcuts = await loadPromptShortcutsFromStorage();
+        shortcuts.push(shortcut);
+        await KvSet(KvKeyPromptShortCuts, shortcuts);
     }
 
     // new element
-    const ele = document.createElement('span')
-    ele.classList.add('badge', 'text-bg-info')
-    ele.dataset.prompt = shortcut.description
-    ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`
+    const ele = document.createElement('span');
+    ele.classList.add('badge', 'text-bg-info');
+    ele.dataset.prompt = shortcut.description;
+    ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`;
 
     // add delete click event
-    ele.querySelector('i.bi-trash').addEventListener('click', (evt) => {
-        evt.stopPropagation()
+    ele.querySelector('i.bi-trash')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
 
-        ConfirmModal('delete saved prompt', async () => {
-            evtTarget(evt).parentElement.remove()
+            ConfirmModal('delete saved prompt', async () => {
+                evtTarget(evt).parentElement.remove();
 
-            // remove localstorage shortcut
-            let shortcuts = GetLocalStorage(StorageKeyPromptShortCuts)
-            shortcuts = shortcuts.filter((item) => item.title !== shortcut.title)
-            SetLocalStorage(StorageKeyPromptShortCuts, shortcuts)
-        })
-    })
+                let shortcuts = await KvGet(KvKeyPromptShortCuts);
+                shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
+                await KvSet(KvKeyPromptShortCuts, shortcuts);
+            })
+        });
 
     // add click event
     // replace system prompt
     ele.addEventListener('click', async (evt) => {
-        evt.stopPropagation()
-        const promptInput = configContainer.querySelector('.system-prompt .input')
+        evt.stopPropagation();
+        const promptInput = configContainer.querySelector('.system-prompt .input');
 
-        await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt)
-        promptInput.value = evtTarget(evt).dataset.prompt
-    })
+        await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
+        promptInput.value = evtTarget(evt).dataset.prompt;
+    });
 
     // add to html
-    promptShortcutContainer.appendChild(ele)
+    promptShortcutContainer.appendChild(ele);
 }
 
-function setupPromptManager () {
-    // restore shortcuts from localstorage
+async function setupPromptManager () {
+    // restore shortcuts from kv
     {
         // bind default prompt shortcuts
         configContainer
             .querySelector('.prompt-shortcuts .badge')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                const promptInput = configContainer.querySelector('.system-prompt .input')
-                promptInput.value = evtTarget(evt).dataset.prompt
-                await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt)
+                evt.stopPropagation();
+                const promptInput = configContainer.querySelector('.system-prompt .input');
+                promptInput.value = evtTarget(evt).dataset.prompt;
+                await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
             })
 
-        const shortcuts = loadPromptShortcutsFromStorage()
-        shortcuts.forEach((shortcut) => {
-            appendPromptShortcut(shortcut, false)
-        })
+        const shortcuts = await loadPromptShortcutsFromStorage();
+        await Promise.all(shortcuts.map(async (shortcut) => {
+            await appendPromptShortcut(shortcut, false);
+        }));
     }
 
     // bind star prompt
-    const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal')
-    const saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle)
+    const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
+    const saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
     {
         configContainer
             .querySelector('.system-prompt .bi.save-prompt')
-            .addEventListener('click', (evt) => {
-                evt.stopPropagation()
+            .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
                 const promptInput = configContainer
-                    .querySelector('.system-prompt .input')
+                    .querySelector('.system-prompt .input');
 
                 saveSystemPromptModelEle
                     .querySelector('.modal-body textarea.user-input')
-                    .innerHTML = promptInput.value
+                    .innerHTML = promptInput.value;
 
-                saveSystemPromptModal.show()
-            })
+                saveSystemPromptModal.show();
+            });
     }
 
     // bind prompt market modal
     {
         configContainer
             .querySelector('.system-prompt .bi.open-prompt-market')
-            .addEventListener('click', (evt) => {
-                evt.stopPropagation()
-                const promptMarketModalEle = document.querySelector('#prompt-market.modal')
-                const promptMarketModal = new bootstrap.Modal(promptMarketModalEle)
-                promptMarketModal.show()
-            })
+            .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+                const promptMarketModalEle = document.querySelector('#prompt-market.modal');
+                const promptMarketModal = new bootstrap.Modal(promptMarketModalEle);
+                promptMarketModal.show();
+            });
     }
 
     // bind save button in system-prompt modal
     {
         saveSystemPromptModelEle
             .querySelector('.btn.save')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 const titleInput = saveSystemPromptModelEle
                     .querySelector('.modal-body input.title')
@@ -2239,7 +2228,7 @@ function setupPromptManager () {
 
             // add click event
             // replace system prompt
-            ele.addEventListener('click', (evt) => {
+            ele.addEventListener('click', async (evt) => {
                 evt.stopPropagation()
 
                 promptInput.value = evtTarget(evt).dataset.description
@@ -2253,7 +2242,7 @@ function setupPromptManager () {
     // bind chat prompts market add button
     {
         promptMarketModal.querySelector('.modal-body .save')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
 
                 // trim and check empty
@@ -2284,7 +2273,7 @@ function setupPromptManager () {
 }
 
 // setup private dataset modal
-function setupPrivateDataset () {
+async function setupPrivateDataset () {
     const pdfchatModalEle = document.querySelector('#modal-pdfchat')
 
     // bind header's custom qa button
@@ -2295,29 +2284,29 @@ function setupPrivateDataset () {
 
         document
             .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
-            .addEventListener('click', (evt) => {
+            .addEventListener('click', async (evt) => {
                 evt.stopPropagation()
                 pdfFileModal.show()
             })
     }
 
-    // bind datakey to localstorage
+    // bind datakey to kv
     {
         const datakeyEle = pdfchatModalEle
             .querySelector('div[data-field="data-key"] input')
 
-        datakeyEle.value = GetLocalStorage(StorageKeyCustomDatasetPassword)
+        datakeyEle.value = await KvGet(KvKeyCustomDatasetPassword)
 
         // set default datakey
         if (!datakeyEle.value) {
             datakeyEle.value = RandomString(16)
-            SetLocalStorage(StorageKeyCustomDatasetPassword, datakeyEle.value)
+            await KvSet(KvKeyCustomDatasetPassword, datakeyEle.value)
         }
 
         datakeyEle
-            .addEventListener('change', (evt) => {
+            .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
-                SetLocalStorage(StorageKeyCustomDatasetPassword, evtTarget(evt).value)
+                await KvSet(KvKeyCustomDatasetPassword, evtTarget(evt).value)
             })
     }
 
@@ -2328,7 +2317,7 @@ function setupPrivateDataset () {
         // and set to dataset-name input
         pdfchatModalEle
             .querySelector('div[data-field="pdffile"] input')
-            .addEventListener('change', (evt) => {
+            .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
 
                 if (evtTarget(evt).files.length === 0) {
@@ -2424,7 +2413,7 @@ function setupPrivateDataset () {
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                 headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
                 headers.append('Cache-Control', 'no-cache')
-                // headers.append("X-PDFCHAT-PASSWORD", GetLocalStorage(StorageKeyCustomDatasetPassword));
+                // headers.append("X-PDFCHAT-PASSWORD", await KvGet(KvKeyCustomDatasetPassword));
 
                 try {
                     ShowSpinner()
@@ -2465,7 +2454,7 @@ function setupPrivateDataset () {
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                 headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
                 headers.append('Cache-Control', 'no-cache')
-                headers.append('X-PDFCHAT-PASSWORD', GetLocalStorage(StorageKeyCustomDatasetPassword))
+                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword))
 
                 let body
                 try {
@@ -2564,7 +2553,7 @@ function setupPrivateDataset () {
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`)
                 headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
                 headers.append('Cache-Control', 'no-cache')
-                headers.append('X-PDFCHAT-PASSWORD', GetLocalStorage(StorageKeyCustomDatasetPassword))
+                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword))
 
                 let body
                 try {
@@ -2651,7 +2640,7 @@ function setupPrivateDataset () {
                                     method: 'POST',
                                     headers,
                                     body: JSON.stringify({
-                                        data_key: GetLocalStorage(StorageKeyCustomDatasetPassword),
+                                        data_key: await KvGet(KvKeyCustomDatasetPassword),
                                         chatbot_name: chatbotName
                                     })
                                 })
@@ -2705,7 +2694,7 @@ function setupPrivateDataset () {
                         headers,
                         body: JSON.stringify({
                             chatbot_name,
-                            data_key: GetLocalStorage(StorageKeyCustomDatasetPassword)
+                            data_key: await KvGet(KvKeyCustomDatasetPassword)
                         })
                     })
 

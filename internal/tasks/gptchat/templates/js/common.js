@@ -68,16 +68,14 @@ const FreeModels = [
 ]
 const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels)
 
-const StorageKeyPromptShortCuts = 'config_prompt_shortcuts'
 // custom dataset's end-to-end password
-const StorageKeyCustomDatasetPassword = 'config_chat_dataset_key'
-const StorageKeyPinnedMaterials = 'config_api_pinned_materials'
-const StorageKeyAllowedModels = 'config_chat_models'
-const StorageKeySelectedSession = 'config_selected_session'
-
-// should not has same prefix
+const KvKeyPinnedMaterials = 'config_api_pinned_materials'
+const KvKeyAllowedModels = 'config_chat_models'
+const KvKeyCustomDatasetPassword = 'config_chat_dataset_key'
+const KvKeyPromptShortCuts = 'config_prompt_shortcuts'
 const KvKeyPrefixSessionHistory = 'chat_user_session_'
 const KvKeyPrefixSessionConfig = 'chat_user_config_'
+const KvKeyPrefixSelectedSession = 'config_selected_session'
 
 const IsChatModel = (model) => {
     return ChatModels.includes(model)
@@ -95,13 +93,13 @@ const IsImageModel = (model) => {
     return ImageModels.includes(model)
 }
 
-const IsChatModelAllowed = (model) => {
-    const allowed_models = GetLocalStorage(StorageKeyAllowedModels)
-    if (!allowed_models) {
+const IsChatModelAllowed = async (model) => {
+    const allowedModels = await KvGet(KvKeyAllowedModels)
+    if (!allowedModels) {
         return false
     }
 
-    return allowed_models.includes(model)
+    return allowedModels.includes(model)
 }
 
 const ShowSpinner = () => {
@@ -127,7 +125,7 @@ const RandomString = (length) => {
 }
 
 const OpenaiToken = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     let apikey
@@ -165,49 +163,49 @@ const OpenaiToken = async () => {
 }
 
 const OpenaiApiBase = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.api_base || 'https://api.openai.com'
 }
 
 const OpenaiSelectedModel = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.selected_model || ChatModelTurbo35V1106
 }
 
 const OpenaiMaxTokens = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.max_tokens || 500
 }
 
 const OpenaiTemperature = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.temperature
 }
 
 const OpenaiPresencePenalty = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.presence_penalty || 0
 }
 
 const OpenaiFrequencyPenalty = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.frequency_penalty || 0
 }
 
 const ChatNContexts = async () => {
-    const sid = activeSessionID()
+    const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
     return sconfig.n_contexts || 6
@@ -219,7 +217,7 @@ const ChatNContexts = async () => {
  * @returns {string} prompt
  */
 const OpenaiChatStaticContext = async (prompt) => {
-    const sid = activeSessionID();
+    const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
     const sconfig = await KvGet(skey);
 
@@ -277,18 +275,39 @@ window.AppEntrypoint = async () => {
     await setupChatJs();
 };
 
-async function dataMigrate () {
-    const sid = activeSessionID();
+async function dataMigrate() {
+    const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
     let sconfig = await KvGet(skey);
 
     // set selected session
-    if (!GetLocalStorage(StorageKeySelectedSession)) {
-        SetLocalStorage(StorageKeySelectedSession, sid);
+    if (!KvGet(KvKeyPrefixSelectedSession)) {
+        KvSet(KvKeyPrefixSelectedSession, sid);
     }
 
     // move config from localstorage to session config
     {
+        // move global config
+        const storageVals = { // old: new
+            config_prompt_shortcuts: KvKeyPromptShortCuts,
+            config_chat_dataset_key: KvKeyCustomDatasetPassword,
+            config_api_pinned_materials: KvKeyPinnedMaterials,
+            config_chat_models: KvKeyAllowedModels,
+            config_selected_session: KvKeyPrefixSelectedSession
+        };
+        await Promise.all(Object.keys(storageVals)
+            .map(async (oldKey) => {
+                const val = GetLocalStorage(oldKey);
+                if (!val) {
+                    return;
+                }
+
+                const newKey = storageVals[oldKey];
+                await KvSet(newKey, val);
+                localStorage.removeItem(oldKey);
+            }));
+
+        // move session config
         if (!sconfig) {
             sconfig = newSessionConfig();
 
@@ -365,7 +384,7 @@ async function dataMigrate () {
 
 let singleInputCallback, singleInputModal
 
-function setupSingleInputModal () {
+function setupSingleInputModal() {
     singleInputCallback = null
     singleInputModal = new bootstrap.Modal(document.getElementById('singleInputModal'))
     document.getElementById('singleInputModal')
@@ -390,7 +409,7 @@ let deleteCheckCallback,
      */
     deleteCheckModal
 
-function setupConfirmModal () {
+function setupConfirmModal() {
     deleteCheckModal = new bootstrap.Modal(document.getElementById('deleteCheckModal'))
     document.getElementById('deleteCheckModal')
         .querySelector('.modal-body .yes')
@@ -408,7 +427,7 @@ function setupConfirmModal () {
 /** setup header bar
  *
  */
-async function setupHeader () {
+async function setupHeader() {
     const headerBarEle = document.getElementById('headerbar')
     let allowedModels = []
     const sconfig = await getChatSessionConfig()
@@ -431,59 +450,59 @@ async function setupHeader () {
             throw new Error('failed to get user info, please refresh your browser.')
         }
 
-        const modelsContainer = document.querySelector('#headerbar .chat-models')
-        let modelsEle = ''
-        const respData = await response.json()
+        const modelsContainer = document.querySelector('#headerbar .chat-models');
+        let modelsEle = '';
+        const respData = await response.json();
         if (respData.allowed_models.includes('*')) {
-            respData.allowed_models = Array.from(AllModels)
+            respData.allowed_models = Array.from(AllModels);
         } else {
-            respData.allowed_models.push(QAModelCustom, QAModelShared)
+            respData.allowed_models.push(QAModelCustom, QAModelShared);
         }
         respData.allowed_models = respData.allowed_models.filter((model) => {
-            return AllModels.includes(model)
-        })
+            return AllModels.includes(model);
+        });
 
-        respData.allowed_models.sort()
-        SetLocalStorage(StorageKeyAllowedModels, respData.allowed_models)
-        allowedModels = respData.allowed_models
+        respData.allowed_models.sort();
+        await KvSet(KvKeyAllowedModels, respData.allowed_models);
+        allowedModels = respData.allowed_models;
 
         if (!allowedModels.includes(selectedModel)) {
-            selectedModel = ''
+            selectedModel = '';
             AllModels.forEach((model) => {
                 if (selectedModel != '' || !allowedModels.includes(model)) {
-                    return
+                    return;
                 }
 
                 if (model.startsWith('gpt-') || model.startsWith('gemini-')) {
-                    selectedModel = model
+                    selectedModel = model;
                 }
-            })
+            });
 
-            const sid = activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
-            sconfig.selected_model = selectedModel
-            await KvSet(skey, sconfig)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
+            sconfig.selected_model = selectedModel;
+            await KvSet(skey, sconfig);
         }
 
         // add hint to input text
         // chatPromptInputEle.attributes
         //     .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
 
-        const unsupportedModels = []
+        const unsupportedModels = [];
         respData.allowed_models.forEach((model) => {
             if (!ChatModels.includes(model)) {
-                unsupportedModels.push(model)
-                return
+                unsupportedModels.push(model);
+                return;
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
             }
-        })
-        modelsContainer.innerHTML = modelsEle
+        });
+        modelsContainer.innerHTML = modelsEle;
     }
 
     // FIXME
@@ -495,44 +514,44 @@ async function setupHeader () {
 
     // setup chat qa models
     {
-        const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models')
-        let modelsEle = ''
+        const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models');
+        let modelsEle = '';
 
-        const allowedQaModels = [QAModelCustom, QAModelShared]
-        data.qa_chat_models.forEach((item) => {
-            allowedQaModels.push(item.name)
-        })
+        const allowedQaModels = [QAModelCustom, QAModelShared];
+        window.data.qa_chat_models.forEach((item) => {
+            allowedQaModels.push(item.name);
+        });
 
         allowedModels.forEach((model) => {
             if (!QaModels.includes(model) || !allowedQaModels.includes(model)) {
-                return
+                return;
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
             }
-        })
-        qaModelsContainer.innerHTML = modelsEle
+        });
+        qaModelsContainer.innerHTML = modelsEle;
     }
 
     // setup chat image models
     {
-        const imageModelsContainer = headerBarEle.querySelector('.dropdown-menu.image-models')
-        let modelsEle = ''
+        const imageModelsContainer = headerBarEle.querySelector('.dropdown-menu.image-models');
+        let modelsEle = '';
         allowedModels.forEach((model) => {
             if (!ImageModels.includes(model)) {
-                return
+                return;
             }
 
             if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
             } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
             }
-        })
-        imageModelsContainer.innerHTML = modelsEle
+        });
+        imageModelsContainer.innerHTML = modelsEle;
     }
 
     // listen click events
@@ -540,32 +559,32 @@ async function setupHeader () {
         .querySelectorAll('#headerbar .chat-models li a, ' +
             '#headerbar .qa-models li a, ' +
             '#headerbar .image-models li a'
-        )
+        );
     modelElems.forEach((elem) => {
         elem.addEventListener('click', async (evt) => {
-            evt.preventDefault()
+            evt.preventDefault();
             modelElems.forEach((elem) => {
-                elem.classList.remove('active')
+                elem.classList.remove('active');
             })
 
-            evt.target.classList.add('active')
-            const selectedModel = evt.target.dataset.model
+            evt.target.classList.add('active');
+            const selectedModel = evt.target.dataset.model;
 
-            const sid = activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
-            sconfig.selected_model = selectedModel
-            await KvSet(skey, sconfig)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
+            sconfig.selected_model = selectedModel;
+            await KvSet(skey, sconfig);
 
             // add active to class
             document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
                 .forEach((elem) => {
-                    elem.classList.remove('active')
-                })
-            evt.target.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active')
+                    elem.classList.remove('active');
+                });
+            evt.target.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
 
             // add hint to input text
-            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`
-        })
-    })
+            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+        });
+    });
 }
