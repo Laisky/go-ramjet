@@ -15,6 +15,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/go-ramjet/library/log"
+	gcompress "github.com/Laisky/go-utils/v4/compress"
 	gcrypto "github.com/Laisky/go-utils/v4/crypto"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
@@ -84,12 +85,18 @@ func UploadUserConfig(ctx *gin.Context) {
 		return
 	}
 
+	var gzout bytes.Buffer
+	err = gcompress.GzCompress(bytes.NewReader(body), &gzout)
+	if AbortErr(ctx, errors.Wrap(err, "compress body")) {
+		return
+	}
+
 	encryptKey, err := gcrypto.DeriveKeyByHKDF([]byte(apikey), nil, 32)
 	if AbortErr(ctx, errors.Wrap(err, "derive key")) {
 		return
 	}
 
-	cipher, err := gcrypto.AEADEncrypt(encryptKey, body, nil)
+	cipher, err := gcrypto.AEADEncrypt(encryptKey, gzout.Bytes(), nil)
 	if AbortErr(ctx, errors.Wrap(err, "encrypt body")) {
 		return
 	}
@@ -134,8 +141,8 @@ func DownloadUserConfig(ctx *gin.Context) {
 	}
 	defer object.Close()
 
-	cipher, err := io.ReadAll(object)
-	if AbortErr(ctx, errors.Wrap(err, "read cipher from s3")) {
+	body, err := io.ReadAll(object)
+	if AbortErr(ctx, errors.Wrap(err, "read body")) {
 		return
 	}
 
@@ -144,11 +151,17 @@ func DownloadUserConfig(ctx *gin.Context) {
 		return
 	}
 
-	plaintext, err := gcrypto.AEADDecrypt(encryptKey, cipher, nil)
+	plaintext, err := gcrypto.AEADDecrypt(encryptKey, body, nil)
 	if AbortErr(ctx, errors.Wrap(err, "decrypt body")) {
 		return
 	}
 
+	var gzout bytes.Buffer
+	err = gcompress.GzDecompress(bytes.NewReader(plaintext), &gzout)
+	if AbortErr(ctx, errors.Wrap(err, "decompress body")) {
+		return
+	}
+
 	logger.Info("download user config success")
-	ctx.Data(200, "application/json", plaintext)
+	ctx.Data(200, "application/json", gzout.Bytes())
 }

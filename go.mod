@@ -7,7 +7,7 @@ require (
 	github.com/Laisky/gin-middlewares/v5 v5.0.3
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.8.1-0.20240116051208-cb19d41c819b
+	github.com/Laisky/go-utils/v4 v4.8.1-0.20240120160724-0135bf4798d3
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
@@ -33,7 +33,7 @@ require (
 	github.com/yanyiwu/gojieba v1.3.0
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/net v0.19.0
-	golang.org/x/sync v0.5.0
+	golang.org/x/sync v0.6.0
 	google.golang.org/protobuf v1.32.0
 	gorm.io/driver/clickhouse v0.6.0
 	gorm.io/gorm v1.25.5
@@ -106,6 +106,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
+	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -158,11 +159,11 @@ require (
 	go.uber.org/automaxprocs v1.5.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.11.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.10.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
