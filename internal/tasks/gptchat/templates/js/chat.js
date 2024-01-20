@@ -2074,45 +2074,76 @@ async function setupConfig () {
     //  config_api_static_context
     {
         const staticConfigInput = configContainer
-            .querySelector('.system-prompt .input')
+            .querySelector('.system-prompt .input');
         staticConfigInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.system_prompt = evtTarget(evt).value
-            await KvSet(skey, sconfig)
-        })
+            sconfig.system_prompt = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+        });
     }
 
     // bind reset button
     {
         configContainer.querySelector('.btn.reset')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                localStorage.clear()
-                await KvClear()
-                location.reload()
-            })
+                evt.stopPropagation();
+
+                ConfirmModal('Reset everything?', async () => {
+                    localStorage.clear();
+                    await KvClear();
+                    location.reload();
+                });
+            });
     }
 
     // bind clear-chats button
     {
         configContainer.querySelector('.btn.clear-chats')
             .addEventListener('click', async (evt) => {
-                clearSessionAndChats(evt, await activeSessionID())
-            })
+                evt.stopPropagation();
+
+                ConfirmModal('Clear all chat records in the current session?', async () => {
+                    clearSessionAndChats(evt, await activeSessionID());
+                });
+            });
     }
 
     // bind submit button
     {
         configContainer.querySelector('.btn.submit')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                location.reload()
-            })
+                evt.stopPropagation();
+                location.reload();
+            });
+    }
+
+    // bind sync key
+    {
+        const syncKeyEle = configContainer.querySelector('.input.sync-key');
+        syncKeyEle
+            .addEventListener('input', async (evt) => {
+                evt.stopPropagation();
+                const syncKey = evtTarget(evt).value;
+                await KvSet(KvKeySyncKey, syncKey);
+            });
+        KvAddListener(KvKeySyncKey, async (key, op, oldVal, newVal) => {
+            if (op != KvOp.SET) {
+                return;
+            }
+
+            syncKeyEle.value = newVal;
+        });
+
+        // set default val
+        if (!(await KvGet(KvKeySyncKey))) {
+            await KvSet(KvKeySyncKey, `sync-${RandomString(64)}`);
+        }
+        syncKeyEle.value = await KvGet(KvKeySyncKey);
     }
 
     // bind upload & download configs
@@ -2121,18 +2152,20 @@ async function setupConfig () {
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
 
-                const data = {};
-                (await KvList()).forEach(async (key) => {
-                    data[key] = await KvGet(key);
-                });
-
-                const apiToken = (await getChatSessionConfig()).api_token;
                 try {
+                    ShowSpinner();
+
+                    const data = {};
+                    await Promise.all((await KvList()).map(async (key) => {
+                        data[key] = await KvGet(key);
+                    }));
+
+                    const syncKey = await KvGet(KvKeySyncKey);
                     const resp = await fetch('/user/config', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            Authorization: 'Bearer ' + apiToken
+                            'X-LAISKY-SYNC-KEY': syncKey
                         },
                         body: JSON.stringify(data)
                     });
@@ -2145,6 +2178,8 @@ async function setupConfig () {
                 } catch (err) {
                     console.error(`upload config failed: ${err}`);
                     showalert('danger', 'upload config failed: ' + err);
+                } finally {
+                    HideSpinner();
                 }
             });
 
@@ -2152,33 +2187,36 @@ async function setupConfig () {
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
 
-                const apiToken = (await getChatSessionConfig()).api_token;
-                try {
-                    ShowSpinner();
-                    const resp = await fetch('/user/config', {
-                        method: 'GET',
-                        headers: {
-                            Authorization: 'Bearer ' + apiToken
+                ConfirmModal('Download config will clear all local data, are you sure?', async () => {
+                    const syncKey = await KvGet(KvKeySyncKey);
+                    try {
+                        ShowSpinner();
+                        const resp = await fetch('/user/config', {
+                            method: 'GET',
+                            headers: {
+                                'X-LAISKY-SYNC-KEY': syncKey,
+                                'Cache-Control': 'no-cache'
+                            }
+                        });
+
+                        if (resp.status != 200) {
+                            throw new Error(`download config failed: ${resp.status}`);
                         }
-                    });
 
-                    if (resp.status != 200) {
-                        throw new Error(`download config failed: ${resp.status}`);
+                        const data = await resp.json();
+                        await KvClear();
+                        for (const key in data) {
+                            await KvSet(key, data[key]);
+                        }
+
+                        location.reload();
+                    } catch (err) {
+                        console.error(`download config failed: ${err}`);
+                        showalert('danger', 'download config failed: ' + err);
+                    } finally {
+                        HideSpinner();
                     }
-
-                    const data = await resp.json();
-                    await KvClear();
-                    for (const key in data) {
-                        await KvSet(key, data[key]);
-                    }
-
-                    location.reload();
-                } catch (err) {
-                    console.error(`download config failed: ${err}`);
-                    showalert('danger', 'download config failed: ' + err);
-                } finally {
-                    HideSpinner();
-                }
+                });
             });
     }
 

@@ -43,15 +43,27 @@
   padding-top: 0px;
 }
 #hiddenChatConfigSideBar .offcanvas-body .system-prompt .input {
+  padding: 2px;
   min-height: 180px;
-  font-size: smaller;
+  font-size: 0.8em;
 }
 #hiddenChatConfigSideBar .offcanvas-body .dropdown-menu {
   min-width: inherit;
   padding: 0px;
 }
+#hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts {
+  margin-bottom: 5px !important;
+}
+#hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge {
+  margin-right: 5px;
+  cursor: pointer;
+  height: 22px;
+}
+#hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge .bi.bi-trash {
+  margin-left: 5px;
+}
 #hiddenChatConfigSideBar .offcanvas-body .input-group {
-  margin-bottom: 2px !important;
+  margin-bottom: 5px !important;
 }
 #hiddenChatConfigSideBar .offcanvas-body .input-group label {
   margin-bottom: 0px;
@@ -61,14 +73,6 @@
 }
 #hiddenChatConfigSideBar .offcanvas-body .input-group i.bi {
   font-size: small;
-}
-#hiddenChatConfigSideBar .offcanvas-body .input-group .prompt-shortcuts span.badge {
-  margin-right: 5px;
-  cursor: pointer;
-  height: 22px;
-}
-#hiddenChatConfigSideBar .offcanvas-body .input-group .prompt-shortcuts span.badge .bi.bi-trash {
-  margin-left: 5px;
 }
 #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.save-prompt,
 #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.open-prompt-market {

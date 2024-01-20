@@ -177,6 +177,12 @@
                     data-prompt="The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.">
                     chat</span>
             </div>
+
+            <div class="input-group mb-3">
+                <span class="input-group-text">sync key</span>
+                <input dir="auto" type="text" class="form-control input sync-key" value="">
+            </div>
+
             <button class="btn btn-success submit" data-bs-toggle="tooltip" data-bs-placement="top" title="Save">
                 <i class="bi bi-file-earmark-check"></i>
             </button>
@@ -188,13 +194,13 @@
                         title="Sync configurations"></i>
                 </button>
                 <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="#">
-                            <i class="bi bi-cloud-arrow-up btn-upload" data-bs-toggle="tooltip" data-bs-placement="top"
-                                title="Upload configurations"></i>
+                    <li><a class="dropdown-item btn-upload" href="#" data-bs-toggle="tooltip" data-bs-placement="top"
+                        title="Upload configurations">
+                            <i class="bi bi-cloud-arrow-up"></i>
                         </a></li>
-                    <li><a class="dropdown-item" href="#">
-                            <i class="bi bi-cloud-arrow-down btn-download" data-bs-toggle="tooltip" data-bs-placement="top"
-                                title="Download configurations"></i>
+                    <li><a class="dropdown-item btn-download" href="#" data-bs-toggle="tooltip"
+                        data-bs-placement="top" title="Download configurations">
+                            <i class="bi bi-cloud-arrow-down"></i>
                         </a></li>
                 </ul>
             </div>

@@ -1,27 +1,27 @@
-'use strict'
+'use strict';
 
-const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106'
-// ChatModelTurbo35 = "gpt-3.5-turbo",
-// ChatModelTurbo35_16K = "gpt-3.5-turbo-16k",
-// ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613",
-// ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613",
-// ChatModelGPT4 = "gpt-4",
-const ChatModelGPT4Turbo = 'gpt-4-1106-preview'
-const ChatModelGPT4Vision = 'gpt-4-vision-preview'
-// ChatModelGPT4_0613 = "gpt-4-0613",
-// ChatModelGPT4_32K = "gpt-4-32k",
-// ChatModelGPT4_0613_32K = "gpt-4-32k-0613",
-const ChatModelGeminiPro = 'gemini-pro'
-const ChatModelGeminiProVision = 'gemini-pro-vision'
-const QAModelBasebit = 'qa-bbt-xego'
-const QAModelSecurity = 'qa-security'
-const QAModelImmigrate = 'qa-immigrate'
-const QAModelCustom = 'qa-custom'
-const QAModelShared = 'qa-shared'
-const CompletionModelDavinci3 = 'text-davinci-003'
-const ImageModelDalle2 = 'dall-e-3'
-const ImageModelSdxlTurbo = 'sdxl-turbo'
-const ImageModelImg2Img = 'img-to-img'
+const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
+// const ChatModelTurbo35 = "gpt-3.5-turbo";
+// const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
+// const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
+// const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
+// const ChatModelGPT4 = "gpt-4";
+const ChatModelGPT4Turbo = 'gpt-4-1106-preview';
+const ChatModelGPT4Vision = 'gpt-4-vision-preview';
+// const ChatModelGPT4_0613 = "gpt-4-0613";
+// const ChatModelGPT4_32K = "gpt-4-32k";
+// const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
+const ChatModelGeminiPro = 'gemini-pro';
+const ChatModelGeminiProVision = 'gemini-pro-vision';
+const QAModelBasebit = 'qa-bbt-xego';
+const QAModelSecurity = 'qa-security';
+const QAModelImmigrate = 'qa-immigrate';
+const QAModelCustom = 'qa-custom';
+const QAModelShared = 'qa-shared';
+const CompletionModelDavinci3 = 'text-davinci-003';
+const ImageModelDalle2 = 'dall-e-3';
+const ImageModelSdxlTurbo = 'sdxl-turbo';
+const ImageModelImg2Img = 'img-to-img';
 
 // casual chat models
 
@@ -39,22 +39,22 @@ const ChatModels = [
     // ChatModelGPT4_0613,
     // ChatModelGPT4_32K,
     // ChatModelGPT4_0613_32K,
-]
+];
 const QaModels = [
     QAModelBasebit,
     QAModelSecurity,
     QAModelImmigrate,
     QAModelCustom,
     QAModelShared
-]
+];
 const ImageModels = [
     ImageModelDalle2,
     ImageModelSdxlTurbo,
     ImageModelImg2Img
-]
+];
 const CompletionModels = [
     CompletionModelDavinci3
-]
+];
 const FreeModels = [
     // ChatModelTurbo35,
     ChatModelTurbo35V1106,
@@ -65,21 +65,22 @@ const FreeModels = [
     QAModelImmigrate,
     ImageModelSdxlTurbo,
     ImageModelImg2Img
-]
-const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels)
+];
+const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
 
 // custom dataset's end-to-end password
-const KvKeyPinnedMaterials = 'config_api_pinned_materials'
-const KvKeyAllowedModels = 'config_chat_models'
-const KvKeyCustomDatasetPassword = 'config_chat_dataset_key'
-const KvKeyPromptShortCuts = 'config_prompt_shortcuts'
-const KvKeyPrefixSessionHistory = 'chat_user_session_'
-const KvKeyPrefixSessionConfig = 'chat_user_config_'
-const KvKeyPrefixSelectedSession = 'config_selected_session'
+const KvKeyPinnedMaterials = 'config_api_pinned_materials';
+const KvKeyAllowedModels = 'config_chat_models';
+const KvKeyCustomDatasetPassword = 'config_chat_dataset_key';
+const KvKeyPromptShortCuts = 'config_prompt_shortcuts';
+const KvKeyPrefixSessionHistory = 'chat_user_session_';
+const KvKeyPrefixSessionConfig = 'chat_user_config_';
+const KvKeyPrefixSelectedSession = 'config_selected_session';
+const KvKeySyncKey = 'config_sync_key';
 
 const IsChatModel = (model) => {
-    return ChatModels.includes(model)
-}
+    return ChatModels.includes(model);
+};
 
 const IsQaModel = (model) => {
     return QaModels.includes(model)

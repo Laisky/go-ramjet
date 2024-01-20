@@ -85,7 +85,6 @@
 }
 #chatContainer .chatManager .alerts-container .alerts {
   width: 80%;
-  min-height: 50px;
 }
 #chatContainer .chatManager .alerts-container .alerts .alert {
   margin-bottom: 5px;
@@ -121,6 +120,7 @@
   border: none;
   border-right: 1px dashed #e2e3e5;
   z-index: 50;
+  font-size: 0.8em;
 }
 #chatContainer .chatManager .card .conservations .sessions button {
   padding: 5px;

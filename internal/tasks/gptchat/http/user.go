@@ -3,10 +3,12 @@ package http
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
@@ -59,18 +61,26 @@ func GetCurrentUserQuota(ctx *gin.Context) {
 
 func userConfigS3Key(apikey string) string {
 	hashed := sha256.Sum256([]byte(apikey))
-	return "user-configs/" + base64.StdEncoding.EncodeToString(hashed[:])
+	return "user-configs/" + hex.EncodeToString(hashed[:])
 }
 
 func UploadUserConfig(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx)
-	apikey := strings.TrimPrefix(strings.ToLower(
-		ctx.Request.Header.Get("authorization"),
-	), "bearer ")
+	apikey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
+	if apikey == "" {
+		AbortErr(ctx, errors.New("empty apikey"))
+		return
+	}
+
 	logger = logger.With(zap.String("user", apikey[:15]))
 
 	body, err := ctx.GetRawData()
 	if AbortErr(ctx, errors.Wrap(err, "get raw data")) {
+		return
+	}
+
+	if len(body) > 100*1024*1024 {
+		AbortErr(ctx, errors.New("body too large"))
 		return
 	}
 
@@ -101,14 +111,23 @@ func UploadUserConfig(ctx *gin.Context) {
 
 func DownloadUserConfig(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx)
-	apikey := strings.TrimPrefix(strings.ToLower(
-		ctx.Request.Header.Get("authorization"),
-	), "bearer ")
+	apikey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
+
+	if apikey == "" {
+		AbortErr(ctx, errors.New("empty apikey"))
+		return
+	}
+
+	logger = logger.With(zap.String("user", apikey[:15]))
+
+	opt := minio.GetObjectOptions{}
+	opt.Set("Cache-Control", "no-cache")
+	opt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
 
 	object, err := s3.GetCli().GetObject(ctx.Request.Context(),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
-		minio.GetObjectOptions{},
+		opt,
 	)
 	if AbortErr(ctx, errors.Wrap(err, "get user config from s3")) {
 		return

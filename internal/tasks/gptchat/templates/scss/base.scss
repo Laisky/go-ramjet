@@ -58,8 +58,9 @@
         padding-top: 0px;
 
         .system-prompt .input {
+            padding: 2px;
             min-height: 180px;
-            font-size: smaller;
+            font-size: 0.8em;
         }
 
         .dropdown-menu {
@@ -67,8 +68,23 @@
             padding: 0px;
         }
 
+        .prompt-shortcuts {
+            margin-bottom: 5px !important;
+
+            span.badge {
+                margin-right: 5px;
+                cursor: pointer;
+                height: 22px;
+
+                .bi.bi-trash {
+                    margin-left: 5px;
+                }
+            }
+        }
+
+
         .input-group {
-            margin-bottom: 2px !important;
+            margin-bottom: 5px !important;
 
             label {
                 margin-bottom: 0px;
@@ -81,19 +97,6 @@
             i.bi {
                 font-size: small;
             }
-
-            .prompt-shortcuts {
-                span.badge {
-                    margin-right: 5px;
-                    cursor: pointer;
-                    height: 22px;
-
-                    .bi.bi-trash {
-                        margin-left: 5px;
-                    }
-                }
-            }
-
             .system-prompt {
 
                 .bi.save-prompt,
