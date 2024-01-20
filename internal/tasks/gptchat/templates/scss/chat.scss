@@ -99,7 +99,7 @@
             position: absolute;
             display: flex;
             justify-content: space-around;
-            z-index: 50;
+            z-index: 10;
 
             .alerts {
                 width: 80%;
@@ -175,6 +175,10 @@
                     .icon {
                         width: 25px;
                         padding: 0px;
+                    }
+
+                    .bi {
+                        z-index: 50;
                     }
 
                     .role-human {

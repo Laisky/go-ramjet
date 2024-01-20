@@ -81,7 +81,7 @@
   position: absolute;
   display: flex;
   justify-content: space-around;
-  z-index: 50;
+  z-index: 10;
 }
 #chatContainer .chatManager .alerts-container .alerts {
   width: 80%;
@@ -146,6 +146,9 @@
 #chatContainer .chatManager .card .conservations .chats .icon {
   width: 25px;
   padding: 0px;
+}
+#chatContainer .chatManager .card .conservations .chats .bi {
+  z-index: 50;
 }
 #chatContainer .chatManager .card .conservations .chats .role-human {
   position: relative;
