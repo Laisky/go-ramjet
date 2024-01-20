@@ -366,13 +366,13 @@ async function setupSessionManager () {
         }
 
         await Promise.all(allSessionKeys.map(async (key) => {
-            const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''))
+            const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
 
             let active = '';
             const sconfig = await getChatSessionConfig(sessionID);
             const sessionName = sconfig.session_name || sessionID;
             if (sessionID == selectedSessionID) {
-                active = 'active'
+                active = 'active';
             }
 
             document
@@ -385,7 +385,7 @@ async function setupSessionManager () {
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash col-auto"></i>
                         </button>
-                    </div>`)
+                    </div>`);
             chatContainer
                 .querySelector('.sessions')
                 .insertAdjacentHTML(
@@ -394,23 +394,23 @@ async function setupSessionManager () {
                         <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
                             <div class="col">${sessionName}</div>
                         </button>
-                    </div>`)
+                    </div>`);
         }));
 
         // restore conservation history
         (await activeSessionChatHistory()).forEach((item) => {
-            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML)
-            renderAfterAIResponse(item.chatID)
-        })
+            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
+            renderAfterAIResponse(item.chatID);
+        });
     }
 
     // add widget to scroll bottom
     {
         document.querySelector('#chatContainer .chatManager .card-footer .scroll-down')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                scrollChatToDown()
-            })
+                evt.stopPropagation();
+                scrollChatToDown();
+            });
     }
 
     // new session
@@ -421,25 +421,25 @@ async function setupSessionManager () {
                 let maxSessionID = 0;
                 (await KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
-                        const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''))
+                        const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
                         if (sessionID > maxSessionID) {
-                            maxSessionID = sessionID
+                            maxSessionID = sessionID;
                         }
                     }
-                })
+                });
 
                 // deactive all sessions
                 document.querySelectorAll(`
                     #sessionManager .sessions .list-group-item.active,
                     #chatContainer .sessions .list-group-item.active
                 `).forEach((item) => {
-                    item.classList.remove('active')
-                })
+                    item.classList.remove('active');
+                });
 
                 // add new active session
                 chatContainer
-                    .querySelector('.chatManager .conservations .chats').innerHTML = ''
-                const newSessionID = maxSessionID + 1
+                    .querySelector('.chatManager .conservations .chats').innerHTML = '';
+                const newSessionID = maxSessionID + 1;
                 document
                     .querySelector('#sessionManager .sessions')
                     .insertAdjacentHTML(
@@ -450,7 +450,7 @@ async function setupSessionManager () {
                                 <i class="bi bi-pencil-square"></i>
                                 <i class="bi bi-trash col-auto"></i>
                             </button>
-                        </div>`)
+                        </div>`);
                 chatContainer
                     .querySelector('.sessions')
                     .insertAdjacentHTML(
@@ -459,15 +459,15 @@ async function setupSessionManager () {
                             <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
                                 <div class="col">${newSessionID}</div>
                             </button>
-                        </div>`)
+                        </div>`);
 
                 // save new session history and config
-                await KvSet(kvSessionKey(newSessionID), [])
-                const oldSessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`)
-                const sconfig = newSessionConfig()
-                sconfig.api_token = oldSessionConfig.api_token // keep api token
-                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig)
-                await KvSet(KvKeyPrefixSelectedSession, newSessionID)
+                await KvSet(kvSessionKey(newSessionID), []);
+                const oldSessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`);
+                const sconfig = newSessionConfig();
+                sconfig.api_token = oldSessionConfig.api_token; // keep api token
+                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
+                await KvSet(KvKeyPrefixSelectedSession, newSessionID);
 
                 // bind session switch listener for new session
                 document
@@ -475,7 +475,7 @@ async function setupSessionManager () {
                         #sessionManager .sessions [data-session="${newSessionID}"],
                         #chatContainer .sessions [data-session="${newSessionID}"]
                     `)
-                    .addEventListener('click', listenSessionSwitch)
+                    .addEventListener('click', listenSessionSwitch);
 
                 bindSessionEditBtn();
                 bindSessionDeleteBtn();
@@ -491,27 +491,27 @@ async function setupSessionManager () {
                 #chatContainer .sessions .list-group .session
             `)
             .forEach((item) => {
-                item.addEventListener('click', listenSessionSwitch)
+                item.addEventListener('click', listenSessionSwitch);
             })
     }
 
-    bindSessionEditBtn()
-    bindSessionDeleteBtn()
+    bindSessionEditBtn();
+    bindSessionDeleteBtn();
 }
 
 // remove chat in storage by chatid
 async function removeChatInStorage (chatid) {
     if (!chatid) {
-        throw 'chatid is required'
+        throw 'chatid is required';
     }
 
-    const storageActiveSessionKey = kvSessionKey(await activeSessionID())
-    let session = await activeSessionChatHistory()
+    const storageActiveSessionKey = kvSessionKey(await activeSessionID());
+    let session = await activeSessionChatHistory();
 
     // remove all chats with the same chatid
-    session = session.filter((item) => item.chatID !== chatid)
+    session = session.filter((item) => item.chatID !== chatid);
 
-    await KvSet(storageActiveSessionKey, session)
+    await KvSet(storageActiveSessionKey, session);
 }
 
 /** append or update chat history by chatid and role
@@ -522,28 +522,28 @@ async function removeChatInStorage (chatid) {
 */
 async function appendChats2Storage (role, chatid, renderedContent, attachHTML, rawContent) {
     if (!chatid) {
-        throw 'chatid is required'
+        throw 'chatid is required';
     }
 
-    const storageActiveSessionKey = kvSessionKey(await activeSessionID())
-    const session = await activeSessionChatHistory()
+    const storageActiveSessionKey = kvSessionKey(await activeSessionID());
+    const session = await activeSessionChatHistory();
 
     // if chat is already in history, find and update it.
-    let found = false
+    let found = false;
     session.forEach((item, idx) => {
         if (item.chatID == chatid && item.role == role) {
-            found = true
-            item.content = renderedContent
-            item.attachHTML = attachHTML
-            item.rawContent = rawContent
+            found = true;
+            item.content = renderedContent;
+            item.attachHTML = attachHTML;
+            item.rawContent = rawContent;
         }
-    })
+    });
 
     // if ai response is not in history, add it after user's chat which has same chatid
     if (!found && role == RoleAI) {
         session.forEach((item, idx) => {
             if (item.chatID == chatid) {
-                found = true
+                found = true;
                 if (item.role != RoleAI) {
                     session.splice(idx + 1, 0, {
                         role: RoleAI,
@@ -551,10 +551,10 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
                         content: renderedContent,
                         attachHTML,
                         rawContent
-                    })
+                    });
                 }
             }
-        })
+        });
     }
 
     // if chat is not in history, add it
@@ -565,18 +565,19 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
             content: renderedContent,
             attachHTML,
             rawContent
-        })
+        });
     }
 
-    await KvSet(storageActiveSessionKey, session)
+    await KvSet(storageActiveSessionKey, session);
 }
 
 function scrollChatToDown () {
-    ScrollDown(chatContainer.querySelector('.chatManager .conservations .chats'))
+    ScrollDown(document.querySelector('body'));
+    ScrollDown(chatContainer.querySelector('.chatManager .conservations .chats'));
 }
 
 function scrollToChat (chatEle) {
-    chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 /**

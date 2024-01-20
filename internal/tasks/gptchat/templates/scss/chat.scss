@@ -124,7 +124,7 @@
             .conservations {
                 padding: 0px;
                 position: relative;
-                min-height: 300px;
+                // min-height: 300px;
                 overflow-y: scroll;
                 display: flex;
                 flex-direction: row;
@@ -146,6 +146,7 @@
                     width: 44px;
                     border: none;
                     border-right: 1px dashed #e2e3e5;
+                    z-index: 60;
 
                     button {
                         padding: 5px;
@@ -265,7 +266,7 @@
                 .scroll-down {
                     position: fixed;
                     bottom: 101px;
-                    right: 15px;
+                    right: 5px;
                     z-index: 1000;
                     font-size: larger;
                     cursor: pointer;
