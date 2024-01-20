@@ -222,8 +222,8 @@ func (c *UserConfig) Valid() error {
 }
 
 var (
-	onceLimiter                                                    sync.Once
-	globalRatelimiter, expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
+	onceLimiter                                 sync.Once
+	expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
 )
 
 // setupRateLimiter setup ratelimiter depends on loaded config
@@ -232,16 +232,16 @@ func setupRateLimiter() {
 	var err error
 	logger := log.Logger.Named("gptchat.ratelimiter")
 
-	{
-		if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
-			gutils.RateLimiterArgs{
-				Max:     10,
-				NPerSec: 1,
-			}); err != nil {
-			log.Logger.Panic("new ratelimiter", zap.Error(err))
-		}
-		logger.Info("set overall ratelimiter", zap.Int("burst", 10))
-	}
+	// {
+	// 	if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
+	// 		gutils.RateLimiterArgs{
+	// 			Max:     10,
+	// 			NPerSec: 1,
+	// 		}); err != nil {
+	// 		log.Logger.Panic("new ratelimiter", zap.Error(err))
+	// 	}
+	// 	logger.Info("set overall ratelimiter", zap.Int("burst", 10))
+	// }
 
 	{
 		burst := int(float64(Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
@@ -297,9 +297,9 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		return errors.Errorf("model %q is not allowed for user %q", model, c.UserName)
 	}
 
-	if !globalRatelimiter.Allow() { // check rate limit
-		return errors.Errorf("too many requests, please try again later")
-	}
+	// if !globalRatelimiter.Allow() { // check rate limit
+	// 	return errors.Errorf("too many requests, please try again later")
+	// }
 
 	// rate limit only support limit by second,
 	// so we consume 60 tokens once to make it limit by minute

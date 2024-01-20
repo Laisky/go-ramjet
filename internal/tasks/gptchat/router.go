@@ -2,10 +2,14 @@
 package gptchat
 
 import (
+	"context"
 	"net/http"
+	"sync"
 
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 	"github.com/stripe/stripe-go/v76"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -15,12 +19,41 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+var (
+	once              sync.Once
+	globalRatelimiter *gutils.RateLimiter
+)
+
+func setupInit() {
+	once.Do(func() {
+		var err error
+		if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
+			gutils.RateLimiterArgs{
+				Max:     10,
+				NPerSec: 1,
+			}); err != nil {
+			log.Logger.Panic("new ratelimiter", zap.Error(err))
+		}
+	})
+}
+
+func globalRatelimitMw(ctx *gin.Context) {
+	setupInit()
+
+	if !globalRatelimiter.Allow() {
+		ihttp.AbortErr(ctx, errors.New("global rate limit"))
+	}
+
+	ctx.Next()
+}
+
 func bindHTTP() {
 	if err := ihttp.SetupHTTPCli(); err != nil {
 		log.Logger.Panic("setup http client", zap.Error(err))
 	}
 
 	grp := web.Server.Group("/gptchat")
+	grp.Use(globalRatelimitMw)
 
 	ihttp.RegisterStatic(grp.Group("/static"))
 	grp.GET("/favicon.ico", func(ctx *gin.Context) {
@@ -34,6 +67,8 @@ func bindHTTP() {
 	grp.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
+	grp.POST("/user/config", ihttp.UploadUserConfig)
+	grp.GET("/user/config", ihttp.DownloadUserConfig)
 	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
 	grp.GET("/", ihttp.Chat)
 
