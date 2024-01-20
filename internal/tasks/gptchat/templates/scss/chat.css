@@ -120,7 +120,7 @@
   width: 44px;
   border: none;
   border-right: 1px dashed #e2e3e5;
-  z-index: 60;
+  z-index: 50;
 }
 #chatContainer .chatManager .card .conservations .sessions button {
   padding: 5px;
@@ -198,6 +198,7 @@
 #chatContainer .chatManager .card .card-footer {
   position: relative;
   padding: 0px;
+  z-index: 60;
 }
 #chatContainer .chatManager .card .card-footer .pinned-files {
   z-index: 1000;
