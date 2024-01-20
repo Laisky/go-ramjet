@@ -26,6 +26,7 @@ require (
 	github.com/gorilla/feeds v1.1.2
 	github.com/jinzhu/copier v0.4.0
 	github.com/minio/minio-go/v7 v7.0.66
+	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/stripe/stripe-go/v76 v76.10.0
@@ -128,7 +129,6 @@ require (
 	github.com/paulmach/orb v0.10.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.15.1 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect

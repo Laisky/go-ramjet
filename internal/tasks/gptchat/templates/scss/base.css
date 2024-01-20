@@ -32,37 +32,48 @@
   background: none;
 }
 
-#hiddenChatConfigSideBar .system-prompt .input {
-  min-height: 220px;
+#hiddenChatConfigSideBar #prompt-market .prompt-labels span {
+  cursor: pointer;
+  margin-right: 5px;
+}
+#hiddenChatConfigSideBar .offcanvas-header {
+  padding-bottom: 0px;
+}
+#hiddenChatConfigSideBar .offcanvas-body {
+  padding-top: 0px;
+}
+#hiddenChatConfigSideBar .offcanvas-body .system-prompt .input {
+  min-height: 180px;
   font-size: smaller;
 }
-#hiddenChatConfigSideBar .input-group {
-  margin-bottom: 0px !important;
-  padding-top: 1px;
+#hiddenChatConfigSideBar .offcanvas-body .dropdown-menu {
+  min-width: inherit;
+  padding: 0px;
 }
-#hiddenChatConfigSideBar .input-group label[for=configStaticContext] {
+#hiddenChatConfigSideBar .offcanvas-body .input-group {
+  margin-bottom: 2px !important;
+}
+#hiddenChatConfigSideBar .offcanvas-body .input-group label {
+  margin-bottom: 0px;
+}
+#hiddenChatConfigSideBar .offcanvas-body .input-group label[for=configStaticContext] {
   width: 100%;
 }
-#hiddenChatConfigSideBar i.bi {
+#hiddenChatConfigSideBar .offcanvas-body .input-group i.bi {
   font-size: small;
 }
-#hiddenChatConfigSideBar .prompt-shortcuts span.badge {
+#hiddenChatConfigSideBar .offcanvas-body .input-group .prompt-shortcuts span.badge {
   margin-right: 5px;
   cursor: pointer;
   height: 22px;
 }
-#hiddenChatConfigSideBar .prompt-shortcuts span.badge .bi.bi-trash {
+#hiddenChatConfigSideBar .offcanvas-body .input-group .prompt-shortcuts span.badge .bi.bi-trash {
   margin-left: 5px;
 }
-#hiddenChatConfigSideBar .system-prompt .bi.save-prompt,
-#hiddenChatConfigSideBar .system-prompt .bi.open-prompt-market {
+#hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.save-prompt,
+#hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.open-prompt-market {
   cursor: pointer;
   margin-left: 5px;
-}
-
-#prompt-market .prompt-labels span {
-  cursor: pointer;
-  margin-right: 5px;
 }
 
 /*# sourceMappingURL=base.css.map */

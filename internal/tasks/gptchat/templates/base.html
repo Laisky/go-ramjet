@@ -177,9 +177,36 @@
                     data-prompt="The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.">
                     chat</span>
             </div>
-            <button class="btn btn-success submit">Save</button>
-            <button class="btn btn-secondary clear-chats" data-bs-toggle="tooltip" data-bs-placement="top" title="Clear all chat history from the current session, but retain the settings.">Clear Chats</button>
-            <button class="btn btn-danger reset">Reset</button>
+            <button class="btn btn-success submit" data-bs-toggle="tooltip" data-bs-placement="top" title="Save">
+                <i class="bi bi-file-earmark-check"></i>
+            </button>
+
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                    <i class="bi bi-clouds" data-bs-toggle="tooltip" data-bs-placement="top"
+                        title="Sync configurations"></i>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#">
+                            <i class="bi bi-cloud-arrow-up btn-upload" data-bs-toggle="tooltip" data-bs-placement="top"
+                                title="Upload configurations"></i>
+                        </a></li>
+                    <li><a class="dropdown-item" href="#">
+                            <i class="bi bi-cloud-arrow-down btn-download" data-bs-toggle="tooltip" data-bs-placement="top"
+                                title="Download configurations"></i>
+                        </a></li>
+                </ul>
+            </div>
+
+            <button class="btn btn-warning clear-chats" data-bs-toggle="tooltip" data-bs-placement="top"
+                title="Clear all chat history from the current session, but retain the settings.">
+                <i class="bi bi-trash3"></i>
+                <i class="bi bi-chat-dots"></i>
+            </button>
+            <button class="btn btn-danger reset" data-bs-toggle="tooltip" data-bs-placement="top" title="Reset all">
+                <i class="bi bi-bootstrap-reboot"></i>
+            </button>
         </div>
     </div>
 

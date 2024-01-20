@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
@@ -16,7 +17,6 @@ import (
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/go-faster/errors"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -69,8 +69,8 @@ func UploadUserConfig(ctx *gin.Context) {
 	), "bearer ")
 	logger = logger.With(zap.String("user", apikey[:15]))
 
-	body, err := io.ReadAll(ctx.Request.Body)
-	if AbortErr(ctx, errors.Wrap(err, "read body")) {
+	body, err := ctx.GetRawData()
+	if AbortErr(ctx, errors.Wrap(err, "get raw data")) {
 		return
 	}
 

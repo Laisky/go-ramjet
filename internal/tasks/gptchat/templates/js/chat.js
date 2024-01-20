@@ -2115,6 +2115,73 @@ async function setupConfig () {
             })
     }
 
+    // bind upload & download configs
+    {
+        configContainer.querySelector('.btn-upload')
+            .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+
+                const data = {};
+                (await KvList()).forEach(async (key) => {
+                    data[key] = await KvGet(key);
+                });
+
+                const apiToken = (await getChatSessionConfig()).api_token;
+                try {
+                    const resp = await fetch('/user/config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + apiToken
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (resp.status != 200) {
+                        throw new Error(`upload config failed: ${resp.status}`);
+                    }
+
+                    showalert('success', 'upload config success');
+                } catch (err) {
+                    console.error(`upload config failed: ${err}`);
+                    showalert('danger', 'upload config failed: ' + err);
+                }
+            });
+
+        configContainer.querySelector('.btn-download')
+            .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+
+                const apiToken = (await getChatSessionConfig()).api_token;
+                try {
+                    ShowSpinner();
+                    const resp = await fetch('/user/config', {
+                        method: 'GET',
+                        headers: {
+                            Authorization: 'Bearer ' + apiToken
+                        }
+                    });
+
+                    if (resp.status != 200) {
+                        throw new Error(`download config failed: ${resp.status}`);
+                    }
+
+                    const data = await resp.json();
+                    await KvClear();
+                    for (const key in data) {
+                        await KvSet(key, data[key]);
+                    }
+
+                    location.reload();
+                } catch (err) {
+                    console.error(`download config failed: ${err}`);
+                    showalert('danger', 'download config failed: ' + err);
+                } finally {
+                    HideSpinner();
+                }
+            });
+    }
+
     EnableTooltipsEverywhere()
 }
 

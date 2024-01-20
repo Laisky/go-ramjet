@@ -45,47 +45,63 @@
 }
 
 #hiddenChatConfigSideBar {
-    .system-prompt .input {
-        min-height: 220px;
-        font-size: smaller;
+    #prompt-market .prompt-labels span {
+        cursor: pointer;
+        margin-right: 5px;
     }
 
-    .input-group {
-        margin-bottom: 0px !important;
-        padding-top: 1px;
+    .offcanvas-header {
+        padding-bottom: 0px;
     }
 
-    .input-group label[for="configStaticContext"] {
-        width: 100%;
-    }
+    .offcanvas-body {
+        padding-top: 0px;
 
-    i.bi {
-        font-size: small;
-    }
+        .system-prompt .input {
+            min-height: 180px;
+            font-size: smaller;
+        }
 
-    .prompt-shortcuts {
-        span.badge {
-            margin-right: 5px;
-            cursor: pointer;
-            height: 22px;
+        .dropdown-menu {
+            min-width: inherit;
+            padding: 0px;
+        }
 
-            .bi.bi-trash {
-                margin-left: 5px;
+        .input-group {
+            margin-bottom: 2px !important;
+
+            label {
+                margin-bottom: 0px;
+            }
+
+            label[for="configStaticContext"] {
+                width: 100%;
+            }
+
+            i.bi {
+                font-size: small;
+            }
+
+            .prompt-shortcuts {
+                span.badge {
+                    margin-right: 5px;
+                    cursor: pointer;
+                    height: 22px;
+
+                    .bi.bi-trash {
+                        margin-left: 5px;
+                    }
+                }
+            }
+
+            .system-prompt {
+
+                .bi.save-prompt,
+                .bi.open-prompt-market {
+                    cursor: pointer;
+                    margin-left: 5px;
+                }
             }
         }
     }
-
-    .system-prompt {
-
-        .bi.save-prompt,
-        .bi.open-prompt-market {
-            cursor: pointer;
-            margin-left: 5px;
-        }
-    }
-}
-
-#prompt-market .prompt-labels span {
-    cursor: pointer;
-    margin-right: 5px;
 }
