@@ -53,24 +53,25 @@ func bindHTTP() {
 	}
 
 	grp := web.Server.Group("/gptchat")
-	grp.Use(globalRatelimitMw)
 
 	ihttp.RegisterStatic(grp.Group("/static"))
 	grp.GET("/favicon.ico", func(ctx *gin.Context) {
 		ctx.Header("Cache-Control", "max-age=86400")
 		ctx.Data(http.StatusOK, "image/png", istatic.Favicon)
 	})
-	grp.POST("/audit/conservation", ihttp.SaveLlmConservationHandler)
-	grp.Any("/api", ihttp.ChatHandler)
-	grp.POST("/images/generations", ihttp.DrawByDalleHandler)
-	grp.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
-	grp.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandler)
+
+	grp.GET("/", ihttp.Chat)
+	apiWithRatelimiter := grp.Group("", globalRatelimitMw)
+	apiWithRatelimiter.POST("/audit/conservation", ihttp.SaveLlmConservationHandler)
+	apiWithRatelimiter.Any("/api", ihttp.ChatHandler)
+	apiWithRatelimiter.POST("/images/generations", ihttp.DrawByDalleHandler)
+	apiWithRatelimiter.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
+	apiWithRatelimiter.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
-	grp.POST("/user/config", ihttp.UploadUserConfig)
+	apiWithRatelimiter.POST("/user/config", ihttp.UploadUserConfig)
 	grp.GET("/user/config", ihttp.DownloadUserConfig)
-	grp.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
-	grp.GET("/", ihttp.Chat)
+	apiWithRatelimiter.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
 
 	// payment
 	stripe.Key = config.Config.PaymentStripeKey

@@ -28,7 +28,6 @@
   padding: 0px;
 }
 #offcanvasSession .offcanvas-body #sessionManager.card .card-body {
-  min-height: 300px;
   padding: 0px;
 }
 #offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group {

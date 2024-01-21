@@ -1,108 +1,114 @@
-#headerbar {
-    padding: 0px;
+body {
+    min-height: 360px;
+    overflow-x: scroll;
 
-    .bi.bi-coin {
-        color: #ffc82c;
-    }
-
-    >.container-fluid {
-        display: flex;
-        justify-content: space-between;
-        flex-wrap: nowrap;
+    #headerbar {
         padding: 0px;
 
-        .container-fluid.left {
+        .bi.bi-coin {
+            color: #ffc82c;
+        }
+
+        >.container-fluid {
             display: flex;
-            justify-content: flex-start;
-
-            .navbar-nav {
-                display: flex;
-                flex-direction: row;
-            }
-        }
-
-        .navbar-nav {
-            margin-bottom: 0 !important;
-
-            // .dropdown-menu {
-            //     position: absolute;
-            // }
-
-            a.dropdown-toggle.active {
-                -webkit-text-stroke: 1px #0063f6;
-            }
-        }
-
-        ul.dropdown-menu {
-            min-width: fit-content;
-        }
-
-        a[data-bs-toggle="offcanvas"] {
-            border-style: none;
-            background: none;
-        }
-    }
-}
-
-#hiddenChatConfigSideBar {
-    #prompt-market .prompt-labels span {
-        cursor: pointer;
-        margin-right: 5px;
-    }
-
-    .offcanvas-header {
-        padding-bottom: 0px;
-    }
-
-    .offcanvas-body {
-        padding-top: 0px;
-
-        .system-prompt .input {
-            padding: 2px;
-            min-height: 180px;
-            font-size: 0.8em;
-        }
-
-        .dropdown-menu {
-            min-width: inherit;
+            justify-content: space-between;
+            flex-wrap: nowrap;
             padding: 0px;
-        }
 
-        .prompt-shortcuts {
-            margin-bottom: 5px !important;
+            .container-fluid.left {
+                display: flex;
+                justify-content: flex-start;
 
-            span.badge {
-                margin-right: 5px;
-                cursor: pointer;
-                height: 22px;
-
-                .bi.bi-trash {
-                    margin-left: 5px;
+                .navbar-nav {
+                    display: flex;
+                    flex-direction: row;
                 }
             }
+
+            .navbar-nav {
+                margin-bottom: 0 !important;
+
+                // .dropdown-menu {
+                //     position: absolute;
+                // }
+
+                a.dropdown-toggle.active {
+                    -webkit-text-stroke: 1px #0063f6;
+                }
+            }
+
+            ul.dropdown-menu {
+                min-width: fit-content;
+            }
+
+            a[data-bs-toggle="offcanvas"] {
+                border-style: none;
+                background: none;
+            }
+        }
+    }
+
+    #hiddenChatConfigSideBar {
+        #prompt-market .prompt-labels span {
+            cursor: pointer;
+            margin-right: 5px;
         }
 
+        .offcanvas-header {
+            padding-bottom: 0px;
+        }
 
-        .input-group {
-            margin-bottom: 5px !important;
+        .offcanvas-body {
+            padding-top: 0px;
 
-            label {
-                margin-bottom: 0px;
+            .system-prompt .input {
+                padding: 2px;
+                min-height: 180px;
+                font-size: 0.8em;
             }
 
-            label[for="configStaticContext"] {
-                width: 100%;
+            .dropdown-menu {
+                min-width: inherit;
+                padding: 0px;
             }
 
-            i.bi {
-                font-size: small;
-            }
-            .system-prompt {
+            .prompt-shortcuts {
+                margin-bottom: 5px !important;
 
-                .bi.save-prompt,
-                .bi.open-prompt-market {
+                span.badge {
+                    margin-right: 5px;
                     cursor: pointer;
-                    margin-left: 5px;
+                    height: 22px;
+
+                    .bi.bi-trash {
+                        margin-left: 5px;
+                    }
+                }
+            }
+
+
+            .input-group {
+                margin-bottom: 5px !important;
+
+                label {
+                    margin-bottom: 0px;
+                }
+
+                label[for="configStaticContext"] {
+                    width: 100%;
+                }
+
+                i.bi {
+                    font-size: small;
+                }
+
+                .system-prompt {
+
+                    .bi.save-prompt,
+                    .bi.open-prompt-market {
+                        cursor: pointer;
+                        margin-left: 5px;
+                    }
                 }
             }
         }
