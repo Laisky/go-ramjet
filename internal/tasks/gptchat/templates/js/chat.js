@@ -9,7 +9,8 @@ const configContainer = document.getElementById('hiddenChatConfigSideBar')
 const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt')
 const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send')
 
-let currentAIRespSSE, currentAIRespEle
+// could be controlled(interrupt) anywhere, so it's global
+let globalAIRespSSE, globalAIRespEle
 
 // map[filename]fileContent_in_base64
 //
@@ -17,7 +18,7 @@ let currentAIRespSSE, currentAIRespEle
 let chatVisionSelectedFileStore = {}
 
 // eslint-disable-next-line no-unused-vars
-async function setupChatJs () {
+async function setupChatJs() {
     await setupSessionManager();
     await setupConfig();
     await setupChatInput();
@@ -26,14 +27,14 @@ async function setupChatJs () {
     setInterval(fetchImageDrawingResultBackground, 3000);
 }
 
-function newChatID () {
+function newChatID() {
     return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
 }
 
 // show alert
 //
 // type: primary, secondary, success, danger, warning, info, light, dark
-function showalert (type, msg) {
+function showalert(type, msg) {
     const alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
             <div>${sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -45,7 +46,7 @@ function showalert (type, msg) {
 }
 
 // check sessionID's type, secure convert to int, default is 1
-function kvSessionKey (sessionID) {
+function kvSessionKey(sessionID) {
     sessionID = parseInt(sessionID) || 1
     return `${KvKeyPrefixSessionHistory}${sessionID}`
 }
@@ -55,7 +56,7 @@ function kvSessionKey (sessionID) {
  * @param {*} sessionID
  * @returns {Array} An array of chat messages.
  */
-async function sessionChatHistory (sessionID) {
+async function sessionChatHistory(sessionID) {
     let data = (await KvGet(kvSessionKey(sessionID)))
     if (!data) {
         return []
@@ -74,7 +75,7 @@ async function sessionChatHistory (sessionID) {
  *
  * @returns {Array} An array of chat messages, oldest first.
  */
-async function activeSessionChatHistory () {
+async function activeSessionChatHistory() {
     const sid = await activeSessionID()
     if (!sid) {
         return new Array()
@@ -83,7 +84,7 @@ async function activeSessionChatHistory () {
     return await sessionChatHistory(sid)
 }
 
-async function activeSessionID () {
+async function activeSessionID() {
     let activeSession = document.querySelector('#sessionManager .card-body button.active');
     if (activeSession) {
         return activeSession.dataset.session;
@@ -97,7 +98,7 @@ async function activeSessionID () {
     return 1;
 }
 
-async function listenSessionSwitch (evt) {
+async function listenSessionSwitch(evt) {
     // deactive all sessions
     evt = evtTarget(evt);
     if (!evt.classList.contains('list-group-item')) {
@@ -135,7 +136,7 @@ async function listenSessionSwitch (evt) {
  * Fetches the image drawing result background for the AI response and displays it in the chat container.
  * @returns {Promise<void>}
  */
-async function fetchImageDrawingResultBackground () {
+async function fetchImageDrawingResultBackground() {
     const elements = chatContainer
         .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || [];
 
@@ -188,7 +189,7 @@ async function fetchImageDrawingResultBackground () {
  * @param {string} imageUrl current subtask's image url
  * @param {boolean} succeed is current subtask succeed
  */
-function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
+function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
     let processingImageUrls = JSON.parse(item.dataset.imageUrls) || [];
     if (!processingImageUrls.includes(imageUrl)) {
         return;
@@ -229,7 +230,7 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
  *
  * @returns {void}
  */
-async function clearSessionAndChats (evt, sessionID) {
+async function clearSessionAndChats(evt, sessionID) {
     console.debug('clearSessionAndChats', evt, sessionID)
     if (evt) {
         evt.stopPropagation();
@@ -267,7 +268,7 @@ async function clearSessionAndChats (evt, sessionID) {
     location.reload();
 }
 
-function bindSessionEditBtn () {
+function bindSessionEditBtn() {
     document.querySelectorAll('#sessionManager .sessions .session .bi.bi-pencil-square')
         .forEach((item) => {
             if (item.dataset.bindClicked) {
@@ -303,7 +304,7 @@ function bindSessionEditBtn () {
         })
 }
 
-function bindSessionDeleteBtn () {
+function bindSessionDeleteBtn() {
     const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || [];
     btns.forEach((item) => {
         if (item.dataset.bindClicked) {
@@ -336,7 +337,7 @@ function bindSessionDeleteBtn () {
 /** setup session manager and restore current chat history
  *
  */
-async function setupSessionManager () {
+async function setupSessionManager() {
     const selectedSessionID = await activeSessionID();
 
     // bind remove all sessions
@@ -500,7 +501,7 @@ async function setupSessionManager () {
 }
 
 // remove chat in storage by chatid
-async function removeChatInStorage (chatid) {
+async function removeChatInStorage(chatid) {
     if (!chatid) {
         throw 'chatid is required';
     }
@@ -520,7 +521,7 @@ async function removeChatInStorage (chatid) {
     * @param {string} renderedContent - chat content
     * @param {string} attachHTML - chat content's attach html
 */
-async function appendChats2Storage (role, chatid, renderedContent, attachHTML, rawContent) {
+async function appendChats2Storage(role, chatid, renderedContent, attachHTML, rawContent) {
     if (!chatid) {
         throw 'chatid is required';
     }
@@ -571,12 +572,12 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
     await KvSet(storageActiveSessionKey, session);
 }
 
-function scrollChatToDown () {
+function scrollChatToDown() {
     ScrollDown(document.querySelector('body'));
     ScrollDown(chatContainer.querySelector('.chatManager .conservations .chats'));
 }
 
-function scrollToChat (chatEle) {
+function scrollToChat(chatEle) {
     chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
@@ -588,7 +589,7 @@ function scrollToChat (chatEle) {
 * @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
 * @returns {Array} An array of chat messages.
 */
-async function getLastNChatMessages (N, ignoredChatID) {
+async function getLastNChatMessages(N, ignoredChatID) {
     console.debug('getLastNChatMessages', N, ignoredChatID)
 
     const systemPrompt = await OpenaiChatStaticContext()
@@ -633,17 +634,17 @@ async function getLastNChatMessages (N, ignoredChatID) {
     return messages
 }
 
-function lockChatInput () {
+function lockChatInput() {
     chatPromptInputBtn.classList.add('disabled')
 }
-function unlockChatInput () {
+function unlockChatInput() {
     chatPromptInputBtn.classList.remove('disabled')
 }
-function isAllowChatPrompInput () {
+function isAllowChatPrompInput() {
     return !chatPromptInputBtn.classList.contains('disabled')
 }
 
-function parseChatResp (chatmodel, payload) {
+function parseChatResp(chatmodel, payload) {
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
         return payload.choices[0].delta.content || ''
     } else if (IsCompletionModel(chatmodel)) {
@@ -661,7 +662,7 @@ const httpsRegexp = /\bhttps:\/\/\S+/
  * @param {string} reqPrompt - request prompt
  * @returns {string} modified request prompt
  */
-async function userPromptEnhence (reqPrompt) {
+async function userPromptEnhence(reqPrompt) {
     const pinnedUrls = getPinnedMaterials();
     const sconfig = await getChatSessionConfig();
     const urls = reqPrompt.match(httpsRegexp);
@@ -697,7 +698,7 @@ async function userPromptEnhence (reqPrompt) {
     return reqPrompt;
 }
 
-async function restorePinnedMaterials () {
+async function restorePinnedMaterials() {
     const urlEle = await KvGet(KvKeyPinnedMaterials) || '';
     const container = document.querySelector('#chatContainer .pinned-refs');
     container.innerHTML = urlEle;
@@ -717,7 +718,7 @@ async function restorePinnedMaterials () {
         })
 }
 
-function getPinnedMaterials () {
+function getPinnedMaterials() {
     const urls = []
     document.querySelectorAll('#chatContainer .pinned-refs a')
         .forEach((item) => {
@@ -735,15 +736,15 @@ function getPinnedMaterials () {
  * @param {string} prompt - The image prompt to send to the server.
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
-async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
 
     switch (selectedModel) {
-    case ImageModelDalle2:
-        url = '/images/generations';
-        break;
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`);
+        case ImageModelDalle2:
+            url = '/images/generations';
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     const sconfig = await getChatSessionConfig();
@@ -778,29 +779,29 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
-    let url
+async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+    let url;
     switch (selectedModel) {
-    case ImageModelSdxlTurbo:
-        url = '/images/generations/sdxl-turbo'
-        break
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`)
+        case ImageModelSdxlTurbo:
+            url = '/images/generations/sdxl-turbo';
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     // get first image in store
-    let imageBase64 = ''
+    let imageBase64 = '';
     if (Object.keys(chatVisionSelectedFileStore).length != 0) {
-        imageBase64 = Object.values(chatVisionSelectedFileStore)[0]
+        imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
 
         // insert image to user input & hisotry
-        await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`)
+        await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
 
-        chatVisionSelectedFileStore = {}
-        updateChatVisionSelectedFileStore()
+        chatVisionSelectedFileStore = {};
+        updateChatVisionSelectedFileStore();
     }
 
-    const sconfig = await getChatSessionConfig()
+    const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
         method: 'POST',
         headers: {
@@ -813,49 +814,49 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
             text: prompt,
             image: imageBase64
         })
-    })
+    });
     if (!resp.ok || resp.status != 200) {
-        throw new Error(`[${resp.status}]: ${await resp.text()}`)
+        throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
-    const respData = await resp.json()
+    const respData = await resp.json();
 
-    currentAIRespEle.dataset.status = 'waiting'
-    currentAIRespEle.dataset.taskType = 'image'
-    currentAIRespEle.dataset.taskId = respData.task_id
-    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls)
+    currentAIRespEle.dataset.status = 'waiting';
+    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskId = respData.task_id;
+    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
     // save img to storage no matter it's done or not
-    let attachHTML = ''
+    let attachHTML = '';
     respData.image_urls.forEach((url) => {
         attachHTML += `<img src="${url}">`
-    })
+    });
 
-    await appendChats2Storage(RoleAI, chatID, attachHTML)
+    await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
-    let url
+async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+    let url;
     switch (selectedModel) {
-    case ImageModelImg2Img:
-        url = '/images/generations/lcm'
-        break
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`)
+        case ImageModelImg2Img:
+            url = '/images/generations/lcm';
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     // get first image in store
     if (Object.keys(chatVisionSelectedFileStore).length == 0) {
-        throw new Error('no image selected')
+        throw new Error('no image selected');
     }
-    const imageBase64 = Object.values(chatVisionSelectedFileStore)[0]
+    const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
 
     // insert image to user input & hisotry
-    await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`)
+    await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
 
-    chatVisionSelectedFileStore = {}
-    updateChatVisionSelectedFileStore()
+    chatVisionSelectedFileStore = {};
+    updateChatVisionSelectedFileStore();
 
-    const sconfig = await getChatSessionConfig()
+    const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
         method: 'POST',
         headers: {
@@ -868,33 +869,33 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
             prompt,
             image_base64: imageBase64
         })
-    })
+    });
     if (!resp.ok || resp.status != 200) {
-        throw new Error(`[${resp.status}]: ${await resp.text()}`)
+        throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
-    const respData = await resp.json()
+    const respData = await resp.json();
 
-    currentAIRespEle.dataset.status = 'waiting'
-    currentAIRespEle.dataset.taskType = 'image'
-    currentAIRespEle.dataset.taskId = respData.task_id
-    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls)
+    currentAIRespEle.dataset.status = 'waiting';
+    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskId = respData.task_id;
+    currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
     // save img to storage no matter it's done or not
-    let attachHTML = ''
+    let attachHTML = '';
     respData.image_urls.forEach((url) => {
-        attachHTML += `<img src="${url}">`
+        attachHTML += `<img src="${url}">`;
     })
 
-    await appendChats2Storage(RoleAI, chatID, attachHTML)
+    await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
+async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
-        .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML
+        .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
     await appendChats2Storage(RoleHuman, chatID, text,
         `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
-    )
+    );
 
     // insert image to user input
     chatContainer
@@ -902,135 +903,118 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
         .insertAdjacentHTML(
             'beforeend',
             `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
-        )
+        );
 }
 
-async function sendChat2Server (chatID) {
-    let reqPrompt
+async function sendChat2Server(chatID) {
+    let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
-        chatID = newChatID()
-        reqPrompt = TrimSpace(chatPromptInputEle.value || '')
+        chatID = newChatID();
+        reqPrompt = TrimSpace(chatPromptInputEle.value || '');
 
-        chatPromptInputEle.value = ''
+        chatPromptInputEle.value = '';
         if (reqPrompt == '') {
-            return
+            return;
         }
 
-        append2Chats(chatID, RoleHuman, reqPrompt, false)
+        append2Chats(chatID, RoleHuman, reqPrompt, false);
         await appendChats2Storage(RoleHuman, chatID, reqPrompt)
     } else { // if chatID is not empty, it's a reload request
         reqPrompt = chatContainer
-            .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML
+            .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
     }
 
     // extract and pin new material in chat
-    reqPrompt = await userPromptEnhence(reqPrompt)
+    reqPrompt = await userPromptEnhence(reqPrompt);
 
-    currentAIRespEle = chatContainer
-        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
-    currentAIRespEle = currentAIRespEle
-    lockChatInput()
+    globalAIRespEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    globalAIRespEle = globalAIRespEle;
+    lockChatInput();
 
-    let selectedModel = await OpenaiSelectedModel()
+    let selectedModel = await OpenaiSelectedModel();
     // get chatmodel from url parameters
     if (location.search) {
-        const params = new URLSearchParams(location.search)
+        const params = new URLSearchParams(location.search);
         if (params.has('chatmodel')) {
             selectedModel = params.get('chatmodel')
         }
     }
 
     // these extras will append to the tail of AI's response
-    let responseExtras = ''
-    const sconfig = await getChatSessionConfig()
+    let responseExtras = '';
+    let reqBody;
+    const sconfig = await getChatSessionConfig();
 
     if (IsChatModel(selectedModel)) {
-        let messages
-        const nContexts = parseInt(sconfig.n_contexts)
+        let messages;
+        const nContexts = parseInt(sconfig.n_contexts);
 
         if (chatID) { // reload current chat by latest context
-            messages = await getLastNChatMessages(nContexts - 1, chatID)
+            messages = await getLastNChatMessages(nContexts - 1, chatID);
             messages.push({
                 role: RoleHuman,
                 content: reqPrompt
-            })
+            });
         } else {
-            messages = await getLastNChatMessages(nContexts, chatID)
+            messages = await getLastNChatMessages(nContexts, chatID);
         }
 
         // if selected model is vision model, but no image selected, abort
         if (selectedModel.includes('vision') && Object.keys(chatVisionSelectedFileStore).length == 0) {
-            abortAIResp('you should select at least one image for vision model')
-            return
+            abortAIResp('you should select at least one image for vision model');
+            return;
         }
 
         // there are pinned files, add them to user's prompt
         if (Object.keys(chatVisionSelectedFileStore).length != 0) {
             if (!selectedModel.includes('vision')) {
                 // if selected model is not vision model, just ignore it
-                chatVisionSelectedFileStore = {}
-                updateChatVisionSelectedFileStore()
-                return
+                chatVisionSelectedFileStore = {};
+                updateChatVisionSelectedFileStore();
+                return;
             }
 
-            messages[messages.length - 1].files = []
+            messages[messages.length - 1].files = [];
             for (const key in chatVisionSelectedFileStore) {
                 messages[messages.length - 1].files.push({
                     type: 'image',
                     name: key,
                     content: chatVisionSelectedFileStore[key]
-                })
+                });
 
                 // insert image to user input & hisotry
-                await appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key)
+                await appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key);
             }
 
-            chatVisionSelectedFileStore = {}
-            updateChatVisionSelectedFileStore()
+            chatVisionSelectedFileStore = {};
+            updateChatVisionSelectedFileStore();
         }
 
-        currentAIRespSSE = new SSE('/api', {
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + sconfig.api_token,
-                'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-                'X-Laisky-Api-Base': sconfig.api_base
-            },
-            method: 'POST',
-            payload: JSON.stringify({
-                model: selectedModel,
-                stream: true,
-                max_tokens: parseInt(sconfig.max_tokens),
-                temperature: parseFloat(sconfig.temperature),
-                presence_penalty: parseFloat(sconfig.presence_penalty),
-                frequency_penalty: parseFloat(sconfig.frequency_penalty),
-                messages,
-                stop: ['\n\n'],
-                laisky_extra: {
-                    chat_switch: sconfig.chat_switch
-                }
-            })
-        })
+        reqBody = JSON.stringify({
+            model: selectedModel,
+            stream: true,
+            max_tokens: parseInt(sconfig.max_tokens),
+            temperature: parseFloat(sconfig.temperature),
+            presence_penalty: parseFloat(sconfig.presence_penalty),
+            frequency_penalty: parseFloat(sconfig.frequency_penalty),
+            messages,
+            stop: ['\n\n'],
+            laisky_extra: {
+                chat_switch: sconfig.chat_switch
+            }
+        });
     } else if (IsCompletionModel(selectedModel)) {
-        currentAIRespSSE = new SSE('/api', {
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + (sconfig.api_token),
-                'X-Laisky-User-Id': await getSHA1((sconfig.api_token)),
-                'X-Laisky-Api-Base': sconfig.api_base
-            },
-            method: 'POST',
-            payload: JSON.stringify({
-                model: selectedModel,
-                stream: true,
-                max_tokens: parseInt(sconfig.max_tokens),
-                temperature: parseFloat(sconfig.temperature),
-                presence_penalty: parseFloat(sconfig.presence_penalty),
-                frequency_penalty: parseFloat(sconfig.frequency_penalty),
-                prompt: reqPrompt,
-                stop: ['\n\n']
-            })
-        })
+        reqBody = JSON.stringify({
+            model: selectedModel,
+            stream: true,
+            max_tokens: parseInt(sconfig.max_tokens),
+            temperature: parseFloat(sconfig.temperature),
+            presence_penalty: parseFloat(sconfig.presence_penalty),
+            frequency_penalty: parseFloat(sconfig.frequency_penalty),
+            prompt: reqPrompt,
+            stop: ['\n\n']
+        });
     } else if (IsQaModel(selectedModel)) {
         // {
         //     "question": "XFS 是干啥的",
@@ -1038,43 +1022,43 @@ async function sendChat2Server (chatID) {
         //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
         // }
 
-        let url, project
+        let url, project;
         switch (selectedModel) {
-        case QAModelBasebit:
-        case QAModelSecurity:
-        case QAModelImmigrate:
-            data.qa_chat_models.forEach((item) => {
-                if (item.name == selectedModel) {
-                    url = item.url
-                    project = item.project
+            case QAModelBasebit:
+            case QAModelSecurity:
+            case QAModelImmigrate:
+                window.data.qa_chat_models.forEach((item) => {
+                    if (item.name == selectedModel) {
+                        url = item.url;
+                        project = item.project;
+                    }
+                })
+
+                if (!project) {
+                    console.error("can't find project name for chat model: " + selectedModel);
+                    return;
                 }
-            })
 
-            if (!project) {
-                console.error("can't find project name for chat model: " + selectedModel)
-                return
-            }
+                url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
+                break;
+            case QAModelCustom:
+                url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
+                break;
+            case QAModelShared:
+                // example url:
+                //
+                // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
 
-            url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`
-            break
-        case QAModelCustom:
-            url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`
-            break
-        case QAModelShared:
-            // example url:
-            //
-            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
-
-            const params = new URLSearchParams(location.search)
-            url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
+                const params = new URLSearchParams(location.search);
+                url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
                     `&chatbot_name=${params.get('chatbot_name')}` +
-                    `&q=${encodeURIComponent(reqPrompt)}`
-            break
-        default:
-            console.error('unknown qa chat model: ' + selectedModel)
+                    `&q=${encodeURIComponent(reqPrompt)}`;
+                break;
+            default:
+                console.error('unknown qa chat model: ' + selectedModel);
         }
 
-        currentAIRespEle.scrollIntoView({ behavior: 'smooth' })
+        globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
         try {
             const resp = await fetch(url, {
                 method: 'GET',
@@ -1087,13 +1071,13 @@ async function sendChat2Server (chatID) {
                     'X-Laisky-Api-Base': sconfig.api_base,
                     'X-PDFCHAT-PASSWORD': await KvGet(KvKeyCustomDatasetPassword)
                 }
-            })
+            });
 
             if (!resp.ok || resp.status != 200) {
-                throw new Error(`[${resp.status}]: ${await resp.text()}`)
+                throw new Error(`[${resp.status}]: ${await resp.text()}`);
             }
 
-            const data = await resp.json()
+            const data = await resp.json();
             if (data && data.text) {
                 responseExtras = `
                     <p style="margin-bottom: 0;">
@@ -1105,7 +1089,7 @@ async function sendChat2Server (chatID) {
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
-                    </div>`
+                    </div>`;
                 const messages = [{
                     role: RoleHuman,
                     content: `Use the following pieces of context to answer the users question.
@@ -1119,158 +1103,160 @@ async function sendChat2Server (chatID) {
 
                     question: ${reqPrompt}
                     `
-                }]
-                const model = ChatModelTurbo35V1106 // rewrite chat model
+                }];
+                const model = ChatModelTurbo35V1106; // rewrite chat model
 
-                currentAIRespSSE = new SSE('/api', {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: 'Bearer ' + sconfig.api_token,
-                        'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
-                        'X-Laisky-Api-Base': sconfig.api_base
-                    },
-                    method: 'POST',
-                    payload: JSON.stringify({
-                        model,
-                        stream: true,
-                        max_tokens: parseInt(await OpenaiMaxTokens()),
-                        temperature: parseFloat(await OpenaiTemperature()),
-                        presence_penalty: parseFloat(await OpenaiPresencePenalty()),
-                        frequency_penalty: parseFloat(await OpenaiFrequencyPenalty()),
-                        messages,
-                        stop: ['\n\n']
-                    })
-                })
+                reqBody = JSON.stringify({
+                    model,
+                    stream: true,
+                    max_tokens: parseInt(sconfig.max_tokens),
+                    temperature: parseFloat(sconfig.temperature),
+                    presence_penalty: parseFloat(sconfig.presence_penalty),
+                    frequency_penalty: parseFloat(sconfig.frequency_penalty),
+                    messages,
+                    stop: ['\n\n']
+                });
             }
         } catch (err) {
-            abortAIResp(err)
-            return
+            abortAIResp(err);
+            return;
         }
     } else if (IsImageModel(selectedModel)) {
         try {
             switch (selectedModel) {
-            case ImageModelDalle2:
-                await sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt)
-                break
-            case ImageModelImg2Img:
-                await sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt)
-                break
-            case ImageModelSdxlTurbo:
-                await sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEle, reqPrompt)
-                break
-            default:
-                throw new Error(`unknown image model: ${selectedModel}`)
+                case ImageModelDalle2:
+                    await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                    break;
+                case ImageModelImg2Img:
+                    await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                    break;
+                case ImageModelSdxlTurbo:
+                    await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                    break;
+                default:
+                    throw new Error(`unknown image model: ${selectedModel}`);
             }
         } catch (err) {
-            abortAIResp(err)
-            return
+            abortAIResp(err);
         } finally {
-            unlockChatInput()
+            unlockChatInput();
         }
+
+        return;
     } else {
-        currentAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
+        globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
             '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
-            `unimplemented model: ${sanitizeHTML(selectedModel)}</pre>`
-        appendChats2Storage(RoleAI, chatID, currentAIRespEle.innerHTML)
-        unlockChatInput()
-        return
+            `unimplemented model: ${sanitizeHTML(selectedModel)}</pre>`;
+        appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
+        unlockChatInput();
+        return;
     }
 
-    if (!currentAIRespSSE) {
-        return
+    if (!reqBody) {
+        return;
     }
+
+    globalAIRespSSE = new SSE('/api', {
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + sconfig.api_token,
+            'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+            'X-Laisky-Api-Base': sconfig.api_base
+        },
+        method: 'POST',
+        payload: reqBody
+    });
 
     // origin response from ai
-    let aiRawResp = ''
-    currentAIRespSSE.addEventListener('message', async (evt) => {
-        evt.stopPropagation()
+    let aiRawResp = '';
+    globalAIRespSSE.addEventListener('message', async (evt) => {
+        evt.stopPropagation();
 
-        let isChatRespDone = false
+        let isChatRespDone = false;
         if (evt.data == '[DONE]') {
-            isChatRespDone = true
+            isChatRespDone = true;
         } else if (evt.data == '[HEARTBEAT]') {
-            return
+            return;
         }
 
         // remove prefix [HEARTBEAT]
-        evt.data = evt.data.replace(/^\[HEARTBEAT\]+/, '')
+        evt.data = evt.data.replace(/^\[HEARTBEAT\]+/, '');
 
         if (!isChatRespDone) {
-            const payload = JSON.parse(evt.data)
-            const respContent = parseChatResp(selectedModel, payload)
+            const payload = JSON.parse(evt.data);
+            const respContent = parseChatResp(selectedModel, payload);
 
             if (payload.choices[0].finish_reason) {
-                isChatRespDone = true
+                isChatRespDone = true;
             }
 
-            switch (currentAIRespEle.dataset.status) {
-            case 'waiting':
-                currentAIRespEle.dataset.status = 'writing'
+            switch (globalAIRespEle.dataset.status) {
+                case 'waiting':
+                    globalAIRespEle.dataset.status = 'writing';
 
-                if (respContent) {
-                    currentAIRespEle.innerHTML = respContent
-                    aiRawResp += respContent
-                } else {
-                    currentAIRespEle.innerHTML = ''
-                }
+                    if (respContent) {
+                        globalAIRespEle.innerHTML = respContent;
+                        aiRawResp += respContent;
+                    } else {
+                        globalAIRespEle.innerHTML = '';
+                    }
 
-                break
-            case 'writing':
-                if (respContent) {
-                    aiRawResp += respContent
-                    currentAIRespEle.innerHTML = Markdown2HTML(aiRawResp)
-                }
+                    break;
+                case 'writing':
+                    if (respContent) {
+                        aiRawResp += respContent;
+                        globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
+                    }
 
-                scrollToChat(currentAIRespEle)
-                break
+                    scrollToChat(globalAIRespEle);
+                    break;
             }
         }
 
         if (isChatRespDone) {
-            if (!currentAIRespSSE) {
-                return
+            if (!globalAIRespSSE) {
+                return;
             }
 
-            currentAIRespSSE.close()
-            currentAIRespSSE = null
+            globalAIRespSSE.close();
+            globalAIRespSSE = null;
 
-            currentAIRespEle.innerHTML = Markdown2HTML(aiRawResp)
-            currentAIRespEle.innerHTML += responseExtras
-            currentAIRespEle
-                .insertAdjacentHTML('afterbegin', `<i class="bi bi-copy" data-content="${encodeURIComponent(aiRawResp)}" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>`)
+            globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
+            globalAIRespEle.innerHTML += responseExtras;
+            globalAIRespEle
+                .insertAdjacentHTML('afterbegin', `<i class="bi bi-copy" data-content="${encodeURIComponent(aiRawResp)}" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>`);
 
             // setup prism
             {
                 // add line number
-                currentAIRespEle.querySelectorAll('pre').forEach((item) => {
-                    item.classList.add('line-numbers')
-                })
+                globalAIRespEle.querySelectorAll('pre').forEach((item) => {
+                    item.classList.add('line-numbers');
+                });
             }
 
             // should save html before prism formatted,
             // because prism.js do not support formatted html.
-            const markdownContent = currentAIRespEle.innerHTML
+            const markdownContent = globalAIRespEle.innerHTML;
 
-            renderAfterAIResponse(chatID)
+            renderAfterAIResponse(chatID);
 
-            scrollToChat(currentAIRespEle)
-            await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp)
-            unlockChatInput()
+            scrollToChat(globalAIRespEle);
+            await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp);
+            unlockChatInput();
         }
     })
 
-    currentAIRespSSE.onerror = (err) => {
-        // abortAIResp(new Error("SSE error: " + err));
-        abortAIResp(err)
-    }
-    currentAIRespSSE.stream()
+    globalAIRespSSE.onerror = (err) => {
+        abortAIResp(err);
+    };
+    globalAIRespSSE.stream();
 }
 
 /** append chat to chat conservation window
  *
  * @param {string} chatID - chat id
  */
-function renderAfterAIResponse (chatID) {
+function renderAfterAIResponse(chatID) {
     // Prism.highlightAll();
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
 
@@ -1292,7 +1278,7 @@ function renderAfterAIResponse (chatID) {
     }
 }
 
-function combineRefs (arr) {
+function combineRefs(arr) {
     let markdown = ''
     for (const val of arr) {
         if (val.startsWith('https') || val.startsWith('http')) {
@@ -1308,7 +1294,7 @@ function combineRefs (arr) {
 }
 
 // parse langchain qa references to markdown links
-function wrapRefLines (input) {
+function wrapRefLines(input) {
     const lines = input.split('\n')
     let result = ''
     for (let i = 0; i < lines.length; i++) {
@@ -1322,47 +1308,52 @@ function wrapRefLines (input) {
     return result
 }
 
-function abortAIResp (err) {
-    console.error(`abort AI resp: ${err}`)
-    if (currentAIRespSSE) {
-        currentAIRespSSE.close()
-        currentAIRespSSE = null
+function abortAIResp(err) {
+    console.error(`abort AI resp: ${err}`);
+    if (globalAIRespSSE) {
+        globalAIRespSSE.close();
+        globalAIRespSSE = null;
     }
 
-    let errMsg
+    let errMsg;
     if (err.data) {
-        errMsg = err.data
+        errMsg = err.data;
     } else {
-        errMsg = err.toString()
+        errMsg = err.toString();
     }
 
-    if (errMsg == '[object CustomEvent]' && navigator.userAgent.includes('Firefox')) {
-        // firefox will throw this error when SSE is closed, just ignore it.
-        return
+    if (errMsg == '[object CustomEvent]') {
+        if (navigator.userAgent.includes('Firefox')) {
+            // firefox will throw this error when SSE is closed, just ignore it.
+            return;
+        }
+
+        errMsg = "There may be a network issue, please check the network connection and try again later.";
     }
+
 
     if (typeof errMsg !== 'string') {
-        errMsg = JSON.stringify(errMsg)
+        errMsg = JSON.stringify(errMsg);
     }
 
     // if errMsg contains
     if (errMsg.includes('Access denied due to invalid subscription key or wrong API endpoint')) {
-        showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。')
+        showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。');
     }
 
-    if (currentAIRespEle.dataset.status == 'waiting') { // || currentAIRespEle.dataset.status == "writing") {
-        currentAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`
+    if (globalAIRespEle.dataset.status == 'waiting') { // || currentAIRespEle.dataset.status == "writing") {
+        globalAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
     } else {
-        currentAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`
+        globalAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
     }
 
     // ScrollDown(chatContainer.querySelector(".chatManager .conservations .chats"));
-    currentAIRespEle.scrollIntoView({ behavior: 'smooth' })
-    appendChats2Storage(RoleAI, currentAIRespEle.closest('.role-ai').dataset.chatid, currentAIRespEle.innerHTML)
-    unlockChatInput()
+    globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
+    appendChats2Storage(RoleAI, globalAIRespEle.closest('.role-ai').dataset.chatid, globalAIRespEle.innerHTML);
+    unlockChatInput();
 }
 
-async function bindUserInputSelectFilesBtn () {
+async function bindUserInputSelectFilesBtn() {
     chatContainer.querySelector('.user-input .btn.upload')
         .addEventListener('click', async (evt) => {
             // click to select images
@@ -1387,7 +1378,7 @@ async function bindUserInputSelectFilesBtn () {
 /** auto display or hide user input select files button according to selected model
  *
  */
-async function autoToggleUserImageUploadBtn () {
+async function autoToggleUserImageUploadBtn() {
     const sconfig = await getChatSessionConfig();
     const isVision = sconfig.selected_model.includes('vision');
 
@@ -1406,7 +1397,7 @@ async function autoToggleUserImageUploadBtn () {
     }
 }
 
-async function setupChatInput () {
+async function setupChatInput() {
     // bind input press enter
     {
         let isComposition = false
@@ -1559,7 +1550,7 @@ async function setupChatInput () {
 }
 
 // read paste file
-async function filePasteHandler (evt) {
+async function filePasteHandler(evt) {
     if (!evt.clipboardData || !evt.clipboardData.items) {
         return;
     }
@@ -1587,7 +1578,7 @@ async function filePasteHandler (evt) {
  *
  * @param {*} file - file object
  */
-function readFileForVision (file) {
+function readFileForVision(file) {
     // get file content as Blob
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -1618,7 +1609,7 @@ function readFileForVision (file) {
     reader.readAsArrayBuffer(file);
 }
 
-async function updateChatVisionSelectedFileStore () {
+async function updateChatVisionSelectedFileStore() {
     const pinnedFiles = chatContainer.querySelector('.pinned-files')
     pinnedFiles.innerHTML = ''
     for (const key in chatVisionSelectedFileStore) {
@@ -1648,7 +1639,7 @@ async function updateChatVisionSelectedFileStore () {
  * @param {string} attachHTML - html to attach to chat
  * @param {string} rawAiResp - raw ai response
  */
-async function append2Chats (chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
+async function append2Chats(chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
     if (!chatID) {
         throw 'chatID is required'
     }
@@ -1657,21 +1648,21 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     let chatEleHtml
     let chatOp = 'append'
     switch (role) {
-    case RoleSystem:
-        text = escapeHtml(text)
+        case RoleSystem:
+            text = escapeHtml(text)
 
-        chatEleHtml = `
+            chatEleHtml = `
             <div class="container-fluid row role-human">
                 <div class="col-auto icon">💻</div>
                 <div class="col text-start"><pre>${text}</pre></div>
             </div>`
-        break
-    case RoleHuman:
-        text = escapeHtml(text)
+            break
+        case RoleHuman:
+            text = escapeHtml(text)
 
-        let waitAI = ''
-        if (!isHistory) {
-            waitAI = `
+            let waitAI = ''
+            if (!isHistory) {
+                waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                             <div class="col-auto icon">${robot_icon}</div>
                             <div class="col text-start ai-response" data-status="waiting">
@@ -1684,15 +1675,15 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                                 </p>
                             </div>
                         </div>`
-        }
+            }
 
-        if (attachHTML) {
-            attachHTML = `${attachHTML}`
-        } else {
-            attachHTML = ''
-        }
+            if (attachHTML) {
+                attachHTML = `${attachHTML}`
+            } else {
+                attachHTML = ''
+            }
 
-        chatEleHtml = `
+            chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-auto icon">🤔️</div>
@@ -1707,27 +1698,27 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                     </div>
                     ${waitAI}
                 </div>`
-        break
-    case RoleAI:
-        // let insertText;
-        // if (rawAiResp) {
-        //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
-        // }else {
-        //     insertText = text
-        // }
+            break
+        case RoleAI:
+            // let insertText;
+            // if (rawAiResp) {
+            //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
+            // }else {
+            //     insertText = text
+            // }
 
-        chatEleHtml = `
+            chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robot_icon}</div>
                         <div class="col text-start ai-response" data-status="waiting">
                             ${text}
                         </div>
                 </div>`
-        if (!isHistory) {
-            chatOp = 'replace'
-        }
+            if (!isHistory) {
+                chatOp = 'replace'
+            }
 
-        break
+            break
     }
 
     if (chatOp == 'append') {
@@ -1874,7 +1865,7 @@ window.saveChatSessionConfig = async (sconfig) => {
     await KvSet(skey, sconfig);
 };
 
-function newSessionConfig () {
+function newSessionConfig() {
     return {
         api_token: 'FREETIER-' + RandomString(32),
         api_base: 'https://api.openai.com',
@@ -1895,7 +1886,7 @@ function newSessionConfig () {
 /**
  * initialize every chat component by active session config
  */
-async function updateConfigFromSessionConfig () {
+async function updateConfigFromSessionConfig() {
     console.debug(`updateConfigFromSessionConfig for session ${(await activeSessionID())}`);
 
     const sconfig = await getChatSessionConfig();
@@ -1946,7 +1937,7 @@ async function updateConfigFromSessionConfig () {
         });
 }
 
-async function setupConfig () {
+async function setupConfig() {
     await updateConfigFromSessionConfig();
 
     //  config_api_token_value
@@ -2223,7 +2214,7 @@ async function setupConfig () {
     EnableTooltipsEverywhere()
 }
 
-async function loadPromptShortcutsFromStorage () {
+async function loadPromptShortcutsFromStorage() {
     let shortcuts = await KvGet(KvKeyPromptShortCuts)
     if (!shortcuts) {
         // default prompts
@@ -2243,7 +2234,7 @@ async function loadPromptShortcutsFromStorage () {
 //
 // @param {Object} shortcut - shortcut object
 // @param {bool} storage - whether to save to kv
-async function appendPromptShortcut (shortcut, storage = false) {
+async function appendPromptShortcut(shortcut, storage = false) {
     const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
 
     // add to local storage
@@ -2287,7 +2278,7 @@ async function appendPromptShortcut (shortcut, storage = false) {
     promptShortcutContainer.appendChild(ele);
 }
 
-async function setupPromptManager () {
+async function setupPromptManager() {
     // restore shortcuts from kv
     {
         // bind default prompt shortcuts
@@ -2432,7 +2423,7 @@ async function setupPromptManager () {
 }
 
 // setup private dataset modal
-async function setupPrivateDataset () {
+async function setupPrivateDataset() {
     const pdfchatModalEle = document.querySelector('#modal-pdfchat')
 
     // bind header's custom qa button
@@ -2644,8 +2635,8 @@ async function setupPrivateDataset () {
                 // show processing files in grey and progress bar
                 body.datasets.forEach((dataset) => {
                     switch (dataset.status) {
-                    case 'done':
-                        datasetsHTML += `
+                        case 'done':
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -2661,9 +2652,9 @@ async function setupPrivateDataset () {
                                         </div>
                                     </div>
                                 </div>`
-                        break
-                    case 'processing':
-                        datasetsHTML += `
+                            break
+                        case 'processing':
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -2682,7 +2673,7 @@ async function setupPrivateDataset () {
                                         </div>
                                     </div>
                                 </div>`
-                        break
+                            break
                     }
                 })
 
