@@ -308,7 +308,11 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		ratelimiter   = expensiveModelRateLimiter
 	)
 	switch model {
-	case "gpt-3.5-turbo-1106", "img-to-img", "sdxl-turbo", "gemini-pro", "gemini-pro-vision":
+	case "gpt-3.5-turbo-1106",
+		"img-to-img",
+		"sdxl-turbo",
+		"gemini-pro",
+		"gemini-pro-vision":
 		// bypass cheap model
 	case "dall-e-3":
 		if c.NoLimitImageModels {

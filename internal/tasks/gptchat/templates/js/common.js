@@ -1,12 +1,14 @@
 'use strict';
 
 const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
+// const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
 // const ChatModelTurbo35 = "gpt-3.5-turbo";
 // const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
 // const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
 const ChatModelGPT4Turbo = 'gpt-4-1106-preview';
+const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
 const ChatModelGPT4Vision = 'gpt-4-vision-preview';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
@@ -28,8 +30,10 @@ const ImageModelImg2Img = 'img-to-img';
 const ChatModels = [
     // ChatModelTurbo35,
     ChatModelTurbo35V1106,
+    // ChatModelTurbo35V0125,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
+    ChatModelGPT4Turbo0125,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision
@@ -58,6 +62,7 @@ const CompletionModels = [
 const FreeModels = [
     // ChatModelTurbo35,
     ChatModelTurbo35V1106,
+    // ChatModelTurbo35V0125,
     ChatModelGeminiPro,
     ChatModelGeminiProVision,
     QAModelBasebit,
