@@ -72,6 +72,9 @@ func bindHTTP() {
 	apiWithRatelimiter.POST("/user/config", ihttp.UploadUserConfig)
 	grp.GET("/user/config", ihttp.DownloadUserConfig)
 	apiWithRatelimiter.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
+	grp.GET("/version", func(ctx *gin.Context) {
+		ctx.Data(http.StatusOK, gutils.HTTPHeaderContentTypeValJSON, []byte(gutils.PrettyBuildInfo()))
+	})
 
 	// payment
 	stripe.Key = config.Config.PaymentStripeKey

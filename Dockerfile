@@ -7,7 +7,7 @@ RUN sass ./internal/tasks/gptchat/templates/scss
 
 # =====================================
 
-FROM golang:1.21.5-bullseye AS gobuild
+FROM golang:1.21.6-bullseye AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
@@ -26,7 +26,7 @@ ADD . .
 COPY --from=nodebuild /app/internal/tasks/gptchat/templates/scss/*.css ./internal/tasks/gptchat/templates/scss/.
 ENV GOOS=linux
 ENV GOARCH=amd64
-RUN go build -a --ldflags '-extldflags "-static"' main.go
+RUN go build -a --ldflags '-extldflags "-static"'
 
 # =====================================
 
@@ -53,6 +53,6 @@ WORKDIR /app
 
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.3.0 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.3.0
-COPY --from=gobuild /goapp/main /app/go-ramjet
+COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
 
 ENTRYPOINT ["/app/go-ramjet"]
