@@ -126,6 +126,12 @@ func RegisterStatic(g gin.IRouter) {
 
 var ts = time.Now().Format(time.RFC3339Nano)
 
+func injectVer() any {
+	v := map[string]any{}
+	_ = json.UnmarshalFromString(gutils.PrettyBuildInfo(), &v)
+	return v
+}
+
 // Chat render chat page
 func Chat(ctx *gin.Context) {
 	tpl := template.New("mytemplate")
@@ -156,6 +162,7 @@ func Chat(ctx *gin.Context) {
 			"chat_prompts": staticFiles.DataJs.Name,
 		},
 		"qa_chat_models": iconfig.Config.QAChatModels,
+		"version":        injectVer(),
 	}
 	injectDataPayload, err := json.MarshalToString(injectData)
 	if AbortErr(ctx, err) {
