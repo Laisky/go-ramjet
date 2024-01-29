@@ -1,6 +1,11 @@
+// html {
+//     overflow: hidden;
+//     height: 100svh;
+// }
+
 body {
-    min-height: 360px;
-    overflow-x: scroll;
+    width: 100vw;
+    overflow-y: hidden;
 
     #headerbar {
         padding: 0px;

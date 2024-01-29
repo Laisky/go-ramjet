@@ -573,8 +573,8 @@ async function appendChats2Storage(role, chatid, renderedContent, attachHTML, ra
 }
 
 function scrollChatToDown() {
-    ScrollDown(document.querySelector('body'));
-    ScrollDown(chatContainer.querySelector('.chatManager .conservations .chats'));
+    ScrollDown(document.querySelector('html'));
+    ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
 }
 
 function scrollToChat(chatEle) {

@@ -1,102 +1,100 @@
 {{define "body"}}
 <div class="container-fluid" id="chatContainer">
-    <div class="row" style="height: 100vh; padding-top: 40px;">
-        <div class="col chatManager">
-            <div class="alerts-container">
-                <div class="alerts">
-                    <!-- <div class="alert alert-danger alert-dismissible" role="alert">
-                        <div>danger</div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <div class="col chatManager">
+        <div class="alerts-container">
+            <div class="alerts">
+                <!-- <div class="alert alert-danger alert-dismissible" role="alert">
+                    <div>danger</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <div class="alert alert-warning alert-dismissible" role="alert">
+                    <div>warning</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div> -->
+            </div>
+        </div>
+        <div class="card text-center">
+            <div class="pinned-refs">
+                <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
+                <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
+            </div>
+
+            <!-- <div class="alert alert-success alert-dismissible" role="alert">
+                <div>A simple success alert—check it out!</div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div> -->
+
+            <div class="card-body conservations">
+                <div class="sessions">
+                    <!-- <div class="list-group">
+                        <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
+                            <div class="col">12</div>
+                        </button>
                     </div>
-                    <div class="alert alert-warning alert-dismissible" role="alert">
-                        <div>warning</div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <div class="list-group">
+                        <button type="button" class="list-group-item list-group-item-action session" aria-current="true" data-session="2">
+                            <div class="col">23</div>
+                        </button>
                     </div> -->
                 </div>
+                <div class="chats">
+                    <!-- chats is here -->
+
+                    <!-- <div id="${chatID}">
+                        <div class="container-fluid row role-human" data-chatid="${chatID}">
+                            <div class="col-auto" style="width:50px;">🤔️</div>
+                            <div class="col text-start">
+                                <pre>${text}</pre>
+                                ${attachHTML}
+                            </div>
+                            <div class="col-auto d-flex control">
+                                <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-trash"></i>
+                            </div>
+                        </div>
+                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;"
+                        data-chatid="${chatID}">
+                        <div class="col-auto icon" style="width:50px;">${robot_icon}</div>
+                        <div class="col text-start ai-response" data-status="waiting">
+                            <p dir="auto" class="card-text placeholder-glow">
+                                <span class="placeholder col-7"></span>
+                                <span class="placeholder col-4"></span>
+                                <span class="placeholder col-4"></span>
+                                <span class="placeholder col-6"></span>
+                                <span class="placeholder col-8"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div> -->
+
+                </div>
             </div>
-            <div class="card text-center">
-                <div class="pinned-refs">
+            <div class="card-footer text-muted">
+                <div class="pinned-files">
                     <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
                     <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
                 </div>
-
-                <!-- <div class="alert alert-success alert-dismissible" role="alert">
-                    <div>A simple success alert—check it out!</div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div> -->
-
-                <div class="card-body conservations">
-                    <div class="sessions">
-                        <!-- <div class="list-group">
-                            <button type="button" class="list-group-item list-group-item-action session active" aria-current="true" data-session="1">
-                                <div class="col">12</div>
-                            </button>
-                        </div>
-                        <div class="list-group">
-                            <button type="button" class="list-group-item list-group-item-action session" aria-current="true" data-session="2">
-                                <div class="col">23</div>
-                            </button>
-                        </div> -->
-                    </div>
-                    <div class="chats">
-                        <!-- chats is here -->
-
-                        <!-- <div id="${chatID}">
-                            <div class="container-fluid row role-human" data-chatid="${chatID}">
-                                <div class="col-auto" style="width:50px;">🤔️</div>
-                                <div class="col text-start">
-                                    <pre>${text}</pre>
-                                    ${attachHTML}
-                                </div>
-                                <div class="col-auto d-flex control">
-                                    <i class="bi bi-pencil-square"></i>
-                                    <i class="bi bi-trash"></i>
-                                </div>
-                            </div>
-                            <div class="container-fluid row role-ai" style="background-color: #f4f4f4;"
-                            data-chatid="${chatID}">
-                            <div class="col-auto icon" style="width:50px;">${robot_icon}</div>
-                            <div class="col text-start ai-response" data-status="waiting">
-                                <p dir="auto" class="card-text placeholder-glow">
-                                    <span class="placeholder col-7"></span>
-                                    <span class="placeholder col-4"></span>
-                                    <span class="placeholder col-4"></span>
-                                    <span class="placeholder col-6"></span>
-                                    <span class="placeholder col-8"></span>
-                                </p>
-                            </div>
-                        </div>
-                    </div> -->
-
-                    </div>
+                <i class="bi bi-arrow-down-circle scroll-down"></i>
+                <div class="input-group mb-3 user-input">
+                    <textarea dir="auto" class="form-control input prompt"
+                    placeholder="please wait a moment..."></textarea>
+                    <button class="btn btn-outline-secondary upload" type="button"><i class="bi bi-images"></i></button>
+                    <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
                 </div>
-                <div class="card-footer text-muted">
-                    <div class="pinned-files">
-                        <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 1</a></p> -->
-                        <!-- <p><i class="bi bi-trash"></i> <a href="#" class="link-primary" target="_blank">link here 2</a></p> -->
+                <div class="input-group mb-3 chat-controller">
+                    <div class="form-check-reverse form-switch">
+                        <label class="form-check-label" for="switchChatEnableHttpsCrawler" data-bs-toggle="tooltip"
+                            data-bs-placement="top" title="If you include a web address with 'https' in the chat, the AI will automatically fetch the content of these websites and generate a response. The web address could be pointing to a normal webpage or a document."><i
+                                class="bi bi-link-45deg"></i></label>
+                        <input class="form-check-input" type="checkbox" role="switch"
+                            id="switchChatEnableHttpsCrawler">
                     </div>
-                    <i class="bi bi-arrow-down-circle scroll-down"></i>
-                    <div class="input-group mb-3 user-input">
-                        <textarea dir="auto" class="form-control input prompt"
-                        placeholder="please wait a moment..."></textarea>
-                        <button class="btn btn-outline-secondary upload" type="button"><i class="bi bi-images"></i></button>
-                        <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
-                    </div>
-                    <div class="input-group mb-3 chat-controller">
-                        <div class="form-check-reverse form-switch">
-                            <label class="form-check-label" for="switchChatEnableHttpsCrawler" data-bs-toggle="tooltip"
-                                data-bs-placement="top" title="If you include a web address with 'https' in the chat, the AI will automatically fetch the content of these websites and generate a response. The web address could be pointing to a normal webpage or a document."><i
-                                    class="bi bi-link-45deg"></i></label>
-                            <input class="form-check-input" type="checkbox" role="switch"
-                                id="switchChatEnableHttpsCrawler">
-                        </div>
-                        <div class="form-check-reverse form-switch">
-                            <label class="form-check-label" for="switchChatEnableGoogleSearch" data-bs-toggle="tooltip"
-                                data-bs-placement="top" title="Use Google search to enhance AI knowledge."><i
-                                    class="bi bi-google"></i></label>
-                            <input class="form-check-input" type="checkbox" role="switch"
-                                id="switchChatEnableGoogleSearch">
-                        </div>
+                    <div class="form-check-reverse form-switch">
+                        <label class="form-check-label" for="switchChatEnableGoogleSearch" data-bs-toggle="tooltip"
+                            data-bs-placement="top" title="Use Google search to enhance AI knowledge."><i
+                                class="bi bi-google"></i></label>
+                        <input class="form-check-input" type="checkbox" role="switch"
+                            id="switchChatEnableGoogleSearch">
                     </div>
                 </div>
             </div>
