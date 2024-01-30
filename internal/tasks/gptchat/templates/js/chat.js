@@ -18,7 +18,7 @@ let globalAIRespSSE, globalAIRespEle
 let chatVisionSelectedFileStore = {}
 
 // eslint-disable-next-line no-unused-vars
-async function setupChatJs() {
+async function setupChatJs () {
     await setupSessionManager();
     await setupConfig();
     await setupChatInput();
@@ -27,14 +27,14 @@ async function setupChatJs() {
     setInterval(fetchImageDrawingResultBackground, 3000);
 }
 
-function newChatID() {
+function newChatID () {
     return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
 }
 
 // show alert
 //
 // type: primary, secondary, success, danger, warning, info, light, dark
-function showalert(type, msg) {
+function showalert (type, msg) {
     const alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
             <div>${sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -46,7 +46,7 @@ function showalert(type, msg) {
 }
 
 // check sessionID's type, secure convert to int, default is 1
-function kvSessionKey(sessionID) {
+function kvSessionKey (sessionID) {
     sessionID = parseInt(sessionID) || 1
     return `${KvKeyPrefixSessionHistory}${sessionID}`
 }
@@ -56,7 +56,7 @@ function kvSessionKey(sessionID) {
  * @param {*} sessionID
  * @returns {Array} An array of chat messages.
  */
-async function sessionChatHistory(sessionID) {
+async function sessionChatHistory (sessionID) {
     let data = (await KvGet(kvSessionKey(sessionID)))
     if (!data) {
         return []
@@ -75,7 +75,7 @@ async function sessionChatHistory(sessionID) {
  *
  * @returns {Array} An array of chat messages, oldest first.
  */
-async function activeSessionChatHistory() {
+async function activeSessionChatHistory () {
     const sid = await activeSessionID()
     if (!sid) {
         return new Array()
@@ -84,7 +84,7 @@ async function activeSessionChatHistory() {
     return await sessionChatHistory(sid)
 }
 
-async function activeSessionID() {
+async function activeSessionID () {
     let activeSession = document.querySelector('#sessionManager .card-body button.active');
     if (activeSession) {
         return activeSession.dataset.session;
@@ -98,7 +98,7 @@ async function activeSessionID() {
     return 1;
 }
 
-async function listenSessionSwitch(evt) {
+async function listenSessionSwitch (evt) {
     // deactive all sessions
     evt = evtTarget(evt);
     if (!evt.classList.contains('list-group-item')) {
@@ -136,7 +136,7 @@ async function listenSessionSwitch(evt) {
  * Fetches the image drawing result background for the AI response and displays it in the chat container.
  * @returns {Promise<void>}
  */
-async function fetchImageDrawingResultBackground() {
+async function fetchImageDrawingResultBackground () {
     const elements = chatContainer
         .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || [];
 
@@ -189,7 +189,7 @@ async function fetchImageDrawingResultBackground() {
  * @param {string} imageUrl current subtask's image url
  * @param {boolean} succeed is current subtask succeed
  */
-function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
+function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
     let processingImageUrls = JSON.parse(item.dataset.imageUrls) || [];
     if (!processingImageUrls.includes(imageUrl)) {
         return;
@@ -230,7 +230,7 @@ function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
  *
  * @returns {void}
  */
-async function clearSessionAndChats(evt, sessionID) {
+async function clearSessionAndChats (evt, sessionID) {
     console.debug('clearSessionAndChats', evt, sessionID)
     if (evt) {
         evt.stopPropagation();
@@ -268,7 +268,7 @@ async function clearSessionAndChats(evt, sessionID) {
     location.reload();
 }
 
-function bindSessionEditBtn() {
+function bindSessionEditBtn () {
     document.querySelectorAll('#sessionManager .sessions .session .bi.bi-pencil-square')
         .forEach((item) => {
             if (item.dataset.bindClicked) {
@@ -304,7 +304,7 @@ function bindSessionEditBtn() {
         })
 }
 
-function bindSessionDeleteBtn() {
+function bindSessionDeleteBtn () {
     const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || [];
     btns.forEach((item) => {
         if (item.dataset.bindClicked) {
@@ -337,7 +337,7 @@ function bindSessionDeleteBtn() {
 /** setup session manager and restore current chat history
  *
  */
-async function setupSessionManager() {
+async function setupSessionManager () {
     const selectedSessionID = await activeSessionID();
 
     // bind remove all sessions
@@ -501,7 +501,7 @@ async function setupSessionManager() {
 }
 
 // remove chat in storage by chatid
-async function removeChatInStorage(chatid) {
+async function removeChatInStorage (chatid) {
     if (!chatid) {
         throw 'chatid is required';
     }
@@ -521,7 +521,7 @@ async function removeChatInStorage(chatid) {
     * @param {string} renderedContent - chat content
     * @param {string} attachHTML - chat content's attach html
 */
-async function appendChats2Storage(role, chatid, renderedContent, attachHTML, rawContent) {
+async function appendChats2Storage (role, chatid, renderedContent, attachHTML, rawContent) {
     if (!chatid) {
         throw 'chatid is required';
     }
@@ -532,7 +532,7 @@ async function appendChats2Storage(role, chatid, renderedContent, attachHTML, ra
     // if chat is already in history, find and update it.
     let found = false;
     session.forEach((item, idx) => {
-        if (item.chatID == chatid && item.role == role) {
+        if (item.chatID === chatid && item.role === role) {
             found = true;
             item.content = renderedContent;
             item.attachHTML = attachHTML;
@@ -543,9 +543,9 @@ async function appendChats2Storage(role, chatid, renderedContent, attachHTML, ra
     // if ai response is not in history, add it after user's chat which has same chatid
     if (!found && role == RoleAI) {
         session.forEach((item, idx) => {
-            if (item.chatID == chatid) {
+            if (item.chatID === chatid) {
                 found = true;
-                if (item.role != RoleAI) {
+                if (item.role !== RoleAI) {
                     session.splice(idx + 1, 0, {
                         role: RoleAI,
                         chatID: chatid,
@@ -572,12 +572,12 @@ async function appendChats2Storage(role, chatid, renderedContent, attachHTML, ra
     await KvSet(storageActiveSessionKey, session);
 }
 
-function scrollChatToDown() {
+function scrollChatToDown () {
     ScrollDown(document.querySelector('html'));
     ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
 }
 
-function scrollToChat(chatEle) {
+function scrollToChat (chatEle) {
     chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
@@ -589,7 +589,7 @@ function scrollToChat(chatEle) {
 * @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
 * @returns {Array} An array of chat messages.
 */
-async function getLastNChatMessages(N, ignoredChatID) {
+async function getLastNChatMessages (N, ignoredChatID) {
     console.debug('getLastNChatMessages', N, ignoredChatID)
 
     const systemPrompt = await OpenaiChatStaticContext()
@@ -634,17 +634,17 @@ async function getLastNChatMessages(N, ignoredChatID) {
     return messages
 }
 
-function lockChatInput() {
+function lockChatInput () {
     chatPromptInputBtn.classList.add('disabled')
 }
-function unlockChatInput() {
+function unlockChatInput () {
     chatPromptInputBtn.classList.remove('disabled')
 }
-function isAllowChatPrompInput() {
+function isAllowChatPrompInput () {
     return !chatPromptInputBtn.classList.contains('disabled')
 }
 
-function parseChatResp(chatmodel, payload) {
+function parseChatResp (chatmodel, payload) {
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
         return payload.choices[0].delta.content || ''
     } else if (IsCompletionModel(chatmodel)) {
@@ -662,7 +662,7 @@ const httpsRegexp = /\bhttps:\/\/\S+/
  * @param {string} reqPrompt - request prompt
  * @returns {string} modified request prompt
  */
-async function userPromptEnhence(reqPrompt) {
+async function userPromptEnhence (reqPrompt) {
     const pinnedUrls = getPinnedMaterials();
     const sconfig = await getChatSessionConfig();
     const urls = reqPrompt.match(httpsRegexp);
@@ -698,7 +698,7 @@ async function userPromptEnhence(reqPrompt) {
     return reqPrompt;
 }
 
-async function restorePinnedMaterials() {
+async function restorePinnedMaterials () {
     const urlEle = await KvGet(KvKeyPinnedMaterials) || '';
     const container = document.querySelector('#chatContainer .pinned-refs');
     container.innerHTML = urlEle;
@@ -718,7 +718,7 @@ async function restorePinnedMaterials() {
         })
 }
 
-function getPinnedMaterials() {
+function getPinnedMaterials () {
     const urls = []
     document.querySelectorAll('#chatContainer .pinned-refs a')
         .forEach((item) => {
@@ -736,15 +736,15 @@ function getPinnedMaterials() {
  * @param {string} prompt - The image prompt to send to the server.
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
-async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
 
     switch (selectedModel) {
-        case ImageModelDalle2:
-            url = '/images/generations';
-            break;
-        default:
-            throw new Error(`unknown image model: ${selectedModel}`);
+    case ImageModelDalle2:
+        url = '/images/generations';
+        break;
+    default:
+        throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     const sconfig = await getChatSessionConfig();
@@ -779,14 +779,14 @@ async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEl
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
-        case ImageModelSdxlTurbo:
-            url = '/images/generations/sdxl-turbo';
-            break;
-        default:
-            throw new Error(`unknown image model: ${selectedModel}`);
+    case ImageModelSdxlTurbo:
+        url = '/images/generations/sdxl-turbo';
+        break;
+    default:
+        throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     // get first image in store
@@ -834,14 +834,14 @@ async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEl
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
-        case ImageModelImg2Img:
-            url = '/images/generations/lcm';
-            break;
-        default:
-            throw new Error(`unknown image model: ${selectedModel}`);
+    case ImageModelImg2Img:
+        url = '/images/generations/lcm';
+        break;
+    default:
+        throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     // get first image in store
@@ -889,7 +889,7 @@ async function sendImg2ImgPrompt2Server(chatID, selectedModel, currentAIRespEle,
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
-async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
+async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
@@ -906,7 +906,7 @@ async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
         );
 }
 
-async function sendChat2Server(chatID) {
+async function sendChat2Server (chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
@@ -1024,38 +1024,38 @@ async function sendChat2Server(chatID) {
 
         let url, project;
         switch (selectedModel) {
-            case QAModelBasebit:
-            case QAModelSecurity:
-            case QAModelImmigrate:
-                window.data.qa_chat_models.forEach((item) => {
-                    if (item.name == selectedModel) {
-                        url = item.url;
-                        project = item.project;
-                    }
-                })
-
-                if (!project) {
-                    console.error("can't find project name for chat model: " + selectedModel);
-                    return;
+        case QAModelBasebit:
+        case QAModelSecurity:
+        case QAModelImmigrate:
+            window.data.qa_chat_models.forEach((item) => {
+                if (item.name == selectedModel) {
+                    url = item.url;
+                    project = item.project;
                 }
+            })
 
-                url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
-                break;
-            case QAModelCustom:
-                url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
-                break;
-            case QAModelShared:
-                // example url:
-                //
-                // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+            if (!project) {
+                console.error("can't find project name for chat model: " + selectedModel);
+                return;
+            }
 
-                const params = new URLSearchParams(location.search);
-                url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
+            url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
+            break;
+        case QAModelCustom:
+            url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
+            break;
+        case QAModelShared:
+            // example url:
+            //
+            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+
+            const params = new URLSearchParams(location.search);
+            url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
                     `&chatbot_name=${params.get('chatbot_name')}` +
                     `&q=${encodeURIComponent(reqPrompt)}`;
-                break;
-            default:
-                console.error('unknown qa chat model: ' + selectedModel);
+            break;
+        default:
+            console.error('unknown qa chat model: ' + selectedModel);
         }
 
         globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
@@ -1124,17 +1124,17 @@ async function sendChat2Server(chatID) {
     } else if (IsImageModel(selectedModel)) {
         try {
             switch (selectedModel) {
-                case ImageModelDalle2:
-                    await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                    break;
-                case ImageModelImg2Img:
-                    await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                    break;
-                case ImageModelSdxlTurbo:
-                    await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                    break;
-                default:
-                    throw new Error(`unknown image model: ${selectedModel}`);
+            case ImageModelDalle2:
+                await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                break;
+            case ImageModelImg2Img:
+                await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                break;
+            case ImageModelSdxlTurbo:
+                await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                break;
+            default:
+                throw new Error(`unknown image model: ${selectedModel}`);
             }
         } catch (err) {
             abortAIResp(err);
@@ -1191,25 +1191,25 @@ async function sendChat2Server(chatID) {
             }
 
             switch (globalAIRespEle.dataset.status) {
-                case 'waiting':
-                    globalAIRespEle.dataset.status = 'writing';
+            case 'waiting':
+                globalAIRespEle.dataset.status = 'writing';
 
-                    if (respContent) {
-                        globalAIRespEle.innerHTML = respContent;
-                        aiRawResp += respContent;
-                    } else {
-                        globalAIRespEle.innerHTML = '';
-                    }
+                if (respContent) {
+                    globalAIRespEle.innerHTML = respContent;
+                    aiRawResp += respContent;
+                } else {
+                    globalAIRespEle.innerHTML = '';
+                }
 
-                    break;
-                case 'writing':
-                    if (respContent) {
-                        aiRawResp += respContent;
-                        globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
-                    }
+                break;
+            case 'writing':
+                if (respContent) {
+                    aiRawResp += respContent;
+                    globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
+                }
 
-                    scrollToChat(globalAIRespEle);
-                    break;
+                scrollToChat(globalAIRespEle);
+                break;
             }
         }
 
@@ -1256,7 +1256,7 @@ async function sendChat2Server(chatID) {
  *
  * @param {string} chatID - chat id
  */
-function renderAfterAIResponse(chatID) {
+function renderAfterAIResponse (chatID) {
     // Prism.highlightAll();
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
 
@@ -1278,7 +1278,7 @@ function renderAfterAIResponse(chatID) {
     }
 }
 
-function combineRefs(arr) {
+function combineRefs (arr) {
     let markdown = ''
     for (const val of arr) {
         if (val.startsWith('https') || val.startsWith('http')) {
@@ -1294,7 +1294,7 @@ function combineRefs(arr) {
 }
 
 // parse langchain qa references to markdown links
-function wrapRefLines(input) {
+function wrapRefLines (input) {
     const lines = input.split('\n')
     let result = ''
     for (let i = 0; i < lines.length; i++) {
@@ -1308,7 +1308,7 @@ function wrapRefLines(input) {
     return result
 }
 
-function abortAIResp(err) {
+function abortAIResp (err) {
     console.error(`abort AI resp: ${err}`);
     if (globalAIRespSSE) {
         globalAIRespSSE.close();
@@ -1328,9 +1328,8 @@ function abortAIResp(err) {
             return;
         }
 
-        errMsg = "There may be a network issue, please check the network connection and try again later.";
+        errMsg = 'There may be a network issue, please check the network connection and try again later.';
     }
-
 
     if (typeof errMsg !== 'string') {
         errMsg = JSON.stringify(errMsg);
@@ -1353,7 +1352,7 @@ function abortAIResp(err) {
     unlockChatInput();
 }
 
-async function bindUserInputSelectFilesBtn() {
+async function bindUserInputSelectFilesBtn () {
     chatContainer.querySelector('.user-input .btn.upload')
         .addEventListener('click', async (evt) => {
             // click to select images
@@ -1378,7 +1377,7 @@ async function bindUserInputSelectFilesBtn() {
 /** auto display or hide user input select files button according to selected model
  *
  */
-async function autoToggleUserImageUploadBtn() {
+async function autoToggleUserImageUploadBtn () {
     const sconfig = await getChatSessionConfig();
     const isVision = sconfig.selected_model.includes('vision');
 
@@ -1397,7 +1396,7 @@ async function autoToggleUserImageUploadBtn() {
     }
 }
 
-async function setupChatInput() {
+async function setupChatInput () {
     // bind input press enter
     {
         let isComposition = false
@@ -1550,7 +1549,7 @@ async function setupChatInput() {
 }
 
 // read paste file
-async function filePasteHandler(evt) {
+async function filePasteHandler (evt) {
     if (!evt.clipboardData || !evt.clipboardData.items) {
         return;
     }
@@ -1578,7 +1577,7 @@ async function filePasteHandler(evt) {
  *
  * @param {*} file - file object
  */
-function readFileForVision(file) {
+function readFileForVision (file) {
     // get file content as Blob
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -1609,7 +1608,7 @@ function readFileForVision(file) {
     reader.readAsArrayBuffer(file);
 }
 
-async function updateChatVisionSelectedFileStore() {
+async function updateChatVisionSelectedFileStore () {
     const pinnedFiles = chatContainer.querySelector('.pinned-files')
     pinnedFiles.innerHTML = ''
     for (const key in chatVisionSelectedFileStore) {
@@ -1639,32 +1638,32 @@ async function updateChatVisionSelectedFileStore() {
  * @param {string} attachHTML - html to attach to chat
  * @param {string} rawAiResp - raw ai response
  */
-async function append2Chats(chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
+async function append2Chats (chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
     if (!chatID) {
-        throw 'chatID is required'
+        throw 'chatID is required';
     }
 
-    const robot_icon = '🤖️'
-    let chatEleHtml
-    let chatOp = 'append'
+    const robotIcon = '🤖️';
+    let chatEleHtml;
+    let chatOp = 'append';
     switch (role) {
-        case RoleSystem:
-            text = escapeHtml(text)
+    case RoleSystem:
+        text = escapeHtml(text);
 
-            chatEleHtml = `
+        chatEleHtml = `
             <div class="container-fluid row role-human">
                 <div class="col-auto icon">💻</div>
                 <div class="col text-start"><pre>${text}</pre></div>
-            </div>`
-            break
-        case RoleHuman:
-            text = escapeHtml(text)
+            </div>`;
+        break;
+    case RoleHuman:
+        text = escapeHtml(text);
 
-            let waitAI = ''
-            if (!isHistory) {
-                waitAI = `
+        let waitAI = '';
+        if (!isHistory) {
+            waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                            <div class="col-auto icon">${robot_icon}</div>
+                            <div class="col-auto icon">${robotIcon}</div>
                             <div class="col text-start ai-response" data-status="waiting">
                                 <p dir="auto" class="card-text placeholder-glow">
                                     <span class="placeholder col-7"></span>
@@ -1674,16 +1673,16 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
                                     <span class="placeholder col-8"></span>
                                 </p>
                             </div>
-                        </div>`
-            }
+                        </div>`;
+        }
 
-            if (attachHTML) {
-                attachHTML = `${attachHTML}`
-            } else {
-                attachHTML = ''
-            }
+        if (attachHTML) {
+            attachHTML = `${attachHTML}`;
+        } else {
+            attachHTML = '';
+        }
 
-            chatEleHtml = `
+        chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-auto icon">🤔️</div>
@@ -1697,81 +1696,85 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
                         </div>
                     </div>
                     ${waitAI}
-                </div>`
-            break
-        case RoleAI:
-            // let insertText;
-            // if (rawAiResp) {
-            //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
-            // }else {
-            //     insertText = text
-            // }
+                </div>`;
+        break;
+    case RoleAI:
+        // let insertText;
+        // if (rawAiResp) {
+        //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
+        // }else {
+        //     insertText = text
+        // }
 
-            chatEleHtml = `
+        chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-auto icon">${robot_icon}</div>
+                        <div class="col-auto icon">${robotIcon}</div>
                         <div class="col text-start ai-response" data-status="waiting">
                             ${text}
                         </div>
-                </div>`
-            if (!isHistory) {
-                chatOp = 'replace'
-            }
+                </div>`;
+        if (!isHistory) {
+            chatOp = 'replace';
+        }
 
-            break
+        break;
     }
 
-    if (chatOp == 'append') {
-        if (role == RoleAI) {
+    if (chatOp === 'append') {
+        if (role === RoleAI) {
             // ai response is always after human, so we need to find the last human chat,
             // and append ai response after it
-            chatContainer.querySelector(`#${chatID}`).insertAdjacentHTML('beforeend', chatEleHtml)
+            chatContainer.querySelector(`#${chatID}`)
+                .insertAdjacentHTML('beforeend', chatEleHtml);
         } else {
             chatContainer.querySelector('.chatManager .conservations .chats')
-                .insertAdjacentHTML('beforeend', chatEleHtml)
+                .insertAdjacentHTML('beforeend', chatEleHtml);
         }
-    } else if (chatOp == 'replace') {
-        // replace html element of ai
-        chatEle.querySelector('.role-ai')
-            .outerHTML = chatEleHtml
     }
 
-    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`)
-    if (!isHistory && role == RoleHuman) {
-        scrollToChat(chatEle)
+    const chatEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID}`);
+    if (chatOp === 'replace') {
+        // replace html element of ai
+        chatEle.querySelector('.role-ai')
+            .outerHTML = chatEleHtml;
+    }
+
+    if (!isHistory && role === RoleHuman) {
+        scrollToChat(chatEle);
     }
 
     // avoid duplicate event listener, only bind event listener for new chat
-    if (role == RoleHuman) {
+    if (role === RoleHuman) {
         // bind delete button
         const deleteBtnHandler = (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
             ConfirmModal('Delete Chat', 'Are you sure to delete this chat?', () => {
-                chatEle.parentNode.removeChild(chatEle)
-                removeChatInStorage(chatID)
-            })
-        }
+                chatEle.parentNode.removeChild(chatEle);
+                removeChatInStorage(chatID);
+            });
+        };
 
         const editHumanInputHandler = (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const oldText = chatContainer.querySelector(`#${chatID}`).innerHTML
-            let text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML
+            const oldText = chatContainer.querySelector(`#${chatID}`).innerHTML;
+            let text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
 
             // attach image to vision-selected-store when edit human input
             const attachEles = chatContainer
-                .querySelectorAll(`.chatManager .conservations .chats #${chatID} .role-human .text-start img`) || []
-            let attachHTML = ''
+                .querySelectorAll(`.chatManager .conservations .chats #${chatID} .role-human .text-start img`) || [];
+            let attachHTML = '';
             attachEles.forEach((ele) => {
-                const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '')
-                const key = ele.dataset.name || `${DateStr()}.png`
-                chatVisionSelectedFileStore[key] = b64fileContent
-                attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`
+                const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
+                const key = ele.dataset.name || `${DateStr()}.png`;
+                chatVisionSelectedFileStore[key] = b64fileContent;
+                attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
             })
-            updateChatVisionSelectedFileStore()
+            updateChatVisionSelectedFileStore();
 
-            text = sanitizeHTML(text)
+            text = sanitizeHTML(text);
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
@@ -1781,13 +1784,13 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
                     <button class="btn btn-sm btn-outline-secondary cancel" type="button">
                         <i class="bi bi-x"></i>
                         Cancel</button>
-                </div>`
+                </div>`;
 
-            const saveBtn = chatEle.querySelector('.role-human .btn.save')
-            const cancelBtn = chatEle.querySelector('.role-human .btn.cancel')
+            const saveBtn = chatEle.querySelector('.role-human .btn.save');
+            const cancelBtn = chatEle.querySelector('.role-human .btn.cancel');
             saveBtn.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                const newText = chatEle.querySelector('.role-human textarea').value
+                evt.stopPropagation();
+                const newText = chatEle.querySelector('.role-human textarea').value;
                 chatEle.innerHTML = `
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-auto icon">🤔️</div>
@@ -1798,7 +1801,7 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
                         </div>
                     </div>
                     <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-auto icon">${robot_icon}</div>
+                        <div class="col-auto icon">${robotIcon}</div>
                         <div class="col text-start ai-response" data-status="waiting">
                             <p class="card-text placeholder-glow">
                                 <span class="placeholder col-7"></span>
@@ -1808,36 +1811,36 @@ async function append2Chats(chatID, role, text, isHistory = false, attachHTML, r
                                 <span class="placeholder col-8"></span>
                             </p>
                         </div>
-                    </div>`
-                chatEle.querySelector('.role-ai').dataset.status = 'waiting'
+                    </div>`;
+                chatEle.querySelector('.role-ai').dataset.status = 'waiting';
 
                 // bind delete and edit button
                 chatEle.querySelector('.role-human .bi-trash')
-                    .addEventListener('click', deleteBtnHandler)
+                    .addEventListener('click', deleteBtnHandler);
                 chatEle.querySelector('.bi.bi-pencil-square')
-                    .addEventListener('click', editHumanInputHandler)
+                    .addEventListener('click', editHumanInputHandler);
 
-                await sendChat2Server(chatID)
-                await appendChats2Storage(RoleHuman, chatID, newText, attachHTML)
-            })
+                await sendChat2Server(chatID);
+                await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
+            });
 
             cancelBtn.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                chatEle.innerHTML = oldText
+                evt.stopPropagation();
+                chatEle.innerHTML = oldText;
 
                 // bind delete and edit button
                 chatEle.querySelector('.role-human .bi-trash')
-                    .addEventListener('click', deleteBtnHandler)
+                    .addEventListener('click', deleteBtnHandler);
                 chatEle.querySelector('.bi.bi-pencil-square')
-                    .addEventListener('click', editHumanInputHandler)
-            })
-        }
+                    .addEventListener('click', editHumanInputHandler);
+            });
+        };
 
         // bind delete and edit button
         chatEle.querySelector('.role-human .bi-trash')
-            .addEventListener('click', deleteBtnHandler)
+            .addEventListener('click', deleteBtnHandler);
         chatEle.querySelector('.bi.bi-pencil-square')
-            .addEventListener('click', editHumanInputHandler)
+            .addEventListener('click', editHumanInputHandler);
     }
 }
 
@@ -1865,7 +1868,7 @@ window.saveChatSessionConfig = async (sconfig) => {
     await KvSet(skey, sconfig);
 };
 
-function newSessionConfig() {
+function newSessionConfig () {
     return {
         api_token: 'FREETIER-' + RandomString(32),
         api_base: 'https://api.openai.com',
@@ -1886,7 +1889,7 @@ function newSessionConfig() {
 /**
  * initialize every chat component by active session config
  */
-async function updateConfigFromSessionConfig() {
+async function updateConfigFromSessionConfig () {
     console.debug(`updateConfigFromSessionConfig for session ${(await activeSessionID())}`);
 
     const sconfig = await getChatSessionConfig();
@@ -1937,7 +1940,7 @@ async function updateConfigFromSessionConfig() {
         });
 }
 
-async function setupConfig() {
+async function setupConfig () {
     await updateConfigFromSessionConfig();
 
     //  config_api_token_value
@@ -2161,7 +2164,7 @@ async function setupConfig() {
                         body: JSON.stringify(data)
                     });
 
-                    if (resp.status != 200) {
+                    if (resp.status !== 200) {
                         throw new Error(`upload config failed: ${resp.status}`);
                     }
 
@@ -2178,43 +2181,112 @@ async function setupConfig() {
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
 
-                ConfirmModal('Download config will clear all local data, are you sure?', async () => {
-                    const syncKey = await KvGet(KvKeySyncKey);
-                    try {
-                        ShowSpinner();
-                        const resp = await fetch('/user/config', {
-                            method: 'GET',
-                            headers: {
-                                'X-LAISKY-SYNC-KEY': syncKey,
-                                'Cache-Control': 'no-cache'
-                            }
-                        });
-
-                        if (resp.status != 200) {
-                            throw new Error(`download config failed: ${resp.status}`);
+                const syncKey = await KvGet(KvKeySyncKey);
+                try {
+                    ShowSpinner();
+                    const resp = await fetch('/user/config', {
+                        method: 'GET',
+                        headers: {
+                            'X-LAISKY-SYNC-KEY': syncKey,
+                            'Cache-Control': 'no-cache'
                         }
+                    });
 
-                        const data = await resp.json();
-                        await KvClear();
-                        for (const key in data) {
-                            await KvSet(key, data[key]);
-                        }
-
-                        location.reload();
-                    } catch (err) {
-                        console.error(`download config failed: ${err}`);
-                        showalert('danger', 'download config failed: ' + err);
-                    } finally {
-                        HideSpinner();
+                    if (resp.status !== 200) {
+                        throw new Error(`download config failed: ${resp.status}`);
                     }
-                });
+
+                    const data = await resp.json();
+                    for (const key in data) {
+                        if (!(await KvExists(key)) ||
+                            !key.startsWith(KvKeyPrefixSessionHistory)) {
+                            await KvSet(key, data[key]);
+                            continue;
+                        }
+
+                        // incremental update local sessions chat history
+                        let localHistory = await KvGet(key);
+                        let iLocal = 0;
+                        let iRemote = 0;
+                        let localChatId = 0;
+                        let remoteChatId = 0;
+                        let localChatNum = 0;
+                        let remoteChatNum = 0;
+                        while (iLocal < localHistory.length || iRemote < data[key].length) {
+                            if (iLocal >= localHistory.length) {
+                                localHistory = localHistory.concat(data[key].slice(iRemote));
+                                break;
+                            }
+                            if (iRemote >= data[key].length) {
+                                break;
+                            }
+
+                            localChatId = localHistory[iLocal].chatID;
+                            // latest version's chatid like: chat-1705899120122-NwN9sB
+                            if (!localChatId || !localChatId.match(/chat-\d+-\w+/)) {
+                                iLocal++;
+                                continue;
+                            }
+
+                            localChatNum = parseInt(localChatId.split('-')[1]);
+
+                            while (iRemote < data[key].length) {
+                                remoteChatId = data[key][iRemote].chatID;
+                                if (!remoteChatId || !remoteChatId.match(/chat-\d+-\w+/)) {
+                                    localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                                    iLocal++;
+                                    iRemote++;
+                                    continue;
+                                }
+
+                                remoteChatNum = parseInt(remoteChatId.split('-')[1]);
+                                break;
+                            }
+
+                            if (iRemote >= data[key].length) {
+                                break;
+                            }
+
+                            // skip same chat
+                            if (localChatNum === remoteChatNum) {
+                                while (iLocal < localHistory.length && localHistory[iLocal].chatID === localChatId) {
+                                    iLocal++;
+                                }
+
+                                while (iRemote < data[key].length && data[key][iRemote].chatID === remoteChatId) {
+                                    iRemote++;
+                                }
+
+                                continue;
+                            }
+
+                            // insert remote chat into local by chat num
+                            if (localChatNum > remoteChatNum) {
+                                // insert before
+                                localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                                iRemote++;
+                            }
+
+                            iLocal++;
+                        }
+
+                        await KvSet(key, localHistory);
+                    }
+
+                    location.reload();
+                } catch (err) {
+                    console.error(`download config failed: ${err}`);
+                    showalert('danger', 'download config failed: ' + err);
+                } finally {
+                    HideSpinner();
+                }
             });
     }
 
     EnableTooltipsEverywhere()
 }
 
-async function loadPromptShortcutsFromStorage() {
+async function loadPromptShortcutsFromStorage () {
     let shortcuts = await KvGet(KvKeyPromptShortCuts)
     if (!shortcuts) {
         // default prompts
@@ -2234,7 +2306,7 @@ async function loadPromptShortcutsFromStorage() {
 //
 // @param {Object} shortcut - shortcut object
 // @param {bool} storage - whether to save to kv
-async function appendPromptShortcut(shortcut, storage = false) {
+async function appendPromptShortcut (shortcut, storage = false) {
     const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
 
     // add to local storage
@@ -2278,7 +2350,7 @@ async function appendPromptShortcut(shortcut, storage = false) {
     promptShortcutContainer.appendChild(ele);
 }
 
-async function setupPromptManager() {
+async function setupPromptManager () {
     // restore shortcuts from kv
     {
         // bind default prompt shortcuts
@@ -2423,7 +2495,7 @@ async function setupPromptManager() {
 }
 
 // setup private dataset modal
-async function setupPrivateDataset() {
+async function setupPrivateDataset () {
     const pdfchatModalEle = document.querySelector('#modal-pdfchat')
 
     // bind header's custom qa button
@@ -2635,8 +2707,8 @@ async function setupPrivateDataset() {
                 // show processing files in grey and progress bar
                 body.datasets.forEach((dataset) => {
                     switch (dataset.status) {
-                        case 'done':
-                            datasetsHTML += `
+                    case 'done':
+                        datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -2652,9 +2724,9 @@ async function setupPrivateDataset() {
                                         </div>
                                     </div>
                                 </div>`
-                            break
-                        case 'processing':
-                            datasetsHTML += `
+                        break
+                    case 'processing':
+                        datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -2673,7 +2745,7 @@ async function setupPrivateDataset() {
                                         </div>
                                     </div>
                                 </div>`
-                            break
+                        break
                     }
                 })
 

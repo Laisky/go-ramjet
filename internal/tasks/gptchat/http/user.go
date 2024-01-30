@@ -163,5 +163,6 @@ func DownloadUserConfig(ctx *gin.Context) {
 	}
 
 	logger.Info("download user config success")
+	ctx.Header("Cache-Control", "no-cache")
 	ctx.Data(200, "application/json", gzout.Bytes())
 }
