@@ -2249,7 +2249,12 @@ async function downloadUserConfig (evt) {
         }
     });
 
+
     if (resp.status !== 200) {
+        if (resp.status === 400) {
+            return;
+        }
+
         throw new Error(`download config failed: ${resp.status}`);
     }
 
