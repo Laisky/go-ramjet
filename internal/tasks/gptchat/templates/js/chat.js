@@ -322,9 +322,9 @@ function bindSessionDeleteBtn () {
             }
 
             const sid = evtTarget(evt).closest('.session').dataset.session;
-            ConfirmModal('Are you sure to delete this session?', () => {
-                KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
-                KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
+            ConfirmModal('Are you sure to delete this session?', async () => {
+                await KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
+                await KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
                 document
                     .querySelector(`#sessionManager .sessions [data-session="${sid}"]`).remove();
                 chatContainer
@@ -1789,7 +1789,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         const deleteBtnHandler = (evt) => {
             evt.stopPropagation();
 
-            ConfirmModal('Delete Chat', 'Are you sure to delete this chat?', () => {
+            ConfirmModal('Are you sure to delete this chat?', async () => {
                 chatEle.parentNode.removeChild(chatEle);
                 removeChatInStorage(chatID);
             });

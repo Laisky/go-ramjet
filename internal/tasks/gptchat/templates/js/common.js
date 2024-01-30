@@ -417,44 +417,44 @@ let deleteCheckCallback,
     deleteCheckModal
 
 function setupConfirmModal () {
-    deleteCheckModal = new bootstrap.Modal(document.getElementById('deleteCheckModal'))
+    deleteCheckModal = new bootstrap.Modal(document.getElementById('deleteCheckModal'));
     document.getElementById('deleteCheckModal')
         .querySelector('.modal-body .yes')
         .addEventListener('click', async (e) => {
-            e.preventDefault()
+            e.preventDefault();
 
             if (deleteCheckCallback) {
-                await deleteCheckCallback()
+                await deleteCheckCallback();
             }
 
-            deleteCheckModal.hide()
-        })
+            deleteCheckModal.hide();
+        });
 }
 
 /** setup header bar
  *
  */
 async function setupHeader () {
-    const headerBarEle = document.getElementById('headerbar')
-    let allowedModels = []
+    const headerBarEle = document.getElementById('headerbar');
+    let allowedModels = [];
     const sconfig = await getChatSessionConfig();
 
     // setup chat models
     {
         // set default chat model
-        let selectedModel = await OpenaiSelectedModel()
+        let selectedModel = await OpenaiSelectedModel();
 
         // get users' models
-        const headers = new Headers()
-        headers.append('Authorization', 'Bearer ' + sconfig.api_token)
+        const headers = new Headers();
+        headers.append('Authorization', 'Bearer ' + sconfig.api_token);
         const response = await fetch('/user/me', {
             method: 'GET',
             cache: 'no-cache',
             headers
-        })
+        });
 
         if (response.status != 200) {
-            throw new Error('failed to get user info, please refresh your browser.')
+            throw new Error('failed to get user info, please refresh your browser.');
         }
 
         const modelsContainer = document.querySelector('#headerbar .chat-models');
