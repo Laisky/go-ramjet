@@ -82,6 +82,7 @@ const KvKeyPrefixSessionHistory = 'chat_user_session_';
 const KvKeyPrefixSessionConfig = 'chat_user_config_';
 const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
+const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
 
 const IsChatModel = (model) => {
     return ChatModels.includes(model);

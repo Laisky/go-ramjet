@@ -1545,6 +1545,45 @@ async function setupChatInput () {
                 sconfig.chat_switch.enable_google_search = switchEle.checked
                 await saveChatSessionConfig(sconfig)
             })
+
+        chatContainer
+            .querySelector('#switchChatEnableAutoSync')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation()
+                const switchEle = evtTarget(evt)
+                await KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
+            });
+        let userConfigSyncer;
+        KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
+            if (op !== KvOp.SET) {
+                return;
+            }
+
+            // update ui
+            const switchEle = chatContainer.querySelector('#switchChatEnableAutoSync');
+            switchEle.checked = newVal;
+
+            // update background syncer
+            if (!newVal) {
+                console.debug('stop user config syncer');
+                if (userConfigSyncer) {
+                    clearTimeout(userConfigSyncer);
+                    userConfigSyncer = null;
+                }
+
+                return;
+            }
+
+            if (userConfigSyncer) {
+                return;
+            }
+
+            console.debug('start user config syncer');
+            // await syncUserConfig();
+            userConfigSyncer = setTimeout(async () => {
+                await syncUserConfig();
+            }, 1800 * 1000);
+        });
     }
 }
 
@@ -1917,6 +1956,8 @@ async function updateConfigFromSessionConfig () {
         .checked = !sconfig.chat_switch.disable_https_crawler;
     chatContainer.querySelector('#switchChatEnableGoogleSearch')
         .checked = sconfig.chat_switch.enable_google_search;
+    chatContainer.querySelector('#switchChatEnableAutoSync')
+        .checked = await KvGet(KvKeyAutoSyncUserConfig);
 
     // update selected model
     // set active status for models
@@ -2142,148 +2183,152 @@ async function setupConfig () {
 
     // bind upload & download configs
     {
-        configContainer.querySelector('.btn-upload')
+        configContainer.querySelector('.btn[data-app-fn="cloud-sync"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-
                 try {
                     ShowSpinner();
-
-                    const data = {};
-                    await Promise.all((await KvList()).map(async (key) => {
-                        data[key] = await KvGet(key);
-                    }));
-
-                    const syncKey = await KvGet(KvKeySyncKey);
-                    const resp = await fetch('/user/config', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-LAISKY-SYNC-KEY': syncKey
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    if (resp.status !== 200) {
-                        throw new Error(`upload config failed: ${resp.status}`);
-                    }
-
-                    showalert('success', 'upload config success');
-                } catch (err) {
-                    console.error(`upload config failed: ${err}`);
-                    showalert('danger', 'upload config failed: ' + err);
-                } finally {
-                    HideSpinner();
-                }
-            });
-
-        configContainer.querySelector('.btn-download')
-            .addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-
-                const syncKey = await KvGet(KvKeySyncKey);
-                try {
-                    ShowSpinner();
-                    const resp = await fetch('/user/config', {
-                        method: 'GET',
-                        headers: {
-                            'X-LAISKY-SYNC-KEY': syncKey,
-                            'Cache-Control': 'no-cache'
-                        }
-                    });
-
-                    if (resp.status !== 200) {
-                        throw new Error(`download config failed: ${resp.status}`);
-                    }
-
-                    const data = await resp.json();
-                    for (const key in data) {
-                        if (!(await KvExists(key)) ||
-                            !key.startsWith(KvKeyPrefixSessionHistory)) {
-                            await KvSet(key, data[key]);
-                            continue;
-                        }
-
-                        // incremental update local sessions chat history
-                        let localHistory = await KvGet(key);
-                        let iLocal = 0;
-                        let iRemote = 0;
-                        let localChatId = 0;
-                        let remoteChatId = 0;
-                        let localChatNum = 0;
-                        let remoteChatNum = 0;
-                        while (iLocal < localHistory.length || iRemote < data[key].length) {
-                            if (iLocal >= localHistory.length) {
-                                localHistory = localHistory.concat(data[key].slice(iRemote));
-                                break;
-                            }
-                            if (iRemote >= data[key].length) {
-                                break;
-                            }
-
-                            localChatId = localHistory[iLocal].chatID;
-                            // latest version's chatid like: chat-1705899120122-NwN9sB
-                            if (!localChatId || !localChatId.match(/chat-\d+-\w+/)) {
-                                iLocal++;
-                                continue;
-                            }
-
-                            localChatNum = parseInt(localChatId.split('-')[1]);
-
-                            while (iRemote < data[key].length) {
-                                remoteChatId = data[key][iRemote].chatID;
-                                if (!remoteChatId || !remoteChatId.match(/chat-\d+-\w+/)) {
-                                    localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
-                                    iLocal++;
-                                    iRemote++;
-                                    continue;
-                                }
-
-                                remoteChatNum = parseInt(remoteChatId.split('-')[1]);
-                                break;
-                            }
-
-                            if (iRemote >= data[key].length) {
-                                break;
-                            }
-
-                            // skip same chat
-                            if (localChatNum === remoteChatNum) {
-                                while (iLocal < localHistory.length && localHistory[iLocal].chatID === localChatId) {
-                                    iLocal++;
-                                }
-
-                                while (iRemote < data[key].length && data[key][iRemote].chatID === remoteChatId) {
-                                    iRemote++;
-                                }
-
-                                continue;
-                            }
-
-                            // insert remote chat into local by chat num
-                            if (localChatNum > remoteChatNum) {
-                                // insert before
-                                localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
-                                iRemote++;
-                            }
-
-                            iLocal++;
-                        }
-
-                        await KvSet(key, localHistory);
-                    }
-
+                    await syncUserConfig(evt);
                     location.reload();
                 } catch (err) {
-                    console.error(`download config failed: ${err}`);
-                    showalert('danger', 'download config failed: ' + err);
+                    console.error(err);
+                    showalert('danger', `sync user config failed: ${err}`);
                 } finally {
                     HideSpinner();
                 }
             });
+
+        // configContainer.querySelector('.btn-upload')
+        //     .addEventListener('click', uploadUserConfig);
+
+        // configContainer.querySelector('.btn-download')
+        //     .addEventListener('click', downloadUserConfig);
     }
 
-    EnableTooltipsEverywhere()
+    EnableTooltipsEverywhere();
+}
+
+async function syncUserConfig (evt) {
+    await downloadUserConfig(evt);
+    await uploadUserConfig(evt);
+}
+
+async function uploadUserConfig (evt) {
+    console.debug('uploadUserConfig');
+    evt && evt.stopPropagation();
+
+    const data = {};
+    await Promise.all((await KvList()).map(async (key) => {
+        data[key] = await KvGet(key);
+    }));
+
+    const syncKey = await KvGet(KvKeySyncKey);
+    const resp = await fetch('/user/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-LAISKY-SYNC-KEY': syncKey
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (resp.status !== 200) {
+        throw new Error(`upload config failed: ${resp.status}`);
+    }
+}
+
+async function downloadUserConfig (evt) {
+    console.debug('downloadUserConfig');
+    evt && evt.stopPropagation();
+
+    const syncKey = await KvGet(KvKeySyncKey);
+    const resp = await fetch('/user/config', {
+        method: 'GET',
+        headers: {
+            'X-LAISKY-SYNC-KEY': syncKey,
+            'Cache-Control': 'no-cache'
+        }
+    });
+
+    if (resp.status !== 200) {
+        throw new Error(`download config failed: ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    for (const key in data) {
+        if (!(await KvExists(key)) ||
+                !key.startsWith(KvKeyPrefixSessionHistory)) {
+            await KvSet(key, data[key]);
+            continue;
+        }
+
+        // incremental update local sessions chat history
+        let localHistory = await KvGet(key);
+        let iLocal = 0;
+        let iRemote = 0;
+        let localChatId = 0;
+        let remoteChatId = 0;
+        let localChatNum = 0;
+        let remoteChatNum = 0;
+        while (iLocal < localHistory.length || iRemote < data[key].length) {
+            if (iLocal >= localHistory.length) {
+                localHistory = localHistory.concat(data[key].slice(iRemote));
+                break;
+            }
+            if (iRemote >= data[key].length) {
+                break;
+            }
+
+            localChatId = localHistory[iLocal].chatID;
+            // latest version's chatid like: chat-1705899120122-NwN9sB
+            if (!localChatId || !localChatId.match(/chat-\d+-\w+/)) {
+                iLocal++;
+                continue;
+            }
+
+            localChatNum = parseInt(localChatId.split('-')[1]);
+
+            while (iRemote < data[key].length) {
+                remoteChatId = data[key][iRemote].chatID;
+                if (!remoteChatId || !remoteChatId.match(/chat-\d+-\w+/)) {
+                    localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                    iLocal++;
+                    iRemote++;
+                    continue;
+                }
+
+                remoteChatNum = parseInt(remoteChatId.split('-')[1]);
+                break;
+            }
+
+            if (iRemote >= data[key].length) {
+                break;
+            }
+
+            // skip same chat
+            if (localChatNum === remoteChatNum) {
+                while (iLocal < localHistory.length && localHistory[iLocal].chatID === localChatId) {
+                    iLocal++;
+                }
+
+                while (iRemote < data[key].length && data[key][iRemote].chatID === remoteChatId) {
+                    iRemote++;
+                }
+
+                continue;
+            }
+
+            // insert remote chat into local by chat num
+            if (localChatNum > remoteChatNum) {
+                // insert before
+                localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                iRemote++;
+            }
+
+            iLocal++;
+        }
+
+        await KvSet(key, localHistory);
+    }
 }
 
 async function loadPromptShortcutsFromStorage () {
