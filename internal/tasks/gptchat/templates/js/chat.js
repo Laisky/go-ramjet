@@ -2249,7 +2249,6 @@ async function downloadUserConfig (evt) {
         }
     });
 
-
     if (resp.status !== 200) {
         if (resp.status === 400) {
             return;
@@ -2260,79 +2259,90 @@ async function downloadUserConfig (evt) {
 
     const data = await resp.json();
     for (const key in data) {
-        if (!(await KvExists(key)) ||
-                !key.startsWith(KvKeyPrefixSessionHistory)) {
+        // download non-exists key
+        if (!(await KvExists(key))) {
             await KvSet(key, data[key]);
             continue;
         }
 
-        // incremental update local sessions chat history
-        let localHistory = await KvGet(key);
-        let iLocal = 0;
-        let iRemote = 0;
-        let localChatId = 0;
-        let remoteChatId = 0;
-        let localChatNum = 0;
-        let remoteChatNum = 0;
-        while (iLocal < localHistory.length || iRemote < data[key].length) {
-            if (iLocal >= localHistory.length) {
-                localHistory = localHistory.concat(data[key].slice(iRemote));
-                break;
-            }
-            if (iRemote >= data[key].length) {
-                break;
-            }
-
-            localChatId = localHistory[iLocal].chatID;
-            // latest version's chatid like: chat-1705899120122-NwN9sB
-            if (!localChatId || !localChatId.match(/chat-\d+-\w+/)) {
-                iLocal++;
+        // only update session config with different session name
+        if (key.startsWith(KvKeyPrefixSessionConfig)) {
+            const localConfig = await KvGet(key);
+            if (localConfig.session_name !== data[key].session_name) {
+                await KvSet(key, data[key]);
                 continue;
             }
+        }
 
-            localChatNum = parseInt(localChatId.split('-')[1]);
+        // incremental update local sessions chat history
+        if (key.startsWith(KvKeyPrefixSessionHistory)) {
+            let localHistory = await KvGet(key);
+            let iLocal = 0;
+            let iRemote = 0;
+            let localChatId = 0;
+            let remoteChatId = 0;
+            let localChatNum = 0;
+            let remoteChatNum = 0;
+            while (iLocal < localHistory.length || iRemote < data[key].length) {
+                if (iLocal >= localHistory.length) {
+                    localHistory = localHistory.concat(data[key].slice(iRemote));
+                    break;
+                }
+                if (iRemote >= data[key].length) {
+                    break;
+                }
 
-            while (iRemote < data[key].length) {
-                remoteChatId = data[key][iRemote].chatID;
-                if (!remoteChatId || !remoteChatId.match(/chat-\d+-\w+/)) {
-                    localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                localChatId = localHistory[iLocal].chatID;
+                // latest version's chatid like: chat-1705899120122-NwN9sB
+                if (!localChatId || !localChatId.match(/chat-\d+-\w+/)) {
                     iLocal++;
-                    iRemote++;
                     continue;
                 }
 
-                remoteChatNum = parseInt(remoteChatId.split('-')[1]);
-                break;
-            }
+                localChatNum = parseInt(localChatId.split('-')[1]);
 
-            if (iRemote >= data[key].length) {
-                break;
-            }
+                while (iRemote < data[key].length) {
+                    remoteChatId = data[key][iRemote].chatID;
+                    if (!remoteChatId || !remoteChatId.match(/chat-\d+-\w+/)) {
+                        localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
+                        iLocal++;
+                        iRemote++;
+                        continue;
+                    }
 
-            // skip same chat
-            if (localChatNum === remoteChatNum) {
-                while (iLocal < localHistory.length && localHistory[iLocal].chatID === localChatId) {
-                    iLocal++;
+                    remoteChatNum = parseInt(remoteChatId.split('-')[1]);
+                    break;
                 }
 
-                while (iRemote < data[key].length && data[key][iRemote].chatID === remoteChatId) {
+                if (iRemote >= data[key].length) {
+                    break;
+                }
+
+                // skip same chat
+                if (localChatNum === remoteChatNum) {
+                    while (iLocal < localHistory.length && localHistory[iLocal].chatID === localChatId) {
+                        iLocal++;
+                    }
+
+                    while (iRemote < data[key].length && data[key][iRemote].chatID === remoteChatId) {
+                        iRemote++;
+                    }
+
+                    continue;
+                }
+
+                // insert remote chat into local by chat num
+                if (localChatNum > remoteChatNum) {
+                    // insert before
+                    localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
                     iRemote++;
                 }
 
-                continue;
+                iLocal++;
             }
 
-            // insert remote chat into local by chat num
-            if (localChatNum > remoteChatNum) {
-                // insert before
-                localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
-                iRemote++;
-            }
-
-            iLocal++;
+            await KvSet(key, localHistory);
         }
-
-        await KvSet(key, localHistory);
     }
 }
 
