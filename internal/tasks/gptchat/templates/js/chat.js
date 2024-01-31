@@ -1379,7 +1379,8 @@ async function bindUserInputSelectFilesBtn () {
  */
 async function autoToggleUserImageUploadBtn () {
     const sconfig = await getChatSessionConfig();
-    const isVision = sconfig.selected_model.includes('vision');
+    const isVision = sconfig.selected_model.includes('vision') ||
+        sconfig.selected_model === ImageModelImg2Img;
 
     const btnEle = chatContainer.querySelector('.user-input .btn.upload');
     if ((isVision && btnEle) || (!isVision && !btnEle)) {
