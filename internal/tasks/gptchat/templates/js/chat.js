@@ -646,6 +646,10 @@ function isAllowChatPrompInput () {
 
 function parseChatResp (chatmodel, payload) {
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
+        if (payload.choices.length === 0) {
+            return '';
+        }
+
         return payload.choices[0].delta.content || ''
     } else if (IsCompletionModel(chatmodel)) {
         return payload.choices[0].text || ''
