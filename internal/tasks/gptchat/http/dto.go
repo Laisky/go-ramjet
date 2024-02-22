@@ -191,9 +191,9 @@ type OpenaiVisionMessageContentImageUrl struct {
 
 // OpenaiVisionMessageContent vision message content
 type OpenaiVisionMessageContent struct {
-	Type     OpenaiVisionMessageContentType     `json:"type"`
-	Text     string                             `json:"text,omitempty"`
-	ImageUrl OpenaiVisionMessageContentImageUrl `json:"image_url,omitempty"`
+	Type     OpenaiVisionMessageContentType      `json:"type"`
+	Text     string                              `json:"text,omitempty"`
+	ImageUrl *OpenaiVisionMessageContentImageUrl `json:"image_url,omitempty"`
 }
 
 // OpenaiCompletionReq request to openai chat api

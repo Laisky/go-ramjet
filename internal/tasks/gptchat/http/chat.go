@@ -401,7 +401,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
 					Type: OpenaiVisionMessageContentTypeImageUrl,
-					ImageUrl: OpenaiVisionMessageContentImageUrl{
+					ImageUrl: &OpenaiVisionMessageContentImageUrl{
 						URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
 						Detail: resolution,
 					},
