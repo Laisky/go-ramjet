@@ -149,6 +149,11 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			respContent += lastResp.Choices[0].Delta.Content
 		}
 
+		// new oai api will return empty choices first
+		if len(lastResp.Choices) == 0 {
+			continue
+		}
+
 		// check if resp is end
 		if !isStream ||
 			len(lastResp.Choices) == 0 ||
@@ -156,6 +161,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
 				go saveLLMConservation(frontReq, respContent)
 			}
+
 			return
 		}
 	}
@@ -736,8 +742,6 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
 	}
-
-	fmt.Println(string(payload))
 
 	userReq = new(FrontendReq)
 	if err = json.Unmarshal(payload, userReq); err != nil {

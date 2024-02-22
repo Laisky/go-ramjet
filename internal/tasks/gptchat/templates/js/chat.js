@@ -645,11 +645,16 @@ function isAllowChatPrompInput () {
 }
 
 function parseChatResp (chatmodel, payload) {
-    if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
-        if (payload.choices.length === 0) {
-            return '';
-        }
+    if (!payload.choices || payload.choices.length === 0) {
+        payload.choices = [{
+            delta: {
+                content: '',
+                text: ''
+            }
+        }];
+    }
 
+    if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
         return payload.choices[0].delta.content || ''
     } else if (IsCompletionModel(chatmodel)) {
         return payload.choices[0].text || ''
