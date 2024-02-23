@@ -1087,21 +1087,30 @@ async function sendChat2Server (chatID) {
             }
 
             const data = await resp.json();
-            if (data && data.text) {
-                responseExtras = `
+            if (!data || !data.text) {
+                abortAIResp('cannot gather sufficient context to answer the question');
+                return;
+            }
+
+            responseExtras = `
                     <p style="margin-bottom: 0;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
                         </button>
-                    </p>
+                    </p>`;
+
+            if (data.url) {
+                responseExtras += `
                     <div>
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
                     </div>`;
-                const messages = [{
-                    role: RoleHuman,
-                    content: `Use the following pieces of context to answer the users question.
+            }
+
+            const messages = [{
+                role: RoleHuman,
+                content: `Use the following pieces of context to answer the users question.
                     the context that help you answer the question is between ">>>>>>>" and "<<<<<<<",
                     the user' question that you should answer in after "<<<<<<<".
                     you should directly answer the user's question, and you can use the context to help you answer the question.
@@ -1112,20 +1121,19 @@ async function sendChat2Server (chatID) {
 
                     question: ${reqPrompt}
                     `
-                }];
-                const model = ChatModelTurbo35V1106; // rewrite chat model
+            }];
+            const model = ChatModelTurbo35V1106; // rewrite chat model
 
-                reqBody = JSON.stringify({
-                    model,
-                    stream: true,
-                    max_tokens: parseInt(sconfig.max_tokens),
-                    temperature: parseFloat(sconfig.temperature),
-                    presence_penalty: parseFloat(sconfig.presence_penalty),
-                    frequency_penalty: parseFloat(sconfig.frequency_penalty),
-                    messages,
-                    stop: ['\n\n']
-                });
-            }
+            reqBody = JSON.stringify({
+                model,
+                stream: true,
+                max_tokens: parseInt(sconfig.max_tokens),
+                temperature: parseFloat(sconfig.temperature),
+                presence_penalty: parseFloat(sconfig.presence_penalty),
+                frequency_penalty: parseFloat(sconfig.frequency_penalty),
+                messages,
+                stop: ['\n\n']
+            });
         } catch (err) {
             abortAIResp(err);
             return;
