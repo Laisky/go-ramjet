@@ -38,7 +38,8 @@ func AbortErr(ctx *gin.Context, err error) bool {
 func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
 	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
 	if userToken == "" {
-		return nil, errors.New("authorization token is empty")
+		log.Logger.Debug("user token not found in header, use freetier token instead")
+		userToken = config.FreetierUserToken
 	}
 
 	return getUserByToken(gctx, userToken)
@@ -97,7 +98,8 @@ func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfi
 
 SWITCH_FOR_USER:
 	switch {
-	case strings.HasPrefix(userToken, "FREETIER-"): // free user
+	case strings.HasPrefix(userToken, "FREETIER-"),
+		userToken == config.FreetierUserToken: // free user
 		if len(userToken) < 15 {
 			return nil, errors.Errorf("invalid freetier token %q", userToken)
 		}
