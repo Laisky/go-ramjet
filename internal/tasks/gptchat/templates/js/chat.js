@@ -1,21 +1,28 @@
-'use strict'
+'use strict';
 
-const RoleHuman = 'user'
-const RoleSystem = 'system'
-const RoleAI = 'assistant'
+// const
+const RoleHuman = 'user';
+const RoleSystem = 'system';
+const RoleAI = 'assistant';
 
-const chatContainer = document.getElementById('chatContainer')
-const configContainer = document.getElementById('hiddenChatConfigSideBar')
-const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt')
-const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send')
+const chatContainer = document.getElementById('chatContainer');
+const configContainer = document.getElementById('hiddenChatConfigSideBar');
+const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
 // could be controlled(interrupt) anywhere, so it's global
-let globalAIRespSSE, globalAIRespEle
+let globalAIRespSSE, globalAIRespEle;
 
-// map[filename]fileContent_in_base64
+// [
+//     {
+//         filename: xx,
+//         contentB64: xx,
+//         cache_key: xx
+//     }
+// ]
 //
 // should invoke updateChatVisionSelectedFileStore after update this object
-let chatVisionSelectedFileStore = {}
+let chatVisionSelectedFileStore = [];
 
 // eslint-disable-next-line no-unused-vars
 async function setupChatJs () {
@@ -57,18 +64,18 @@ function kvSessionKey (sessionID) {
  * @returns {Array} An array of chat messages.
  */
 async function sessionChatHistory (sessionID) {
-    let data = (await KvGet(kvSessionKey(sessionID)))
+    let data = (await KvGet(kvSessionKey(sessionID)));
     if (!data) {
-        return []
+        return [];
     }
 
     // fix legacy bug for marshal data twice
     if (typeof data === 'string') {
-        data = JSON.parse(data)
-        await KvSet(kvSessionKey(sessionID), data)
+        data = JSON.parse(data);
+        await KvSet(kvSessionKey(sessionID), data);
     }
 
-    return data
+    return data;
 }
 
 /**
@@ -76,12 +83,12 @@ async function sessionChatHistory (sessionID) {
  * @returns {Array} An array of chat messages, oldest first.
  */
 async function activeSessionChatHistory () {
-    const sid = await activeSessionID()
+    const sid = await activeSessionID();
     if (!sid) {
-        return new Array()
+        return [];
     }
 
-    return await sessionChatHistory(sid)
+    return await sessionChatHistory(sid);
 }
 
 async function activeSessionID () {
@@ -145,7 +152,7 @@ async function fetchImageDrawingResultBackground () {
             return;
         }
 
-        const taskId = item.dataset.taskId;
+        // const taskId = item.dataset.taskId;
         const imageUrls = JSON.parse(item.dataset.imageUrls) || [];
         const chatId = item.closest('.role-ai').dataset.chatid;
 
@@ -503,7 +510,7 @@ async function setupSessionManager () {
 // remove chat in storage by chatid
 async function removeChatInStorage (chatid) {
     if (!chatid) {
-        throw 'chatid is required';
+        throw new Error('chatid is required');
     }
 
     const storageActiveSessionKey = kvSessionKey(await activeSessionID());
@@ -523,7 +530,7 @@ async function removeChatInStorage (chatid) {
 */
 async function appendChats2Storage (role, chatid, renderedContent, attachHTML, rawContent) {
     if (!chatid) {
-        throw 'chatid is required';
+        throw new Error('chatid is required');
     }
 
     const storageActiveSessionKey = kvSessionKey(await activeSessionID());
@@ -800,13 +807,13 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
 
     // get first image in store
     let imageBase64 = '';
-    if (Object.keys(chatVisionSelectedFileStore).length != 0) {
-        imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
+    if (chatVisionSelectedFileStore.length !== 0) {
+        imageBase64 = chatVisionSelectedFileStore[0].contentB64;
 
         // insert image to user input & hisotry
         await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
 
-        chatVisionSelectedFileStore = {};
+        chatVisionSelectedFileStore = [];
         updateChatVisionSelectedFileStore();
     }
 
@@ -854,15 +861,15 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
     }
 
     // get first image in store
-    if (Object.keys(chatVisionSelectedFileStore).length == 0) {
+    if (chatVisionSelectedFileStore.length === 0) {
         throw new Error('no image selected');
     }
-    const imageBase64 = Object.values(chatVisionSelectedFileStore)[0];
+    const imageBase64 = chatVisionSelectedFileStore[0].contentB64;
 
     // insert image to user input & hisotry
     await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
 
-    chatVisionSelectedFileStore = {};
+    chatVisionSelectedFileStore = [];
     updateChatVisionSelectedFileStore();
 
     const sconfig = await getChatSessionConfig();
@@ -938,7 +945,6 @@ async function sendChat2Server (chatID) {
 
     globalAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
-    globalAIRespEle = globalAIRespEle;
     lockChatInput();
 
     let selectedModel = await OpenaiSelectedModel();
@@ -970,33 +976,33 @@ async function sendChat2Server (chatID) {
         }
 
         // if selected model is vision model, but no image selected, abort
-        if (selectedModel.includes('vision') && Object.keys(chatVisionSelectedFileStore).length == 0) {
+        if (selectedModel.includes('vision') && chatVisionSelectedFileStore.length === 0) {
             abortAIResp('you should select at least one image for vision model');
             return;
         }
 
         // there are pinned files, add them to user's prompt
-        if (Object.keys(chatVisionSelectedFileStore).length !== 0) {
+        if (chatVisionSelectedFileStore.length !== 0) {
             if (!selectedModel.includes('vision')) {
                 // if selected model is not vision model, just ignore it
-                chatVisionSelectedFileStore = {};
+                chatVisionSelectedFileStore = [];
                 updateChatVisionSelectedFileStore();
                 return;
             }
 
             messages[messages.length - 1].files = [];
-            for (const key in chatVisionSelectedFileStore) {
+            for (const item of chatVisionSelectedFileStore) {
                 messages[messages.length - 1].files.push({
                     type: 'image',
-                    name: key,
-                    content: chatVisionSelectedFileStore[key]
+                    name: item.filename,
+                    content: item.contentB64
                 });
 
                 // insert image to user input & hisotry
-                await appendImg2UserInput(chatID, chatVisionSelectedFileStore[key], key);
+                await appendImg2UserInput(chatID, item.contentB64, item.filename);
             }
 
-            chatVisionSelectedFileStore = {};
+            chatVisionSelectedFileStore = [];
             updateChatVisionSelectedFileStore();
         }
 
@@ -1032,11 +1038,12 @@ async function sendChat2Server (chatID) {
         // }
 
         let url, project;
+        const params = new URLSearchParams(location.search);
         switch (selectedModel) {
         case QAModelBasebit:
         case QAModelSecurity:
         case QAModelImmigrate:
-            window.data.qa_chat_models.forEach((item) => {
+            data.qa_chat_models.forEach((item) => {
                 if (item.name == selectedModel) {
                     url = item.url;
                     project = item.project;
@@ -1056,11 +1063,10 @@ async function sendChat2Server (chatID) {
         case QAModelShared:
             // example url:
             //
-            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbotName=default
 
-            const params = new URLSearchParams(location.search);
             url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
-                    `&chatbot_name=${params.get('chatbot_name')}` +
+                    `&chatbotName=${params.get('chatbotName')}` +
                     `&q=${encodeURIComponent(reqPrompt)}`;
             break;
         default:
@@ -1311,19 +1317,19 @@ function combineRefs (arr) {
 }
 
 // parse langchain qa references to markdown links
-function wrapRefLines (input) {
-    const lines = input.split('\n')
-    let result = ''
-    for (let i = 0; i < lines.length; i++) {
-        // skip empty lines
-        if (lines[i].trim() == '') {
-            continue
-        }
+// function wrapRefLines (input) {
+//     const lines = input.split('\n')
+//     let result = ''
+//     for (let i = 0; i < lines.length; i++) {
+//         // skip empty lines
+//         if (lines[i].trim() == '') {
+//             continue
+//         }
 
-        result += `* <${lines[i]}>\n`
-    }
-    return result
-}
+//         result += `* <${lines[i]}>\n`
+//     }
+//     return result
+// }
 
 function abortAIResp (err) {
     console.error(`abort AI resp: ${err}`);
@@ -1626,15 +1632,18 @@ async function filePasteHandler (evt) {
         evt.preventDefault();
 
         // get file content as Blob
-        readFileForVision(file);
+        readFileForVision(file, `paste-${DateStr()}.png`);
     }
 };
 
 /** read file content and append to vision store
  *
  * @param {*} file - file object
+ * @param {*} rewriteName - rewrite file name
  */
-function readFileForVision (file) {
+function readFileForVision (file, rewriteName) {
+    const filename = rewriteName || file.name;
+
     // get file content as Blob
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -1653,12 +1662,22 @@ function readFileForVision (file) {
         const base64String = btoa(chunks.join(''));
 
         // only support 5 image for current version
-        if (Object.keys(chatVisionSelectedFileStore).length > 5) {
+        if (chatVisionSelectedFileStore.length > 5) {
             showalert('warning', 'only support 5 images for current version');
             return;
         }
 
-        chatVisionSelectedFileStore[file.name] = base64String;
+        // check duplicate
+        for (const item of chatVisionSelectedFileStore) {
+            if (item.contentB64 === base64String) {
+                return;
+            }
+        }
+
+        chatVisionSelectedFileStore.push({
+            filename,
+            contentB64: base64String
+        });
         updateChatVisionSelectedFileStore();
     };
 
@@ -1666,23 +1685,23 @@ function readFileForVision (file) {
 }
 
 async function updateChatVisionSelectedFileStore () {
-    const pinnedFiles = chatContainer.querySelector('.pinned-files')
-    pinnedFiles.innerHTML = ''
-    for (const key in chatVisionSelectedFileStore) {
-        pinnedFiles.insertAdjacentHTML('beforeend', `<p data-key="${key}"><i class="bi bi-trash"></i> ${key}</p>`)
+    const pinnedFiles = chatContainer.querySelector('.pinned-files');
+    pinnedFiles.innerHTML = '';
+    for (const item of chatVisionSelectedFileStore) {
+        pinnedFiles.insertAdjacentHTML('beforeend', `<p data-key="${item.filename}"><i class="bi bi-trash"></i> ${item.filename}</p>`);
     }
 
     // click to remove pinned file
     chatContainer.querySelectorAll('.pinned-files .bi.bi-trash')
         .forEach((item) => {
             item.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                const ele = evtTarget(evt).closest('p')
-                const key = ele.dataset.key
-                delete chatVisionSelectedFileStore[key]
-                ele.parentNode.removeChild(ele)
-            })
-        })
+                evt.stopPropagation();
+                const ele = evtTarget(evt).closest('p');
+                const key = ele.dataset.key;
+                chatVisionSelectedFileStore = chatVisionSelectedFileStore.filter((item) => item.filename !== key);
+                ele.parentNode.removeChild(ele);
+            });
+        });
 }
 
 /**
@@ -1697,12 +1716,13 @@ async function updateChatVisionSelectedFileStore () {
  */
 async function append2Chats (chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
     if (!chatID) {
-        throw 'chatID is required';
+        throw new Error('chatID is required');
     }
 
     const robotIcon = '🤖️';
     let chatEleHtml;
     let chatOp = 'append';
+    let waitAI = '';
     switch (role) {
     case RoleSystem:
         text = escapeHtml(text);
@@ -1715,8 +1735,6 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         break;
     case RoleHuman:
         text = escapeHtml(text);
-
-        let waitAI = '';
         if (!isHistory) {
             waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
@@ -1826,7 +1844,10 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             attachEles.forEach((ele) => {
                 const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
                 const key = ele.dataset.name || `${DateStr()}.png`;
-                chatVisionSelectedFileStore[key] = b64fileContent;
+                chatVisionSelectedFileStore.push({
+                    filename: key,
+                    contentB64: b64fileContent
+                });
                 attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
             })
             updateChatVisionSelectedFileStore();
@@ -1901,7 +1922,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     }
 }
 
-window.getChatSessionConfig = async (sid) => {
+const getChatSessionConfig = async (sid) => {
     if (!sid) {
         sid = await activeSessionID();
     }
@@ -1916,9 +1937,8 @@ window.getChatSessionConfig = async (sid) => {
 
     return sconfig;
 };
-const getChatSessionConfig = window.getChatSessionConfig;
 
-window.saveChatSessionConfig = async (sconfig) => {
+const saveChatSessionConfig = async (sconfig) => {
     const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
 
@@ -2005,123 +2025,123 @@ async function setupConfig () {
     //  config_api_token_value
     {
         const apitokenInput = configContainer
-            .querySelector('.input.api-token')
+            .querySelector('.input.api-token');
         apitokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.api_token = evtTarget(evt).value
-            await KvSet(skey, sconfig)
-        })
+            sconfig.api_token = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+        });
     }
 
     // bind api_base
     {
         const apibaseInput = configContainer
-            .querySelector('.input.api-base')
+            .querySelector('.input.api-base');
         apibaseInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.api_base = evtTarget(evt).value
-            await KvSet(skey, sconfig)
-        })
+            sconfig.api_base = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
+        });
     }
 
     //  config_chat_n_contexts
     {
         const maxtokenInput = configContainer
-            .querySelector('.input.contexts')
+            .querySelector('.input.contexts');
         maxtokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.n_contexts = evtTarget(evt).value
-            await KvSet(skey, sconfig)
+            sconfig.n_contexts = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = evtTarget(evt).value
-        })
+            configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = evtTarget(evt).value;
+        });
     }
 
     //  config_api_max_tokens
     {
         const maxtokenInput = configContainer
-            .querySelector('.input.max-token')
+            .querySelector('.input.max-token');
         maxtokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.max_tokens = evtTarget(evt).value
-            await KvSet(skey, sconfig)
+            sconfig.max_tokens = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = evtTarget(evt).value
-        })
+            configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = evtTarget(evt).value;
+        });
     }
 
     //  config_api_temperature
     {
         const maxtokenInput = configContainer
-            .querySelector('.input.temperature')
+            .querySelector('.input.temperature');
         maxtokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
+            const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sconfig = await KvGet(skey);
 
-            sconfig.temperature = evtTarget(evt).value
-            await KvSet(skey, sconfig)
+            sconfig.temperature = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = evtTarget(evt).value
-        })
+            configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = evtTarget(evt).value;
+        });
     }
 
     //  config_api_presence_penalty
     {
         const maxtokenInput = configContainer
-            .querySelector('.input.presence_penalty')
+            .querySelector('.input.presence_penalty');
         maxtokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.presence_penalty = evtTarget(evt).value
-            await KvSet(skey, sconfig)
+            sconfig.presence_penalty = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = evtTarget(evt).value
-        })
+            configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = evtTarget(evt).value;
+        });
     }
 
     //  config_api_frequency_penalty
     {
         const maxtokenInput = configContainer
-            .querySelector('.input.frequency_penalty')
+            .querySelector('.input.frequency_penalty');
         maxtokenInput.addEventListener('input', async (evt) => {
-            evt.stopPropagation()
+            evt.stopPropagation();
 
-            const sid = await activeSessionID()
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey)
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await KvGet(skey);
 
-            sconfig.frequency_penalty = evtTarget(evt).value
-            await KvSet(skey, sconfig)
+            sconfig.frequency_penalty = evtTarget(evt).value;
+            await KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = evtTarget(evt).value
-        })
+            configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = evtTarget(evt).value;
+        });
     }
 
     //  config_api_static_context
@@ -2365,7 +2385,7 @@ async function downloadUserConfig (evt) {
 }
 
 async function loadPromptShortcutsFromStorage () {
-    let shortcuts = await KvGet(KvKeyPromptShortCuts)
+    let shortcuts = await KvGet(KvKeyPromptShortCuts);
     if (!shortcuts) {
         // default prompts
         shortcuts = [
@@ -2373,11 +2393,11 @@ async function loadPromptShortcutsFromStorage () {
                 title: '中英互译',
                 description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
             }
-        ]
-        await KvSet(KvKeyPromptShortCuts, shortcuts)
+        ];
+        await KvSet(KvKeyPromptShortCuts, shortcuts);
     }
 
-    return shortcuts
+    return shortcuts;
 }
 
 // append prompt shortcuts to html and kv
@@ -2483,131 +2503,131 @@ async function setupPromptManager () {
         saveSystemPromptModelEle
             .querySelector('.btn.save')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
                 const titleInput = saveSystemPromptModelEle
-                    .querySelector('.modal-body input.title')
+                    .querySelector('.modal-body input.title');
                 const descriptionInput = saveSystemPromptModelEle
-                    .querySelector('.modal-body textarea.user-input')
+                    .querySelector('.modal-body textarea.user-input');
 
                 // trim space
-                titleInput.value = titleInput.value.trim()
-                descriptionInput.value = descriptionInput.value.trim()
+                titleInput.value = titleInput.value.trim();
+                descriptionInput.value = descriptionInput.value.trim();
 
                 // if title is empty, set input border to red
                 if (titleInput.value === '') {
-                    titleInput.classList.add('border-danger')
-                    return
+                    titleInput.classList.add('border-danger');
+                    return;
                 }
 
                 const shortcut = {
                     title: titleInput.value,
                     description: descriptionInput.value
-                }
+                };
 
-                appendPromptShortcut(shortcut, true)
+                appendPromptShortcut(shortcut, true);
 
                 // clear input
-                titleInput.value = ''
-                descriptionInput.value = ''
-                titleInput.classList.remove('border-danger')
-                saveSystemPromptModal.hide()
+                titleInput.value = '';
+                descriptionInput.value = '';
+                titleInput.classList.remove('border-danger');
+                saveSystemPromptModal.hide();
             })
     }
 
     // fill chat prompts market
-    const promptMarketModal = document.querySelector('#prompt-market')
-    const promptInput = promptMarketModal.querySelector('textarea.prompt-content')
-    const promptTitle = promptMarketModal.querySelector('input.prompt-title')
+    const promptMarketModal = document.querySelector('#prompt-market');
+    const promptInput = promptMarketModal.querySelector('textarea.prompt-content');
+    const promptTitle = promptMarketModal.querySelector('input.prompt-title');
     {
         chatPrompts.forEach((prompt) => {
-            const ele = document.createElement('span')
-            ele.classList.add('badge', 'text-bg-info')
-            ele.dataset.description = prompt.description
-            ele.dataset.title = prompt.title
-            ele.innerHTML = ` ${prompt.title}  <i class="bi bi-plus-circle"></i>`
+            const ele = document.createElement('span');
+            ele.classList.add('badge', 'text-bg-info');
+            ele.dataset.description = prompt.description;
+            ele.dataset.title = prompt.title;
+            ele.innerHTML = ` ${prompt.title}  <i class="bi bi-plus-circle"></i>`;
 
             // add click event
             // replace system prompt
             ele.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
-                promptInput.value = evtTarget(evt).dataset.description
-                promptTitle.value = evtTarget(evt).dataset.title
-            })
+                promptInput.value = evtTarget(evt).dataset.description;
+                promptTitle.value = evtTarget(evt).dataset.title;
+            });
 
-            promptMarketModal.querySelector('.prompt-labels').appendChild(ele)
-        })
+            promptMarketModal.querySelector('.prompt-labels').appendChild(ele);
+        });
     }
 
     // bind chat prompts market add button
     {
         promptMarketModal.querySelector('.modal-body .save')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
                 // trim and check empty
-                promptTitle.value = promptTitle.value.trim()
-                promptInput.value = promptInput.value.trim()
+                promptTitle.value = promptTitle.value.trim();
+                promptInput.value = promptInput.value.trim();
                 if (promptTitle.value === '') {
-                    promptTitle.classList.add('border-danger')
-                    return
+                    promptTitle.classList.add('border-danger');
+                    return;
                 }
                 if (promptInput.value === '') {
-                    promptInput.classList.add('border-danger')
-                    return
+                    promptInput.classList.add('border-danger');
+                    return;
                 }
 
                 const shortcut = {
                     title: promptTitle.value,
                     description: promptInput.value
-                }
+                };
 
-                appendPromptShortcut(shortcut, true)
+                appendPromptShortcut(shortcut, true);
 
-                promptTitle.value = ''
-                promptInput.value = ''
-                promptTitle.classList.remove('border-danger')
-                promptInput.classList.remove('border-danger')
-            })
+                promptTitle.value = '';
+                promptInput.value = '';
+                promptTitle.classList.remove('border-danger');
+                promptInput.classList.remove('border-danger');
+            });
     }
 }
 
 // setup private dataset modal
 async function setupPrivateDataset () {
-    const pdfchatModalEle = document.querySelector('#modal-pdfchat')
+    const pdfchatModalEle = document.querySelector('#modal-pdfchat');
 
     // bind header's custom qa button
     {
         // bind pdf-file modal
-        const pdfFileModalEle = document.querySelector('#modal-pdfchat')
-        const pdfFileModal = new bootstrap.Modal(pdfFileModalEle)
+        const pdfFileModalEle = document.querySelector('#modal-pdfchat');
+        const pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
 
         document
             .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                pdfFileModal.show()
-            })
+                evt.stopPropagation();
+                pdfFileModal.show();
+            });
     }
 
     // bind datakey to kv
     {
         const datakeyEle = pdfchatModalEle
-            .querySelector('div[data-field="data-key"] input')
+            .querySelector('div[data-field="data-key"] input');
 
-        datakeyEle.value = await KvGet(KvKeyCustomDatasetPassword)
+        datakeyEle.value = await KvGet(KvKeyCustomDatasetPassword);
 
         // set default datakey
         if (!datakeyEle.value) {
-            datakeyEle.value = RandomString(16)
-            await KvSet(KvKeyCustomDatasetPassword, datakeyEle.value)
+            datakeyEle.value = RandomString(16);
+            await KvSet(KvKeyCustomDatasetPassword, datakeyEle.value);
         }
 
         datakeyEle
             .addEventListener('change', async (evt) => {
-                evt.stopPropagation()
-                await KvSet(KvKeyCustomDatasetPassword, evtTarget(evt).value)
-            })
+                evt.stopPropagation();
+                await KvSet(KvKeyCustomDatasetPassword, evtTarget(evt).value);
+            });
     }
 
     // bind file upload
@@ -2618,128 +2638,128 @@ async function setupPrivateDataset () {
         pdfchatModalEle
             .querySelector('div[data-field="pdffile"] input')
             .addEventListener('change', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
                 if (evtTarget(evt).files.length === 0) {
-                    return
+                    return;
                 }
 
-                let filename = evtTarget(evt).files[0].name
-                const fileext = filename.substring(filename.lastIndexOf('.')).toLowerCase()
+                let filename = evtTarget(evt).files[0].name;
+                const fileext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
 
                 if (['.pdf', '.md', '.ppt', '.pptx', '.doc', '.docx'].indexOf(fileext) === -1) {
                     // remove choosen
                     pdfchatModalEle
-                        .querySelector('div[data-field="pdffile"] input').value = ''
+                        .querySelector('div[data-field="pdffile"] input').value = '';
 
-                    showalert('warning', 'currently only support pdf file')
-                    return
+                    showalert('warning', 'currently only support pdf file');
+                    return;
                 }
 
                 // remove extension and non-ascii charactors
-                filename = filename.substring(0, filename.lastIndexOf('.'))
-                filename = filename.replace(/[^a-zA-Z0-9]/g, '_')
+                filename = filename.substring(0, filename.lastIndexOf('.'));
+                filename = filename.replace(/[^a-zA-Z0-9]/g, '_');
 
                 pdfchatModalEle
                     .querySelector('div[data-field="dataset-name"] input')
-                    .value = filename
-            })
+                    .value = filename;
+            });
 
         // bind upload button
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] button[data-fn="upload"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
                 if (pdfchatModalEle
                     .querySelector('div[data-field="pdffile"] input').files.length === 0) {
-                    showalert('warning', 'please choose a pdf file before upload')
-                    return
+                    showalert('warning', 'please choose a pdf file before upload');
+                    return;
                 }
 
-                const sconfig = await getChatSessionConfig()
+                const sconfig = await getChatSessionConfig();
 
                 // build post form
-                const form = new FormData()
+                const form = new FormData();
                 form.append('file', pdfchatModalEle
-                    .querySelector('div[data-field="pdffile"] input').files[0])
+                    .querySelector('div[data-field="pdffile"] input').files[0]);
                 form.append('file_key', pdfchatModalEle
-                    .querySelector('div[data-field="dataset-name"] input').value)
+                    .querySelector('div[data-field="dataset-name"] input').value);
                 form.append('data_key', pdfchatModalEle
-                    .querySelector('div[data-field="data-key"] input').value)
+                    .querySelector('div[data-field="data-key"] input').value);
                 // and auth token to header
-                const headers = new Headers()
-                headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('X-Laisky-Api-Base', sconfig.api_base)
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                 try {
-                    ShowSpinner()
+                    ShowSpinner();
                     const resp = await fetch('/ramjet/gptchat/files', {
                         method: 'POST',
                         headers,
                         body: form
-                    })
+                    });
 
                     if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`)
+                        throw new Error(`${resp.status} ${await resp.text()}`);
                     }
 
-                    showalert('success', 'upload dataset success, please wait few minutes to process')
+                    showalert('success', 'upload dataset success, please wait few minutes to process');
                 } catch (err) {
-                    showalert('danger', `upload dataset failed, ${err.message}`)
-                    throw err
+                    showalert('danger', `upload dataset failed, ${err.message}`);
+                    throw err;
                 } finally {
-                    HideSpinner()
+                    HideSpinner();
                 }
-            })
+            });
     }
 
     // bind delete datasets buttion
     const bindDatasetDeleteBtn = () => {
         const datasets = pdfchatModalEle
-            .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash')
+            .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash');
 
         if (datasets == null || datasets.length === 0) {
-            return
+            return;
         }
 
         datasets.forEach((ele) => {
             ele.addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
-                const sconfig = await getChatSessionConfig()
-                const headers = new Headers()
-                headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('Cache-Control', 'no-cache')
+                const sconfig = await getChatSessionConfig();
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('Cache-Control', 'no-cache');
                 // headers.append("X-PDFCHAT-PASSWORD", await KvGet(KvKeyCustomDatasetPassword));
 
                 try {
-                    ShowSpinner()
+                    ShowSpinner();
                     const resp = await fetch('/ramjet/gptchat/files', {
                         method: 'DELETE',
                         headers,
                         body: JSON.stringify({
                             datasets: [evtTarget(evt).closest('.dataset-item').getAttribute('data-filename')]
                         })
-                    })
+                    });
 
                     if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`)
+                        throw new Error(`${resp.status} ${await resp.text()}`);
                     }
-                    await resp.json()
+                    await resp.json();
                 } catch (err) {
-                    showalert('danger', `delete dataset failed, ${err.message}`)
-                    throw err
+                    showalert('danger', `delete dataset failed, ${err.message}`);
+                    throw err;
                 } finally {
-                    HideSpinner()
+                    HideSpinner();
                 }
 
                 // remove dataset item
-                evtTarget(evt).closest('.dataset-item').remove()
-            })
-        })
+                evtTarget(evt).closest('.dataset-item').remove();
+            });
+        });
     }
 
     // bind list datasets
@@ -2747,39 +2767,39 @@ async function setupPrivateDataset () {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] button[data-fn="refresh"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
 
-                const sconfig = await getChatSessionConfig()
-                const headers = new Headers()
-                headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('Cache-Control', 'no-cache')
-                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword))
+                const sconfig = await getChatSessionConfig();
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('Cache-Control', 'no-cache');
+                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword));
 
-                let body
+                let body;
                 try {
-                    ShowSpinner()
+                    ShowSpinner();
                     const resp = await fetch('/ramjet/gptchat/files', {
                         method: 'GET',
                         cache: 'no-cache',
                         headers
-                    })
+                    });
 
                     if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`)
+                        throw new Error(`${resp.status} ${await resp.text()}`);
                     }
 
-                    body = await resp.json()
+                    body = await resp.json();
                 } catch (err) {
-                    showalert('danger', `fetch dataset failed, ${err.message}`)
-                    throw err
+                    showalert('danger', `fetch dataset failed, ${err.message}`);
+                    throw err;
                 } finally {
-                    HideSpinner()
+                    HideSpinner();
                 }
 
                 const datasetListEle = pdfchatModalEle
-                    .querySelector('div[data-field="dataset"]')
-                let datasetsHTML = ''
+                    .querySelector('div[data-field="dataset"]');
+                let datasetsHTML = '';
 
                 // add processing files
                 // show processing files in grey and progress bar
@@ -2801,8 +2821,8 @@ async function setupPrivateDataset () {
                                             <i class="bi bi-trash"></i>
                                         </div>
                                     </div>
-                                </div>`
-                        break
+                                </div>`;
+                        break;
                     case 'processing':
                         datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
@@ -2822,22 +2842,22 @@ async function setupPrivateDataset () {
                                             <i class="bi bi-trash"></i>
                                         </div>
                                     </div>
-                                </div>`
-                        break
+                                </div>`;
+                        break;
                     }
-                })
+                });
 
-                datasetListEle.innerHTML = datasetsHTML
+                datasetListEle.innerHTML = datasetsHTML;
 
                 // selected binded datasets
                 body.selected.forEach((dataset) => {
                     datasetListEle
                         .querySelector(`div[data-filename="${dataset}"] input[type="checkbox"]`)
-                        .checked = true
+                        .checked = true;
                 })
 
-                bindDatasetDeleteBtn()
-            })
+                bindDatasetDeleteBtn();
+            });
     }
 
     // bind list chatbots
@@ -2845,45 +2865,45 @@ async function setupPrivateDataset () {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide()
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
 
-                const sconfig = await getChatSessionConfig()
-                const headers = new Headers()
-                headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('Cache-Control', 'no-cache')
-                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword))
+                const sconfig = await getChatSessionConfig();
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('Cache-Control', 'no-cache');
+                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword));
 
-                let body
+                let body;
                 try {
-                    ShowSpinner()
+                    ShowSpinner();
                     const resp = await fetch('/ramjet/gptchat/ctx/list', {
                         method: 'GET',
                         cache: 'no-cache',
                         headers
-                    })
+                    });
 
                     if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`)
+                        throw new Error(`${resp.status} ${await resp.text()}`);
                     }
 
-                    body = await resp.json()
+                    body = await resp.json();
                 } catch (err) {
-                    showalert('danger', `fetch chatbot list failed, ${err.message}`)
-                    throw err
+                    showalert('danger', `fetch chatbot list failed, ${err.message}`);
+                    throw err;
                 } finally {
-                    HideSpinner()
+                    HideSpinner();
                 }
 
                 const datasetListEle = pdfchatModalEle
-                    .querySelector('div[data-field="dataset"]')
-                let chatbotsHTML = ''
+                    .querySelector('div[data-field="dataset"]');
+                let chatbotsHTML = '';
 
                 body.chatbots.forEach((chatbot) => {
-                    let selectedHTML = ''
+                    let selectedHTML = '';
                     if (chatbot == body.current) {
-                        selectedHTML = 'checked'
+                        selectedHTML = 'checked';
                     }
 
                     chatbotsHTML += `
@@ -2902,64 +2922,64 @@ async function setupPrivateDataset () {
                                 </div>
                             </div>
                         </div>`
-                })
+                });
 
-                datasetListEle.innerHTML = chatbotsHTML
+                datasetListEle.innerHTML = chatbotsHTML;
 
                 // bind active new selected chatbot
                 datasetListEle
                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                     .forEach((ele) => {
                         ele.addEventListener('change', async (evt) => {
-                            evt.stopPropagation()
+                            evt.stopPropagation();
 
                             if (!evtTarget(evt).checked) {
                                 // at least one chatbot should be selected
-                                evtTarget(evt).checked = true
-                                return
+                                evtTarget(evt).checked = true;
+                                return;
                             } else {
                                 // uncheck other chatbot
                                 datasetListEle
                                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                                     .forEach((ele) => {
                                         if (ele != evtTarget(evt)) {
-                                            ele.checked = false
+                                            ele.checked = false;
                                         }
-                                    })
+                                    });
                             }
 
-                            const headers = new Headers()
-                            headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                            headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                            headers.append('X-Laisky-Api-Base', sconfig.api_base)
+                            const headers = new Headers();
+                            headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                            headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                            headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                             try {
-                                ShowSpinner()
-                                const chatbotName = evtTarget(evt).closest('.chatbot-item').getAttribute('data-name')
+                                ShowSpinner();
+                                const chatbotName = evtTarget(evt).closest('.chatbot-item').getAttribute('data-name');
                                 const resp = await fetch('/ramjet/gptchat/ctx/active', {
                                     method: 'POST',
                                     headers,
                                     body: JSON.stringify({
                                         data_key: await KvGet(KvKeyCustomDatasetPassword),
-                                        chatbot_name: chatbotName
+                                        chatbotName
                                     })
-                                })
+                                });
 
                                 if (!resp.ok || resp.status !== 200) {
-                                    throw new Error(`${resp.status} ${await resp.text()}`)
+                                    throw new Error(`${resp.status} ${await resp.text()}`);
                                 }
 
-                                const body = await resp.json()
-                                showalert('success', `active chatbot success, you can chat with ${chatbotName} now`)
+                                // const body = await resp.json();
+                                showalert('success', `active chatbot success, you can chat with ${chatbotName} now`);
                             } catch (err) {
-                                showalert('danger', `active chatbot failed, ${err.message}`)
-                                throw err
+                                showalert('danger', `active chatbot failed, ${err.message}`);
+                                throw err;
                             } finally {
-                                HideSpinner()
+                                HideSpinner();
                             }
-                        })
-                    })
-            })
+                        });
+                    });
+            });
     }
 
     // bind share chatbots
@@ -2967,54 +2987,54 @@ async function setupPrivateDataset () {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide()
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
 
                 const checkedChatbotEle = pdfchatModalEle
-                    .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked')
+                    .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
                 if (!checkedChatbotEle) {
-                    showalert('danger', 'please click [Chatbot List] first')
-                    return
+                    showalert('danger', 'please click [Chatbot List] first');
+                    return;
                 }
 
-                const chatbot_name = checkedChatbotEle.closest('.chatbot-item').getAttribute('data-name')
+                const chatbotName = checkedChatbotEle.closest('.chatbot-item').getAttribute('data-name');
 
-                const sconfig = await getChatSessionConfig()
-                const headers = new Headers()
-                headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                headers.append('Cache-Control', 'no-cache')
-                headers.append('X-Laisky-Api-Base', sconfig.api_base)
+                const sconfig = await getChatSessionConfig();
+                const headers = new Headers();
+                headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('Cache-Control', 'no-cache');
+                headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                 let respBody
                 try {
-                    ShowSpinner()
+                    ShowSpinner();
                     const resp = await fetch('/ramjet/gptchat/ctx/share', {
                         method: 'POST',
                         headers,
                         body: JSON.stringify({
-                            chatbot_name,
+                            chatbotName,
                             data_key: await KvGet(KvKeyCustomDatasetPassword)
                         })
-                    })
+                    });
 
                     if (!resp.ok || resp.status !== 200) {
-                        throw new Error(`${resp.status} ${await resp.text()}`)
+                        throw new Error(`${resp.status} ${await resp.text()}`);
                     }
 
-                    respBody = await resp.json()
+                    respBody = await resp.json();
                 } catch (err) {
-                    showalert('danger', `fetch chatbot list failed, ${err.message}`)
-                    throw err
+                    showalert('danger', `fetch chatbot list failed, ${err.message}`);
+                    throw err;
                 } finally {
-                    HideSpinner()
+                    HideSpinner();
                 }
 
                 // open new tab page
-                const sharedChatbotUrl = `${location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`
-                showalert('info', `open ${sharedChatbotUrl}`)
-                open(sharedChatbotUrl, '_blank')
-            })
+                const sharedChatbotUrl = `${location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbotName=${respBody.chatbotName}`;
+                showalert('info', `open ${sharedChatbotUrl}`);
+                open(sharedChatbotUrl, '_blank');
+            });
     }
 
     // build custom chatbot
@@ -3022,38 +3042,38 @@ async function setupPrivateDataset () {
         pdfchatModalEle
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide()
+                evt.stopPropagation();
+                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
 
-                const selectedDatasets = []
+                const selectedDatasets = [];
                 pdfchatModalEle
                     .querySelectorAll('div[data-field="dataset"] .dataset-item input[type="checkbox"]')
                     .forEach((ele) => {
                         if (ele.checked) {
                             selectedDatasets.push(
-                                ele.closest('.dataset-item').getAttribute('data-filename'))
+                                ele.closest('.dataset-item').getAttribute('data-filename'));
                         }
-                    })
+                    });
 
                 if (selectedDatasets.length === 0) {
-                    showalert('warning', 'please select at least one dataset, click [List Dataset] button to fetch dataset list')
-                    return
+                    showalert('warning', 'please select at least one dataset, click [List Dataset] button to fetch dataset list');
+                    return;
                 }
 
                 // ask chatbot's name
                 SingleInputModal('build bot', 'chatbot name', async (botname) => {
                     // botname should be 1-32 ascii characters
-                    if (!botname.match(/^[a-zA-Z0-9_\-]{1,32}$/)) {
-                        showalert('warning', 'chatbot name should be 1-32 ascii characters')
-                        return
+                    if (!botname.match(/^[a-zA-Z0-9_-]{1,32}$/)) {
+                        showalert('warning', 'chatbot name should be 1-32 ascii characters');
+                        return;
                     }
 
-                    const sconfig = await getChatSessionConfig()
-                    const headers = new Headers()
-                    headers.append('Content-Type', 'application/json')
-                    headers.append('Authorization', `Bearer ${sconfig.api_token}`)
-                    headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token))
-                    headers.append('X-Laisky-Api-Base', sconfig.api_base)
+                    const sconfig = await getChatSessionConfig();
+                    const headers = new Headers();
+                    headers.append('Content-Type', 'application/json');
+                    headers.append('Authorization', `Bearer ${sconfig.api_token}`);
+                    headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                    headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                     try { // build chatbot
                         ShowSpinner()
@@ -3061,25 +3081,25 @@ async function setupPrivateDataset () {
                             method: 'POST',
                             headers,
                             body: JSON.stringify({
-                                chatbot_name: botname,
+                                chatbotName: botname,
                                 datasets: selectedDatasets,
                                 data_key: pdfchatModalEle
                                     .querySelector('div[data-field="data-key"] input').value
                             })
-                        })
+                        });
 
                         if (!resp.ok || resp.status !== 200) {
-                            throw new Error(`${resp.status} ${await resp.text()}`)
+                            throw new Error(`${resp.status} ${await resp.text()}`);
                         }
 
-                        showalert('success', 'build dataset success, you can chat now')
+                        showalert('success', 'build dataset success, you can chat now');
                     } catch (err) {
-                        showalert('danger', `build dataset failed, ${err.message}`)
-                        throw err
+                        showalert('danger', `build dataset failed, ${err.message}`);
+                        throw err;
                     } finally {
-                        HideSpinner()
+                        HideSpinner();
                     }
-                })
-            })
+                });
+            });
     }
 }
