@@ -976,7 +976,7 @@ async function sendChat2Server (chatID) {
         }
 
         // there are pinned files, add them to user's prompt
-        if (Object.keys(chatVisionSelectedFileStore).length != 0) {
+        if (Object.keys(chatVisionSelectedFileStore).length !== 0) {
             if (!selectedModel.includes('vision')) {
                 // if selected model is not vision model, just ignore it
                 chatVisionSelectedFileStore = {};
