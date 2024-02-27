@@ -678,8 +678,8 @@ const httpsRegexp = /\bhttps:\/\/\S+/
  * @param {string} reqPrompt - request prompt
  * @returns {string} modified request prompt
  */
-async function userPromptEnhence (reqPrompt) {
-    const pinnedUrls = getPinnedMaterials();
+async function userPromptEnhance (reqPrompt) {
+    const pinnedUrls = getPinnedMaterials() || [];
     const sconfig = await getChatSessionConfig();
     const urls = reqPrompt.match(httpsRegexp);
 
@@ -688,15 +688,17 @@ async function userPromptEnhence (reqPrompt) {
         return reqPrompt;
     }
 
-    if (!urls || urls.length == 0) {
-        return reqPrompt;
+    if (urls) {
+        urls.forEach((url) => {
+            if (!pinnedUrls.includes(url)) {
+                pinnedUrls.push(url);
+            }
+        });
     }
 
-    urls.forEach((url) => {
-        if (!pinnedUrls.includes(url)) {
-            pinnedUrls.push(url);
-        }
-    });
+    if (pinnedUrls.length === 0) {
+        return reqPrompt;
+    }
 
     let urlEle = '';
     for (const url of pinnedUrls) {
@@ -710,7 +712,7 @@ async function userPromptEnhence (reqPrompt) {
 
     // re generate reqPrompt
     reqPrompt = reqPrompt.replace(httpsRegexp, '');
-    reqPrompt += '\n' + pinnedUrls.join('\n');
+    reqPrompt += '\nrefs:\n- ' + pinnedUrls.join('\n- ');
     return reqPrompt;
 }
 
@@ -941,7 +943,7 @@ async function sendChat2Server (chatID) {
     }
 
     // extract and pin new material in chat
-    reqPrompt = await userPromptEnhence(reqPrompt);
+    reqPrompt = await userPromptEnhance(reqPrompt);
 
     globalAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
