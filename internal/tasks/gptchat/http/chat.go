@@ -489,7 +489,7 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
-	req.Header.Set("User-Agent", "go-ramjet-bot")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537")
 	resp, err := httpcli.Do(req) // nolint:bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", url)
@@ -678,7 +678,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 		zap.String("ext", args.ext))
 
 	reqData := map[string]any{
-		"content":    args.content,
+		"content":    base64.StdEncoding.EncodeToString(args.content),
 		"query":      args.query,
 		"ext":        args.ext,
 		"model":      args.model,

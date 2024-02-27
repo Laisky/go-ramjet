@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -116,7 +117,7 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
-	req.Header.Set("User-Agent", "go-ramjet-bot")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537")
 	req.Header.Del("Accept-Encoding")
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
@@ -129,8 +130,15 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
 	}
 
-	if content, err = _extractHtmlBody(resp.Body); err != nil {
-		return nil, errors.Wrapf(err, "extract html body %q", url)
+	switch filepath.Ext(url) {
+	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".json":
+		if content, err = io.ReadAll(resp.Body); err != nil {
+			return nil, errors.Wrapf(err, "read %q", url)
+		}
+	default:
+		if content, err = _extractHtmlBody(resp.Body); err != nil {
+			return nil, errors.Wrapf(err, "extract html body %q", url)
+		}
 	}
 
 	return content, nil
