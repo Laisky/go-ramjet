@@ -1130,7 +1130,7 @@ async function sendChat2Server (chatID) {
                     question: ${reqPrompt}
                     `
             }];
-            const model = ChatModelTurbo35V1106; // rewrite chat model
+            const model = ChatModelTurbo35V0125; // rewrite chat model
 
             reqBody = JSON.stringify({
                 model,
@@ -1957,7 +1957,7 @@ function newSessionConfig () {
         frequency_penalty: 0,
         n_contexts: 6,
         system_prompt: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
-        selected_model: ChatModelTurbo35V1106,
+        selected_model: ChatModelTurbo35V0125,
         chat_switch: {
             disable_https_crawler: true,
             enable_google_search: false

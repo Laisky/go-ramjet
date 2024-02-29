@@ -1,7 +1,7 @@
 'use strict';
 
 const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
-// const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
+const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
 // const ChatModelTurbo35 = "gpt-3.5-turbo";
 // const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
 // const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
@@ -30,7 +30,7 @@ const ImageModelImg2Img = 'img-to-img';
 const ChatModels = [
     // ChatModelTurbo35,
     ChatModelTurbo35V1106,
-    // ChatModelTurbo35V0125,
+    ChatModelTurbo35V0125,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
     ChatModelGPT4Turbo0125,
@@ -62,7 +62,7 @@ const CompletionModels = [
 const FreeModels = [
     // ChatModelTurbo35,
     ChatModelTurbo35V1106,
-    // ChatModelTurbo35V0125,
+    ChatModelTurbo35V0125,
     ChatModelGeminiPro,
     ChatModelGeminiProVision,
     QAModelBasebit,
@@ -180,7 +180,7 @@ const OpenaiSelectedModel = async () => {
     const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
-    return sconfig.selected_model || ChatModelTurbo35V1106
+    return sconfig.selected_model || ChatModelTurbo35V0125
 }
 
 const OpenaiMaxTokens = async () => {

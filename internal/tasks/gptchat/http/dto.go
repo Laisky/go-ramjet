@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	defaultChatModel = "gpt-3.5-turbo-1106"
+	defaultChatModel = "gpt-3.5-turbo-0125"
 )
 
 // ChatModel return chat model

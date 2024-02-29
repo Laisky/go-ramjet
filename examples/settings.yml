@@ -26,7 +26,7 @@ openai:
   - token: "<DEFAULT_PROXY_TOKEN>"
     # (required) allowed models for this token
     allowed_models:
-    - "gpt-3.5-turbo-1106"
+    - "gpt-3.5-turbo-0125"
     - "text-davinci-003"
 
   # (optional) rewrite third-parth frontend static libraries
