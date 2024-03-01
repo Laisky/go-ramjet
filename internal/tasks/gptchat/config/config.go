@@ -341,8 +341,8 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 	}
 
 	if !c.NoLimitExpensiveModels && c.IsFree {
-		if nPromptTokens > 1000 {
-			return errors.Errorf("the length of prompt tokens should not exceed 1000 for free users")
+		if nPromptTokens > 2000 {
+			return errors.Errorf("the length of prompt tokens should not exceed 2000 for free users")
 		}
 	}
 
