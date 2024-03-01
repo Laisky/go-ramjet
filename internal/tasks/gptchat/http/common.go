@@ -111,13 +111,12 @@ SWITCH_FOR_USER:
 
 		for _, commFreeUser := range config.Config.UserTokens {
 			if commFreeUser.Token == config.FreetierUserToken {
-				user = &config.UserConfig{
-					IsFree: true,
-				}
+				user = &config.UserConfig{}
 				if err = copier.Copy(user, commFreeUser); err != nil {
 					return nil, errors.Wrap(err, "copy free user")
 				}
 
+				user.IsFree = true
 				user.UserName = username
 				break SWITCH_FOR_USER
 			}

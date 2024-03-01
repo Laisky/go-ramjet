@@ -2,8 +2,10 @@ package http
 
 import (
 	gconfig "github.com/Laisky/go-config/v2"
-
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
+	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/zap"
+	"github.com/pkoukk/tiktoken-go"
 )
 
 // OpenaiMessageRole message role
@@ -79,6 +81,30 @@ type frontendReqMessageFiles struct {
 	Type    string `json:"type" binding:"required,oneof=image"`
 	Name    string `json:"name"`
 	Content []byte `json:"content"`
+}
+
+// Tiktoken return tiktoken, could be nil if not found
+func Tiktoken() *tiktoken.Tiktoken {
+	tik, err := tiktoken.EncodingForModel("gpt-3.5-turbo")
+	if err != nil {
+		log.Logger.Warn("get tiktoken failed", zap.Error(err))
+	}
+
+	return tik
+}
+
+// PromptTokens count prompt tokens
+func (r *FrontendReq) PromptTokens() (n int) {
+	tik := Tiktoken()
+	for _, msg := range r.Messages {
+		if tik != nil {
+			n += len(tik.Encode(msg.Content, nil, nil))
+		} else {
+			n += len(msg.Content)
+		}
+	}
+
+	return n
 }
 
 // OpenaiChatReq request to openai chat api
@@ -360,6 +386,16 @@ type DrawImageByTextRequest struct {
 	Prompt string `json:"prompt" binding:"required,min=1"`
 	Model  string `json:"model" binding:"required,min=1"`
 }
+
+// PromptTokens count prompt tokens
+// func (r *DrawImageByTextRequest) PromptTokens() int {
+// 	tik := Tiktoken()
+// 	if tik != nil {
+// 		return len(tik.Encode(r.Prompt, nil, nil))
+// 	}
+
+// 	return len(r.Prompt)
+// }
 
 // DrawImageByImageRequest draw image by image and prompt
 type DrawImageByImageRequest struct {

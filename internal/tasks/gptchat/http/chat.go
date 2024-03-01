@@ -340,7 +340,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
 
-		if err := user.IsModelAllowed(frontendReq.Model); err != nil {
+		if err := user.IsModelAllowed(frontendReq.Model, frontendReq.PromptTokens()); err != nil {
 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
 		}
 

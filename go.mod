@@ -27,6 +27,7 @@ require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/minio/minio-go/v7 v7.0.66
 	github.com/pkg/errors v0.9.1
+	github.com/pkoukk/tiktoken-go v0.1.6
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/stripe/stripe-go/v76 v76.14.0
@@ -74,6 +75,7 @@ require (
 	github.com/chromedp/sysutil v1.0.0 // indirect
 	github.com/containerd/containerd v1.7.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect

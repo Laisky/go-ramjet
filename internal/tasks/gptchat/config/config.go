@@ -269,7 +269,11 @@ func setupRateLimiter() {
 }
 
 // IsModelAllowed check if model is allowed
-func (c *UserConfig) IsModelAllowed(model string) error {
+//
+// # Args
+//   - model: model name
+//   - nPromptTokens: the length of prompt tokens, 0 means no limit
+func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 	onceLimiter.Do(setupRateLimiter)
 
 	if c.BYOK { // bypass if user bring their own token
@@ -334,6 +338,12 @@ func (c *UserConfig) IsModelAllowed(model string) error {
 		}
 
 		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+	}
+
+	if !c.NoLimitExpensiveModels && c.IsFree {
+		if nPromptTokens > 1000 {
+			return errors.Errorf("the length of prompt tokens should not exceed 1000 for free users")
+		}
 	}
 
 	// if price less than 0, means no limit
