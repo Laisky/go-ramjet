@@ -52,14 +52,14 @@ func SetupConfig() (err error) {
 		&Config.DefaultImageToken, Config.Token)
 	// Config.DefaultImageTokenType = gutils.OptionalVal(
 	// 	&Config.DefaultImageTokenType, ImageTokenOpenai)
-	Config.DefaultImageUrl = gutils.OptionalVal(
-		&Config.DefaultImageUrl, "https://api.openai.com/v1/images/generations")
-	Config.API = gutils.OptionalVal(
-		&Config.API, "https://api.openai.com")
-	Config.ExternalBillingAPI = gutils.OptionalVal(
-		&Config.ExternalBillingAPI, "https://oneapi.laisky.com")
-	Config.RamjetURL = gutils.OptionalVal(
-		&Config.RamjetURL, "https://app.laisky.com")
+	Config.API = trimUrl(gutils.OptionalVal(
+		&Config.API, "https://api.openai.com"))
+	Config.DefaultImageUrl = trimUrl(gutils.OptionalVal(
+		&Config.DefaultImageUrl, Config.API+"/v1/images/generations"))
+	Config.ExternalBillingAPI = trimUrl(gutils.OptionalVal(
+		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
+	Config.RamjetURL = trimUrl(gutils.OptionalVal(
+		&Config.RamjetURL, "https://app.laisky.com"))
 	Config.DefaultOpenaiToken = gutils.OptionalVal(
 		&Config.DefaultOpenaiToken, Config.Token)
 
@@ -69,6 +69,10 @@ func SetupConfig() (err error) {
 	Config.RamjetURL = strings.TrimRight(Config.RamjetURL, "/")
 
 	return nil
+}
+
+func trimUrl(url string) string {
+	return strings.TrimRight(strings.TrimSpace(url), "/")
 }
 
 // OpenAI openai config
@@ -93,7 +97,7 @@ type OpenAI struct {
 
 	// DefaultImageUrl (optional) default image url
 	//
-	// default to https://api.openai.com/v1/images/generations
+	// default to https://{{API}}/v1/images/generations
 	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
 	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 60
 	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`

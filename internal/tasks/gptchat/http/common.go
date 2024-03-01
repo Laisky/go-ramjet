@@ -141,17 +141,24 @@ SWITCH_FOR_USER:
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
 			APIBase:                "https://oneapi.laisky.com",
+			ImageUrl:               "https://oneapi.laisky.com/v1/images/generations",
 		}
 
-		if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
-			log.Logger.Error("get oneapi uid", zap.Error(err))
+		if strings.Contains(user.ImageUrl, "https://oneapi.laisky.com") {
+			// billing by oneapi, no need to enable external billing
 			user.EnableExternalImageBilling = false
-			user.NoLimitImageModels = false
-		} else {
-			log.Logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
-			user.EnableExternalImageBilling = true
-			user.ExternalImageBillingUID = oneapiUid
 			user.NoLimitImageModels = true
+		} else {
+			if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
+				log.Logger.Error("get oneapi uid", zap.Error(err))
+				user.EnableExternalImageBilling = false
+				user.NoLimitImageModels = false
+			} else {
+				log.Logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
+				user.EnableExternalImageBilling = true
+				user.ExternalImageBillingUID = oneapiUid
+				user.NoLimitImageModels = true
+			}
 		}
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
