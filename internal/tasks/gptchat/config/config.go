@@ -184,6 +184,8 @@ type UserConfig struct {
 	NoLimitImageModels bool `json:"no_limit_image_models" mapstructure:"no_limit_image_models"`
 	// NoLimitOpenaiModels (optional) skip rate limiter for models that only supported by openai
 	NoLimitOpenaiModels bool `json:"no_limit_openai_models" mapstructure:"no_limit_openai_models"`
+	// LimitPromptTokenLength (optional) set limit for prompt token length, <=0 means no limit
+	LimitPromptTokenLength int `json:"limit_prompt_token_length" mapstructure:"limit_prompt_token_length"`
 	// EnableExternalImageBilling (optional) enable external image billing
 	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
 	// ExternalImageBillingUID (optional) external image billing uid
@@ -340,9 +342,10 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
 	}
 
-	if !c.NoLimitExpensiveModels && c.IsFree {
-		if nPromptTokens > 2000 {
-			return errors.Errorf("the length of prompt tokens should not exceed 2000 for free users")
+	if !c.NoLimitExpensiveModels && c.LimitPromptTokenLength > 0 {
+		if nPromptTokens > c.LimitPromptTokenLength {
+			return errors.Errorf("the length of prompt tokens should not exceed %d for free users",
+				c.LimitPromptTokenLength)
 		}
 	}
 
