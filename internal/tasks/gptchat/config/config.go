@@ -318,7 +318,8 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 		ratelimiter   = expensiveModelRateLimiter
 	)
 	switch model {
-	case "gpt-3.5-turbo-1106",
+	case "gpt-3.5-turbo",
+		"gpt-3.5-turbo-1106",
 		"gpt-3.5-turbo-0125",
 		"img-to-img",
 		"sdxl-turbo",
@@ -357,9 +358,10 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 	log.Logger.Debug("check rate limit",
 		zap.String("model", model), zap.Int("price", ratelimitCost))
 	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
-		return errors.Errorf("This model(%q) restricts usage for free users. "+
-			"Please wait for %d seconds before trying again, "+
-			"or consider using the free gpt-3.5-turbo-0125.",
+		return errors.Errorf("This model(%s) restricts usage for free users. "+
+			"Please hold on for %d seconds before trying again, "+
+			"alternatively, you may opt to switch to the free gpt-3.5-turbo, "+
+			"or upgrade to a paid membership by https://wiki.laisky.com/projects/gpt/pay/cn/",
 			model, (ratelimitCost - ratelimiter.Len()))
 	}
 

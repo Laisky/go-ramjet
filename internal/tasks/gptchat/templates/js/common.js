@@ -1,13 +1,14 @@
 'use strict';
 
+const ChatModelTurbo35 = 'gpt-3.5-turbo';
 const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
 const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
-// const ChatModelTurbo35 = "gpt-3.5-turbo";
 // const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
 // const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
-const ChatModelGPT4Turbo = 'gpt-4-1106-preview';
+const ChatModelGPT4Turbo = 'gpt-4-turbo-preview';
+const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
 const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
 const ChatModelGPT4Vision = 'gpt-4-vision-preview';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
@@ -28,11 +29,12 @@ const ImageModelImg2Img = 'img-to-img';
 // casual chat models
 
 const ChatModels = [
-    // ChatModelTurbo35,
+    ChatModelTurbo35,
     ChatModelTurbo35V1106,
     ChatModelTurbo35V0125,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
+    ChatModelGPT4Turbo1106,
     ChatModelGPT4Turbo0125,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
@@ -60,7 +62,7 @@ const CompletionModels = [
     CompletionModelDavinci3
 ];
 const FreeModels = [
-    // ChatModelTurbo35,
+    ChatModelTurbo35,
     ChatModelTurbo35V1106,
     ChatModelTurbo35V0125,
     ChatModelGeminiPro,
@@ -180,7 +182,7 @@ const OpenaiSelectedModel = async () => {
     const sid = await activeSessionID()
     const skey = `${KvKeyPrefixSessionConfig}${sid}`
     const sconfig = await KvGet(skey)
-    return sconfig.selected_model || ChatModelTurbo35V0125
+    return sconfig.selected_model || ChatModelTurbo35
 }
 
 const OpenaiMaxTokens = async () => {
