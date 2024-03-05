@@ -47,7 +47,7 @@ const ChatModels = [
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
     ChatModelLlama2With70B4K,
-ChatModelMixtral8x7B32K,
+    ChatModelMixtral8x7B32K,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision
@@ -74,8 +74,9 @@ const CompletionModels = [
     CompletionModelDavinci3
 ];
 const FreeModels = [
+    ChatModelLlama2With70B4K,
+    ChatModelMixtral8x7B32K,
     ChatModelTurbo35,
-    ChatModelTurbo35V1106,
     ChatModelTurbo35V0125,
     ChatModelGeminiPro,
     ChatModelGeminiProVision,
