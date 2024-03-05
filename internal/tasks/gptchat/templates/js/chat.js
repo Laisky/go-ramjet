@@ -1801,8 +1801,10 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         if (role === RoleAI) {
             // ai response is always after human, so we need to find the last human chat,
             // and append ai response after it
-            chatContainer.querySelector(`#${chatID}`)
-                .insertAdjacentHTML('beforeend', chatEleHtml);
+            if (chatContainer.querySelector(`#${chatID}`)) {
+                chatContainer.querySelector(`#${chatID}`)
+                    .insertAdjacentHTML('beforeend', chatEleHtml);
+            }
         } else {
             chatContainer.querySelector('.chatManager .conservations .chats')
                 .insertAdjacentHTML('beforeend', chatEleHtml);
