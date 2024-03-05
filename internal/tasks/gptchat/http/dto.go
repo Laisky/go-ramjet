@@ -59,14 +59,14 @@ type FrontendReq struct {
 	N                int                  `json:"n"`
 
 	// LaiskyExtra some special config for laisky
-	LaiskyExtra struct {
+	LaiskyExtra *struct {
 		ChatSwitch struct {
 			// DisableHttpsCrawler disable https crawler
 			DisableHttpsCrawler bool `json:"disable_https_crawler"`
 			// EnableGoogleSearch enable google search
 			EnableGoogleSearch bool `json:"enable_google_search"`
 		} `json:"chat_switch"`
-	} `json:"laisky_extra"`
+	} `json:"laisky_extra,omitempty"`
 }
 
 // FrontendReqMessage request message from frontend

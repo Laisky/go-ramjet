@@ -359,6 +359,10 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-1106",
 			"gpt-3.5-turbo-0125",
+			"claude-instant-1",
+			"claude-2",
+			"claude-3-opus",
+			"claude-3-sonnet",
 			"gemini-pro":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
@@ -790,5 +794,6 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		userReq.embeddingGoogleSearch(gctx)
 	}
 
+	userReq.LaiskyExtra = nil // remove extra data before send to upstream server
 	return userReq, err
 }
