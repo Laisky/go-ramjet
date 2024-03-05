@@ -11,8 +11,8 @@ const ChatModelGPT4Turbo = 'gpt-4-turbo-preview';
 const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
 const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
 const ChatModelGPT4Vision = 'gpt-4-vision-preview';
-const ChatModelClaude1 = 'claude-instant-1';
-const ChatModelClaude2 = 'claude-2';
+// const ChatModelClaude1 = 'claude-instant-1';
+// const ChatModelClaude2 = 'claude-2';
 const ChatModelClaude3Opus = 'claude-3-opus';
 const ChatModelClaude3Sonnet = 'claude-3-sonnet';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
@@ -20,6 +20,8 @@ const ChatModelClaude3Sonnet = 'claude-3-sonnet';
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
 const ChatModelGeminiPro = 'gemini-pro';
 const ChatModelGeminiProVision = 'gemini-pro-vision';
+const ChatModelLlama2With70B4K = 'llama2-70b-4096';
+const ChatModelMixtral8x7B32K = 'mixtral-8x7b-32768';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
 const QAModelImmigrate = 'qa-immigrate';
@@ -40,10 +42,12 @@ const ChatModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4Turbo1106,
     ChatModelGPT4Turbo0125,
-    ChatModelClaude1,
-    ChatModelClaude2,
+    // ChatModelClaude1,
+    // ChatModelClaude2,
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
+    ChatModelLlama2With70B4K,
+ChatModelMixtral8x7B32K,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision

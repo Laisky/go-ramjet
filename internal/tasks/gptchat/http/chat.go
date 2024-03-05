@@ -363,6 +363,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-2",
 			"claude-3-opus",
 			"claude-3-sonnet",
+			"llama2-70b-4096",
+			"mixtral-8x7b-32768",
 			"gemini-pro":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 
