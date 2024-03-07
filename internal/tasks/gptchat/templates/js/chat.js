@@ -112,6 +112,13 @@ async function listenSessionSwitch (evt) {
         evt = evt.closest('.list-group-item');
     }
 
+    if (globalAIRespSSE) { // auto stop previous sse when switch session
+        console.warn('auto stop previous sse because of session switch');
+        globalAIRespSSE.close();
+        globalAIRespSSE = null;
+        unlockChatInput();
+    }
+
     const activeSid = evt.dataset.session;
     document
         .querySelectorAll(`
@@ -1256,6 +1263,7 @@ async function sendChat2Server (chatID) {
 
             globalAIRespSSE.close();
             globalAIRespSSE = null;
+            unlockChatInput();
 
             globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
             globalAIRespEle.innerHTML += responseExtras;
@@ -1278,7 +1286,6 @@ async function sendChat2Server (chatID) {
 
             scrollToChat(globalAIRespEle);
             await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp);
-            unlockChatInput();
         }
     })
 
@@ -1349,6 +1356,7 @@ function abortAIResp (err) {
     if (globalAIRespSSE) {
         globalAIRespSSE.close();
         globalAIRespSSE = null;
+        unlockChatInput();
     }
 
     let errMsg;
@@ -1385,7 +1393,6 @@ function abortAIResp (err) {
     // ScrollDown(chatContainer.querySelector(".chatManager .conservations .chats"));
     globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
     appendChats2Storage(RoleAI, globalAIRespEle.closest('.role-ai').dataset.chatid, globalAIRespEle.innerHTML);
-    unlockChatInput();
 }
 
 async function bindUserInputSelectFilesBtn () {
