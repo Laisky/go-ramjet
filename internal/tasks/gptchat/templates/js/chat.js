@@ -1986,6 +1986,8 @@ async function updateConfigFromSessionConfig () {
 
     const sconfig = await getChatSessionConfig();
 
+    sconfig.selected_model = await OpenaiSelectedModel();
+
     // update config
     configContainer.querySelector('.input.api-token').value = sconfig.api_token;
     configContainer.querySelector('.input.api-base').value = sconfig.api_base;

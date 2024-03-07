@@ -185,53 +185,59 @@ const OpenaiToken = async () => {
 }
 
 const OpenaiApiBase = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.api_base || 'https://api.openai.com'
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.api_base || 'https://api.openai.com';
+};
 
 const OpenaiSelectedModel = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.selected_model || ChatModelTurbo35
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    let selectedModel = sconfig.selected_model || ChatModelTurbo35;
+
+    if (!AllModels.includes(selectedModel)) {
+        selectedModel = ChatModelTurbo35;
+    }
+
+    return selectedModel;
+};
 
 const OpenaiMaxTokens = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.max_tokens || 500
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.max_tokens || 500;
+};
 
 const OpenaiTemperature = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.temperature
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.temperature;
+};
 
 const OpenaiPresencePenalty = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.presence_penalty || 0
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.presence_penalty || 0;
+};
 
 const OpenaiFrequencyPenalty = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.frequency_penalty || 0
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.frequency_penalty || 0;
+};
 
 const ChatNContexts = async () => {
-    const sid = await activeSessionID()
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`
-    const sconfig = await KvGet(skey)
-    return sconfig.n_contexts || 6
-}
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await KvGet(skey);
+    return sconfig.n_contexts || 6;
+};
 
 /** get or set chat static context
  *
