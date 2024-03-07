@@ -602,7 +602,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const systemPrompt = await OpenaiChatStaticContext()
     const selectedModel = await OpenaiSelectedModel()
 
-    if (selectedModel == ChatModelGeminiPro) {
+    if (selectedModel === ChatModelGeminiPro) {
         // one-api's gemoni-pro do not support context
         return [{
             role: RoleSystem,
@@ -610,35 +610,46 @@ async function getLastNChatMessages (N, ignoredChatID) {
         }]
     }
 
-    let messages = (await activeSessionChatHistory()).filter((ele) => {
-        if (ele.role != RoleHuman) {
-            // Ignore AI's chat, only use human's chat as context.
-            return false
-        };
-
-        if (ignoredChatID && ignoredChatID == ele.chatID) {
-            // This is a reload request with edited chat,
-            // ignore chat with same chatid to avoid duplicate context.
-            return false
+    let latestMessages = [];
+    const historyMessages = await activeSessionChatHistory();
+    let nHuman = 0;
+    let latestRole;
+    for (let i = historyMessages.length - 1; i >= 0; i--) {
+        if (latestRole && latestRole === historyMessages[i].role) {
+            // if latest role is same as current role, break
+            console.warn(`latest role is same as current role, break, latestRole=${latestRole}`);
+            break;
         }
 
-        return true
-    })
+        if (historyMessages[i].role !== RoleHuman && historyMessages[i].role !== RoleAI) {
+            // exclude system message
+            continue;
+        }
 
-    if (N == 0) {
-        messages = []
-    } else {
-        messages = messages.slice(-N)
+        if (ignoredChatID && ignoredChatID === historyMessages[i].chatID) {
+            // This is a reload request with edited chat,
+            // ignore chat with same chatid to avoid duplicate context.
+            continue;
+        }
+
+        if (historyMessages[i].role === RoleHuman) {
+            nHuman++;
+        }
+
+        latestMessages.unshift(historyMessages[i]);
+        if (nHuman >= N) {
+            break;
+        }
     }
 
     if (systemPrompt) {
-        messages = [{
+        latestMessages = [{
             role: RoleSystem,
             content: systemPrompt
-        }].concat(messages)
+        }].concat(latestMessages);
     }
 
-    return messages
+    return latestMessages;
 }
 
 function lockChatInput () {
