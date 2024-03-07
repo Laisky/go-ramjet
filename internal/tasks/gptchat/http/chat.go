@@ -121,9 +121,11 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	var respContent string
 	var lastResp *OpenaiCompletionStreamResp
+	var nScan int
 	for reader.Scan() {
 		line := reader.Bytes()
-		logger.Debug("got response line", zap.ByteString("line", line)) // debug only
+		nScan++
+		// logger.Debug("got response line", zap.ByteString("line", line)) // debug only
 
 		var chunk []byte
 		if matched := dataReg.FindAllSubmatch(line, -1); len(matched) != 0 {
@@ -133,6 +135,9 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
 		if AbortErr(ctx, err) {
 			return
+		}
+		if nScan%5 == 0 {
+			ctx.Writer.Flush()
 		}
 
 		lastResp = new(OpenaiCompletionStreamResp)

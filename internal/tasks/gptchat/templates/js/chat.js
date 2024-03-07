@@ -11,7 +11,7 @@ const chatPromptInputEle = chatContainer.querySelector('.user-input .input.promp
 const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
 // could be controlled(interrupt) anywhere, so it's global
-let globalAIRespSSE, globalAIRespEle;
+let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
 
 // [
 //     {
@@ -31,11 +31,30 @@ async function setupChatJs () {
     await setupChatInput();
     await setupPromptManager();
     await setupPrivateDataset();
+    setupGlobalAiRespHeartbeatTimer();
     setInterval(fetchImageDrawingResultBackground, 3000);
 }
 
 function newChatID () {
     return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
+}
+
+/**
+ * check if AI response is IDLE periodly
+ */
+function setupGlobalAiRespHeartbeatTimer () {
+    globalAIRespHeartBeatTimer = Date.now();
+
+    setInterval(() => {
+        if (!globalAIRespSSE) {
+            return;
+        }
+
+        if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 15) {
+            console.warn('no heartbeat for 15s, abort AI resp');
+            abortAIResp('no heartbeat for 15s, abort AI resp automatically');
+        }
+    }, 3000);
 }
 
 // show alert
@@ -1199,6 +1218,7 @@ async function sendChat2Server (chatID) {
         return;
     }
 
+    globalAIRespHeartBeatTimer = Date.now();
     globalAIRespSSE = new SSE('/api', {
         headers: {
             'Content-Type': 'application/json',
@@ -1214,6 +1234,7 @@ async function sendChat2Server (chatID) {
     let aiRawResp = '';
     globalAIRespSSE.addEventListener('message', async (evt) => {
         evt.stopPropagation();
+        globalAIRespHeartBeatTimer = Date.now();
 
         let isChatRespDone = false;
         if (evt.data == '[DONE]') {
@@ -1283,7 +1304,6 @@ async function sendChat2Server (chatID) {
             const markdownContent = globalAIRespEle.innerHTML;
 
             renderAfterAIResponse(chatID);
-
             scrollToChat(globalAIRespEle);
             await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp);
         }
@@ -1301,39 +1321,39 @@ async function sendChat2Server (chatID) {
  */
 function renderAfterAIResponse (chatID) {
     // Prism.highlightAll();
-    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`)
+    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
 
     if (!chatEle) {
-        return
+        return;
     }
 
-    Prism.highlightAllUnder(chatEle)
-    EnableTooltipsEverywhere()
+    Prism.highlightAllUnder(chatEle);
+    EnableTooltipsEverywhere();
 
     if (chatEle.querySelector('.bi.bi-copy')) { // not every ai response has copy button
         chatEle.querySelector('.bi.bi-copy')
             .addEventListener('click', async (evt) => {
-                evt.stopPropagation()
-                const content = decodeURIComponent(evtTarget(evt).dataset.content)
+                evt.stopPropagation();
+                const content = decodeURIComponent(evtTarget(evt).dataset.content);
                 // copy to clipboard
-                navigator.clipboard.writeText(content)
-            })
+                navigator.clipboard.writeText(content);
+            });
     }
 }
 
 function combineRefs (arr) {
-    let markdown = ''
+    let markdown = '';
     for (const val of arr) {
         if (val.startsWith('https') || val.startsWith('http')) {
             // markdown += `- <${val}>\n`;
-            markdown += `<li><a href="${val}">${decodeURIComponent(val)}</li>`
+            markdown += `<li><a href="${val}">${decodeURIComponent(val)}</li>`;
         } else { // sometimes refs are just plain text, not url
             // markdown += `- \`${val}\`\n`;
-            markdown += `<li><p>${val}</p></li>`
+            markdown += `<li><p>${val}</p></li>`;
         }
     }
 
-    return `<ul style="margin-bottom: 0;">${markdown}</ul>`
+    return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
 }
 
 // parse langchain qa references to markdown links
@@ -1352,6 +1372,10 @@ function combineRefs (arr) {
 // }
 
 function abortAIResp (err) {
+    if (typeof err === 'string') {
+        err = new Error(err);
+    }
+
     console.error(`abort AI resp: ${err}`);
     if (globalAIRespSSE) {
         globalAIRespSSE.close();
@@ -1359,6 +1383,12 @@ function abortAIResp (err) {
         unlockChatInput();
     }
 
+    if (!globalAIRespEle) {
+        console.warn('globalAIRespEle is not set for abortAIResp');
+        return;
+    }
+
+    const chatID = globalAIRespEle.closest('.role-ai').dataset.chatid;
     let errMsg;
     if (err.data) {
         errMsg = err.data;
@@ -1390,9 +1420,9 @@ function abortAIResp (err) {
         globalAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
     }
 
-    // ScrollDown(chatContainer.querySelector(".chatManager .conservations .chats"));
-    globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
-    appendChats2Storage(RoleAI, globalAIRespEle.closest('.role-ai').dataset.chatid, globalAIRespEle.innerHTML);
+    renderAfterAIResponse(chatID);
+    scrollToChat(globalAIRespEle);
+    appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
 }
 
 async function bindUserInputSelectFilesBtn () {
