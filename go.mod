@@ -14,11 +14,11 @@ require (
 	github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa
 	github.com/Laisky/zap v1.25.3-0.20231205071752-1cdfcee9191f
 	github.com/aws/aws-sdk-go-v2 v1.25.2
-	github.com/aws/aws-sdk-go-v2/config v1.27.4
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.4
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.1
+	github.com/aws/aws-sdk-go-v2/config v1.27.6
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.6
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.3
 	github.com/baidubce/bce-sdk-go v0.9.167
-	github.com/chromedp/cdproto v0.0.0-20240226204813-532e667d868f
+	github.com/chromedp/cdproto v0.0.0-20240304214822-eeb3d13057c9
 	github.com/chromedp/chromedp v0.9.5
 	github.com/deckarep/golang-set/v2 v2.6.0
 	github.com/fsouza/go-dockerclient v1.10.2
@@ -33,9 +33,9 @@ require (
 	github.com/stripe/stripe-go/v76 v76.19.0
 	github.com/yanyiwu/gojieba v1.3.0
 	go.mongodb.org/mongo-driver v1.14.0
-	golang.org/x/net v0.21.0
+	golang.org/x/net v0.22.0
 	golang.org/x/sync v0.6.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	gorm.io/driver/clickhouse v0.6.0
 	gorm.io/gorm v1.25.7
 )
@@ -60,12 +60,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.28.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.3 // indirect
 	github.com/aws/smithy-go v1.20.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
@@ -162,11 +162,11 @@ require (
 	go.uber.org/automaxprocs v1.5.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/crypto v0.19.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
-	golang.org/x/term v0.17.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.9.3 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
