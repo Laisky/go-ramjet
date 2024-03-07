@@ -635,11 +635,11 @@ async function getLastNChatMessages (N, ignoredChatID) {
         if (historyMessages[i].role === RoleHuman) {
             nHuman++;
         }
-
-        latestMessages.unshift(historyMessages[i]);
         if (nHuman >= N) {
             break;
         }
+
+        latestMessages.unshift(historyMessages[i]);
     }
 
     if (systemPrompt) {
