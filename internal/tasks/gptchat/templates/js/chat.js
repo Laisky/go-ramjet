@@ -1,5 +1,625 @@
 'use strict';
 
+const libs = await import(window.modules.libjs);
+
+const ChatModelTurbo35 = 'gpt-3.5-turbo';
+// const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
+// const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
+// const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
+// const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
+// const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
+// const ChatModelGPT4 = "gpt-4";
+const ChatModelGPT4Turbo = 'gpt-4-turbo-preview';
+// const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
+// const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
+const ChatModelGPT4Vision = 'gpt-4-vision-preview';
+// const ChatModelClaude1 = 'claude-instant-1';
+// const ChatModelClaude2 = 'claude-2';
+const ChatModelClaude3Opus = 'claude-3-opus';
+const ChatModelClaude3Sonnet = 'claude-3-sonnet';
+// const ChatModelGPT4_0613 = "gpt-4-0613";
+// const ChatModelGPT4_32K = "gpt-4-32k";
+// const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
+const ChatModelGeminiPro = 'gemini-pro';
+const ChatModelGeminiProVision = 'gemini-pro-vision';
+const ChatModelLlama2With70B4K = 'llama2-70b-4096';
+const ChatModelMixtral8x7B32K = 'mixtral-8x7b-32768';
+const QAModelBasebit = 'qa-bbt-xego';
+const QAModelSecurity = 'qa-security';
+const QAModelImmigrate = 'qa-immigrate';
+const QAModelCustom = 'qa-custom';
+const QAModelShared = 'qa-shared';
+const CompletionModelDavinci3 = 'text-davinci-003';
+const ImageModelDalle2 = 'dall-e-3';
+const ImageModelSdxlTurbo = 'sdxl-turbo';
+const ImageModelImg2Img = 'img-to-img';
+
+// casual chat models
+
+const ChatModels = [
+    ChatModelTurbo35,
+    // ChatModelTurbo35V1106,
+    // ChatModelTurbo35V0125,
+    // ChatModelGPT4,
+    ChatModelGPT4Turbo,
+    // ChatModelGPT4Turbo1106,
+    // ChatModelGPT4Turbo0125,
+    // ChatModelClaude1,
+    // ChatModelClaude2,
+    ChatModelClaude3Opus,
+    ChatModelClaude3Sonnet,
+    ChatModelLlama2With70B4K,
+    ChatModelMixtral8x7B32K,
+    ChatModelGPT4Vision,
+    ChatModelGeminiPro,
+    ChatModelGeminiProVision
+    // ChatModelTurbo35_16K,
+    // ChatModelTurbo35_0613,
+    // ChatModelTurbo35_0613_16K,
+    // ChatModelGPT4_0613,
+    // ChatModelGPT4_32K,
+    // ChatModelGPT4_0613_32K,
+];
+const QaModels = [
+    QAModelBasebit,
+    QAModelSecurity,
+    QAModelImmigrate,
+    QAModelCustom,
+    QAModelShared
+];
+const ImageModels = [
+    ImageModelDalle2,
+    ImageModelSdxlTurbo,
+    ImageModelImg2Img
+];
+const CompletionModels = [
+    CompletionModelDavinci3
+];
+const FreeModels = [
+    ChatModelLlama2With70B4K,
+    ChatModelMixtral8x7B32K,
+    ChatModelTurbo35,
+    // ChatModelTurbo35V0125,
+    ChatModelGeminiPro,
+    ChatModelGeminiProVision,
+    QAModelBasebit,
+    QAModelSecurity,
+    QAModelImmigrate,
+    ImageModelSdxlTurbo,
+    ImageModelImg2Img
+];
+const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
+
+// custom dataset's end-to-end password
+const KvKeyPinnedMaterials = 'config_api_pinned_materials';
+const KvKeyAllowedModels = 'config_chat_models';
+const KvKeyCustomDatasetPassword = 'config_chat_dataset_key';
+const KvKeyPromptShortCuts = 'config_prompt_shortcuts';
+const KvKeyPrefixSessionHistory = 'chat_user_session_';
+const KvKeyPrefixSessionConfig = 'chat_user_config_';
+const KvKeyPrefixSelectedSession = 'config_selected_session';
+const KvKeySyncKey = 'config_sync_key';
+const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
+
+const IsChatModel = (model) => {
+    return ChatModels.includes(model);
+};
+
+const IsQaModel = (model) => {
+    return QaModels.includes(model)
+}
+
+const IsCompletionModel = (model) => {
+    return CompletionModels.includes(model)
+}
+
+const IsImageModel = (model) => {
+    return ImageModels.includes(model)
+}
+
+// const IsChatModelAllowed = async (model) => {
+//     const allowedModels = await libs.KvGet(KvKeyAllowedModels)
+//     if (!allowedModels) {
+//         return false
+//     }
+
+//     return allowedModels.includes(model)
+// }
+
+const ShowSpinner = () => {
+    document.getElementById('spinner').toggleAttribute('hidden', false)
+}
+const HideSpinner = () => {
+    document.getElementById('spinner').toggleAttribute('hidden', true)
+}
+
+/**
+ * Generates a random string of the specified length.
+ * @param {number} length - The length of the string to generate.
+ * @returns {string} - The generated random string.
+ */
+const RandomString = (length) => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let result = ''
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length))
+    }
+
+    return result
+}
+
+// const OpenaiToken = async () => {
+//     const sid = await activeSessionID()
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`
+//     const sconfig = await libs.KvGet(skey)
+//     let apikey
+
+//     // get token from url params first
+//     {
+//         apikey = new URLSearchParams(location.search).get('apikey')
+
+//         if (apikey) {
+//             // fix: sometimes url.searchParams.delete() works too quickly,
+//             // that let another caller rewrite apikey to FREE-TIER,
+//             // so we delay 1s to delete apikey from url params.
+//             setTimeout(() => {
+//                 const v = new URLSearchParams(location.search).get('apikey')
+//                 if (!v) {
+//                     return
+//                 }
+
+//                 // remove apikey from url params
+//                 const url = new URL(location.href)
+//                 url.searchParams.delete('apikey')
+//                 window.history.pushState({}, document.title, url)
+//             }, 500)
+//         }
+//     }
+
+//     // get token from storage
+//     if (!apikey) {
+//         apikey = sconfig.api_token || 'FREETIER-' + RandomString(32)
+//     }
+
+//     sconfig.api_token = apikey
+//     await libs.KvSet(skey, sconfig)
+//     return apikey
+// }
+
+// const OpenaiApiBase = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.api_base || 'https://api.openai.com';
+// };
+
+const OpenaiSelectedModel = async () => {
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await libs.KvGet(skey);
+    let selectedModel = sconfig.selected_model || ChatModelTurbo35;
+
+    if (!AllModels.includes(selectedModel)) {
+        selectedModel = ChatModelTurbo35;
+    }
+
+    return selectedModel;
+};
+
+// const OpenaiMaxTokens = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.max_tokens || 500;
+// };
+
+// const OpenaiTemperature = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.temperature;
+// };
+
+// const OpenaiPresencePenalty = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.presence_penalty || 0;
+// };
+
+// const OpenaiFrequencyPenalty = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.frequency_penalty || 0;
+// };
+
+// const ChatNContexts = async () => {
+//     const sid = await activeSessionID();
+//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+//     const sconfig = await libs.KvGet(skey);
+//     return sconfig.n_contexts || 6;
+// };
+
+/** get or set chat static context
+ *
+ * @param {string} prompt
+ * @returns {string} prompt
+ */
+const OpenaiChatStaticContext = async (prompt) => {
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    const sconfig = await libs.KvGet(skey);
+
+    if (prompt) {
+        sconfig.system_prompt = prompt;
+        await libs.KvSet(skey, sconfig);
+    }
+
+    return sconfig.system_prompt || '';
+}
+
+const SingleInputModal = (title, message, callback, defaultVal) => {
+    const modal = document.getElementById('singleInputModal');
+    singleInputCallback = async () => {
+        try {
+            ShowSpinner();
+            await callback(modal.querySelector('.modal-body input').value);
+        } finally {
+            HideSpinner();
+        }
+    }
+
+    modal.querySelector('.modal-title').innerHTML = title;
+    modal.querySelector('.modal-body label.form-label').innerHTML = message;
+    modal.querySelector('.modal-body input').value = defaultVal || '';
+    singleInputModal.show();
+    modal.querySelector('.modal-body input').focus();
+};
+
+// show modal to confirm,
+// callback will be called if user click yes
+//
+// params:
+//   - title: modal title
+//   - callback: async callback function
+const ConfirmModal = (title, callback) => {
+    deleteCheckCallback = async () => {
+        try {
+            ShowSpinner();
+            await callback();
+        } finally {
+            HideSpinner();
+        }
+    };
+    document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title;
+    deleteCheckModal.show();
+};
+
+// main entry
+(async function () {
+    await dataMigrate();
+    await setupHeader();
+    setupConfirmModal();
+    setupSingleInputModal();
+
+    await setupChatJs();
+})();
+
+async function dataMigrate () {
+    const sid = await activeSessionID();
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+    let sconfig = await libs.KvGet(skey);
+
+    // set selected session
+    if (!libs.KvGet(KvKeyPrefixSelectedSession)) {
+        libs.KvSet(KvKeyPrefixSelectedSession, parseInt(sid));
+    }
+
+    // move config from localstorage to session config
+    {
+        // move global config
+        const storageVals = { // old: new
+            config_prompt_shortcuts: KvKeyPromptShortCuts,
+            config_chat_dataset_key: KvKeyCustomDatasetPassword,
+            config_api_pinned_materials: KvKeyPinnedMaterials,
+            config_chat_models: KvKeyAllowedModels,
+            config_selected_session: KvKeyPrefixSelectedSession
+        };
+        await Promise.all(Object.keys(storageVals)
+            .map(async (oldKey) => {
+                const val = libs.GetLocalStorage(oldKey);
+                if (!val) {
+                    return;
+                }
+
+                const newKey = storageVals[oldKey];
+                await libs.KvSet(newKey, val);
+                localStorage.removeItem(oldKey);
+            }));
+
+        // move session config
+        if (!sconfig) {
+            sconfig = newSessionConfig();
+
+            sconfig.api_token = libs.GetLocalStorage('config_api_token_value') || sconfig.api_token;
+            sconfig.token_type = libs.GetLocalStorage('config_api_token_type') || sconfig.token_type;
+            sconfig.max_tokens = libs.GetLocalStorage('config_api_max_tokens') || sconfig.max_tokens;
+            sconfig.temperature = libs.GetLocalStorage('config_api_temperature') || sconfig.temperature;
+            sconfig.presence_penalty = libs.GetLocalStorage('config_api_presence_penalty') || sconfig.presence_penalty;
+            sconfig.frequency_penalty = libs.GetLocalStorage('config_api_frequency_penalty') || sconfig.frequency_penalty;
+            sconfig.n_contexts = libs.GetLocalStorage('config_api_n_contexts') || sconfig.n_contexts;
+            sconfig.system_prompt = libs.GetLocalStorage('config_api_static_context') || sconfig.system_prompt;
+            sconfig.selected_model = libs.GetLocalStorage('config_chat_model') || sconfig.selected_model;
+
+            await libs.KvSet(skey, sconfig);
+        }
+    }
+
+    // set api token from url params
+    {
+        const apikey = new URLSearchParams(location.search).get('apikey');
+
+        if (apikey) {
+            // remove apikey from url params
+            const url = new URL(location.href);
+            url.searchParams.delete('apikey');
+            window.history.pushState({}, document.title, url);
+            sconfig.api_token = apikey;
+            await libs.KvSet(skey, sconfig);
+        }
+    }
+
+    // list all session configs
+    await Promise.all((await libs.KvList()).map(async (key) => {
+        if (!key.startsWith(KvKeyPrefixSessionConfig)) {
+            return;
+        }
+
+        const sconfig = await libs.KvGet(key);
+
+        // set default api_token
+        if (!sconfig.api_token || sconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
+            sconfig.api_token = 'FREETIER-' + RandomString(32);
+        }
+        // set default api_base
+        if (!sconfig.api_base) {
+            sconfig.api_base = 'https://api.openai.com';
+        }
+
+        // set default chat controller
+        if (!sconfig.chat_switch) {
+            sconfig.chat_switch = {
+                disable_https_crawler: false
+            }
+        }
+
+        console.debug('migrate session config: ', key, sconfig);
+        await libs.KvSet(key, sconfig);
+    }))
+
+    // update legacy chat history, add chatID to each chat
+    {
+        await Promise.all(Object.keys(localStorage).map(async (key) => {
+            if (!key.startsWith(KvKeyPrefixSessionHistory)) {
+                return
+            }
+
+            // move from localstorage to kv
+            // console.log("move from localstorage to kv: ", key);
+            await libs.KvSet(key, JSON.parse(localStorage[key]))
+            localStorage.removeItem(key)
+        }))
+    }
+}
+
+let singleInputCallback, singleInputModal
+
+function setupSingleInputModal () {
+    singleInputCallback = null
+    singleInputModal = new window.bootstrap.Modal(document.getElementById('singleInputModal'))
+    document.getElementById('singleInputModal')
+        .querySelector('.modal-body .yes')
+        .addEventListener('click', async (e) => {
+            e.preventDefault()
+
+            if (singleInputCallback) {
+                await singleInputCallback()
+            }
+
+            singleInputModal.hide()
+        })
+}
+
+/**
+ * setup confirm modal callback, shoule be an async function
+ */
+let deleteCheckCallback,
+    /**
+     * global shared modal to act as confirm dialog
+     */
+    deleteCheckModal
+
+function setupConfirmModal () {
+    deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));
+    document.getElementById('deleteCheckModal')
+        .querySelector('.modal-body .yes')
+        .addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            if (deleteCheckCallback) {
+                await deleteCheckCallback();
+            }
+
+            deleteCheckModal.hide();
+        });
+}
+
+/** setup header bar
+ *
+ */
+async function setupHeader () {
+    const headerBarEle = document.getElementById('headerbar');
+    let allowedModels = [];
+    const sconfig = await getChatSessionConfig();
+
+    // setup chat models
+    {
+        // set default chat model
+        let selectedModel = await OpenaiSelectedModel();
+
+        // get users' models
+        const headers = new Headers();
+        headers.append('Authorization', 'Bearer ' + sconfig.api_token);
+        const response = await fetch('/user/me', {
+            method: 'GET',
+            cache: 'no-cache',
+            headers
+        });
+
+        if (response.status !== 200) {
+            throw new Error('failed to get user info, please refresh your browser.');
+        }
+
+        const modelsContainer = document.querySelector('#headerbar .chat-models');
+        let modelsEle = '';
+        const respData = await response.json();
+        if (respData.allowed_models.includes('*')) {
+            respData.allowed_models = Array.from(AllModels);
+        } else {
+            respData.allowed_models.push(QAModelCustom, QAModelShared);
+        }
+        respData.allowed_models = respData.allowed_models.filter((model) => {
+            return AllModels.includes(model);
+        });
+
+        respData.allowed_models.sort();
+        await libs.KvSet(KvKeyAllowedModels, respData.allowed_models);
+        allowedModels = respData.allowed_models;
+
+        if (!allowedModels.includes(selectedModel)) {
+            selectedModel = '';
+            AllModels.forEach((model) => {
+                if (selectedModel !== '' || !allowedModels.includes(model)) {
+                    return;
+                }
+
+                if (model.startsWith('gpt-') || model.startsWith('gemini-')) {
+                    selectedModel = model;
+                }
+            });
+
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await libs.KvGet(skey);
+            sconfig.selected_model = selectedModel;
+            await libs.KvSet(skey, sconfig);
+        }
+
+        // add hint to input text
+        // chatPromptInputEle.attributes
+        //     .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+
+        const unsupportedModels = [];
+        respData.allowed_models.forEach((model) => {
+            if (!ChatModels.includes(model)) {
+                unsupportedModels.push(model);
+                return;
+            }
+
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
+        });
+        modelsContainer.innerHTML = modelsEle;
+    }
+
+    // FIXME
+    // if (unsupportedModels.length > 0) {
+    //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
+    //         + `maybe you need refresh your browser. if this warning still exists, `
+    //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
+    // }
+
+    // setup chat qa models
+    {
+        const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models');
+        let modelsEle = '';
+
+        const allowedQaModels = [QAModelCustom, QAModelShared];
+        window.data.qa_chat_models.forEach((item) => {
+            allowedQaModels.push(item.name);
+        });
+
+        allowedModels.forEach((model) => {
+            if (!QaModels.includes(model) || !allowedQaModels.includes(model)) {
+                return;
+            }
+
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
+        });
+        qaModelsContainer.innerHTML = modelsEle;
+    }
+
+    // setup chat image models
+    {
+        const imageModelsContainer = headerBarEle.querySelector('.dropdown-menu.image-models');
+        let modelsEle = '';
+        allowedModels.forEach((model) => {
+            if (!ImageModels.includes(model)) {
+                return;
+            }
+
+            if (FreeModels.includes(model)) {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+            } else {
+                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+            }
+        });
+        imageModelsContainer.innerHTML = modelsEle;
+    }
+
+    // listen click events
+    const modelElems = document
+        .querySelectorAll('#headerbar .chat-models li a, ' +
+            '#headerbar .qa-models li a, ' +
+            '#headerbar .image-models li a'
+        );
+    modelElems.forEach((elem) => {
+        elem.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            modelElems.forEach((elem) => {
+                elem.classList.remove('active');
+            })
+
+            evt.target.classList.add('active');
+            const selectedModel = evt.target.dataset.model;
+
+            const sid = await activeSessionID();
+            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+            const sconfig = await libs.KvGet(skey);
+            sconfig.selected_model = selectedModel;
+            await libs.KvSet(skey, sconfig);
+
+            // add active to class
+            document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
+                .forEach((elem) => {
+                    elem.classList.remove('active');
+                });
+            evt.target.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
+
+            // add hint to input text
+            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+        });
+    });
+}
+
 // const
 const RoleHuman = 'user';
 const RoleSystem = 'system';
@@ -62,7 +682,7 @@ function setupGlobalAiRespHeartbeatTimer () {
 // type: primary, secondary, success, danger, warning, info, light, dark
 function showalert (type, msg) {
     const alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
-            <div>${sanitizeHTML(msg)}</div>
+            <div>${libs.sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>`;
 
@@ -83,7 +703,7 @@ function kvSessionKey (sessionID) {
  * @returns {Array} An array of chat messages.
  */
 async function sessionChatHistory (sessionID) {
-    let data = (await KvGet(kvSessionKey(sessionID)));
+    let data = (await libs.KvGet(kvSessionKey(sessionID)));
     if (!data) {
         return [];
     }
@@ -91,7 +711,7 @@ async function sessionChatHistory (sessionID) {
     // fix legacy bug for marshal data twice
     if (typeof data === 'string') {
         data = JSON.parse(data);
-        await KvSet(kvSessionKey(sessionID), data);
+        await libs.KvSet(kvSessionKey(sessionID), data);
     }
 
     return data;
@@ -113,12 +733,12 @@ async function activeSessionChatHistory () {
 async function activeSessionID () {
     let activeSession = document.querySelector('#sessionManager .card-body button.active');
     if (activeSession) {
-        return activeSession.dataset.session;
+        return parseInt(activeSession.dataset.session);
     }
 
-    activeSession = await KvGet(KvKeyPrefixSelectedSession)
+    activeSession = await libs.KvGet(KvKeyPrefixSelectedSession);
     if (activeSession) {
-        return activeSession;
+        return parseInt(activeSession);
     }
 
     return 1;
@@ -126,7 +746,7 @@ async function activeSessionID () {
 
 async function listenSessionSwitch (evt) {
     // deactive all sessions
-    evt = evtTarget(evt);
+    evt = libs.evtTarget(evt);
     if (!evt.classList.contains('list-group-item')) {
         evt = evt.closest('.list-group-item');
     }
@@ -138,14 +758,14 @@ async function listenSessionSwitch (evt) {
         unlockChatInput();
     }
 
-    const activeSid = evt.dataset.session;
+    const activeSid = parseInt(evt.dataset.session);
     document
         .querySelectorAll(`
             #sessionManager .sessions .list-group-item,
             #chatContainer .sessions .list-group-item
         `)
         .forEach((item) => {
-            if (item.dataset.session === activeSid) {
+            if (parseInt(item.dataset.session) === activeSid) {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
@@ -159,10 +779,10 @@ async function listenSessionSwitch (evt) {
         renderAfterAIResponse(item.chatID);
     })
 
-    await KvSet(KvKeyPrefixSelectedSession, activeSid);
+    await libs.KvSet(KvKeyPrefixSelectedSession, activeSid);
     await updateConfigFromSessionConfig();
     await autoToggleUserImageUploadBtn();
-    EnableTooltipsEverywhere();
+    libs.EnableTooltipsEverywhere();
 }
 
 /**
@@ -203,7 +823,7 @@ async function fetchImageDrawingResultBackground () {
                     method: 'GET',
                     cache: 'no-cache'
                 });
-                if (!imgResp.ok || imgResp.status != 200) {
+                if (!imgResp.ok || imgResp.status !== 200) {
                     return;
                 }
 
@@ -241,7 +861,7 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         item.dataset.imageUrls = JSON.stringify(processingImageUrls);
     }
 
-    if (processingImageUrls.length == 0 && succeedImageUrls.length > 0) {
+    if (processingImageUrls.length === 0 && succeedImageUrls.length > 0) {
         item.dataset.status = 'done';
         let imgHTML = '';
         succeedImageUrls.forEach((url) => {
@@ -270,30 +890,30 @@ async function clearSessionAndChats (evt, sessionID) {
     }
 
     // remove pinned materials
-    await KvDel(KvKeyPinnedMaterials);
+    await libs.KvDel(KvKeyPinnedMaterials);
 
     if (!sessionID) { // remove all session
-        const sessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${(await activeSessionID())}`);
+        const sessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${(await activeSessionID())}`);
 
-        await Promise.all((await KvList()).map(async (key) => {
+        await Promise.all((await libs.KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory) || // remove all sessions
                 key.startsWith(KvKeyPrefixSessionConfig) // remove all sessions' config
             ) {
-                await KvDel(key);
+                await libs.KvDel(key);
             }
         }));
 
         // restore session config
-        await KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig);
-        await KvSet(kvSessionKey(1), []);
+        await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig);
+        await libs.KvSet(kvSessionKey(1), []);
     } else { // only remove one session's chat, keep config
-        await Promise.all((await KvList()).map(async (key) => {
+        await Promise.all((await libs.KvList()).map(async (key) => {
             if (
                 key.startsWith(KvKeyPrefixSessionHistory) && // remove all sessions
                 key.endsWith(`_${sessionID}`) // remove specified session
             ) {
-                await KvSet(key, []);
+                await libs.KvSet(key, []);
             }
         }));
     }
@@ -312,8 +932,8 @@ function bindSessionEditBtn () {
 
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                evt = evtTarget(evt);
-                const sid = evt.closest('.session').dataset.session;
+                evt = libs.evtTarget(evt);
+                const sid = parseInt(evt.closest('.session').dataset.session);
                 const sconfig = await getChatSessionConfig(sid);
                 const oldSessionName = sconfig.session_name || sid;
 
@@ -324,7 +944,7 @@ function bindSessionEditBtn () {
 
                     // update session config
                     sconfig.session_name = newSessionName;
-                    await KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig);
+                    await libs.KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig);
 
                     // update session name
                     document
@@ -350,14 +970,14 @@ function bindSessionDeleteBtn () {
             evt.stopPropagation();
 
             // if there is only one session, don't delete it
-            if (document.querySelectorAll('#sessionManager .sessions .session').length == 1) {
+            if (document.querySelectorAll('#sessionManager .sessions .session').length === 1) {
                 return;
             }
 
-            const sid = evtTarget(evt).closest('.session').dataset.session;
+            const sid = parseInt(libs.evtTarget(evt).closest('.session').dataset.session);
             ConfirmModal('Are you sure to delete this session?', async () => {
-                await KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
-                await KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
+                await libs.KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
+                await libs.KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
                 document
                     .querySelector(`#sessionManager .sessions [data-session="${sid}"]`).remove();
                 chatContainer
@@ -383,20 +1003,20 @@ async function setupSessionManager () {
     // restore all sessions from storage
     {
         const allSessionKeys = [];
-        (await KvList()).forEach((key) => {
+        (await libs.KvList()).forEach((key) => {
             if (key.startsWith(KvKeyPrefixSessionHistory)) {
                 allSessionKeys.push(key);
             }
         });
 
-        if (allSessionKeys.length == 0) { // there is no session, create one
+        if (allSessionKeys.length === 0) { // there is no session, create one
             // create session history
             const skey = kvSessionKey(1);
             allSessionKeys.push(skey);
-            await KvSet(skey, []);
+            await libs.KvSet(skey, []);
 
             // create session config
-            await KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
+            await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
         }
 
         await Promise.all(allSessionKeys.map(async (key) => {
@@ -405,9 +1025,11 @@ async function setupSessionManager () {
             let active = '';
             const sconfig = await getChatSessionConfig(sessionID);
             const sessionName = sconfig.session_name || sessionID;
-            if (sessionID == selectedSessionID) {
+            if (sessionID === selectedSessionID) {
                 active = 'active';
             }
+
+            console.log(sconfig); //FIXME
 
             document
                 .querySelector('#sessionManager .sessions')
@@ -453,7 +1075,7 @@ async function setupSessionManager () {
             .querySelector('#sessionManager .btn.new-session')
             .addEventListener('click', async (evt) => {
                 let maxSessionID = 0;
-                (await KvList()).forEach((key) => {
+                (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
                         const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
                         if (sessionID > maxSessionID) {
@@ -496,12 +1118,12 @@ async function setupSessionManager () {
                         </div>`);
 
                 // save new session history and config
-                await KvSet(kvSessionKey(newSessionID), []);
-                const oldSessionConfig = await KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`);
+                await libs.KvSet(kvSessionKey(newSessionID), []);
+                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`);
                 const sconfig = newSessionConfig();
                 sconfig.api_token = oldSessionConfig.api_token; // keep api token
-                await KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
-                await KvSet(KvKeyPrefixSelectedSession, newSessionID);
+                await libs.KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
+                await libs.KvSet(KvKeyPrefixSelectedSession, newSessionID);
 
                 // bind session switch listener for new session
                 document
@@ -545,7 +1167,7 @@ async function removeChatInStorage (chatid) {
     // remove all chats with the same chatid
     session = session.filter((item) => item.chatID !== chatid);
 
-    await KvSet(storageActiveSessionKey, session);
+    await libs.KvSet(storageActiveSessionKey, session);
 }
 
 /** append or update chat history by chatid and role
@@ -574,7 +1196,7 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
     });
 
     // if ai response is not in history, add it after user's chat which has same chatid
-    if (!found && role == RoleAI) {
+    if (!found && role === RoleAI) {
         session.forEach((item, idx) => {
             if (item.chatID === chatid) {
                 found = true;
@@ -602,12 +1224,12 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
         });
     }
 
-    await KvSet(storageActiveSessionKey, session);
+    await libs.KvSet(storageActiveSessionKey, session);
 }
 
 function scrollChatToDown () {
-    ScrollDown(document.querySelector('html'));
-    ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
+    libs.ScrollDown(document.querySelector('html'));
+    libs.ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
 }
 
 function scrollToChat (chatEle) {
@@ -744,7 +1366,7 @@ async function userPromptEnhance (reqPrompt) {
 
     // save to storage
     // FIXME save to session config
-    await KvSet(KvKeyPinnedMaterials, urlEle);
+    await libs.KvSet(KvKeyPinnedMaterials, urlEle);
     await restorePinnedMaterials();
 
     // re generate reqPrompt
@@ -754,7 +1376,7 @@ async function userPromptEnhance (reqPrompt) {
 }
 
 async function restorePinnedMaterials () {
-    const urlEle = await KvGet(KvKeyPinnedMaterials) || '';
+    const urlEle = await libs.KvGet(KvKeyPinnedMaterials) || '';
     const container = document.querySelector('#chatContainer .pinned-refs');
     container.innerHTML = urlEle;
 
@@ -763,12 +1385,12 @@ async function restorePinnedMaterials () {
         .forEach((item) => {
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                const container = evtTarget(evt).closest('.pinned-refs');
-                const ele = evtTarget(evt).closest('p');
+                const container = libs.evtTarget(evt).closest('.pinned-refs');
+                const ele = libs.evtTarget(evt).closest('p');
                 ele.parentNode.removeChild(ele);
 
                 // update storage
-                await KvSet(KvKeyPinnedMaterials, container.innerHTML);
+                await libs.KvSet(KvKeyPinnedMaterials, container.innerHTML);
             })
         })
 }
@@ -807,7 +1429,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
         method: 'POST',
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
@@ -815,7 +1437,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
             prompt
         })
     });
-    if (!resp.ok || resp.status != 200) {
+    if (!resp.ok || resp.status !== 200) {
         throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
     const respData = await resp.json();
@@ -850,7 +1472,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
         imageBase64 = chatVisionSelectedFileStore[0].contentB64;
 
         // insert image to user input & hisotry
-        await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
+        await appendImg2UserInput(chatID, imageBase64, `${libs.DateStr()}.png`);
 
         chatVisionSelectedFileStore = [];
         updateChatVisionSelectedFileStore();
@@ -861,7 +1483,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
         method: 'POST',
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
@@ -870,7 +1492,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
             image: imageBase64
         })
     });
-    if (!resp.ok || resp.status != 200) {
+    if (!resp.ok || resp.status !== 200) {
         throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
     const respData = await resp.json();
@@ -906,7 +1528,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
     const imageBase64 = chatVisionSelectedFileStore[0].contentB64;
 
     // insert image to user input & hisotry
-    await appendImg2UserInput(chatID, imageBase64, `${DateStr()}.png`);
+    await appendImg2UserInput(chatID, imageBase64, `${libs.DateStr()}.png`);
 
     chatVisionSelectedFileStore = [];
     updateChatVisionSelectedFileStore();
@@ -916,7 +1538,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
         method: 'POST',
         headers: {
             Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
@@ -925,7 +1547,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
             image_base64: imageBase64
         })
     });
-    if (!resp.ok || resp.status != 200) {
+    if (!resp.ok || resp.status !== 200) {
         throw new Error(`[${resp.status}]: ${await resp.text()}`);
     }
     const respData = await resp.json();
@@ -965,10 +1587,10 @@ async function sendChat2Server (chatID) {
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
-        reqPrompt = TrimSpace(chatPromptInputEle.value || '');
+        reqPrompt = libs.TrimSpace(chatPromptInputEle.value || '');
 
         chatPromptInputEle.value = '';
-        if (reqPrompt == '') {
+        if (reqPrompt === '') {
             return;
         }
 
@@ -1082,8 +1704,8 @@ async function sendChat2Server (chatID) {
         case QAModelBasebit:
         case QAModelSecurity:
         case QAModelImmigrate:
-            data.qa_chat_models.forEach((item) => {
-                if (item.name == selectedModel) {
+            window.data.qa_chat_models.forEach((item) => {
+                if (item.name === selectedModel) {
                     url = item.url;
                     project = item.project;
                 }
@@ -1121,13 +1743,13 @@ async function sendChat2Server (chatID) {
                     Connection: 'keep-alive',
                     'Content-Type': 'application/json',
                     Authorization: 'Bearer ' + sconfig.api_token,
-                    'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+                    'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
                     'X-Laisky-Api-Base': sconfig.api_base,
-                    'X-PDFCHAT-PASSWORD': await KvGet(KvKeyCustomDatasetPassword)
+                    'X-PDFCHAT-PASSWORD': await libs.KvGet(KvKeyCustomDatasetPassword)
                 }
             });
 
-            if (!resp.ok || resp.status != 200) {
+            if (!resp.ok || resp.status !== 200) {
                 throw new Error(`[${resp.status}]: ${await resp.text()}`);
             }
 
@@ -1208,7 +1830,7 @@ async function sendChat2Server (chatID) {
     } else {
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
             '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
-            `unimplemented model: ${sanitizeHTML(selectedModel)}</pre>`;
+            `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
         appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
         unlockChatInput();
         return;
@@ -1219,11 +1841,11 @@ async function sendChat2Server (chatID) {
     }
 
     globalAIRespHeartBeatTimer = Date.now();
-    globalAIRespSSE = new SSE('/api', {
+    globalAIRespSSE = new window.SSE('/api', {
         headers: {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await getSHA1(sconfig.api_token),
+            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
         method: 'POST',
@@ -1237,9 +1859,9 @@ async function sendChat2Server (chatID) {
         globalAIRespHeartBeatTimer = Date.now();
 
         let isChatRespDone = false;
-        if (evt.data == '[DONE]') {
+        if (evt.data === '[DONE]') {
             isChatRespDone = true;
-        } else if (evt.data == '[HEARTBEAT]') {
+        } else if (evt.data === '[HEARTBEAT]') {
             return;
         }
 
@@ -1269,7 +1891,7 @@ async function sendChat2Server (chatID) {
             case 'writing':
                 if (respContent) {
                     aiRawResp += respContent;
-                    globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
+                    globalAIRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
                 }
 
                 scrollToChat(globalAIRespEle);
@@ -1286,7 +1908,7 @@ async function sendChat2Server (chatID) {
             globalAIRespSSE = null;
             unlockChatInput();
 
-            globalAIRespEle.innerHTML = Markdown2HTML(aiRawResp);
+            globalAIRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
             globalAIRespEle.innerHTML += responseExtras;
             globalAIRespEle
                 .insertAdjacentHTML('afterbegin', `<i class="bi bi-copy" data-content="${encodeURIComponent(aiRawResp)}" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>`);
@@ -1320,21 +1942,21 @@ async function sendChat2Server (chatID) {
  * @param {string} chatID - chat id
  */
 function renderAfterAIResponse (chatID) {
-    // Prism.highlightAll();
+    // window.Prism.highlightAll();
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
 
     if (!chatEle) {
         return;
     }
 
-    Prism.highlightAllUnder(chatEle);
-    EnableTooltipsEverywhere();
+    window.Prism.highlightAllUnder(chatEle);
+    libs.EnableTooltipsEverywhere();
 
     if (chatEle.querySelector('.bi.bi-copy')) { // not every ai response has copy button
         chatEle.querySelector('.bi.bi-copy')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                const content = decodeURIComponent(evtTarget(evt).dataset.content);
+                const content = decodeURIComponent(libs.evtTarget(evt).dataset.content);
                 // copy to clipboard
                 navigator.clipboard.writeText(content);
             });
@@ -1362,7 +1984,7 @@ function combineRefs (arr) {
 //     let result = ''
 //     for (let i = 0; i < lines.length; i++) {
 //         // skip empty lines
-//         if (lines[i].trim() == '') {
+//         if (lines[i].trim() === '') {
 //             continue
 //         }
 
@@ -1396,9 +2018,9 @@ function abortAIResp (err) {
         errMsg = err.toString();
     }
 
-    if (errMsg == '[object CustomEvent]') {
+    if (errMsg === '[object CustomEvent]') {
         if (navigator.userAgent.includes('Firefox')) {
-            // firefox will throw this error when SSE is closed, just ignore it.
+            // firefox will throw this error when window.SSE is closed, just ignore it.
             return;
         }
 
@@ -1414,10 +2036,10 @@ function abortAIResp (err) {
         showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。');
     }
 
-    if (globalAIRespEle.dataset.status == 'waiting') { // || currentAIRespEle.dataset.status == "writing") {
-        globalAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
+    if (globalAIRespEle.dataset.status === 'waiting') { // || currentAIRespEle.dataset.status === "writing") {
+        globalAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
     } else {
-        globalAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${RenderStr2HTML(errMsg)}</pre>`;
+        globalAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
     }
 
     renderAfterAIResponse(chatID);
@@ -1437,7 +2059,7 @@ async function bindUserInputSelectFilesBtn () {
             inputEle.accept = 'image/*';
 
             inputEle.addEventListener('change', async (evt) => {
-                const files = evtTarget(evt).files;
+                const files = libs.evtTarget(evt).files;
                 for (const file of files) {
                     readFileForVision(file);
                 }
@@ -1488,9 +2110,9 @@ async function setupChatInput () {
         chatPromptInputEle
             .addEventListener('keydown', async (evt) => {
                 evt.stopPropagation();
-                if (evt.key != 'Enter' ||
+                if (evt.key !== 'Enter' ||
                     isComposition ||
-                    (evt.key == 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey)) ||
+                    (evt.key === 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey)) ||
                     !isAllowChatPrompInput()) {
                     return;
                 }
@@ -1502,13 +2124,13 @@ async function setupChatInput () {
 
     // change hint when models change
     {
-        KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
-            if (op != KvOp.SET) {
+        libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+            if (op !== libs.KvOp.SET) {
                 return;
             }
 
             const expectedKey = `KvKeyPrefixSessionConfig${(await activeSessionID())}`;
-            if (key != expectedKey) {
+            if (key !== expectedKey) {
                 return;
             }
 
@@ -1527,8 +2149,8 @@ async function setupChatInput () {
 
     // bindImageUploadButton
     await autoToggleUserImageUploadBtn();
-    KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
-        if (op != KvOp.SET) {
+    libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+        if (op !== libs.KvOp.SET) {
             return;
         }
 
@@ -1541,7 +2163,7 @@ async function setupChatInput () {
     // bind input element's drag-drop
     {
         const dropfileModalEle = document.querySelector('#modal-dropfile.modal');
-        const dropfileModal = new bootstrap.Modal(dropfileModalEle);
+        const dropfileModal = new window.bootstrap.Modal(dropfileModalEle);
 
         const fileDragLeave = async (evt) => {
             evt.stopPropagation();
@@ -1560,7 +2182,7 @@ async function setupChatInput () {
 
             for (let i = 0; i < evt.dataTransfer.items.length; i++) {
                 const item = evt.dataTransfer.items[i];
-                if (item.kind != 'file') {
+                if (item.kind !== 'file') {
                     continue;
                 }
 
@@ -1597,13 +2219,13 @@ async function setupChatInput () {
             .querySelector('#switchChatEnableHttpsCrawler')
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation();
-                const switchEle = evtTarget(evt);
+                const switchEle = libs.evtTarget(evt);
                 const sconfig = await getChatSessionConfig();
                 sconfig.chat_switch.disable_https_crawler = !switchEle.checked;
 
                 // clear pinned https urls
                 if (!switchEle.checked) {
-                    await KvSet(KvKeyPinnedMaterials, '');
+                    await libs.KvSet(KvKeyPinnedMaterials, '');
                     await await restorePinnedMaterials();
                 }
 
@@ -1614,7 +2236,7 @@ async function setupChatInput () {
             .querySelector('#switchChatEnableGoogleSearch')
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
-                const switchEle = evtTarget(evt)
+                const switchEle = libs.evtTarget(evt)
                 const sconfig = await getChatSessionConfig()
                 sconfig.chat_switch.enable_google_search = switchEle.checked
                 await saveChatSessionConfig(sconfig)
@@ -1624,12 +2246,12 @@ async function setupChatInput () {
             .querySelector('#switchChatEnableAutoSync')
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
-                const switchEle = evtTarget(evt)
-                await KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
+                const switchEle = libs.evtTarget(evt)
+                await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
             });
         let userConfigSyncer;
-        KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
-            if (op !== KvOp.SET) {
+        libs.KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
+            if (op !== libs.KvOp.SET) {
                 return;
             }
 
@@ -1669,7 +2291,7 @@ async function filePasteHandler (evt) {
 
     for (let i = 0; i < evt.clipboardData.items.length; i++) {
         const item = evt.clipboardData.items[i];
-        if (item.kind != 'file') {
+        if (item.kind !== 'file') {
             continue;
         }
 
@@ -1682,7 +2304,7 @@ async function filePasteHandler (evt) {
         evt.preventDefault();
 
         // get file content as Blob
-        readFileForVision(file, `paste-${DateStr()}.png`);
+        readFileForVision(file, `paste-${libs.DateStr()}.png`);
     }
 };
 
@@ -1746,7 +2368,7 @@ async function updateChatVisionSelectedFileStore () {
         .forEach((item) => {
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                const ele = evtTarget(evt).closest('p');
+                const ele = libs.evtTarget(evt).closest('p');
                 const key = ele.dataset.key;
                 chatVisionSelectedFileStore = chatVisionSelectedFileStore.filter((item) => item.filename !== key);
                 ele.parentNode.removeChild(ele);
@@ -1775,7 +2397,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     let waitAI = '';
     switch (role) {
     case RoleSystem:
-        text = escapeHtml(text);
+        text = libs.escapeHtml(text);
 
         chatEleHtml = `
             <div class="container-fluid row role-human">
@@ -1784,7 +2406,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             </div>`;
         break;
     case RoleHuman:
-        text = escapeHtml(text);
+        text = libs.escapeHtml(text);
         if (!isHistory) {
             waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
@@ -1895,7 +2517,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             let attachHTML = '';
             attachEles.forEach((ele) => {
                 const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
-                const key = ele.dataset.name || `${DateStr()}.png`;
+                const key = ele.dataset.name || `${libs.DateStr()}.png`;
                 chatVisionSelectedFileStore.push({
                     filename: key,
                     contentB64: b64fileContent
@@ -1904,7 +2526,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             })
             updateChatVisionSelectedFileStore();
 
-            text = sanitizeHTML(text);
+            text = libs.sanitizeHTML(text);
             chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
                 <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
                 <div class="btn-group" role="group">
@@ -1980,7 +2602,7 @@ const getChatSessionConfig = async (sid) => {
     }
 
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-    let sconfig = await KvGet(skey);
+    let sconfig = await libs.KvGet(skey);
 
     if (!sconfig) {
         console.info(`create new session config for session ${sid}`);
@@ -1994,7 +2616,7 @@ const saveChatSessionConfig = async (sconfig) => {
     const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
 
-    await KvSet(skey, sconfig);
+    await libs.KvSet(skey, sconfig);
 };
 
 function newSessionConfig () {
@@ -2022,7 +2644,6 @@ async function updateConfigFromSessionConfig () {
     console.debug(`updateConfigFromSessionConfig for session ${(await activeSessionID())}`);
 
     const sconfig = await getChatSessionConfig();
-
     sconfig.selected_model = await OpenaiSelectedModel();
 
     // update config
@@ -2049,7 +2670,7 @@ async function updateConfigFromSessionConfig () {
     chatContainer.querySelector('#switchChatEnableGoogleSearch')
         .checked = sconfig.chat_switch.enable_google_search;
     chatContainer.querySelector('#switchChatEnableAutoSync')
-        .checked = await KvGet(KvKeyAutoSyncUserConfig);
+        .checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
 
     // update selected model
     // set active status for models
@@ -2066,7 +2687,7 @@ async function updateConfigFromSessionConfig () {
         .forEach((elem) => {
             elem.classList.remove('active');
 
-            if (elem.dataset.model == selectedModel) {
+            if (elem.dataset.model === selectedModel) {
                 elem.classList.add('active');
                 elem.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
             }
@@ -2085,10 +2706,10 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.api_token = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.api_token = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
         });
     }
 
@@ -2101,10 +2722,10 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.api_base = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.api_base = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
         });
     }
 
@@ -2117,12 +2738,12 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.n_contexts = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.n_contexts = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = evtTarget(evt).value;
+            configContainer.querySelector('.input-group.contexts .contexts-val').innerHTML = libs.evtTarget(evt).value;
         });
     }
 
@@ -2135,12 +2756,12 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.max_tokens = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.max_tokens = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = evtTarget(evt).value;
+            configContainer.querySelector('.input-group.max-token .max-token-val').innerHTML = libs.evtTarget(evt).value;
         });
     }
 
@@ -2153,12 +2774,12 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.temperature = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.temperature = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = evtTarget(evt).value;
+            configContainer.querySelector('.input-group.temperature .temperature-val').innerHTML = libs.evtTarget(evt).value;
         });
     }
 
@@ -2171,12 +2792,12 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.presence_penalty = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.presence_penalty = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = evtTarget(evt).value;
+            configContainer.querySelector('.input-group.presence_penalty .presence_penalty-val').innerHTML = libs.evtTarget(evt).value;
         });
     }
 
@@ -2189,12 +2810,12 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.frequency_penalty = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.frequency_penalty = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
 
-            configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = evtTarget(evt).value;
+            configContainer.querySelector('.input-group.frequency_penalty .frequency_penalty-val').innerHTML = libs.evtTarget(evt).value;
         });
     }
 
@@ -2207,10 +2828,10 @@ async function setupConfig () {
 
             const sid = await activeSessionID();
             const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await KvGet(skey);
+            const sconfig = await libs.KvGet(skey);
 
-            sconfig.system_prompt = evtTarget(evt).value;
-            await KvSet(skey, sconfig);
+            sconfig.system_prompt = libs.evtTarget(evt).value;
+            await libs.KvSet(skey, sconfig);
         });
     }
 
@@ -2222,7 +2843,7 @@ async function setupConfig () {
 
                 ConfirmModal('Reset everything?', async () => {
                     localStorage.clear();
-                    await KvClear();
+                    await libs.KvClear();
                     location.reload();
                 });
             });
@@ -2255,11 +2876,11 @@ async function setupConfig () {
         syncKeyEle
             .addEventListener('input', async (evt) => {
                 evt.stopPropagation();
-                const syncKey = evtTarget(evt).value;
-                await KvSet(KvKeySyncKey, syncKey);
+                const syncKey = libs.evtTarget(evt).value;
+                await libs.KvSet(KvKeySyncKey, syncKey);
             });
-        KvAddListener(KvKeySyncKey, async (key, op, oldVal, newVal) => {
-            if (op != KvOp.SET) {
+        libs.KvAddListener(KvKeySyncKey, async (key, op, oldVal, newVal) => {
+            if (op !== libs.KvOp.SET) {
                 return;
             }
 
@@ -2267,10 +2888,10 @@ async function setupConfig () {
         });
 
         // set default val
-        if (!(await KvGet(KvKeySyncKey))) {
-            await KvSet(KvKeySyncKey, `sync-${RandomString(64)}`);
+        if (!(await libs.KvGet(KvKeySyncKey))) {
+            await libs.KvSet(KvKeySyncKey, `sync-${RandomString(64)}`);
         }
-        syncKeyEle.value = await KvGet(KvKeySyncKey);
+        syncKeyEle.value = await libs.KvGet(KvKeySyncKey);
     }
 
     // bind upload & download configs
@@ -2296,7 +2917,7 @@ async function setupConfig () {
         //     .addEventListener('click', downloadUserConfig);
     }
 
-    EnableTooltipsEverywhere();
+    libs.EnableTooltipsEverywhere();
 }
 
 async function syncUserConfig (evt) {
@@ -2309,11 +2930,11 @@ async function uploadUserConfig (evt) {
     evt && evt.stopPropagation();
 
     const data = {};
-    await Promise.all((await KvList()).map(async (key) => {
-        data[key] = await KvGet(key);
+    await Promise.all((await libs.KvList()).map(async (key) => {
+        data[key] = await libs.KvGet(key);
     }));
 
-    const syncKey = await KvGet(KvKeySyncKey);
+    const syncKey = await libs.KvGet(KvKeySyncKey);
     const resp = await fetch('/user/config', {
         method: 'POST',
         headers: {
@@ -2332,7 +2953,7 @@ async function downloadUserConfig (evt) {
     console.debug('downloadUserConfig');
     evt && evt.stopPropagation();
 
-    const syncKey = await KvGet(KvKeySyncKey);
+    const syncKey = await libs.KvGet(KvKeySyncKey);
     const resp = await fetch('/user/config', {
         method: 'GET',
         headers: {
@@ -2352,23 +2973,23 @@ async function downloadUserConfig (evt) {
     const data = await resp.json();
     for (const key in data) {
         // download non-exists key
-        if (!(await KvExists(key))) {
-            await KvSet(key, data[key]);
+        if (!(await libs.KvExists(key))) {
+            await libs.KvSet(key, data[key]);
             continue;
         }
 
         // only update session config with different session name
         if (key.startsWith(KvKeyPrefixSessionConfig)) {
-            const localConfig = await KvGet(key);
+            const localConfig = await libs.KvGet(key);
             if (localConfig.session_name !== data[key].session_name) {
-                await KvSet(key, data[key]);
+                await libs.KvSet(key, data[key]);
                 continue;
             }
         }
 
         // incremental update local sessions chat history
         if (key.startsWith(KvKeyPrefixSessionHistory)) {
-            let localHistory = await KvGet(key);
+            let localHistory = await libs.KvGet(key);
             let iLocal = 0;
             let iRemote = 0;
             let localChatId = 0;
@@ -2433,13 +3054,13 @@ async function downloadUserConfig (evt) {
                 iLocal++;
             }
 
-            await KvSet(key, localHistory);
+            await libs.KvSet(key, localHistory);
         }
     }
 }
 
 async function loadPromptShortcutsFromStorage () {
-    let shortcuts = await KvGet(KvKeyPromptShortCuts);
+    let shortcuts = await libs.KvGet(KvKeyPromptShortCuts);
     if (!shortcuts) {
         // default prompts
         shortcuts = [
@@ -2448,7 +3069,7 @@ async function loadPromptShortcutsFromStorage () {
                 description: 'As an English-Chinese translator, your task is to accurately translate text between the two languages. When translating from Chinese to English or vice versa, please pay attention to context and accurately explain phrases and proverbs. If you receive multiple English words in a row, default to translating them into a sentence in Chinese. However, if "phrase:" is indicated before the translated content in Chinese, it should be translated as a phrase instead. Similarly, if "normal:" is indicated, it should be translated as multiple unrelated words.Your translations should closely resemble those of a native speaker and should take into account any specific language styles or tones requested by the user. Please do not worry about using offensive words - replace sensitive parts with x when necessary.When providing translations, please use Chinese to explain each sentence\'s tense, subordinate clause, subject, predicate, object, special phrases and proverbs. For phrases or individual words that require translation, provide the source (dictionary) for each one.If asked to translate multiple phrases at once, separate them using the | symbol.Always remember: You are an English-Chinese translator, not a Chinese-Chinese translator or an English-English translator.Please review and revise your answers carefully before submitting.'
             }
         ];
-        await KvSet(KvKeyPromptShortCuts, shortcuts);
+        await libs.KvSet(KvKeyPromptShortCuts, shortcuts);
     }
 
     return shortcuts;
@@ -2465,7 +3086,7 @@ async function appendPromptShortcut (shortcut, storage = false) {
     if (storage) {
         const shortcuts = await loadPromptShortcutsFromStorage();
         shortcuts.push(shortcut);
-        await KvSet(KvKeyPromptShortCuts, shortcuts);
+        await libs.KvSet(KvKeyPromptShortCuts, shortcuts);
     }
 
     // new element
@@ -2480,11 +3101,11 @@ async function appendPromptShortcut (shortcut, storage = false) {
             evt.stopPropagation();
 
             ConfirmModal('delete saved prompt', async () => {
-                evtTarget(evt).parentElement.remove();
+                libs.evtTarget(evt).parentElement.remove();
 
-                let shortcuts = await KvGet(KvKeyPromptShortCuts);
+                let shortcuts = await libs.KvGet(KvKeyPromptShortCuts);
                 shortcuts = shortcuts.filter((item) => item.title !== shortcut.title);
-                await KvSet(KvKeyPromptShortCuts, shortcuts);
+                await libs.KvSet(KvKeyPromptShortCuts, shortcuts);
             })
         });
 
@@ -2494,8 +3115,8 @@ async function appendPromptShortcut (shortcut, storage = false) {
         evt.stopPropagation();
         const promptInput = configContainer.querySelector('.system-prompt .input');
 
-        await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
-        promptInput.value = evtTarget(evt).dataset.prompt;
+        await OpenaiChatStaticContext(libs.evtTarget(evt).dataset.prompt);
+        promptInput.value = libs.evtTarget(evt).dataset.prompt;
     });
 
     // add to html
@@ -2511,8 +3132,8 @@ async function setupPromptManager () {
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
                 const promptInput = configContainer.querySelector('.system-prompt .input');
-                promptInput.value = evtTarget(evt).dataset.prompt;
-                await OpenaiChatStaticContext(evtTarget(evt).dataset.prompt);
+                promptInput.value = libs.evtTarget(evt).dataset.prompt;
+                await OpenaiChatStaticContext(libs.evtTarget(evt).dataset.prompt);
             })
 
         const shortcuts = await loadPromptShortcutsFromStorage();
@@ -2523,7 +3144,7 @@ async function setupPromptManager () {
 
     // bind star prompt
     const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
-    const saveSystemPromptModal = new bootstrap.Modal(saveSystemPromptModelEle);
+    const saveSystemPromptModal = new window.bootstrap.Modal(saveSystemPromptModelEle);
     {
         configContainer
             .querySelector('.system-prompt .bi.save-prompt')
@@ -2547,7 +3168,7 @@ async function setupPromptManager () {
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
                 const promptMarketModalEle = document.querySelector('#prompt-market.modal');
-                const promptMarketModal = new bootstrap.Modal(promptMarketModalEle);
+                const promptMarketModal = new window.bootstrap.Modal(promptMarketModalEle);
                 promptMarketModal.show();
             });
     }
@@ -2593,7 +3214,7 @@ async function setupPromptManager () {
     const promptInput = promptMarketModal.querySelector('textarea.prompt-content');
     const promptTitle = promptMarketModal.querySelector('input.prompt-title');
     {
-        chatPrompts.forEach((prompt) => {
+        window.chatPrompts.forEach((prompt) => {
             const ele = document.createElement('span');
             ele.classList.add('badge', 'text-bg-info');
             ele.dataset.description = prompt.description;
@@ -2605,8 +3226,8 @@ async function setupPromptManager () {
             ele.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
 
-                promptInput.value = evtTarget(evt).dataset.description;
-                promptTitle.value = evtTarget(evt).dataset.title;
+                promptInput.value = libs.evtTarget(evt).dataset.description;
+                promptTitle.value = libs.evtTarget(evt).dataset.title;
             });
 
             promptMarketModal.querySelector('.prompt-labels').appendChild(ele);
@@ -2654,7 +3275,7 @@ async function setupPrivateDataset () {
     {
         // bind pdf-file modal
         const pdfFileModalEle = document.querySelector('#modal-pdfchat');
-        const pdfFileModal = new bootstrap.Modal(pdfFileModalEle);
+        const pdfFileModal = new window.bootstrap.Modal(pdfFileModalEle);
 
         document
             .querySelector('#headerbar .qa-models a[data-model="qa-custom"]')
@@ -2669,18 +3290,18 @@ async function setupPrivateDataset () {
         const datakeyEle = pdfchatModalEle
             .querySelector('div[data-field="data-key"] input');
 
-        datakeyEle.value = await KvGet(KvKeyCustomDatasetPassword);
+        datakeyEle.value = await libs.KvGet(KvKeyCustomDatasetPassword);
 
         // set default datakey
         if (!datakeyEle.value) {
             datakeyEle.value = RandomString(16);
-            await KvSet(KvKeyCustomDatasetPassword, datakeyEle.value);
+            await libs.KvSet(KvKeyCustomDatasetPassword, datakeyEle.value);
         }
 
         datakeyEle
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation();
-                await KvSet(KvKeyCustomDatasetPassword, evtTarget(evt).value);
+                await libs.KvSet(KvKeyCustomDatasetPassword, libs.evtTarget(evt).value);
             });
     }
 
@@ -2694,11 +3315,11 @@ async function setupPrivateDataset () {
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation();
 
-                if (evtTarget(evt).files.length === 0) {
+                if (libs.evtTarget(evt).files.length === 0) {
                     return;
                 }
 
-                let filename = evtTarget(evt).files[0].name;
+                let filename = libs.evtTarget(evt).files[0].name;
                 const fileext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
 
                 if (['.pdf', '.md', '.ppt', '.pptx', '.doc', '.docx'].indexOf(fileext) === -1) {
@@ -2744,7 +3365,7 @@ async function setupPrivateDataset () {
                 // and auth token to header
                 const headers = new Headers();
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                 headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                 try {
@@ -2774,7 +3395,7 @@ async function setupPrivateDataset () {
         const datasets = pdfchatModalEle
             .querySelectorAll('div[data-field="dataset"] .dataset-item .bi-trash');
 
-        if (datasets == null || datasets.length === 0) {
+        if (datasets === null || datasets.length === 0) {
             return;
         }
 
@@ -2785,9 +3406,9 @@ async function setupPrivateDataset () {
                 const sconfig = await getChatSessionConfig();
                 const headers = new Headers();
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                 headers.append('Cache-Control', 'no-cache');
-                // headers.append("X-PDFCHAT-PASSWORD", await KvGet(KvKeyCustomDatasetPassword));
+                // headers.append("X-PDFCHAT-PASSWORD", await libs.KvGet(KvKeyCustomDatasetPassword));
 
                 try {
                     ShowSpinner();
@@ -2795,7 +3416,7 @@ async function setupPrivateDataset () {
                         method: 'DELETE',
                         headers,
                         body: JSON.stringify({
-                            datasets: [evtTarget(evt).closest('.dataset-item').getAttribute('data-filename')]
+                            datasets: [libs.evtTarget(evt).closest('.dataset-item').getAttribute('data-filename')]
                         })
                     });
 
@@ -2811,7 +3432,7 @@ async function setupPrivateDataset () {
                 }
 
                 // remove dataset item
-                evtTarget(evt).closest('.dataset-item').remove();
+                libs.evtTarget(evt).closest('.dataset-item').remove();
             });
         });
     }
@@ -2826,9 +3447,9 @@ async function setupPrivateDataset () {
                 const sconfig = await getChatSessionConfig();
                 const headers = new Headers();
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                 headers.append('Cache-Control', 'no-cache');
-                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword));
+                headers.append('X-PDFCHAT-PASSWORD', await libs.KvGet(KvKeyCustomDatasetPassword));
 
                 let body;
                 try {
@@ -2920,14 +3541,14 @@ async function setupPrivateDataset () {
             .querySelector('div[data-field="buttons"] a[data-fn="list-bot"]')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
+                new window.bootstrap.Dropdown(libs.evtTarget(evt).closest('.dropdown')).hide();
 
                 const sconfig = await getChatSessionConfig();
                 const headers = new Headers();
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                 headers.append('Cache-Control', 'no-cache');
-                headers.append('X-PDFCHAT-PASSWORD', await KvGet(KvKeyCustomDatasetPassword));
+                headers.append('X-PDFCHAT-PASSWORD', await libs.KvGet(KvKeyCustomDatasetPassword));
 
                 let body;
                 try {
@@ -2956,7 +3577,7 @@ async function setupPrivateDataset () {
 
                 body.chatbots.forEach((chatbot) => {
                     let selectedHTML = '';
-                    if (chatbot == body.current) {
+                    if (chatbot === body.current) {
                         selectedHTML = 'checked';
                     }
 
@@ -2987,16 +3608,16 @@ async function setupPrivateDataset () {
                         ele.addEventListener('change', async (evt) => {
                             evt.stopPropagation();
 
-                            if (!evtTarget(evt).checked) {
+                            if (!libs.evtTarget(evt).checked) {
                                 // at least one chatbot should be selected
-                                evtTarget(evt).checked = true;
+                                libs.evtTarget(evt).checked = true;
                                 return;
                             } else {
                                 // uncheck other chatbot
                                 datasetListEle
                                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                                     .forEach((ele) => {
-                                        if (ele != evtTarget(evt)) {
+                                        if (ele !== libs.evtTarget(evt)) {
                                             ele.checked = false;
                                         }
                                     });
@@ -3004,17 +3625,17 @@ async function setupPrivateDataset () {
 
                             const headers = new Headers();
                             headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                            headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                            headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                             headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                             try {
                                 ShowSpinner();
-                                const chatbotName = evtTarget(evt).closest('.chatbot-item').getAttribute('data-name');
+                                const chatbotName = libs.evtTarget(evt).closest('.chatbot-item').getAttribute('data-name');
                                 const resp = await fetch('/ramjet/gptchat/ctx/active', {
                                     method: 'POST',
                                     headers,
                                     body: JSON.stringify({
-                                        data_key: await KvGet(KvKeyCustomDatasetPassword),
+                                        data_key: await libs.KvGet(KvKeyCustomDatasetPassword),
                                         chatbotName
                                     })
                                 });
@@ -3042,7 +3663,7 @@ async function setupPrivateDataset () {
             .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
+                new window.bootstrap.Dropdown(libs.evtTarget(evt).closest('.dropdown')).hide();
 
                 const checkedChatbotEle = pdfchatModalEle
                     .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
@@ -3056,7 +3677,7 @@ async function setupPrivateDataset () {
                 const sconfig = await getChatSessionConfig();
                 const headers = new Headers();
                 headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                 headers.append('Cache-Control', 'no-cache');
                 headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
@@ -3068,7 +3689,7 @@ async function setupPrivateDataset () {
                         headers,
                         body: JSON.stringify({
                             chatbotName,
-                            data_key: await KvGet(KvKeyCustomDatasetPassword)
+                            data_key: await libs.KvGet(KvKeyCustomDatasetPassword)
                         })
                     });
 
@@ -3097,7 +3718,7 @@ async function setupPrivateDataset () {
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                new bootstrap.Dropdown(evtTarget(evt).closest('.dropdown')).hide();
+                new window.bootstrap.Dropdown(libs.evtTarget(evt).closest('.dropdown')).hide();
 
                 const selectedDatasets = [];
                 pdfchatModalEle
@@ -3126,7 +3747,7 @@ async function setupPrivateDataset () {
                     const headers = new Headers();
                     headers.append('Content-Type', 'application/json');
                     headers.append('Authorization', `Bearer ${sconfig.api_token}`);
-                    headers.append('X-Laisky-User-Id', await getSHA1(sconfig.api_token));
+                    headers.append('X-Laisky-User-Id', await libs.getSHA1(sconfig.api_token));
                     headers.append('X-Laisky-Api-Base', sconfig.api_base);
 
                     try { // build chatbot
