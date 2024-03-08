@@ -297,14 +297,22 @@ const ConfirmModal = (title, callback) => {
 };
 
 // main entry
-(async function () {
+let mainRunned = false;
+const main = async (event) => {
+    if (mainRunned) {
+        return;
+    }
+
+    mainRunned = true;
     await dataMigrate();
     await setupHeader();
     setupConfirmModal();
     setupSingleInputModal();
 
     await setupChatJs();
-})();
+};
+// document.addEventListener('DOMContentLoaded', main);
+main();
 
 async function dataMigrate () {
     const sid = await activeSessionID();
@@ -2518,7 +2526,6 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
             // attach image to vision-selected-store when edit human input
             const attachEles = chatContainer
                 .querySelectorAll(`.chatManager .conservations .chats #${chatID} .role-human .text-start img`) || [];
-            let attachHTML = '';
             attachEles.forEach((ele) => {
                 const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
                 const key = ele.dataset.name || `${libs.DateStr()}.png`;

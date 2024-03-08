@@ -329,16 +329,16 @@
         };
     </script>
 
-    <script defer src="{{.BootstrapJs}}" type="text/javascript"></script>
-    <script defer src="{{.SeeJs}}" type="text/javascript"></script>
-    <script defer src="{{.ShowdownJs}}" type="text/javascript"></script>
-    <script defer src="{{.PrismJs}}" type="text/javascript"></script>
-    <script defer src="{{.FuseJs}}" type="text/javascript"></script>
-    <script defer src="https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js" type="text/javascript"></script>
-    <script defer src="https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js" type="text/javascript"></script>
-    <script defer src="/static/{{.DataJs}}" type="module"></script>
-    <script defer src="/static/{{.LibJs}}" type="module"></script>
-    <script defer src="/static/{{.SiteJs}}" type="module"></script>
+    <script async src="{{.BootstrapJs}}" type="text/javascript"></script>
+    <script async src="{{.SeeJs}}" type="text/javascript"></script>
+    <script async src="{{.ShowdownJs}}" type="text/javascript"></script>
+    <script async src="{{.PrismJs}}" type="text/javascript"></script>
+    <script async src="{{.FuseJs}}" type="text/javascript"></script>
+    <script async src="https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js" type="text/javascript"></script>
+    <script async src="https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js" type="text/javascript"></script>
+    <script async src="/static/{{.DataJs}}" type="module"></script>
+    <script async src="/static/{{.LibJs}}" type="module"></script>
+    <script async src="/static/{{.SiteJs}}" type="module"></script>
 
     {{block "ga" .}}
     {{end}}
