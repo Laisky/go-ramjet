@@ -351,7 +351,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 func drawImageByOpenaiDalle(ctx context.Context,
 	user *config.UserConfig, prompt, taskID string) (err error) {
 	logger := gmw.GetLogger(ctx).Named("openai")
-	logger.Debug("draw image by openai dalle")
+	logger.Debug("draw image by openai dalle", zap.String("img_url", user.ImageUrl))
 
 	reqBody, err := json.Marshal(NewOpenaiCreateImageRequest(prompt))
 	if err != nil {
