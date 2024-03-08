@@ -312,8 +312,8 @@ async function dataMigrate () {
     let sconfig = await libs.KvGet(skey);
 
     // set selected session
-    if (!libs.KvGet(KvKeyPrefixSelectedSession)) {
-        libs.KvSet(KvKeyPrefixSelectedSession, parseInt(sid));
+    if (!await libs.KvGet(KvKeyPrefixSelectedSession)) {
+        await libs.KvSet(KvKeyPrefixSelectedSession, parseInt(sid));
     }
 
     // move config from localstorage to session config
@@ -665,14 +665,14 @@ function newChatID () {
 function setupGlobalAiRespHeartbeatTimer () {
     globalAIRespHeartBeatTimer = Date.now();
 
-    setInterval(() => {
+    setInterval(async () => {
         if (!globalAIRespSSE) {
             return;
         }
 
         if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 15) {
             console.warn('no heartbeat for 15s, abort AI resp');
-            abortAIResp('no heartbeat for 15s, abort AI resp automatically');
+            await abortAIResp('no heartbeat for 15s, abort AI resp automatically');
         }
     }, 3000);
 }
@@ -774,10 +774,10 @@ async function listenSessionSwitch (evt) {
 
     // restore session hisgoty
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
-    (await sessionChatHistory(activeSid)).forEach((item) => {
-        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
-        renderAfterAIResponse(item.chatID);
-    })
+    await Promise.all(Array.from(await sessionChatHistory(activeSid)).map(async (item) => {
+        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
+        await renderAfterAiResp(item.chatID);
+    }));
 
     await libs.KvSet(KvKeyPrefixSelectedSession, activeSid);
     await updateConfigFromSessionConfig();
@@ -1029,8 +1029,6 @@ async function setupSessionManager () {
                 active = 'active';
             }
 
-            console.log(sconfig); //FIXME
-
             document
                 .querySelector('#sessionManager .sessions')
                 .insertAdjacentHTML(
@@ -1054,10 +1052,10 @@ async function setupSessionManager () {
         }));
 
         // restore conservation history
-        (await activeSessionChatHistory()).forEach((item) => {
-            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML);
-            renderAfterAIResponse(item.chatID);
-        });
+        await Promise.all(Array.from(await activeSessionChatHistory()).map(async (item) => {
+            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
+            await renderAfterAiResp(item.chatID);
+        }));
     }
 
     // add widget to scroll bottom
@@ -1224,6 +1222,7 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
         });
     }
 
+    // save session chat history
     await libs.KvSet(storageActiveSessionKey, session);
 }
 
@@ -1618,7 +1617,8 @@ async function sendChat2Server (chatID) {
     }
 
     // these extras will append to the tail of AI's response
-    let responseExtras = '';
+    globalAIRespEle.dataset.aiRawResp = '';
+    globalAIRespEle.dataset.respExtras = '';
     let reqBody;
     const sconfig = await getChatSessionConfig();
 
@@ -1638,7 +1638,7 @@ async function sendChat2Server (chatID) {
 
         // if selected model is vision model, but no image selected, abort
         if (selectedModel.includes('vision') && chatVisionSelectedFileStore.length === 0) {
-            abortAIResp('you should select at least one image for vision model');
+            await abortAIResp('you should select at least one image for vision model');
             return;
         }
 
@@ -1755,24 +1755,24 @@ async function sendChat2Server (chatID) {
 
             const data = await resp.json();
             if (!data || !data.text) {
-                abortAIResp('cannot gather sufficient context to answer the question');
+                await abortAIResp('cannot gather sufficient context to answer the question');
                 return;
             }
 
-            responseExtras = `
+            globalAIRespEle.dataset.respExtras = encodeURIComponent(`
                     <p style="margin-bottom: 0;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
                         </button>
-                    </p>`;
+                    </p>`);
 
             if (data.url) {
-                responseExtras += `
+                globalAIRespEle.dataset.respExtras += encodeURIComponent(`
                     <div>
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
-                    </div>`;
+                    </div>`);
             }
 
             const messages = [{
@@ -1802,7 +1802,7 @@ async function sendChat2Server (chatID) {
                 stop: ['\n\n']
             });
         } catch (err) {
-            abortAIResp(err);
+            await abortAIResp(err);
             return;
         }
     } else if (IsImageModel(selectedModel)) {
@@ -1821,7 +1821,7 @@ async function sendChat2Server (chatID) {
                 throw new Error(`unknown image model: ${selectedModel}`);
             }
         } catch (err) {
-            abortAIResp(err);
+            await abortAIResp(err);
         } finally {
             unlockChatInput();
         }
@@ -1831,7 +1831,7 @@ async function sendChat2Server (chatID) {
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
             '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
             `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
-        appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
+        await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
         unlockChatInput();
         return;
     }
@@ -1852,8 +1852,6 @@ async function sendChat2Server (chatID) {
         payload: reqBody
     });
 
-    // origin response from ai
-    let aiRawResp = '';
     globalAIRespSSE.addEventListener('message', async (evt) => {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
@@ -1882,7 +1880,7 @@ async function sendChat2Server (chatID) {
 
                 if (respContent) {
                     globalAIRespEle.innerHTML = respContent;
-                    aiRawResp += respContent;
+                    globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
                 } else {
                     globalAIRespEle.innerHTML = '';
                 }
@@ -1890,8 +1888,8 @@ async function sendChat2Server (chatID) {
                 break;
             case 'writing':
                 if (respContent) {
-                    aiRawResp += respContent;
-                    globalAIRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
+                    globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
+                    globalAIRespEle.innerHTML = libs.Markdown2HTML(decodeURIComponent(globalAIRespEle.dataset.aiRawResp));
                 }
 
                 scrollToChat(globalAIRespEle);
@@ -1900,66 +1898,84 @@ async function sendChat2Server (chatID) {
         }
 
         if (isChatRespDone) {
-            if (!globalAIRespSSE) {
-                return;
+            if (globalAIRespSSE) {
+                globalAIRespSSE.close();
+                globalAIRespSSE = null;
+                unlockChatInput();
             }
 
-            globalAIRespSSE.close();
-            globalAIRespSSE = null;
-            unlockChatInput();
-
-            globalAIRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
-            globalAIRespEle.innerHTML += responseExtras;
-            globalAIRespEle
-                .insertAdjacentHTML('afterbegin', `<i class="bi bi-copy" data-content="${encodeURIComponent(aiRawResp)}" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>`);
-
-            // setup prism
-            {
-                // add line number
-                globalAIRespEle.querySelectorAll('pre').forEach((item) => {
-                    item.classList.add('line-numbers');
-                });
-            }
-
-            // should save html before prism formatted,
-            // because prism.js do not support formatted html.
-            const markdownContent = globalAIRespEle.innerHTML;
-
-            renderAfterAIResponse(chatID);
-            scrollToChat(globalAIRespEle);
-            await appendChats2Storage(RoleAI, chatID, markdownContent, null, aiRawResp);
+            console.debug(`chat response done for chat ${chatID}`);
+            await renderAfterAiResp(chatID, true);
         }
     })
 
-    globalAIRespSSE.onerror = (err) => {
-        abortAIResp(err);
+    globalAIRespSSE.onerror = async (err) => {
+        await abortAIResp(err);
     };
     globalAIRespSSE.stream();
 }
 
-/** append chat to chat conservation window
- *
- * @param {string} chatID - chat id
+/**
+ * do render and save chat after ai response finished
  */
-function renderAfterAIResponse (chatID) {
-    // window.Prism.highlightAll();
+async function renderAfterAiResp (chatID, saveStorage = false) {
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
-
     if (!chatEle) {
+        console.warn(`can not find ai-response element for chatid=${chatID}`);
         return;
     }
+
+    const aiRawResp = decodeURIComponent(chatEle.dataset.aiRawResp || '');
+    const respExtras = decodeURIComponent(chatEle.dataset.respExtras || '');
+    if (aiRawResp) {
+        chatEle.innerHTML = libs.Markdown2HTML(aiRawResp);
+        chatEle.innerHTML += respExtras;
+    }
+
+    if (!chatEle.querySelector('.bi.bi-copy')) {
+        chatEle
+            .insertAdjacentHTML('afterbegin', '<i class="bi bi-copy" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>');
+    }
+
+    // setup prism
+    {
+        // add line number
+        chatEle.querySelectorAll('pre').forEach((item) => {
+            item.classList.add('line-numbers');
+        });
+    }
+
+    // should save html before prism formatted,
+    // because prism.js do not support formatted html.
+    const markdownContent = chatEle.innerHTML;
 
     window.Prism.highlightAllUnder(chatEle);
     libs.EnableTooltipsEverywhere();
 
-    if (chatEle.querySelector('.bi.bi-copy')) { // not every ai response has copy button
+    if (chatEle.querySelector('.bi.bi-copy') && !chatEle.dataset.copyBinded) { // not every ai response has copy button
         chatEle.querySelector('.bi.bi-copy')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                const content = decodeURIComponent(libs.evtTarget(evt).dataset.content);
+                evt = libs.evtTarget(evt);
+
+                chatEle.dataset.copyBinded = true;
+                let copyContent = '';
+                if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+                    console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
+                } else {
+                    copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+                }
+
                 // copy to clipboard
-                navigator.clipboard.writeText(content);
+                navigator.clipboard.writeText(copyContent);
             });
+    }
+
+    // in the scenario of reload chat, the chatEle is already in view,
+    // no need to scroll and save to storage
+    if (saveStorage) {
+        scrollToChat(chatEle);
+        await appendChats2Storage(RoleAI, chatID, markdownContent, respExtras, aiRawResp);
     }
 }
 
@@ -1993,7 +2009,7 @@ function combineRefs (arr) {
 //     return result
 // }
 
-function abortAIResp (err) {
+async function abortAIResp (err) {
     if (typeof err === 'string') {
         err = new Error(err);
     }
@@ -2036,15 +2052,15 @@ function abortAIResp (err) {
         showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。');
     }
 
-    if (globalAIRespEle.dataset.status === 'waiting') { // || currentAIRespEle.dataset.status === "writing") {
-        globalAIRespEle.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
+    if (globalAIRespEle.dataset.status === 'waiting') {
+        globalAIRespEle.dataset.aiRawResp = encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
     } else {
-        globalAIRespEle.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
+        globalAIRespEle.dataset.respExtras += encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
     }
 
-    renderAfterAIResponse(chatID);
-    scrollToChat(globalAIRespEle);
-    appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
+    await renderAfterAiResp(chatID, true);
+    // scrollToChat(globalAIRespEle);
+    // await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
 }
 
 async function bindUserInputSelectFilesBtn () {
@@ -2395,6 +2411,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     let chatEleHtml;
     let chatOp = 'append';
     let waitAI = '';
+    attachHTML = attachHTML || '';
     switch (role) {
     case RoleSystem:
         text = libs.escapeHtml(text);
@@ -2423,12 +2440,6 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                         </div>`;
         }
 
-        if (attachHTML) {
-            attachHTML = `${attachHTML}`;
-        } else {
-            attachHTML = '';
-        }
-
         chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
@@ -2446,17 +2457,10 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                 </div>`;
         break;
     case RoleAI:
-        // let insertText;
-        // if (rawAiResp) {
-        //     insertText = `<i class="bi bi-copy" data-content="${rawAiResp}"></i>${text}`
-        // }else {
-        //     insertText = text
-        // }
-
         chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robotIcon}</div>
-                        <div class="col text-start ai-response" data-status="waiting">
+                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}">
                             ${text}
                         </div>
                 </div>`;
@@ -2573,7 +2577,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                     .addEventListener('click', editHumanInputHandler);
 
                 await sendChat2Server(chatID);
-                await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
+                // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
             });
 
             cancelBtn.addEventListener('click', async (evt) => {

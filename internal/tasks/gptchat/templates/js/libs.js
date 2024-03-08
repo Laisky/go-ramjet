@@ -86,6 +86,7 @@ export const KvSet = async (key, val) => {
                 val: marshaledVal
             });
         } else {
+            console.error(`KvSet for key=${key}, val=${val} got error ${error.status}`);
             throw error;
         }
     }
