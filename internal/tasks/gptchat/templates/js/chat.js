@@ -60,6 +60,13 @@ const ChatModels = [
     // ChatModelGPT4_32K,
     // ChatModelGPT4_0613_32K,
 ];
+const VisionModels = [
+    ChatModelGPT4Vision,
+    ChatModelGeminiProVision,
+    ChatModelClaude3Opus,
+    ChatModelClaude3Sonnet,
+    ImageModelImg2Img
+];
 const QaModels = [
     QAModelBasebit,
     QAModelSecurity,
@@ -1644,15 +1651,16 @@ async function sendChat2Server (chatID) {
             messages = await getLastNChatMessages(nContexts, chatID);
         }
 
+        // some models support both vision and chat
         // if selected model is vision model, but no image selected, abort
-        if (selectedModel.includes('vision') && chatVisionSelectedFileStore.length === 0) {
-            await abortAIResp('you should select at least one image for vision model');
-            return;
-        }
+        // if (selectedModel.includes('vision') && chatVisionSelectedFileStore.length === 0) {
+        //     await abortAIResp('you should select at least one image for vision model');
+        //     return;
+        // }
 
         // there are pinned files, add them to user's prompt
         if (chatVisionSelectedFileStore.length !== 0) {
-            if (!selectedModel.includes('vision')) {
+            if (!VisionModels.includes(selectedModel)) {
                 // if selected model is not vision model, just ignore it
                 chatVisionSelectedFileStore = [];
                 updateChatVisionSelectedFileStore();
@@ -2098,8 +2106,7 @@ async function bindUserInputSelectFilesBtn () {
  */
 async function autoToggleUserImageUploadBtn () {
     const sconfig = await getChatSessionConfig();
-    const isVision = sconfig.selected_model.includes('vision') ||
-        sconfig.selected_model === ImageModelImg2Img;
+    const isVision = VisionModels.includes(sconfig.selected_model);
 
     const btnEle = chatContainer.querySelector('.user-input .btn.upload');
     if ((isVision && btnEle) || (!isVision && !btnEle)) {

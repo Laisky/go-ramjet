@@ -89,7 +89,8 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	// send request to openai
-	logger.Debug("try send request to upstream server", zap.String("url", openaiReq.RemoteAddr))
+	logger.Debug("try send request to upstream server",
+		zap.String("url", openaiReq.URL.String()))
 	resp, err := httpcli.Do(openaiReq) //nolint: bodyclose
 	if AbortErr(ctx, err) {
 		return
@@ -312,8 +313,7 @@ var (
 )
 
 func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiReq *http.Request, err error) {
-	// logger := gmw.GetLogger(ctx).With(zap.String("method", ctx.Request.Method))
-	path := strings.TrimPrefix(ctx.Request.URL.Path, "/chat")
+	logger := gmw.GetLogger(ctx)
 	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "get user")
@@ -324,11 +324,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 	// 	return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
 	// }
 
-	newUrl := fmt.Sprintf("%s%s",
-		user.APIBase,
-		path,
-	)
-
+	newUrl := fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 	if ctx.Request.URL.RawQuery != "" {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
@@ -345,6 +341,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		}
 
 		var openaiReq any
+	MODEL_SWITCH:
 		switch frontendReq.Model {
 		case "gpt-4-turbo-preview",
 			"gpt-4-1106-preview",
@@ -361,25 +358,34 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0125",
 			"claude-instant-1",
 			"claude-2",
-			"claude-3-opus",
-			"claude-3-sonnet",
 			"llama2-70b-4096",
 			"mixtral-8x7b-32768",
 			"gemini-pro":
-			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-
 			req := new(OpenaiChatReq[string])
 			if err := copier.Copy(req, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to chat req")
 			}
 
 			openaiReq = req
+		case "claude-3-opus", // support text and vision at the same time
+			"claude-3-sonnet":
+			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+			if len(lastMessage.Files) == 0 { // no images, text only
+				req := new(OpenaiChatReq[string])
+				if err := copier.Copy(req, frontendReq); err != nil {
+					return nil, nil, errors.Wrap(err, "copy to chat req")
+				}
+
+				openaiReq = req
+				break MODEL_SWITCH
+			}
+
+			fallthrough // jump to vision part
 		case "gpt-4-vision-preview",
 			"gemini-pro-vision":
-			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // gpt-vision
-				return nil, nil, errors.New("no image")
+				return nil, nil, errors.New("should have at least one image for vision model")
 			}
 
 			req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
@@ -428,7 +434,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 			openaiReq = req
 		case "text-davinci-003":
-			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
 			if err := copier.Copy(openaiReq, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to completion req")
@@ -441,6 +446,9 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "marshal new body")
 		}
+
+		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", payload),
+
 		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
