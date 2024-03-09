@@ -324,7 +324,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 	// 	return nil, nil, errors.Wrapf(err, "check quota for user %q", user.UserName)
 	// }
 
-	newUrl := fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
+	newUrl := fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
 	if ctx.Request.URL.RawQuery != "" {
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
@@ -434,6 +434,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 			openaiReq = req
 		case "text-davinci-003":
+			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
 			if err := copier.Copy(openaiReq, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to completion req")
