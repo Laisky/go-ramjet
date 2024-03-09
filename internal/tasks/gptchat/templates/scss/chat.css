@@ -158,9 +158,12 @@
   margin-bottom: 3px;
   font-size: 0.9em;
   white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: scroll;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control {
-  margin-right: 5px;
+  position: absolute;
+  right: 5px;
   flex-direction: row-reverse;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
