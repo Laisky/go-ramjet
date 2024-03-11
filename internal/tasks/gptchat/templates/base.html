@@ -323,19 +323,29 @@
     <script>
         window.Version = "{{.Version}}";
         window.data = JSON.parse({{ .DataJSON }});
-        window.modules = {
+        window.internalModules = {
             "libjs": "/static/{{.LibJs}}",
             "sitejs": "/static/{{.SiteJs}}"
         };
+        // modules need to load before main.js
+        window.modules = [
+            "{{.BootstrapJs}}",
+            "{{.SeeJs}}",
+            "{{.ShowdownJs}}",
+            "{{.PrismJs}}",
+            "{{.FuseJs}}",
+            "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
+            "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js"
+        ];
     </script>
 
-    <script defer src="{{.BootstrapJs}}" type="text/javascript"></script>
+    <!-- <script defer src="{{.BootstrapJs}}" type="text/javascript"></script>
     <script defer src="{{.SeeJs}}" type="text/javascript"></script>
     <script defer src="{{.ShowdownJs}}" type="text/javascript"></script>
     <script defer src="{{.PrismJs}}" type="text/javascript"></script>
     <script defer src="{{.FuseJs}}" type="text/javascript"></script>
     <script defer src="https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js" type="text/javascript"></script>
-    <script defer src="https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js" type="text/javascript"></script>
+    <script defer src="https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js" type="text/javascript"></script> -->
     <script src="/static/{{.DataJs}}" type="module"></script>
     <script src="/static/{{.LibJs}}" type="module"></script>
     <script src="/static/{{.SiteJs}}" type="module"></script>

@@ -1,6 +1,23 @@
 'use strict';
 
-let kv = new window.PouchDB('mydatabase');
+/**
+ * load js modules by urls
+ */
+export const LoadJsModules = async (moduleUrls) => {
+    const promises = moduleUrls.map((moduleUrl) => {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = moduleUrl;
+            script.type = 'text/javascript';
+            script.async = false;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    });
+
+    await Promise.all(promises);
+}
 
 export const ActiveElementsByID = (elements, id) => {
     for (let i = 0; i < elements.length; i++) {
@@ -47,6 +64,13 @@ export const DateStr = () => {
 
 // {key: [callback1, callback2]}
 const kvListeners = {};
+let kv;
+
+function initKv () {
+    if (!kv) {
+        kv = new window.PouchDB('mydatabase');
+    }
+}
 
 export const KvOp = Object.freeze({
     SET: 1,
@@ -55,6 +79,7 @@ export const KvOp = Object.freeze({
 
 // callback: function(keyPrefix, op, oldVal, newVal)
 export const KvAddListener = (keyPrefix, callback) => {
+    initKv();
     if (!kvListeners[keyPrefix]) {
         kvListeners[keyPrefix] = [];
     }
@@ -65,6 +90,7 @@ export const KvAddListener = (keyPrefix, callback) => {
 };
 // set data into indexeddb
 export const KvSet = async (key, val) => {
+    initKv();
     console.debug(`KvSet: ${key}`);
     const marshaledVal = JSON.stringify(val);
     let oldVal = null;
@@ -107,6 +133,7 @@ export const KvSet = async (key, val) => {
  * @returns null if not found
  */
 export const KvGet = async (key) => {
+    initKv();
     console.debug(`KvGet: ${key}`);
     try {
         const doc = await kv.get(key);
@@ -126,6 +153,7 @@ export const KvGet = async (key) => {
  * @returns true if exists, false otherwise
  */
 export const KvExists = async (key) => {
+    initKv();
     console.debug(`KvExists: ${key}`);
     try {
         await kv.get(key);
@@ -145,6 +173,7 @@ export const KvExists = async (key) => {
  * @param {*} newKey
  */
 export const KvRename = async (oldKey, newKey) => {
+    initKv();
     console.debug(`KvRename: ${oldKey} -> ${newKey}`);
     const oldVal = await KvGet(oldKey);
     if (!oldVal) {
@@ -156,6 +185,7 @@ export const KvRename = async (oldKey, newKey) => {
 };
 // delete data from indexeddb
 export const KvDel = async (key) => {
+    initKv();
     console.debug(`KvDel: ${key}`);
     let oldVal = null;
     try {
@@ -181,6 +211,7 @@ export const KvDel = async (key) => {
 };
 // list all keys from indexeddb
 export const KvList = async () => {
+    initKv();
     console.debug('KvList');
     const docs = await kv.allDocs({ include_docs: true });
     const keys = [];
@@ -191,6 +222,7 @@ export const KvList = async () => {
 };
 // clear all data from indexeddb
 export const KvClear = async () => {
+    initKv();
     console.debug('KvClear');
 
     // notify listeners

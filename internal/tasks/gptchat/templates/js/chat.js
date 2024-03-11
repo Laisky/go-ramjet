@@ -1,6 +1,6 @@
 'use strict';
 
-const libs = await import(window.modules.libjs);
+const libs = await import(window.internalModules.libjs);
 
 const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
@@ -309,8 +309,9 @@ const main = async (event) => {
     if (mainRunned) {
         return;
     }
-
     mainRunned = true;
+
+    await libs.LoadJsModules(window.modules);
     await dataMigrate();
     await setupHeader();
     setupConfirmModal();
