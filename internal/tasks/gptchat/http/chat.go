@@ -282,6 +282,16 @@ func CountVisionImagePrice(width int, height int, resolution VisionImageResoluti
 	}
 }
 
+func imageType(cnt []byte) string {
+	contentType := http.DetectContentType(cnt)
+	if strings.HasPrefix(contentType, "image/") {
+		return contentType
+	}
+
+	log.Logger.Warn("unsupport image content type", zap.String("type", contentType))
+	return "image/jpeg"
+}
+
 func imageSize(cnt []byte) (width, height int, err error) {
 	contentType := http.DetectContentType(cnt)
 	switch contentType {
@@ -418,7 +428,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
 					Type: OpenaiVisionMessageContentTypeImageUrl,
 					ImageUrl: &OpenaiVisionMessageContentImageUrl{
-						URL:    "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(f.Content),
+						URL: fmt.Sprintf("data:%s;base64,", imageType(f.Content)) +
+							base64.StdEncoding.EncodeToString(f.Content),
 						Detail: resolution,
 					},
 				})
