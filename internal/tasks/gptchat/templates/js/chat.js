@@ -17,6 +17,7 @@ const ChatModelGPT4Vision = 'gpt-4-vision-preview';
 // const ChatModelClaude2 = 'claude-2';
 const ChatModelClaude3Opus = 'claude-3-opus';
 const ChatModelClaude3Sonnet = 'claude-3-sonnet';
+const ChatModelClaude3Haiku = 'claude-3-haiku';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
@@ -48,6 +49,7 @@ const ChatModels = [
     // ChatModelClaude2,
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
+    ChatModelClaude3Haiku,
     ChatModelLlama2With70B4K,
     ChatModelMixtral8x7B32K,
     ChatModelGPT4Vision,
@@ -65,6 +67,7 @@ const VisionModels = [
     ChatModelGeminiProVision,
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
+    ChatModelClaude3Haiku,
     ImageModelImg2Img
 ];
 const QaModels = [
@@ -686,9 +689,9 @@ function setupGlobalAiRespHeartbeatTimer () {
             return;
         }
 
-        if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 15) {
-            console.warn('no heartbeat for 15s, abort AI resp');
-            await abortAIResp('no heartbeat for 15s, abort AI resp automatically');
+        if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 30) {
+            console.warn('no heartbeat for 30s, abort AI resp');
+            await abortAIResp('no heartbeat for 30s, abort AI resp automatically');
         }
     }, 3000);
 }

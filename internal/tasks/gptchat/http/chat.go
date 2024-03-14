@@ -368,7 +368,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 			openaiReq = req
 		case "claude-3-opus", // support text and vision at the same time
-			"claude-3-sonnet":
+			"claude-3-sonnet",
+			"claude-3-haiku":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
