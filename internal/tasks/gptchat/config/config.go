@@ -322,6 +322,7 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 		"gpt-3.5-turbo-1106",
 		"gpt-3.5-turbo-0125",
 		"llama2-70b-4096",
+		"gemma-7b-it",
 		"mixtral-8x7b-32768",
 		"img-to-img",
 		"sdxl-turbo",

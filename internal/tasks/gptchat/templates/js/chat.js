@@ -23,8 +23,9 @@ const ChatModelClaude3Haiku = 'claude-3-haiku';
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
 const ChatModelGeminiPro = 'gemini-pro';
 const ChatModelGeminiProVision = 'gemini-pro-vision';
-const ChatModelLlama2With70B4K = 'llama2-70b-4096';
-const ChatModelMixtral8x7B32K = 'mixtral-8x7b-32768';
+const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
+const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
+const ChatModelGroqGemma7b = 'gemma-7b-it';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
 const QAModelImmigrate = 'qa-immigrate';
@@ -50,8 +51,9 @@ const ChatModels = [
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
     ChatModelClaude3Haiku,
-    ChatModelLlama2With70B4K,
-    ChatModelMixtral8x7B32K,
+    ChatModelGroqLlama2With70B4K,
+    ChatModelGroqMixtral8x7B32K,
+    ChatModelGroqGemma7b,
     ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision
@@ -86,8 +88,9 @@ const CompletionModels = [
     CompletionModelDavinci3
 ];
 const FreeModels = [
-    ChatModelLlama2With70B4K,
-    ChatModelMixtral8x7B32K,
+    ChatModelGroqLlama2With70B4K,
+    ChatModelGroqMixtral8x7B32K,
+    ChatModelGroqGemma7b,
     ChatModelTurbo35,
     // ChatModelTurbo35V0125,
     ChatModelGeminiPro,
