@@ -1747,10 +1747,10 @@ async function sendChat2Server (chatID) {
         case QAModelShared:
             // example url:
             //
-            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbotName=default
+            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
 
             url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
-                    `&chatbotName=${params.get('chatbotName')}` +
+                    `&chatbot_name=${params.get('chatbot_name')}` +
                     `&q=${encodeURIComponent(reqPrompt)}`;
             break;
         default:
@@ -3661,7 +3661,7 @@ async function setupPrivateDataset () {
                                     headers,
                                     body: JSON.stringify({
                                         data_key: await libs.KvGet(KvKeyCustomDatasetPassword),
-                                        chatbotName
+                                        chatbot_name: chatbotName
                                     })
                                 });
 
@@ -3713,7 +3713,7 @@ async function setupPrivateDataset () {
                         method: 'POST',
                         headers,
                         body: JSON.stringify({
-                            chatbotName,
+                            chatbot_name: chatbotName,
                             data_key: await libs.KvGet(KvKeyCustomDatasetPassword)
                         })
                     });
@@ -3731,7 +3731,7 @@ async function setupPrivateDataset () {
                 }
 
                 // open new tab page
-                const sharedChatbotUrl = `${location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbotName=${respBody.chatbotName}`;
+                const sharedChatbotUrl = `${location.origin}/?chatmodel=qa-shared&uid=${respBody.uid}&chatbot_name=${respBody.chatbot_name}`;
                 showalert('info', `open ${sharedChatbotUrl}`);
                 open(sharedChatbotUrl, '_blank');
             });
@@ -3781,7 +3781,7 @@ async function setupPrivateDataset () {
                             method: 'POST',
                             headers,
                             body: JSON.stringify({
-                                chatbotName: botname,
+                                chatbot_name: botname,
                                 datasets: selectedDatasets,
                                 data_key: pdfchatModalEle
                                     .querySelector('div[data-field="data-key"] input').value
