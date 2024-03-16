@@ -811,10 +811,12 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 	}()
 
 	if config.Config.RamjetURL != "" &&
+		userReq.LaiskyExtra != nil &&
 		!userReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
 		userReq.embeddingUrlContent(gctx, user)
 	}
-	if userReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
+	if userReq.LaiskyExtra != nil &&
+		userReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
 		userReq.embeddingGoogleSearch(gctx)
 	}
 
