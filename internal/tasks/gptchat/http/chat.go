@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	dataReg = regexp.MustCompile(`data: (\{.*\})`)
+	dataReg = regexp.MustCompile(`^data: (.*)$`)
 	// llmRespCache cache llm response to quick response
 	llmRespCache = gutils.NewExpCache[string](context.Background(), time.Hour)
 )
@@ -108,27 +108,40 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	bodyReader := resp.Body
 
 	reader := bufio.NewScanner(bodyReader)
-	reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF {
-			return 0, nil, io.EOF
-		}
+	reader.Split(bufio.ScanLines)
+	// reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	// 	if atEOF {
+	// 		return 0, nil, io.EOF
+	// 	}
 
-		if i := bytes.Index(data, []byte("\n\n")); i >= 0 {
-			return i + 1, data[0:i], nil
-		}
+	// 	if i := bytes.Index(data, []byte("\n\n")); i >= 0 {
+	// 		return i + 1, data[0:i], nil
+	// 	}
 
-		return 0, nil, nil
-	})
+	// 	return 0, nil, nil
+	// })
 
 	var respContent string
 	var lastResp *OpenaiCompletionStreamResp
+	var line []byte
 	for reader.Scan() {
-		line := reader.Bytes()
+		line = bytes.TrimSpace(reader.Bytes())
 		// logger.Debug("got response line", zap.ByteString("line", line)) // debug only
+
+		if len(line) == 0 {
+			continue
+		}
 
 		var chunk []byte
 		if matched := dataReg.FindAllSubmatch(line, -1); len(matched) != 0 {
 			chunk = matched[0][1]
+		} else {
+			logger.Warn("unsupport resp line", zap.ByteString("line", line))
+			continue
+		}
+		if len(chunk) == 0 {
+			logger.Debug("empty chunk")
+			continue
 		}
 
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
@@ -136,14 +149,30 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			return
 		}
 
+		if bytes.Equal(chunk, []byte("[DONE]")) {
+			logger.Debug("got [DONE]")
+			lastResp = &OpenaiCompletionStreamResp{
+				Choices: []OpenaiCompletionStreamRespChoice{
+					{
+						FinishReason: "[DONE]",
+					},
+				},
+			}
+			break
+		}
+
 		lastResp = new(OpenaiCompletionStreamResp)
 		if err = json.Unmarshal(chunk, lastResp); err != nil {
-			logger.Warn("unmarshal resp", zap.ByteString("chunk", chunk), zap.Error(err))
+			logger.Warn("unmarshal resp",
+				zap.ByteString("line", line),
+				zap.ByteString("chunk", chunk),
+				zap.Error(err))
 			continue
 		}
 
 		if len(lastResp.Choices) > 0 {
 			if len(lastResp.Choices[0].Delta.ToolCalls) != 0 {
+				logger.Debug("got tool calls")
 				return lastResp.Choices[0].Delta.ToolCalls
 			}
 
@@ -159,24 +188,31 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		if !isStream ||
 			len(lastResp.Choices) == 0 ||
 			lastResp.Choices[0].FinishReason != "" {
-			if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
-				go saveLLMConservation(frontReq, respContent)
-			}
-
-			return
+			logger.Debug("got last resp",
+				zap.Any("is_stream", isStream),
+				zap.Int("choices", len(lastResp.Choices)),
+				zap.String("finish_reason", lastResp.Choices[0].FinishReason),
+			)
+			break
 		}
 	}
 
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
-		go saveLLMConservation(frontReq, respContent)
+		if respContent != "" {
+			go saveLLMConservation(frontReq, respContent)
+		}
+	}
+
+	if lastResp == nil {
+		AbortErr(ctx, errors.New("no response"))
+		return
 	}
 
 	// scanner quit unexpected, write last line
-	if lastResp != nil &&
-		len(lastResp.Choices) != 0 &&
+	if len(lastResp.Choices) != 0 &&
 		lastResp.Choices[0].FinishReason == "" {
 		lastResp.Choices[0].FinishReason = "stop"
-		lastResp.Choices[0].Delta.Content = " [TRUNCATED BY SERVER]"
+		lastResp.Choices[0].Delta.Content = " [TERMINATED UNEXPECTEDLY]"
 		payload, err := json.MarshalToString(lastResp)
 		if AbortErr(ctx, err) {
 			return
@@ -186,10 +222,12 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		if AbortErr(ctx, err) {
 			return
 		}
-	} else if lastResp != nil && gutils.IsEmpty(lastResp) {
+	} else if gutils.IsEmpty(lastResp) {
 		return // bypass empty response
+	} else if isStream || len(lastResp.Choices) == 0 || lastResp.Choices[0].FinishReason != "" {
+		return // normal response
 	} else {
-		AbortErr(ctx, errors.Errorf("unsupport resp body %q", reader.Text()))
+		AbortErr(ctx, errors.Errorf("unsupport resp body %q", string(line)))
 	}
 
 	return nil
