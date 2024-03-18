@@ -713,11 +713,11 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 		"query":      args.query,
 		"ext":        args.ext,
 		"model":      args.model,
-		"max_chunks": 200,
+		"max_chunks": 10000,
 	}
 
 	if args.user.IsFree {
-		reqData["max_chunks"] = 1500
+		reqData["max_chunks"] = 500
 	}
 
 	postBody, err := json.Marshal(reqData)
