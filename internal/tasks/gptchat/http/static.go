@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -219,13 +218,10 @@ func Chat(ctx *gin.Context) {
 
 // CopyHeader copy header from `from` to `to`
 func CopyHeader(to, from http.Header) {
-	for k, v := range from {
-		if gutils.Contains([]string{
-			"content-length",
-		}, strings.ToLower(k)) {
-			continue
-		}
+	for _, k := range []string{
+		"Content-Type",
+	} {
+		to.Add(k, from.Get(k))
 
-		to.Set(k, strings.Join(v, ";"))
 	}
 }

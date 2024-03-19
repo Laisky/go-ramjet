@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func TestAPIHandler(t *testing.T) {

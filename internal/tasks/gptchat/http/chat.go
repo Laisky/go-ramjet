@@ -377,7 +377,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		newUrl += "?" + ctx.Request.URL.RawQuery
 	}
 
-	body := ctx.Request.Body
+	var reqBody []byte
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
 		frontendReq, err = bodyChecker(ctx, user, ctx.Request.Body)
 		if err != nil {
@@ -494,18 +494,15 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
 		}
 
-		payload, err := json.Marshal(openaiReq)
-		if err != nil {
+		if reqBody, err = json.Marshal(openaiReq); err != nil {
 			return nil, nil, errors.Wrap(err, "marshal new body")
 		}
 
 		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", payload),
-
-		body = io.NopCloser(bytes.NewReader(payload))
 	}
 
 	req, err := http.NewRequestWithContext(ctx.Request.Context(),
-		ctx.Request.Method, newUrl, body)
+		ctx.Request.Method, newUrl, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "new request")
 	}

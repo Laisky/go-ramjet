@@ -2,10 +2,11 @@ package http
 
 import (
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/zap"
 	"github.com/pkoukk/tiktoken-go"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 // OpenaiMessageRole message role

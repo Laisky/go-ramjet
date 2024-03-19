@@ -141,7 +141,8 @@ SWITCH_FOR_USER:
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
 			APIBase:                "https://oneapi.laisky.com",
-			ImageUrl:               "https://oneapi.laisky.com/v1/images/generations",
+			// APIBase:  "http://100.97.108.34:3000",
+			ImageUrl: "https://oneapi.laisky.com/v1/images/generations",
 		}
 
 		if strings.Contains(user.ImageUrl, "https://oneapi.laisky.com") {
