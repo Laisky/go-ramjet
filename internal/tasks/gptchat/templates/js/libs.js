@@ -19,6 +19,16 @@ export const LoadJsModules = async (moduleUrls) => {
     await Promise.all(promises);
 }
 
+/**
+ * async wait for seconds
+ *
+ * @param {*} seconds
+ * @returns
+ */
+export const Sleep = async (seconds) => {
+    return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+}
+
 export const ActiveElementsByID = (elements, id) => {
     for (let i = 0; i < elements.length; i++) {
         const item = elements[i];

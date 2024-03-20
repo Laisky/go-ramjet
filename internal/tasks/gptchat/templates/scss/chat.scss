@@ -202,6 +202,11 @@
                             position: absolute;
                             right: 5px;
                             flex-direction: row-reverse;
+                            opacity: 0.5;
+
+                            &:hover {
+                                opacity: 1;
+                            }
 
                             .bi-trash {
                                 margin-right: 5px;
@@ -228,11 +233,31 @@
                                 position: absolute;
                                 right: 16px;
                                 cursor: pointer;
+                                opacity: 0.5;
+
+                                &:hover {
+                                    opacity: 1;
+                                }
                             }
 
                             p {
                                 margin-bottom: 0.5em;
                                 margin-top: 0.5em;
+                            }
+
+                            .operator {
+                                text-align: center;
+                                cursor: default;
+
+                                .btn {
+                                    width: 100px;
+                                    padding: 3px;
+                                    opacity: 0.8;
+
+                                    &:hover {
+                                        opacity: 1;
+                                    }
+                                }
                             }
                         }
                     }
@@ -240,11 +265,6 @@
                     .card-body pre {
                         overflow-wrap: break-word;
                         white-space: pre-wrap;
-                    }
-
-                    .btn.reload {
-                        max-width: 85px;
-                        margin-bottom: 5px;
                     }
                 }
             }
@@ -277,11 +297,16 @@
 
                 .scroll-down {
                     position: fixed;
-                    bottom: 104px;
-                    right: 3px;
+                    bottom: 120px;
+                    right: 10px;
                     z-index: 1000;
                     font-size: larger;
                     cursor: pointer;
+                    opacity: 0.5;
+
+                    &:hover {
+                        opacity: 1;
+                    }
                 }
 
                 .input-group {

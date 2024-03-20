@@ -2,6 +2,8 @@
 
 const libs = await import(window.internalModules.libjs);
 
+const robotIcon = '🤖️';
+
 const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
 // const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
@@ -1323,13 +1325,25 @@ async function getLastNChatMessages (N, ignoredChatID) {
 }
 
 function lockChatInput () {
-    chatPromptInputBtn.classList.add('disabled')
+    chatContainer.querySelectorAll('.role-human .form-control btn.save').forEach((item) => {
+        item.classList.add('disabled');
+    });
+    chatContainer.querySelectorAll('.ai-response .operator .btn').forEach((item) => {
+        item.classList.add('disabled');
+    });
+    chatPromptInputBtn.classList.add('disabled');
 }
 function unlockChatInput () {
-    chatPromptInputBtn.classList.remove('disabled')
+    chatContainer.querySelectorAll('.role-human .form-control btn.save').forEach((item) => {
+        item.classList.remove('disabled');
+    });
+    chatContainer.querySelectorAll('.ai-response .operator .btn').forEach((item) => {
+        item.classList.remove('disabled');
+    });
+    chatPromptInputBtn.classList.remove('disabled');
 }
 function isAllowChatPrompInput () {
-    return !chatPromptInputBtn.classList.contains('disabled')
+    return !chatPromptInputBtn.classList.contains('disabled');
 }
 
 function parseChatResp (chatmodel, payload) {
@@ -1943,46 +1957,47 @@ async function sendChat2Server (chatID) {
  * do render and save chat after ai response finished
  */
 async function renderAfterAiResp (chatID, saveStorage = false) {
-    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
-    if (!chatEle) {
+    const aiRespEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    if (!aiRespEle) {
         console.warn(`can not find ai-response element for chatid=${chatID}`);
         return;
     }
 
-    const aiRawResp = decodeURIComponent(chatEle.dataset.aiRawResp || '');
-    const respExtras = decodeURIComponent(chatEle.dataset.respExtras || '');
+    const aiRawResp = decodeURIComponent(aiRespEle.dataset.aiRawResp || '');
+    const respExtras = decodeURIComponent(aiRespEle.dataset.respExtras || '');
     if (aiRawResp) {
-        chatEle.innerHTML = libs.Markdown2HTML(aiRawResp);
-        chatEle.innerHTML += respExtras;
+        aiRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
+        aiRespEle.innerHTML += respExtras;
     }
 
-    if (!chatEle.querySelector('.bi.bi-copy')) {
-        chatEle
+    if (!aiRespEle.querySelector('.bi.bi-copy')) {
+        aiRespEle
             .insertAdjacentHTML('afterbegin', '<i class="bi bi-copy" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>');
     }
 
     // setup prism
     {
         // add line number
-        chatEle.querySelectorAll('pre').forEach((item) => {
+        aiRespEle.querySelectorAll('pre').forEach((item) => {
             item.classList.add('line-numbers');
         });
     }
 
     // should save html before prism formatted,
     // because prism.js do not support formatted html.
-    const markdownContent = chatEle.innerHTML;
+    const markdownContent = aiRespEle.innerHTML;
 
-    window.Prism.highlightAllUnder(chatEle);
+    window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 
-    if (chatEle.querySelector('.bi.bi-copy') && !chatEle.dataset.copyBinded) { // not every ai response has copy button
-        chatEle.querySelector('.bi.bi-copy')
+    if (aiRespEle.querySelector('.bi.bi-copy') && !aiRespEle.dataset.copyBinded) { // not every ai response has copy button
+        aiRespEle.querySelector('.bi.bi-copy')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
                 evt = libs.evtTarget(evt);
 
-                chatEle.dataset.copyBinded = true;
+                aiRespEle.dataset.copyBinded = true;
                 let copyContent = '';
                 if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
                     console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
@@ -1998,9 +2013,45 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     // in the scenario of reload chat, the chatEle is already in view,
     // no need to scroll and save to storage
     if (saveStorage) {
-        scrollToChat(chatEle);
+        scrollToChat(aiRespEle);
         await appendChats2Storage(RoleAI, chatID, markdownContent, respExtras, aiRawResp);
     }
+
+    addReloadBtn(chatID);
+}
+
+function addReloadBtn (chatID) {
+    const chatEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+
+    // Create a new div element
+    const div = document.createElement('div');
+    div.className = 'operator';
+
+    // Create a new button element
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-secondary';
+    button.dataset.bsToggle = 'tooltip';
+    button.dataset.bsPlacement = 'top';
+    button.title = 'reload';
+
+    // Create a new i element
+    const i = document.createElement('i');
+    i.className = 'bi bi-arrow-clockwise';
+    i.dataset.fn = 'reload';
+
+    // Append the i element to the button
+    button.appendChild(i);
+
+    // Append the button to the div
+    div.appendChild(button);
+
+    // Append the div to the chatEle
+    chatEle.appendChild(div);
+
+    // Add event listener to the button
+    button.addEventListener('click', reloadAiResp);
 }
 
 function combineRefs (arr) {
@@ -2415,6 +2466,120 @@ async function updateChatVisionSelectedFileStore () {
         });
 }
 
+const reloadAiResp = async (evt) => {
+    evt.stopPropagation();
+
+    const chatID = evt.target.closest('.role-ai').dataset.chatid;
+    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
+
+    let newText = ''
+    if (chatEle.querySelector('.role-human textarea')) {
+        // read user input from click edit button
+        newText = chatEle.querySelector('.role-human textarea').value;
+    } else {
+        // read user input from click reload button
+        newText = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    }
+
+    chatEle.innerHTML = `
+        <div class="container-fluid row role-human" data-chatid="${chatID}">
+            <div class="col-auto icon">🤔️</div>
+            <div class="col text-start"><pre>${newText}</pre></div>
+            <div class="col-auto d-flex control">
+                <i class="bi bi-pencil-square"></i>
+                <i class="bi bi-trash"></i>
+            </div>
+        </div>
+        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+            <div class="col-auto icon">${robotIcon}</div>
+            <div class="col text-start ai-response" data-status="waiting">
+                <p class="card-text placeholder-glow">
+                    <span class="placeholder col-7"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-6"></span>
+                    <span class="placeholder col-8"></span>
+                </p>
+            </div>
+        </div>`;
+
+    chatEle.querySelector('.role-ai').dataset.status = 'waiting';
+
+    // bind delete and edit button
+    chatEle.querySelector('.role-human .bi-trash')
+        .addEventListener('click', deleteBtnHandler);
+    chatEle.querySelector('.bi.bi-pencil-square')
+        .addEventListener('click', editHumanInputHandler);
+
+    await sendChat2Server(chatID);
+    // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
+}
+
+const editHumanInputHandler = (evt) => {
+    evt.stopPropagation();
+    const chatID = evt.target.closest('.role-human').dataset.chatid;
+
+    const chatEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID}`);
+
+    const oldText = chatEle.innerHTML;
+    let text = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    // let attachHTML = '';
+
+    // attach image to vision-selected-store when edit human input
+    const attachEles = chatEle
+        .querySelectorAll('.role-human .text-start img') || [];
+    attachEles.forEach((ele) => {
+        const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
+        const key = ele.dataset.name || `${libs.DateStr()}.png`;
+        chatVisionSelectedFileStore.push({
+            filename: key,
+            contentB64: b64fileContent
+        });
+        // attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
+    })
+    updateChatVisionSelectedFileStore();
+
+    text = libs.sanitizeHTML(text);
+    chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
+        <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
+        <div class="btn-group" role="group">
+            <button class="btn btn-sm btn-outline-secondary save" type="button">
+                <i class="bi bi-check"></i>
+                Save</button>
+            <button class="btn btn-sm btn-outline-secondary cancel" type="button">
+                <i class="bi bi-x"></i>
+                Cancel</button>
+        </div>`;
+
+    const saveBtn = chatEle.querySelector('.role-human .btn.save');
+    const cancelBtn = chatEle.querySelector('.role-human .btn.cancel');
+    saveBtn.addEventListener('click', reloadAiResp);
+
+    cancelBtn.addEventListener('click', async (evt) => {
+        evt.stopPropagation();
+        chatEle.innerHTML = oldText;
+
+        // bind delete and edit button
+        chatEle.querySelector('.role-human .bi-trash')
+            .addEventListener('click', deleteBtnHandler);
+        chatEle.querySelector('.bi.bi-pencil-square')
+            .addEventListener('click', editHumanInputHandler);
+    });
+};
+
+// bind delete button
+const deleteBtnHandler = (evt) => {
+    evt.stopPropagation();
+    const chatID = evt.target.closest('.role-human').dataset.chatid;
+    const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
+
+    ConfirmModal('Are you sure to delete this chat?', async () => {
+        chatEle.parentNode.removeChild(chatEle);
+        removeChatInStorage(chatID);
+    });
+};
+
 /**
  * Append chat to conservation container
  *
@@ -2430,7 +2595,6 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         throw new Error('chatID is required');
     }
 
-    const robotIcon = '🤖️';
     let chatEleHtml;
     let chatOp = 'append';
     let waitAI = '';
@@ -2522,98 +2686,6 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
 
     // avoid duplicate event listener, only bind event listener for new chat
     if (role === RoleHuman) {
-        // bind delete button
-        const deleteBtnHandler = (evt) => {
-            evt.stopPropagation();
-
-            ConfirmModal('Are you sure to delete this chat?', async () => {
-                chatEle.parentNode.removeChild(chatEle);
-                removeChatInStorage(chatID);
-            });
-        };
-
-        const editHumanInputHandler = (evt) => {
-            evt.stopPropagation();
-
-            const oldText = chatContainer.querySelector(`#${chatID}`).innerHTML;
-            let text = chatContainer.querySelector(`#${chatID} .role-human .text-start pre`).innerHTML;
-
-            // attach image to vision-selected-store when edit human input
-            const attachEles = chatContainer
-                .querySelectorAll(`.chatManager .conservations .chats #${chatID} .role-human .text-start img`) || [];
-            attachEles.forEach((ele) => {
-                const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
-                const key = ele.dataset.name || `${libs.DateStr()}.png`;
-                chatVisionSelectedFileStore.push({
-                    filename: key,
-                    contentB64: b64fileContent
-                });
-                attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
-            })
-            updateChatVisionSelectedFileStore();
-
-            text = libs.sanitizeHTML(text);
-            chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
-                <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
-                <div class="btn-group" role="group">
-                    <button class="btn btn-sm btn-outline-secondary save" type="button">
-                        <i class="bi bi-check"></i>
-                        Save</button>
-                    <button class="btn btn-sm btn-outline-secondary cancel" type="button">
-                        <i class="bi bi-x"></i>
-                        Cancel</button>
-                </div>`;
-
-            const saveBtn = chatEle.querySelector('.role-human .btn.save');
-            const cancelBtn = chatEle.querySelector('.role-human .btn.cancel');
-            saveBtn.addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-                const newText = chatEle.querySelector('.role-human textarea').value;
-                chatEle.innerHTML = `
-                    <div class="container-fluid row role-human" data-chatid="${chatID}">
-                        <div class="col-auto icon">🤔️</div>
-                        <div class="col text-start"><pre>${newText}</pre></div>
-                        <div class="col-auto d-flex control">
-                            <i class="bi bi-pencil-square"></i>
-                            <i class="bi bi-trash"></i>
-                        </div>
-                    </div>
-                    <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
-                        <div class="col-auto icon">${robotIcon}</div>
-                        <div class="col text-start ai-response" data-status="waiting">
-                            <p class="card-text placeholder-glow">
-                                <span class="placeholder col-7"></span>
-                                <span class="placeholder col-4"></span>
-                                <span class="placeholder col-4"></span>
-                                <span class="placeholder col-6"></span>
-                                <span class="placeholder col-8"></span>
-                            </p>
-                        </div>
-                    </div>`;
-                chatEle.querySelector('.role-ai').dataset.status = 'waiting';
-
-                // bind delete and edit button
-                chatEle.querySelector('.role-human .bi-trash')
-                    .addEventListener('click', deleteBtnHandler);
-                chatEle.querySelector('.bi.bi-pencil-square')
-                    .addEventListener('click', editHumanInputHandler);
-
-                await sendChat2Server(chatID);
-                // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
-            });
-
-            cancelBtn.addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-                chatEle.innerHTML = oldText;
-
-                // bind delete and edit button
-                chatEle.querySelector('.role-human .bi-trash')
-                    .addEventListener('click', deleteBtnHandler);
-                chatEle.querySelector('.bi.bi-pencil-square')
-                    .addEventListener('click', editHumanInputHandler);
-            });
-        };
-
         // bind delete and edit button
         chatEle.querySelector('.role-human .bi-trash')
             .addEventListener('click', deleteBtnHandler);

@@ -165,6 +165,10 @@
   position: absolute;
   right: 5px;
   flex-direction: row-reverse;
+  opacity: 0.5;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control:hover {
+  opacity: 1;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
   margin-right: 5px;
@@ -186,18 +190,33 @@
   position: absolute;
   right: 16px;
   cursor: pointer;
+  opacity: 0.5;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .bi.bi-copy:hover {
+  opacity: 1;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response p {
   margin-bottom: 0.5em;
   margin-top: 0.5em;
 }
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator {
+  text-align: center;
+  cursor: default;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
+  width: 100px;
+  padding: 3px;
+  opacity: 0.8;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:hover {
+  opacity: 1;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:disabled {
+  cursor: not-allowed;
+}
 #chatContainer .chatManager .card.text-center .conservations .chats .card-body pre {
   overflow-wrap: break-word;
   white-space: pre-wrap;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .btn.reload {
-  max-width: 85px;
-  margin-bottom: 5px;
 }
 #chatContainer .chatManager .card.text-center .card-footer {
   position: relative;
@@ -224,11 +243,15 @@
 }
 #chatContainer .chatManager .card.text-center .card-footer .scroll-down {
   position: fixed;
-  bottom: 104px;
-  right: 3px;
+  bottom: 120px;
+  right: 10px;
   z-index: 1000;
   font-size: larger;
   cursor: pointer;
+  opacity: 0.5;
+}
+#chatContainer .chatManager .card.text-center .card-footer .scroll-down:hover {
+  opacity: 1;
 }
 #chatContainer .chatManager .card.text-center .card-footer .input-group {
   margin-bottom: 0px !important;
