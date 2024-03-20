@@ -801,7 +801,9 @@ async function listenSessionSwitch (evt) {
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
     await Promise.all(Array.from(await sessionChatHistory(activeSid)).map(async (item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
-        await renderAfterAiResp(item.chatID);
+        if (item.role === RoleAI) {
+            await renderAfterAiResp(item.chatID);
+        }
     }));
 
     await libs.KvSet(KvKeyPrefixSelectedSession, activeSid);
@@ -1079,7 +1081,9 @@ async function setupSessionManager () {
         // restore conservation history
         await Promise.all(Array.from(await activeSessionChatHistory()).map(async (item) => {
             append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
-            await renderAfterAiResp(item.chatID);
+            if (item.role === RoleAI) {
+                await renderAfterAiResp(item.chatID);
+            }
         }));
     }
 
@@ -1966,7 +1970,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
 
     const aiRawResp = decodeURIComponent(aiRespEle.dataset.aiRawResp || '');
     const respExtras = decodeURIComponent(aiRespEle.dataset.respExtras || '');
-    if (aiRawResp) {
+    if (aiRawResp && aiRawResp !== 'undefined') {
         aiRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
         aiRespEle.innerHTML += respExtras;
     }
