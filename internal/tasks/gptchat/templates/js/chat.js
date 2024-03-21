@@ -1547,7 +1547,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     respData.image_urls.forEach((url) => {
         attachHTML += `<img src="${url}">`
     });
-const reloadAiResp
+
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
