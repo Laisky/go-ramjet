@@ -1547,7 +1547,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     respData.image_urls.forEach((url) => {
         attachHTML += `<img src="${url}">`
     });
-
+const reloadAiResp
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
@@ -2473,7 +2473,7 @@ async function updateChatVisionSelectedFileStore () {
 const reloadAiResp = async (evt) => {
     evt.stopPropagation();
 
-    const chatID = evt.target.closest('.role-ai').dataset.chatid;
+    const chatID = evt.target.closest('.role-ai,.role-human').dataset.chatid;
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
 
     let newText = ''
