@@ -351,7 +351,10 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 
 	if !c.NoLimitExpensiveModels && c.LimitPromptTokenLength > 0 {
 		if nPromptTokens > c.LimitPromptTokenLength {
-			return errors.Errorf("the length of prompt tokens should not exceed %d for free users",
+			return errors.Errorf(
+				"the length of prompt tokens should not exceed %d for free users, "+
+					"you need upgrade to a paid membership to use longer prompt tokens, "+
+					"more info at https://wiki.laisky.com/projects/gpt/pay/cn/",
 				c.LimitPromptTokenLength)
 		}
 	}

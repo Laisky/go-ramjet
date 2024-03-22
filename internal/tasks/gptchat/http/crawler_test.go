@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 )
@@ -70,7 +71,9 @@ func TestGoogleSearch(t *testing.T) {
 	ctx := context.Background()
 	query := "how about the weather in shanghai"
 
-	content, err := googleSearch(ctx, query)
+	content, err := googleSearch(ctx, query, &config.UserConfig{
+		IsFree: false,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, content)
 

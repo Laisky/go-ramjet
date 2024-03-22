@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -150,7 +151,7 @@ var (
 	regexpHTMLTag  = regexp.MustCompile(`</?\w+>`)
 )
 
-func googleSearch(ctx context.Context, query string) (result string, err error) {
+func googleSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {
 	logger := gmw.GetLogger(ctx).Named("google_search")
 	searchContent, err := fetchDynamicURLContent(ctx, "https://www.google.com/search?q="+query)
 	if err != nil {
@@ -189,6 +190,9 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 
 		url := url
 		pool.Go(func() error {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
 			pageCnt, err := fetchStaticURLContent(ctx, url)
 			if err != nil {
 				return errors.Wrapf(err, "fetch %q", url)
@@ -199,7 +203,11 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 				return errors.Wrapf(err, "extract html text %q", url)
 			}
 
-			texts = utils.TrimByTokens("", texts, 1500)
+			limit := 2000 // for paid user
+			if user.IsFree {
+				limit = user.LimitPromptTokenLength / 5
+			}
+			texts = utils.TrimByTokens("", texts, limit)
 
 			mu.Lock()
 			result += texts + "\n"

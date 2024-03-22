@@ -384,8 +384,24 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
 
+		// enhance user query
+		if config.Config.RamjetURL != "" &&
+			frontendReq.LaiskyExtra != nil &&
+			!frontendReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
+			frontendReq.embeddingUrlContent(ctx, user)
+		}
+		if frontendReq.LaiskyExtra != nil &&
+			frontendReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
+			frontendReq.embeddingGoogleSearch(ctx, user)
+		}
+		frontendReq.LaiskyExtra = nil
+
 		if err := user.IsModelAllowed(frontendReq.Model, frontendReq.PromptTokens()); err != nil {
 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
+		}
+
+		if frontendReq.Stream {
+			enableHeartBeatForStreamReq(ctx)
 		}
 
 		var openaiReq any
@@ -611,7 +627,7 @@ func extractHTMLBody(content []byte) (bodyContent []byte, err error) {
 	return out.Bytes(), nil
 }
 
-func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context) {
+func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.UserConfig) {
 	logger := gmw.GetLogger(gctx)
 	logger.Debug("embedding google search")
 
@@ -634,7 +650,7 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context) {
 	}
 
 	// fetch google search result
-	extra, err := googleSearch(gctx.Request.Context(), *lastUserPrompt)
+	extra, err := googleSearch(gctx.Request.Context(), *lastUserPrompt, user)
 	if err != nil {
 		log.Logger.Error("google search", zap.Error(err))
 		return
@@ -803,22 +819,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 	return respData.Results, nil
 }
 
-func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
-	payload, err := io.ReadAll(body)
-	if err != nil {
-		return nil, errors.Wrap(err, "read request body")
-	}
-
-	userReq = new(FrontendReq)
-	if err = json.Unmarshal(payload, userReq); err != nil {
-		return nil, errors.Wrap(err, "parse request")
-	}
-	userReq.fillDefault()
-
-	if len(userReq.Messages) == 0 {
-		return nil, errors.New("no messages")
-	}
-
+func enableHeartBeatForStreamReq(gctx *gin.Context) {
 	heartCtx, heartCancel := context.WithCancel(gctx.Request.Context())
 	var allCleaned = make(chan struct{})
 	defer func() {
@@ -844,17 +845,34 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 			time.Sleep(time.Second)
 		}
 	}()
+}
 
-	if config.Config.RamjetURL != "" &&
-		userReq.LaiskyExtra != nil &&
-		!userReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
-		userReq.embeddingUrlContent(gctx, user)
-	}
-	if userReq.LaiskyExtra != nil &&
-		userReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
-		userReq.embeddingGoogleSearch(gctx)
+func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read request body")
 	}
 
-	userReq.LaiskyExtra = nil // remove extra data before send to upstream server
+	userReq = new(FrontendReq)
+	if err = json.Unmarshal(payload, userReq); err != nil {
+		return nil, errors.Wrap(err, "parse request")
+	}
+	userReq.fillDefault()
+
+	if len(userReq.Messages) == 0 {
+		return nil, errors.New("no messages")
+	}
+
+	// if config.Config.RamjetURL != "" &&
+	// 	userReq.LaiskyExtra != nil &&
+	// 	!userReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
+	// 	userReq.embeddingUrlContent(gctx, user)
+	// }
+	// if userReq.LaiskyExtra != nil &&
+	// 	userReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
+	// 	userReq.embeddingGoogleSearch(gctx)
+	// }
+
+	// userReq.LaiskyExtra = nil // remove extra data before send to upstream server
 	return userReq, err
 }
