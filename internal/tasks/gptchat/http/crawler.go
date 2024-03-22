@@ -199,7 +199,7 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 				return errors.Wrapf(err, "extract html text %q", url)
 			}
 
-			texts = utils.TrimByTokens("", texts, 1000)
+			texts = utils.TrimByTokens("", texts, 1500)
 
 			mu.Lock()
 			result += texts + "\n"

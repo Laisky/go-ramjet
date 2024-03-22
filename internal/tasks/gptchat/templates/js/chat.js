@@ -1909,33 +1909,37 @@ async function sendChat2Server (chatID) {
         evt.data = evt.data.replace(/^\[HEARTBEAT\]+/, '');
 
         if (!isChatRespDone) {
-            const payload = JSON.parse(evt.data);
-            const respContent = parseChatResp(selectedModel, payload);
+            try {
+                const payload = JSON.parse(evt.data);
+                const respContent = parseChatResp(selectedModel, payload);
 
-            if (payload.choices[0].finish_reason) {
-                isChatRespDone = true;
-            }
-
-            switch (globalAIRespEle.dataset.status) {
-            case 'waiting':
-                globalAIRespEle.dataset.status = 'writing';
-
-                if (respContent) {
-                    globalAIRespEle.innerHTML = respContent;
-                    globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
-                } else {
-                    globalAIRespEle.innerHTML = '';
+                if (payload.choices[0].finish_reason) {
+                    isChatRespDone = true;
                 }
 
-                break;
-            case 'writing':
-                if (respContent) {
-                    globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
-                    globalAIRespEle.innerHTML = libs.Markdown2HTML(decodeURIComponent(globalAIRespEle.dataset.aiRawResp));
-                }
+                switch (globalAIRespEle.dataset.status) {
+                case 'waiting':
+                    globalAIRespEle.dataset.status = 'writing';
 
-                scrollToChat(globalAIRespEle);
-                break;
+                    if (respContent) {
+                        globalAIRespEle.innerHTML = respContent;
+                        globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
+                    } else {
+                        globalAIRespEle.innerHTML = '';
+                    }
+
+                    break;
+                case 'writing':
+                    if (respContent) {
+                        globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
+                        globalAIRespEle.innerHTML = libs.Markdown2HTML(decodeURIComponent(globalAIRespEle.dataset.aiRawResp));
+                    }
+
+                    scrollToChat(globalAIRespEle);
+                    break;
+                }
+            } catch (err) {
+                await abortAIResp(err);
             }
         }
 
