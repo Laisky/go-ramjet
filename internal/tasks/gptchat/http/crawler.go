@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -198,9 +199,7 @@ func googleSearch(ctx context.Context, query string) (result string, err error) 
 				return errors.Wrapf(err, "extract html text %q", url)
 			}
 
-			if len(texts) > 1000 {
-				texts = texts[:1000]
-			}
+			texts = utils.TrimByTokens("", texts, 1000)
 
 			mu.Lock()
 			result += texts + "\n"
