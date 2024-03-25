@@ -1278,7 +1278,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const systemPrompt = await OpenaiChatStaticContext()
     const selectedModel = await OpenaiSelectedModel()
 
-    if (selectedModel === ChatModelGeminiPro) {
+    if (selectedModel === ChatModelGeminiPro || N <= 1) {
         // one-api's gemoni-pro do not support context
         return [{
             role: RoleSystem,
@@ -1286,9 +1286,9 @@ async function getLastNChatMessages (N, ignoredChatID) {
         }]
     }
 
-    let latestMessages = [];
+    const latestMessages = [];
     const historyMessages = await activeSessionChatHistory();
-    let nHuman = 0;
+    let nHuman = 1;
     let latestRole;
     for (let i = historyMessages.length - 1; i >= 0; i--) {
         const role = historyMessages[i].role;
@@ -1311,13 +1311,6 @@ async function getLastNChatMessages (N, ignoredChatID) {
             continue;
         }
 
-        if (role === RoleHuman) {
-            nHuman++;
-        }
-        if (nHuman >= N) {
-            break;
-        }
-
         if (role === RoleAI && content.includes('🔥Someting in trouble')) {
             // if AI response is error, treat it as an empty response
             content = '';
@@ -1328,13 +1321,20 @@ async function getLastNChatMessages (N, ignoredChatID) {
             role,
             content
         });
+
+        if (role === RoleHuman) {
+            nHuman++;
+            if (nHuman >= N) {
+                break;
+            }
+        }
     }
 
     if (systemPrompt) {
-        latestMessages = [{
+        latestMessages.unshift({
             role: RoleSystem,
             content: systemPrompt
-        }].concat(latestMessages);
+        });
     }
 
     return latestMessages;
