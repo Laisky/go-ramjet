@@ -1146,9 +1146,13 @@ async function setupSessionManager () {
 
                 // save new session history and config
                 await libs.KvSet(kvSessionKey(newSessionID), []);
-                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${maxSessionID}`);
+                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${await activeSessionID()}`);
                 const sconfig = newSessionConfig();
-                sconfig.api_token = oldSessionConfig.api_token; // keep api token
+
+                // keep old session's api token and api base
+                sconfig.api_token = oldSessionConfig.api_token;
+                sconfig.api_base = oldSessionConfig.api_base;
+
                 await libs.KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, sconfig);
                 await libs.KvSet(KvKeyPrefixSelectedSession, newSessionID);
 
