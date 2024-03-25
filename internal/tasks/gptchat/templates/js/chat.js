@@ -1101,6 +1101,7 @@ async function setupSessionManager () {
         document
             .querySelector('#sessionManager .btn.new-session')
             .addEventListener('click', async (evt) => {
+                const activeSID = await activeSessionID();
                 let maxSessionID = 0;
                 (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
@@ -1118,6 +1119,7 @@ async function setupSessionManager () {
                 `).forEach((item) => {
                     item.classList.remove('active');
                 });
+
 
                 // add new active session
                 chatContainer
@@ -1146,7 +1148,7 @@ async function setupSessionManager () {
 
                 // save new session history and config
                 await libs.KvSet(kvSessionKey(newSessionID), []);
-                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${await activeSessionID()}`);
+                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${activeSID}`);
                 const sconfig = newSessionConfig();
 
                 // keep old session's api token and api base
