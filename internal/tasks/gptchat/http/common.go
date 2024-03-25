@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -88,6 +89,7 @@ func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err 
 }
 
 func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
+	logger := gmw.GetLogger(gctx.Request.Context()).Named("get_user_by_token")
 	ctx, cancel := context.WithTimeout(gctx.Request.Context(), time.Second*10)
 	defer cancel()
 
@@ -105,7 +107,7 @@ SWITCH_FOR_USER:
 		}
 
 		username := userToken[:15]
-		log.Logger.Debug("use server's freetier openai token",
+		logger.Debug("use server's freetier openai token",
 			zap.String("token", userToken),
 			zap.String("user", username))
 
@@ -130,7 +132,7 @@ SWITCH_FOR_USER:
 		}
 
 		username := userToken[:15]
-		log.Logger.Debug("use laisky's oneapi token", zap.String("user", username))
+		logger.Debug("use laisky's oneapi token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
 			UserName:    username,
 			Token:       userToken,
@@ -151,11 +153,11 @@ SWITCH_FOR_USER:
 			user.NoLimitImageModels = true
 		} else {
 			if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
-				log.Logger.Error("get oneapi uid", zap.Error(err))
+				logger.Error("get oneapi uid", zap.Error(err))
 				user.EnableExternalImageBilling = false
 				user.NoLimitImageModels = false
 			} else {
-				log.Logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
+				logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
 				user.EnableExternalImageBilling = true
 				user.ExternalImageBillingUID = oneapiUid
 				user.NoLimitImageModels = true
@@ -164,7 +166,7 @@ SWITCH_FOR_USER:
 	default: // use server's token in settings
 		for _, u := range config.Config.UserTokens {
 			if u.Token == userToken {
-				log.Logger.Debug("paid user", zap.String("user", u.UserName))
+				logger.Debug("paid user", zap.String("user", u.UserName))
 				if err = u.Valid(); err != nil {
 					return nil, errors.Wrap(err, "valid paid user")
 				}
@@ -177,7 +179,7 @@ SWITCH_FOR_USER:
 		// use user's own openai/azure or whatever token
 		hashed := sha256.Sum256([]byte(userToken))
 		username := hex.EncodeToString(hashed[:])[:16]
-		log.Logger.Debug("use user's own token", zap.String("user", username))
+		logger.Debug("use user's own token", zap.String("user", username))
 		user = &config.UserConfig{ // default to openai user
 			UserName:               username,
 			Token:                  userToken,
@@ -206,6 +208,8 @@ SWITCH_FOR_USER:
 			default:
 				user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
 			}
+
+			logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
 		}
 	}
 

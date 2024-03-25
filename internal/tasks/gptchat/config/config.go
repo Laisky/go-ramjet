@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
@@ -60,8 +61,8 @@ func SetupConfig() (err error) {
 		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
-	Config.DefaultOpenaiToken = gutils.OptionalVal(
-		&Config.DefaultOpenaiToken, Config.Token)
+	// Config.DefaultOpenaiToken = gutils.OptionalVal(
+	// 	&Config.DefaultOpenaiToken, Config.Token)
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
@@ -88,7 +89,7 @@ type OpenAI struct {
 	// DefaultOpenaiToken (optional) default openai token, default equals to token
 	//
 	// Dangerous: will escape paying wall, use it carefully
-	DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
+	// DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
 	// DefaultImageToken (optional) default image token, default equals to token
 	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
 
@@ -279,11 +280,13 @@ func setupRateLimiter() {
 // # Args
 //   - model: model name
 //   - nPromptTokens: the length of prompt tokens, 0 means no limit
-func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
+func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTokens int) error {
 	onceLimiter.Do(setupRateLimiter)
 
+	logger := gmw.GetLogger(ctx)
+
 	if c.BYOK { // bypass if user bring their own token
-		log.Logger.Debug("bypass rate limit for BYOK user")
+		logger.Debug("bypass rate limit for BYOK user")
 		return nil
 	}
 
@@ -352,15 +355,15 @@ func (c *UserConfig) IsModelAllowed(model string, nPromptTokens int) error {
 	if !c.NoLimitExpensiveModels && c.LimitPromptTokenLength > 0 {
 		if nPromptTokens > c.LimitPromptTokenLength {
 			return errors.Errorf(
-				"the length of prompt tokens should not exceed %d for free users, "+
+				"The length of the prompt you submitted is %d, exceeds the limit for free users %d, "+
 					"you need upgrade to a paid membership to use longer prompt tokens, "+
 					"more info at https://wiki.laisky.com/projects/gpt/pay/cn/",
-				c.LimitPromptTokenLength)
+				nPromptTokens, c.LimitPromptTokenLength)
 		}
 	}
 
 	// if price less than 0, means no limit
-	log.Logger.Debug("check rate limit",
+	logger.Debug("check rate limit",
 		zap.String("model", model), zap.Int("price", ratelimitCost))
 	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
 		return errors.Errorf("This model(%s) restricts usage for free users. "+

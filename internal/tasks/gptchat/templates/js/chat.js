@@ -1291,13 +1291,16 @@ async function getLastNChatMessages (N, ignoredChatID) {
     let nHuman = 0;
     let latestRole;
     for (let i = historyMessages.length - 1; i >= 0; i--) {
-        if (latestRole && latestRole === historyMessages[i].role) {
+        const role = historyMessages[i].role;
+        let content = historyMessages[i].rawContent || historyMessages[i].content;
+
+        if (latestRole && latestRole === role) {
             // if latest role is same as current role, break
             console.warn(`latest role is same as current role, break, latestRole=${latestRole}`);
             break;
         }
 
-        if (historyMessages[i].role !== RoleHuman && historyMessages[i].role !== RoleAI) {
+        if (role !== RoleHuman && role !== RoleAI) {
             // exclude system message
             continue;
         }
@@ -1308,14 +1311,23 @@ async function getLastNChatMessages (N, ignoredChatID) {
             continue;
         }
 
-        if (historyMessages[i].role === RoleHuman) {
+        if (role === RoleHuman) {
             nHuman++;
         }
         if (nHuman >= N) {
             break;
         }
 
-        latestMessages.unshift(historyMessages[i]);
+        if (role === RoleAI && content.includes('🔥Someting in trouble')) {
+            // if AI response is error, treat it as an empty response
+            content = '';
+        }
+
+        // insert at the beginning, only keep role and content
+        latestMessages.unshift({
+            role,
+            content
+        });
     }
 
     if (systemPrompt) {

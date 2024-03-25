@@ -43,7 +43,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
 		return
 	}
 
@@ -175,7 +175,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
 		return
 	}
 
@@ -295,7 +295,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
 		return
 	}
 	if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
