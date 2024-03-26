@@ -2078,7 +2078,13 @@ function addReloadBtn (chatID) {
     chatEle.appendChild(div);
 
     // Add event listener to the button
-    button.addEventListener('click', reloadAiResp);
+    button.addEventListener('click', async (evt) => {
+        const chatID = evt.target.closest('.role-ai').dataset.chatid;
+        // put image back to vision store
+        putBackAttachmentsInUserInput(chatID);
+
+        await reloadAiResp(evt);
+    });
 }
 
 function combineRefs (arr) {
@@ -2542,16 +2548,14 @@ const reloadAiResp = async (evt) => {
     // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
 }
 
-const editHumanInputHandler = (evt) => {
-    evt.stopPropagation();
-    const chatID = evt.target.closest('.role-human').dataset.chatid;
-
+/**
+ * put attachments back to vision store when edit human input
+ *
+ * @param {string} chatID - chat id
+ */
+function putBackAttachmentsInUserInput (chatID) {
     const chatEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID}`);
-
-    const oldText = chatEle.innerHTML;
-    let text = chatEle.querySelector('.role-human .text-start pre').innerHTML;
-    // let attachHTML = '';
 
     // attach image to vision-selected-store when edit human input
     const attachEles = chatEle
@@ -2566,6 +2570,25 @@ const editHumanInputHandler = (evt) => {
         // attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
     })
     updateChatVisionSelectedFileStore();
+}
+
+/**
+ * edit human input
+ *
+ * @param {Event} evt - event
+ */
+function editHumanInputHandler (evt) {
+    evt.stopPropagation();
+    const chatID = evt.target.closest('.role-human').dataset.chatid;
+
+    const chatEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID}`);
+
+    const oldText = chatEle.innerHTML;
+    let text = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    // let attachHTML = '';
+
+    putBackAttachmentsInUserInput(chatID);
 
     text = libs.sanitizeHTML(text);
     chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
