@@ -2,13 +2,17 @@
 
 /**
  * load js modules by urls
+ *
+ * @param {*} moduleUrls array of module urls
+ * @param {*} moduleType script type, default is 'text/javascript'
  */
-export const LoadJsModules = async (moduleUrls) => {
+export const LoadJsModules = async (moduleUrls, moduleType) => {
+    moduleType = moduleType || 'text/javascript';
     const promises = moduleUrls.map((moduleUrl) => {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = moduleUrl;
-            script.type = 'text/javascript';
+            script.type = moduleType;
             script.async = false;
             script.onload = resolve;
             script.onerror = reject;
