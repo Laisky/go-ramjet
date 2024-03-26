@@ -222,6 +222,5 @@ func CopyHeader(to, from http.Header) {
 		"Content-Type",
 	} {
 		to.Add(k, from.Get(k))
-
 	}
 }

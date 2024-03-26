@@ -7,9 +7,10 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 func TestFetchDynamicURLContent(t *testing.T) {

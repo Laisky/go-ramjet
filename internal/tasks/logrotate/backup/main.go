@@ -1,4 +1,4 @@
-// Package backup backup logs from ES to file system
+// Package backup provides backup log files to remote server.
 package backup
 
 import (
@@ -76,7 +76,6 @@ func (u *baseUploader) AddFaiFile(fpath string) {
 
 // CleanFiles remove failed files if IsReserve=false
 func (u *baseUploader) CleanFiles() {
-
 	if u.ST.IsReserve {
 		return
 	}

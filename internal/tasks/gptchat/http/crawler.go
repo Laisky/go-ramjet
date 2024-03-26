@@ -119,7 +119,9 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537")
+	req.Header.Set("User-Agent",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "+
+			"Chrome/58.0.3029.110 Safari/537")
 	req.Header.Del("Accept-Encoding")
 
 	resp, err := httpcli.Do(req) // nolint:bodyclose
@@ -147,8 +149,8 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 }
 
 var (
-	regexpHTMLText = regexp.MustCompile(`<p>([\S ]+?)</p>`)
-	regexpHTMLTag  = regexp.MustCompile(`</?\w+>`)
+	// regexpHTMLText = regexp.MustCompile(`<p>([\S ]+?)</p>`)
+	regexpHTMLTag = regexp.MustCompile(`</?\w+>`)
 )
 
 func googleSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {
@@ -310,6 +312,7 @@ func _extrachHtmlText(raw []byte) (result string, err error) {
 		switch n.DataAtom {
 		case atom.Script, atom.Style, atom.Meta, atom.Link, atom.Head, atom.Title:
 			return
+		default:
 		}
 
 		if n.Type == html.TextNode {

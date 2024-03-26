@@ -13,31 +13,31 @@ require (
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa
 	github.com/Laisky/zap v1.27.0
-	github.com/aws/aws-sdk-go-v2 v1.25.2
-	github.com/aws/aws-sdk-go-v2/config v1.27.6
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.6
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.51.3
-	github.com/baidubce/bce-sdk-go v0.9.167
-	github.com/chromedp/cdproto v0.0.0-20240304214822-eeb3d13057c9
+	github.com/aws/aws-sdk-go-v2 v1.26.0
+	github.com/aws/aws-sdk-go-v2/config v1.27.9
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.9
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.0
+	github.com/baidubce/bce-sdk-go v0.9.170
+	github.com/chromedp/cdproto v0.0.0-20240312231614-1e5096e63154
 	github.com/chromedp/chromedp v0.9.5
 	github.com/deckarep/golang-set/v2 v2.6.0
-	github.com/fsouza/go-dockerclient v1.10.2
+	github.com/fsouza/go-dockerclient v1.11.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gorilla/feeds v1.1.2
 	github.com/jinzhu/copier v0.4.0
-	github.com/minio/minio-go/v7 v7.0.68
+	github.com/minio/minio-go/v7 v7.0.69
 	github.com/pkg/errors v0.9.1
 	github.com/pkoukk/tiktoken-go v0.1.6
 	github.com/spf13/cobra v1.8.0
-	github.com/stretchr/testify v1.8.4
-	github.com/stripe/stripe-go/v76 v76.19.0
+	github.com/stretchr/testify v1.9.0
+	github.com/stripe/stripe-go/v76 v76.22.0
 	github.com/yanyiwu/gojieba v1.3.0
 	go.mongodb.org/mongo-driver v1.14.0
 	golang.org/x/net v0.22.0
 	golang.org/x/sync v0.6.0
 	google.golang.org/protobuf v1.33.0
 	gorm.io/driver/clickhouse v0.6.0
-	gorm.io/gorm v1.25.7
+	gorm.io/gorm v1.25.8
 )
 
 require (
@@ -54,18 +54,18 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.2 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.2 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.0 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.20.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.28.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.20.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.5 // indirect
 	github.com/aws/smithy-go v1.20.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
@@ -77,7 +77,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
-	github.com/docker/docker v25.0.5+incompatible // indirect
+	github.com/docker/docker v25.0.4+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

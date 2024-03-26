@@ -112,12 +112,14 @@ func DrawByLcmHandler(ctx *gin.Context) {
 					return errors.New("empty response")
 				}
 
-				img, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(respBody.Data[0], "data:image/png;base64,"))
+				img, err := base64.StdEncoding.DecodeString(
+					strings.TrimPrefix(respBody.Data[0], "data:image/png;base64,"))
 				if err != nil {
 					return errors.Wrap(err, "decode image")
 				}
 
-				return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Prompt, img)
+				return uploadImage2Minio(taskCtx,
+					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Prompt, img)
 			}(); err != nil {
 				// upload error msg
 				msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
@@ -231,7 +233,8 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 				}
 
 				pool.Go(func() error {
-					return uploadImage2Minio(taskCtx, drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, imgBytes)
+					return uploadImage2Minio(taskCtx,
+						drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, imgBytes)
 				})
 			}
 
@@ -298,7 +301,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
 		return
 	}
-	if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
+	if err := checkUserExternalBilling(ctx.Request.Context(),
+		user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
 		return
 	}
 

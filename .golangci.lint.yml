@@ -373,7 +373,7 @@ linters:
     # - exhaustruct # useless, there could be some reasons to not use all fields
     - exportloopref
     # - forbidigo # no need
-    - forcetypeassert
+    # - forcetypeassert
     # - funlen
     # - gci # there is no need to strictly the order of imports
     - ginkgolinter

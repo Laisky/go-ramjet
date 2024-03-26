@@ -1120,7 +1120,6 @@ async function setupSessionManager () {
                     item.classList.remove('active');
                 });
 
-
                 // add new active session
                 chatContainer
                     .querySelector('.chatManager .conservations .chats').innerHTML = '';

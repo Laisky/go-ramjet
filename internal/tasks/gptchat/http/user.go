@@ -12,6 +12,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
+	gutils "github.com/Laisky/go-utils/v4"
 	gcompress "github.com/Laisky/go-utils/v4/compress"
 	gcrypto "github.com/Laisky/go-utils/v4/crypto"
 	"github.com/Laisky/go-utils/v4/json"
@@ -140,7 +141,7 @@ func DownloadUserConfig(ctx *gin.Context) {
 	if AbortErr(ctx, errors.Wrap(err, "get user config from s3")) {
 		return
 	}
-	defer object.Close()
+	defer gutils.CloseWithLog(object, logger)
 
 	body, err := io.ReadAll(object)
 	if AbortErr(ctx, errors.Wrap(err, "read body")) {

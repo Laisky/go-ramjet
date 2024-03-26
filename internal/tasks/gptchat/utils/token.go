@@ -1,3 +1,4 @@
+// Package utils provides some utility functions for gptchat
 package utils
 
 import (
@@ -7,7 +8,7 @@ import (
 	tiktoken "github.com/pkoukk/tiktoken-go"
 )
 
-const defaultTokenEncoding = "gpt-3.5-turbo"
+const defaultTokenEncoding = "gpt-3.5-turbo" //nolint:gosec //G101: Potential hardcoded credentials
 
 // CalculateTokens calculate tokens for given model and content
 func CalculateTokens(model, content string) int {

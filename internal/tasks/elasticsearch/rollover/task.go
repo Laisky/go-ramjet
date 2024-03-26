@@ -3,7 +3,7 @@ package rollover
 import (
 	"context"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"time"
@@ -84,13 +84,22 @@ func LoadAllIndicesNames(api string) (indices []string, err error) {
 		idxList = []map[string]string{}
 		idxItm  map[string]string
 	)
-	resp, err := httpClient.Get(url) //nolint: bodyclose
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "new http request error for url %v", urlMasking(url))
+	}
+
+	resp, err := httpClient.Do(req) //nolint: bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "http get error for url %v", urlMasking(url))
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
-	respBytes, err := ioutil.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrapf(err, "load body error for url %v", urlMasking(url))
 	}

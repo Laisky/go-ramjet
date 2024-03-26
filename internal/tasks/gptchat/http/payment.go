@@ -29,7 +29,7 @@ func PaymentStaticHandler(c *gin.Context) {
 }
 
 type paymentItem struct {
-	id string
+	// id string
 }
 
 type paymentRequest struct {

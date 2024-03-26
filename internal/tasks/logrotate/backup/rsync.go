@@ -85,7 +85,7 @@ func RunSysCMD(cmd []string) (output string, err error) {
 	defer cancel()
 	term := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 	out, err := term.Output()
-	if ctx.Err() == context.DeadlineExceeded {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return "", errors.Wrap(ctx.Err(), "upload timeout")
 	}
 	if err != nil {
