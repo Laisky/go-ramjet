@@ -123,15 +123,15 @@ const IsChatModel = (model) => {
 
 const IsQaModel = (model) => {
     return QaModels.includes(model)
-}
+};
 
 const IsCompletionModel = (model) => {
     return CompletionModels.includes(model)
-}
+};
 
 const IsImageModel = (model) => {
     return ImageModels.includes(model)
-}
+};
 
 // const IsChatModelAllowed = async (model) => {
 //     const allowedModels = await libs.KvGet(KvKeyAllowedModels)
@@ -144,10 +144,10 @@ const IsImageModel = (model) => {
 
 const ShowSpinner = () => {
     document.getElementById('spinner').toggleAttribute('hidden', false)
-}
+};
 const HideSpinner = () => {
     document.getElementById('spinner').toggleAttribute('hidden', true)
-}
+};
 
 /**
  * Generates a random string of the specified length.
@@ -162,7 +162,7 @@ const RandomString = (length) => {
     }
 
     return result
-}
+};
 
 // const OpenaiToken = async () => {
 //     const sid = await activeSessionID()
@@ -273,7 +273,7 @@ const OpenaiChatStaticContext = async (prompt) => {
     }
 
     return sconfig.system_prompt || '';
-}
+};
 
 const SingleInputModal = (title, message, callback, defaultVal) => {
     const modal = document.getElementById('singleInputModal');
@@ -438,7 +438,7 @@ async function dataMigrate () {
     }
 }
 
-let singleInputCallback, singleInputModal
+let singleInputCallback, singleInputModal;
 
 function setupSingleInputModal () {
     singleInputCallback = null
@@ -463,7 +463,7 @@ let deleteCheckCallback,
     /**
      * global shared modal to act as confirm dialog
      */
-    deleteCheckModal
+    deleteCheckModal;
 
 function setupConfirmModal () {
     deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));
@@ -1278,17 +1278,17 @@ function scrollToChat (chatEle) {
 * @returns {Array} An array of chat messages.
 */
 async function getLastNChatMessages (N, ignoredChatID) {
-    console.debug('getLastNChatMessages', N, ignoredChatID)
+    console.debug('getLastNChatMessages', N, ignoredChatID);
 
-    const systemPrompt = await OpenaiChatStaticContext()
-    const selectedModel = await OpenaiSelectedModel()
+    const systemPrompt = await OpenaiChatStaticContext();
+    const selectedModel = await OpenaiSelectedModel();
 
     if (selectedModel === ChatModelGeminiPro || N <= 1) {
         // one-api's gemoni-pro do not support context
         return [{
             role: RoleSystem,
             content: systemPrompt
-        }]
+        }];
     }
 
     const latestMessages = [];
@@ -1380,15 +1380,15 @@ function parseChatResp (chatmodel, payload) {
     }
 
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
-        return payload.choices[0].delta.content || ''
+        return payload.choices[0].delta.content || '';
     } else if (IsCompletionModel(chatmodel)) {
-        return payload.choices[0].text || ''
+        return payload.choices[0].text || '';
     } else {
-        showalert('error', `Unknown chat model ${chatmodel}`)
+        showalert('error', `Unknown chat model ${chatmodel}`);
     }
 }
 
-const httpsRegexp = /\bhttps:\/\/\S+/
+const httpsRegexp = /\bhttps:\/\/\S+/;
 
 /**
  * extract https urls from reqPrompt and pin them to the chat conservation window
@@ -1672,7 +1672,7 @@ async function sendChat2Server (chatID) {
     if (location.search) {
         const params = new URLSearchParams(location.search);
         if (params.has('chatmodel')) {
-            selectedModel = params.get('chatmodel')
+            selectedModel = params.get('chatmodel');
         }
     }
 
@@ -2546,7 +2546,7 @@ const reloadAiResp = async (evt) => {
 
     await sendChat2Server(chatID);
     // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
-}
+};
 
 /**
  * put attachments back to vision store when edit human input
