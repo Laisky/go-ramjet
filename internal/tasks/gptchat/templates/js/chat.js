@@ -320,6 +320,11 @@ const main = async (event) => {
     }
     mainRunned = true;
 
+    // load js modules asynchronously
+    libs.LoadJsModules([
+        'https://js.sentry-cdn.com/b69cdec9bcfe0a72438804bef2fecab5.min.js'
+    ]);
+    // load required modules synchronously
     await libs.LoadJsModules(window.modules);
     await dataMigrate();
     await setupHeader();
