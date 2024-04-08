@@ -327,7 +327,7 @@
             window.libs = await import("/static/{{.LibJs}}");
 
             // modules need to load before main.js
-            window.libs.LoadJsModules([
+            await window.libs.LoadJsModules([
                 "{{.BootstrapJs}}",
                 "{{.SeeJs}}",
                 "{{.ShowdownJs}}",
@@ -337,7 +337,7 @@
                 "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
                 "/static/{{.DataJs}}"
             ]);
-            window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
+            await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
         })();
     </script>
 
