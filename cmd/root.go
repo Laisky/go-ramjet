@@ -36,9 +36,9 @@ var rootCMD = &cobra.Command{
 		//加载参数并启动邮箱
 		alert.Manager.Setup()
 
-		if err := alert.Telegram.SendAlert("start go-ramjet"); err != nil {
-			log.Logger.Error("send telegram msg", zap.Error(err))
-		}
+		// if err := alert.Telegram.SendAlert("start go-ramjet"); err != nil {
+		// 	log.Logger.Error("send telegram msg", zap.Error(err))
+		// }
 
 		//获取参数
 		log.Logger.Info("running...",
@@ -108,6 +108,10 @@ func setupLogger(ctx context.Context) {
 		}
 
 		opts = append(opts, zap.HooksWithFields(alertPusher.GetZapHook()))
+		log.Logger.Info("set alert",
+			zap.String("alert_api", gconfig.Shared.GetString("logger.push_api")),
+			zap.String("alert_type", gconfig.Shared.GetString("logger.alert_type")),
+		)
 	}
 
 	hostname, err := os.Hostname()
@@ -115,13 +119,10 @@ func setupLogger(ctx context.Context) {
 		log.Logger.Panic("get hostname", zap.Error(err))
 	}
 
-	if _, err := glog.NewConsoleWithName(
-		"go-ramjet:"+hostname,
-		glog.Level(gconfig.Shared.GetString("log-level")),
-		opts...,
-	); err != nil {
-		log.Logger.Panic("setup logger", zap.Error(err))
-	}
+	logger := log.Logger.WithOptions(opts...).With(
+		zap.String("host", hostname),
+	)
+	log.Logger = logger
 
 	//根据入参来区分日志输出级别
 	if gconfig.Shared.GetBool("debug") { // debug mode
