@@ -1,6 +1,6 @@
 'use strict';
 
-const libs = await import(window.internalModules.libjs);
+const libs = window.libs;
 
 const robotIcon = '🤖️';
 
@@ -122,31 +122,22 @@ const IsChatModel = (model) => {
 };
 
 const IsQaModel = (model) => {
-    return QaModels.includes(model)
+    return QaModels.includes(model);
 };
 
 const IsCompletionModel = (model) => {
-    return CompletionModels.includes(model)
+    return CompletionModels.includes(model);
 };
 
 const IsImageModel = (model) => {
-    return ImageModels.includes(model)
+    return ImageModels.includes(model);
 };
-
-// const IsChatModelAllowed = async (model) => {
-//     const allowedModels = await libs.KvGet(KvKeyAllowedModels)
-//     if (!allowedModels) {
-//         return false
-//     }
-
-//     return allowedModels.includes(model)
-// }
 
 const ShowSpinner = () => {
-    document.getElementById('spinner').toggleAttribute('hidden', false)
+    document.getElementById('spinner').toggleAttribute('hidden', false);
 };
 const HideSpinner = () => {
-    document.getElementById('spinner').toggleAttribute('hidden', true)
+    document.getElementById('spinner').toggleAttribute('hidden', true);
 };
 
 /**
@@ -155,13 +146,13 @@ const HideSpinner = () => {
  * @returns {string} - The generated random string.
  */
 const RandomString = (length) => {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-    let result = ''
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
     for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length))
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
 
-    return result
+    return result;
 };
 
 // const OpenaiToken = async () => {
@@ -320,8 +311,6 @@ const main = async (event) => {
     }
     mainRunned = true;
 
-    // load required modules synchronously
-    await libs.LoadJsModules(window.modules);
     await dataMigrate();
     await setupHeader();
     setupConfirmModal();
@@ -329,7 +318,6 @@ const main = async (event) => {
 
     await setupChatJs();
 };
-// document.addEventListener('DOMContentLoaded', main);
 main();
 
 async function dataMigrate () {
