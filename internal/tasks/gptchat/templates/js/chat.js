@@ -402,7 +402,10 @@ async function dataMigrate () {
             return;
         }
 
-        const sconfig = await libs.KvGet(key);
+        let sconfig = await libs.KvGet(key);
+        if (!sconfig) {
+            sconfig = newSessionConfig();
+        }
 
         // set default api_token
         if (!sconfig.api_token || sconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
