@@ -116,6 +116,17 @@ const KvKeyPrefixSessionConfig = 'chat_user_config_';
 const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
 const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
+const KvKeyVersionDate = 'config_version_date';
+
+/**
+ * setup confirm modal callback, shoule be an async function
+ */
+let deleteCheckCallback,
+    /**
+     * global shared modal to act as confirm dialog
+     */
+    deleteCheckModal;
+let singleInputCallback, singleInputModal;
 
 const IsChatModel = (model) => {
     return ChatModels.includes(model);
@@ -307,11 +318,12 @@ const main = async (event) => {
     }
     mainRunned = true;
 
+    setupConfirmModal();
     await dataMigrate();
     await setupHeader();
-    setupConfirmModal();
     setupSingleInputModal();
 
+    await checkUpgrade();
     await setupChatJs();
 };
 main();
@@ -427,7 +439,40 @@ async function dataMigrate () {
     }
 }
 
-let singleInputCallback, singleInputModal;
+async function checkUpgrade () {
+    // fetch server's version
+    const resp = await fetch('/version',
+        {
+            method: 'GET',
+            cache: 'no-cache'
+        });
+    if (!resp.ok) {
+        console.error('failed to fetch version');
+        return;
+    }
+
+    let currentVer = null;
+    const data = await resp.json();
+    for (const item of data.Settings) {
+        if (item.Key === 'vcs.time') {
+            currentVer = item.Value;
+            break;
+        }
+    }
+
+    // fetch local's version
+    const localVer = await libs.KvGet(KvKeyVersionDate);
+
+    // check version
+    if (currentVer && currentVer !== localVer) {
+        await libs.KvSet(KvKeyVersionDate, currentVer); // save/skip this version
+        if (localVer) {
+            ConfirmModal(`there is a new version ${localVer} -> ${currentVer}, reload page to upgrade?`, async () => {
+                location.reload();
+            });
+        }
+    }
+}
 
 function setupSingleInputModal () {
     singleInputCallback = null;
@@ -444,15 +489,6 @@ function setupSingleInputModal () {
             singleInputModal.hide();
         });
 }
-
-/**
- * setup confirm modal callback, shoule be an async function
- */
-let deleteCheckCallback,
-    /**
-     * global shared modal to act as confirm dialog
-     */
-    deleteCheckModal;
 
 function setupConfirmModal () {
     deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));

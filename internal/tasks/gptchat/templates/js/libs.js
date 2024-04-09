@@ -117,7 +117,9 @@ export const KvSet = async (key, val) => {
         if (error.status === 409) {
             // Fetch the current document
             const doc = await kv.get(key);
-            oldVal = JSON.parse(doc.val);
+            if (doc && doc.val) {
+                oldVal = JSON.parse(doc.val);
+            }
 
             // Save the new document with the _rev of the current document
             await kv.put({
@@ -151,6 +153,10 @@ export const KvGet = async (key) => {
     console.debug(`KvGet: ${key}`);
     try {
         const doc = await kv.get(key);
+        if (!doc || !doc.val) {
+            return null;
+        }
+
         return JSON.parse(doc.val);
     } catch (error) {
         if (error.status === 404) {
