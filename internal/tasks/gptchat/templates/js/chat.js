@@ -201,9 +201,7 @@ const RandomString = (length) => {
 // };
 
 const OpenaiSelectedModel = async () => {
-    const sid = await activeSessionID();
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-    const sconfig = await libs.KvGet(skey);
+    const sconfig = await getChatSessionConfig();
     let selectedModel = sconfig.selected_model || ChatModelTurbo35;
 
     if (!AllModels.includes(selectedModel)) {
@@ -254,13 +252,11 @@ const OpenaiSelectedModel = async () => {
  * @returns {string} prompt
  */
 const OpenaiChatStaticContext = async (prompt) => {
-    const sid = await activeSessionID();
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-    const sconfig = await libs.KvGet(skey);
+    const sconfig = await getChatSessionConfig();
 
     if (prompt) {
         sconfig.system_prompt = prompt;
-        await libs.KvSet(skey, sconfig);
+        await saveChatSessionConfig(sconfig);
     }
 
     return sconfig.system_prompt || '';
@@ -350,7 +346,8 @@ async function dataMigrate () {
                 const newKey = storageVals[oldKey];
                 await libs.KvSet(newKey, val);
                 localStorage.removeItem(oldKey);
-            }));
+            })
+        );
 
         // move session config
         if (!sconfig) {
@@ -390,62 +387,62 @@ async function dataMigrate () {
             return;
         }
 
-        let sconfig = await libs.KvGet(key);
-        if (!sconfig) {
-            sconfig = newSessionConfig();
+        let eachSconfig = await libs.KvGet(key);
+        if (!eachSconfig) {
+            eachSconfig = newSessionConfig();
         }
 
         // set default api_token
-        if (!sconfig.api_token || sconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
-            sconfig.api_token = 'FREETIER-' + RandomString(32);
+        if (!eachSconfig.api_token || eachSconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
+            eachSconfig.api_token = 'FREETIER-' + RandomString(32);
         }
         // set default api_base
-        if (!sconfig.api_base) {
-            sconfig.api_base = 'https://api.openai.com';
+        if (!eachSconfig.api_base) {
+            eachSconfig.api_base = 'https://api.openai.com';
         }
 
         // set default chat controller
-        if (!sconfig.chat_switch) {
-            sconfig.chat_switch = {
+        if (!eachSconfig.chat_switch) {
+            eachSconfig.chat_switch = {
                 disable_https_crawler: false
-            }
+            };
         }
 
-        console.debug('migrate session config: ', key, sconfig);
-        await libs.KvSet(key, sconfig);
+        console.debug('migrate session config: ', key, eachSconfig);
+        await libs.KvSet(key, eachSconfig);
     }))
 
     // update legacy chat history, add chatID to each chat
     {
         await Promise.all(Object.keys(localStorage).map(async (key) => {
             if (!key.startsWith(KvKeyPrefixSessionHistory)) {
-                return
+                return;
             }
 
             // move from localstorage to kv
             // console.log("move from localstorage to kv: ", key);
-            await libs.KvSet(key, JSON.parse(localStorage[key]))
-            localStorage.removeItem(key)
-        }))
+            await libs.KvSet(key, JSON.parse(localStorage[key]));
+            localStorage.removeItem(key);
+        }));
     }
 }
 
 let singleInputCallback, singleInputModal;
 
 function setupSingleInputModal () {
-    singleInputCallback = null
-    singleInputModal = new window.bootstrap.Modal(document.getElementById('singleInputModal'))
+    singleInputCallback = null;
+    singleInputModal = new window.bootstrap.Modal(document.getElementById('singleInputModal'));
     document.getElementById('singleInputModal')
         .querySelector('.modal-body .yes')
         .addEventListener('click', async (e) => {
-            e.preventDefault()
+            e.preventDefault();
 
             if (singleInputCallback) {
-                await singleInputCallback()
+                await singleInputCallback();
             }
 
-            singleInputModal.hide()
-        })
+            singleInputModal.hide();
+        });
 }
 
 /**
@@ -526,11 +523,9 @@ async function setupHeader () {
                 }
             });
 
-            const sid = await activeSessionID();
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await libs.KvGet(skey);
+            const sconfig = await getChatSessionConfig();
             sconfig.selected_model = selectedModel;
-            await libs.KvSet(skey, sconfig);
+            await saveChatSessionConfig(sconfig);
         }
 
         // add hint to input text
@@ -618,11 +613,9 @@ async function setupHeader () {
             evt.target.classList.add('active');
             const selectedModel = evt.target.dataset.model;
 
-            const sid = await activeSessionID();
-            const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-            const sconfig = await libs.KvGet(skey);
+            const sconfig = await getChatSessionConfig();
             sconfig.selected_model = selectedModel;
-            await libs.KvSet(skey, sconfig);
+            await saveChatSessionConfig(sconfig);
 
             // add active to class
             document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
@@ -755,6 +748,15 @@ async function activeSessionID () {
 
     activeSession = await libs.KvGet(KvKeyPrefixSelectedSession);
     if (activeSession) {
+        if (!document.querySelector(`#sessionManager .card-body button[data-session="${activeSession}"]`)) {
+            // if session not exists on tabs, choose first tab's session as active session
+            const firstSessionBtn = document.querySelector('#sessionManager .card-body button');
+            if (firstSessionBtn) {
+                activeSession = parseInt(firstSessionBtn.dataset.session || '1');
+                await libs.KvSet(KvKeyPrefixSelectedSession, activeSession);
+            }
+        }
+
         return parseInt(activeSession);
     }
 
@@ -762,12 +764,16 @@ async function activeSessionID () {
 }
 
 async function listenSessionSwitch (evt) {
-    // deactive all sessions
     evt = libs.evtTarget(evt);
     if (!evt.classList.contains('list-group-item')) {
         evt = evt.closest('.list-group-item');
     }
+    const activeSid = parseInt(evt.dataset.session);
 
+    await changeSession(activeSid);
+}
+
+async function changeSession (activeSid) {
     if (globalAIRespSSE) { // auto stop previous sse when switch session
         console.warn('auto stop previous sse because of session switch');
         globalAIRespSSE.close();
@@ -775,7 +781,7 @@ async function listenSessionSwitch (evt) {
         unlockChatInput();
     }
 
-    const activeSid = parseInt(evt.dataset.session);
+    // deactive all sessions
     document
         .querySelectorAll(`
             #sessionManager .sessions .list-group-item,
@@ -789,7 +795,7 @@ async function listenSessionSwitch (evt) {
             }
         })
 
-    // restore session hisgoty
+    // restore session history
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
     await Promise.all(Array.from(await sessionChatHistory(activeSid)).map(async (item) => {
         append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
@@ -912,7 +918,7 @@ async function clearSessionAndChats (evt, sessionID) {
     await libs.KvDel(KvKeyPinnedMaterials);
 
     if (!sessionID) { // remove all session
-        const sessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${(await activeSessionID())}`);
+        const sconfig = await getChatSessionConfig();
 
         await Promise.all((await libs.KvList()).map(async (key) => {
             if (
@@ -924,7 +930,7 @@ async function clearSessionAndChats (evt, sessionID) {
         }));
 
         // restore session config
-        await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, sessionConfig);
+        await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, sconfig);
         await libs.KvSet(kvSessionKey(1), []);
     } else { // only remove one session's chat, keep config
         await Promise.all((await libs.KvList()).map(async (key) => {
@@ -963,7 +969,7 @@ function bindSessionEditBtn () {
 
                     // update session config
                     sconfig.session_name = newSessionName;
-                    await libs.KvSet(`${KvKeyPrefixSessionConfig}${sid}`, sconfig);
+                    await saveChatSessionConfig(sconfig, sid);
 
                     // update session name
                     document
@@ -993,14 +999,21 @@ function bindSessionDeleteBtn () {
                 return;
             }
 
-            const sid = parseInt(libs.evtTarget(evt).closest('.session').dataset.session);
+            const activeSid = await activeSessionID();
+            const deleteSid = parseInt(libs.evtTarget(evt).closest('.session').dataset.session);
             ConfirmModal('Are you sure to delete this session?', async () => {
-                await libs.KvDel(`${KvKeyPrefixSessionHistory}${sid}`);
-                await libs.KvDel(`${KvKeyPrefixSessionConfig}${sid}`);
+                await libs.KvDel(`${KvKeyPrefixSessionHistory}${deleteSid}`);
+                await libs.KvDel(`${KvKeyPrefixSessionConfig}${deleteSid}`);
                 document
-                    .querySelector(`#sessionManager .sessions [data-session="${sid}"]`).remove();
+                    .querySelector(`#sessionManager .sessions [data-session="${deleteSid}"]`).remove();
                 chatContainer
-                    .querySelector(`.sessions [data-session="${sid}"]`).remove();
+                    .querySelector(`.sessions [data-session="${deleteSid}"]`).remove();
+
+                if (activeSid === deleteSid) {
+                    // current active session has been deleted, so need to switch to new session
+                    const newSid = await activeSessionID();
+                    await changeSession(newSid);
+                }
             });
         });
     });
@@ -1093,7 +1106,6 @@ async function setupSessionManager () {
         document
             .querySelector('#sessionManager .btn.new-session')
             .addEventListener('click', async (evt) => {
-                const activeSID = await activeSessionID();
                 let maxSessionID = 0;
                 (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
@@ -1139,7 +1151,7 @@ async function setupSessionManager () {
 
                 // save new session history and config
                 await libs.KvSet(kvSessionKey(newSessionID), []);
-                const oldSessionConfig = await libs.KvGet(`${KvKeyPrefixSessionConfig}${activeSID}`);
+                const oldSessionConfig = await getChatSessionConfig();
                 const sconfig = newSessionConfig();
 
                 // keep old session's api token and api base
@@ -2736,6 +2748,9 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     }
 }
 
+/**
+ * get user's chat session config by sid
+ */
 const getChatSessionConfig = async (sid) => {
     if (!sid) {
         sid = await activeSessionID();
@@ -2747,15 +2762,18 @@ const getChatSessionConfig = async (sid) => {
     if (!sconfig) {
         console.info(`create new session config for session ${sid}`);
         sconfig = newSessionConfig();
+        await saveChatSessionConfig(sconfig, sid);
     }
 
     return sconfig;
 };
 
-const saveChatSessionConfig = async (sconfig) => {
-    const sid = await activeSessionID();
-    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
+const saveChatSessionConfig = async (sconfig, sid) => {
+    if (!sid) {
+        sid = await activeSessionID();
+    }
 
+    const skey = `${KvKeyPrefixSessionConfig}${sid}`;
     await libs.KvSet(skey, sconfig);
 };
 
