@@ -446,13 +446,15 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		case "gpt-4-vision-preview",
 			"gemini-pro-vision":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
-			if len(lastMessage.Files) == 0 { // gpt-vision
-				return nil, nil, errors.New("should have at least one image for vision model")
-			}
 
 			req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
 			if err := copier.Copy(req, frontendReq); err != nil {
 				return nil, nil, errors.Wrap(err, "copy to chat req")
+			}
+
+			if len(lastMessage.Files) == 0 {
+				// there is no images attached, so rewrite model to non-vision model
+				req.Model = "gpt-3.5-turbo"
 			}
 
 			req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
