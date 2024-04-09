@@ -650,7 +650,7 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 	// fetch google search result
 	extra, err := googleSearch(gctx.Request.Context(), *lastUserPrompt, user)
 	if err != nil {
-		log.Logger.Error("google search", zap.Error(err))
+		log.Logger.Error("google search", zap.Error(err), zap.String("prompt", *lastUserPrompt))
 		return
 	}
 
