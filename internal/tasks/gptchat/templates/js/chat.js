@@ -118,6 +118,17 @@ const KvKeySyncKey = 'config_sync_key';
 const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
 const KvKeyVersionDate = 'config_version_date';
 
+const RoleHuman = 'user';
+const RoleSystem = 'system';
+const RoleAI = 'assistant';
+
+const chatContainer = document.getElementById('chatContainer');
+const configContainer = document.getElementById('hiddenChatConfigSideBar');
+const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+
+const httpsRegexp = /\bhttps:\/\/\S+/;
+
 /**
  * setup confirm modal callback, shoule be an async function
  */
@@ -128,90 +139,44 @@ let deleteCheckCallback,
     deleteCheckModal;
 let singleInputCallback, singleInputModal;
 
-const IsChatModel = (model) => {
+// could be controlled(interrupt) anywhere, so it's global
+let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
+
+// [
+//     {
+//         filename: xx,
+//         contentB64: xx,
+//         cache_key: xx
+//     }
+// ]
+//
+// should invoke updateChatVisionSelectedFileStore after update this object
+let chatVisionSelectedFileStore = [];
+
+async function IsChatModel (model) {
     return ChatModels.includes(model);
 };
 
-const IsQaModel = (model) => {
+async function IsQaModel (model) {
     return QaModels.includes(model);
 };
 
-const IsCompletionModel = (model) => {
+async function IsCompletionModel (model) {
     return CompletionModels.includes(model);
 };
 
-const IsImageModel = (model) => {
+async function IsImageModel (model) {
     return ImageModels.includes(model);
 };
 
-const ShowSpinner = () => {
+async function ShowSpinner () {
     document.getElementById('spinner').toggleAttribute('hidden', false);
 };
-const HideSpinner = () => {
+async function HideSpinner () {
     document.getElementById('spinner').toggleAttribute('hidden', true);
 };
 
-/**
- * Generates a random string of the specified length.
- * @param {number} length - The length of the string to generate.
- * @returns {string} - The generated random string.
- */
-const RandomString = (length) => {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-
-    return result;
-};
-
-// const OpenaiToken = async () => {
-//     const sid = await activeSessionID()
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`
-//     const sconfig = await libs.KvGet(skey)
-//     let apikey
-
-//     // get token from url params first
-//     {
-//         apikey = new URLSearchParams(location.search).get('apikey')
-
-//         if (apikey) {
-//             // fix: sometimes url.searchParams.delete() works too quickly,
-//             // that let another caller rewrite apikey to FREE-TIER,
-//             // so we delay 1s to delete apikey from url params.
-//             setTimeout(() => {
-//                 const v = new URLSearchParams(location.search).get('apikey')
-//                 if (!v) {
-//                     return
-//                 }
-
-//                 // remove apikey from url params
-//                 const url = new URL(location.href)
-//                 url.searchParams.delete('apikey')
-//                 window.history.pushState({}, document.title, url)
-//             }, 500)
-//         }
-//     }
-
-//     // get token from storage
-//     if (!apikey) {
-//         apikey = sconfig.api_token || 'FREETIER-' + RandomString(32)
-//     }
-
-//     sconfig.api_token = apikey
-//     await libs.KvSet(skey, sconfig)
-//     return apikey
-// }
-
-// const OpenaiApiBase = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.api_base || 'https://api.openai.com';
-// };
-
-const OpenaiSelectedModel = async () => {
+async function OpenaiSelectedModel () {
     const sconfig = await getChatSessionConfig();
     let selectedModel = sconfig.selected_model || ChatModelTurbo35;
 
@@ -222,47 +187,12 @@ const OpenaiSelectedModel = async () => {
     return selectedModel;
 };
 
-// const OpenaiMaxTokens = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.max_tokens || 500;
-// };
-
-// const OpenaiTemperature = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.temperature;
-// };
-
-// const OpenaiPresencePenalty = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.presence_penalty || 0;
-// };
-
-// const OpenaiFrequencyPenalty = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.frequency_penalty || 0;
-// };
-
-// const ChatNContexts = async () => {
-//     const sid = await activeSessionID();
-//     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
-//     const sconfig = await libs.KvGet(skey);
-//     return sconfig.n_contexts || 6;
-// };
-
 /** get or set chat static context
  *
  * @param {string} prompt
  * @returns {string} prompt
  */
-const OpenaiChatStaticContext = async (prompt) => {
+async function OpenaiChatStaticContext (prompt) {
     const sconfig = await getChatSessionConfig();
 
     if (prompt) {
@@ -273,7 +203,7 @@ const OpenaiChatStaticContext = async (prompt) => {
     return sconfig.system_prompt || '';
 };
 
-const SingleInputModal = (title, message, callback, defaultVal) => {
+function SingleInputModal (title, message, callback, defaultVal) {
     const modal = document.getElementById('singleInputModal');
     singleInputCallback = async () => {
         try {
@@ -297,7 +227,7 @@ const SingleInputModal = (title, message, callback, defaultVal) => {
 // params:
 //   - title: modal title
 //   - callback: async callback function
-const ConfirmModal = (title, callback) => {
+function ConfirmModal (title, callback) {
     deleteCheckCallback = async () => {
         try {
             ShowSpinner();
@@ -312,7 +242,7 @@ const ConfirmModal = (title, callback) => {
 
 // main entry
 let mainRunned = false;
-const main = async (event) => {
+async function main (event) {
     if (mainRunned) {
         return;
     }
@@ -406,7 +336,7 @@ async function dataMigrate () {
 
         // set default api_token
         if (!eachSconfig.api_token || eachSconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
-            eachSconfig.api_token = 'FREETIER-' + RandomString(32);
+            eachSconfig.api_token = 'FREETIER-' + libs.RandomString(32);
         }
         // set default api_base
         if (!eachSconfig.api_base) {
@@ -666,30 +596,6 @@ async function setupHeader () {
     });
 }
 
-// const
-const RoleHuman = 'user';
-const RoleSystem = 'system';
-const RoleAI = 'assistant';
-
-const chatContainer = document.getElementById('chatContainer');
-const configContainer = document.getElementById('hiddenChatConfigSideBar');
-const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
-const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
-
-// could be controlled(interrupt) anywhere, so it's global
-let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
-
-// [
-//     {
-//         filename: xx,
-//         contentB64: xx,
-//         cache_key: xx
-//     }
-// ]
-//
-// should invoke updateChatVisionSelectedFileStore after update this object
-let chatVisionSelectedFileStore = [];
-
 // eslint-disable-next-line no-unused-vars
 async function setupChatJs () {
     await setupSessionManager();
@@ -702,7 +608,7 @@ async function setupChatJs () {
 }
 
 function newChatID () {
-    return `chat-${(new Date()).getTime()}-${RandomString(6)}`;
+    return `chat-${(new Date()).getTime()}-${libs.RandomString(6)}`;
 }
 
 /**
@@ -867,7 +773,7 @@ async function fetchImageDrawingResultBackground () {
             await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
                 const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
-                const errFileResp = await fetch(`${errFileUrl}?rr=${RandomString(12)}`, {
+                const errFileResp = await fetch(`${errFileUrl}?rr=${libs.RandomString(12)}`, {
                     method: 'GET',
                     cache: 'no-cache'
                 });
@@ -880,7 +786,7 @@ async function fetchImageDrawingResultBackground () {
                 }
 
                 // check is image ready
-                const imgResp = await fetch(`${imageUrl}?rr=${RandomString(12)}`, {
+                const imgResp = await fetch(`${imageUrl}?rr=${libs.RandomString(12)}`, {
                     method: 'GET',
                     cache: 'no-cache'
                 });
@@ -1427,8 +1333,6 @@ function parseChatResp (chatmodel, payload) {
         showalert('error', `Unknown chat model ${chatmodel}`);
     }
 }
-
-const httpsRegexp = /\bhttps:\/\/\S+/;
 
 /**
  * extract https urls from reqPrompt and pin them to the chat conservation window
@@ -2786,6 +2690,8 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
 
 /**
  * get user's chat session config by sid
+ *
+ * @param {string} sid - session id, default is active session id
  */
 const getChatSessionConfig = async (sid) => {
     if (!sid) {
@@ -2804,6 +2710,12 @@ const getChatSessionConfig = async (sid) => {
     return sconfig;
 };
 
+/**
+ * save chat session config
+ *
+ * @param {Object} sconfig - session config
+ * @param {string} sid - session id
+ */
 const saveChatSessionConfig = async (sconfig, sid) => {
     if (!sid) {
         sid = await activeSessionID();
@@ -2813,9 +2725,14 @@ const saveChatSessionConfig = async (sconfig, sid) => {
     await libs.KvSet(skey, sconfig);
 };
 
+/**
+ * create new default session config
+ *
+ * @returns {Object} - new session config
+ */
 function newSessionConfig () {
     return {
-        api_token: 'FREETIER-' + RandomString(32),
+        api_token: 'FREETIER-' + libs.RandomString(32),
         api_base: 'https://api.openai.com',
         max_tokens: 500,
         temperature: 1,
@@ -3083,7 +3000,7 @@ async function setupConfig () {
 
         // set default val
         if (!(await libs.KvGet(KvKeySyncKey))) {
-            await libs.KvSet(KvKeySyncKey, `sync-${RandomString(64)}`);
+            await libs.KvSet(KvKeySyncKey, `sync-${libs.RandomString(64)}`);
         }
         syncKeyEle.value = await libs.KvGet(KvKeySyncKey);
     }
@@ -3269,10 +3186,12 @@ async function loadPromptShortcutsFromStorage () {
     return shortcuts;
 }
 
-// append prompt shortcuts to html and kv
-//
-// @param {Object} shortcut - shortcut object
-// @param {bool} storage - whether to save to kv
+/**
+ * append prompt shortcuts to html and kv
+ *
+ * @param {Object} shortcut - shortcut object
+ * @param {bool} storage - whether to save to kv
+ */
 async function appendPromptShortcut (shortcut, storage = false) {
     const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
 
@@ -3461,7 +3380,9 @@ async function setupPromptManager () {
     }
 }
 
-// setup private dataset modal
+/**
+ * setup private dataset modal
+ */
 async function setupPrivateDataset () {
     const pdfchatModalEle = document.querySelector('#modal-pdfchat');
 
@@ -3488,7 +3409,7 @@ async function setupPrivateDataset () {
 
         // set default datakey
         if (!datakeyEle.value) {
-            datakeyEle.value = RandomString(16);
+            datakeyEle.value = libs.RandomString(16);
             await libs.KvSet(KvKeyCustomDatasetPassword, datakeyEle.value);
         }
 

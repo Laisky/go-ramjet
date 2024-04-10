@@ -374,7 +374,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 	var reqBody []byte
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
-		frontendReq, err = bodyChecker(ctx, user, ctx.Request.Body)
+		frontendReq, err = bodyChecker(ctx.Request.Body)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "request is illegal")
 		}
@@ -851,7 +851,7 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 	}()
 }
 
-func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser) (userReq *FrontendReq, err error) {
+func bodyChecker(body io.ReadCloser) (userReq *FrontendReq, err error) {
 	payload, err := io.ReadAll(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "read request body")
@@ -867,16 +867,5 @@ func bodyChecker(gctx *gin.Context, user *config.UserConfig, body io.ReadCloser)
 		return nil, errors.New("no messages")
 	}
 
-	// if config.Config.RamjetURL != "" &&
-	// 	userReq.LaiskyExtra != nil &&
-	// 	!userReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
-	// 	userReq.embeddingUrlContent(gctx, user)
-	// }
-	// if userReq.LaiskyExtra != nil &&
-	// 	userReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
-	// 	userReq.embeddingGoogleSearch(gctx)
-	// }
-
-	// userReq.LaiskyExtra = nil // remove extra data before send to upstream server
 	return userReq, err
 }

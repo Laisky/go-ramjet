@@ -24,6 +24,6 @@ func ToolsRequest() []OpenaiChatReqTool {
 	}
 }
 
-func howToSubscribe(args string) (string, error) {
+func howToSubscribe(_ string) (string, error) {
 	return "yehoo", nil
 }
