@@ -430,7 +430,9 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			openaiReq = req
 		case "claude-3-opus", // support text and vision at the same time
 			"claude-3-sonnet",
-			"claude-3-haiku":
+			"claude-3-haiku",
+			"gpt-4-turbo-2024-04-09",
+			"gpt-4-turbo":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
@@ -443,7 +445,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			}
 
 			fallthrough // jump to vision part
-		case "gpt-4-vision-preview",
+		case "gpt-4-vision-preview", // only support vision
 			"gemini-pro-vision":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 
