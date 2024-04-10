@@ -397,7 +397,7 @@ async function checkUpgrade () {
     if (currentVer && currentVer !== localVer) {
         await libs.KvSet(KvKeyVersionDate, currentVer); // save/skip this version
         if (localVer) {
-            ConfirmModal(`there is a new version ${localVer} -> ${currentVer}, reload page to upgrade?`, async () => {
+            ConfirmModal(`New version found ${localVer} -> ${currentVer}, reload page to upgrade?`, async () => {
                 location.reload();
             });
         }
