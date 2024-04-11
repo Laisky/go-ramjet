@@ -99,7 +99,8 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		AbortErr(ctx, errors.Errorf("[%d]%s", resp.StatusCode, body))
+		AbortErr(ctx, errors.Errorf("request model %q got [%d]%s",
+			frontReq.Model, resp.StatusCode, body))
 		return
 	}
 
