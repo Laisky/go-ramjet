@@ -80,7 +80,7 @@ export const DateStr = () => {
 const kvListeners = {};
 let kv;
 
-function initKv () {
+function initKv() {
     if (!kv) {
         kv = new window.PouchDB('mydatabase');
     }
@@ -333,12 +333,30 @@ export const escapeHtml = (str) => {
     return str.replace(/[&<>"']/g, function (m) { return map[m] });
 };
 
+/**
+ * enable bootstrap tooltips for all elements with data-bs-toggle="tooltip"
+ */
 export const EnableTooltipsEverywhere = () => {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new window.bootstrap.Tooltip(tooltipTriggerEl);
+    const eles = document.querySelectorAll('[data-bs-toggle="tooltip"]') || [];
+    eles.forEach((ele) => {
+        if (ele.dataset.bsToggle === 'true') {
+            return;
+        }
+
+        ele.dataset.bsToggle = 'true';
+        return new window.bootstrap.Tooltip(ele);
     });
 };
+
+/**
+ * disable bootstrap tooltips for all elements with class="tooltip.bs-tooltip-auto.fade.show"
+ */
+export const DisableTooltipsEverywhere = () => {
+    const eles = document.querySelectorAll('.tooltip.bs-tooltip-auto.fade.show') || [];
+    eles.forEach((ele) => {
+        ele.remove();
+    });
+}
 
 // convert blob to hex string
 export const blob2Hex = async (blob) => {

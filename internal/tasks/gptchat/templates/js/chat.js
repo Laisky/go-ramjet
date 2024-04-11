@@ -1942,10 +1942,10 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         aiRespEle.innerHTML += respExtras;
     }
 
-    if (!aiRespEle.querySelector('.bi.bi-copy')) {
-        aiRespEle
-            .insertAdjacentHTML('afterbegin', '<i class="bi bi-copy" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>');
-    }
+    // if (!aiRespEle.querySelector('.bi.bi-copy')) {
+    //     aiRespEle
+    //         .insertAdjacentHTML('afterbegin', '<i class="bi bi-copy" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>');
+    // }
 
     // setup prism
     {
@@ -1962,24 +1962,24 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 
-    if (aiRespEle.querySelector('.bi.bi-copy') && !aiRespEle.dataset.copyBinded) { // not every ai response has copy button
-        aiRespEle.querySelector('.bi.bi-copy')
-            .addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-                evt = libs.evtTarget(evt);
+    // if (aiRespEle.querySelector('.bi.bi-copy') && !aiRespEle.dataset.copyBinded) { // not every ai response has copy button
+    //     aiRespEle.querySelector('.bi.bi-copy')
+    //         .addEventListener('click', async (evt) => {
+    //             evt.stopPropagation();
+    //             evt = libs.evtTarget(evt);
 
-                aiRespEle.dataset.copyBinded = true;
-                let copyContent = '';
-                if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
-                    console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
-                } else {
-                    copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
-                }
+    //             aiRespEle.dataset.copyBinded = true;
+    //             let copyContent = '';
+    //             if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+    //                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
+    //             } else {
+    //                 copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+    //             }
 
-                // copy to clipboard
-                navigator.clipboard.writeText(copyContent);
-            });
-    }
+    //             // copy to clipboard
+    //             navigator.clipboard.writeText(copyContent);
+    //         });
+    // }
 
     // in the scenario of reload chat, the chatEle is already in view,
     // no need to scroll and save to storage
@@ -1988,47 +1988,82 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         await appendChats2Storage(RoleAI, chatID, markdownContent, respExtras, aiRawResp);
     }
 
-    addReloadBtn(chatID);
+    addOperateBtnBelowAiResponse(chatID);
 }
 
-function addReloadBtn (chatID) {
-    const chatEle = chatContainer
+/**
+ * add operate buttons to ai response element after ai response finished
+ *
+ * @param {*} chatID - chat id
+ */
+function addOperateBtnBelowAiResponse (chatID) {
+    const aiRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
 
-    // Create a new div element
-    const div = document.createElement('div');
-    div.className = 'operator';
+    // Create a new div element just under ai-response
+    const divContainer = document.createElement('div');
+    divContainer.className = 'operator';
+    aiRespEle.appendChild(divContainer);
 
-    // Create a new button element
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn btn-secondary';
-    button.dataset.bsToggle = 'tooltip';
-    button.dataset.bsPlacement = 'top';
-    button.title = 'reload';
+    // add copy button
+    divContainer.insertAdjacentHTML('beforeend', `
+        <button type="button" class="btn btn-success" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw" data-fn="copy">
+            <i class="bi bi-copy"></i>
+        </button>
+    `)
+    divContainer.querySelector('button[data-fn="copy"]')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
+            evt = libs.evtTarget(evt);
 
-    // Create a new i element
-    const i = document.createElement('i');
-    i.className = 'bi bi-arrow-clockwise';
-    i.dataset.fn = 'reload';
+            // aiRespEle.dataset.copyBinded = true;
+            let copyContent = '';
+            if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+                console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
+            } else {
+                copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+            }
 
-    // Append the i element to the button
-    button.appendChild(i);
+            // copy to clipboard
+            if (location.protocol === 'https:') {
+                navigator.clipboard.writeText(copyContent);
+            } else {
+                // compatibility for http site
+                try {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = copyContent;
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                } catch (err) {
+                    console.error('copy to clipboard failed:', err);
+                }
+            }
+        });
 
-    // Append the button to the div
-    div.appendChild(button);
+    // add reload button
+    divContainer.insertAdjacentHTML('beforeend', `
+        <button type="button" class="btn btn-secondary" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="reload" data-bs-original-title="reload" data-fn="reload">
+            <i class="bi bi-arrow-clockwise" data-fn="reload"></i>
+        </button>
+    `)
+    divContainer.querySelector('button[data-fn="reload"]')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
 
-    // Append the div to the chatEle
-    chatEle.appendChild(div);
+            // hide tooltip manually
+            libs.DisableTooltipsEverywhere();
 
-    // Add event listener to the button
-    button.addEventListener('click', async (evt) => {
-        const chatID = evt.target.closest('.role-ai').dataset.chatid;
-        // put image back to vision store
-        putBackAttachmentsInUserInput(chatID);
+            const chatID = evt.target.closest('.role-ai').dataset.chatid;
+            // put image back to vision store
+            putBackAttachmentsInUserInput(chatID);
 
-        await reloadAiResp(evt);
-    });
+            await reloadAiResp(evt);
+        });
+
+    libs.EnableTooltipsEverywhere();
 }
 
 function combineRefs (arr) {

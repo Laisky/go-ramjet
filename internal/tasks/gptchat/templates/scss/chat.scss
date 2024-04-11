@@ -229,16 +229,16 @@
                         .ai-response {
                             position: relative;
 
-                            .bi.bi-copy {
-                                position: absolute;
-                                right: 16px;
-                                cursor: pointer;
-                                opacity: 0.5;
+                            // .bi.bi-copy {
+                            //     position: absolute;
+                            //     right: 16px;
+                            //     cursor: pointer;
+                            //     opacity: 0.5;
 
-                                &:hover {
-                                    opacity: 1;
-                                }
-                            }
+                            //     &:hover {
+                            //         opacity: 1;
+                            //     }
+                            // }
 
                             p {
                                 margin-bottom: 0.5em;
@@ -250,12 +250,19 @@
                                 cursor: default;
 
                                 .btn {
-                                    width: 100px;
+                                    opacity: 0.6;
                                     padding: 3px;
-                                    opacity: 0.8;
 
                                     &:hover {
                                         opacity: 1;
+                                    }
+
+                                    &[data-fn="copy"] {
+                                        width: 40px;
+                                    }
+
+                                    &[data-fn="reload"] {
+                                        width: 100px;
                                     }
                                 }
                             }

@@ -186,15 +186,6 @@
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response {
   position: relative;
 }
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .bi.bi-copy {
-  position: absolute;
-  right: 16px;
-  cursor: pointer;
-  opacity: 0.5;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .bi.bi-copy:hover {
-  opacity: 1;
-}
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response p {
   margin-bottom: 0.5em;
   margin-top: 0.5em;
@@ -204,15 +195,17 @@
   cursor: default;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
-  width: 100px;
+  opacity: 0.6;
   padding: 3px;
-  opacity: 0.8;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:hover {
   opacity: 1;
 }
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:disabled {
-  cursor: not-allowed;
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn=copy] {
+  width: 40px;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn=reload] {
+  width: 100px;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .card-body pre {
   overflow-wrap: break-word;
