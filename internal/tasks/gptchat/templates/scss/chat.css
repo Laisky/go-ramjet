@@ -196,16 +196,14 @@
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
   opacity: 0.6;
-  padding: 3px;
+  padding: 1px;
+  width: 30px;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:hover {
   opacity: 1;
 }
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn=copy] {
-  width: 40px;
-}
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn=reload] {
-  width: 100px;
+  width: 80px;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .card-body pre {
   overflow-wrap: break-word;

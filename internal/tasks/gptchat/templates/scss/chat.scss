@@ -251,18 +251,16 @@
 
                                 .btn {
                                     opacity: 0.6;
-                                    padding: 3px;
+                                    padding: 1px;
 
                                     &:hover {
                                         opacity: 1;
                                     }
 
-                                    &[data-fn="copy"] {
-                                        width: 40px;
-                                    }
+                                    width: 30px;
 
                                     &[data-fn="reload"] {
-                                        width: 100px;
+                                        width: 80px;
                                     }
                                 }
                             }

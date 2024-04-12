@@ -7,7 +7,7 @@ require (
 	github.com/Laisky/gin-middlewares/v5 v5.0.3
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.9.2-0.20240408065856-811401f70bbb
+	github.com/Laisky/go-utils/v4 v4.9.2-0.20240412064731-eb19077af24c
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20230802075242-7f1f4e0ef4b4
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71

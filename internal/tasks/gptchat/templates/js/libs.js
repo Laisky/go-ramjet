@@ -80,7 +80,7 @@ export const DateStr = () => {
 const kvListeners = {};
 let kv;
 
-function initKv() {
+function initKv () {
     if (!kv) {
         kv = new window.PouchDB('mydatabase');
     }

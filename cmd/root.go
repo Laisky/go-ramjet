@@ -96,12 +96,21 @@ func setupLogger(ctx context.Context) {
 	opts := []zap.Option{}
 
 	if gconfig.Shared.GetString("logger.push_api") != "" {
+		ratelimiter, err := gutils.NewRateLimiter(ctx, gutils.RateLimiterArgs{
+			Max:     1,
+			NPerSec: 1,
+		})
+		if err != nil {
+			log.Logger.Panic("create ratelimiter", zap.Error(err))
+		}
+
 		alertPusher, err := glog.NewAlert(
 			ctx,
 			gconfig.Shared.GetString("logger.push_api"),
 			glog.WithAlertType(gconfig.Shared.GetString("logger.alert_type")),
 			glog.WithAlertToken(gconfig.Shared.GetString("logger.push_token")),
 			glog.WithAlertHookLevel(zap.ErrorLevel),
+			glog.WithRateLimiter(ratelimiter),
 		)
 		if err != nil {
 			log.Logger.Panic("create AlertPusher", zap.Error(err))
