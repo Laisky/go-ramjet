@@ -324,19 +324,21 @@
             window.Version = "{{.Version}}";
             window.data = JSON.parse({{ .DataJSON }});
 
-            window.libs = await import("/static/{{.LibJs}}");
 
             // modules need to load before main.js
+            window.libs = await import("/static/{{.LibJs}}");
             await window.libs.LoadJsModules([
                 "{{.BootstrapJs}}",
                 "{{.SeeJs}}",
-                "{{.ShowdownJs}}",
                 "{{.PrismJs}}",
                 "{{.FuseJs}}",
                 "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
                 "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
-                "/static/{{.DataJs}}"
+                "/static/{{.DataJs}}",
+                "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
+                "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
             ]);
+
             await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
         })();
     </script>

@@ -1895,7 +1895,7 @@ async function sendChat2Server (chatID) {
                 case 'writing':
                     if (respContent) {
                         globalAIRespEle.dataset.aiRawResp += encodeURIComponent(respContent);
-                        globalAIRespEle.innerHTML = libs.Markdown2HTML(decodeURIComponent(globalAIRespEle.dataset.aiRawResp));
+                        globalAIRespEle.innerHTML = await libs.Markdown2HTML(decodeURIComponent(globalAIRespEle.dataset.aiRawResp));
                     }
 
                     scrollToChat(globalAIRespEle);
@@ -1938,14 +1938,9 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     const aiRawResp = decodeURIComponent(aiRespEle.dataset.aiRawResp || '');
     const respExtras = decodeURIComponent(aiRespEle.dataset.respExtras || '');
     if (aiRawResp && aiRawResp !== 'undefined') {
-        aiRespEle.innerHTML = libs.Markdown2HTML(aiRawResp);
+        aiRespEle.innerHTML = await libs.Markdown2HTML(aiRawResp);
         aiRespEle.innerHTML += respExtras;
     }
-
-    // if (!aiRespEle.querySelector('.bi.bi-copy')) {
-    //     aiRespEle
-    //         .insertAdjacentHTML('afterbegin', '<i class="bi bi-copy" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw"></i>');
-    // }
 
     // setup prism
     {
@@ -1959,27 +1954,9 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     // because prism.js do not support formatted html.
     const markdownContent = aiRespEle.innerHTML;
 
+    window.mermaid && await window.mermaid.run({ querySelector: 'pre.mermaid' });
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
-
-    // if (aiRespEle.querySelector('.bi.bi-copy') && !aiRespEle.dataset.copyBinded) { // not every ai response has copy button
-    //     aiRespEle.querySelector('.bi.bi-copy')
-    //         .addEventListener('click', async (evt) => {
-    //             evt.stopPropagation();
-    //             evt = libs.evtTarget(evt);
-
-    //             aiRespEle.dataset.copyBinded = true;
-    //             let copyContent = '';
-    //             if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
-    //                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
-    //             } else {
-    //                 copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
-    //             }
-
-    //             // copy to clipboard
-    //             navigator.clipboard.writeText(copyContent);
-    //         });
-    // }
 
     // in the scenario of reload chat, the chatEle is already in view,
     // no need to scroll and save to storage

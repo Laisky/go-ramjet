@@ -273,9 +273,25 @@ export const GetLocalStorage = (key) => {
     }
 };
 
-export const Markdown2HTML = (markdown) => {
-    const markdownConverter = new window.showdown.Converter();
-    return markdownConverter.makeHtml(markdown);
+/**
+ * render markdown to html
+ *
+ * @param {string} markdownString -
+ * @returns
+ */
+export const Markdown2HTML = async (markdownString) => {
+    const marked = window.marked;
+    const renderer = new marked.Renderer();
+    renderer.code = (code, language) => {
+        if (code.match(/^sequenceDiagram/) || code.match(/^graph/)) {
+            return '<pre class="mermaid">' + code + '</pre>';
+        } else {
+            return '<pre><code>' + code + '</code></pre>';
+        }
+    }
+    marked.use({ renderer });
+
+    return marked.parse(markdownString);
 };
 
 export const ScrollDown = (element) => {
