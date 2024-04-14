@@ -229,20 +229,13 @@
                         .ai-response {
                             position: relative;
 
-                            // .bi.bi-copy {
-                            //     position: absolute;
-                            //     right: 16px;
-                            //     cursor: pointer;
-                            //     opacity: 0.5;
-
-                            //     &:hover {
-                            //         opacity: 1;
-                            //     }
-                            // }
-
                             p {
                                 margin-bottom: 0.5em;
                                 margin-top: 0.5em;
+                            }
+
+                            pre.mermaid {
+                                background-color: white;
                             }
 
                             .operator {
