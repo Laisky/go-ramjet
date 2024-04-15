@@ -440,3 +440,9 @@ type DrawImageByLcmResponse struct {
 	Duration        float64  `json:"duration"`
 	AverageDuration float64  `json:"average_duration"`
 }
+
+// OneShotChatRequest request to one-shot chat api
+type OneShotChatRequest struct {
+	SystemPrompt string `json:"system_prompt"`
+	UserPrompt   string `json:"user_prompt" binding:"required,min=1"`
+}

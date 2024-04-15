@@ -870,3 +870,89 @@ func bodyChecker(body io.ReadCloser) (userReq *FrontendReq, err error) {
 
 	return userReq, err
 }
+
+// OneShotChatHandler handle one shot chat request
+func OneShotChatHandler(gctx *gin.Context) {
+	user, err := getUserByAuthHeader(gctx)
+	if AbortErr(gctx, err) {
+		return
+	}
+
+	req := new(OneShotChatRequest)
+	if err := gctx.BindJSON(req); AbortErr(gctx, err) {
+		return
+	}
+
+	resp, err := OneshotChat(gctx.Request.Context(), user, req.SystemPrompt, req.UserPrompt)
+	if AbortErr(gctx, err) {
+		return
+	}
+
+	gctx.JSON(http.StatusOK, gin.H{
+		"response": resp,
+	})
+}
+
+// OneshotChat get ai response from gpt-3.5-turbo
+//
+// # Args:
+//   - systemPrompt: system prompt
+//   - userPrompt: user prompt
+func OneshotChat(ctx context.Context, user *config.UserConfig, systemPrompt, userPrompt string) (answer string, err error) {
+	logger := gmw.GetLogger(ctx)
+	if userPrompt == "" {
+		userPrompt = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
+	}
+
+	body, err := json.Marshal(OpenaiChatReq[string]{
+		Model:     "gpt-3.5-turbo",
+		MaxTokens: 1000,
+		Stream:    false,
+		Messages: []OpenaiReqMessage[string]{
+			{
+				Role:    OpenaiMessageRoleSystem,
+				Content: systemPrompt,
+			},
+			{
+				Role:    OpenaiMessageRoleUser,
+				Content: userPrompt,
+			},
+		},
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "marshal req")
+	}
+
+	url := fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
+	req, err := http.NewRequestWithContext(ctx,
+		http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", errors.Wrap(err, "new request")
+	}
+
+	logger.Info("send one-shot chat request",
+		zap.String("user", user.UserName),
+	)
+	req.Header.Add("Authorization", "Bearer "+user.Token)
+	req.Header.Add("Content-Type", "application/json")
+	resp, err := httpcli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("[%d]%s", resp.StatusCode, url)
+	}
+
+	respData := new(OpenaiCompletionResp)
+	if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
+		return "", errors.Wrap(err, "decode response")
+	}
+
+	if len(respData.Choices) == 0 {
+		return "", errors.New("no choices")
+	}
+
+	return respData.Choices[0].Message.Content, nil
+}

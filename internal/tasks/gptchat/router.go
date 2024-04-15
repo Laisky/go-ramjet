@@ -29,8 +29,8 @@ func setupInit() {
 		var err error
 		if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
 			gutils.RateLimiterArgs{
-				Max:     10,
-				NPerSec: 1,
+				Max:     100,
+				NPerSec: 10,
 			}); err != nil {
 			log.Logger.Panic("new ratelimiter", zap.Error(err))
 		}
@@ -67,6 +67,7 @@ func bindHTTP() {
 	apiWithRatelimiter.POST("/images/generations", ihttp.DrawByDalleHandler)
 	apiWithRatelimiter.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
 	apiWithRatelimiter.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandler)
+	apiWithRatelimiter.POST("/chat/oneshot", ihttp.OneShotChatHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	apiWithRatelimiter.POST("/user/config", ihttp.UploadUserConfig)
