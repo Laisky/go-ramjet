@@ -47,11 +47,6 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		return
 	}
 
-	// free
-	// if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
-	// 	return
-	// }
-
 	const nSubTask = 2
 	for i := 0; i < nSubTask; i++ {
 		i := i
@@ -301,7 +296,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
 		return
 	}
-	if err := checkUserExternalBilling(ctx.Request.Context(),
+	if err := checkUserExternalBilling(gmw.Ctx(ctx),
 		user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
 		return
 	}

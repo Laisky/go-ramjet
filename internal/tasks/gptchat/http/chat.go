@@ -518,7 +518,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", payload),
 	}
 
-	req, err := http.NewRequestWithContext(ctx.Request.Context(),
+	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
 		ctx.Request.Method, newUrl, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "new request")
@@ -565,7 +565,7 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return content, nil
 	}
 
-	ctx, cancel := context.WithTimeout(gctx.Request.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(gmw.Ctx(gctx), 25*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
@@ -651,9 +651,9 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 	}
 
 	// fetch google search result
-	extra, err := googleSearch(gctx.Request.Context(), *lastUserPrompt, user)
+	extra, err := googleSearch(gmw.Ctx(gctx), *lastUserPrompt, user)
 	if err != nil {
-		log.Logger.Error("google search", zap.Error(err), zap.String("prompt", *lastUserPrompt))
+		log.Logger.Warn("google search", zap.Error(err), zap.String("prompt", *lastUserPrompt))
 		return
 	}
 
@@ -783,7 +783,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 
 	queryChunkURL := fmt.Sprintf("%s/gptchat/query/chunks", config.Config.RamjetURL)
 
-	queryCtx, queryCancel := context.WithTimeout(gctx.Request.Context(), 180*time.Second)
+	queryCtx, queryCancel := context.WithTimeout(gmw.Ctx(gctx), 180*time.Second)
 	defer queryCancel()
 	req, err := http.NewRequestWithContext(queryCtx, http.MethodPost, queryChunkURL, bytes.NewReader(postBody))
 	if err != nil {
@@ -825,7 +825,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 }
 
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
-	heartCtx, heartCancel := context.WithCancel(gctx.Request.Context())
+	heartCtx, heartCancel := context.WithCancel(gmw.Ctx(gctx))
 	var allCleaned = make(chan struct{})
 	defer func() {
 		heartCancel()
@@ -883,7 +883,7 @@ func OneShotChatHandler(gctx *gin.Context) {
 		return
 	}
 
-	resp, err := OneshotChat(gctx.Request.Context(), user, req.SystemPrompt, req.UserPrompt)
+	resp, err := OneshotChat(gmw.Ctx(gctx), user, req.SystemPrompt, req.UserPrompt)
 	if AbortErr(gctx, err) {
 		return
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -30,7 +31,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		strings.TrimPrefix(url.Path, "/"), "gptchat/ramjet/")
 	targetUrl += "?" + url.RawQuery
 
-	req, err := http.NewRequestWithContext(ctx.Request.Context(),
+	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
 		ctx.Request.Method,
 		targetUrl,
 		ctx.Request.Body,
@@ -103,7 +104,7 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserExternalBilling(gctx.Request.Context(), user, cost, costReason); err != nil {
+	if err := checkUserExternalBilling(gmw.Ctx(gctx), user, cost, costReason); err != nil {
 		return errors.Wrapf(err, "check quota for user %q", user.UserName)
 	}
 

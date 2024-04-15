@@ -47,12 +47,12 @@ func GetCurrentUserQuota(ctx *gin.Context) {
 		return
 	}
 
-	externalBill, err := GetUserExternalBillingQuota(ctx.Request.Context(), user)
+	externalBill, err := GetUserExternalBillingQuota(gmw.Ctx(ctx), user)
 	if err != nil {
 		log.Logger.Error("get user external billing quota", zap.Error(err))
 	}
 
-	// internalBill, err := GetUserInternalBill(ctx.Request.Context(), user, db.BillTypeTxt2Image)
+	// internalBill, err := GetUserInternalBill(gmw.Ctx(ctx), user, db.BillTypeTxt2Image)
 	// if err != nil {
 	// 	log.Logger.Error("get user internal billing quota", zap.Error(err))
 	// }
@@ -104,7 +104,7 @@ func UploadUserConfig(ctx *gin.Context) {
 	}
 
 	// upload cipher to s3
-	if _, err := s3.GetCli().PutObject(ctx.Request.Context(),
+	if _, err := s3.GetCli().PutObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
 		bytes.NewReader(cipher),
@@ -133,7 +133,7 @@ func DownloadUserConfig(ctx *gin.Context) {
 	opt.Set("Cache-Control", "no-cache")
 	opt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
 
-	object, err := s3.GetCli().GetObject(ctx.Request.Context(),
+	object, err := s3.GetCli().GetObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
 		opt,

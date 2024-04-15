@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/library/web"
@@ -17,7 +18,7 @@ func registerWeb(svc *Service) {
 			return
 		}
 
-		rets, err := svc.Search(ctx.Request.Context(), q)
+		rets, err := svc.Search(gmw.Ctx(ctx), q)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, err)
 			return

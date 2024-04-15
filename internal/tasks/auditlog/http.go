@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
 	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
@@ -72,7 +73,7 @@ func (r *router) receiveLog(ctx *gin.Context) {
 }
 
 func (r *router) listLogs(ctx *gin.Context) {
-	logs, err := r.svc.ListLogs(ctx.Request.Context(),
+	logs, err := r.svc.ListLogs(gmw.Ctx(ctx),
 		ctx.Query("env"),
 	)
 	if r.abortErr(ctx, err) {
@@ -97,7 +98,7 @@ func (r *router) receiveNormalLog(ctx *gin.Context) {
 	}
 
 	delete(log, "_id")
-	if err := r.svc.SaveNormalLog(ctx.Request.Context(), log); r.abortErr(ctx, err) {
+	if err := r.svc.SaveNormalLog(gmw.Ctx(ctx), log); r.abortErr(ctx, err) {
 		return
 	}
 
@@ -107,7 +108,7 @@ func (r *router) receiveNormalLog(ctx *gin.Context) {
 }
 
 func (r *router) listNormalLogs(ctx *gin.Context) {
-	logs, err := r.svc.ListNormalLogs(ctx.Request.Context(),
+	logs, err := r.svc.ListNormalLogs(gmw.Ctx(ctx),
 		ctx.Query("env"),
 	)
 	if r.abortErr(ctx, err) {

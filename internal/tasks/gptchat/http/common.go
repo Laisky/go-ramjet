@@ -89,8 +89,8 @@ func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err 
 }
 
 func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
-	logger := gmw.GetLogger(gctx.Request.Context()).Named("get_user_by_token")
-	ctx, cancel := context.WithTimeout(gctx.Request.Context(), time.Second*10)
+	logger := gmw.GetLogger(gctx).Named("get_user_by_token")
+	ctx, cancel := context.WithTimeout(gmw.Ctx(gctx), time.Second*10)
 	defer cancel()
 
 	userToken = strings.TrimSpace(strings.TrimPrefix(userToken, "Bearer "))

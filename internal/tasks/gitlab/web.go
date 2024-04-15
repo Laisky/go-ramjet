@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	gmw "github.com/Laisky/gin-middlewares/v5"
+
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -18,7 +20,7 @@ func registerWeb() {
 			return
 		}
 
-		rets, err := svc.GetFile(ctx.Request.Context(), file)
+		rets, err := svc.GetFile(gmw.Ctx(ctx), file)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, fmt.Sprintf("%+v", err))
 			return
