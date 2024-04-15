@@ -2001,23 +2001,7 @@ function addOperateBtnBelowAiResponse (chatID) {
                 copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
             }
 
-            // copy to clipboard
-            if (location.protocol === 'https:') {
-                navigator.clipboard.writeText(copyContent);
-            } else {
-                // compatibility for http site
-                try {
-                    const textArea = document.createElement('textarea');
-                    textArea.value = copyContent;
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                } catch (err) {
-                    console.error('copy to clipboard failed:', err);
-                }
-            }
+            libs.Copy2Clipboard(copyContent);
         });
 
     // add reload button

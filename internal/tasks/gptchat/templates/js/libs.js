@@ -449,3 +449,23 @@ export const RandomString = (length) => {
 
     return result;
 };
+
+/**
+ * Copy content to clipboard, support both http and https
+ *
+ * @param {string} content
+ */
+export const Copy2Clipboard = (content) => {
+    if (location.protocol === 'https:') {
+        navigator.clipboard.writeText(content);
+    } else {
+        // compatibility for http site
+        const textArea = document.createElement('textarea');
+        textArea.value = content;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+    }
+}
