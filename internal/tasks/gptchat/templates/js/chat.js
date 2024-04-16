@@ -351,6 +351,9 @@ async function dataMigrate () {
                 enable_google_search: false
             };
         }
+        if (eachSconfig.chat_switch.all_in_one === undefined) {
+            eachSconfig.chat_switch.all_in_one = true;
+        }
 
         console.debug('migrate session config: ', key, eachSconfig);
         await libs.KvSet(key, eachSconfig);
@@ -1591,7 +1594,7 @@ async function detectPromptTaskType (model, prompt) {
                         'X-Laisky-Api-Base': sconfig.api_base
                     },
                     method: 'POST',
-                    payload: JSON.stringify({
+                    body: JSON.stringify({
                         model: ChatModelTurbo35,
                         max_tokens: 50,
                         stream: false,
@@ -1609,7 +1612,7 @@ async function detectPromptTaskType (model, prompt) {
                 });
 
                 const respData = await resp.json();
-                if (respData.choices[0].content.exec(/image/)) {
+                if (respData.choices[0].message.content.includes('image')) {
                     return 'image';
                 }
             } catch (err) {

@@ -62,7 +62,7 @@ func runRSSTask() {
 	}
 
 	var pool errgroup.Group
-	pool.Go(func() error {
+	pool.Go(func() (err error) {
 		fpath := gconfig.Shared.GetString("tasks.blog.rss.rss_file_path")
 		if fpath != "" {
 			if err := w.Write2File(fpath); err != nil {
@@ -73,7 +73,7 @@ func runRSSTask() {
 		return nil
 	})
 
-	pool.Go(func() error {
+	pool.Go(func() (err error) {
 		if gconfig.S.GetBool("tasks.blog.rss.upload_to_s3.enable") {
 			if err := w.Write2S3(ctx,
 				gconfig.S.GetString("tasks.blog.rss.upload_to_s3.endpoint"),

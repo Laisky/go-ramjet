@@ -227,7 +227,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 					return errors.Wrap(err, "decode image")
 				}
 
-				pool.Go(func() error {
+				pool.Go(func() (err error) {
 					return uploadImage2Minio(taskCtx,
 						drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, imgBytes)
 				})
@@ -487,7 +487,7 @@ func uploadImage2Minio(ctx context.Context, objkeyPrefix, prompt string, img_con
 	var pool errgroup.Group
 
 	// upload image
-	pool.Go(func() error {
+	pool.Go(func() (err error) {
 		_, err = s3cli.PutObject(ctx,
 			config.Config.S3.Bucket,
 			objkeyPrefix+".png",
@@ -501,7 +501,7 @@ func uploadImage2Minio(ctx context.Context, objkeyPrefix, prompt string, img_con
 	})
 
 	// upload prompt
-	pool.Go(func() error {
+	pool.Go(func() (err error) {
 		_, err = s3cli.PutObject(ctx,
 			config.Config.S3.Bucket,
 			objkeyPrefix+".txt",

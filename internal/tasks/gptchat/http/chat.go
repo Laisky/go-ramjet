@@ -106,21 +106,18 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
-	bodyReader := resp.Body
 
+	if !isStream {
+		if _, err = io.Copy(ctx.Writer, resp.Body); AbortErr(ctx, err) {
+			return
+		}
+
+		return
+	}
+
+	bodyReader := resp.Body
 	reader := bufio.NewScanner(bodyReader)
 	reader.Split(bufio.ScanLines)
-	// reader.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	// 	if atEOF {
-	// 		return 0, nil, io.EOF
-	// 	}
-
-	// 	if i := bytes.Index(data, []byte("\n\n")); i >= 0 {
-	// 		return i + 1, data[0:i], nil
-	// 	}
-
-	// 	return 0, nil, nil
-	// })
 
 	var respContent string
 	var lastResp *OpenaiCompletionStreamResp

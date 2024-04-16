@@ -208,7 +208,7 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 		}
 
 		url := url
-		pool.Go(func() error {
+		pool.Go(func() (err error) {
 			logger := logger.With(zap.String("request_url", url))
 			crawlerCtx, crawlerCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer crawlerCancel()
