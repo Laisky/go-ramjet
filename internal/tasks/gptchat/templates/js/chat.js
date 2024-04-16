@@ -2457,7 +2457,6 @@ async function setupChatInput () {
             chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
             chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
             chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
-            chatContainer.querySelector('#switchChatEnableAutoSync').checked = sconfig.chat_switch.auto_sync;
         });
     }
 }
