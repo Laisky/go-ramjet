@@ -2322,8 +2322,28 @@ async function setupChatInput () {
                     continue;
                 }
 
-                // get file content as Blob
-                readFileForVision(file);
+                const fileExtension = `.${file.name.split('.').pop().toLowerCase()}`;
+                switch (fileExtension) {
+                case '.txt':
+                case '.md':
+                case '.doc':
+                case '.docx':
+                case '.pdf':
+                case '.ppt':
+                case '.pptx':
+                    try {
+                        ShowSpinner();
+                        await uploadFileAsInputUrls(file, fileExtension);
+                    } catch (err) {
+                        console.error(`upload file failed: ${err}`);
+                    } finally {
+                        HideSpinner();
+                    }
+
+                    break;
+                default:
+                    readFileForVision(file);
+                }
             }
         };
 
@@ -2421,6 +2441,24 @@ async function setupChatInput () {
                 await syncUserConfig();
             }, 1800 * 1000);
         });
+
+        // bind listener for all chat switchs
+        libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+            if (op !== libs.KvOp.SET) {
+                return;
+            }
+
+            const expectedKey = `${KvKeyPrefixSessionConfig}${(await activeSessionID())}`;
+            if (key !== expectedKey) {
+                return;
+            }
+
+            const sconfig = newVal;
+            chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
+            chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
+            chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
+            chatContainer.querySelector('#switchChatEnableAutoSync').checked = sconfig.chat_switch.auto_sync;
+        });
     }
 }
 
@@ -2448,6 +2486,52 @@ async function filePasteHandler (evt) {
         readFileForVision(file, `paste-${libs.DateStr()}.png`);
     }
 };
+
+/**
+ * upload user file then insert file url to the head of prompt input
+ *
+ * @param {file} file - file object
+ */
+async function uploadFileAsInputUrls (file, fileExt) {
+    if (file.size > 1024 * 1024 * 20) {
+        showalert('danger', 'File size exceeds the limit of 20MB');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('file_ext', fileExt);
+
+    const sconfig = await getChatSessionConfig();
+    const resp = await fetch('/files/chat', {
+        method: 'POST',
+        headers: {
+            Authorization: 'Bearer ' + sconfig.api_token,
+            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+            'X-Laisky-Api-Base': sconfig.api_base
+        },
+        body: formData
+    });
+
+    if (!resp.ok) {
+        showalert('danger', `upload file failed: ${await resp.text()}`);
+        return;
+    }
+
+    const data = await resp.json();
+    if (!data || !data.url) {
+        showalert('danger', 'upload file failed');
+        return;
+    }
+
+    if (sconfig.chat_switch.disable_https_crawler) {
+        sconfig.chat_switch.disable_https_crawler = false;
+        await saveChatSessionConfig(sconfig);
+    }
+
+    const url = data.url;
+    chatPromptInputEle.value = url + '\n' + chatPromptInputEle.value;
+}
 
 /** read file content and append to vision store
  *

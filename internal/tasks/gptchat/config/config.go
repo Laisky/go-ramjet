@@ -64,7 +64,7 @@ func SetupConfig() (err error) {
 	// Config.DefaultOpenaiToken = gutils.OptionalVal(
 	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
-		&Config.LimitUploadFileBytes, 10*1024*1024)
+		&Config.LimitUploadFileBytes, 20*1024*1024)
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
@@ -132,7 +132,7 @@ type OpenAI struct {
 	LcmBasicAuthUsername string `json:"lcm_basic_auth_username" mapstructure:"lcm_basic_auth_username"`
 	// LcmBasicAuthPassword (optional) lcm basic auth password
 	LcmBasicAuthPassword string `json:"lcm_basic_auth_password" mapstructure:"lcm_basic_auth_password"`
-	// LimitUploadFileBytes (optional) limit upload file bytes, default is 10MB
+	// LimitUploadFileBytes (optional) limit upload file bytes, default is 20MB
 	LimitUploadFileBytes int `json:"limit_upload_file_bytes" mapstructure:"limit_upload_file_bytes"`
 }
 

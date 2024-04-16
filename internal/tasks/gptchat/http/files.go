@@ -10,7 +10,6 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -25,11 +24,17 @@ func UploadFiles(ctx *gin.Context) {
 	if AbortErr(ctx, err) {
 		return
 	}
-
-	err = checkUserExternalBilling(ctx, user, db.PriceUploadFile, "upload file")
-	if AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
+	if user.IsFree {
+		AbortErr(ctx, errors.New("free user cannot upload files. "+
+			"you need upgrade to a paid membership, "+
+			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
 		return
 	}
+
+	// err = checkUserExternalBilling(ctx, user, db.PriceUploadFile, "upload file")
+	// if AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
+	// 	return
+	// }
 
 	file, err := ctx.FormFile("file")
 	if AbortErr(ctx, errors.Wrap(err, "get file from form")) {

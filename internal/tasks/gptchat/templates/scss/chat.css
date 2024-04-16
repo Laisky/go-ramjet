@@ -76,7 +76,7 @@
 }
 #chatContainer .chatManager .alerts-container {
   width: 100%;
-  padding-top: 20px;
+  padding-top: 40px;
   position: absolute;
   display: flex;
   justify-content: space-around;
