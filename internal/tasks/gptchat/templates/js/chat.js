@@ -34,7 +34,7 @@ const QAModelImmigrate = 'qa-immigrate';
 const QAModelCustom = 'qa-custom';
 const QAModelShared = 'qa-shared';
 const CompletionModelDavinci3 = 'text-davinci-003';
-const ImageModelDalle2 = 'dall-e-3';
+const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 const ImageModelImg2Img = 'img-to-img';
 
@@ -83,7 +83,7 @@ const QaModels = [
     QAModelShared
 ];
 const ImageModels = [
-    ImageModelDalle2,
+    ImageModelDalle3,
     ImageModelSdxlTurbo,
     ImageModelImg2Img
 ];
@@ -153,26 +153,26 @@ let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
 
-async function IsChatModel (model) {
+function IsChatModel (model) {
     return ChatModels.includes(model);
 };
 
-async function IsQaModel (model) {
+function IsQaModel (model) {
     return QaModels.includes(model);
 };
 
-async function IsCompletionModel (model) {
+function IsCompletionModel (model) {
     return CompletionModels.includes(model);
 };
 
-async function IsImageModel (model) {
+function IsImageModel (model) {
     return ImageModels.includes(model);
 };
 
-async function ShowSpinner () {
+function ShowSpinner () {
     document.getElementById('spinner').toggleAttribute('hidden', false);
 };
-async function HideSpinner () {
+function HideSpinner () {
     document.getElementById('spinner').toggleAttribute('hidden', true);
 };
 
@@ -346,7 +346,9 @@ async function dataMigrate () {
         // set default chat controller
         if (!eachSconfig.chat_switch) {
             eachSconfig.chat_switch = {
-                disable_https_crawler: false
+                all_in_one: true,
+                disable_https_crawler: true,
+                enable_google_search: false
             };
         }
 
@@ -1420,7 +1422,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     let url;
 
     switch (selectedModel) {
-    case ImageModelDalle2:
+    case ImageModelDalle3:
         url = '/images/generations';
         break;
     default:
@@ -1569,6 +1571,64 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
     await appendChats2Storage(RoleAI, chatID, attachHTML);
 }
 
+/**
+ * Sends a prompt to the server for the selected model and updates the current AI response element with the task information.
+ *
+ * @param {string} model - The selected model.
+ * @param {string} prompt - The prompt to send to the server.
+ * @returns chat/complete/image/qa/unknown
+ */
+async function detectPromptTaskType (model, prompt) {
+    if (IsChatModel(model)) {
+        const sconfig = await getChatSessionConfig();
+        if (sconfig.chat_switch.all_in_one) {
+            try {
+                const resp = await fetch('/api', {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + sconfig.api_token,
+                        'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                        'X-Laisky-Api-Base': sconfig.api_base
+                    },
+                    method: 'POST',
+                    payload: JSON.stringify({
+                        model: ChatModelTurbo35,
+                        max_tokens: 50,
+                        stream: false,
+                        messages: [
+                            {
+                                role: RoleSystem,
+                                content: 'Please determine the user\'s intent based on the prompt. Return "image" if the user wants to generate an image, otherwise return "text". Do not provide any other irrelevant content except "image"/"text".'
+                            },
+                            {
+                                role: RoleHuman,
+                                content: prompt
+                            }
+                        ]
+                    })
+                });
+
+                const respData = await resp.json();
+                if (respData.choices[0].content.exec(/image/)) {
+                    return 'image';
+                }
+            } catch (err) {
+                console.warn(`failed to request llm to detect prompt task type: ${err}`)
+            }
+        }
+
+        return 'chat';
+    } else if (IsCompletionModel(model)) {
+        return 'complete';
+    } else if (IsQaModel(model)) {
+        return 'qa';
+    } else if (IsImageModel(model)) {
+        return 'image';
+    } else {
+        return 'unknown';
+    }
+}
+
 async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
@@ -1623,13 +1683,19 @@ async function sendChat2Server (chatID) {
     // these extras will append to the tail of AI's response
     globalAIRespEle.dataset.aiRawResp = '';
     globalAIRespEle.dataset.respExtras = '';
-    let reqBody;
+    let reqBody = null;
     const sconfig = await getChatSessionConfig();
 
-    if (IsChatModel(selectedModel)) {
-        let messages;
-        const nContexts = parseInt(sconfig.n_contexts);
+    let messages;
+    const nContexts = parseInt(sconfig.n_contexts);
+    let url, project;
+    const urlParams = new URLSearchParams(location.search);
 
+    const promptType = await detectPromptTaskType(selectedModel, reqPrompt);
+    console.debug(`detected prompt type ${promptType}`);
+
+    switch (promptType) {
+    case 'chat':
         if (chatID) { // reload current chat by latest context
             messages = await getLastNChatMessages(nContexts - 1, chatID);
             messages.push({
@@ -1639,13 +1705,6 @@ async function sendChat2Server (chatID) {
         } else {
             messages = await getLastNChatMessages(nContexts, chatID);
         }
-
-        // some models support both vision and chat
-        // if selected model is vision model, but no image selected, abort
-        // if (selectedModel.includes('vision') && chatVisionSelectedFileStore.length === 0) {
-        //     await abortAIResp('you should select at least one image for vision model');
-        //     return;
-        // }
 
         // there are pinned files, add them to user's prompt
         if (chatVisionSelectedFileStore.length !== 0) {
@@ -1685,7 +1744,8 @@ async function sendChat2Server (chatID) {
                 chat_switch: sconfig.chat_switch
             }
         });
-    } else if (IsCompletionModel(selectedModel)) {
+        break;
+    case 'complete':
         reqBody = JSON.stringify({
             model: selectedModel,
             stream: true,
@@ -1696,15 +1756,14 @@ async function sendChat2Server (chatID) {
             prompt: reqPrompt,
             stop: ['\n\n']
         });
-    } else if (IsQaModel(selectedModel)) {
+        break;
+    case 'qa':
         // {
         //     "question": "XFS 是干啥的",
         //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
         //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
         // }
 
-        let url, project;
-        const params = new URLSearchParams(location.search);
         switch (selectedModel) {
         case QAModelBasebit:
         case QAModelSecurity:
@@ -1731,9 +1790,9 @@ async function sendChat2Server (chatID) {
             //
             // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
 
-            url = `/ramjet/gptchat/ctx/share?uid=${params.get('uid')}` +
-                    `&chatbot_name=${params.get('chatbot_name')}` +
-                    `&q=${encodeURIComponent(reqPrompt)}`;
+            url = `/ramjet/gptchat/ctx/share?uid=${urlParams.get('uid')}` +
+                        `&chatbot_name=${urlParams.get('chatbot_name')}` +
+                        `&q=${encodeURIComponent(reqPrompt)}`;
             break;
         default:
             console.error('unknown qa chat model: ' + selectedModel);
@@ -1810,10 +1869,16 @@ async function sendChat2Server (chatID) {
             await abortAIResp(err);
             return;
         }
-    } else if (IsImageModel(selectedModel)) {
+
+        break;
+    case 'image':
+        if (!IsImageModel(selectedModel) && sconfig.chat_switch.all_in_one) {
+            selectedModel = ImageModelDalle3;
+        }
+
         try {
             switch (selectedModel) {
-            case ImageModelDalle2:
+            case ImageModelDalle3:
                 await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
             case ImageModelImg2Img:
@@ -1832,10 +1897,10 @@ async function sendChat2Server (chatID) {
         }
 
         return;
-    } else {
+    default:
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
-            '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
-            `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
+                '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
+                `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
         await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
         unlockChatInput();
         return;
@@ -2689,7 +2754,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
  *
  * @param {string} sid - session id, default is active session id
  */
-const getChatSessionConfig = async (sid) => {
+async function getChatSessionConfig (sid) {
     if (!sid) {
         sid = await activeSessionID();
     }
@@ -2712,7 +2777,7 @@ const getChatSessionConfig = async (sid) => {
  * @param {Object} sconfig - session config
  * @param {string} sid - session id
  */
-const saveChatSessionConfig = async (sconfig, sid) => {
+async function saveChatSessionConfig (sconfig, sid) {
     if (!sid) {
         sid = await activeSessionID();
     }
@@ -2738,6 +2803,7 @@ function newSessionConfig () {
         system_prompt: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
         selected_model: ChatModelTurbo35,
         chat_switch: {
+            all_in_one: true,
             disable_https_crawler: true,
             enable_google_search: false
         }
