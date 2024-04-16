@@ -2371,7 +2371,17 @@ async function setupChatInput () {
                 const sconfig = await getChatSessionConfig()
                 sconfig.chat_switch.enable_google_search = switchEle.checked
                 await saveChatSessionConfig(sconfig)
-            })
+            });
+
+        chatContainer
+            .querySelector('#switchChatEnableAllInOne')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation()
+                const switchEle = libs.evtTarget(evt)
+                const sconfig = await getChatSessionConfig()
+                sconfig.chat_switch.all_in_one = switchEle.checked
+                await saveChatSessionConfig(sconfig)
+            });
 
         chatContainer
             .querySelector('#switchChatEnableAutoSync')
@@ -2845,6 +2855,8 @@ async function updateConfigFromSessionConfig () {
         .checked = !sconfig.chat_switch.disable_https_crawler;
     chatContainer.querySelector('#switchChatEnableGoogleSearch')
         .checked = sconfig.chat_switch.enable_google_search;
+    chatContainer.querySelector('#switchChatEnableAllInOne')
+        .checked = sconfig.chat_switch.all_in_one;
     chatContainer.querySelector('#switchChatEnableAutoSync')
         .checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
 
