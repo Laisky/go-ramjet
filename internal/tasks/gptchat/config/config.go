@@ -326,8 +326,8 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 	)
 	switch model {
 	case "gpt-3.5-turbo", // free models
-		"gpt-3.5-turbo-1106",
-		"gpt-3.5-turbo-0125",
+		// "gpt-3.5-turbo-1106",
+		// "gpt-3.5-turbo-0125",
 		// "llama2-70b-4096",
 		"gemma-7b-it",
 		"llama3-8b-8192",
