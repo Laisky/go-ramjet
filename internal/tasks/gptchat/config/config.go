@@ -330,6 +330,8 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"gpt-3.5-turbo-0125",
 		"llama2-70b-4096",
 		"gemma-7b-it",
+		"llama3-8b-8192",
+		"llama3-70b-8192",
 		"mixtral-8x7b-32768",
 		"img-to-img",
 		"sdxl-turbo",

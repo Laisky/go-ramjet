@@ -9,11 +9,12 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 )
 
 // UploadFiles upload files

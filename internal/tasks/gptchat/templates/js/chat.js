@@ -28,6 +28,8 @@ const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 const ChatModelGroqGemma7b = 'gemma-7b-it';
+const ChatModelGroqllama3With70B = 'llama3-70b-8192';
+const ChatModelGroqllama3With8B = 'llama3-8b-8192';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
 const QAModelImmigrate = 'qa-immigrate';
@@ -56,6 +58,8 @@ const ChatModels = [
     ChatModelGroqLlama2With70B4K,
     ChatModelGroqMixtral8x7B32K,
     ChatModelGroqGemma7b,
+    ChatModelGroqllama3With70B,
+    ChatModelGroqllama3With8B,
     // ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision
@@ -94,6 +98,8 @@ const FreeModels = [
     ChatModelGroqLlama2With70B4K,
     ChatModelGroqMixtral8x7B32K,
     ChatModelGroqGemma7b,
+    ChatModelGroqllama3With70B,
+    ChatModelGroqllama3With8B,
     ChatModelTurbo35,
     // ChatModelTurbo35V0125,
     ChatModelGeminiPro,

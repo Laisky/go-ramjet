@@ -419,6 +419,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"llama2-70b-4096",
 			"mixtral-8x7b-32768",
 			"gemma-7b-it",
+			"llama3-8b-8192",
+			"llama3-70b-8192",
 			"gemini-pro":
 			req := new(OpenaiChatReq[string])
 			if err := copier.Copy(req, frontendReq); err != nil {
