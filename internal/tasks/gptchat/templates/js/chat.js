@@ -2028,7 +2028,12 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     // because prism.js do not support formatted html.
     const markdownContent = aiRespEle.innerHTML;
 
-    window.mermaid && await window.mermaid.run({ querySelector: 'pre.mermaid' });
+    try {
+        window.mermaid && await window.mermaid.run({ querySelector: 'pre.mermaid' });
+    } catch (err) {
+        console.error('mermaid run error:', err);
+    }
+
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 
