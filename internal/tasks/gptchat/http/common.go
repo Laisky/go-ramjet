@@ -29,7 +29,7 @@ func AbortErr(ctx *gin.Context, err error) bool {
 		return false
 	}
 
-	log.Logger.Error("openai chat abort", zap.Error(err))
+	gmw.GetLogger(ctx).Error("chat abort", zap.Error(err))
 	ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 		"err": err.Error(),
 	})
