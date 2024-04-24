@@ -62,7 +62,7 @@ body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge {
   cursor: pointer;
   height: 22px;
 }
-body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge .bi.bi-trash {
+body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge .bi.bi-pencil-square {
   margin-left: 5px;
 }
 body #hiddenChatConfigSideBar .offcanvas-body .input-group {

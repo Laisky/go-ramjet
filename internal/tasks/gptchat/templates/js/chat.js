@@ -143,7 +143,7 @@ let deleteCheckCallback,
      * global shared modal to act as confirm dialog
      */
     deleteCheckModal;
-let singleInputCallback, singleInputModal;
+let singleInputCallback, singleInputModal, systemPromptModalCallback;
 
 // could be controlled(interrupt) anywhere, so it's global
 let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
@@ -254,7 +254,7 @@ async function main (event) {
     }
     mainRunned = true;
 
-    setupConfirmModal();
+    setupModals();
     await dataMigrate();
     await setupHeader();
     setupSingleInputModal();
@@ -431,7 +431,7 @@ function setupSingleInputModal () {
         });
 }
 
-function setupConfirmModal () {
+function setupModals () {
     deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));
     document.getElementById('deleteCheckModal')
         .querySelector('.modal-body .yes')
@@ -443,6 +443,16 @@ function setupConfirmModal () {
             }
 
             deleteCheckModal.hide();
+        });
+
+    const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
+    saveSystemPromptModelEle
+        .querySelector('.btn.save')
+        .addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            if (systemPromptModalCallback) {
+                await systemPromptModalCallback(evt);
+            }
         });
 }
 
@@ -3462,6 +3472,66 @@ async function loadPromptShortcutsFromStorage () {
     return shortcuts;
 }
 
+async function EditFavSystemPromptHandler (evt) {
+    evt.stopPropagation();
+
+    const badgetEle = evt.target.closest('.badge');
+    const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
+    const saveSystemPromptModal = new window.bootstrap.Modal(saveSystemPromptModelEle);
+
+    const shortcut = {
+        title: badgetEle.querySelector('.title').innerText,
+        description: badgetEle.dataset.prompt
+    }
+
+    const titleInput = saveSystemPromptModelEle
+        .querySelector('.modal-body input.title');
+    titleInput.value = shortcut.title;
+
+    const descriptionInput = saveSystemPromptModelEle
+        .querySelector('.modal-body textarea.user-input');
+    descriptionInput.value = shortcut.description;
+
+    systemPromptModalCallback = async (evt) => {
+        evt.stopPropagation();
+
+        // trim and check empty
+        titleInput.value = titleInput.value.trim();
+        descriptionInput.value = descriptionInput.value.trim();
+        if (titleInput.value === '') {
+            titleInput.classList.add('border-danger');
+            return;
+        }
+        if (descriptionInput.value === '') {
+            descriptionInput.classList.add('border-danger');
+            return;
+        }
+
+        const newShortcut = {
+            title: titleInput.value,
+            description: descriptionInput.value
+        };
+
+        // update in kv
+        let shortcuts = await libs.KvGet(KvKeyPromptShortCuts);
+        shortcuts = shortcuts.map((item) => {
+            if (item.title === shortcut.title) {
+                return newShortcut;
+            }
+            return item;
+        });
+        await libs.KvSet(KvKeyPromptShortCuts, shortcuts);
+
+        // update badge in html
+        badgetEle.dataset.prompt = newShortcut.description;
+        badgetEle.querySelector('.title').innerText = newShortcut.title;
+
+        saveSystemPromptModal.hide();
+    };
+
+    saveSystemPromptModal.show();
+}
+
 /**
  * append prompt shortcuts to html and kv
  *
@@ -3482,7 +3552,12 @@ async function appendPromptShortcut (shortcut, storage = false) {
     const ele = document.createElement('span');
     ele.classList.add('badge', 'text-bg-info');
     ele.dataset.prompt = shortcut.description;
-    ele.innerHTML = ` ${shortcut.title}  <i class="bi bi-trash"></i>`;
+    ele.dataset.title = shortcut.title;
+    ele.innerHTML = `<i class="title">${shortcut.title}</i>  <i class="bi bi-pencil-square"></i><i class="bi bi-trash"></i>`;
+
+    // add edit click event
+    ele.querySelector('i.bi-pencil-square')
+        .addEventListener('click', EditFavSystemPromptHandler);
 
     // add delete click event
     ele.querySelector('i.bi-trash')
@@ -3502,10 +3577,13 @@ async function appendPromptShortcut (shortcut, storage = false) {
     // replace system prompt
     ele.addEventListener('click', async (evt) => {
         evt.stopPropagation();
-        const promptInput = configContainer.querySelector('.system-prompt .input');
 
-        await OpenaiChatStaticContext(libs.evtTarget(evt).dataset.prompt);
-        promptInput.value = libs.evtTarget(evt).dataset.prompt;
+        const promptInput = configContainer.querySelector('.system-prompt .input');
+        const badgetEle = evt.target.closest('.badge');
+        const prompt = badgetEle.dataset.prompt;
+
+        await OpenaiChatStaticContext(prompt);
+        promptInput.value = prompt;
     });
 
     // add to html
@@ -3564,38 +3642,36 @@ async function setupPromptManager () {
 
     // bind save button in system-prompt modal
     {
-        saveSystemPromptModelEle
-            .querySelector('.btn.save')
-            .addEventListener('click', async (evt) => {
-                evt.stopPropagation();
-                const titleInput = saveSystemPromptModelEle
-                    .querySelector('.modal-body input.title');
-                const descriptionInput = saveSystemPromptModelEle
-                    .querySelector('.modal-body textarea.user-input');
+        systemPromptModalCallback = async (evt) => {
+            evt.stopPropagation();
+            const titleInput = saveSystemPromptModelEle
+                .querySelector('.modal-body input.title');
+            const descriptionInput = saveSystemPromptModelEle
+                .querySelector('.modal-body textarea.user-input');
 
-                // trim space
-                titleInput.value = titleInput.value.trim();
-                descriptionInput.value = descriptionInput.value.trim();
+            // trim space
+            titleInput.value = titleInput.value.trim();
+            descriptionInput.value = descriptionInput.value.trim();
 
-                // if title is empty, set input border to red
-                if (titleInput.value === '') {
-                    titleInput.classList.add('border-danger');
-                    return;
-                }
+            // if title is empty, set input border to red
+            if (titleInput.value === '') {
+                titleInput.classList.add('border-danger');
+                return;
+            }
 
-                const shortcut = {
-                    title: titleInput.value,
-                    description: descriptionInput.value
-                };
+            const shortcut = {
+                title: titleInput.value,
+                description: descriptionInput.value
+            };
 
-                appendPromptShortcut(shortcut, true);
+            appendPromptShortcut(shortcut, true);
 
-                // clear input
-                titleInput.value = '';
-                descriptionInput.value = '';
-                titleInput.classList.remove('border-danger');
-                saveSystemPromptModal.hide();
-            })
+            // clear input
+            titleInput.value = '';
+            descriptionInput.value = '';
+            titleInput.classList.remove('border-danger');
+            saveSystemPromptModal.hide();
+        }
     }
 
     // fill chat prompts market
