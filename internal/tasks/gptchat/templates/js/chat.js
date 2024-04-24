@@ -2101,7 +2101,8 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     let costUsd = aiRespEle.dataset.costUsd;
     try {
         const sconfig = await getChatSessionConfig();
-        if (sconfig.api_token.startsWith('laisky-')) {
+        if (sconfig.api_token.startsWith('laisky-') ||
+        sconfig.api_token.startsWith('FREETIER-')) {
             if (!costUsd) {
                 const requestid = aiRespEle.dataset.reqeustid;
                 if (requestid) {
