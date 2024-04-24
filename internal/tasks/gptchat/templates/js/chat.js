@@ -792,7 +792,11 @@ async function fetchImageDrawingResultBackground () {
                     const errText = await errFileResp.text();
                     item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
                     checkIsImageAllSubtaskDone(item, imageUrl, false);
-                    await appendChats2Storage(RoleAI, chatId, item.innerHTML);
+                    await appendChats2Storage({
+                        role: RoleAI,
+                        chatID: chatId,
+                        content: item.innerHTML
+                    });
                     return;
                 }
 
@@ -1159,15 +1163,18 @@ async function removeChatInStorage (chatid) {
     await libs.KvSet(storageActiveSessionKey, session);
 }
 
-/** append or update chat history by chatid and role
-    * @param {string} chatid - chat id
-    * @param {string} role - user or assistant
-    * @param {string} renderedContent - chat content
-    * @param {string} attachHTML - chat content's attach html
+/** append or update chat history by chatID and role
+ *
+ * @param {object} chatItem - chat item
+ *   @property {string} chatID - chat id
+ *   @property {string} role - user or assistant
+ *   @property {string} content - rendered chat content
+ *   @property {string} attachHTML - chat content's attach html
+ *   @property {string} rawContent - chat content's raw content
 */
-async function appendChats2Storage (role, chatid, renderedContent, attachHTML, rawContent) {
-    if (!chatid) {
-        throw new Error('chatid is required');
+async function appendChats2Storage (chatItem) {
+    if (!chatItem.chatID) {
+        throw new Error('chatID is required');
     }
 
     const storageActiveSessionKey = kvSessionKey(await activeSessionID());
@@ -1176,26 +1183,26 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
     // if chat is already in history, find and update it.
     let found = false;
     session.forEach((item, idx) => {
-        if (item.chatID === chatid && item.role === role) {
+        if (item.chatID === chatItem.chatID && item.role === chatItem.role) {
             found = true;
-            item.content = renderedContent;
-            item.attachHTML = attachHTML;
-            item.rawContent = rawContent;
+            item.content = chatItem.content;
+            item.attachHTML = chatItem.attachHTML;
+            item.rawContent = chatItem.rawContent;
         }
     });
 
-    // if ai response is not in history, add it after user's chat which has same chatid
-    if (!found && role === RoleAI) {
+    // if ai response is not in history, add it after user's chat which has same chatID
+    if (!found && chatItem.role === RoleAI) {
         session.forEach((item, idx) => {
-            if (item.chatID === chatid) {
+            if (item.chatID === chatItem.chatID) {
                 found = true;
                 if (item.role !== RoleAI) {
                     session.splice(idx + 1, 0, {
                         role: RoleAI,
-                        chatID: chatid,
-                        content: renderedContent,
-                        attachHTML,
-                        rawContent
+                        chatID: chatItem.chatID,
+                        content: chatItem.content,
+                        attachHTML: chatItem.attachHTML,
+                        rawContent: chatItem.rawContent
                     });
                 }
             }
@@ -1205,11 +1212,11 @@ async function appendChats2Storage (role, chatid, renderedContent, attachHTML, r
     // if chat is not in history, add it
     if (!found) {
         session.push({
-            role,
-            chatID: chatid,
-            content: renderedContent,
-            attachHTML,
-            rawContent
+            role: chatItem.role,
+            chatID: chatItem.chatID,
+            content: chatItem.content,
+            attachHTML: chatItem.attachHTML,
+            rawContent: chatItem.rawContent
         });
     }
 
@@ -1467,7 +1474,11 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     })
 
     // save img to storage no matter it's done or not
-    await appendChats2Storage(RoleAI, chatID, attachHTML);
+    await appendChats2Storage({
+        role: RoleAI,
+        chatID,
+        content: attachHTML
+    });
 }
 
 async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
@@ -1522,7 +1533,11 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
         attachHTML += `<img src="${url}">`
     });
 
-    await appendChats2Storage(RoleAI, chatID, attachHTML);
+    await appendChats2Storage({
+        role: RoleAI,
+        chatID,
+        content: attachHTML
+    });
 }
 
 async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
@@ -1577,7 +1592,11 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
         attachHTML += `<img src="${url}">`;
     })
 
-    await appendChats2Storage(RoleAI, chatID, attachHTML);
+    await appendChats2Storage({
+        role: RoleAI,
+        chatID,
+        content: attachHTML
+    });
 }
 
 /**
@@ -1642,9 +1661,12 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
-    await appendChats2Storage(RoleHuman, chatID, text,
-        `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
-    );
+    await appendChats2Storage({
+        role: RoleHuman,
+        chatID,
+        content: text,
+        attachHTML: `<img src="data:image/png;base64,${imgDataBase64}" data-name="${imgName}">`
+    });
 
     // insert image to user input
     chatContainer
@@ -1667,7 +1689,11 @@ async function sendChat2Server (chatID) {
         }
 
         append2Chats(chatID, RoleHuman, reqPrompt, false);
-        await appendChats2Storage(RoleHuman, chatID, reqPrompt)
+        await appendChats2Storage({
+            role: RoleHuman,
+            chatID,
+            content: reqPrompt
+        });
     } else { // if chatID is not empty, it's a reload request
         reqPrompt = chatContainer
             .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
@@ -1910,7 +1936,11 @@ async function sendChat2Server (chatID) {
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
                 '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
                 `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
-        await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
+        await appendChats2Storage({
+            role: RoleAI,
+            chatID,
+            content: globalAIRespEle.innerHTML
+        });
         unlockChatInput();
         return;
     }
@@ -2041,7 +2071,13 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     // no need to scroll and save to storage
     if (saveStorage) {
         scrollToChat(aiRespEle);
-        await appendChats2Storage(RoleAI, chatID, markdownContent, respExtras, aiRawResp);
+        await appendChats2Storage({
+            role: RoleAI,
+            chatID,
+            content: markdownContent,
+            attachHTML: respExtras,
+            rawContent: aiRawResp
+        });
     }
 
     addOperateBtnBelowAiResponse(chatID);
