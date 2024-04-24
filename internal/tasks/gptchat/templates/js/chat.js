@@ -2064,6 +2064,17 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         console.error('mermaid run error:', err);
     }
 
+    // TODO
+    // add cost tips
+    // const sconfig = await getChatSessionConfig();
+    // if (sconfig.api_token.startsWith('laisky-')) {
+    //     aiRespEle.insertAdjacentHTML('beforeend', `
+    //         <div class="alert alert-warning" role="alert">
+    //             <p>💰 <strong>Cost Tips:</strong> The cost of this request is <strong>$${sconfig.cost_per_1000_tokens}</strong> per 1000 tokens.</p>
+    //         </div>
+    //     `);
+    // }
+
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 

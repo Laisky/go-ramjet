@@ -327,9 +327,10 @@
 
             // modules need to load before main.js
             window.libs = await import("/static/{{.LibJs}}");
-            await window.libs.LoadJsModules([
+            let futures = [];
+            futures.push(window.libs.LoadJsModules([
                 "{{.BootstrapJs}}",
-                "{{.SeeJs}}",
+                // "{{.SeeJs}}",
                 "{{.PrismJs}}",
                 "{{.FuseJs}}",
                 "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
@@ -337,7 +338,13 @@
                 "/static/{{.DataJs}}",
                 "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
                 "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
-            ]);
+            ]));
+            futures.push(window.libs.LoadJsModules([
+                "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v3.js",
+            ], "module"));
+            await Promise.all(futures);
+
+            window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v3.js")).SSE;
 
             await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
         })();

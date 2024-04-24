@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -218,9 +219,14 @@ func Chat(ctx *gin.Context) {
 
 // CopyHeader copy header from `from` to `to`
 func CopyHeader(to, from http.Header) {
-	for _, k := range []string{
-		"Content-Type",
-	} {
-		to.Add(k, from.Get(k))
+	for key, values := range from {
+		lowerKey := strings.ToLower(key)
+		switch {
+		case lowerKey == "content-type",
+			strings.HasPrefix(lowerKey, "x-oneapi-"):
+			for _, v := range values {
+				to.Add(key, v)
+			}
+		}
 	}
 }

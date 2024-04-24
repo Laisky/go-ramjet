@@ -100,7 +100,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		AbortErr(ctx, errors.Errorf("request model %q got [%d]%s",
-			frontReq.Model, resp.StatusCode, body))
+			frontReq.Model, resp.StatusCode, string(body)))
 		return
 	}
 
@@ -514,7 +514,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			return nil, nil, errors.Wrap(err, "marshal new body")
 		}
 
-		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", payload),
+		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", reqBody),
+
 	}
 
 	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
