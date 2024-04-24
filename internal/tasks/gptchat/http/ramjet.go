@@ -23,6 +23,48 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+func OneapiProxyHandler(ctx *gin.Context) {
+	defer gutils.LogErr(ctx.Request.Body.Close, log.Logger)
+	url := ctx.Request.URL
+	targetUrl := "https://oneapi.laisky.com" + "/" + strings.TrimPrefix(
+		strings.TrimPrefix(url.Path, "/"), "gptchat/oneapi/")
+	targetUrl += "?" + url.RawQuery
+
+	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
+		ctx.Request.Method,
+		targetUrl,
+		ctx.Request.Body,
+	)
+	if AbortErr(ctx, err) {
+		return
+	}
+
+	req.Header = ctx.Request.Header
+	if err = setUserAuth(ctx, req); AbortErr(ctx, err) {
+		return
+	}
+
+	resp, err := httpcli.Do(req) //nolint: bodyclose
+	if AbortErr(ctx, err) {
+		return
+	}
+
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+	payload, err := io.ReadAll(resp.Body)
+	if AbortErr(ctx, err) {
+		return
+	}
+
+	for k, v := range resp.Header {
+		if len(v) == 0 {
+			continue
+		}
+
+		ctx.Header(k, v[0])
+	}
+	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
+}
+
 // RamjetProxyHandler proxy to ramjet url
 func RamjetProxyHandler(ctx *gin.Context) {
 	defer gutils.LogErr(ctx.Request.Body.Close, log.Logger)

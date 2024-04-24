@@ -238,6 +238,15 @@
                                 background-color: white;
                             }
 
+                            .cost {
+                                position: absolute;
+                                right: 1px;
+                                bottom: 1px;
+                                margin: 0;
+                                font-size: small;
+                                opacity: 0.6;
+                            }
+
                             .operator {
                                 text-align: center;
                                 cursor: default;

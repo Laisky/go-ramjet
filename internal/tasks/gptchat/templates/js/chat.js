@@ -751,7 +751,15 @@ async function changeSession (activeSid) {
     // restore session history
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
     await Promise.all(Array.from(await sessionChatHistory(activeSid)).map(async (item) => {
-        append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
+        append2Chats({
+            chatID: item.chatID,
+            role: item.role,
+            content: item.content,
+            isHistory: true,
+            attachHTML: item.attachHTML,
+            rawContent: item.rawContent,
+            costUsd: item.costUsd
+        });
         if (item.role === RoleAI) {
             await renderAfterAiResp(item.chatID);
         }
@@ -1042,7 +1050,15 @@ async function setupSessionManager () {
 
         // restore conservation history
         await Promise.all(Array.from(await activeSessionChatHistory()).map(async (item) => {
-            append2Chats(item.chatID, item.role, item.content, true, item.attachHTML, item.rawContent);
+            append2Chats({
+                chatID: item.chatID,
+                role: item.role,
+                content: item.content,
+                isHistory: true,
+                attachHTML: item.attachHTML,
+                rawContent: item.rawContent,
+                costUsd: item.costUsd
+            });
             if (item.role === RoleAI) {
                 await renderAfterAiResp(item.chatID);
             }
@@ -1171,6 +1187,7 @@ async function removeChatInStorage (chatid) {
  *   @property {string} content - rendered chat content
  *   @property {string} attachHTML - chat content's attach html
  *   @property {string} rawContent - chat content's raw content
+ *   @property {string} costUsd - chat cost in USD
 */
 async function appendChats2Storage (chatItem) {
     if (!chatItem.chatID) {
@@ -1188,6 +1205,7 @@ async function appendChats2Storage (chatItem) {
             item.content = chatItem.content;
             item.attachHTML = chatItem.attachHTML;
             item.rawContent = chatItem.rawContent;
+            item.costUsd = chatItem.costUsd || item.costUsd;
         }
     });
 
@@ -1202,7 +1220,8 @@ async function appendChats2Storage (chatItem) {
                         chatID: chatItem.chatID,
                         content: chatItem.content,
                         attachHTML: chatItem.attachHTML,
-                        rawContent: chatItem.rawContent
+                        rawContent: chatItem.rawContent,
+                        costUsd: chatItem.costUsd
                     });
                 }
             }
@@ -1216,7 +1235,8 @@ async function appendChats2Storage (chatItem) {
             chatID: chatItem.chatID,
             content: chatItem.content,
             attachHTML: chatItem.attachHTML,
-            rawContent: chatItem.rawContent
+            rawContent: chatItem.rawContent,
+            costUsd: chatItem.costUsd
         });
     }
 
@@ -1688,7 +1708,12 @@ async function sendChat2Server (chatID) {
             return;
         }
 
-        append2Chats(chatID, RoleHuman, reqPrompt, false);
+        append2Chats({
+            chatID,
+            role: RoleHuman,
+            content: reqPrompt,
+            isHistory: false
+        });
         await appendChats2Storage({
             role: RoleHuman,
             chatID,
@@ -1965,6 +1990,14 @@ async function sendChat2Server (chatID) {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
 
+        // set request id to ai response element
+        if (!globalAIRespEle.dataset.reqeustid) {
+            const ids = evt.headers['x-oneapi-request-id'] || [];
+            if (ids.length > 0) {
+                globalAIRespEle.dataset.reqeustid = ids[0];
+            }
+        }
+
         let isChatRespDone = false;
         if (evt.data === '[DONE]') {
             isChatRespDone = true;
@@ -2064,16 +2097,29 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         console.error('mermaid run error:', err);
     }
 
-    // TODO
     // add cost tips
-    // const sconfig = await getChatSessionConfig();
-    // if (sconfig.api_token.startsWith('laisky-')) {
-    //     aiRespEle.insertAdjacentHTML('beforeend', `
-    //         <div class="alert alert-warning" role="alert">
-    //             <p>💰 <strong>Cost Tips:</strong> The cost of this request is <strong>$${sconfig.cost_per_1000_tokens}</strong> per 1000 tokens.</p>
-    //         </div>
-    //     `);
-    // }
+    let costUsd = aiRespEle.dataset.costUsd;
+    try {
+        const sconfig = await getChatSessionConfig();
+        if (sconfig.api_token.startsWith('laisky-')) {
+            if (!costUsd) {
+                const requestid = aiRespEle.dataset.reqeustid;
+                if (requestid) {
+                    const resp = await fetch(`/oneapi/api/cost/request/${requestid}`);
+                    if (resp.ok) {
+                        costUsd = (await resp.json()).cost_usd;
+                    }
+                }
+            }
+
+            if (costUsd) {
+                aiRespEle.dataset.costUsd = costUsd;
+                aiRespEle.insertAdjacentHTML('beforeend', `<p class="cost">$${costUsd}</p>`);
+            }
+        }
+    } catch (err) {
+        console.error('add cost tips error:', err);
+    }
 
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
@@ -2085,6 +2131,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         await appendChats2Storage({
             role: RoleAI,
             chatID,
+            costUsd,
             content: markdownContent,
             attachHTML: respExtras,
             rawContent: aiRawResp
@@ -2792,14 +2839,24 @@ const deleteBtnHandler = (evt) => {
 /**
  * Append chat to conservation container
  *
- * @param {string} chatID - chat id
- * @param {string} role - RoleHuman/RoleSystem/RoleAI
- * @param {string} text - chat text
- * @param {boolean} isHistory - is history chat, default false. if true, will not append to storage
- * @param {string} attachHTML - html to attach to chat
- * @param {string} rawAiResp - raw ai response
+ * @param {Object} chatItem - chat item
+ *   @property {string} chatID - chat id
+ *   @property {string} role - RoleHuman/RoleSystem/RoleAI
+ *   @property {string} content - chat content
+ *   @property {boolean} isHistory - is history chat, default false. if true, will not append to storage
+ *   @property {string} attachHTML - html to attach to chat
+ *   @property {string} rawAiResp - raw ai response
+ *   @property {string} costUsd - cost in usd
  */
-async function append2Chats (chatID, role, text, isHistory = false, attachHTML, rawAiResp) {
+async function append2Chats (chatItem) {
+    const chatID = chatItem.chatID;
+    const role = chatItem.role;
+    let content = chatItem.content;
+    const isHistory = chatItem.isHistory || false;
+    let attachHTML = chatItem.attachHTML || '';
+    const rawAiResp = chatItem.rawAiResp || '';
+    const costUsd = chatItem.costUsd || '';
+
     if (!chatID) {
         throw new Error('chatID is required');
     }
@@ -2810,16 +2867,16 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
     attachHTML = attachHTML || '';
     switch (role) {
     case RoleSystem:
-        text = libs.escapeHtml(text);
+        content = libs.escapeHtml(content);
 
         chatEleHtml = `
             <div class="container-fluid row role-human">
                 <div class="col-auto icon">💻</div>
-                <div class="col text-start"><pre>${text}</pre></div>
+                <div class="col text-start"><pre>${content}</pre></div>
             </div>`;
         break;
     case RoleHuman:
-        text = libs.escapeHtml(text);
+        content = libs.escapeHtml(content);
         if (!isHistory) {
             waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
@@ -2841,7 +2898,7 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-auto icon">🤔️</div>
                         <div class="col text-start">
-                            <pre>${text}</pre>
+                            <pre>${content}</pre>
                             ${attachHTML}
                         </div>
                         <div class="col-auto d-flex control">
@@ -2856,8 +2913,8 @@ async function append2Chats (chatID, role, text, isHistory = false, attachHTML, 
         chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robotIcon}</div>
-                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}">
-                            ${text}
+                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}">
+                            ${content}
                         </div>
                 </div>`;
         if (!isHistory) {
