@@ -1767,7 +1767,7 @@ async function sendChat2Server (chatID) {
     switch (promptType) {
     case 'chat':
         if (chatID) { // reload current chat by latest context
-            messages = await getLastNChatMessages(nContexts - 1, chatID);
+            messages = await getLastNChatMessages(nContexts, chatID);
             messages.push({
                 role: RoleHuman,
                 content: reqPrompt
