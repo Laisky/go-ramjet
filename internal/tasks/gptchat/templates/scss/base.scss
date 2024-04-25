@@ -118,4 +118,16 @@ body {
             }
         }
     }
+
+    #modal-draw-canvas {
+        .modal-dialog {
+            max-width: 80%;
+
+            .modal-body {
+                max-height: 80vh;
+                overflow: auto;
+                padding: 0px;
+            }
+        }
+    }
 }

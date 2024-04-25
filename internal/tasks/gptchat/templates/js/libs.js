@@ -469,3 +469,15 @@ export const Copy2Clipboard = (content) => {
         document.body.removeChild(textArea);
     }
 }
+
+/**
+ * Download image to local disk
+ *
+ * @param {string} b64EncodedImage - base64 encoded image
+ */
+export const DownloadImage = (b64EncodedImage) => {
+    const a = document.createElement('a');
+    a.href = b64EncodedImage;
+    a.download = 'image.png';
+    a.click();
+};

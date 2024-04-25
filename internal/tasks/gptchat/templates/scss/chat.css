@@ -193,13 +193,16 @@
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response pre.mermaid {
   background-color: white;
 }
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .cost {
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info {
   position: absolute;
   right: 1px;
   bottom: 1px;
   margin: 0;
   font-size: small;
   opacity: 0.6;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info i {
+  padding-left: 2px;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator {
   text-align: center;

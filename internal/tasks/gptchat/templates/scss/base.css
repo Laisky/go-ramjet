@@ -82,5 +82,13 @@ body #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.op
   cursor: pointer;
   margin-left: 5px;
 }
+body #modal-draw-canvas .modal-dialog {
+  max-width: 80%;
+}
+body #modal-draw-canvas .modal-dialog .modal-body {
+  max-height: 80vh;
+  overflow: auto;
+  padding: 0px;
+}
 
 /*# sourceMappingURL=base.css.map */
