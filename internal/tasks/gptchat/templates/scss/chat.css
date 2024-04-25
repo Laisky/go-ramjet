@@ -283,6 +283,16 @@
   font-size: small;
 }
 
+#modal-draw-canvas .modal-dialog {
+  width: max-content;
+  max-width: 80%;
+}
+#modal-draw-canvas .modal-dialog .modal-body {
+  max-height: 80vh;
+  overflow: auto;
+  padding: 0px;
+}
+
 #modal-pdfchat .modal-dialog {
   max-width: 85%;
   min-width: 600px;

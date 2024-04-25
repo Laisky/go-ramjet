@@ -268,6 +268,9 @@ async function main (event) {
 
     await checkUpgrade();
     await setupChatJs();
+
+    // FIXME
+    // await showImageEditModal();
 };
 main();
 
@@ -281,11 +284,19 @@ async function showImageEditModal () {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = 'https://s3.laisky.com/embeddings/create-images/2024/01/PIOWWnKcYkGWzbAWEmEKmHMSuVjGhGfanPuU-0.png';
-    img.onload = () => {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        ctx.drawImage(img, 0, 0);
-    };
+    await new Promise((resolve, reject) => {
+        img.onload = () => {
+            if (img.naturalWidth !== img.naturalHeight) {
+                reject(new Error('Image must be square'));
+            }
+
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            resolve();
+        };
+        img.onerror = reject;
+    });
 
     // Append the canvas to the modal's body
     canvasContainer.innerHTML = '';
