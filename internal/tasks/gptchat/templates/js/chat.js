@@ -143,7 +143,10 @@ let deleteCheckCallback,
      * global shared modal to act as confirm dialog
      */
     deleteCheckModal;
-let singleInputCallback, singleInputModal, systemPromptModalCallback;
+let singleInputCallback,
+    singleInputModal,
+    editImageModalCallback,
+    systemPromptModalCallback;
 
 // could be controlled(interrupt) anywhere, so it's global
 let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
@@ -158,6 +161,10 @@ let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
 //
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
+/**
+ * @type {string} b64EncodedImageMask - Base64 encoded image mask, used for image editing.
+ */
+let b64EncodedImageMask = null;
 
 function IsChatModel (model) {
     return ChatModels.includes(model);
@@ -263,6 +270,104 @@ async function main (event) {
     await setupChatJs();
 };
 main();
+
+async function showImageEditModal () {
+    const modalEle = document.getElementById('modal-draw-canvas');
+    const canvasContainer = modalEle.querySelector('.modal-body');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Load the image onto the canvas
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = 'https://s3.laisky.com/embeddings/create-images/2024/01/PIOWWnKcYkGWzbAWEmEKmHMSuVjGhGfanPuU-0.png';
+    img.onload = () => {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+    };
+
+    // Append the canvas to the modal's body
+    canvasContainer.innerHTML = '';
+    canvasContainer.appendChild(canvas);
+
+    // Variables for drawing transparent areas
+    let isDrawing = false;
+
+    function getMousePos (canvas, evt) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top
+        };
+    }
+
+    // Drawing function with transparency
+    function draw (e) {
+        if (!isDrawing) return;
+        const { x, y } = getMousePos(canvas, e);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(255, 255, 0, 1)'; // Fully transparent color
+        ctx.lineWidth = 40; // Adjust line width as needed
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    }
+
+    // Event listeners for drawing
+    canvas.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDrawing = true;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        e.preventDefault();
+        if (isDrawing) draw(e);
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        isDrawing = false;
+        ctx.beginPath(); // Start a new path for next drawing
+    });
+
+    const imgEditModal = new window.bootstrap.Modal(modalEle);
+    imgEditModal.show();
+
+    // Button click event for generating and downloading mask
+    editImageModalCallback = async (e) => {
+        e.preventDefault();
+
+        // Extract image data and create mask
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const maskData = new Uint8ClampedArray(imageData.data.length);
+
+        for (let i = 0; i < imageData.data.length; i += 1) {
+            maskData[i] = imageData.data[i];
+        }
+
+        // set alpha to where the image is been drawn to yellow
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            if (imageData.data[i] >= 250 && imageData.data[i + 1] >= 250 && imageData.data[i + 2] <= 5) {
+                maskData[i + 3] = 0; // set alpha to 0
+            }
+        }
+
+        // Create a new canvas and context for the mask
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = canvas.width;
+        maskCanvas.height = canvas.height;
+        const maskCtx = maskCanvas.getContext('2d');
+
+        // Put the mask data onto the mask canvas
+        const maskImageData = new ImageData(maskData, canvas.width, canvas.height);
+        maskCtx.putImageData(maskImageData, 0, 0);
+
+        // Generate and download the masked image as PNG
+        b64EncodedImageMask = maskCanvas.toDataURL('image/png');
+        imgEditModal.hide();
+    };
+}
 
 async function dataMigrate () {
     const sid = await activeSessionID();
@@ -446,6 +551,7 @@ function setupModals () {
         });
 
     const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
+    const saveSystemPromptModel = new window.bootstrap.Modal(saveSystemPromptModelEle);
     saveSystemPromptModelEle
         .querySelector('.btn.save')
         .addEventListener('click', async (evt) => {
@@ -453,6 +559,21 @@ function setupModals () {
             if (systemPromptModalCallback) {
                 await systemPromptModalCallback(evt);
             }
+
+            saveSystemPromptModel.hide();
+        });
+
+    const editImageModalEle = document.querySelector('#modal-draw-canvas.modal');
+    const editImageModal = new window.bootstrap.Modal(editImageModalEle);
+    editImageModalEle
+        .querySelector('.btn.save')
+        .addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            if (editImageModalCallback) {
+                await editImageModalCallback(evt);
+            }
+
+            editImageModal.hide();
         });
 }
 
@@ -768,6 +889,7 @@ async function changeSession (activeSid) {
             isHistory: true,
             attachHTML: item.attachHTML,
             rawContent: item.rawContent,
+            model: item.model,
             costUsd: item.costUsd
         });
         if (item.role === RoleAI) {
@@ -813,6 +935,7 @@ async function fetchImageDrawingResultBackground () {
                     await appendChats2Storage({
                         role: RoleAI,
                         chatID: chatId,
+                        model: item.dataset.model,
                         content: item.innerHTML
                     });
                     return;
@@ -1067,6 +1190,7 @@ async function setupSessionManager () {
                 isHistory: true,
                 attachHTML: item.attachHTML,
                 rawContent: item.rawContent,
+                model: item.model,
                 costUsd: item.costUsd
             });
             if (item.role === RoleAI) {
@@ -1198,6 +1322,7 @@ async function removeChatInStorage (chatid) {
  *   @property {string} attachHTML - chat content's attach html
  *   @property {string} rawContent - chat content's raw content
  *   @property {string} costUsd - chat cost in USD
+ *   @property {string} model - chat model
 */
 async function appendChats2Storage (chatItem) {
     if (!chatItem.chatID) {
@@ -1215,6 +1340,7 @@ async function appendChats2Storage (chatItem) {
             item.content = chatItem.content;
             item.attachHTML = chatItem.attachHTML;
             item.rawContent = chatItem.rawContent;
+            item.model = chatItem.model;
             item.costUsd = chatItem.costUsd || item.costUsd;
         }
     });
@@ -1231,6 +1357,7 @@ async function appendChats2Storage (chatItem) {
                         content: chatItem.content,
                         attachHTML: chatItem.attachHTML,
                         rawContent: chatItem.rawContent,
+                        model: chatItem.model,
                         costUsd: chatItem.costUsd
                     });
                 }
@@ -1246,6 +1373,7 @@ async function appendChats2Storage (chatItem) {
             content: chatItem.content,
             attachHTML: chatItem.attachHTML,
             rawContent: chatItem.rawContent,
+            model: chatItem.model,
             costUsd: chatItem.costUsd
         });
     }
@@ -1495,6 +1623,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
 
     currentAIRespEle.dataset.status = 'waiting';
     currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
@@ -1507,6 +1636,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     await appendChats2Storage({
         role: RoleAI,
         chatID,
+        model: selectedModel,
         content: attachHTML
     });
 }
@@ -1554,6 +1684,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
 
     currentAIRespEle.dataset.status = 'waiting';
     currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
@@ -1566,6 +1697,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     await appendChats2Storage({
         role: RoleAI,
         chatID,
+        model: selectedModel,
         content: attachHTML
     });
 }
@@ -1613,6 +1745,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
 
     currentAIRespEle.dataset.status = 'waiting';
     currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
 
@@ -1625,6 +1758,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
     await appendChats2Storage({
         role: RoleAI,
         chatID,
+        model: selectedModel,
         content: attachHTML
     });
 }
@@ -1708,6 +1842,7 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
 }
 
 async function sendChat2Server (chatID) {
+    let selectedModel = await OpenaiSelectedModel();
     let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
@@ -1722,11 +1857,13 @@ async function sendChat2Server (chatID) {
             chatID,
             role: RoleHuman,
             content: reqPrompt,
+            model: selectedModel,
             isHistory: false
         });
         await appendChats2Storage({
             role: RoleHuman,
             chatID,
+            model: selectedModel,
             content: reqPrompt
         });
     } else { // if chatID is not empty, it's a reload request
@@ -1741,7 +1878,6 @@ async function sendChat2Server (chatID) {
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
     lockChatInput();
 
-    let selectedModel = await OpenaiSelectedModel();
     // get chatmodel from url parameters
     if (location.search) {
         const params = new URLSearchParams(location.search);
@@ -1974,6 +2110,7 @@ async function sendChat2Server (chatID) {
         await appendChats2Storage({
             role: RoleAI,
             chatID,
+            model: selectedModel,
             content: globalAIRespEle.innerHTML
         });
         unlockChatInput();
@@ -2107,29 +2244,31 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         console.error('mermaid run error:', err);
     }
 
+    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${aiRespEle.dataset.model || ''}</i></div>`);
+
     // add cost tips
     let costUsd = aiRespEle.dataset.costUsd;
-    try {
-        const sconfig = await getChatSessionConfig();
-        if (sconfig.api_token.startsWith('laisky-') ||
+    const sconfig = await getChatSessionConfig();
+    if (sconfig.api_token.startsWith('laisky-') ||
         sconfig.api_token.startsWith('FREETIER-')) {
-            if (!costUsd) {
-                const requestid = aiRespEle.dataset.reqeustid;
-                if (requestid) {
-                    const resp = await fetch(`/oneapi/api/cost/request/${requestid}`);
-                    if (resp.ok) {
-                        costUsd = (await resp.json()).cost_usd;
-                    }
+        if (!costUsd && aiRespEle.dataset.reqeustid) {
+            // do not block the main thread
+            fetch(`/oneapi/api/cost/request/${aiRespEle.dataset.reqeustid}`).then(async (resp) => {
+                if (resp.ok) {
+                    costUsd = (await resp.json()).cost_usd;
                 }
-            }
 
-            if (costUsd) {
-                aiRespEle.dataset.costUsd = costUsd;
-                aiRespEle.insertAdjacentHTML('beforeend', `<p class="cost">$${costUsd}</p>`);
-            }
+                if (costUsd) {
+                    aiRespEle.dataset.costUsd = costUsd;
+                    aiRespEle.querySelector('div.info')
+                        .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+                }
+            });
+        } else if (costUsd) {
+            aiRespEle.dataset.costUsd = costUsd;
+            aiRespEle.querySelector('div.info')
+                .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
         }
-    } catch (err) {
-        console.error('add cost tips error:', err);
     }
 
     window.Prism.highlightAllUnder(aiRespEle);
@@ -2143,6 +2282,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
             role: RoleAI,
             chatID,
             costUsd,
+            model: aiRespEle.dataset.model,
             content: markdownContent,
             attachHTML: respExtras,
             rawContent: aiRawResp
@@ -2858,6 +2998,7 @@ const deleteBtnHandler = (evt) => {
  *   @property {string} attachHTML - html to attach to chat
  *   @property {string} rawAiResp - raw ai response
  *   @property {string} costUsd - cost in usd
+ *   @property {string} model - model name
  */
 async function append2Chats (chatItem) {
     const chatID = chatItem.chatID;
@@ -2867,6 +3008,7 @@ async function append2Chats (chatItem) {
     let attachHTML = chatItem.attachHTML || '';
     const rawAiResp = chatItem.rawAiResp || '';
     const costUsd = chatItem.costUsd || '';
+    const model = chatItem.model || '';
 
     if (!chatID) {
         throw new Error('chatID is required');
@@ -2892,7 +3034,7 @@ async function append2Chats (chatItem) {
             waitAI = `
                         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                             <div class="col-auto icon">${robotIcon}</div>
-                            <div class="col text-start ai-response" data-status="waiting">
+                            <div class="col text-start ai-response" data-status="waiting" data-model="${model}">
                                 <p dir="auto" class="card-text placeholder-glow">
                                     <span class="placeholder col-7"></span>
                                     <span class="placeholder col-4"></span>
@@ -2924,7 +3066,7 @@ async function append2Chats (chatItem) {
         chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robotIcon}</div>
-                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}">
+                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}" data-model="${model}">
                             ${content}
                         </div>
                 </div>`;
