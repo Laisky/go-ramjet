@@ -554,7 +554,7 @@ const (
 
 var (
 	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
-	urlRegexp       = regexp.MustCompile(`https://[^\s]+`)
+	urlRegexp       = regexp.MustCompile(`https:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
 )
 
 // fetchURLContent fetch url content
