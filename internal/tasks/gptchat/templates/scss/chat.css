@@ -136,7 +136,6 @@
   width: 100%;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats img {
-  max-width: 90%;
   max-height: 500px;
   border-width: 5px 5px 5px 5px;
   box-shadow: 1px 1px 5px #333;
@@ -192,6 +191,29 @@
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response pre.mermaid {
   background-color: white;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image {
+  display: inline-block;
+  position: relative;
+  width: fit-content;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image img {
+  display: block;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns {
+  display: none;
+  position: absolute;
+  background-color: #dee2e6;
+  padding: 4px;
+  opacity: 0.8;
+  top: 5px;
+  right: 5px;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns .bi {
+  cursor: pointer;
+}
+#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image:hover .hover-btns {
+  display: block;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info {
   position: absolute;
@@ -290,7 +312,17 @@
 #modal-draw-canvas .modal-dialog .modal-body {
   max-height: 80vh;
   overflow: auto;
-  padding: 0px;
+  padding: 5px;
+}
+#modal-draw-canvas .modal-dialog .modal-footer {
+  padding: 5px;
+}
+#modal-draw-canvas .modal-dialog .modal-footer .prompt {
+  width: 100%;
+  margin: 0px;
+}
+#modal-draw-canvas .modal-dialog .modal-footer .prompt .btn {
+  margin-top: 5px;
 }
 
 #modal-pdfchat .modal-dialog {

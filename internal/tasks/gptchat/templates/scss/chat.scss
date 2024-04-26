@@ -11,7 +11,6 @@
     z-index: 1500;
 }
 
-
 #offcanvasSession {
     padding: 0px;
 
@@ -28,7 +27,6 @@
 
             .card-header {
                 padding: 0px;
-
             }
 
             .card-body {
@@ -59,8 +57,6 @@
         }
     }
 }
-
-
 
 #chatContainer {
     position: relative;
@@ -167,7 +163,7 @@
                     // overflow-y: scroll;
 
                     img {
-                        max-width: 90%;
+                        // max-width: 90%;
                         max-height: 500px;
                         border-width: 5px 5px 5px 5px;
                         box-shadow: 1px 1px 5px #333;
@@ -236,6 +232,36 @@
 
                             pre.mermaid {
                                 background-color: white;
+                            }
+
+                            .ai-resp-image {
+                                display: inline-block;
+                                position: relative;
+                                width: fit-content;
+
+                                img {
+                                    display: block;
+                                }
+
+                                .hover-btns {
+                                    display: none;
+                                    position: absolute;
+                                    background-color: #dee2e6;
+                                    padding: 4px;
+                                    opacity: 0.8;
+                                    top: 5px;
+                                    right: 5px;
+
+                                    .bi {
+                                        cursor: pointer;
+                                    }
+                                }
+
+                                &:hover {
+                                    .hover-btns {
+                                        display: block;
+                                    }
+                                }
                             }
 
                             div.info {
@@ -363,7 +389,20 @@
         .modal-body {
             max-height: 80vh;
             overflow: auto;
-            padding: 0px;
+            padding: 5px;
+        }
+
+        .modal-footer {
+            padding: 5px;
+
+            .prompt {
+                width: 100%;
+                margin: 0px;
+
+                .btn {
+                    margin-top: 5px;
+                }
+            }
         }
     }
 }

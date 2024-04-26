@@ -44,6 +44,30 @@ func OneapiProxyHandler(ctx *gin.Context) {
 		return
 	}
 
+	// just for test: fake response
+	// {
+	// 	resp, err := httpcli.Get("https://s3.laisky.com/embeddings/image-by-image/2024/04/mJMYRFmprERonrhEfuHwMnaYvzXQuzFLPQuo-1.png")
+	// 	if AbortErr(ctx, err) {
+	// 		return
+	// 	}
+	// 	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	// 	respBody, err := io.ReadAll(resp.Body)
+	// 	if AbortErr(ctx, err) {
+	// 		return
+	// 	}
+
+	// 	b64img := base64.StdEncoding.EncodeToString(respBody)
+	// 	ctx.JSON(http.StatusOK, gin.H{
+	// 		"data": []gin.H{
+	// 			{
+	// 				"url": "data:image/png;base64," + b64img,
+	// 			},
+	// 		},
+	// 	})
+	// 	return
+	// }
+
 	resp, err := httpcli.Do(req) //nolint: bodyclose
 	if AbortErr(ctx, err) {
 		return

@@ -36,6 +36,7 @@ const QAModelImmigrate = 'qa-immigrate';
 const QAModelCustom = 'qa-custom';
 const QAModelShared = 'qa-shared';
 const CompletionModelDavinci3 = 'text-davinci-003';
+const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 const ImageModelImg2Img = 'img-to-img';
@@ -161,10 +162,6 @@ let globalAIRespSSE, globalAIRespEle, globalAIRespHeartBeatTimer;
 //
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
-/**
- * @type {string} b64EncodedImageMask - Base64 encoded image mask, used for image editing.
- */
-let b64EncodedImageMask = null;
 
 function IsChatModel (model) {
     return ChatModels.includes(model);
@@ -261,20 +258,22 @@ async function main (event) {
     }
     mainRunned = true;
 
-    setupModals();
+    await setupModals();
     await dataMigrate();
     await setupHeader();
     setupSingleInputModal();
 
     await checkUpgrade();
     await setupChatJs();
-
-    // FIXME
-    // await showImageEditModal();
 };
 main();
 
-async function showImageEditModal () {
+/**
+ * show image edit modal
+ *
+ * @param {string} imgSrc - image url or base64 encoded image
+ */
+async function showImageEditModal (chatID, imgSrc) {
     const modalEle = document.getElementById('modal-draw-canvas');
     const canvasContainer = modalEle.querySelector('.modal-body');
     const canvas = document.createElement('canvas');
@@ -283,7 +282,6 @@ async function showImageEditModal () {
     // Load the image onto the canvas
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = 'https://s3.laisky.com/embeddings/create-images/2024/01/PIOWWnKcYkGWzbAWEmEKmHMSuVjGhGfanPuU-0.png';
     await new Promise((resolve, reject) => {
         img.onload = () => {
             if (img.naturalWidth !== img.naturalHeight) {
@@ -296,6 +294,7 @@ async function showImageEditModal () {
             resolve();
         };
         img.onerror = reject;
+        img.src = imgSrc;
     });
 
     // Append the canvas to the modal's body
@@ -349,6 +348,13 @@ async function showImageEditModal () {
     editImageModalCallback = async (e) => {
         e.preventDefault();
 
+        // check data
+        const prompt = modalEle.querySelector('.prompt .input').value.trim();
+        if (prompt.length === 0) {
+            showalert('danger', 'Please enter a prompt');
+            return;
+        }
+
         // Extract image data and create mask
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const maskData = new Uint8ClampedArray(imageData.data.length);
@@ -374,9 +380,61 @@ async function showImageEditModal () {
         const maskImageData = new ImageData(maskData, canvas.width, canvas.height);
         maskCtx.putImageData(maskImageData, 0, 0);
 
-        // Generate and download the masked image as PNG
-        b64EncodedImageMask = maskCanvas.toDataURL('image/png');
+        const maskBlob = await new Promise((resolve) => {
+            maskCanvas.toBlob(async (blob) => {
+                resolve(blob);
+            })
+        });
+
+        const rawImgBlob = await (await fetch(imgSrc)).blob();
+
+        const formData = new FormData();
+        formData.append('image', rawImgBlob, 'image.png');
+        formData.append('mask', maskBlob, 'mask.png');
+        formData.append('prompt', prompt);
+        formData.append('model', ImageModelDalle2);
+        formData.append('response_format', 'b64_json');
+
         imgEditModal.hide();
+
+        try {
+            ShowSpinner();
+            await reloadAiResp(chatID, async () => {
+                const sconfig = await getChatSessionConfig();
+                const resp = await fetch('/oneapi/v1/images/edits', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        Authorization: `Bearer ${sconfig.api_token}`
+                    }
+                });
+                const respData = await resp.json();
+                const respImageData = respData.data[0].url;
+                const content = `<div class="ai-resp-image">
+                        <div class="hover-btns">
+                            <i class="bi bi-pencil-square"></i>
+                        </div>
+                        <img src="${respImageData}">
+                    </div>`
+
+                await append2Chats({
+                    chatID,
+                    role: RoleAI,
+                    model: ImageModelDalle2,
+                    content
+                });
+                await appendChats2Storage({
+                    role: RoleAI,
+                    chatID,
+                    model: ImageModelDalle2,
+                    content
+                });
+            });
+        } catch (e) {
+            abortAIResp(e);
+        } finally {
+            HideSpinner();
+        }
     };
 }
 
@@ -547,7 +605,8 @@ function setupSingleInputModal () {
         });
 }
 
-function setupModals () {
+async function setupModals () {
+    // init delete check modal
     deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));
     document.getElementById('deleteCheckModal')
         .querySelector('.modal-body .yes')
@@ -561,6 +620,7 @@ function setupModals () {
             deleteCheckModal.hide();
         });
 
+    // init system prompt modal
     const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
     const saveSystemPromptModel = new window.bootstrap.Modal(saveSystemPromptModelEle);
     saveSystemPromptModelEle
@@ -574,6 +634,7 @@ function setupModals () {
             saveSystemPromptModel.hide();
         });
 
+    // init edit image modal
     const editImageModalEle = document.querySelector('#modal-draw-canvas.modal');
     const editImageModal = new window.bootstrap.Modal(editImageModalEle);
     editImageModalEle
@@ -999,7 +1060,12 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         item.dataset.status = 'done';
         let imgHTML = '';
         succeedImageUrls.forEach((url) => {
-            imgHTML += `<img src="${url}">`;
+            imgHTML += `<div class="ai-resp-image">
+                <div class="hover-btns">
+                    <i class="bi bi-pencil-square"></i>
+                </div>
+                <img src="${url}">
+            </div>`;
         });
         item.innerHTML = imgHTML;
 
@@ -1640,7 +1706,12 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
 
     let attachHTML = '';
     respData.image_urls.forEach((url) => {
-        attachHTML += `<img src="${url}">`;
+        attachHTML += `<div class="ai-resp-image">
+            <div class="hover-btns">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <img src="${url}">
+        </div>`;
     })
 
     // save img to storage no matter it's done or not
@@ -1702,7 +1773,12 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     // save img to storage no matter it's done or not
     let attachHTML = '';
     respData.image_urls.forEach((url) => {
-        attachHTML += `<img src="${url}">`
+        attachHTML += `<div class="ai-resp-image">
+            <div class="hover-btns">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <img src="${url}">
+        </div>`
     });
 
     await appendChats2Storage({
@@ -2300,7 +2376,33 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         });
     }
 
+    bindImageOperationInAiResp(chatID)
     addOperateBtnBelowAiResponse(chatID);
+}
+
+function bindImageOperationInAiResp (chatID) {
+    const aiRespEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    if (!aiRespEle) {
+        console.warn(`can not find ai-response element for chatid=${chatID}`);
+    }
+
+    const images = aiRespEle.querySelectorAll('.ai-resp-image') || [];
+    for (const img of images) {
+        const editBtn = img.querySelector('.hover-btns .bi-pencil-square');
+        if (!editBtn) {
+            continue;
+        }
+
+        editBtn.addEventListener('click', async (evt) => {
+            evt.stopPropagation();
+            evt = libs.evtTarget(evt);
+
+            // read image data to base64 encoded str
+            const imgUrl = evt.closest('.ai-resp-image').querySelector('img').src;
+            showImageEditModal(chatID, imgUrl);
+        });
+    }
 }
 
 /**
@@ -2356,7 +2458,7 @@ function addOperateBtnBelowAiResponse (chatID) {
             // put image back to vision store
             putBackAttachmentsInUserInput(chatID);
 
-            await reloadAiResp(evt);
+            await reloadAiResp(chatID);
         });
 
     libs.EnableTooltipsEverywhere();
@@ -2867,10 +2969,12 @@ async function updateChatVisionSelectedFileStore () {
         });
 }
 
-const reloadAiResp = async (evt) => {
-    evt.stopPropagation();
-
-    const chatID = evt.target.closest('.role-ai,.role-human').dataset.chatid;
+/**
+ * reload ai response
+ *
+ * @param {async function} overwriteSendChat2Server - overwrite sendChat2Server function
+ */
+async function reloadAiResp (chatID, overwriteSendChat2Server) {
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
 
     let newText = ''
@@ -2912,8 +3016,11 @@ const reloadAiResp = async (evt) => {
     chatEle.querySelector('.bi.bi-pencil-square')
         .addEventListener('click', editHumanInputHandler);
 
-    await sendChat2Server(chatID);
-    // await appendChats2Storage(RoleHuman, chatID, newText, attachHTML);
+    if (overwriteSendChat2Server) {
+        await overwriteSendChat2Server();
+    } else {
+        await sendChat2Server(chatID);
+    }
 };
 
 /**
@@ -2972,7 +3079,10 @@ function editHumanInputHandler (evt) {
 
     const saveBtn = chatEle.querySelector('.role-human .btn.save');
     const cancelBtn = chatEle.querySelector('.role-human .btn.cancel');
-    saveBtn.addEventListener('click', reloadAiResp);
+    saveBtn.addEventListener('click', async (evt) => {
+        evt.stopPropagation();
+        await reloadAiResp(chatID);
+    });
 
     cancelBtn.addEventListener('click', async (evt) => {
         evt.stopPropagation();
