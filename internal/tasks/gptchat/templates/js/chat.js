@@ -409,12 +409,12 @@ async function showImageEditModal (chatID, imgSrc) {
                     }
                 });
                 const respData = await resp.json();
-                const respImageData = respData.data[0].url;
+                const respImageData = respData.data[0].b64_json;
                 const content = `<div class="ai-resp-image">
                         <div class="hover-btns">
                             <i class="bi bi-pencil-square"></i>
                         </div>
-                        <img src="${respImageData}">
+                        <img src="data:image/png;base64,${respImageData}">
                     </div>`
 
                 await append2Chats({
@@ -1043,6 +1043,8 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         return;
     }
 
+    const chatID = item.closest('.role-ai').dataset.chatid;
+
     // remove current subtask from imageUrls(tasks)
     processingImageUrls = processingImageUrls.filter((url) => url !== imageUrl)
     item.dataset.imageUrls = JSON.stringify(processingImageUrls);
@@ -1068,6 +1070,7 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
             </div>`;
         });
         item.innerHTML = imgHTML;
+        bindImageOperationInAiResp(chatID);
 
         if (succeedImageUrls.length > 1) {
             item.classList.add('multi-images');
@@ -2376,7 +2379,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         });
     }
 
-    bindImageOperationInAiResp(chatID)
+    bindImageOperationInAiResp(chatID);
     addOperateBtnBelowAiResponse(chatID);
 }
 
