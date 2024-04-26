@@ -39,7 +39,7 @@ import (
 var (
 	dataReg = regexp.MustCompile(`^data: (.*)$`)
 	// llmRespCache cache llm response to quick response
-	llmRespCache = gutils.NewExpCache[string](context.Background(), time.Hour)
+	llmRespCache = gutils.NewExpCache[string](context.Background(), time.Second*3)
 )
 
 // ChatHandler handle api request
