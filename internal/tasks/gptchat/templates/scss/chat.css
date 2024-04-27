@@ -229,6 +229,8 @@
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator {
   text-align: center;
   cursor: default;
+  position: relative;
+  z-index: 1;
 }
 #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
   opacity: 0.6;

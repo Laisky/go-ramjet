@@ -280,6 +280,8 @@
                             .operator {
                                 text-align: center;
                                 cursor: default;
+                                position: relative;
+                                z-index: 1;
 
                                 .btn {
                                     opacity: 0.6;
