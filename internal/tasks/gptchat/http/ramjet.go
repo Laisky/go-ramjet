@@ -23,8 +23,8 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+// OneapiProxyHandler proxy to oneapi url
 func OneapiProxyHandler(ctx *gin.Context) {
-	defer gutils.LogErr(ctx.Request.Body.Close, log.Logger)
 	url := ctx.Request.URL
 	targetUrl := "https://oneapi.laisky.com" + "/" + strings.TrimPrefix(
 		strings.TrimPrefix(url.Path, "/"), "gptchat/oneapi/")
@@ -40,9 +40,6 @@ func OneapiProxyHandler(ctx *gin.Context) {
 	}
 
 	req.Header = ctx.Request.Header
-	if err = setUserAuth(ctx, req); AbortErr(ctx, err) {
-		return
-	}
 
 	// just for test: fake response
 	// {
