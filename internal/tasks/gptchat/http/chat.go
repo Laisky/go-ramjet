@@ -416,7 +416,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0125",
 			"claude-instant-1",
 			"claude-2",
-			"mixtral-8x7b-32768",
+			// "mixtral-8x7b-32768",
 			"gemma-7b-it",
 			"llama3-8b-8192",
 			"llama3-70b-8192",
