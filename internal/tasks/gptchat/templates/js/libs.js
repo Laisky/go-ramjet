@@ -283,10 +283,11 @@ export const Markdown2HTML = async (markdownString) => {
     const marked = window.marked;
     const renderer = new marked.Renderer();
     renderer.code = (code, language) => {
+        code = sanitizeHTML(code);
         if (code.match(/^sequenceDiagram/) || code.match(/^graph/)) {
             return '<pre class="mermaid">' + code + '</pre>';
         } else {
-            return '<pre><code>' + code + '</code></pre>';
+            return `<pre class="language-${language}"><code class="language-${language}">` + code + '</code></pre>';
         }
     }
     marked.use({ renderer });
