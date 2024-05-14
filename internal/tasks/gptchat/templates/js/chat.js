@@ -12,6 +12,7 @@ const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
+const ChatModelGPT4O = 'gpt-4o';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 // const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
 // const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
@@ -50,6 +51,7 @@ const ChatModels = [
     // ChatModelTurbo35V0125,
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
+    ChatModelGPT4O,
     ChatModelDeepSeekChat,
     // ChatModelGPT4Turbo1106,
     // ChatModelGPT4Turbo0125,
@@ -75,6 +77,7 @@ const ChatModels = [
 ];
 const VisionModels = [
     ChatModelGPT4Turbo,
+    ChatModelGPT4O,
     ChatModelGeminiProVision,
     ChatModelClaude3Opus,
     ChatModelClaude3Sonnet,
