@@ -11,7 +11,7 @@ const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
-const ChatModelGPT4Turbo = 'gpt-4-turbo';
+// const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT4O = 'gpt-4o';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 // const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
@@ -50,7 +50,7 @@ const ChatModels = [
     // ChatModelTurbo35V1106,
     // ChatModelTurbo35V0125,
     // ChatModelGPT4,
-    ChatModelGPT4Turbo,
+    // ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelDeepSeekChat,
     // ChatModelGPT4Turbo1106,
@@ -76,7 +76,7 @@ const ChatModels = [
     // ChatModelGPT4_0613_32K,
 ];
 const VisionModels = [
-    ChatModelGPT4Turbo,
+    // ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelGeminiProVision,
     ChatModelClaude3Opus,
@@ -2349,17 +2349,16 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         sconfig.api_token.startsWith('FREETIER-')) {
         if (!costUsd && aiRespEle.dataset.reqeustid) {
             // do not block the main thread
-            fetch(`/oneapi/api/cost/request/${aiRespEle.dataset.reqeustid}`).then(async (resp) => {
-                if (resp.ok) {
-                    costUsd = (await resp.json()).cost_usd;
-                }
+            const resp = await fetch(`/oneapi/api/cost/request/${aiRespEle.dataset.reqeustid}`)
+            if (resp.ok) {
+                costUsd = (await resp.json()).cost_usd;
+            }
 
-                if (costUsd) {
-                    aiRespEle.dataset.costUsd = costUsd;
-                    aiRespEle.querySelector('div.info')
-                        .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
-                }
-            });
+            if (costUsd) {
+                aiRespEle.dataset.costUsd = costUsd;
+                aiRespEle.querySelector('div.info')
+                    .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+            }
         } else if (costUsd) {
             aiRespEle.dataset.costUsd = costUsd;
             aiRespEle.querySelector('div.info')
