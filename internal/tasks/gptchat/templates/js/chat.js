@@ -541,6 +541,11 @@ async function dataMigrate () {
             eachSconfig.chat_switch.all_in_one = false;
         }
 
+        // change model
+        if (!eachSconfig.selected_model || !AllModels.includes(eachSconfig.selected_model)) {
+            eachSconfig.selected_model = ChatModelTurbo35;
+        }
+
         console.debug('migrate session config: ', key, eachSconfig);
         await libs.KvSet(key, eachSconfig);
     }))
