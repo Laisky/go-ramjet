@@ -2398,6 +2398,7 @@ function bindImageOperationInAiResp (chatID) {
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
     if (!aiRespEle) {
         console.warn(`can not find ai-response element for chatid=${chatID}`);
+        return;
     }
 
     const images = aiRespEle.querySelectorAll('.ai-resp-image') || [];
