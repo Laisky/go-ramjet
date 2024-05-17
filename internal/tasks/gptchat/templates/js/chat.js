@@ -2427,6 +2427,10 @@ function bindImageOperationInAiResp (chatID) {
 function addOperateBtnBelowAiResponse (chatID) {
     const aiRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    if (!aiRespEle) {
+        console.warn(`can not find ai-response element for chatid=${chatID}`);
+        return;
+    }
 
     // Create a new div element just under ai-response
     const divContainer = document.createElement('div');
