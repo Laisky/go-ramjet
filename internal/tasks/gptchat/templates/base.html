@@ -340,11 +340,11 @@
                 "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
             ]));
             futures.push(window.libs.LoadJsModules([
-                "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v3.js",
+                "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js",
             ], "module"));
             await Promise.all(futures);
 
-            window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v3.js")).SSE;
+            window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js")).SSE;
 
             await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
         })();
