@@ -23,17 +23,18 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // GetCurrentUser get current user
 func GetCurrentUser(ctx *gin.Context) {
 	user, err := getUserByAuthHeader(ctx)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
 	payload, err := json.Marshal(user)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -43,7 +44,7 @@ func GetCurrentUser(ctx *gin.Context) {
 func GetCurrentUserQuota(ctx *gin.Context) {
 	usertoken := ctx.Query("apikey")
 	user, err := getUserByToken(ctx, usertoken)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -71,35 +72,35 @@ func UploadUserConfig(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx)
 	apikey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
 	if apikey == "" {
-		AbortErr(ctx, errors.New("empty apikey"))
+		web.AbortErr(ctx, errors.New("empty apikey"))
 		return
 	}
 
 	logger = logger.With(zap.String("user", apikey[:15]))
 
 	body, err := ctx.GetRawData()
-	if AbortErr(ctx, errors.Wrap(err, "get raw data")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "get raw data")) {
 		return
 	}
 
 	if len(body) > 100*1024*1024 {
-		AbortErr(ctx, errors.New("body too large"))
+		web.AbortErr(ctx, errors.New("body too large"))
 		return
 	}
 
 	var gzout bytes.Buffer
 	err = gcompress.GzCompress(bytes.NewReader(body), &gzout)
-	if AbortErr(ctx, errors.Wrap(err, "compress body")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "compress body")) {
 		return
 	}
 
 	encryptKey, err := gcrypto.DeriveKeyByHKDF([]byte(apikey), nil, 32)
-	if AbortErr(ctx, errors.Wrap(err, "derive key")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "derive key")) {
 		return
 	}
 
 	cipher, err := gcrypto.AEADEncrypt(encryptKey, gzout.Bytes(), nil)
-	if AbortErr(ctx, errors.Wrap(err, "encrypt body")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "encrypt body")) {
 		return
 	}
 
@@ -111,7 +112,7 @@ func UploadUserConfig(ctx *gin.Context) {
 		int64(len(cipher)),
 		minio.PutObjectOptions{
 			ContentType: "text/plain",
-		}); AbortErr(ctx, err) {
+		}); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -123,7 +124,7 @@ func DownloadUserConfig(ctx *gin.Context) {
 	apikey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
 
 	if apikey == "" {
-		AbortErr(ctx, errors.New("empty apikey"))
+		web.AbortErr(ctx, errors.New("empty apikey"))
 		return
 	}
 
@@ -138,29 +139,29 @@ func DownloadUserConfig(ctx *gin.Context) {
 		userConfigS3Key(apikey),
 		opt,
 	)
-	if AbortErr(ctx, errors.Wrap(err, "get user config from s3")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "get user config from s3")) {
 		return
 	}
 	defer gutils.CloseWithLog(object, logger)
 
 	body, err := io.ReadAll(object)
-	if AbortErr(ctx, errors.Wrap(err, "read body")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "read body")) {
 		return
 	}
 
 	encryptKey, err := gcrypto.DeriveKeyByHKDF([]byte(apikey), nil, 32)
-	if AbortErr(ctx, errors.Wrap(err, "derive key")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "derive key")) {
 		return
 	}
 
 	plaintext, err := gcrypto.AEADDecrypt(encryptKey, body, nil)
-	if AbortErr(ctx, errors.Wrap(err, "decrypt body")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "decrypt body")) {
 		return
 	}
 
 	var gzout bytes.Buffer
 	err = gcompress.GzDecompress(bytes.NewReader(plaintext), &gzout)
-	if AbortErr(ctx, errors.Wrap(err, "decompress body")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "decompress body")) {
 		return
 	}
 

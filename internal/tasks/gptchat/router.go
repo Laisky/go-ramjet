@@ -41,7 +41,7 @@ func globalRatelimitMw(ctx *gin.Context) {
 	setupInit()
 
 	if !globalRatelimiter.Allow() {
-		ihttp.AbortErr(ctx, errors.New("global rate limit"))
+		web.AbortErr(ctx, errors.New("global rate limit"))
 	}
 
 	ctx.Next()

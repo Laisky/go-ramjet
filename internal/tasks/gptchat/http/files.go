@@ -15,6 +15,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // UploadFiles upload files
@@ -22,49 +23,49 @@ func UploadFiles(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx)
 
 	user, err := getUserByAuthHeader(ctx)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 	if user.IsFree {
-		AbortErr(ctx, errors.New("free user cannot upload files. "+
+		web.AbortErr(ctx, errors.New("free user cannot upload files. "+
 			"you need upgrade to a paid membership, "+
 			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
 		return
 	}
 
 	// err = checkUserExternalBilling(ctx, user, db.PriceUploadFile, "upload file")
-	// if AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
+	// if web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
 	// 	return
 	// }
 
 	file, err := ctx.FormFile("file")
-	if AbortErr(ctx, errors.Wrap(err, "get file from form")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "get file from form")) {
 		return
 	}
 
 	if file.Size > int64(config.Config.LimitUploadFileBytes) {
-		AbortErr(ctx, errors.Errorf("file size should not exceed %d bytes",
+		web.AbortErr(ctx, errors.Errorf("file size should not exceed %d bytes",
 			config.Config.LimitUploadFileBytes))
 		return
 	}
 
 	ext := ctx.PostForm("file_ext")
 	if ext == "" {
-		AbortErr(ctx, errors.New("should set file extension by `ext`"))
+		web.AbortErr(ctx, errors.New("should set file extension by `ext`"))
 		return
 	} else if !strings.HasPrefix(ext, ".") {
-		AbortErr(ctx, errors.New("file extension should start with dot"))
+		web.AbortErr(ctx, errors.New("file extension should start with dot"))
 		return
 	}
 
 	fileContent, err := file.Open()
-	if AbortErr(ctx, errors.Wrap(err, "open file")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "open file")) {
 		return
 	}
 
 	var buf bytes.Buffer
 	_, err = buf.ReadFrom(fileContent)
-	if AbortErr(ctx, errors.Wrap(err, "read file content")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "read file content")) {
 		return
 	}
 	fileBytes := buf.Bytes()
@@ -84,7 +85,7 @@ func UploadFiles(ctx *gin.Context) {
 			ContentType: "application/octet-stream",
 		},
 	)
-	if AbortErr(ctx, errors.Wrap(err, "upload file")) {
+	if web.AbortErr(ctx, errors.Wrap(err, "upload file")) {
 		return
 	}
 

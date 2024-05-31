@@ -13,6 +13,7 @@ import (
 	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
 	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
 	icss "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/scss"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 func PaymentStaticHandler(c *gin.Context) {
@@ -24,7 +25,7 @@ func PaymentStaticHandler(c *gin.Context) {
 	case "js":
 		c.Data(http.StatusOK, "application/javascript; charset=utf-8", ijs.Payment)
 	default:
-		AbortErr(c, errors.New("only support html/css/js"))
+		web.AbortErr(c, errors.New("only support html/css/js"))
 	}
 }
 
@@ -39,12 +40,12 @@ type paymentRequest struct {
 func PaymentHandler(c *gin.Context) {
 	logger := gmw.GetLogger(c)
 	if c.Request.Method != http.MethodPost {
-		AbortErr(c, errors.New("only support POST method"))
+		web.AbortErr(c, errors.New("only support POST method"))
 		return
 	}
 
 	req := new(paymentRequest)
-	if err := c.BindJSON(req); AbortErr(c, err) {
+	if err := c.BindJSON(req); web.AbortErr(c, err) {
 		return
 	}
 
@@ -63,7 +64,7 @@ func PaymentHandler(c *gin.Context) {
 	}
 
 	pi, err := paymentintent.New(params)
-	if AbortErr(c, err) {
+	if web.AbortErr(c, err) {
 		return
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -48,8 +49,8 @@ func init() {
 	}
 }
 
-// GatewayHandler redirect request to multiple arweave gateways,
-// and return the first response.
+// GatewayHandler redirects request to multiple arweave gateways,
+// and returns the first response.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	logger := gmw.GetLogger(ctx).With(
@@ -80,38 +81,46 @@ func GatewayHandler(ctx *gin.Context) {
 
 			if resp.StatusCode == http.StatusOK {
 				select {
-				case <-taskCtx.Done():
-				default:
-					select {
-					case firstFinished <- struct{}{}:
-						logger.Info("got response", zap.String("url", url))
-						ctx.Header("X-Ar-Io-Url", url)
-						for k, v := range resp.Header {
-							ctx.Header(k, v[0])
-						}
-						ctx.Status(resp.StatusCode)
-						if _, err := io.Copy(ctx.Writer, resp.Body); err != nil {
-							log.Logger.Error("copy response", zap.Error(err))
-						}
-						taskCancel()
-					default:
+				case firstFinished <- struct{}{}:
+					logger.Info("got response", zap.String("url", url))
+					ctx.Header("X-Ar-Io-Url", url)
+					for k, v := range resp.Header {
+						ctx.Header(k, v[0])
 					}
+					ctx.Status(resp.StatusCode)
+
+					buf := make([]byte, 4*1024*1024) // 4MB buffer
+					for {
+						n, err := resp.Body.Read(buf)
+						if n > 0 {
+							if _, writeErr := ctx.Writer.Write(buf[:n]); writeErr != nil {
+								log.Logger.Error("write chunk", zap.Error(writeErr))
+								return writeErr
+							}
+						}
+						if err != nil {
+							if err == io.EOF {
+								break
+							}
+							log.Logger.Error("read chunk", zap.Error(err))
+							return err
+						}
+					}
+
+					taskCancel()
+				case <-taskCtx.Done():
 				}
 
 				return nil
 			}
 
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return errors.Wrap(err, "read body")
-			}
-			return errors.Errorf("request %q, got [%d]%s", url, resp.StatusCode, string(body))
+			return errors.Errorf("request %q, got %d", url, resp.StatusCode)
 		})
 	}
 
 	go func() {
 		if err := pool.Wait(); err != nil {
-			logger.Error("failed to fetch file", zap.Error(err))
+			logger.Debug("failed to fetch file", zap.Error(err))
 		}
 
 		taskCancel()
@@ -121,8 +130,6 @@ func GatewayHandler(ctx *gin.Context) {
 	select {
 	case <-firstFinished:
 	default:
-		ctx.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "all gateways are down",
-		})
+		web.AbortErr(ctx, errors.New("all gateways are down"))
 	}
 }

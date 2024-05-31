@@ -23,19 +23,6 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-// AbortErr abort with error
-func AbortErr(ctx *gin.Context, err error) bool {
-	if err == nil {
-		return false
-	}
-
-	gmw.GetLogger(ctx).Error("chat abort", zap.Error(err))
-	ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-		"err": err.Error(),
-	})
-	return true
-}
-
 func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
 	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
 	if userToken == "" {

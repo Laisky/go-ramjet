@@ -34,6 +34,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var (
@@ -49,13 +50,13 @@ func ChatHandler(ctx *gin.Context) {
 		return
 	}
 
-	AbortErr(ctx, errors.New("tool calls not implemented"))
+	web.AbortErr(ctx, errors.New("tool calls not implemented"))
 }
 
 func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespToolCall) {
 	logger := gmw.GetLogger(ctx)
 	frontReq, openaiReq, err := convert2OpenaiRequest(ctx) //nolint:bodyclose
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -92,14 +93,14 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	logger.Debug("try send request to upstream server",
 		zap.String("url", openaiReq.URL.String()))
 	resp, err := httpcli.Do(openaiReq) //nolint: bodyclose
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 	defer gutils.LogErr(resp.Body.Close, logger)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		AbortErr(ctx, errors.Errorf("request model %q got [%d]%s",
+		web.AbortErr(ctx, errors.Errorf("request model %q got [%d]%s",
 			frontReq.Model, resp.StatusCode, string(body)))
 		return
 	}
@@ -108,7 +109,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
 
 	if !isStream {
-		if _, err = io.Copy(ctx.Writer, resp.Body); AbortErr(ctx, err) {
+		if _, err = io.Copy(ctx.Writer, resp.Body); web.AbortErr(ctx, err) {
 			return
 		}
 
@@ -143,7 +144,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		}
 
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
-		if AbortErr(ctx, err) {
+		if web.AbortErr(ctx, err) {
 			return
 		}
 
@@ -202,7 +203,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	if lastResp == nil {
-		AbortErr(ctx, errors.New("no response"))
+		web.AbortErr(ctx, errors.New("no response"))
 		return
 	}
 
@@ -212,12 +213,12 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		lastResp.Choices[0].FinishReason = "stop"
 		lastResp.Choices[0].Delta.Content = " [TERMINATED UNEXPECTEDLY]"
 		payload, err := json.MarshalToString(lastResp)
-		if AbortErr(ctx, err) {
+		if web.AbortErr(ctx, err) {
 			return
 		}
 
 		_, err = io.Copy(ctx.Writer, strings.NewReader("\ndata: "+payload))
-		if AbortErr(ctx, err) {
+		if web.AbortErr(ctx, err) {
 			return
 		}
 	} else if gutils.IsEmpty(lastResp) {
@@ -225,7 +226,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	} else if isStream || len(lastResp.Choices) == 0 || lastResp.Choices[0].FinishReason != "" {
 		return // normal response
 	} else {
-		AbortErr(ctx, errors.Errorf("unsupport resp body %q", string(line)))
+		web.AbortErr(ctx, errors.Errorf("unsupport resp body %q", string(line)))
 	}
 
 	return nil
@@ -244,12 +245,12 @@ func req2CacheKey(req *FrontendReq) (string, error) {
 // SaveLlmConservationHandler save llm conservation
 func SaveLlmConservationHandler(ctx *gin.Context) {
 	req := new(LLMConservationReq)
-	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
 		return
 	}
 
 	freq := new(FrontendReq)
-	if err := copier.Copy(freq, req); AbortErr(ctx, err) {
+	if err := copier.Copy(freq, req); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -875,17 +876,17 @@ func bodyChecker(body io.ReadCloser) (userReq *FrontendReq, err error) {
 // OneShotChatHandler handle one shot chat request
 func OneShotChatHandler(gctx *gin.Context) {
 	user, err := getUserByAuthHeader(gctx)
-	if AbortErr(gctx, err) {
+	if web.AbortErr(gctx, err) {
 		return
 	}
 
 	req := new(OneShotChatRequest)
-	if err := gctx.BindJSON(req); AbortErr(gctx, err) {
+	if err := gctx.BindJSON(req); web.AbortErr(gctx, err) {
 		return
 	}
 
 	resp, err := OneshotChat(gmw.Ctx(gctx), user, req.SystemPrompt, req.UserPrompt)
-	if AbortErr(gctx, err) {
+	if web.AbortErr(gctx, err) {
 		return
 	}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // OneapiProxyHandler proxy to oneapi url
@@ -35,7 +36,7 @@ func OneapiProxyHandler(ctx *gin.Context) {
 		targetUrl,
 		ctx.Request.Body,
 	)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -44,13 +45,13 @@ func OneapiProxyHandler(ctx *gin.Context) {
 	// just for test: fake response
 	// {
 	// 	resp, err := httpcli.Get("https://s3.laisky.com/embeddings/image-by-image/2024/04/mJMYRFmprERonrhEfuHwMnaYvzXQuzFLPQuo-1.png")
-	// 	if AbortErr(ctx, err) {
+	// 	if web.AbortErr(ctx, err) {
 	// 		return
 	// 	}
 	// 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	// 	respBody, err := io.ReadAll(resp.Body)
-	// 	if AbortErr(ctx, err) {
+	// 	if web.AbortErr(ctx, err) {
 	// 		return
 	// 	}
 
@@ -66,13 +67,13 @@ func OneapiProxyHandler(ctx *gin.Context) {
 	// }
 
 	resp, err := httpcli.Do(req) //nolint: bodyclose
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 	payload, err := io.ReadAll(resp.Body)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -99,24 +100,24 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		targetUrl,
 		ctx.Request.Body,
 	)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
 	req.Header = ctx.Request.Header
 	req.Header.Del("Accept-Encoding") // do not disable gzip
-	if err = setUserAuth(ctx, req); AbortErr(ctx, err) {
+	if err = setUserAuth(ctx, req); web.AbortErr(ctx, err) {
 		return
 	}
 
 	resp, err := httpcli.Do(req) //nolint: bodyclose
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 	payload, err := io.ReadAll(resp.Body)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 

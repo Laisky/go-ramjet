@@ -24,6 +24,7 @@ import (
 	ipartials "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/partials"
 	icss "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/scss"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var (
@@ -137,13 +138,13 @@ func Chat(ctx *gin.Context) {
 		"base": itemplates.Base,
 		"chat": ipages.Chat,
 	} {
-		if _, err := tpl.New(name).Parse(cnt); AbortErr(ctx, err) {
+		if _, err := tpl.New(name).Parse(cnt); web.AbortErr(ctx, err) {
 			return
 		}
 	}
 
 	if iconfig.Config.GoogleAnalytics != "" {
-		if _, err := tpl.Parse(ipartials.GoogleAnalytics); AbortErr(ctx, err) {
+		if _, err := tpl.Parse(ipartials.GoogleAnalytics); web.AbortErr(ctx, err) {
 			return
 		}
 	}
@@ -163,7 +164,7 @@ func Chat(ctx *gin.Context) {
 		"version":        injectVer(),
 	}
 	injectDataPayload, err := json.MarshalToString(injectData)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -212,7 +213,7 @@ func Chat(ctx *gin.Context) {
 		"https://s3.laisky.com/static/fuse.js/6.6.2/fuse.min.js")
 
 	err = tpl.ExecuteTemplate(ctx.Writer, "base", tplArg)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 }

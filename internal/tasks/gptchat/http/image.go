@@ -24,6 +24,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 func DrawByLcmHandler(ctx *gin.Context) {
@@ -34,16 +35,16 @@ func DrawByLcmHandler(ctx *gin.Context) {
 	gmw.SetLogger(ctx, logger)
 
 	req := new(DrawImageByImageRequest)
-	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
 		return
 	}
 
 	user, err := getUserByAuthHeader(ctx)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -75,7 +76,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 
 				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
 					"http://100.92.237.35:7860/run/predict", bytes.NewReader(upstreamReqBody))
-				if AbortErr(ctx, errors.Wrap(err, "new request")) {
+				if web.AbortErr(ctx, errors.Wrap(err, "new request")) {
 					return
 				}
 
@@ -157,7 +158,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
 	req := new(DrawImageBySdxlturboRequest)
-	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -168,11 +169,11 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 	gmw.SetLogger(ctx, logger)
 
 	user, err := getUserByAuthHeader(ctx)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -191,7 +192,7 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 
 			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
 				"http://100.92.237.35:7861/predict", bytes.NewReader(upstreamReqBody))
-			if AbortErr(ctx, errors.Wrap(err, "new request")) {
+			if web.AbortErr(ctx, errors.Wrap(err, "new request")) {
 				return
 			}
 
@@ -279,7 +280,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
 	req := new(DrawImageByTextRequest)
-	if err := ctx.BindJSON(req); AbortErr(ctx, err) {
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -289,15 +290,15 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	gmw.SetLogger(ctx, logger)
 
 	user, err := getUserByAuthHeader(ctx)
-	if AbortErr(ctx, err) {
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
 		return
 	}
 	if err := checkUserExternalBilling(gmw.Ctx(ctx),
-		user, db.PriceTxt2Image, "txt2image"); AbortErr(ctx, err) {
+		user, db.PriceTxt2Image, "txt2image"); web.AbortErr(ctx, err) {
 		return
 	}
 
