@@ -29,4 +29,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/gptchat"
 	// auditlog
 	_ "github.com/Laisky/go-ramjet/internal/tasks/auditlog"
+	// arweave
+	_ "github.com/Laisky/go-ramjet/internal/tasks/arweave"
 )
