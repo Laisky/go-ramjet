@@ -56,6 +56,8 @@ func init() {
 // and returns the first response.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
+	domain := ctx.Query("domain")
+
 	logger := gmw.GetLogger(ctx).With(
 		zap.String("method", ctx.Request.Method),
 		zap.String("fileKey", fileKey),
@@ -67,7 +69,13 @@ func GatewayHandler(ctx *gin.Context) {
 
 	var pool errgroup.Group
 	for _, gw := range ArweaveGateways {
-		url := gw + fileKey
+		var url string
+		if domain != "" {
+			url = strings.Replace(gw, "https://", "https://"+domain+".", 1)
+		} else {
+			url = gw + fileKey
+		}
+
 		pool.Go(func() error {
 			logger.Debug("fetching file", zap.String("target_url", url))
 			req, err := http.NewRequestWithContext(taskCtx, ctx.Request.Method, url, ctx.Request.Body)
