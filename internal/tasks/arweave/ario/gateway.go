@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
@@ -43,7 +44,9 @@ var (
 
 func init() {
 	var err error
-	httpcli, err = gutils.NewHTTPClient()
+	httpcli, err = gutils.NewHTTPClient(
+		gutils.WithHTTPClientTimeout(5 * time.Minute),
+	)
 	if err != nil {
 		log.Logger.Panic("new http client", zap.Error(err))
 	}
@@ -58,7 +61,7 @@ func GatewayHandler(ctx *gin.Context) {
 		zap.String("fileKey", fileKey),
 	)
 
-	firstFinished := make(chan struct{}, 1)
+	firstFinished := make(chan *http.Response)
 	taskCtx, taskCancel := context.WithCancel(ctx.Request.Context())
 	defer taskCancel()
 
@@ -77,59 +80,68 @@ func GatewayHandler(ctx *gin.Context) {
 			if err != nil {
 				return errors.Wrap(err, "do request")
 			}
-			defer resp.Body.Close()
 
 			if resp.StatusCode == http.StatusOK {
 				select {
-				case firstFinished <- struct{}{}:
-					logger.Info("got response", zap.String("url", url))
-					ctx.Header("X-Ar-Io-Url", url)
-					for k, v := range resp.Header {
-						ctx.Header(k, v[0])
-					}
-					ctx.Status(resp.StatusCode)
-
-					buf := make([]byte, 4*1024*1024) // 4MB buffer
-					for {
-						n, err := resp.Body.Read(buf)
-						if n > 0 {
-							if _, writeErr := ctx.Writer.Write(buf[:n]); writeErr != nil {
-								log.Logger.Error("write chunk", zap.Error(writeErr))
-								return writeErr
-							}
-						}
-						if err != nil {
-							if err == io.EOF {
-								break
-							}
-							log.Logger.Error("read chunk", zap.Error(err))
-							return err
-						}
-					}
-
-					taskCancel()
+				case firstFinished <- resp:
 				case <-taskCtx.Done():
+					_ = resp.Body.Close()
 				}
 
 				return nil
 			}
 
+			_ = resp.Body.Close()
 			return errors.Errorf("request %q, got %d", url, resp.StatusCode)
 		})
 	}
 
+	taskErrCh := make(chan error)
 	go func() {
 		if err := pool.Wait(); err != nil {
-			logger.Debug("failed to fetch file", zap.Error(err))
+			taskErrCh <- err
 		}
-
-		taskCancel()
 	}()
 
-	<-taskCtx.Done()
 	select {
-	case <-firstFinished:
-	default:
-		web.AbortErr(ctx, errors.New("all gateways are down"))
+	case resp := <-firstFinished:
+		func() {
+			defer resp.Body.Close()
+			reqUrl := resp.Request.URL.RequestURI()
+			logger := logger.With(zap.String("upstream", reqUrl))
+			logger.Info("got response")
+
+			ctx.Header("X-Ar-Io-Url", reqUrl)
+			for k, v := range resp.Header {
+				ctx.Header(k, v[0])
+			}
+			ctx.Status(resp.StatusCode)
+
+			buf := make([]byte, 4*1024*1024) // 4MB buffer
+			for {
+				n, err := resp.Body.Read(buf)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+
+					logger.Debug("read chunk", zap.Error(err))
+					web.AbortErr(ctx, errors.Wrap(err, "read chunk"))
+					return
+				}
+
+				if n > 0 {
+					if _, writeErr := ctx.Writer.Write(buf[:n]); writeErr != nil {
+						web.AbortErr(ctx, errors.Wrap(writeErr, "write chunk"))
+						return
+					}
+				}
+			}
+
+			taskCancel()
+		}()
+	case err := <-taskErrCh:
+		web.AbortErr(ctx, err)
+		return
 	}
 }
