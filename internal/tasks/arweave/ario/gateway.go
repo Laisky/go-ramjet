@@ -18,6 +18,7 @@ import (
 )
 
 var ArweaveGateways = []string{
+	"https://akrd.net/",
 	"https://permagate.io/",
 	"https://ar-io.dev/",
 	"https://vilenarios.com/",
