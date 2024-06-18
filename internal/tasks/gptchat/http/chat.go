@@ -422,6 +422,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"llama3-8b-8192",
 			"llama3-70b-8192",
 			"deepseek-chat",
+			"deepseek-coder",
 			"gemini-pro":
 			req := new(OpenaiChatReq[string])
 			if err := copier.Copy(req, frontendReq); err != nil {
