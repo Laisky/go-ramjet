@@ -550,19 +550,37 @@ async function dataMigrate () {
         await libs.KvSet(key, eachSconfig);
     }))
 
-    // update legacy chat history, add chatID to each chat
-    {
+    { // move session history from localstorage to kv
         await Promise.all(Object.keys(localStorage).map(async (key) => {
             if (!key.startsWith(KvKeyPrefixSessionHistory)) {
                 return;
             }
 
             // move from localstorage to kv
-            // console.log("move from localstorage to kv: ", key);
             await libs.KvSet(key, JSON.parse(localStorage[key]));
             localStorage.removeItem(key);
         }));
     }
+
+    // update chat history, add chatID to each chat
+    await Promise.all((await libs.KvList()).map(async (key) => {
+        if (!key.startsWith(KvKeyPrefixSessionHistory)) {
+            return;
+        }
+
+        const chats = await libs.KvGet(key);
+        if (!chats) {
+            return;
+        }
+
+        await Promise.all(chats.map(async (chat) => {
+            if (!chat.chatID) {
+                chat.chatID = newChatID();
+            }
+        }));
+
+        await libs.KvSet(key, chats);
+    }));
 }
 
 async function checkUpgrade () {
