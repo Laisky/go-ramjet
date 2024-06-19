@@ -1971,6 +1971,10 @@ async function sendChat2Server (chatID) {
         reqPrompt = libs.TrimSpace(chatPromptInputEle.value || '');
 
         chatPromptInputEle.value = '';
+        // if prompt is empty, just ignore it.
+        //
+        // it is unable to just send image without text,
+        // because claude will return error if prompt is empty.
         if (reqPrompt === '') {
             return;
         }
@@ -1994,7 +1998,9 @@ async function sendChat2Server (chatID) {
     }
 
     // extract and pin new material in chat
-    reqPrompt = await userPromptEnhance(reqPrompt);
+    if (reqPrompt !== '') {
+        reqPrompt = await userPromptEnhance(reqPrompt);
+    }
 
     globalAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
@@ -2024,14 +2030,16 @@ async function sendChat2Server (chatID) {
 
     switch (promptType) {
     case 'chat':
-        if (chatID) { // reload current chat by latest context
-            messages = await getLastNChatMessages(nContexts, chatID);
+        messages = await getLastNChatMessages(nContexts, chatID);
+        if (reqPrompt !== '') {
             messages.push({
                 role: RoleHuman,
                 content: reqPrompt
             });
         } else {
-            messages = await getLastNChatMessages(nContexts, chatID);
+            messages.push({
+                role: RoleHuman
+            });
         }
 
         // there are pinned files, add them to user's prompt
