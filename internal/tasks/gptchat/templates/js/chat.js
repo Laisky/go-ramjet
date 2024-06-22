@@ -2883,22 +2883,36 @@ async function filePasteHandler (evt) {
         return;
     }
 
+    evt.stopPropagation();
+    evt.preventDefault();
+
+    let file;
     for (let i = 0; i < evt.clipboardData.items.length; i++) {
         const item = evt.clipboardData.items[i];
-        if (item.kind !== 'file') {
+
+        if (item.type === 'text/rtf' || item.type === 'text/html') {
+            // remove rtf content that copy from word/ppt
             continue;
         }
 
-        const file = item.getAsFile();
-        if (!file) {
-            continue;
+        switch (item.kind) {
+        case 'string':
+            item.getAsString((val) => {
+                chatPromptInputEle.value += val;
+            });
+            break;
+        case 'file':
+            file = item.getAsFile();
+            if (!file) {
+                continue;
+            }
+
+            // get file content as Blob
+            readFileForVision(file, `paste-${libs.DateStr()}.png`);
+            break;
+        default:
+            continue
         }
-
-        evt.stopPropagation();
-        evt.preventDefault();
-
-        // get file content as Blob
-        readFileForVision(file, `paste-${libs.DateStr()}.png`);
     }
 };
 
