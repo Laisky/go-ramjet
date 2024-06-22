@@ -24,7 +24,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -226,11 +225,11 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 				zap.Int("before", len(addText)),
 				zap.Int("after", len(addText)))
 
-			limit := 2500 // for paid user
-			if user.IsFree {
-				limit = user.LimitPromptTokenLength / 5
-			}
-			addText = utils.TrimByTokens("", addText, limit)
+			// limit := 2500 // for paid user
+			// if user.IsFree {
+			// 	limit = user.LimitPromptTokenLength / 5
+			// }
+			// addText = utils.TrimByTokens("", addText, limit)
 
 			// summary by LLM
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
