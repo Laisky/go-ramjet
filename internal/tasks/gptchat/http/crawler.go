@@ -173,7 +173,7 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 	query = strings.ReplaceAll(query, "\n", ". ")
 	query = strings.TrimSpace(query)
 
-	searchCtx, searchCancel := context.WithTimeout(ctx, 10*time.Second)
+	searchCtx, searchCancel := context.WithTimeout(ctx, 20*time.Second)
 	defer searchCancel()
 	searchContent, err := fetchDynamicURLContent(searchCtx, "https://www.google.com/search?q="+query)
 	if err != nil {
