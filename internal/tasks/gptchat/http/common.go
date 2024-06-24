@@ -22,7 +22,15 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+const (
+	ctxKeyUser string = "ctx_user"
+)
+
 func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
+	if useri, ok := gctx.Get(ctxKeyUser); ok {
+		return useri.(*config.UserConfig), nil
+	}
+
 	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
 	if userToken == "" {
 		log.Logger.Debug("user token not found in header, use freetier token instead")
@@ -75,6 +83,10 @@ func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err 
 }
 
 func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfig, err error) {
+	if useri, ok := gctx.Get(ctxKeyUser); ok {
+		return useri.(*config.UserConfig), nil
+	}
+
 	logger := gmw.GetLogger(gctx).Named("get_user_by_token")
 	// ctx, cancel := context.WithTimeout(gmw.Ctx(gctx), time.Second*10)
 	// defer cancel()
@@ -203,5 +215,6 @@ SWITCH_FOR_USER:
 		return nil, errors.Wrap(err, "valid user")
 	}
 
+	gctx.Set(ctxKeyUser, user)
 	return user, nil
 }

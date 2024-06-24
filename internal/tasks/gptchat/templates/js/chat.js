@@ -2486,6 +2486,8 @@ function addOperateBtnBelowAiResponse (chatID) {
                 textContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
             }
 
+            const sconfig = await getChatSessionConfig();
+
             // fetch wav bytes from tts server, play it
             try {
                 ShowSpinner();
@@ -2493,7 +2495,7 @@ function addOperateBtnBelowAiResponse (chatID) {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        Authorization: 'Bearer ' + await getChatSessionConfig().api_token
+                        Authorization: `Bearer ${sconfig.api_token}`
                     },
                     body: JSON.stringify({
                         text: textContent

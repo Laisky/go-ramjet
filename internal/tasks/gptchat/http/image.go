@@ -297,9 +297,12 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
 		return
 	}
-	if err := checkUserExternalBilling(gmw.Ctx(ctx),
-		user, db.PriceTxt2Image, "txt2image"); web.AbortErr(ctx, err) {
-		return
+
+	if user.EnableExternalImageBilling {
+		if err := checkUserExternalBilling(gmw.Ctx(ctx),
+			user, db.PriceTxt2Image, "txt2image"); web.AbortErr(ctx, err) {
+			return
+		}
 	}
 
 	go func() {

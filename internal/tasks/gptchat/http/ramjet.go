@@ -167,8 +167,10 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		req.Header.Set("Authorization", token)
 	}
 
-	if err := checkUserExternalBilling(gmw.Ctx(gctx), user, cost, costReason); err != nil {
-		return errors.Wrapf(err, "check quota for user %q", user.UserName)
+	if user.EnableExternalImageBilling {
+		if err := checkUserExternalBilling(gmw.Ctx(gctx), user, cost, costReason); err != nil {
+			return errors.Wrapf(err, "check quota for user %q", user.UserName)
+		}
 	}
 
 	return nil
@@ -252,11 +254,6 @@ func GetUserInternalBill(ctx context.Context,
 func checkUserExternalBilling(ctx context.Context,
 	user *config.UserConfig, cost db.Price, costReason string) (err error) {
 	logger := log.Logger.Named("openai.billing")
-	if !user.EnableExternalImageBilling {
-		logger.Debug("skip billing for user", zap.String("username", user.UserName))
-		return nil
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 

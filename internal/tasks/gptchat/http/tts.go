@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/web"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
@@ -26,6 +28,11 @@ type TTSRequest struct {
 func TTSStreamHanler(ctx *gin.Context) {
 	if config.Config.Azure.TTSKey == "" || config.Config.Azure.TTSRegion == "" {
 		web.AbortErr(ctx, fmt.Errorf("azure tts key or region is empty"))
+		return
+	}
+
+	user, err := getUserByAuthHeader(ctx)
+	if web.AbortErr(ctx, errors.Wrap(err, "get user by auth header")) {
 		return
 	}
 
@@ -74,6 +81,14 @@ func TTSStreamHanler(ctx *gin.Context) {
 		defer event.Close()
 		logger.Debug("synthesis canceled")
 	})
+
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+
+		err = checkUserExternalBilling(ctx, user, db.PriceTTS, "tts")
+		logger.Error("push tts to billing", zap.Error(err))
+	}()
 
 	// StartSpeakingTextAsync sends the result to channel when the synthesis starts.
 	task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
