@@ -35,7 +35,7 @@ const (
 	// PriceTxt2Image how many quotes for txt2image
 	PriceTxt2Image  Price = 20000      // 0.04 usd
 	PriceUploadFile Price = 2500       // 0.005 usd
-	PriceTTS        Price = 500        // 0.002 usd
+	PriceTTS        Price = 100        // 0.0004 usd
 	PriceUSD        Price = 500000     // 1 usd
 	PriceRMB        Price = 500000 / 8 // 1 rmb
 )
