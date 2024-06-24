@@ -2469,7 +2469,7 @@ function addOperateBtnBelowAiResponse (chatID) {
 
     // add voice button
     divContainer.insertAdjacentHTML('beforeend', `
-        <button type="button" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="voice" data-fn="voice">
+        <button type="button" class="btn btn-primary" data-fn="voice">
             <i class="bi bi-mic"></i>
         </button>
     `);
@@ -2487,22 +2487,29 @@ function addOperateBtnBelowAiResponse (chatID) {
             }
 
             // fetch wav bytes from tts server, play it
-            const resp = await fetch('/audio/tts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: 'Bearer ' + await getChatSessionConfig().api_token
-                },
-                body: JSON.stringify({
-                    text: textContent
-                })
-            });
+            try {
+                ShowSpinner();
+                const resp = await fetch('/audio/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + await getChatSessionConfig().api_token
+                    },
+                    body: JSON.stringify({
+                        text: textContent
+                    })
+                });
 
-            // play
-            const wavBlob = await resp.blob();
-            const wavUrl = URL.createObjectURL(wavBlob);
-            const audio = new Audio(wavUrl);
-            audio.play();
+                // play
+                const wavBlob = await resp.blob();
+                const wavUrl = URL.createObjectURL(wavBlob);
+                const audio = new Audio(wavUrl);
+                HideSpinner();
+                audio.play();
+            } catch (err) {
+                HideSpinner();
+                console.error(err);
+            }
         });
 
     // add copy button
@@ -3217,7 +3224,7 @@ const deleteBtnHandler = (evt) => {
  *   @property {string} content - chat content
  *   @property {boolean} isHistory - is history chat, default false. if true, will not append to storage
  *   @property {string} attachHTML - html to attach to chat
- *   @property {string} rawAiResp - raw ai response
+ *   @property {string} rawContent - raw ai response
  *   @property {string} costUsd - cost in usd
  *   @property {string} model - model name
  */
@@ -3227,7 +3234,7 @@ async function append2Chats (chatItem) {
     let content = chatItem.content;
     const isHistory = chatItem.isHistory || false;
     let attachHTML = chatItem.attachHTML || '';
-    const rawAiResp = chatItem.rawAiResp || '';
+    const rawContent = chatItem.rawContent || '';
     const costUsd = chatItem.costUsd || '';
     const model = chatItem.model || '';
 
@@ -3287,7 +3294,7 @@ async function append2Chats (chatItem) {
         chatEleHtml = `
                 <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
                         <div class="col-auto icon">${robotIcon}</div>
-                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawAiResp)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}" data-model="${model}">
+                        <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawContent)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}" data-model="${model}">
                             ${content}
                         </div>
                 </div>`;
