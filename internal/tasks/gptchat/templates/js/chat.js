@@ -2467,12 +2467,50 @@ function addOperateBtnBelowAiResponse (chatID) {
     divContainer.className = 'operator';
     aiRespEle.appendChild(divContainer);
 
+    // add voice button
+    divContainer.insertAdjacentHTML('beforeend', `
+        <button type="button" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="voice" data-fn="voice">
+            <i class="bi bi-mic"></i>
+        </button>
+    `);
+    divContainer.querySelector('button[data-fn="voice"]')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
+            evt = libs.evtTarget(evt);
+
+            let textContent = '';
+            if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+                console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
+                return;
+            } else {
+                textContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+            }
+
+            // fetch wav bytes from tts server, play it
+            const resp = await fetch('/audio/tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + await getChatSessionConfig().api_token
+                },
+                body: JSON.stringify({
+                    text: textContent
+                })
+            });
+
+            // play
+            const wavBlob = await resp.blob();
+            const wavUrl = URL.createObjectURL(wavBlob);
+            const audio = new Audio(wavUrl);
+            audio.play();
+        });
+
     // add copy button
     divContainer.insertAdjacentHTML('beforeend', `
         <button type="button" class="btn btn-success" data-bs-toggle="tooltip" data-bs-placement="top" title="copy raw" data-fn="copy">
             <i class="bi bi-copy"></i>
         </button>
-    `)
+    `);
     divContainer.querySelector('button[data-fn="copy"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
@@ -2494,7 +2532,7 @@ function addOperateBtnBelowAiResponse (chatID) {
         <button type="button" class="btn btn-secondary" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="reload" data-bs-original-title="reload" data-fn="reload">
             <i class="bi bi-arrow-clockwise" data-fn="reload"></i>
         </button>
-    `)
+    `);
     divContainer.querySelector('button[data-fn="reload"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();

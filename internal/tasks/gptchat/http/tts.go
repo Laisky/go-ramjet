@@ -44,6 +44,9 @@ func TTSStreamHanler(ctx *gin.Context) {
 	if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-AvaMultilingualNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
 		return
 	}
+	if err = azureTTSConfig.SetSpeechSynthesisLanguage("English (Canada)"); web.AbortErr(ctx, errors.Wrap(err, "set language")) {
+		return
+	}
 
 	audioCfg, err := audio.NewAudioConfigFromDefaultSpeakerOutput()
 	if web.AbortErr(ctx, errors.Wrap(err, "new audio config")) {
