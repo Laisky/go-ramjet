@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +21,6 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -41,27 +39,27 @@ func GetCurrentUser(ctx *gin.Context) {
 	ctx.Data(200, "application/json", payload)
 }
 
-func GetCurrentUserQuota(ctx *gin.Context) {
-	usertoken := ctx.Query("apikey")
-	user, err := getUserByToken(ctx, usertoken)
-	if web.AbortErr(ctx, err) {
-		return
-	}
+// func GetCurrentUserQuota(ctx *gin.Context) {
+// 	usertoken := ctx.Query("apikey")
+// 	user, err := getUserByToken(ctx, usertoken)
+// 	if web.AbortErr(ctx, err) {
+// 		return
+// 	}
 
-	externalBill, err := GetUserExternalBillingQuota(gmw.Ctx(ctx), user)
-	if err != nil {
-		log.Logger.Error("get user external billing quota", zap.Error(err))
-	}
+// 	externalBill, err := GetUserExternalBillingQuota(gmw.Ctx(ctx), user)
+// 	if err != nil {
+// 		log.Logger.Error("get user external billing quota", zap.Error(err))
+// 	}
 
-	// internalBill, err := GetUserInternalBill(gmw.Ctx(ctx), user, db.BillTypeTxt2Image)
-	// if err != nil {
-	// 	log.Logger.Error("get user internal billing quota", zap.Error(err))
-	// }
+// 	// internalBill, err := GetUserInternalBill(gmw.Ctx(ctx), user, db.BillTypeTxt2Image)
+// 	// if err != nil {
+// 	// 	log.Logger.Error("get user internal billing quota", zap.Error(err))
+// 	// }
 
-	ctx.JSON(http.StatusOK, map[string]any{
-		"external": externalBill,
-	})
-}
+// 	ctx.JSON(http.StatusOK, map[string]any{
+// 		"external": externalBill,
+// 	})
+// }
 
 func userConfigS3Key(apikey string) string {
 	hashed := sha256.Sum256([]byte(apikey))

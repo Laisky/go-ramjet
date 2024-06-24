@@ -38,10 +38,10 @@ func SetupConfig() (err error) {
 		return errors.New("openai.token is empty")
 	}
 
-	if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
-		return errors.New("external_billing_token should not be empty " +
-			"if external_billing_api is set")
-	}
+	// if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
+	// 	return errors.New("external_billing_token should not be empty " +
+	// 		"if external_billing_api is set")
+	// }
 
 	// fill default
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
@@ -119,7 +119,7 @@ type OpenAI struct {
 	// ExternalBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
 	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
 	// ExternalBillingToken (optional) default billing token
-	ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
+	// ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
 	// RamjetURL (optional) ramjet url
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
@@ -134,6 +134,16 @@ type OpenAI struct {
 	LcmBasicAuthPassword string `json:"lcm_basic_auth_password" mapstructure:"lcm_basic_auth_password"`
 	// LimitUploadFileBytes (optional) limit upload file bytes, default is 20MB
 	LimitUploadFileBytes int `json:"limit_upload_file_bytes" mapstructure:"limit_upload_file_bytes"`
+
+	// Azure (optional) azure config
+	Azure azureConfig `json:"azure" mapstructure:"azure"`
+}
+
+type azureConfig struct {
+	// TTSKey (optional) tts key
+	TTSKey string `json:"tts_key" mapstructure:"tts_key"`
+	// TTSRegion (optional) tts region
+	TTSRegion string `json:"tts_region" mapstructure:"tts_region"`
 }
 
 type qaChatModel struct {
@@ -198,7 +208,7 @@ type UserConfig struct {
 	// EnableExternalImageBilling (optional) enable external image billing
 	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
 	// ExternalImageBillingUID (optional) external image billing uid
-	ExternalImageBillingUID string `json:"external_image_billing_uid" mapstructure:"external_image_billing_uid"`
+	// ExternalImageBillingUID string `json:"external_image_billing_uid" mapstructure:"external_image_billing_uid"`
 }
 
 // Valid valid and fill default values
@@ -213,10 +223,14 @@ func (c *UserConfig) Valid() error {
 	}
 
 	if c.EnableExternalImageBilling {
-		if c.ExternalImageBillingUID == "" {
-			return errors.Errorf("%q's external_image_billing_uid should not be empty "+
-				"if enable_external_image_billing is true", c.UserName)
-		}
+		// if !strings.HasPrefix(c.OpenaiToken, "laisky-") {
+		// 	return errors.Errorf("%q's openai_token should start with `laisky-` "+
+		// 		"if enable_external_image_billing is true", c.UserName)
+
+		// if c.ExternalImageBillingUID == "" {
+		// 	return errors.Errorf("%q's external_image_billing_uid should not be empty "+
+		// 		"if enable_external_image_billing is true", c.UserName)
+		// }
 	}
 
 	// fill default

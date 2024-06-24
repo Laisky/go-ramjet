@@ -671,6 +671,8 @@ github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa h1:NJeNFyPzzyFcyS
 github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa/go.mod h1:q33VY05PIMHPdNftvhzx43CKKK8V+9rtgSGNiiPuZaA=
 github.com/Laisky/zap v1.27.0 h1:NEtFniRXOKUkEf9//FUiBkSIdgbB4V1H3khA/jmPZx4=
 github.com/Laisky/zap v1.27.0/go.mod h1:HABqM5YDQlPq8w+Pmp9h/x9F6Vy+3oHBLP+2+pBoaJw=
+github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0 h1:xPYSgs3nGr5J9ucPfzItDTj2jpQkz5OUPZM4z//8xUg=
+github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0/go.mod h1:ct4bG95K1Lu/c5y60PVGI1XOjo9aAcl80DD5dvu6zsg=
 github.com/Microsoft/go-winio v0.4.11/go.mod h1:VhR8bwka0BXejwEJY73c50VrPtXAaKcyvVC4A4RozmA=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5/go.mod h1:tTuCMEN+UleMWgg9dVx4Hu52b1bJo+59jBh3ajtinzw=

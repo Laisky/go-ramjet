@@ -15,6 +15,7 @@ require (
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa
 	github.com/Laisky/zap v1.27.0
+	github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.13
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.13
