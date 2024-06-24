@@ -48,10 +48,7 @@ func TTSStreamHanler(ctx *gin.Context) {
 	}
 	defer azureTTSConfig.Close()
 
-	if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-AvaMultilingualNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
-		return
-	}
-	if err = azureTTSConfig.SetSpeechSynthesisLanguage("English (Canada)"); web.AbortErr(ctx, errors.Wrap(err, "set language")) {
+	if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-SaraNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
 		return
 	}
 
@@ -86,12 +83,27 @@ func TTSStreamHanler(ctx *gin.Context) {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
-		err = checkUserExternalBilling(ctx, user, db.PriceTTS, "tts")
-		logger.Error("push tts to billing", zap.Error(err))
+		if err := checkUserExternalBilling(ctx, user, db.PriceTTS, "tts"); err != nil {
+			logger.Error("push tts to billing", zap.Error(err))
+		}
 	}()
 
 	// StartSpeakingTextAsync sends the result to channel when the synthesis starts.
-	task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
+	ssml := fmt.Sprintf(`<!--ID=B7267351-473F-409D-9765-754A8EBCDE05;Version=1|{"VoiceNameToIdMapItems":[{"Id":"38db11b6-fa64-4989-8d75-4a48695ee5cd","Name":"Microsoft
+		Server Speech Text to Speech Voice (en-US,
+		SaraNeural)","ShortName":"en-US-SaraNeural","Locale":"en-US","VoiceType":"StandardVoice"}]}-->
+		<!--ID=FCB40C2B-1F9F-4C26-B1A1-CF8E67BE07D1;Version=1|{"Files":{}}-->
+		<!--ID=5B95B1CC-2C7B-494F-B746-CF22A0E779B7;Version=1|{"Locales":{"en-US":{"AutoApplyCustomLexiconFiles":[{}]}}}-->
+		<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
+			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="en-US">
+			<voice name="en-US-SaraNeural">
+				<s />
+				<mstts:express-as style="hopeful">%s</mstts:express-as>
+				<s />
+			</voice>
+		</speak>`, req.Text)
+	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
+	// task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
 	var outcome speech.SpeechSynthesisOutcome
 	select {
 	case outcome = <-task:
