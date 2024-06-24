@@ -357,7 +357,7 @@ func imageSize(cnt []byte) (width, height int, err error) {
 var (
 	// hdResolutionMarker enable hd resolution for gpt-4-vision only
 	// if user has permission and mention "hd" in prompt
-	hdResolutionMarker = regexp.MustCompile(`\bhd\b`)
+	hdResolutionMarker = regexp.MustCompile(`\b@hd\b`)
 )
 
 func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiReq *http.Request, err error) {
