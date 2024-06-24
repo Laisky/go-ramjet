@@ -21,7 +21,8 @@ const ChatModelDeepSeekCoder = 'deepseek-coder';
 // const ChatModelClaude1 = 'claude-instant-1';
 // const ChatModelClaude2 = 'claude-2';
 const ChatModelClaude3Opus = 'claude-3-opus';
-const ChatModelClaude3Sonnet = 'claude-3-sonnet';
+// const ChatModelClaude3Sonnet = 'claude-3-sonnet';
+const ChatModelClaude35Sonnet = 'claude-3.3-sonnet';
 const ChatModelClaude3Haiku = 'claude-3-haiku';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
@@ -60,7 +61,7 @@ const ChatModels = [
     // ChatModelClaude1,
     // ChatModelClaude2,
     ChatModelClaude3Opus,
-    ChatModelClaude3Sonnet,
+    ChatModelClaude35Sonnet,
     ChatModelClaude3Haiku,
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
@@ -82,7 +83,7 @@ const VisionModels = [
     ChatModelGPT4O,
     ChatModelGeminiProVision,
     ChatModelClaude3Opus,
-    ChatModelClaude3Sonnet,
+    ChatModelClaude35Sonnet,
     ChatModelClaude3Haiku,
     ImageModelSdxlTurbo,
     ImageModelImg2Img
