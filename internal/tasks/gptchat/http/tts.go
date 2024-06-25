@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -79,14 +78,9 @@ func TTSStreamHanler(ctx *gin.Context) {
 		logger.Debug("synthesis canceled")
 	})
 
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-
-		if err := checkUserExternalBilling(ctx, user, db.PriceTTS, "tts"); err != nil {
-			logger.Error("push tts to billing", zap.Error(err))
-		}
-	}()
+	if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTTS, "tts"); web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
+		return
+	}
 
 	// StartSpeakingTextAsync sends the result to channel when the synthesis starts.
 	ssml := fmt.Sprintf(`<!--ID=B7267351-473F-409D-9765-754A8EBCDE05;Version=1|{"VoiceNameToIdMapItems":[{"Id":"38db11b6-fa64-4989-8d75-4a48695ee5cd","Name":"Microsoft
