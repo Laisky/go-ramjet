@@ -2945,8 +2945,19 @@ async function filePasteHandler (evt) {
 
         switch (item.kind) {
         case 'string':
+            // should paste to the position of cursor
             item.getAsString((val) => {
-                chatPromptInputEle.value += val;
+                if (document.activeElement === chatPromptInputEle) {
+                    const startPos = chatPromptInputEle.selectionStart;
+                    const endPos = chatPromptInputEle.selectionEnd;
+                    chatPromptInputEle.value = chatPromptInputEle.value.substring(0, startPos) +
+                            val +
+                            chatPromptInputEle.value.substring(endPos, chatPromptInputEle.value.length);
+                    chatPromptInputEle.selectionStart = startPos + val.length;
+                    chatPromptInputEle.selectionEnd = startPos + val.length;
+                } else {
+                    chatPromptInputEle.value += val;
+                }
             });
             break;
         case 'file':
@@ -2959,7 +2970,7 @@ async function filePasteHandler (evt) {
             readFileForVision(file, `paste-${libs.DateStr()}.png`);
             break;
         default:
-            continue
+            continue;
         }
     }
 };
