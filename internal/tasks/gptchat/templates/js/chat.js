@@ -2350,10 +2350,10 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
         return;
     }
 
-    const aiRawResp = decodeURIComponent(aiRespEle.dataset.aiRawResp || '');
+    const rawContent = decodeURIComponent(aiRespEle.dataset.aiRawResp || '');
     const respExtras = decodeURIComponent(aiRespEle.dataset.respExtras || '');
-    if (aiRawResp && aiRawResp !== 'undefined') {
-        aiRespEle.innerHTML = await libs.Markdown2HTML(aiRawResp);
+    if (rawContent && rawContent !== 'undefined') {
+        aiRespEle.innerHTML = await libs.Markdown2HTML(rawContent);
         aiRespEle.innerHTML += respExtras;
     }
 
@@ -2412,10 +2412,10 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
             role: RoleAI,
             chatID,
             costUsd,
+            rawContent,
             model: aiRespEle.dataset.model,
             content: markdownContent,
-            attachHTML: respExtras,
-            rawContent: aiRawResp
+            attachHTML: respExtras
         });
     }
 
