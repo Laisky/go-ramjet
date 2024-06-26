@@ -76,7 +76,7 @@ export const DateStr = () => {
     return `${year}${month}${day}${hours}${minutes}${seconds}`;
 };
 
-// {key: [callback1, callback2]}
+// {key: [callback1, callback2, {name, callback}]}
 const kvListeners = {};
 let kv;
 
@@ -91,18 +91,63 @@ export const KvOp = Object.freeze({
     DEL: 2
 });
 
-// callback: function(keyPrefix, op, oldVal, newVal)
-export const KvAddListener = (keyPrefix, callback) => {
+/**
+ * Add listener for keyPrefix
+ *
+ * @param {str} keyPrefix
+ * @param {function} callback - function(keyPrefix, op, oldVal, newVal)
+ * @param {str} callbackName - optional, name of the callback. If provided, it will overwrite the existing callback with the same name
+ */
+export const KvAddListener = (keyPrefix, callback, callbackName) => {
     initKv();
     if (!kvListeners[keyPrefix]) {
         kvListeners[keyPrefix] = [];
     }
 
     if (kvListeners[keyPrefix].indexOf(callback) === -1) {
-        kvListeners[keyPrefix].push(callback);
+        if (callbackName) {
+            // check whether callbackName is already used, if yes, overwrite it
+            let found = false;
+            for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+                if (typeof kvListeners[keyPrefix][i] === 'object' && kvListeners[keyPrefix][i].name === callbackName) {
+                    kvListeners[keyPrefix][i].callback = callback;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                kvListeners[keyPrefix].push({ name: callbackName, callback });
+            }
+        } else {
+            kvListeners[keyPrefix].push(callback);
+        }
     }
 };
-// set data into indexeddb
+/**
+ * Remove listener for keyPrefix by callbackName
+ *
+ * @param {str} keyPrefix
+ * @param {str} callbackName
+ */
+export const KvRemoveListener = (keyPrefix, callbackName) => {
+    if (!kvListeners[keyPrefix]) {
+        return;
+    }
+
+    for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
+        if (typeof kvListeners[keyPrefix][i] === 'object' && kvListeners[keyPrefix][i].name === callbackName) {
+            kvListeners[keyPrefix].splice(i, 1);
+            break;
+        }
+    }
+};
+/**
+ * Set data to indexeddb
+ *
+ * @param {str} key - key
+ * @param {any} val - value
+ */
 export const KvSet = async (key, val) => {
     initKv();
     console.debug(`KvSet: ${key}`);
@@ -137,15 +182,19 @@ export const KvSet = async (key, val) => {
     Object.keys(kvListeners).forEach((keyPrefix) => {
         if (key.startsWith(keyPrefix)) {
             for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
-                const callback = kvListeners[keyPrefix][i];
-                callback(key, KvOp.SET, oldVal, val);
+                const callbackObj = kvListeners[keyPrefix][i];
+                if (typeof callbackObj === 'object') {
+                    callbackObj.callback(key, KvOp.SET, oldVal, val);
+                } else {
+                    callbackObj(key, KvOp.SET, oldVal, val);
+                }
             }
         }
     });
 };
 /** get data from indexeddb
  *
- * @param {*} key
+ * @param {str} key
  * @returns null if not found
  */
 export const KvGet = async (key) => {
@@ -189,8 +238,8 @@ export const KvExists = async (key) => {
 };
 /** rename key in indexeddb
  *
- * @param {*} oldKey
- * @param {*} newKey
+ * @param {str} oldKey
+ * @param {str} newKey
  */
 export const KvRename = async (oldKey, newKey) => {
     initKv();
@@ -276,7 +325,7 @@ export const GetLocalStorage = (key) => {
 /**
  * render markdown to html
  *
- * @param {string} markdownString -
+ * @param {str} markdownString -
  * @returns
  */
 export const Markdown2HTML = async (markdownString) => {
@@ -439,7 +488,7 @@ export const evtTarget = (evt) => {
 /**
  * Generates a random string of the specified length.
  * @param {number} length - The length of the string to generate.
- * @returns {string} - The generated random string.
+ * @returns {str} - The generated random string.
  */
 export const RandomString = (length) => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -454,7 +503,7 @@ export const RandomString = (length) => {
 /**
  * Copy content to clipboard, support both http and https
  *
- * @param {string} content
+ * @param {str} content
  */
 export const Copy2Clipboard = (content) => {
     if (location.protocol === 'https:') {
@@ -474,7 +523,7 @@ export const Copy2Clipboard = (content) => {
 /**
  * Download image to local disk
  *
- * @param {string} b64EncodedImage - base64 encoded image
+ * @param {str} b64EncodedImage - base64 encoded image
  */
 export const DownloadImage = (b64EncodedImage) => {
     const a = document.createElement('a');

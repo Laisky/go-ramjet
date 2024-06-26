@@ -133,6 +133,7 @@ const KvKeyPrefixSessionConfig = 'chat_user_config_';
 const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
 const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
+const KvKeyEnableTalking = 'config_enable_talking_mode';
 const KvKeyVersionDate = 'config_version_date';
 
 const RoleHuman = 'user';
@@ -141,8 +142,11 @@ const RoleAI = 'assistant';
 
 const chatContainer = document.getElementById('chatContainer');
 const configContainer = document.getElementById('hiddenChatConfigSideBar');
-const chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
-const chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+
+// user-input could be re-render to talking widget,
+// so these widgets could be override after re-rendering.
+let chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+let chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
 const httpsRegexp = /\bhttps:\/\/\S+/;
 
@@ -848,6 +852,7 @@ async function setupChatJs () {
     await setupSessionManager();
     await setupConfig();
     await setupChatInput();
+    await setupChatSwitchs();
     await setupPromptManager();
     await setupPrivateDataset();
     setupGlobalAiRespHeartbeatTimer();
@@ -1964,20 +1969,33 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
         );
 }
 
-async function sendChat2Server (chatID) {
+/**
+ * Sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
+ *
+ * @param {string} chatID - The chat ID.
+ * @param {string} reqPrompt - Optional. The chat prompt to send to the server.
+ *
+ * @returns {string} The chat ID.
+ */
+async function sendChat2Server (chatID, reqPrompt) {
     let selectedModel = await OpenaiSelectedModel();
-    let reqPrompt;
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
-        reqPrompt = libs.TrimSpace(chatPromptInputEle.value || '');
 
-        chatPromptInputEle.value = '';
+        if (!reqPrompt) {
+            reqPrompt = libs.TrimSpace(chatPromptInputEle.value || '');
+        }
+
+        if (chatPromptInputEle) {
+            chatPromptInputEle.value = '';
+        }
+
         // if prompt is empty, just ignore it.
         //
         // it is unable to just send image without text,
         // because claude will return error if prompt is empty.
         if (reqPrompt === '') {
-            return;
+            return chatID;
         }
 
         append2Chats({
@@ -2049,7 +2067,7 @@ async function sendChat2Server (chatID) {
                 // if selected model is not vision model, just ignore it
                 chatVisionSelectedFileStore = [];
                 updateChatVisionSelectedFileStore();
-                return;
+                return chatID;
             }
 
             messages[messages.length - 1].files = [];
@@ -2114,7 +2132,7 @@ async function sendChat2Server (chatID) {
 
             if (!project) {
                 console.error("can't find project name for chat model: " + selectedModel);
-                return;
+                return chatID;
             }
 
             url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
@@ -2157,7 +2175,7 @@ async function sendChat2Server (chatID) {
             const data = await resp.json();
             if (!data || !data.text) {
                 await abortAIResp('cannot gather sufficient context to answer the question');
-                return;
+                return chatID;
             }
 
             globalAIRespEle.dataset.respExtras = encodeURIComponent(`
@@ -2204,7 +2222,7 @@ async function sendChat2Server (chatID) {
             });
         } catch (err) {
             await abortAIResp(err);
-            return;
+            return chatID;
         }
 
         break;
@@ -2233,7 +2251,7 @@ async function sendChat2Server (chatID) {
             unlockChatInput();
         }
 
-        return;
+        return chatID;
     default:
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
                 '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
@@ -2245,11 +2263,11 @@ async function sendChat2Server (chatID) {
             content: globalAIRespEle.innerHTML
         });
         unlockChatInput();
-        return;
+        return chatID;
     }
 
     if (!reqBody) {
-        return;
+        return chatID;
     }
 
     globalAIRespHeartBeatTimer = Date.now();
@@ -2280,7 +2298,7 @@ async function sendChat2Server (chatID) {
         if (evt.data === '[DONE]') {
             isChatRespDone = true;
         } else if (evt.data === '[HEARTBEAT]') {
-            return;
+            return chatID;
         }
 
         // remove prefix [HEARTBEAT]
@@ -2337,6 +2355,8 @@ async function sendChat2Server (chatID) {
         await abortAIResp(err);
     };
     globalAIRespSSE.stream();
+
+    return chatID;
 }
 
 /**
@@ -2470,7 +2490,7 @@ function addOperateBtnBelowAiResponse (chatID) {
     // add voice button
     divContainer.insertAdjacentHTML('beforeend', `
         <button type="button" class="btn btn-primary" data-fn="voice">
-            <i class="bi bi-mic"></i>
+            <i class="bi bi-volume-up"></i>
         </button>
     `);
     divContainer.querySelector('button[data-fn="voice"]')
@@ -2731,7 +2751,7 @@ async function setupChatInput () {
 
             const sconfig = newVal;
             chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
-        });
+        }, 'setupChatInput_change_hint');
     }
 
     // bind input button
@@ -2750,7 +2770,7 @@ async function setupChatInput () {
         }
 
         await autoToggleUserImageUploadBtn();
-    });
+    }, 'setupChatInput_change_image_upload_btn');
 
     // restore pinned materials
     await restorePinnedMaterials();
@@ -2827,8 +2847,12 @@ async function setupChatInput () {
         dropfileModalEle.addEventListener('drop', fileDragDropHandler);
         dropfileModalEle.addEventListener('dragleave', fileDragLeave);
     }
+}
 
-    // bind chat switch
+/**
+ * bind chat switchs
+ */
+async function setupChatSwitchs () {
     {
         chatContainer
             .querySelector('#switchChatEnableHttpsCrawler')
@@ -2906,6 +2930,45 @@ async function setupChatInput () {
             }, 1800 * 1000);
         });
 
+        chatContainer
+            .querySelector('#switchChatEnableTalking')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation()
+                const switchEle = libs.evtTarget(evt)
+                await libs.KvSet(KvKeyEnableTalking, switchEle.checked)
+            });
+        libs.KvAddListener(KvKeyEnableTalking, async (key, op, oldVal, newVal) => {
+            if (op !== libs.KvOp.SET) {
+                return;
+            }
+
+            // update ui
+            const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
+            switchEle.checked = newVal;
+
+            // update background syncer
+            if (newVal) {
+                chatContainer.querySelector('.user-input').innerHTML =
+                    '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
+                bindTalkBtnHandler();
+                return;
+            }
+
+            const ssconfig = await getChatSessionConfig();
+
+            chatContainer.querySelector('.user-input').innerHTML = `
+                <div class="input-group mb-3 user-input">
+                    <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
+                    <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
+                </div>`;
+
+            // reset chat input element
+            chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+            chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+
+            await setupChatInput();
+        }, 'setupChatInput_change_chat_talking');
+
         // bind listener for all chat switchs
         libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
             if (op !== libs.KvOp.SET) {
@@ -2921,8 +2984,80 @@ async function setupChatInput () {
             chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
             chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
             chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
-        });
+        }, 'setupChatInput_change_chat_switchs');
     }
+}
+
+function bindTalkBtnHandler () {
+    let mediaRecorder;
+    let audioChunks = [];
+
+    const startRecording = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            try {
+                ShowSpinner();
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'user_audio.wav');
+                formData.set('model', 'whisper-large-v3');
+                formData.set('response_format', 'verbose_json');
+
+                const ssonfig = await getChatSessionConfig();
+
+                // transcript voice to txt
+                const resp = await fetch('/oneapi/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${ssonfig.api_token}`,
+                    },
+                    body: formData
+                });
+                const userPrompt = (await resp.json()).text;
+
+                const chatID = await sendChat2Server(null, userPrompt);
+
+                const startAt = Date.now();
+                const waitAiRespInterval = setInterval(async () => {
+                    if (Date.now() - startAt > 1000 * 60) {
+                        clearInterval(waitAiRespInterval);
+                        abortAIResp(new Error('timeout to wait ai response'));
+                    }
+
+                    const voiceBtn = chatContainer.querySelector(`#${chatID} .btn[data-fn="voice"]`);
+                    if (!voiceBtn) {
+                        return;
+                    }
+
+                    clearInterval(waitAiRespInterval);
+                    voiceBtn.click();
+                }, 500);
+            } finally {
+                HideSpinner();
+            }
+        };
+
+        mediaRecorder.start();
+    }
+
+    const stopRecording = async () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+    }
+
+    chatContainer.querySelector('.user-input .btn[data-fn="record"]')
+        .addEventListener('mousedown', startRecording);
+    chatContainer.querySelector('.user-input .btn[data-fn="record"]')
+        .addEventListener('mouseup', stopRecording);
 }
 
 // read paste file
