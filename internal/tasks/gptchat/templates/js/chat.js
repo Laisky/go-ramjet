@@ -3004,8 +3004,11 @@ function bindTalkBtnHandler () {
         mediaRecorder.onstop = async () => {
             try {
                 ShowSpinner();
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
 
+                // stop stream
+                stream.getTracks().forEach(track => track.stop());
+
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'user_audio.wav');
                 formData.set('model', 'whisper-large-v3');
@@ -3017,14 +3020,20 @@ function bindTalkBtnHandler () {
                 const resp = await fetch('/oneapi/v1/audio/transcriptions', {
                     method: 'POST',
                     headers: {
-                        Authorization: `Bearer ${ssonfig.api_token}`,
+                        Authorization: `Bearer ${ssonfig.api_token}`
                     },
                     body: formData
                 });
+                if (!resp.ok || resp.status !== 200) {
+                    throw new Error(`${resp.status} ${await resp.text()}`);
+                }
+
                 const userPrompt = (await resp.json()).text;
+                if (!userPrompt) {
+                    return;
+                }
 
                 const chatID = await sendChat2Server(null, userPrompt);
-
                 const startAt = Date.now();
                 const waitAiRespInterval = setInterval(async () => {
                     if (Date.now() - startAt > 1000 * 60) {
@@ -3040,7 +3049,8 @@ function bindTalkBtnHandler () {
                     clearInterval(waitAiRespInterval);
                     voiceBtn.click();
                 }, 500);
-            } finally {
+            } catch (err) {
+                showalert('danger', `record voice failed: ${err}`);
                 HideSpinner();
             }
         };
@@ -3054,10 +3064,18 @@ function bindTalkBtnHandler () {
         }
     }
 
-    chatContainer.querySelector('.user-input .btn[data-fn="record"]')
-        .addEventListener('mousedown', startRecording);
-    chatContainer.querySelector('.user-input .btn[data-fn="record"]')
-        .addEventListener('mouseup', stopRecording);
+    const recordButton = chatContainer.querySelector('.user-input .btn[data-fn="record"]');
+
+    // Feature detection for touch events
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) {
+        // Touchscreen device
+        recordButton.addEventListener('touchstart', startRecording);
+        recordButton.addEventListener('touchend', stopRecording);
+    } else {
+        // Non-touchscreen device (e.g., PC)
+        recordButton.addEventListener('mousedown', startRecording);
+        recordButton.addEventListener('mouseup', stopRecording);
+    }
 }
 
 // read paste file
