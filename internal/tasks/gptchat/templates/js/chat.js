@@ -147,6 +147,7 @@ const configContainer = document.getElementById('hiddenChatConfigSideBar');
 let chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
 let chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
+let audioStream;
 const httpsRegexp = /\bhttps:\/\/\S+/;
 
 /**
@@ -2492,7 +2493,7 @@ function addOperateBtnBelowAiResponse (chatID) {
             <i class="bi bi-volume-up"></i>
         </button>
     `);
-    divContainer.querySelector('button[data-fn="voice"]')
+    divContainer.querySelector('.btn[data-fn="voice"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
             evt = libs.evtTarget(evt);
@@ -2526,7 +2527,7 @@ function addOperateBtnBelowAiResponse (chatID) {
                 const wavUrl = URL.createObjectURL(wavBlob);
                 const audio = new Audio(wavUrl);
                 HideSpinner();
-                audio.play();
+                await audio.play();
             } catch (err) {
                 HideSpinner();
                 console.error(err);
@@ -2971,11 +2972,17 @@ async function bindTalkSwitchHandler (newVal) {
         chatContainer.querySelector('.user-input').innerHTML =
             '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
         await bindTalkBtnHandler();
+        if (!audioStream) {
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
         return;
     }
 
-    const ssconfig = await getChatSessionConfig();
+    // close stream
+    audioStream.getTracks().forEach(track => track.stop());
+    audioStream = null;
 
+    const ssconfig = await getChatSessionConfig();
     chatContainer.querySelector('.user-input').innerHTML = `
         <div class="input-group mb-3 user-input">
             <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
@@ -2991,7 +2998,6 @@ async function bindTalkSwitchHandler (newVal) {
 
 async function bindTalkBtnHandler () {
     let mediaRecorder;
-
     const startRecording = async (evt) => {
         evt.stopPropagation();
         evt.preventDefault();
@@ -3001,8 +3007,7 @@ async function bindTalkBtnHandler () {
             return;
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder = new MediaRecorder(audioStream);
         const audioChunks = [];
         mediaRecorder.ondataavailable = event => {
             audioChunks.push(event.data);
@@ -3011,9 +3016,6 @@ async function bindTalkBtnHandler () {
         mediaRecorder.onstop = async () => {
             try {
                 ShowSpinner();
-
-                // stop stream
-                stream.getTracks().forEach(track => track.stop());
 
                 const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                 const formData = new FormData();

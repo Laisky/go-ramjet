@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -47,9 +48,9 @@ func TTSStreamHanler(ctx *gin.Context) {
 	}
 	defer azureTTSConfig.Close()
 
-	if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-SaraNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
-		return
-	}
+	// if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-SaraNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
+	// 	return
+	// }
 
 	audioCfg, err := audio.NewAudioConfigFromDefaultSpeakerOutput()
 	if web.AbortErr(ctx, errors.Wrap(err, "new audio config")) {
@@ -83,17 +84,10 @@ func TTSStreamHanler(ctx *gin.Context) {
 	}
 
 	// StartSpeakingTextAsync sends the result to channel when the synthesis starts.
-	ssml := fmt.Sprintf(`<!--ID=B7267351-473F-409D-9765-754A8EBCDE05;Version=1|{"VoiceNameToIdMapItems":[{"Id":"38db11b6-fa64-4989-8d75-4a48695ee5cd","Name":"Microsoft
-		Server Speech Text to Speech Voice (en-US,
-		SaraNeural)","ShortName":"en-US-SaraNeural","Locale":"en-US","VoiceType":"StandardVoice"}]}-->
-		<!--ID=FCB40C2B-1F9F-4C26-B1A1-CF8E67BE07D1;Version=1|{"Files":{}}-->
-		<!--ID=5B95B1CC-2C7B-494F-B746-CF22A0E779B7;Version=1|{"Locales":{"en-US":{"AutoApplyCustomLexiconFiles":[{}]}}}-->
-		<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
-			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="en-US">
-			<voice name="en-US-SaraNeural">
-				<s />
-				<mstts:express-as style="hopeful">%s</mstts:express-as>
-				<s />
+	ssml := fmt.Sprintf(`<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
+			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="zh-CN">
+			<voice name="zh-CN-XiaoxiaoNeural">
+				<mstts:express-as style="gentle">%s</mstts:express-as>
 			</voice>
 		</speak>`, req.Text)
 	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
@@ -118,20 +112,35 @@ func TTSStreamHanler(ctx *gin.Context) {
 	}
 	defer stream.Close()
 
-	fp, err := os.CreateTemp("", "tts-*.wav")
+	if outcome.Failed() {
+		web.AbortErr(ctx, errors.Errorf("speech synthesis failed: %s", outcome.Error))
+		return
+	}
+
+	tmpdir, err := os.MkdirTemp("", "tts-*.wav")
 	if web.AbortErr(ctx, errors.Wrap(err, "create temp file")) {
 		return
 	}
-	defer os.Remove(fp.Name())
-	defer fp.Close()
+	defer os.RemoveAll(tmpdir)
 
-	if err = <-stream.SaveToWavFileAsync(fp.Name()); web.AbortErr(ctx, errors.Wrap(err, "save to wav file")) {
+	fpath := filepath.Join(tmpdir, "tts.wav")
+	if err = <-stream.SaveToWavFileAsync(fpath); web.AbortErr(ctx, errors.Wrap(err, "save to wav file")) {
+		return
+	}
+
+	fp, err := os.Open(fpath)
+	if web.AbortErr(ctx, errors.Wrap(err, "open wav file")) {
 		return
 	}
 
 	ctx.Header("Content-Type", "audio/wav")
 	nBytes, err := io.Copy(ctx.Writer, fp)
 	if web.AbortErr(ctx, errors.Wrap(err, "copy stream")) {
+		return
+	}
+
+	if nBytes < 1 {
+		web.AbortErr(ctx, errors.New("failed to generate audio"))
 		return
 	}
 
