@@ -2979,8 +2979,10 @@ async function bindTalkSwitchHandler (newVal) {
     }
 
     // close stream
-    audioStream.getTracks().forEach(track => track.stop());
-    audioStream = null;
+    if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+    }
 
     const ssconfig = await getChatSessionConfig();
     chatContainer.querySelector('.user-input').innerHTML = `
