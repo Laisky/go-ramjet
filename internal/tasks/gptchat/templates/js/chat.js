@@ -3059,7 +3059,7 @@ function bindTalkBtnHandler () {
                                 return;
                             }
 
-                            await libs.Sleep(500);
+                            await libs.Sleep(100);
                         }
                     }
                 }, 'bindTalkBtnHandler_tts');
