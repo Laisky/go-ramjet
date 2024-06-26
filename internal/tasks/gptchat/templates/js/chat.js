@@ -133,7 +133,6 @@ const KvKeyPrefixSessionConfig = 'chat_user_config_';
 const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
 const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
-const KvKeyEnableTalking = 'config_enable_talking_mode';
 const KvKeyVersionDate = 'config_version_date';
 
 const RoleHuman = 'user';
@@ -2935,39 +2934,10 @@ async function setupChatSwitchs () {
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
                 const switchEle = libs.evtTarget(evt)
-                await libs.KvSet(KvKeyEnableTalking, switchEle.checked)
+                const sconfig = await getChatSessionConfig()
+                sconfig.chat_switch.enable_talk = switchEle.checked
+                await saveChatSessionConfig(sconfig)
             });
-        libs.KvAddListener(KvKeyEnableTalking, async (key, op, oldVal, newVal) => {
-            if (op !== libs.KvOp.SET) {
-                return;
-            }
-
-            // update ui
-            const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
-            switchEle.checked = newVal;
-
-            // update background syncer
-            if (newVal) {
-                chatContainer.querySelector('.user-input').innerHTML =
-                    '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
-                bindTalkBtnHandler();
-                return;
-            }
-
-            const ssconfig = await getChatSessionConfig();
-
-            chatContainer.querySelector('.user-input').innerHTML = `
-                <div class="input-group mb-3 user-input">
-                    <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
-                    <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
-                </div>`;
-
-            // reset chat input element
-            chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
-            chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
-
-            await setupChatInput();
-        }, 'setupChatInput_change_chat_talking');
 
         // bind listener for all chat switchs
         libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
@@ -2984,8 +2954,39 @@ async function setupChatSwitchs () {
             chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
             chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
             chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
+            await bindTalkSwitchHandler(sconfig.chat_switch.enable_talk);
+
+            // enable talk
         }, 'setupChatInput_change_chat_switchs');
     }
+}
+
+async function bindTalkSwitchHandler (newVal) {
+    // update ui
+    const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
+    switchEle.checked = newVal;
+
+    // update background syncer
+    if (newVal) {
+        chatContainer.querySelector('.user-input').innerHTML =
+            '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
+        bindTalkBtnHandler();
+        return;
+    }
+
+    const ssconfig = await getChatSessionConfig();
+
+    chatContainer.querySelector('.user-input').innerHTML = `
+        <div class="input-group mb-3 user-input">
+            <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
+            <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
+        </div>`;
+
+    // reset chat input element
+    chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+    chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+
+    await setupChatInput();
 }
 
 function bindTalkBtnHandler () {
@@ -3034,21 +3035,34 @@ function bindTalkBtnHandler () {
                 }
 
                 const chatID = await sendChat2Server(null, userPrompt);
-                const startAt = Date.now();
-                const waitAiRespInterval = setInterval(async () => {
-                    if (Date.now() - startAt > 1000 * 60) {
-                        clearInterval(waitAiRespInterval);
-                        abortAIResp(new Error('timeout to wait ai response'));
-                    }
-
-                    const voiceBtn = chatContainer.querySelector(`#${chatID} .btn[data-fn="voice"]`);
-                    if (!voiceBtn) {
+                const storageActiveSessionKey = kvSessionKey(await activeSessionID());
+                libs.KvAddListener(storageActiveSessionKey, async (key, op, oldVal, newVal) => {
+                    if (op !== libs.KvOp.SET) {
                         return;
                     }
 
-                    clearInterval(waitAiRespInterval);
-                    voiceBtn.click();
-                }, 500);
+                    if (key !== storageActiveSessionKey) {
+                        return;
+                    }
+
+                    const startAt = Date.now();
+                    while (Date.now() - startAt < 3000) {
+                        for (const chatHis of newVal) {
+                            if (chatHis.chatID === chatID && chatHis.role === RoleAI) {
+                                const voiceBtn = chatContainer.querySelector(`#${chatID} .btn[data-fn="voice"]`);
+                                if (!voiceBtn) {
+                                    break;
+                                }
+
+                                voiceBtn.click();
+                                libs.KvRemoveListener(storageActiveSessionKey, 'bindTalkBtnHandler_tts');
+                                return;
+                            }
+
+                            await libs.Sleep(500);
+                        }
+                    }
+                }, 'bindTalkBtnHandler_tts');
             } catch (err) {
                 showalert('danger', `record voice failed: ${err}`);
                 HideSpinner();
@@ -3604,6 +3618,7 @@ async function updateConfigFromSessionConfig () {
         .checked = sconfig.chat_switch.all_in_one;
     chatContainer.querySelector('#switchChatEnableAutoSync')
         .checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
+    await bindTalkSwitchHandler(sconfig.chat_switch.enable_talk);
 
     // update selected model
     // set active status for models

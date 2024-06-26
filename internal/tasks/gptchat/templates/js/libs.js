@@ -24,13 +24,13 @@ export const LoadJsModules = async (moduleUrls, moduleType) => {
 };
 
 /**
- * async wait for seconds
+ * async wait for milliseconds
  *
- * @param {*} seconds
+ * @param {*} milliseconds
  * @returns
  */
-export const Sleep = async (seconds) => {
-    return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+export const Sleep = async (milliseconds) => {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
 };
 
 export const ActiveElementsByID = (elements, id) => {
