@@ -1,10 +1,12 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -83,13 +85,18 @@ func TTSStreamHanler(ctx *gin.Context) {
 		return
 	}
 
-	// StartSpeakingTextAsync sends the result to channel when the synthesis starts.
-	ssml := fmt.Sprintf(`<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
+	ssml, err := generateSSML(ctx.Request.Context(), user, req.Text)
+	if err != nil {
+		logger.Warn("failed to generate ssml by llm", zap.Error(err))
+		// use default ssml
+		ssml = fmt.Sprintf(`<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
 			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="zh-CN">
 			<voice name="zh-CN-XiaoxiaoNeural">
 				<mstts:express-as style="gentle">%s</mstts:express-as>
 			</voice>
 		</speak>`, req.Text)
+	}
+
 	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
 	// task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
 	var outcome speech.SpeechSynthesisOutcome
@@ -147,4 +154,50 @@ func TTSStreamHanler(ctx *gin.Context) {
 	logger.Info("tts audio succeed",
 		zap.Int("text_len", len(req.Text)),
 		zap.String("audio_size", gutils.HumanReadableByteCount(nBytes, true)))
+}
+
+var ssmlRegexp = regexp.MustCompile(`(?ims)(<speak.*</speak>)`)
+
+func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ssml string, err error) {
+	prompt := `将下列文字生成为一段供语音输出的 SSML 格式，按照你的理解增加语音语调，仅输出可直接使用的 SSML 内容，不要输出任何其他字符。我会提供一段示例。` +
+		"\n```\n" + `<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
+			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="zh-CN">
+			<voice name="zh-CN-XiaoxiaoNeural">
+				<mstts:express-as style="lyrical"><prosody rate="+3.00%">且说</prosody>宝玉<prosody
+						rate="+3.00%">正和</prosody>宝钗玩笑，<prosody rate="+5.00%">忽见</prosody>人说-<prosody
+						pitch="+5.00%">史</prosody><prosody rate="+4.00%">大</prosody>姑娘<prosody
+						pitch="+5.00%">来</prosody>了。宝钗<prosody rate="+4.00%">笑道</prosody>：</mstts:express-as>
+			</voice>
+			<voice name="zh-CN-XiaohanNeural">
+				<mstts:express-as style="cheerful">”等着，咱们两个一起走，<prosody rate="+5.00%" pitch="+6.00%">瞧瞧</prosody><prosody
+						contour="(49%, -11%)">他</prosody><prosody rate="+6.00%">
+						<phoneme alphabet="sapi" ph="qu 5">去</phoneme>
+					</prosody>。”</mstts:express-as>
+			</voice>
+			<voice name="zh-CN-XiaoxiaoNeural">
+				<mstts:express-as style="lyrical">说着，下了炕，和宝玉<mstts:ttsbreak strength="none" />来至贾母这边。<prosody
+						rate="+5.00%">只</prosody><prosody rate="+7.00%">见</prosody>史湘云<prosody rate="+4.00%">
+					大说大笑的</prosody>，见了他两个，忙站<prosody rate="+5.00%">起来</prosody>问好。<prosody rate="+5.00%">正值</prosody>
+					黛玉在旁，因问宝玉：</mstts:express-as>
+				<mstts:express-as style="gentle">“<prosody rate="+5.00%">打</prosody><prosody pitch="+3.00%">
+					哪里</prosody>来？”</mstts:express-as>
+				<mstts:express-as style="lyrical">宝玉<prosody rate="+4.00%">便</prosody><prosody
+						pitch="+7.00%">说</prosody>：</mstts:express-as>
+			</voice>
+		</speak>` +
+		"\n```\n" + `请转换下列内容
+		>>
+		` + text
+
+	answer, err := OneshotChat(ctx, user, "", "", prompt)
+	if err != nil {
+		return "", errors.Wrap(err, "oneshot chat")
+	}
+
+	matched := ssmlRegexp.FindStringSubmatch(answer)
+	if len(matched) < 2 {
+		return "", errors.Errorf("failed to extract ssml %q", answer)
+	}
+
+	return matched[1], nil
 }

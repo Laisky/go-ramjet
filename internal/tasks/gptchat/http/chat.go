@@ -911,7 +911,7 @@ func OneShotChatHandler(gctx *gin.Context) {
 		return
 	}
 
-	resp, err := OneshotChat(gmw.Ctx(gctx), user, req.SystemPrompt, req.UserPrompt)
+	resp, err := OneshotChat(gmw.Ctx(gctx), user, "", req.SystemPrompt, req.UserPrompt)
 	if web.AbortErr(gctx, err) {
 		return
 	}
@@ -926,15 +926,19 @@ func OneShotChatHandler(gctx *gin.Context) {
 // # Args:
 //   - systemPrompt: system prompt
 //   - userPrompt: user prompt
-func OneshotChat(ctx context.Context, user *config.UserConfig, systemPrompt, userPrompt string) (answer string, err error) {
+func OneshotChat(ctx context.Context, user *config.UserConfig, model, systemPrompt, userPrompt string) (answer string, err error) {
 	logger := gmw.GetLogger(ctx)
-	if userPrompt == "" {
-		userPrompt = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
+	if systemPrompt == "" {
+		systemPrompt = "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
+	}
+
+	if model == "" {
+		model = "gpt-3.5-turbo"
 	}
 
 	body, err := json.Marshal(OpenaiChatReq[string]{
-		Model:     "gpt-3.5-turbo",
-		MaxTokens: 1000,
+		Model:     model,
+		MaxTokens: 2000,
 		Stream:    false,
 		Messages: []OpenaiReqMessage[string]{
 			{
@@ -961,7 +965,7 @@ func OneshotChat(ctx context.Context, user *config.UserConfig, systemPrompt, use
 	logger.Info("send one-shot chat request",
 		zap.String("user", user.UserName),
 	)
-	req.Header.Add("Authorization", "Bearer "+user.Token)
+	req.Header.Add("Authorization", "Bearer "+user.OpenaiToken)
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := httpcli.Do(req)
 	if err != nil {
@@ -970,7 +974,8 @@ func OneshotChat(ctx context.Context, user *config.UserConfig, systemPrompt, use
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("[%d]%s", resp.StatusCode, url)
+		respText, _ := io.ReadAll(resp.Body)
+		return "", errors.Errorf("req %q [%d]%s", url, resp.StatusCode, string(respText))
 	}
 
 	respData := new(OpenaiCompletionResp)

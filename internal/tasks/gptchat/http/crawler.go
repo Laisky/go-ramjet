@@ -234,7 +234,7 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 			// summary by LLM
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer summaryCancel()
-			if summaryText, err := OneshotChat(summaryCtx, user, "",
+			if summaryText, err := OneshotChat(summaryCtx, user, "", "",
 				fmt.Sprintf(oneshotSummarySysPrompt, query, addText)); err != nil {
 				logger.Warn("summary by LLM", zap.Error(err))
 			} else {
