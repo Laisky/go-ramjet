@@ -2970,7 +2970,7 @@ async function bindTalkSwitchHandler (newVal) {
     if (newVal) {
         chatContainer.querySelector('.user-input').innerHTML =
             '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
-        bindTalkBtnHandler();
+        await bindTalkBtnHandler();
         return;
     }
 
@@ -2989,15 +2989,21 @@ async function bindTalkSwitchHandler (newVal) {
     await setupChatInput();
 }
 
-function bindTalkBtnHandler () {
+async function bindTalkBtnHandler () {
     let mediaRecorder;
-    let audioChunks = [];
 
-    const startRecording = async () => {
+    const startRecording = async (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        evt.target.classList.add('active');
+
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            return;
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
+        const audioChunks = [];
         mediaRecorder.ondataavailable = event => {
             audioChunks.push(event.data);
         };
@@ -3031,6 +3037,7 @@ function bindTalkBtnHandler () {
 
                 const userPrompt = (await resp.json()).text;
                 if (!userPrompt) {
+                    HideSpinner();
                     return;
                 }
 
@@ -3058,9 +3065,9 @@ function bindTalkBtnHandler () {
                                 libs.KvRemoveListener(storageActiveSessionKey, 'bindTalkBtnHandler_tts');
                                 return;
                             }
-
-                            await libs.Sleep(100);
                         }
+
+                        await libs.Sleep(100);
                     }
                 }, 'bindTalkBtnHandler_tts');
             } catch (err) {
@@ -3072,7 +3079,11 @@ function bindTalkBtnHandler () {
         mediaRecorder.start();
     }
 
-    const stopRecording = async () => {
+    const stopRecording = async (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        evt.target.classList.remove('active');
+
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
         }
@@ -3082,11 +3093,11 @@ function bindTalkBtnHandler () {
 
     // Feature detection for touch events
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) {
-        // Touchscreen device
+        console.debug('This device supports touch events');
         recordButton.addEventListener('touchstart', startRecording);
         recordButton.addEventListener('touchend', stopRecording);
     } else {
-        // Non-touchscreen device (e.g., PC)
+        console.debug('This device does not support touch events');
         recordButton.addEventListener('mousedown', startRecording);
         recordButton.addEventListener('mouseup', stopRecording);
     }

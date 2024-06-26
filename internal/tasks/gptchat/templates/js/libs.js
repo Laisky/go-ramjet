@@ -272,8 +272,12 @@ export const KvDel = async (key) => {
     Object.keys(kvListeners).forEach((keyPrefix) => {
         if (key.startsWith(keyPrefix)) {
             for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
-                const callback = kvListeners[keyPrefix][i];
-                callback(key, KvOp.DEL, oldVal, null);
+                const callbackObj = kvListeners[keyPrefix][i];
+                if (typeof callbackObj === 'object') {
+                    callbackObj.callback(key, KvOp.SET, oldVal, null);
+                } else {
+                    callbackObj(key, KvOp.DEL, oldVal, null);
+                }
             }
         }
     });
@@ -299,8 +303,12 @@ export const KvClear = async () => {
         Object.keys(kvListeners).forEach((keyPrefix) => {
             if (key.startsWith(keyPrefix)) {
                 for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
-                    const callback = kvListeners[keyPrefix][i];
-                    callback(key, KvOp.DEL, null, null);
+                    const callbackObj = kvListeners[keyPrefix][i];
+                    if (typeof callbackObj === 'object') {
+                        callbackObj.callback(key, KvOp.SET, null, null);
+                    } else {
+                        callbackObj(key, KvOp.DEL, null, null);
+                    }
                 }
             }
         });

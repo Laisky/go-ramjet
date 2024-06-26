@@ -41,6 +41,12 @@ func OneapiProxyHandler(ctx *gin.Context) {
 
 	req.Header = ctx.Request.Header
 
+	user, err := getUserByAuthHeader(ctx)
+	if web.AbortErr(ctx, errors.Wrap(err, "get user by auth header")) {
+		return
+	}
+	req.Header.Set("Authorization", user.OpenaiToken)
+
 	// just for test: fake response
 	// {
 	// 	resp, err := httpcli.Get("https://s3.laisky.com/embeddings/image-by-image/2024/04/mJMYRFmprERonrhEfuHwMnaYvzXQuzFLPQuo-1.png")
