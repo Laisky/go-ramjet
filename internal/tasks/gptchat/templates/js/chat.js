@@ -2496,42 +2496,17 @@ function addOperateBtnBelowAiResponse (chatID) {
     divContainer.querySelector('.btn[data-fn="voice"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
-            evt = libs.evtTarget(evt);
+            const evtTarget = libs.evtTarget(evt);
 
             let textContent = '';
-            if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+            if (!evtTarget.closest('.ai-response') || !evtTarget.closest('.ai-response').dataset.aiRawResp) {
                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
                 return;
             } else {
-                textContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+                textContent = decodeURIComponent(evtTarget.closest('.ai-response').dataset.aiRawResp);
             }
 
-            const sconfig = await getChatSessionConfig();
-
-            // fetch wav bytes from tts server, play it
-            try {
-                ShowSpinner();
-                const resp = await fetch('/audio/tts', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${sconfig.api_token}`
-                    },
-                    body: JSON.stringify({
-                        text: textContent
-                    })
-                });
-
-                // play
-                const wavBlob = await resp.blob();
-                const wavUrl = URL.createObjectURL(wavBlob);
-                const audio = new Audio(wavUrl);
-                HideSpinner();
-                await audio.play();
-            } catch (err) {
-                HideSpinner();
-                console.error(err);
-            }
+            await tts(textContent);
         });
 
     // add copy button
@@ -2577,6 +2552,41 @@ function addOperateBtnBelowAiResponse (chatID) {
         });
 
     libs.EnableTooltipsEverywhere();
+}
+
+/**
+ * request audio from tts server and play it
+ *
+ * @param {string} text - text to enhance
+ */
+async function tts (text) {
+    const sconfig = await getChatSessionConfig();
+
+    // fetch wav bytes from tts server, play it
+    let audio;
+    try {
+        ShowSpinner();
+        const resp = await fetch('/audio/tts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${sconfig.api_token}`
+            },
+            body: JSON.stringify({
+                text
+            })
+        });
+
+        // play
+        const respBlob = await resp.blob();
+        const wavBlob = new Blob([respBlob], { type: 'audio/wav' });
+        const wavUrl = URL.createObjectURL(wavBlob);
+        audio = new Audio(wavUrl);
+    } finally {
+        HideSpinner();
+    }
+
+    audio.play()
 }
 
 function combineRefs (arr) {
@@ -3000,6 +3010,8 @@ async function bindTalkSwitchHandler (newVal) {
 
 async function bindTalkBtnHandler () {
     let mediaRecorder;
+    let audioChunks = [];
+
     const startRecording = async (evt) => {
         evt.stopPropagation();
         evt.preventDefault();
@@ -3010,74 +3022,8 @@ async function bindTalkBtnHandler () {
         }
 
         mediaRecorder = new MediaRecorder(audioStream);
-        const audioChunks = [];
         mediaRecorder.ondataavailable = event => {
             audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-            try {
-                ShowSpinner();
-
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'user_audio.wav');
-                formData.set('model', 'whisper-large-v3');
-                formData.set('response_format', 'verbose_json');
-
-                const ssonfig = await getChatSessionConfig();
-
-                // transcript voice to txt
-                const resp = await fetch('/oneapi/v1/audio/transcriptions', {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${ssonfig.api_token}`
-                    },
-                    body: formData
-                });
-                if (!resp.ok || resp.status !== 200) {
-                    throw new Error(`${resp.status} ${await resp.text()}`);
-                }
-
-                const userPrompt = (await resp.json()).text;
-                if (!userPrompt) {
-                    HideSpinner();
-                    return;
-                }
-
-                const chatID = await sendChat2Server(null, userPrompt);
-                const storageActiveSessionKey = kvSessionKey(await activeSessionID());
-                libs.KvAddListener(storageActiveSessionKey, async (key, op, oldVal, newVal) => {
-                    if (op !== libs.KvOp.SET) {
-                        return;
-                    }
-
-                    if (key !== storageActiveSessionKey) {
-                        return;
-                    }
-
-                    const startAt = Date.now();
-                    while (Date.now() - startAt < 3000) {
-                        for (const chatHis of newVal) {
-                            if (chatHis.chatID === chatID && chatHis.role === RoleAI) {
-                                const voiceBtn = chatContainer.querySelector(`#${chatID} .btn[data-fn="voice"]`);
-                                if (!voiceBtn) {
-                                    break;
-                                }
-
-                                voiceBtn.click();
-                                libs.KvRemoveListener(storageActiveSessionKey, 'bindTalkBtnHandler_tts');
-                                return;
-                            }
-                        }
-
-                        await libs.Sleep(100);
-                    }
-                }, 'bindTalkBtnHandler_tts');
-            } catch (err) {
-                showalert('danger', `record voice failed: ${err}`);
-                HideSpinner();
-            }
         };
 
         mediaRecorder.start();
@@ -3089,7 +3035,83 @@ async function bindTalkBtnHandler () {
         evt.target.classList.remove('active');
 
         if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.requestData()
             mediaRecorder.stop();
+            mediaRecorder = null;
+        } else {
+            audioChunks = [];
+            return;
+        }
+
+        if (audioChunks.length === 0) {
+            return;
+        }
+
+        try {
+            ShowSpinner();
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'user_audio.wav');
+            formData.set('model', 'whisper-large-v3');
+            formData.set('response_format', 'verbose_json');
+
+            const ssonfig = await getChatSessionConfig();
+
+            // transcript voice to txt
+            const resp = await fetch('/oneapi/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${ssonfig.api_token}`
+                },
+                body: formData
+            });
+            if (!resp.ok || resp.status !== 200) {
+                throw new Error(`${resp.status} ${await resp.text()}`);
+            }
+
+            const userPrompt = (await resp.json()).text;
+            if (!userPrompt) {
+                HideSpinner();
+                return;
+            }
+
+            const chatID = await sendChat2Server(null, userPrompt);
+            const storageActiveSessionKey = kvSessionKey(await activeSessionID());
+            libs.KvAddListener(storageActiveSessionKey, async (key, op, oldVal, newVal) => {
+                if (op !== libs.KvOp.SET) {
+                    return;
+                }
+
+                if (key !== storageActiveSessionKey) {
+                    return;
+                }
+
+                const startAt = Date.now();
+                while (Date.now() - startAt < 3000) {
+                    for (const chatHis of newVal) {
+                        if (chatHis.chatID === chatID && chatHis.role === RoleAI) {
+                            const voiceBtn = chatContainer.querySelector(`#${chatID} .btn[data-fn="voice"]`);
+                            if (!voiceBtn) {
+                                break;
+                            }
+
+                            const text = chatHis.rawContent;
+                            await tts(text);
+
+                            libs.KvRemoveListener(storageActiveSessionKey, 'bindTalkBtnHandler_tts');
+                            return;
+                        }
+                    }
+
+                    await libs.Sleep(100);
+                }
+            }, 'bindTalkBtnHandler_tts');
+        } catch (err) {
+            showalert('danger', `record voice failed: ${err}`);
+            HideSpinner();
+        } finally {
+            audioChunks = [];
         }
     }
 

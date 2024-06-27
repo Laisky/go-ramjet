@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -124,24 +123,21 @@ func TTSStreamHanler(ctx *gin.Context) {
 		return
 	}
 
-	tmpdir, err := os.MkdirTemp("", "tts-*.wav")
+	// Create a temporary file with a .wav extension in the default temporary directory
+	tempFp, err := os.CreateTemp("", "tts-*.wav")
 	if web.AbortErr(ctx, errors.Wrap(err, "create temp file")) {
 		return
 	}
-	defer os.RemoveAll(tmpdir)
+	defer os.Remove(tempFp.Name()) // Ensure the temporary file is removed after use
+	defer tempFp.Close()
 
-	fpath := filepath.Join(tmpdir, "tts.wav")
-	if err = <-stream.SaveToWavFileAsync(fpath); web.AbortErr(ctx, errors.Wrap(err, "save to wav file")) {
-		return
-	}
-
-	fp, err := os.Open(fpath)
-	if web.AbortErr(ctx, errors.Wrap(err, "open wav file")) {
+	// Use the temporary file's name (path) for saving
+	if err = <-stream.SaveToWavFileAsync(tempFp.Name()); web.AbortErr(ctx, errors.Wrap(err, "save to wav file")) {
 		return
 	}
 
 	ctx.Header("Content-Type", "audio/wav")
-	nBytes, err := io.Copy(ctx.Writer, fp)
+	nBytes, err := io.Copy(ctx.Writer, tempFp)
 	if web.AbortErr(ctx, errors.Wrap(err, "copy stream")) {
 		return
 	}
