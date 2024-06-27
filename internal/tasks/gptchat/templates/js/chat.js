@@ -2584,6 +2584,7 @@ async function tts (chatID, text) {
         // sometimes browser will block audio play,
         // try to play audio automately, if failed, add a play button.
         await audio.play();
+        chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
         return;
     } catch (err) {
         console.error(`failed to play audio automately: ${err}`);
@@ -3031,17 +3032,21 @@ async function bindTalkSwitchHandler (newVal) {
 async function bindTalkBtnHandler () {
     let mediaRecorder;
     let audioChunks = [];
+    let startRecordingAt = Date.now();
 
     const startRecording = async (evt) => {
+        console.debug('start recording');
         evt.stopPropagation();
         evt.preventDefault();
         evt.target.classList.add('active');
+        startRecordingAt = Date.now();
 
         if (mediaRecorder && mediaRecorder.state === 'recording') {
-            return;
+            mediaRecorder.stop();
         }
 
         mediaRecorder = new MediaRecorder(audioStream);
+        audioChunks = [];
         mediaRecorder.ondataavailable = event => {
             audioChunks.push(event.data);
         };
@@ -3050,18 +3055,22 @@ async function bindTalkBtnHandler () {
     }
 
     const stopRecording = async (evt) => {
+        console.debug('stop recording');
         evt.stopPropagation();
         evt.preventDefault();
         evt.target.classList.remove('active');
 
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.requestData()
-            mediaRecorder.stop();
-            mediaRecorder = null;
-        } else {
-            audioChunks = [];
+        if (Date.now() - startRecordingAt < 500) {
             return;
         }
+
+        if (mediaRecorder && mediaRecorder.state !== 'recording') {
+            return;
+        }
+
+        mediaRecorder.requestData()
+        mediaRecorder.stop();
+        mediaRecorder = null;
 
         if (audioChunks.length === 0) {
             return;

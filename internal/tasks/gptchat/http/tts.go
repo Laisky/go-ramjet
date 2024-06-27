@@ -76,11 +76,11 @@ func TTSHanler(ctx *gin.Context) {
 		logger.Debug("synthesis canceled")
 	})
 
-	if err := checkUserExternalBilling(ctx.Request.Context(), user, db.PriceTTS, "tts"); web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
+	if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.PriceTTS, "tts"); web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
 		return
 	}
 
-	ssml, err := generateSSML(ctx.Request.Context(), user, text)
+	ssml, err := generateSSML(gmw.Ctx(ctx), user, text)
 	if err != nil {
 		logger.Warn("failed to generate ssml by llm", zap.Error(err))
 		// use default ssml
@@ -151,7 +151,11 @@ func TTSHanler(ctx *gin.Context) {
 var ssmlRegexp = regexp.MustCompile(`(?ims)(<speak.*</speak>)`)
 
 func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ssml string, err error) {
-	prompt := `将下列文字生成为一段供语音输出的 SSML 格式，按照你的理解增加语音语调，仅输出可直接使用的 SSML 内容，不要输出任何其他字符。我会提供一段示例。` +
+	logger := gmw.GetLogger(ctx)
+	prompt := `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
+		Only output the directly usable SSML content, excluding any other characters. I will provide an example.
+		Please pay attention to retaining all "speak", "voice", and "mstts" metadata.
+		Regardless of the language, the "voice name" should always be set to "zh-CN-XiaoxiaoNeural" and not be changed.` +
 		"\n```\n" + `<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
 			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="zh-CN">
 			<voice name="zh-CN-XiaoxiaoNeural">
@@ -177,7 +181,7 @@ func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ss
 						pitch="+7.00%">说</prosody>：</mstts:express-as>
 			</voice>
 		</speak>` +
-		"\n```\n" + `请转换下列内容
+		"\n```\n" + `Please convert the following content:
 		>>
 		` + text
 
@@ -191,5 +195,6 @@ func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ss
 		return "", errors.Errorf("failed to extract ssml %q", answer)
 	}
 
+	logger.Debug("extracted ssml", zap.String("ssml", matched[1]))
 	return matched[1], nil
 }
