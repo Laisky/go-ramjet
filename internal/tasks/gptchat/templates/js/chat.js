@@ -3149,11 +3149,15 @@ async function bindTalkBtnHandler () {
         mediaRecorder = null;
     }
 
-    const recordButton = chatContainer.querySelector('.user-input .btn[data-fn="record"]');
-    recordButton.addEventListener('touchstart', startRecording);
-    recordButton.addEventListener('touchend', stopRecording);
-    recordButton.addEventListener('mousedown', startRecording);
-    recordButton.addEventListener('mouseup', stopRecording);
+    const recordButton = chatContainer
+        .querySelector('.user-input .btn[data-fn="record"]');
+    if (libs.IsTouchDevice()) {
+        recordButton.addEventListener('touchstart', startRecording);
+        recordButton.addEventListener('touchend', stopRecording);
+    } else {
+        recordButton.addEventListener('mousedown', startRecording);
+        recordButton.addEventListener('mouseup', stopRecording);
+    }
 }
 
 // read paste file
