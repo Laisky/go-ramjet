@@ -2506,7 +2506,7 @@ function addOperateBtnBelowAiResponse (chatID) {
                 textContent = decodeURIComponent(evtTarget.closest('.ai-response').dataset.aiRawResp);
             }
 
-            await tts(textContent);
+            await tts(chatID, textContent);
         });
 
     // add copy button
@@ -2559,25 +2559,19 @@ function addOperateBtnBelowAiResponse (chatID) {
  *
  * @param {string} text - text to enhance
  */
-async function tts (text) {
+async function tts (chatID, text) {
     const sconfig = await getChatSessionConfig();
 
     // fetch wav bytes from tts server, play it
     let audio;
     try {
         ShowSpinner();
-        const resp = await fetch('/audio/tts', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${sconfig.api_token}`
-            },
-            body: JSON.stringify({
-                text
-            })
+        const url = `/audio/tts?apikey=${sconfig.api_token}&text=${encodeURIComponent(text)}`;
+        const resp = await fetch(url, {
+            method: 'GET'
         });
 
-        // play
+        // create audio element
         const respBlob = await resp.blob();
         const wavBlob = new Blob([respBlob], { type: 'audio/wav' });
         const wavUrl = URL.createObjectURL(wavBlob);
@@ -2586,7 +2580,33 @@ async function tts (text) {
         HideSpinner();
     }
 
-    audio.play()
+    try {
+        // sometimes browser will block audio play,
+        // try to play audio automately, if failed, add a play button.
+        await audio.play();
+        return;
+    } catch (err) {
+        console.error(`failed to play audio automately: ${err}`);
+    }
+
+    audio.addEventListener('click', async (evt) => {
+        evt.stopPropagation();
+        audio.play().catch((err) => {
+            showalert('danger', `Failed to play audio: ${err}`);
+        });
+    });
+
+    // for mobile device, autoplay is disabled, so we need to add a play button,
+    // and play audio when user click the button.
+    audio.controls = true;
+    audio.playsinline = true;
+    audio.preload = 'auto';
+    audio.classList.add('ai-resp-audio');
+
+    // replace the old audio element
+    chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
+    chatContainer.querySelector(`#${chatID} .ai-response`)
+        .insertAdjacentElement('beforeend', audio);
 }
 
 function combineRefs (arr) {
@@ -3097,7 +3117,7 @@ async function bindTalkBtnHandler () {
                             }
 
                             const text = chatHis.rawContent;
-                            await tts(text);
+                            await tts(chatID, text);
 
                             libs.KvRemoveListener(storageActiveSessionKey, 'bindTalkBtnHandler_tts');
                             return;
@@ -3118,7 +3138,7 @@ async function bindTalkBtnHandler () {
     const recordButton = chatContainer.querySelector('.user-input .btn[data-fn="record"]');
 
     // Feature detection for touch events
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0) {
+    if (libs.IsTouchDevice()) {
         console.debug('This device supports touch events');
         recordButton.addEventListener('touchstart', startRecording);
         recordButton.addEventListener('touchend', stopRecording);

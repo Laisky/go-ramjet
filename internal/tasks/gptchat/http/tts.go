@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"regexp"
 	"time"
@@ -20,25 +21,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TTSRequest is the request struct for text to speech
-type TTSRequest struct {
-	Text string `json:"text" binding:"required,min=1"`
-}
-
-// TTSStreamHanler text to speech by azure, will return audio stream
-func TTSStreamHanler(ctx *gin.Context) {
+// TTSHanler text to speech by azure, will return audio stream
+func TTSHanler(ctx *gin.Context) {
 	if config.Config.Azure.TTSKey == "" || config.Config.Azure.TTSRegion == "" {
 		web.AbortErr(ctx, fmt.Errorf("azure tts key or region is empty"))
 		return
 	}
 
-	user, err := getUserByAuthHeader(ctx)
+	user, err := getUserByToken(ctx, ctx.Query("apikey"))
 	if web.AbortErr(ctx, errors.Wrap(err, "get user by auth header")) {
 		return
 	}
 
-	req := new(TTSRequest)
-	if err := ctx.BindJSON(req); web.AbortErr(ctx, errors.Wrap(err, "bind json")) {
+	text, err := url.QueryUnescape(ctx.Query("text"))
+	if web.AbortErr(ctx, errors.Wrap(err, "url.QueryUnescape")) {
 		return
 	}
 
@@ -84,7 +80,7 @@ func TTSStreamHanler(ctx *gin.Context) {
 		return
 	}
 
-	ssml, err := generateSSML(ctx.Request.Context(), user, req.Text)
+	ssml, err := generateSSML(ctx.Request.Context(), user, text)
 	if err != nil {
 		logger.Warn("failed to generate ssml by llm", zap.Error(err))
 		// use default ssml
@@ -93,7 +89,7 @@ func TTSStreamHanler(ctx *gin.Context) {
 			<voice name="zh-CN-XiaoxiaoNeural">
 				<mstts:express-as style="gentle">%s</mstts:express-as>
 			</voice>
-		</speak>`, req.Text)
+		</speak>`, text)
 	}
 
 	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
@@ -148,7 +144,7 @@ func TTSStreamHanler(ctx *gin.Context) {
 	}
 
 	logger.Info("tts audio succeed",
-		zap.Int("text_len", len(req.Text)),
+		zap.Int("text_len", len(text)),
 		zap.String("audio_size", gutils.HumanReadableByteCount(nBytes, true)))
 }
 

@@ -539,3 +539,12 @@ export const DownloadImage = (b64EncodedImage) => {
     a.download = 'image.png';
     a.click();
 };
+
+/**
+ * Check whether it's a touch device
+ *
+ * @returns true if it's a touch device, false otherwise
+ */
+export const IsTouchDevice = () => {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+}
