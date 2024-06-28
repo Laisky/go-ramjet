@@ -2873,7 +2873,7 @@ async function setupChatInput () {
 
         document.body.addEventListener('dragover', fileDragOverHandler);
         document.body.addEventListener('drop', fileDragDropHandler);
-        document.body.addEventListener('paste', filePasteHandler);
+        // document.body.addEventListener('paste', filePasteHandler);
 
         dropfileModalEle.addEventListener('drop', fileDragDropHandler);
         dropfileModalEle.addEventListener('dragleave', fileDragLeave);
@@ -3166,36 +3166,17 @@ async function filePasteHandler (evt) {
         return;
     }
 
-    evt.stopPropagation();
-    evt.preventDefault();
+    // do not skip default paste action
+    // evt.stopPropagation();
+    // evt.preventDefault();
 
+    // There may be various types of rich text formats,
+    // but here we only handle the images required for vision.
     let file;
     for (let i = 0; i < evt.clipboardData.items.length; i++) {
         const item = evt.clipboardData.items[i];
 
-        if (item.type === 'text/rtf' || item.type === 'text/html') {
-            // remove rtf content that copy from word/ppt
-            continue;
-        }
-
-        switch (item.kind) {
-        case 'string':
-            // should paste to the position of cursor
-            item.getAsString((val) => {
-                if (document.activeElement === chatPromptInputEle) {
-                    const startPos = chatPromptInputEle.selectionStart;
-                    const endPos = chatPromptInputEle.selectionEnd;
-                    chatPromptInputEle.value = chatPromptInputEle.value.substring(0, startPos) +
-                            val +
-                            chatPromptInputEle.value.substring(endPos, chatPromptInputEle.value.length);
-                    chatPromptInputEle.selectionStart = startPos + val.length;
-                    chatPromptInputEle.selectionEnd = startPos + val.length;
-                } else {
-                    chatPromptInputEle.value += val;
-                }
-            });
-            break;
-        case 'file':
+        if (item.kind === 'file') {
             file = item.getAsFile();
             if (!file) {
                 continue;
@@ -3203,10 +3184,44 @@ async function filePasteHandler (evt) {
 
             // get file content as Blob
             readFileForVision(file, `paste-${libs.DateStr()}.png`);
-            break;
-        default:
-            continue;
         }
+
+        continue
+
+        // if (item.type === 'text/rtf' || item.type === 'text/html') {
+        //     // remove rtf content that copy from word/ppt
+        //     continue;
+        // }
+
+        // switch (item.kind) {
+        // case 'string':
+        //     // should paste to the position of cursor
+        //     item.getAsString((val) => {
+        //         if (document.activeElement === chatPromptInputEle) {
+        //             const startPos = chatPromptInputEle.selectionStart;
+        //             const endPos = chatPromptInputEle.selectionEnd;
+        //             chatPromptInputEle.value = chatPromptInputEle.value.substring(0, startPos) +
+        //                     val +
+        //                     chatPromptInputEle.value.substring(endPos, chatPromptInputEle.value.length);
+        //             chatPromptInputEle.selectionStart = startPos + val.length;
+        //             chatPromptInputEle.selectionEnd = startPos + val.length;
+        //         } else {
+        //             chatPromptInputEle.value += val;
+        //         }
+        //     });
+        //     break;
+        // case 'file':
+        //     file = item.getAsFile();
+        //     if (!file) {
+        //         continue;
+        //     }
+
+        //     // get file content as Blob
+        //     readFileForVision(file, `paste-${libs.DateStr()}.png`);
+        //     break;
+        // default:
+        //     continue;
+        // }
     }
 };
 
