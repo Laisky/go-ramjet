@@ -3076,6 +3076,7 @@ async function bindTalkBtnHandler () {
                 const ssonfig = await getChatSessionConfig();
 
                 // transcript voice to txt
+                console.log(`send voice to server, length=${audioBlob.size}`);
                 const resp = await fetch('/oneapi/v1/audio/transcriptions', {
                     method: 'POST',
                     headers: {
@@ -3089,6 +3090,7 @@ async function bindTalkBtnHandler () {
 
                 const userPrompt = (await resp.json()).text;
                 if (!userPrompt) {
+                    console.debug('transcript server has not recognized any text');
                     HideSpinner();
                     return;
                 }
