@@ -3,6 +3,7 @@ package log
 
 import (
 	glog "github.com/Laisky/go-utils/v4/log"
+	"github.com/Laisky/zap"
 )
 
 var Logger glog.Logger
@@ -13,4 +14,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	Logger.WithOptions(zap.HooksWithFields())
 }

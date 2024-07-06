@@ -823,12 +823,13 @@ async function setupHeader () {
     modelElems.forEach((elem) => {
         elem.addEventListener('click', async (evt) => {
             evt.preventDefault();
+            const evtTarget = libs.evtTarget(evt);
             modelElems.forEach((elem) => {
                 elem.classList.remove('active');
             })
 
-            evt.target.classList.add('active');
-            const selectedModel = evt.target.dataset.model;
+            evtTarget.classList.add('active');
+            const selectedModel = evtTarget.dataset.model;
 
             const sconfig = await getChatSessionConfig();
             sconfig.selected_model = selectedModel;
@@ -839,7 +840,7 @@ async function setupHeader () {
                 .forEach((elem) => {
                     elem.classList.remove('active');
                 });
-            evt.target.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
+            evtTarget.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
 
             // add hint to input text
             chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
@@ -958,11 +959,11 @@ async function activeSessionID () {
 }
 
 async function listenSessionSwitch (evt) {
-    evt = libs.evtTarget(evt);
-    if (!evt.classList.contains('list-group-item')) {
-        evt = evt.closest('.list-group-item');
+    let ele = libs.evtTarget(evt);
+    if (!ele.classList.contains('list-group-item')) {
+        ele = ele.closest('.list-group-item');
     }
-    const activeSid = parseInt(evt.dataset.session);
+    const activeSid = parseInt(ele.dataset.session);
 
     await changeSession(activeSid);
 }
@@ -1173,7 +1174,7 @@ function bindSessionEditBtn () {
 
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                evt = libs.evtTarget(evt);
+                // const evtTarget = libs.evtTarget(evt);
                 const sid = parseInt(evt.closest('.session').dataset.session);
                 const sconfig = await getChatSessionConfig(sid);
                 const oldSessionName = sconfig.session_name || sid;
@@ -1209,6 +1210,7 @@ function bindSessionDeleteBtn () {
 
         item.addEventListener('click', async (evt) => {
             evt.stopPropagation();
+            const evtTarget = libs.evtTarget(evt);
 
             // if there is only one session, don't delete it
             if (document.querySelectorAll('#sessionManager .sessions .session').length === 1) {
@@ -1216,7 +1218,7 @@ function bindSessionDeleteBtn () {
             }
 
             const activeSid = await activeSessionID();
-            const deleteSid = parseInt(libs.evtTarget(evt).closest('.session').dataset.session);
+            const deleteSid = parseInt(evtTarget.closest('.session').dataset.session);
             ConfirmModal('Are you sure to delete this session?', async () => {
                 await libs.KvDel(`${KvKeyPrefixSessionHistory}${deleteSid}`);
                 await libs.KvDel(`${KvKeyPrefixSessionConfig}${deleteSid}`);
@@ -1682,8 +1684,10 @@ async function restorePinnedMaterials () {
         .forEach((item) => {
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                const container = libs.evtTarget(evt).closest('.pinned-refs');
-                const ele = libs.evtTarget(evt).closest('p');
+                const evtTarget = libs.evtTarget(evt);
+
+                const container = evtTarget.closest('.pinned-refs');
+                const ele = evtTarget.closest('p');
                 ele.parentNode.removeChild(ele);
 
                 // update storage
@@ -2460,10 +2464,10 @@ function bindImageOperationInAiResp (chatID) {
 
         editBtn.addEventListener('click', async (evt) => {
             evt.stopPropagation();
-            evt = libs.evtTarget(evt);
+            const evtTarget = libs.evtTarget(evt);
 
             // read image data to base64 encoded str
-            const imgUrl = evt.closest('.ai-resp-image').querySelector('img').src;
+            const imgUrl = evtTarget.closest('.ai-resp-image').querySelector('img').src;
             showImageEditModal(chatID, imgUrl);
         });
     }
@@ -2518,14 +2522,14 @@ function addOperateBtnBelowAiResponse (chatID) {
     divContainer.querySelector('button[data-fn="copy"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
-            evt = libs.evtTarget(evt);
+            const evtTarget = libs.evtTarget(evt);
 
             // aiRespEle.dataset.copyBinded = true;
             let copyContent = '';
-            if (!evt.closest('.ai-response') || !evt.closest('.ai-response').dataset.aiRawResp) {
+            if (!evtTarget.closest('.ai-response') || !evtTarget.closest('.ai-response').dataset.aiRawResp) {
                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
             } else {
-                copyContent = decodeURIComponent(evt.closest('.ai-response').dataset.aiRawResp);
+                copyContent = decodeURIComponent(evtTarget.closest('.ai-response').dataset.aiRawResp);
             }
 
             libs.Copy2Clipboard(copyContent);
@@ -2540,11 +2544,12 @@ function addOperateBtnBelowAiResponse (chatID) {
     divContainer.querySelector('button[data-fn="reload"]')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
+            const evtTarget = libs.evtTarget(evt);
 
             // hide tooltip manually
             libs.DisableTooltipsEverywhere();
 
-            const chatID = evt.target.closest('.role-ai').dataset.chatid;
+            const chatID = evtTarget.closest('.role-ai').dataset.chatid;
             // put image back to vision store
             putBackAttachmentsInUserInput(chatID);
 
@@ -2699,6 +2704,7 @@ async function bindUserInputSelectFilesBtn () {
         .addEventListener('click', async (evt) => {
             // click to select images
             evt.stopPropagation();
+            const evtTarget = libs.evtTarget(evt);
 
             const inputEle = document.createElement('input');
             inputEle.type = 'file';
@@ -2706,7 +2712,7 @@ async function bindUserInputSelectFilesBtn () {
             inputEle.accept = 'image/*';
 
             inputEle.addEventListener('change', async (evt) => {
-                const files = libs.evtTarget(evt).files;
+                const files = evtTarget.files;
                 for (const file of files) {
                     readFileForVision(file);
                 }
@@ -2728,6 +2734,8 @@ async function autoToggleUserImageUploadBtn () {
         // everything is ok
         return;
     }
+
+    // const userPrompt = chatContainer.querySelector('.user-input .prompt').value;
 
     const uploadEleHtml = '<button class="btn btn-outline-secondary upload" type="button"><i class="bi bi-images"></i></button>';
     if (isVision) {
@@ -2994,8 +3002,14 @@ async function setupChatSwitchs () {
 }
 
 async function bindTalkSwitchHandler (newVal) {
+    newVal = newVal || false;
+
     // update ui
     const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
+    if (switchEle.checked === newVal) {
+        return;
+    }
+
     switchEle.checked = newVal;
 
     // update background syncer
@@ -3038,7 +3052,9 @@ async function bindTalkBtnHandler () {
         console.debug('start recording');
         evt.stopPropagation();
         evt.preventDefault();
-        evt.target.classList.add('active');
+        const evtTarget = libs.evtTarget(evt);
+
+        evtTarget.classList.add('active');
         startRecordingAt = Date.now();
 
         if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -3139,7 +3155,9 @@ async function bindTalkBtnHandler () {
         console.debug('stop recording');
         evt.stopPropagation();
         evt.preventDefault();
-        evt.target.classList.remove('active');
+        const evtTarget = libs.evtTarget(evt);
+
+        evtTarget.classList.remove('active');
 
         if (!mediaRecorder || mediaRecorder.state !== 'recording') {
             console.debug('recording is not started');
@@ -3426,7 +3444,9 @@ function putBackAttachmentsInUserInput (chatID) {
  */
 function editHumanInputHandler (evt) {
     evt.stopPropagation();
-    const chatID = evt.target.closest('.role-human').dataset.chatid;
+    const evtTarget = libs.evtTarget(evt);
+
+    const chatID = evtTarget.closest('.role-human').dataset.chatid;
 
     const chatEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID}`);
@@ -3471,7 +3491,9 @@ function editHumanInputHandler (evt) {
 // bind delete button
 const deleteBtnHandler = (evt) => {
     evt.stopPropagation();
-    const chatID = evt.target.closest('.role-human').dataset.chatid;
+    const evtTarget = libs.evtTarget(evt);
+
+    const chatID = evtTarget.closest('.role-human').dataset.chatid;
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
 
     ConfirmModal('Are you sure to delete this chat?', async () => {
@@ -4110,8 +4132,9 @@ async function loadPromptShortcutsFromStorage () {
 
 async function EditFavSystemPromptHandler (evt) {
     evt.stopPropagation();
+    const evtTarget = libs.evtTarget(evt);
 
-    const badgetEle = evt.target.closest('.badge');
+    const badgetEle = evtTarget.closest('.badge');
     const saveSystemPromptModelEle = document.querySelector('#save-system-prompt.modal');
     const saveSystemPromptModal = new window.bootstrap.Modal(saveSystemPromptModelEle);
 
@@ -4213,9 +4236,10 @@ async function appendPromptShortcut (shortcut, storage = false) {
     // replace system prompt
     ele.addEventListener('click', async (evt) => {
         evt.stopPropagation();
+        const evtTarget = libs.evtTarget(evt);
 
         const promptInput = configContainer.querySelector('.system-prompt .input');
-        const badgetEle = evt.target.closest('.badge');
+        const badgetEle = evtTarget.closest('.badge');
         const prompt = badgetEle.dataset.prompt;
 
         await OpenaiChatStaticContext(prompt);
