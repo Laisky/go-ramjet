@@ -3002,14 +3002,8 @@ async function setupChatSwitchs () {
 }
 
 async function bindTalkSwitchHandler (newVal) {
-    newVal = newVal || false;
-
     // update ui
     const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
-    if (switchEle.checked === newVal) {
-        return;
-    }
-
     switchEle.checked = newVal;
 
     // update background syncer
@@ -3029,18 +3023,22 @@ async function bindTalkSwitchHandler (newVal) {
         audioStream = null;
     }
 
-    const ssconfig = await getChatSessionConfig();
-    chatContainer.querySelector('.user-input').innerHTML = `
+    // update chat input element.
+    // if prompt input already exists, do nothing.
+    if (!chatContainer.querySelector('.user-input .input.prompt')) {
+        const ssconfig = await getChatSessionConfig();
+        chatContainer.querySelector('.user-input').innerHTML = `
         <div class="input-group mb-3 user-input">
             <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
             <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
         </div>`;
 
-    // reset chat input element
-    chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
-    chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+        // reset chat input element
+        chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+        chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
-    await setupChatInput();
+        await setupChatInput();
+    }
 }
 
 async function bindTalkBtnHandler () {

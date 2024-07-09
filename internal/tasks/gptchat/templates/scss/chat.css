@@ -291,6 +291,9 @@
 #chatContainer .chatManager .card.text-center .card-footer .input-group textarea {
   height: 80px;
 }
+#chatContainer .chatManager .card.text-center .card-footer .user-input {
+  background-color: #f4f4f4;
+}
 #chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn=record] {
   width: 100%;
   height: 80px;
