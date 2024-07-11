@@ -92,7 +92,7 @@ func GatewayHandler(ctx *gin.Context) {
 
 			if resp.StatusCode == http.StatusOK {
 				select {
-				case firstFinished <- resp:
+				case firstFinished <- resp: // close body later
 				case <-taskCtx.Done():
 					_ = resp.Body.Close()
 				}
@@ -108,49 +108,46 @@ func GatewayHandler(ctx *gin.Context) {
 	taskErrCh := make(chan error)
 	go func() {
 		if err := pool.Wait(); err != nil {
-			taskErrCh <- err
+			select {
+			case taskErrCh <- errors.WithStack(err):
+			case <-taskCtx.Done():
+				return
+			}
 		}
 	}()
 
-	select {
-	case resp := <-firstFinished:
-		func() {
-			defer resp.Body.Close()
-			reqUrl := resp.Request.URL.RequestURI()
-			logger := logger.With(zap.String("upstream", reqUrl))
-			logger.Info("got response")
+	for {
+		select {
+		case resp := <-firstFinished:
+			func() {
+				defer resp.Body.Close()
+				reqUrl := resp.Request.URL.RequestURI()
+				logger := logger.With(zap.String("upstream", reqUrl))
+				logger.Info("got response")
 
-			ctx.Header("X-Ar-Io-Url", reqUrl)
-			for k, v := range resp.Header {
-				ctx.Header(k, v[0])
-			}
-			ctx.Status(resp.StatusCode)
+				ctx.Header("X-Ar-Io-Url", reqUrl)
+				for k, v := range resp.Header {
+					ctx.Header(k, v[0])
+				}
+				ctx.Status(resp.StatusCode)
 
-			buf := make([]byte, 4*1024*1024) // 4MB buffer
-			for {
-				n, err := resp.Body.Read(buf)
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-
-					logger.Debug("read chunk", zap.Error(err))
-					web.AbortErr(ctx, errors.Wrap(err, "read chunk"))
+				_, err := io.Copy(ctx.Writer, resp.Body)
+				if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
 					return
 				}
 
-				if n > 0 {
-					if _, writeErr := ctx.Writer.Write(buf[:n]); writeErr != nil {
-						web.AbortErr(ctx, errors.Wrap(writeErr, "write chunk"))
-						return
-					}
-				}
-			}
+			}()
 
-			taskCancel()
-		}()
-	case err := <-taskErrCh:
-		web.AbortErr(ctx, err)
-		return
+			return
+		default:
+			select {
+			case err := <-taskErrCh:
+				web.AbortErr(ctx, errors.WithStack(err))
+				return
+			default:
+			}
+		}
+
+		time.Sleep(time.Millisecond * 10)
 	}
 }
