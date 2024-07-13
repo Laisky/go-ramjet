@@ -3,7 +3,6 @@ package config
 import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -40,10 +39,10 @@ func SetupConfig() error {
 
 func setupS3Cli() error {
 	cli, err := minio.New(
-		config.Config.S3.Endpoint,
+		Instance.S3.Endpoint,
 		&minio.Options{
 			Creds: credentials.NewStaticV4(
-				config.Config.S3.AccessID, config.Config.S3.AccessKey, ""),
+				Instance.S3.AccessID, Instance.S3.AccessKey, ""),
 			Secure: true,
 		},
 	)
