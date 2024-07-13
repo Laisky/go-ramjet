@@ -26,8 +26,8 @@ type s3Config struct {
 // SetupConfig setup config
 func SetupConfig() error {
 	Instance = new(Config)
-	if err := gconfig.Shared.UnmarshalKey("openai", Instance); err != nil {
-		return errors.Wrap(err, "unmarshal openai config")
+	if err := gconfig.Shared.UnmarshalKey("tasks.arweave", Instance); err != nil {
+		return errors.Wrap(err, "unmarshal arweave config")
 	}
 
 	if err := setupS3Cli(); err != nil {

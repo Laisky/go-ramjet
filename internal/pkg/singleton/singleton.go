@@ -7,7 +7,7 @@ import (
 	gjwt "github.com/Laisky/go-utils/v4/jwt"
 )
 
-var jwt gjwt.JWT
+var Jwt gjwt.JWT
 
 func Setup() error {
 	if err := setupJwt(); err != nil {
@@ -18,7 +18,7 @@ func Setup() error {
 }
 
 func setupJwt() (err error) {
-	jwt, err = gjwt.New(
+	Jwt, err = gjwt.New(
 		gjwt.WithSignMethod(gjwt.SignMethodHS256),
 		gjwt.WithSecretByte([]byte(gconfig.Shared.GetString("server.jwt_secret"))),
 	)
