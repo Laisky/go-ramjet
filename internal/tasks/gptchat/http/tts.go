@@ -149,10 +149,10 @@ func TTSHanler(ctx *gin.Context) {
 }
 
 var ssmlRegexp = regexp.MustCompile(`(?ims)(<speak.*</speak>)`)
+var zhRegexp = regexp.MustCompile(`[\p{Han}]`)
 
-func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ssml string, err error) {
-	logger := gmw.GetLogger(ctx)
-	prompt := `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
+const (
+	ttsPromptCN = `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
 		Only output the directly usable SSML content, excluding any other characters. I will provide an example.
 		Please pay attention to retaining all "speak", "voice", and "mstts" metadata.
 		Regardless of the language, the "voice name" should always be set to "zh-CN-XiaoxiaoNeural" and not be changed.` +
@@ -183,7 +183,88 @@ func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ss
 		</speak>` +
 		"\n```\n" + `Please convert the following content:
 		>>
-		` + text
+		`
+	ttsPromptEN = `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
+		Only output the directly usable SSML content, excluding any other characters. I will provide an example.
+		Please pay attention to retaining all "speak", "voice", and "mstts" metadata.
+		Regardless of the language, the "voice name" should always be set to "en-US-JaneNeural" and not be changed.` +
+		"\n```\n" + `<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
+			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="en-US">
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="cheerful">Good morning, Contoso restaurant. I am your AI assistant,
+					Jane. How can I help you?</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural">
+				<s />
+				<mstts:express-as style="friendly">Hi<break strength="weak" />, I would like to make a
+					dinner reservation.</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="cheerful">Of course, what evening will you be joining us on?</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural">We will need the reservation for Thursday night.</voice>
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="cheerful">
+					<prosody rate="+20.00%">And what time would you like the reservation for?</prosody>
+				</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural">We would prefer 7:00 or 7:30.</voice>
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="cheerful">
+					<prosody rate="+10.00%">Sounds good!</prosody>
+					<prosody rate="-5.00%"> And for how many people?</prosody>
+				</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural"><s />There will be 5 of us.<s /></voice>
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="cheerful">Fine, I can seat you at 7:00 on Thursday, if you would
+					kindly give me your name.</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural">
+				<mstts:express-as style="friendly">The last name is Wood. W-O-O-D, Wood.</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-JaneNeural">
+				<s />
+				<mstts:express-as style="excited">See you at 7:00 this Thursday, Mr. Wood.</mstts:express-as>
+				<s />
+			</voice>
+			<voice name="en-US-TonyNeural">
+				<s />
+				<mstts:express-as style="Default">Thank you.</mstts:express-as>
+				<s />
+			</voice>
+		</speak>` +
+		"\n```\n" + `Please convert the following content:
+		>>
+		`
+)
+
+// containsChinese check if string contains chinese
+func containsChinese(s string) bool {
+	return zhRegexp.MatchString(s)
+}
+
+// generateSSML generate ssml by llm
+func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ssml string, err error) {
+	logger := gmw.GetLogger(ctx)
+	var prompt string
+	if containsChinese(text) {
+		prompt = ttsPromptCN + text
+	} else {
+		prompt = ttsPromptEN + text
+	}
 
 	answer, err := OneshotChat(ctx, user, "", "", prompt)
 	if err != nil {
