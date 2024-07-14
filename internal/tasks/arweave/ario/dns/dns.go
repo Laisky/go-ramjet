@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
@@ -40,25 +43,55 @@ func CreateRecord(ctx *gin.Context) {
 	)
 	gmw.SetLogger(ctx, logger)
 
-	opt := minio.GetObjectOptions{}
-	opt.Set("Cache-Control", "no-cache")
+	objpath := dnsNameToS3Path(req.Name)
+	logger.Debug("get record",
+		zap.String("bucket", config.Instance.S3.Bucket),
+		zap.String("objpath", objpath))
 
 	record := new(Record)
-	objpath := dnsNameToS3Path(req.Name)
+	opt := minio.GetObjectOptions{}
+	opt.Set("Cache-Control", "no-cache")
+	opt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
 	obj, err := config.Instance.S3Cli.GetObject(gmw.Ctx(ctx),
 		config.Instance.S3.Bucket,
 		objpath,
 		opt,
 	)
+	var notfound bool
 	if err != nil {
 		if minio.ToErrorResponse(err).Code != "NoSuchKey" {
 			web.AbortErr(ctx, errors.Wrapf(err, "get record %q", objpath))
 			return
 		}
 
-		// notfound, create
+		notfound = true
+	}
+
+	objCnt, err := io.ReadAll(obj)
+	if web.AbortErr(ctx, errors.Wrap(err, "read record")) {
+		return
+	}
+	obj.Seek(0, io.SeekStart)
+
+	// sometines, even if object is not found,
+	// GetObject will return a valid object without error.
+	//
+	// Warning: obj.Stat() will erase the object's content,
+	// so we should read the object's content before calling obj.Stat().
+	if _, err := obj.Stat(); err != nil {
+		if minio.ToErrorResponse(err).Code != "NoSuchKey" {
+			web.AbortErr(ctx, errors.Wrapf(err, "get record %q", objpath))
+			return
+		}
+
+		notfound = true
+	}
+
+	// notfound, create
+	if notfound {
 		if ctx.Request.Method != http.MethodPost {
-			web.AbortErr(ctx, errors.Errorf("record not exists, %s", objpath))
+			web.AbortErr(ctx,
+				errors.Errorf("method is not POST, and record not exists, %s", objpath))
 			return
 		}
 
@@ -76,8 +109,7 @@ func CreateRecord(ctx *gin.Context) {
 		}
 
 		logger = logger.With(zap.String("op", "update"))
-		if err = json.NewDecoder(obj).Decode(record); err != nil {
-			web.AbortErr(ctx, errors.Wrap(err, "decode record"))
+		if err = json.Unmarshal(objCnt, record); web.AbortErr(ctx, errors.Wrap(err, "decode record")) {
 			return
 		}
 
