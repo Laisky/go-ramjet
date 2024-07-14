@@ -12,4 +12,5 @@ func bindHTTP() {
 	grp.POST("/dns", dns.CreateRecord)
 	grp.PUT("/dns", dns.CreateRecord)
 	grp.GET("/dns/:name", dns.GetRecord)
+	grp.GET("/alias/:name", dns.Query)
 }

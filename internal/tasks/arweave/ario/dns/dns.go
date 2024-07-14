@@ -2,6 +2,7 @@ package dns
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -126,47 +127,69 @@ func CreateRecord(ctx *gin.Context) {
 
 // GetRecord get record by name
 func GetRecord(ctx *gin.Context) {
-	logger := gmw.GetLogger(ctx)
 	name := ctx.Param("name")
+
+	logger := gmw.GetLogger(ctx).With(
+		zap.String("name", name),
+	)
+	gmw.SetLogger(ctx, logger)
+
+	record, err := getRecord(gmw.Ctx(ctx), name)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, record)
+	return
+}
+
+func getRecord(ctx context.Context, name string) (recordItem recordItem, err error) {
+	logger := gmw.GetLogger(ctx)
+	logger.Debug("get record", zap.String("name", name))
 
 	opt := minio.GetObjectOptions{}
 	opt.Set("Cache-Control", "no-cache")
 
 	objpath := dnsNameToS3Path(name)
-	obj, err := config.Instance.S3Cli.GetObject(gmw.Ctx(ctx),
+	obj, err := config.Instance.S3Cli.GetObject(ctx,
 		config.Instance.S3.Bucket,
 		objpath,
 		opt,
 	)
 	if err != nil {
 		if minio.ToErrorResponse(err).Code != "NoSuchKey" {
-			web.AbortErr(ctx, errors.Wrapf(err, "get record %q", objpath))
-			return
+			return recordItem, errors.Wrapf(err, "get record %q", objpath)
 		}
 
-		ctx.JSON(http.StatusNotFound, gin.H{
-			"msg": "record not found",
-		})
-		return
+		return recordItem, errors.Errorf("record not found")
 	}
 
 	record := new(Record)
-	if err = json.NewDecoder(obj).Decode(record); web.AbortErr(ctx, errors.Wrap(err, "decode record")) {
-		return
+	if err = json.NewDecoder(obj).Decode(record); err != nil {
+		return recordItem, errors.Wrap(err, "decode record")
 	}
 
-	for _, item := range record.Records {
-		if item.Name == name {
-			logger.Debug("get record",
-				zap.String("name", name),
-				zap.Any("record", record),
-			)
-			ctx.JSON(http.StatusOK, item)
-			return
+	for _, recordItem = range record.Records {
+		if recordItem.Name == name {
+			return recordItem, nil
 		}
 	}
 
-	ctx.JSON(http.StatusNotFound, gin.H{
-		"msg": "record not found",
-	})
+	return recordItem, errors.Errorf("record not found")
+}
+
+func Query(ctx *gin.Context) {
+	name := ctx.Param("name")
+
+	logger := gmw.GetLogger(ctx).With(
+		zap.String("name", name),
+	)
+	gmw.SetLogger(ctx, logger)
+
+	record, err := getRecord(gmw.Ctx(ctx), name)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	ctx.Redirect(http.StatusFound, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID))
 }
