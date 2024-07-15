@@ -149,13 +149,14 @@ func TTSHanler(ctx *gin.Context) {
 }
 
 var ssmlRegexp = regexp.MustCompile(`(?ims)(<speak.*</speak>)`)
-var zhRegexp = regexp.MustCompile(`[\p{Han}]`)
+var zhRegexp = regexp.MustCompile(`[\p{Han}]{3,}`)
 
 const (
 	ttsPromptCN = `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
 		Only output the directly usable SSML content, excluding any other characters. I will provide an example.
 		Please pay attention to retaining all "speak", "voice", and "mstts" metadata.
-		Regardless of the language, the "voice name" should always be set to "zh-CN-XiaoxiaoNeural" and not be changed.` +
+		Regardless of the language, the "voice name" should always be set to "zh-CN-XiaoxiaoNeural" and not be changed.
+		Your response should start from "<speak xmlns".` +
 		"\n```\n" + `<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
 			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="zh-CN">
 			<voice name="zh-CN-XiaoxiaoNeural">
@@ -187,7 +188,7 @@ const (
 	ttsPromptEN = `Please generate a segment of SSML formatted text for voice output, incorporating appropriate intonation based on your understanding.
 		Only output the directly usable SSML content, excluding any other characters. I will provide an example.
 		Please pay attention to retaining all "speak", "voice", and "mstts" metadata.
-		Regardless of the language, the "voice name" should always be set to "en-US-JaneNeural" and not be changed.` +
+		Regardless of the language, the "voice name" should always be set to "en-US-JaneNeural" and not be changed. Your response should start from "<speak xmlns".` +
 		"\n```\n" + `<speak xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts"
 			xmlns:emo="http://www.w3.org/2009/10/emotionml" version="1.0" xml:lang="en-US">
 			<voice name="en-US-JaneNeural">
@@ -266,7 +267,9 @@ func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ss
 		prompt = ttsPromptEN + text
 	}
 
-	answer, err := OneshotChat(ctx, user, "", "", prompt)
+	answer, err := OneshotChat(ctx, user, "",
+		"follow my order, return exactly what I asked",
+		prompt)
 	if err != nil {
 		return "", errors.Wrap(err, "oneshot chat")
 	}
