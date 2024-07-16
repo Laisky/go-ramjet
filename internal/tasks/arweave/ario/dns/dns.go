@@ -15,11 +15,27 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
+	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 )
+
+var (
+	httpcli *http.Client
+)
+
+func init() {
+	var err error
+	httpcli, err = gutils.NewHTTPClient(
+		gutils.WithHTTPClientTimeout(3 * time.Minute),
+	)
+	if err != nil {
+		log.Logger.Panic("new http client", zap.Error(err))
+	}
+}
 
 const S3Prefix = "arweave/dns/records/"
 
@@ -229,5 +245,34 @@ func Query(ctx *gin.Context) {
 		return
 	}
 
-	ctx.Redirect(http.StatusFound, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID))
+	// ctx.Redirect(http.StatusFound, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID))
+
+	// proxy to ario
+	upstreamReq, err := http.NewRequest(ctx.Request.Method, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID), nil)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	upstreamReq.Header = ctx.Request.Header
+	upstreamReq.Header.Del("Host")
+	upstreamReq.Header.Del("Referer")
+	upstreamReq.Header.Del("Origin")
+	upstreamReq.Header.Del("User-Agent")
+	upstreamReq.Header.Del("Accept-Encoding")
+
+	resp, err := httpcli.Do(upstreamReq)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	defer resp.Body.Close()
+	for k, v := range resp.Header {
+		ctx.Writer.Header()[k] = v
+	}
+
+	ctx.Writer.WriteHeader(resp.StatusCode)
+	_, err = io.Copy(ctx.Writer, resp.Body)
+	if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
+		return
+	}
 }
