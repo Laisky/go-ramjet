@@ -67,25 +67,32 @@ func CreateRecord(ctx *gin.Context) {
 		notfound = true
 	}
 
+	fmt.Println(notfound)
 	objCnt, err := io.ReadAll(obj)
-	if web.AbortErr(ctx, errors.Wrap(err, "read record")) {
-		return
-	}
-	obj.Seek(0, io.SeekStart)
-
-	// sometines, even if object is not found,
-	// GetObject will return a valid object without error.
-	//
-	// Warning: obj.Stat() will erase the object's content,
-	// so we should read the object's content before calling obj.Stat().
-	if _, err := obj.Stat(); err != nil {
+	if err != nil {
 		if minio.ToErrorResponse(err).Code != "NoSuchKey" {
 			web.AbortErr(ctx, errors.Wrapf(err, "get record %q", objpath))
 			return
 		}
 
 		notfound = true
+	} else {
+		obj.Seek(0, io.SeekStart)
 	}
+
+	// sometines, even if object is not found,
+	// GetObject will return a valid object without error.
+	//
+	// Warning: obj.Stat() will erase the object's content,
+	// so we should read the object's content before calling obj.Stat().
+	// if _, err := obj.Stat(); err != nil {
+	// 	if minio.ToErrorResponse(err).Code != "NoSuchKey" {
+	// 		web.AbortErr(ctx, errors.Wrapf(err, "get record %q", objpath))
+	// 		return
+	// 	}
+
+	// 	notfound = true
+	// }
 
 	// notfound, create
 	if notfound {
@@ -100,7 +107,6 @@ func CreateRecord(ctx *gin.Context) {
 			Name:   req.Name,
 			FileID: req.FileID,
 		})
-
 	} else {
 		// update
 		if ctx.Request.Method != http.MethodPut {
