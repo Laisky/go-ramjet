@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -21,6 +22,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -246,6 +248,7 @@ func getRecord(ctx context.Context, name string) (recordItem recordItem, err err
 	return recordItem, errors.Errorf("record not found")
 }
 
+// Query query record by name
 func Query(ctx *gin.Context) {
 	name := ctx.Param("name")
 
@@ -294,4 +297,70 @@ func Query(ctx *gin.Context) {
 	if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
 		return
 	}
+}
+
+var listRecordsCache = gutils.NewSingleItemExpCache[[]recordItem](10 * time.Minute)
+
+// ListReocrds list all records
+func ListReocrds(ctx *gin.Context) {
+	logger := gmw.GetLogger(ctx)
+	logger.Debug("list records")
+
+	if records, ok := listRecordsCache.Get(); ok {
+		ctx.JSON(http.StatusOK, records)
+		return
+	}
+
+	records := make([]recordItem, 0)
+	var mu sync.Mutex
+	var pool errgroup.Group
+	pool.SetLimit(10)
+	opt := minio.ListObjectsOptions{
+		Prefix:    S3Prefix,
+		Recursive: true,
+		MaxKeys:   1000,
+	}
+	for listObj := range config.Instance.S3Cli.ListObjects(gmw.Ctx(ctx),
+		config.Instance.S3.Bucket, opt) {
+		if listObj.Err != nil {
+			web.AbortErr(ctx, errors.Wrap(listObj.Err, "list records"))
+			return
+		}
+
+		listObj := listObj
+		pool.Go(func() error {
+			logger.Debug("get record", zap.String("key", listObj.Key))
+			getopt := minio.GetObjectOptions{}
+			getopt.Set("Cache-Control", "no-cache")
+			getopt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
+			getObj, err := config.Instance.S3Cli.GetObject(gmw.Ctx(ctx),
+				config.Instance.S3.Bucket,
+				listObj.Key,
+				getopt,
+			)
+			if err != nil {
+				return errors.Wrapf(err, "get record %q", listObj.Key)
+			}
+
+			record := new(Record)
+			if err = json.NewDecoder(getObj).Decode(record); err != nil {
+				return errors.Wrap(err, "decode record")
+			}
+
+			mu.Lock()
+			for _, recordItem := range record.Records {
+				records = append(records, recordItem)
+			}
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := pool.Wait(); err != nil {
+		logger.Error("list records", zap.Error(err))
+	}
+
+	ctx.JSON(http.StatusOK, records)
+	listRecordsCache.Set(records)
 }

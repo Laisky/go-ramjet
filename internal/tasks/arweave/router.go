@@ -12,6 +12,7 @@ func bindHTTP() {
 	grp.Any("/gateway/*fileKey", ario.GatewayHandler)
 	grp.POST("/dns", auth.AuthMw, dns.CreateRecord)
 	grp.PUT("/dns", auth.AuthMw, dns.CreateRecord)
+	grp.GET("/dns", dns.ListReocrds)
 	grp.GET("/dns/:name", dns.GetRecord)
 	grp.GET("/alias/:name", dns.Query)
 }
