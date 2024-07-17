@@ -147,7 +147,7 @@ func CreateRecord(ctx *gin.Context) {
 					// owner is the same
 				default:
 					ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-						"msg": fmt.Sprintf("the owner of %q is %q", req.Name, item.Owner.TelegramUID),
+						"msg": "you are not the owner of this record",
 					})
 					return
 				}
