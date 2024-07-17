@@ -6,7 +6,7 @@ toolchain go1.22.0
 
 require (
 	github.com/Laisky/errors/v2 v2.0.1
-	github.com/Laisky/gin-middlewares/v5 v5.0.3
+	github.com/Laisky/gin-middlewares/v5 v5.0.4-0.20240717073709-3caed16839bf
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-utils/v4 v4.10.0
