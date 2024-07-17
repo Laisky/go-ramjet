@@ -116,10 +116,12 @@ func GatewayHandler(ctx *gin.Context) {
 		}
 	}()
 
+	firstFail := true
 	for {
 		select {
 		case resp := <-firstFinished:
 			func() {
+				taskCancel()
 				defer resp.Body.Close()
 				reqUrl := resp.Request.URL.RequestURI()
 				logger := logger.With(zap.String("upstream", reqUrl))
@@ -142,6 +144,12 @@ func GatewayHandler(ctx *gin.Context) {
 		default:
 			select {
 			case err := <-taskErrCh:
+				if firstFail {
+					firstFail = false
+					logger.Debug("first request failed, retrying", zap.Error(err))
+					continue
+				}
+
 				web.AbortErr(ctx, errors.WithStack(err))
 				return
 			default:
