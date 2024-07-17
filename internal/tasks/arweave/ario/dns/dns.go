@@ -122,6 +122,7 @@ func CreateRecord(ctx *gin.Context) {
 		record.Records = append(record.Records, recordItem{
 			Name:   req.Name,
 			FileID: req.FileID,
+			Owner:  req.Owner,
 		})
 	} else {
 		// update
