@@ -267,10 +267,15 @@ func Query(ctx *gin.Context) {
 
 	defer resp.Body.Close()
 	for k, v := range resp.Header {
-		ctx.Writer.Header()[k] = v
+		if len(v) == 0 {
+			continue
+		}
+
+		ctx.Header(k, v[0])
 	}
 
-	ctx.Writer.WriteHeader(resp.StatusCode)
+	ctx.Header("X-Ar-File-Id", record.FileID)
+	ctx.Status(resp.StatusCode)
 	_, err = io.Copy(ctx.Writer, resp.Body)
 	if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
 		return
