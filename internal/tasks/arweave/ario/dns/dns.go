@@ -139,6 +139,19 @@ func CreateRecord(ctx *gin.Context) {
 		var matched = false
 		for idx, item := range record.Records {
 			if item.Name == req.Name {
+				// check owner
+				switch {
+				case item.Owner == nil && req.Owner == nil:
+					// owner == nil means this is super admin
+				case item.Owner != nil && req.Owner != nil && item.Owner.TelegramUID == req.Owner.TelegramUID:
+					// owner is the same
+				default:
+					ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+						"msg": fmt.Sprintf("the owner of %q is %q", req.Name, item.Owner.TelegramUID),
+					})
+					return
+				}
+
 				record.Records[idx].FileID = req.FileID
 				matched = true
 				break
