@@ -154,6 +154,18 @@ func CreateRecord(ctx *gin.Context) {
 					return
 				}
 
+				if item.FileID == req.FileID {
+					ctx.JSON(http.StatusOK, gin.H{
+						"msg": "file_id is the same",
+					})
+					return
+				}
+
+				// update record
+				record.Records[idx].History = append(record.Records[idx].History, historyItem{
+					Time:   time.Now(),
+					FileID: item.FileID,
+				})
 				record.Records[idx].FileID = req.FileID
 				matched = true
 				break
