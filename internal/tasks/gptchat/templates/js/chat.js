@@ -444,7 +444,7 @@ async function showImageEditModal (chatID, imgSrc) {
                     model: ImageModelDalle2,
                     content
                 });
-                await appendChats2Storage({
+                await saveChats2Storage({
                     role: RoleAI,
                     chatID,
                     model: ImageModelDalle2,
@@ -1050,7 +1050,7 @@ async function fetchImageDrawingResultBackground () {
                     const errText = await errFileResp.text();
                     item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
                     checkIsImageAllSubtaskDone(item, imageUrl, false);
-                    await appendChats2Storage({
+                    await saveChats2Storage({
                         role: RoleAI,
                         chatID: chatId,
                         model: item.dataset.model,
@@ -1451,7 +1451,7 @@ async function removeChatInStorage (chatid) {
  *   @property {string} costUsd - chat cost in USD
  *   @property {string} model - chat model
 */
-async function appendChats2Storage (chatItem) {
+async function saveChats2Storage (chatItem) {
     if (!chatItem.chatID) {
         throw new Error('chatID is required');
     }
@@ -1767,7 +1767,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     })
 
     // save img to storage no matter it's done or not
-    await appendChats2Storage({
+    await saveChats2Storage({
         role: RoleAI,
         chatID,
         model: selectedModel,
@@ -1833,7 +1833,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
         </div>`
     });
 
-    await appendChats2Storage({
+    await saveChats2Storage({
         role: RoleAI,
         chatID,
         model: selectedModel,
@@ -1894,7 +1894,7 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
         attachHTML += `<img src="${url}">`;
     })
 
-    await appendChats2Storage({
+    await saveChats2Storage({
         role: RoleAI,
         chatID,
         model: selectedModel,
@@ -1964,7 +1964,7 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
-    await appendChats2Storage({
+    await saveChats2Storage({
         role: RoleHuman,
         chatID,
         content: text,
@@ -2016,7 +2016,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             model: selectedModel,
             isHistory: false
         });
-        await appendChats2Storage({
+        await saveChats2Storage({
             role: RoleHuman,
             chatID,
             model: selectedModel,
@@ -2267,7 +2267,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
                 '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
                 `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
-        await appendChats2Storage({
+        await saveChats2Storage({
             role: RoleAI,
             chatID,
             model: selectedModel,
@@ -2439,7 +2439,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     // no need to scroll and save to storage
     if (saveStorage) {
         scrollToChat(aiRespEle);
-        await appendChats2Storage({
+        await saveChats2Storage({
             role: RoleAI,
             chatID,
             costUsd,
@@ -3409,7 +3409,7 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
     chatEle.querySelector('.role-human .bi-trash')
         .addEventListener('click', deleteBtnHandler);
     chatEle.querySelector('.bi.bi-pencil-square')
-        .addEventListener('click', editHumanInputHandler);
+        .addEventListener('click', bindEditHumanInput);
 
     if (overwriteSendChat2Server) {
         await overwriteSendChat2Server();
@@ -3422,6 +3422,8 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
  * put attachments back to vision store when edit human input
  *
  * @param {string} chatID - chat id
+ *
+ * @returns {string} - attachHTML
  */
 function putBackAttachmentsInUserInput (chatID) {
     const chatEle = chatContainer
@@ -3430,6 +3432,7 @@ function putBackAttachmentsInUserInput (chatID) {
     // attach image to vision-selected-store when edit human input
     const attachEles = chatEle
         .querySelectorAll('.role-human .text-start img') || [];
+    let attachHTML = '';
     attachEles.forEach((ele) => {
         const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
         const key = ele.dataset.name || `${libs.DateStr()}.png`;
@@ -3437,9 +3440,12 @@ function putBackAttachmentsInUserInput (chatID) {
             filename: key,
             contentB64: b64fileContent
         });
-        // attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
+
+        attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
     })
     updateChatVisionSelectedFileStore();
+
+    return attachHTML;
 }
 
 /**
@@ -3447,20 +3453,17 @@ function putBackAttachmentsInUserInput (chatID) {
  *
  * @param {Event} evt - event
  */
-function editHumanInputHandler (evt) {
+function bindEditHumanInput (evt) {
     evt.stopPropagation();
     const evtTarget = libs.evtTarget(evt);
 
     const chatID = evtTarget.closest('.role-human').dataset.chatid;
-
     const chatEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID}`);
-
     const oldText = chatEle.innerHTML;
     let text = chatEle.querySelector('.role-human .text-start pre').innerHTML;
-    // let attachHTML = '';
 
-    putBackAttachmentsInUserInput(chatID);
+    const attachHTML = putBackAttachmentsInUserInput(chatID);
 
     text = libs.sanitizeHTML(text);
     chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
@@ -3474,23 +3477,33 @@ function editHumanInputHandler (evt) {
                 Cancel</button>
         </div>`;
 
-    const saveBtn = chatEle.querySelector('.role-human .btn.save');
-    const cancelBtn = chatEle.querySelector('.role-human .btn.cancel');
-    saveBtn.addEventListener('click', async (evt) => {
-        evt.stopPropagation();
-        await reloadAiResp(chatID);
-    });
+    chatEle.querySelector('.role-human .btn.save')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
 
-    cancelBtn.addEventListener('click', async (evt) => {
-        evt.stopPropagation();
-        chatEle.innerHTML = oldText;
+            // update storage with user's new prompt
+            const newtext = chatEle.querySelector('.role-human textarea').value;
+            await saveChats2Storage({
+                chatID,
+                attachHTML,
+                role: RoleHuman,
+                content: newtext
+            });
 
-        // bind delete and edit button
-        chatEle.querySelector('.role-human .bi-trash')
-            .addEventListener('click', deleteBtnHandler);
-        chatEle.querySelector('.bi.bi-pencil-square')
-            .addEventListener('click', editHumanInputHandler);
-    });
+            await reloadAiResp(chatID);
+        });
+
+    chatEle.querySelector('.role-human .btn.cancel')
+        .addEventListener('click', async (evt) => {
+            evt.stopPropagation();
+            chatEle.innerHTML = oldText;
+
+            // bind delete and edit button
+            chatEle.querySelector('.role-human .bi-trash')
+                .addEventListener('click', deleteBtnHandler);
+            chatEle.querySelector('.bi.bi-pencil-square')
+                .addEventListener('click', bindEditHumanInput);
+        });
 };
 
 // bind delete button
@@ -3629,7 +3642,7 @@ async function append2Chats (chatItem) {
         chatEle.querySelector('.role-human .bi-trash')
             .addEventListener('click', deleteBtnHandler);
         chatEle.querySelector('.bi.bi-pencil-square')
-            .addEventListener('click', editHumanInputHandler);
+            .addEventListener('click', bindEditHumanInput);
     }
 }
 
