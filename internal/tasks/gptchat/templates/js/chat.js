@@ -1011,7 +1011,7 @@ async function changeSession (activeSid) {
             costUsd: item.costUsd
         });
         if (item.role === RoleAI) {
-            await renderAfterAiResp(item.chatID);
+            await renderAfterAiResp(item.chatID, false);
         }
     }));
 
@@ -1321,7 +1321,7 @@ async function setupSessionManager () {
                 costUsd: item.costUsd
             });
             if (item.role === RoleAI) {
-                await renderAfterAiResp(item.chatID);
+                await renderAfterAiResp(item.chatID, false);
             }
         }));
     }
@@ -2372,6 +2372,10 @@ async function sendChat2Server (chatID, reqPrompt) {
 
 /**
  * do render and save chat after ai response finished
+ *
+ * @param {string} chatID - chat id
+ * @param {boolean} saveStorage - save to storage or not.
+ *                                if it's restore chat, there is no need to save to storage.
  */
 async function renderAfterAiResp (chatID, saveStorage = false) {
     const aiRespEle = chatContainer
@@ -2435,7 +2439,7 @@ async function renderAfterAiResp (chatID, saveStorage = false) {
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 
-    // in the scenario of reload chat, the chatEle is already in view,
+    // in the scenario of restore chat, the chatEle is already in view,
     // no need to scroll and save to storage
     if (saveStorage) {
         scrollToChat(aiRespEle);
@@ -3381,6 +3385,8 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
         newText = chatEle.querySelector('.role-human .text-start pre').innerHTML;
     }
 
+    const selecedModel = await OpenaiSelectedModel();
+
     chatEle.innerHTML = `
         <div class="container-fluid row role-human" data-chatid="${chatID}">
             <div class="col-auto icon">🤔️</div>
@@ -3392,7 +3398,7 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
         </div>
         <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
             <div class="col-auto icon">${robotIcon}</div>
-            <div class="col text-start ai-response" data-status="waiting">
+            <div class="col text-start ai-response" data-status="waiting" data-model="${selecedModel}">
                 <p class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -3488,6 +3494,7 @@ function bindEditHumanInput (evt) {
                 attachHTML,
                 role: RoleHuman,
                 content: newtext
+                // model: await OpenaiSelectedModel()
             });
 
             await reloadAiResp(chatID);
