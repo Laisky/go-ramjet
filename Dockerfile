@@ -1,3 +1,4 @@
+# db . -t ppcelery/go-ramjet:latest
 FROM node:20 AS nodebuild
 
 RUN npm install -g sass
