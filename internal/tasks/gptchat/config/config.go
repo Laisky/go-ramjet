@@ -342,6 +342,7 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 	case "gpt-3.5-turbo", // free models
 		// "gpt-3.5-turbo-1106",
 		// "gpt-3.5-turbo-0125",
+		"gpt-4o-mini",
 		// "llama2-70b-4096",
 		"deepseek-chat",
 		"deepseek-coder",
@@ -390,7 +391,7 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
 		return errors.Errorf("This model(%s) restricts usage for free users. "+
 			"Please hold on for %d seconds before trying again, "+
-			"alternatively, you may opt to switch to the free gpt-3.5-turbo, "+
+			"alternatively, you may opt to switch to the free gpt-4o-mini, "+
 			"or upgrade to a paid membership by https://wiki.laisky.com/projects/gpt/pay/cn/",
 			model, (ratelimitCost - ratelimiter.Len()))
 	}

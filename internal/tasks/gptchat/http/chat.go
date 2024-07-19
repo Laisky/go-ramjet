@@ -436,6 +436,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-3.5-sonnet-8k",
 			"claude-3-haiku",
 			"gpt-4o",
+			"gpt-4o-mini",
 			"gpt-4-turbo-2024-04-09",
 			"gpt-4-turbo":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
@@ -461,7 +462,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 			if len(lastMessage.Files) == 0 {
 				// there is no images attached, so rewrite model to non-vision model
-				req.Model = "gpt-3.5-turbo"
+				req.Model = "gpt-4o-mini"
 			}
 
 			req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
@@ -934,7 +935,7 @@ func OneshotChat(ctx context.Context, user *config.UserConfig, model, systemProm
 	}
 
 	if model == "" {
-		model = "gpt-3.5-turbo"
+		model = defaultChatModel
 	}
 
 	body, err := json.Marshal(OpenaiChatReq[string]{

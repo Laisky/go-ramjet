@@ -16,7 +16,7 @@ import (
 
 func TestAPIHandler(t *testing.T) {
 	req := &FrontendReq{
-		Model:  "gpt-3.5-turbo-1106",
+		Model:  "gpt-4o-mini",
 		Stream: true,
 		Messages: []FrontendReqMessage{
 			{

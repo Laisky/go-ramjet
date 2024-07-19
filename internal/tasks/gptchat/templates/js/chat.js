@@ -13,6 +13,7 @@ const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelGPT4 = "gpt-4";
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT4O = 'gpt-4o';
+const ChatModelGPT4OMini = 'gpt-4o-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 const ChatModelDeepSeekCoder = 'deepseek-coder';
 // const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
@@ -55,6 +56,7 @@ const ChatModels = [
     // ChatModelGPT4,
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
+    ChatModelGPT4OMini,
     ChatModelDeepSeekChat,
     ChatModelDeepSeekCoder,
     // ChatModelGPT4Turbo1106,
@@ -83,6 +85,7 @@ const ChatModels = [
 const VisionModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
+    ChatModelGPT4OMini,
     ChatModelGeminiProVision,
     ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
@@ -113,6 +116,7 @@ const FreeModels = [
     ChatModelGroqllama3With70B,
     ChatModelGroqllama3With8B,
     ChatModelTurbo35,
+    ChatModelGPT4OMini,
     ChatModelDeepSeekChat,
     ChatModelDeepSeekCoder,
     // ChatModelTurbo35V0125,
@@ -205,10 +209,10 @@ function HideSpinner () {
 
 async function OpenaiSelectedModel () {
     const sconfig = await getChatSessionConfig();
-    let selectedModel = sconfig.selected_model || ChatModelTurbo35;
+    let selectedModel = sconfig.selected_model || ChatModelGPT4OMini;
 
     if (!AllModels.includes(selectedModel)) {
-        selectedModel = ChatModelTurbo35;
+        selectedModel = ChatModelGPT4OMini;
     }
 
     return selectedModel;
@@ -554,7 +558,7 @@ async function dataMigrate () {
 
         // change model
         if (!eachSconfig.selected_model || !AllModels.includes(eachSconfig.selected_model)) {
-            eachSconfig.selected_model = ChatModelTurbo35;
+            eachSconfig.selected_model = ChatModelGPT4OMini;
         }
 
         console.debug('migrate session config: ', key, eachSconfig);
@@ -1919,7 +1923,7 @@ async function detectPromptTaskType (model, prompt) {
                     },
                     method: 'POST',
                     body: JSON.stringify({
-                        model: ChatModelTurbo35,
+                        model: ChatModelGPT4OMini,
                         max_tokens: 50,
                         stream: false,
                         messages: [
@@ -2215,7 +2219,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     question: ${reqPrompt}
                     `
             }];
-            const model = ChatModelTurbo35; // rewrite chat model
+            const model = ChatModelGPT4OMini; // rewrite chat model
 
             reqBody = JSON.stringify({
                 model,
@@ -3681,7 +3685,7 @@ function newSessionConfig () {
         frequency_penalty: 0,
         n_contexts: 6,
         system_prompt: "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
-        selected_model: ChatModelTurbo35,
+        selected_model: ChatModelGPT4OMini,
         chat_switch: {
             all_in_one: false,
             disable_https_crawler: true,
