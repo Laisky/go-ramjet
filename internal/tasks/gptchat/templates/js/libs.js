@@ -337,6 +337,13 @@ export const GetLocalStorage = (key) => {
  * @returns
  */
 export const Markdown2HTML = async (markdownString) => {
+    if (!window.marked) {
+        await LoadJsModules([
+            'https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js',
+            'https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js'
+        ]);
+    }
+
     const marked = window.marked;
     const renderer = new marked.Renderer();
     renderer.code = (code, language) => {
