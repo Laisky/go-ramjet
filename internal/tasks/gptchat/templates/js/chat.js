@@ -551,7 +551,8 @@ async function dataMigrate () {
             eachSconfig.chat_switch = {
                 all_in_one: false,
                 disable_https_crawler: true,
-                enable_google_search: false
+                enable_google_search: false,
+                enable_talk: false
             };
         }
         if (eachSconfig.chat_switch.all_in_one === undefined) {
@@ -2812,12 +2813,13 @@ async function setupChatInput () {
             if (op !== libs.KvOp.SET) {
                 return;
             }
-            if (newVal.chat_switch.enable_talk) {
-                return;
-            }
 
             const expectedKey = `KvKeyPrefixSessionConfig${(await activeSessionID())}`;
             if (key !== expectedKey) {
+                return;
+            }
+
+            if (newVal.chat_switch.enable_talk) {
                 return;
             }
 
@@ -2840,6 +2842,7 @@ async function setupChatInput () {
         if (op !== libs.KvOp.SET) {
             return;
         }
+
         if (newVal.chat_switch.enable_talk) {
             return;
         }
@@ -3768,7 +3771,9 @@ async function updateConfigFromSessionConfig () {
     configContainer.querySelector('.system-prompt .input').value = sconfig.system_prompt;
 
     // update chat input hint
-    chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
+    if (chatPromptInputEle) {
+        chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
+    }
 
     // update chat controller
     chatContainer.querySelector('#switchChatEnableHttpsCrawler')

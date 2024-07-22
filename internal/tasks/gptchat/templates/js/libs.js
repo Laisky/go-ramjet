@@ -274,7 +274,7 @@ export const KvDel = async (key) => {
             for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
                 const callbackObj = kvListeners[keyPrefix][i];
                 if (typeof callbackObj === 'object') {
-                    callbackObj.callback(key, KvOp.SET, oldVal, null);
+                    callbackObj.callback(key, KvOp.DEL, oldVal, null);
                 } else {
                     callbackObj(key, KvOp.DEL, oldVal, null);
                 }
