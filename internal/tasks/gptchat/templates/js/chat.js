@@ -151,6 +151,8 @@ const configContainer = document.getElementById('hiddenChatConfigSideBar');
 
 // user-input could be re-render to talking widget,
 // so these widgets could be override after re-rendering.
+//
+// ⚠️ be careful these elements could be null after when talking widget is active.
 let chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
 let chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
@@ -850,7 +852,9 @@ async function setupHeader () {
             evtTarget.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
 
             // add hint to input text
-            chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+            if (chatPromptInputBtn) {
+                chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+            }
         });
     });
 }
@@ -1603,7 +1607,8 @@ function lockChatInput () {
     chatContainer.querySelectorAll('.ai-response .operator .btn').forEach((item) => {
         item.classList.add('disabled');
     });
-    chatPromptInputBtn.classList.add('disabled');
+
+    chatPromptInputBtn && chatPromptInputBtn.classList.add('disabled');
 }
 function unlockChatInput () {
     chatContainer.querySelectorAll('.role-human .form-control btn.save').forEach((item) => {
@@ -1615,7 +1620,7 @@ function unlockChatInput () {
     chatPromptInputBtn.classList.remove('disabled');
 }
 function isAllowChatPrompInput () {
-    return !chatPromptInputBtn.classList.contains('disabled');
+    return !chatPromptInputBtn || !chatPromptInputBtn.classList.contains('disabled');
 }
 
 function parseChatResp (chatmodel, payload) {
@@ -2740,6 +2745,10 @@ async function bindUserInputSelectFilesBtn () {
  * auto display or hide user input select files button according to selected model
  */
 async function autoToggleUserImageUploadBtn () {
+    if (!chatPromptInputEle) {
+        return;
+    }
+
     const sconfig = await getChatSessionConfig();
     const isVision = VisionModels.includes(sconfig.selected_model);
 
@@ -2752,7 +2761,7 @@ async function autoToggleUserImageUploadBtn () {
     // const userPrompt = chatContainer.querySelector('.user-input .prompt').value;
 
     const uploadEleHtml = '<button class="btn btn-outline-secondary upload" type="button"><i class="bi bi-images"></i></button>';
-    if (isVision) {
+    if (isVision && chatPromptInputBtn) {
         chatPromptInputBtn.insertAdjacentHTML('beforebegin', uploadEleHtml);
         bindUserInputSelectFilesBtn();
     } else {
@@ -2760,7 +2769,14 @@ async function autoToggleUserImageUploadBtn () {
     }
 }
 
+/**
+ * bind text chat input. will be skipped if talking enabled
+ */
 async function setupChatInput () {
+    if (!chatPromptInputEle) {
+        return
+    }
+
     // bind input press enter
     {
         let isComposition = false
@@ -2796,6 +2812,9 @@ async function setupChatInput () {
             if (op !== libs.KvOp.SET) {
                 return;
             }
+            if (newVal.chat_switch.enable_talk) {
+                return;
+            }
 
             const expectedKey = `KvKeyPrefixSessionConfig${(await activeSessionID())}`;
             if (key !== expectedKey) {
@@ -2819,6 +2838,9 @@ async function setupChatInput () {
     await autoToggleUserImageUploadBtn();
     libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
         if (op !== libs.KvOp.SET) {
+            return;
+        }
+        if (newVal.chat_switch.enable_talk) {
             return;
         }
 
@@ -3015,13 +3037,16 @@ async function setupChatSwitchs () {
     }
 }
 
-async function bindTalkSwitchHandler (newVal) {
+async function bindTalkSwitchHandler (newSelectedValue) {
     // update ui
     const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
-    switchEle.checked = newVal;
+    switchEle.checked = newSelectedValue;
 
     // update background syncer
-    if (newVal) {
+    if (newSelectedValue) {
+        chatPromptInputEle = null;
+        chatPromptInputBtn = null;
+
         chatContainer.querySelector('.user-input').innerHTML =
             '<button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>';
         await bindTalkBtnHandler();
@@ -3048,6 +3073,7 @@ async function bindTalkSwitchHandler (newVal) {
         </div>`;
 
         // reset chat input element
+        await libs.waitElementReady('#chatContainer .user-input .input.prompt');
         chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
         chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
