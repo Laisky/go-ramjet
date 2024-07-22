@@ -501,6 +501,28 @@ export const evtTarget = (evt) => {
 };
 
 /**
+ * Wait for the element to be ready.
+ *
+ * @param {string} selector - The selector of the element to wait for.
+ * @returns {Promise} - The promise that resolves when the element is ready.
+ */
+export const waitElementReady = (selector, maxWaitSec = 3000) => {
+    return new Promise((resolve, reject) => {
+        const startAt = Date.now();
+        const interval = setInterval(() => {
+            const ele = document.querySelector(selector);
+            if (ele) {
+                clearInterval(interval);
+                resolve(ele);
+            } else if (Date.now() - startAt > maxWaitSec) {
+                clearInterval(interval);
+                reject(new Error(`waitElementReady timeout for ${selector}`));
+            }
+        }, 100);
+    });
+}
+
+/**
  * Generates a random string of the specified length.
  * @param {number} length - The length of the string to generate.
  * @returns {str} - The generated random string.

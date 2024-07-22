@@ -2710,10 +2710,13 @@ async function abortAIResp (err) {
     // await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
 }
 
+/**
+ * click to select images
+ */
 async function bindUserInputSelectFilesBtn () {
+    await libs.waitElementReady('#chatContainer .user-input .btn.upload');
     chatContainer.querySelector('.user-input .btn.upload')
         .addEventListener('click', async (evt) => {
-            // click to select images
             evt.stopPropagation();
             const evtTarget = libs.evtTarget(evt);
 
@@ -2733,8 +2736,8 @@ async function bindUserInputSelectFilesBtn () {
         });
 }
 
-/** auto display or hide user input select files button according to selected model
- *
+/**
+ * auto display or hide user input select files button according to selected model
  */
 async function autoToggleUserImageUploadBtn () {
     const sconfig = await getChatSessionConfig();
