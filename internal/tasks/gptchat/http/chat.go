@@ -422,6 +422,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gemma-7b-it",
 			"llama3-8b-8192",
 			"llama3-70b-8192",
+			"llama-3.1-8b-instant",
+			"llama-3.1-70b-versatile",
 			"deepseek-chat",
 			"deepseek-coder",
 			"gemini-pro":
