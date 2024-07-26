@@ -1186,8 +1186,8 @@ function bindSessionEditBtn () {
 
             item.addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                // const evtTarget = libs.evtTarget(evt);
-                const sid = parseInt(evt.closest('.session').dataset.session);
+                const evtTarget = libs.evtTarget(evt);
+                const sid = parseInt(evtTarget.closest('.session').dataset.session);
                 const sconfig = await getChatSessionConfig(sid);
                 const oldSessionName = sconfig.session_name || sid;
 
