@@ -116,45 +116,33 @@ func GatewayHandler(ctx *gin.Context) {
 		}
 	}()
 
-	firstFail := true
-	for {
-		select {
-		case resp := <-firstFinished:
-			func() {
-				defer resp.Body.Close()
-				reqUrl := resp.Request.URL.RequestURI()
-				logger := logger.With(zap.String("upstream", reqUrl))
-				logger.Info("got response")
+	select {
+	case resp := <-firstFinished:
+		func() {
+			defer resp.Body.Close()
+			reqUrl := resp.Request.URL.RequestURI()
+			logger := logger.With(zap.String("upstream", reqUrl))
+			logger.Info("got response")
 
-				ctx.Header("X-Ar-Io-Url", reqUrl)
-				for k, v := range resp.Header {
-					ctx.Header(k, v[0])
-				}
-				ctx.Status(resp.StatusCode)
-
-				_, err := io.Copy(ctx.Writer, resp.Body)
-				if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
-					return
-				}
-
-			}()
-
-			return
-		default:
-			select {
-			case err := <-taskErrCh:
-				if firstFail {
-					firstFail = false
-					logger.Debug("first request failed, retrying", zap.Error(err))
-					continue
-				}
-
-				web.AbortErr(ctx, errors.WithStack(err))
-				return
-			default:
+			ctx.Header("X-Ar-Io-Url", reqUrl)
+			for k, v := range resp.Header {
+				ctx.Header(k, v[0])
 			}
+			ctx.Status(resp.StatusCode)
+
+			_, err := io.Copy(ctx.Writer, resp.Body)
+			if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
+				return
+			}
+		}()
+
+		return
+	case err := <-taskErrCh:
+		if err == nil {
+			err = errors.Errorf("this is an internal error, no error occurred in upstreams, please contact the admin")
 		}
 
-		time.Sleep(time.Millisecond * 10)
+		web.AbortErr(ctx, errors.WithStack(err))
+		return
 	}
 }
