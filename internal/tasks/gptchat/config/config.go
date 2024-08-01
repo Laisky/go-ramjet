@@ -123,7 +123,8 @@ type OpenAI struct {
 	// RamjetURL (optional) ramjet url
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
-	S3 s3Config `json:"s3" mapstructure:"s3"`
+	S3           s3Config `json:"s3" mapstructure:"s3"`
+	NvidiaApikey string   `json:"-" mapstructure:"nvidia_apikey"`
 
 	// PaymentStripeKey (optional) stripe key
 	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`

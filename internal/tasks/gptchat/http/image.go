@@ -154,7 +154,127 @@ func DrawByLcmHandler(ctx *gin.Context) {
 	})
 }
 
-func DrawBySdxlturboHandler(ctx *gin.Context) {
+func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
+	rawreq := new(DrawImageBySdxlturboRequest)
+	if err := ctx.BindJSON(rawreq); web.AbortErr(ctx, err) {
+		return
+	}
+
+	user, err := getUserByAuthHeader(ctx)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	if err = user.IsModelAllowed(ctx, rawreq.Model, 0); web.AbortErr(ctx, err) {
+		return
+	}
+
+	taskID := gutils.RandomStringWithLength(36)
+	objkeyPrefix := drawImageByTxtObjkeyPrefix(taskID)
+
+	logger := gmw.GetLogger(ctx).Named("nvidia_sdxl_turbo").With(
+		zap.String("task_id", taskID),
+	)
+	gmw.SetLogger(ctx, logger)
+
+	go func() {
+		logger.Debug("start image drawing task")
+		err := func() error {
+			taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
+			defer cancel()
+
+			nvreq := NewNvidiaDrawImageBySdxlturboRequest(rawreq.Text)
+
+			upstreamReqBody, err := json.Marshal(nvreq)
+			if err != nil {
+				return errors.Wrap(err, "marshal request body")
+			}
+
+			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
+				"https://ai.api.nvidia.com/v1/genai/stabilityai/sdxl-turbo",
+				bytes.NewReader(upstreamReqBody))
+			if err != nil {
+				return errors.Wrap(err, "new request to nvidia")
+			}
+
+			upstreamReq.Header.Add("Content-Type", "application/json")
+			upstreamReq.Header.Set("Authorization", "Bearer "+config.Config.NvidiaApikey)
+
+			resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
+			if err != nil {
+				return errors.Wrap(err, "do request")
+			}
+			defer gutils.LogErr(resp.Body.Close, logger)
+
+			if resp.StatusCode != http.StatusOK {
+				payload, _ := io.ReadAll(resp.Body)
+				return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
+			}
+
+			respData := new(NvidiaDrawImageBySdxlturboResponse)
+			if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
+				return errors.Wrap(err, "decode response")
+			}
+
+			if len(respData.Artifacts) == 0 {
+				return errors.New("empty response")
+			}
+
+			imgcontent, err := base64.StdEncoding.DecodeString(respData.Artifacts[0].Base64)
+			if err != nil {
+				return errors.Wrap(err, "decode image")
+			}
+
+			logger.Debug("succeed get image from nvidia")
+			err = uploadImage2Minio(
+				taskCtx,
+				objkeyPrefix+"-0",
+				rawreq.Text,
+				imgcontent,
+			)
+			if err != nil {
+				return errors.Wrap(err, "upload image")
+			}
+
+			logger.Info("succeed draw image done")
+			return nil
+		}()
+		if err != nil {
+			// upload error msg
+			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", rawreq.Text, err.Error()))
+			objkey := objkeyPrefix + ".err.txt"
+			if _, err := s3.GetCli().PutObject(ctx,
+				config.Config.S3.Bucket,
+				objkey,
+				bytes.NewReader(msg),
+				int64(len(msg)),
+				minio.PutObjectOptions{
+					ContentType: "text/plain",
+				}); err != nil {
+				logger.Error("upload error msg", zap.Error(err))
+			}
+
+			logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
+			return
+		}
+	}()
+
+	imageUrls := []string{}
+	imageUrls = append(imageUrls,
+		fmt.Sprintf("https://%s/%s/%s-0.%s",
+			config.Config.S3.Endpoint,
+			config.Config.S3.Bucket,
+			objkeyPrefix, "png",
+		),
+	)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"task_id":    taskID,
+		"image_urls": imageUrls,
+	})
+}
+
+func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
 	req := new(DrawImageBySdxlturboRequest)
@@ -192,8 +312,8 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 
 			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
 				"http://100.92.237.35:7861/predict", bytes.NewReader(upstreamReqBody))
-			if web.AbortErr(ctx, errors.Wrap(err, "new request")) {
-				return
+			if err != nil {
+				return errors.Wrap(err, "new request to upstream")
 			}
 
 			upstreamReq.Header.Add("Content-Type", "application/json")
@@ -215,13 +335,13 @@ func DrawBySdxlturboHandler(ctx *gin.Context) {
 				return errors.Errorf("bad status code [%d]%s", resp.StatusCode, string(payload))
 			}
 
-			resoData := new(DrawImageBySdxlturboResponse)
-			if err = json.NewDecoder(resp.Body).Decode(resoData); err != nil {
+			respData := new(DrawImageBySdxlturboResponse)
+			if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
 				return errors.Wrap(err, "decode response")
 			}
 
 			var pool errgroup.Group
-			for i, img := range resoData.B64Images {
+			for i, img := range respData.B64Images {
 				subtask := strconv.Itoa(i)
 				imgBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(img, "data:image/png;base64,"))
 				if err != nil {

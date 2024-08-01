@@ -1,6 +1,8 @@
 package http
 
 import (
+	"time"
+
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkoukk/tiktoken-go"
@@ -430,6 +432,45 @@ type DrawImageBySdxlturboRequest struct {
 
 type DrawImageBySdxlturboResponse struct {
 	B64Images []string `json:"images"`
+}
+
+// NvidiaTextPrompt text prompt
+type NvidiaTextPrompt struct {
+	Text string `json:"text"`
+}
+
+// NvidiaDrawImageBySdxlturboRequest draw image by image and prompt with sdxlturbo
+//
+// https://build.nvidia.com/explore/discover?snippet_tab=Python#sdxl-turbo
+type NvidiaDrawImageBySdxlturboRequest struct {
+	TextPrompts []NvidiaTextPrompt `json:"text_prompts"`
+	Seed        int                `json:"seed"`
+	Sampler     string             `json:"sampler"`
+	Steps       int                `json:"steps"`
+}
+
+// NewNvidiaDrawImageBySdxlturboRequest create new request
+func NewNvidiaDrawImageBySdxlturboRequest(prompt string) NvidiaDrawImageBySdxlturboRequest {
+	return NvidiaDrawImageBySdxlturboRequest{
+		TextPrompts: []NvidiaTextPrompt{
+			{Text: prompt},
+		},
+		Seed:    int(time.Now().UnixNano()) % 4294967296,
+		Sampler: "K_EULER_ANCESTRAL",
+		Steps:   4,
+	}
+}
+
+// NvidiaDrawImageBySdxlturboResponse draw image by image and prompt with sdxlturbo
+type NvidiaDrawImageBySdxlturboResponse struct {
+	Artifacts []NvidiaArtifact `json:"artifacts"`
+}
+
+// NvidiaArtifact draw image artifact
+type NvidiaArtifact struct {
+	Base64       string `json:"base64"`
+	FinishReason string `json:"finish_reason"`
+	Seed         int    `json:"seed"`
 }
 
 // DrawImageByLcmResponse draw image by image and prompt with lcm

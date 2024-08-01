@@ -15,7 +15,7 @@ func Setup() error {
 		return errors.Wrap(err, "setup jwt")
 	}
 
-	if err:=auth.Initialize([]byte(gconfig.Shared.GetString("server.jwt_secret"))); err != nil {
+	if err := auth.Initialize([]byte(gconfig.Shared.GetString("server.jwt_secret"))); err != nil {
 		return errors.Wrap(err, "initialize jwt auth")
 	}
 
