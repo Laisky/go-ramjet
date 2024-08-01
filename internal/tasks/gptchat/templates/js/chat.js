@@ -91,7 +91,7 @@ const VisionModels = [
     ChatModelClaude35Sonnet,
     ChatModelClaude35Sonnet8K,
     ChatModelClaude3Haiku,
-    ImageModelSdxlTurbo,
+    // ImageModelSdxlTurbo,
     ImageModelImg2Img
 ];
 const QaModels = [
