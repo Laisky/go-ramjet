@@ -36,6 +36,7 @@ const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGroqGemma7b = 'gemma-7b-it';
 const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.1-70b-versatile';
+const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
 const QAModelImmigrate = 'qa-immigrate';
@@ -72,6 +73,7 @@ const ChatModels = [
     ChatModelGroqGemma7b,
     ChatModelGroqllama3With70B,
     ChatModelGroqllama3With8B,
+    ChatModelGroqllama3With405B,
     // ChatModelGPT4Vision,
     ChatModelGeminiPro,
     ChatModelGeminiProVision
@@ -115,6 +117,7 @@ const FreeModels = [
     ChatModelGroqGemma7b,
     ChatModelGroqllama3With70B,
     ChatModelGroqllama3With8B,
+    ChatModelGroqllama3With405B,
     ChatModelTurbo35,
     ChatModelGPT4OMini,
     ChatModelDeepSeekChat,
