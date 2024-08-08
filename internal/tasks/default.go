@@ -31,4 +31,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/auditlog"
 	// arweave
 	_ "github.com/Laisky/go-ramjet/internal/tasks/arweave"
+	// jav
+	_ "github.com/Laisky/go-ramjet/internal/tasks/jav"
 )

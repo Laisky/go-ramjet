@@ -1,10 +1,11 @@
 package arweave
 
 import (
+	"github.com/Laisky/laisky-blog-graphql/library/auth"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/ario"
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/ario/dns"
 	"github.com/Laisky/go-ramjet/library/web"
-	"github.com/Laisky/laisky-blog-graphql/library/auth"
 )
 
 func bindHTTP() {

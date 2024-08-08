@@ -56,8 +56,8 @@ github.com/Laisky/errors/v2 v2.0.1 h1:yqCBrRzaP012AMB+7fVlXrP34OWRHrSO/hZ38CFdH8
 github.com/Laisky/errors/v2 v2.0.1/go.mod h1:mTn1LHSmKm4CYug0rpYO7rz13dp/DKrtzlSELSrxvT0=
 github.com/Laisky/fast-skiplist/v2 v2.0.1 h1:mZD3G/cwNovXsd21Vyvt3HCI9dEg1V7OD64qXsUUgpQ=
 github.com/Laisky/fast-skiplist/v2 v2.0.1/go.mod h1:JlDGOmsJOwW7Uo46L9aVG7nJAeqP7X7nfU5TABOiiE8=
-github.com/Laisky/gin-middlewares/v5 v5.0.4-0.20240717073709-3caed16839bf h1:wJwrPhYJsBq7bpaIQgrA/qK/ArCwYwcF1k7f13JLHAM=
-github.com/Laisky/gin-middlewares/v5 v5.0.4-0.20240717073709-3caed16839bf/go.mod h1:TIO2acYx+m0nFYU3EEgFPSrj80aVyej7bnM9pkiwyS8=
+github.com/Laisky/gin-middlewares/v5 v5.0.4 h1:92Qya9zk702gXbmjejEU5XyMK8ItCYyfVS8HpPSezhY=
+github.com/Laisky/gin-middlewares/v5 v5.0.4/go.mod h1:TIO2acYx+m0nFYU3EEgFPSrj80aVyej7bnM9pkiwyS8=
 github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be h1:7Rxhm6IjOtDAyj8eScOFntevwzkWhx94zi48lxo4m4w=
 github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be/go.mod h1:1mdzaETo0kjvCQICPSePsoaatJN4l7JvEA1200lyevo=
 github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99 h1:lNg+H6nn2uGmdKWIYDRy+uP20MKPJzGkyr8rRgDlM2k=
@@ -72,8 +72,8 @@ github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b h1:o2BuVyXFkD
 github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b/go.mod h1:j90tUqwBaEncIzpAd6ZGPZHWjclgAyMY8fdOqsewitE=
 github.com/Laisky/graphql v1.0.6 h1:NEULGxfxo+wbsW2OmqBXOMNUGgqo8uFjWNabwuNK10g=
 github.com/Laisky/graphql v1.0.6/go.mod h1:zaKVqXmMQTnTkFJ2AA53oyBWMzlGCnzr3aodKTrtOxI=
-github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240717062938-a62c47b35c17 h1:VwtHiuTv+ZnMpCOoDPo3YGj2sA4XRDYlpIxlIJqN/f0=
-github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240717062938-a62c47b35c17/go.mod h1:VLf2QDJlF/UYS4+qP6ItZm8naXaE0P2F+Cy4Sh3MiHw=
+github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240808093043-3fc2eea8ed39 h1:9nZXDEHhoH7Qpau7sDX31XtZoejaoLF5bF8WMlkWyNw=
+github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240808093043-3fc2eea8ed39/go.mod h1:9+9PxY15101W+radiiBNgMBUCaAlnr3OAx+f9hrqPu0=
 github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee h1:V1d26ZVBvLfzk9yK/bY5ga4BYGxoeyz9skxxvcfMoLQ=
 github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee/go.mod h1:cX5FfBd0q3TXPOZog5ZYaLWysWOD06RSNk6Fixc3bDc=
 github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71 h1:JyM6WS7a/lmSeXSGmEZPm2US7Jb8hbQ2mcFRu9m29g4=
@@ -570,8 +570,8 @@ github.com/xdg-go/stringprep v1.0.4 h1:XLI/Ng3O1Atzq0oBs3TWm+5ZVgkq2aqdlvP9JtoZ6
 github.com/xdg-go/stringprep v1.0.4/go.mod h1:mPGuuIYwz7CmR2bT9j4GbQqutWS1zV24gijq1dTyGkM=
 github.com/xlzd/gotp v0.1.0 h1:37blvlKCh38s+fkem+fFh7sMnceltoIEBYTVXyoa5Po=
 github.com/xlzd/gotp v0.1.0/go.mod h1:ndLJ3JKzi3xLmUProq4LLxCuECL93dG9WASNLpHz8qg=
-github.com/yanyiwu/gojieba v1.3.0 h1:6VeaPOR+MawnImdeSvWNr7rP4tvUfnGlEKaoBnR33Ds=
-github.com/yanyiwu/gojieba v1.3.0/go.mod h1:54wkP7sMJ6bklf7yPl6F+JG71dzVUU1WigZbR47nGdY=
+github.com/yanyiwu/gojieba v1.4.1 h1:rPIQhLQs4hIivocP1PGbbvkpxy2vw5a2mUxtHePRLaE=
+github.com/yanyiwu/gojieba v1.4.1/go.mod h1:54wkP7sMJ6bklf7yPl6F+JG71dzVUU1WigZbR47nGdY=
 github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d h1:splanxYIlg+5LfHAM6xpdFEAYOk8iySO56hMFq6uLyA=
 github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d/go.mod h1:rHwXgn7JulP+udvsHwJoVG1YGAP6VLg4y9I5dyZdqmA=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

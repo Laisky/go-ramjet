@@ -11,8 +11,9 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	gutils "github.com/Laisky/go-utils/v4"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 // TranscriptRequest is the request struct for speech to text

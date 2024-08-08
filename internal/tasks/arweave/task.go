@@ -1,10 +1,11 @@
 package arweave
 
 import (
+	"github.com/Laisky/zap"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/zap"
 )
 
 // bindTask bind heartbeat task

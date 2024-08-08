@@ -15,14 +15,15 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
-	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
-	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/web"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
+	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var (

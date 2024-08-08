@@ -6,12 +6,12 @@ toolchain go1.22.0
 
 require (
 	github.com/Laisky/errors/v2 v2.0.1
-	github.com/Laisky/gin-middlewares/v5 v5.0.4-0.20240717073709-3caed16839bf
+	github.com/Laisky/gin-middlewares/v5 v5.0.4
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-utils/v4 v4.10.0
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240717062938-a62c47b35c17
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20240808093043-3fc2eea8ed39
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130080559-eadd45f8fafa
 	github.com/Laisky/zap v1.27.1-0.20240628060440-a253d90172e3
@@ -34,7 +34,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/stripe/stripe-go/v76 v76.25.0
-	github.com/yanyiwu/gojieba v1.3.0
+	github.com/yanyiwu/gojieba v1.4.1
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
 	golang.org/x/sync v0.7.0

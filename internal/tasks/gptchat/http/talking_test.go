@@ -7,8 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/testify/require"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 func TestTranscript(t *testing.T) {
