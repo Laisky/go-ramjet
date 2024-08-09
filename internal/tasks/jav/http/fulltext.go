@@ -3,12 +3,14 @@ package http
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/dto"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/model"
@@ -37,19 +39,32 @@ func Search(ctx *gin.Context) {
 	}
 
 	var movies []*dto.MovieResponse
+	var mutex sync.Mutex
+	var pool errgroup.Group
 	for _, docu := range docus {
-		for i := range docu.Movies {
-			if i > 20 {
-				break
+		pool.Go(func() error {
+			for i := range docu.Movies {
+				if i > 30 {
+					break
+				}
+
+				movie, err := service.GetMovieInfo(gmw.Ctx(ctx), docu.Movies[i])
+				if err != nil {
+					return errors.Wrap(err, "get movie info")
+				}
+
+				mutex.Lock()
+				movies = append(movies, movie)
+				mutex.Unlock()
 			}
 
-			movie, err := service.GetMovieInfo(gmw.Ctx(ctx), docu.Movies[i])
-			if web.AbortErr(ctx, errors.Wrapf(err, "get movie info `%s`", docu.Movies[i].Hex())) {
-				return
-			}
+			return nil
+		})
+	}
 
-			movies = append(movies, movie)
-		}
+	err = pool.Wait()
+	if web.AbortErr(ctx, errors.Wrap(err, "get movie info")) {
+		return
 	}
 
 	ctx.JSON(200, movies)

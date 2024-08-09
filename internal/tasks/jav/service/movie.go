@@ -24,20 +24,25 @@ func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieRe
 		return nil, errors.Wrap(err, "get movie info")
 	}
 
-	// get actress from db
-	actress := new(model.Actress)
-	err = model.GetDB().
-		GetCol("actress").
-		FindOne(ctx, bson.M{"_id": movie.ActressID}).
-		Decode(actress)
-	if err != nil {
-		return nil, errors.Wrap(err, "get actress info")
+	resp := &dto.MovieResponse{
+		Code:      movie.Name,
+		ImageURLs: movie.ImgUrls,
+		Tags:      movie.Tags,
 	}
 
-	return &dto.MovieResponse{
-		Code:       movie.Name,
-		PictureURL: movie.ImgUrl,
-		Tags:       movie.Tags,
-		Actress:    actress,
-	}, nil
+	// get actress from db
+	for _, actressID := range movie.Actresses {
+		actress := new(model.Actress)
+		err = model.GetDB().
+			GetCol("actresses").
+			FindOne(ctx, bson.M{"_id": actressID}).
+			Decode(actress)
+		if err != nil {
+			return nil, errors.Wrap(err, "get actress info")
+		}
+
+		resp.Actresses = append(resp.Actresses, actress.Name)
+	}
+
+	return resp, nil
 }
