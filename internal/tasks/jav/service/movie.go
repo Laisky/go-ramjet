@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,9 +18,16 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/model"
 )
 
+var getMovieInfoCache = gutils.NewExpCache[(*dto.MovieResponse)](context.Background(), time.Hour)
+
 // GetMovieInfo is a service to get movie info
 func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieResponse, error) {
 	logger := gmw.GetLogger(ctx)
+
+	// search cache
+	if res, ok := getMovieInfoCache.Load(movieID.Hex()); ok {
+		return res, nil
+	}
 
 	// get movie from db
 	movie := new(model.Movie)
@@ -68,6 +77,9 @@ func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieRe
 	} {
 		resp.Downloads = append(resp.Downloads, fmt.Sprintf(format, movie.Name))
 	}
+
+	// update cache
+	getMovieInfoCache.Store(movieID.Hex(), resp)
 
 	return resp, nil
 }

@@ -36,7 +36,7 @@ func Search(ctx *gin.Context) {
 	cur, err := model.GetColFulltext().
 		Find(gmw.Ctx(ctx),
 			bson.M{"word": bson.M{"$regex": query, "$options": "i"}},
-			options.Find().SetLimit(100),
+			options.Find().SetLimit(10),
 		)
 	if web.AbortErr(ctx, errors.Wrap(err, "search fulltext")) {
 		return
@@ -49,6 +49,7 @@ func Search(ctx *gin.Context) {
 	var movies []*dto.MovieResponse
 	var mutex sync.Mutex
 	var pool errgroup.Group
+	pool.SetLimit(10)
 	for _, docu := range docus {
 		pool.Go(func() error {
 			for i := range docu.Movies {
