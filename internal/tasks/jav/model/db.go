@@ -6,6 +6,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
+	mongosdk "go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
@@ -30,4 +31,19 @@ func SetupDB(ctx context.Context) (err error) {
 // GetDB get db
 func GetDB() mongo.DB {
 	return javDB
+}
+
+// GetColActress get actress collection
+func GetColActress() *mongosdk.Collection {
+	return GetDB().GetCol("actress")
+}
+
+// GetColMovie get movie collection
+func GetColMovie() *mongosdk.Collection {
+	return GetDB().GetCol("movies")
+}
+
+// GetColFulltext get fulltext collection
+func GetColFulltext() *mongosdk.Collection {
+	return GetDB().GetCol("fulltext")
 }
