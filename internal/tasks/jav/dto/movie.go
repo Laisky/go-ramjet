@@ -6,4 +6,5 @@ type MovieResponse struct {
 	ImageURLs []string `json:"image_urls"`
 	Tags      []string `json:"tags"`
 	Actresses []string `json:"actresses"`
+	Downloads []string `json:"downloads"`
 }

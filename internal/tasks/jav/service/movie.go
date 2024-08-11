@@ -60,5 +60,14 @@ func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieRe
 		resp.Actresses = append(resp.Actresses, name)
 	}
 
+	// generate downloads
+	for _, format := range []string{
+		"https://16mag.net/search?q=%s",
+		"https://www.torrentkitty.red/search/%s/",
+		"https://www4.javhdporn.net/video/%s/",
+	} {
+		resp.Downloads = append(resp.Downloads, fmt.Sprintf(format, movie.Name))
+	}
+
 	return resp, nil
 }
