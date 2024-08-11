@@ -2,11 +2,13 @@
 package http
 
 import (
-	"strings"
+	"context"
 	"sync"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
+	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,17 +20,23 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+var searchCache = gutils.NewExpCache[[]*dto.MovieResponse](context.Background(), time.Hour)
+
 // Search is a http handler to search movies
 func Search(ctx *gin.Context) {
 	query := ctx.Query("q")
-	query = strings.TrimSpace(strings.ReplaceAll(query, "-", ""))
+
+	// search cache
+	if res, ok := searchCache.Load(query); ok {
+		ctx.JSON(200, res)
+		return
+	}
 
 	var docus []model.Fulltext
-	cur, err := model.GetDB().
-		GetCol("fulltext").
+	cur, err := model.GetColFulltext().
 		Find(gmw.Ctx(ctx),
 			bson.M{"word": bson.M{"$regex": query, "$options": "i"}},
-			options.Find().SetLimit(5),
+			options.Find().SetLimit(50),
 		)
 	if web.AbortErr(ctx, errors.Wrap(err, "search fulltext")) {
 		return
@@ -44,10 +52,6 @@ func Search(ctx *gin.Context) {
 	for _, docu := range docus {
 		pool.Go(func() error {
 			for i := range docu.Movies {
-				if i > 30 {
-					break
-				}
-
 				movie, err := service.GetMovieInfo(gmw.Ctx(ctx), docu.Movies[i])
 				if err != nil {
 					return errors.Wrap(err, "get movie info")
@@ -55,6 +59,9 @@ func Search(ctx *gin.Context) {
 
 				mutex.Lock()
 				movies = append(movies, movie)
+				if len(movies) > 100 {
+					return nil
+				}
 				mutex.Unlock()
 			}
 
@@ -66,6 +73,9 @@ func Search(ctx *gin.Context) {
 	if web.AbortErr(ctx, errors.Wrap(err, "get movie info")) {
 		return
 	}
+
+	// update cache
+	searchCache.Store(query, movies)
 
 	ctx.JSON(200, movies)
 }
