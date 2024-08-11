@@ -36,7 +36,7 @@ func Search(ctx *gin.Context) {
 	cur, err := model.GetColFulltext().
 		Find(gmw.Ctx(ctx),
 			bson.M{"word": bson.M{"$regex": query, "$options": "i"}},
-			options.Find().SetLimit(10),
+			options.Find().SetLimit(30),
 		)
 	if web.AbortErr(ctx, errors.Wrap(err, "search fulltext")) {
 		return
