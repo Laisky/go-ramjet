@@ -10,6 +10,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
 	gutils "github.com/Laisky/go-utils/v4"
+	gset "github.com/deckarep/golang-set/v2"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -47,6 +48,7 @@ func Search(ctx *gin.Context) {
 		return
 	}
 
+	moviesSet := gset.NewSet[string]()
 	var movies []*dto.MovieResponse
 	var mutex sync.Mutex
 	var pool errgroup.Group
@@ -54,12 +56,17 @@ func Search(ctx *gin.Context) {
 	for _, docu := range docus {
 		pool.Go(func() (err error) {
 			for i := range docu.Movies {
+				if moviesSet.Contains(docu.Movies[i].Hex()) {
+					continue
+				}
+
 				movie, err := service.GetMovieInfo(gmw.Ctx(ctx), docu.Movies[i])
 				if err != nil {
 					return errors.Wrap(err, "get movie info")
 				}
 
 				mutex.Lock()
+				moviesSet.Add(docu.Movies[i].Hex())
 				movies = append(movies, movie)
 				if len(movies) > 100 {
 					mutex.Unlock()
