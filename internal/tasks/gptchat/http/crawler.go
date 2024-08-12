@@ -60,14 +60,18 @@ func WithDuration(duration time.Duration) FetchURLOption {
 }
 
 // FetchDynamicURLContent fetch dynamic url content, will render js by chromedp
-func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchURLOption) (content []byte, err error) {
+func FetchDynamicURLContent(ctx context.Context,
+	url string, opts ...FetchURLOption) (content []byte, err error) {
 	opt, err := new(fetchURLOption).apply(opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "apply fetch url option")
 	}
 
 	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
-		With(zap.String("url", url))
+		With(
+			zap.String("url", url),
+			zap.Duration("duration", opt.duration),
+		)
 	logger.Debug("fetch dynamic url")
 	headers := map[string]any{
 		//nolint: lll
@@ -101,7 +105,7 @@ func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchURLOpt
 			chromedp.Sleep(opt.duration), // Wait for the page to load
 			chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
 		}); err != nil {
-			logger.Debug("fetch url first time failed", zap.Error(err))
+			logger.Warn("fetch url failed", zap.Error(err))
 			return
 		}
 
@@ -112,7 +116,7 @@ func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchURLOpt
 
 	select {
 	case <-ctx.Done():
-		return nil, errors.Errorf("no content find by chromedp for %q", url)
+		return nil, errors.Errorf("fetch url timeout for %q", url)
 	case content = <-finishCh:
 	}
 

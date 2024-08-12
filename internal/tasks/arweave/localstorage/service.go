@@ -61,7 +61,6 @@ func SaveUrlContent(ctx context.Context, item taskItem) error {
 	// put task
 	select {
 	case taskChan <- item:
-		runningUrls.Store(item.url, struct{}{})
 	default:
 		return errors.New("taskChan is full, please wait for a while")
 	}
@@ -120,14 +119,19 @@ func LoadContentFromS3(ctx context.Context, url string) (io.ReadCloser, error) {
 }
 
 // RunSaveUrlContent run save url content
-func RunSaveUrlContent() {
+func RunSaveUrlContent(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			for task := range taskChan {
+				if _, ok := runningUrls.Load(task.url); ok {
+					continue
+				}
+				runningUrls.Store(task.url, struct{}{})
+
 				err := func() error {
 					defer runningUrls.Delete(task.url)
 
-					taskCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
 					defer cancel()
 
 					content, err := gpthttp.FetchDynamicURLContent(taskCtx,
@@ -158,7 +162,7 @@ func RunSaveUrlContent() {
 					return nil
 				}()
 				if err != nil {
-					log.Logger.Error("save url content",
+					log.Logger.Error("failed to fetch and save url content",
 						zap.String("url", task.url),
 						zap.Error(err),
 					)

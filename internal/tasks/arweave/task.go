@@ -1,6 +1,9 @@
 package arweave
 
 import (
+	"context"
+
+	gmw "github.com/Laisky/gin-middlewares/v5"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
@@ -11,13 +14,14 @@ import (
 
 // bindTask bind heartbeat task
 func bindTask() {
+	ctx := gmw.SetLogger(context.Background(), log.Logger.Named("arweave"))
 	log.Logger.Info("bind arweave task...")
 
 	if err := config.SetupConfig(); err != nil {
 		log.Logger.Panic("setup arweave config", zap.Error(err))
 	}
 
-	localstorage.RunSaveUrlContent()
+	localstorage.RunSaveUrlContent(ctx)
 
 	bindHTTP()
 }
