@@ -51,7 +51,7 @@ func Search(ctx *gin.Context) {
 	var pool errgroup.Group
 	pool.SetLimit(10)
 	for _, docu := range docus {
-		pool.Go(func() error {
+		pool.Go(func() (err error) {
 			for i := range docu.Movies {
 				movie, err := service.GetMovieInfo(gmw.Ctx(ctx), docu.Movies[i])
 				if err != nil {

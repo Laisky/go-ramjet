@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -13,6 +14,7 @@ import (
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/dto"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/model"
@@ -45,28 +47,41 @@ func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieRe
 	}
 
 	// get actress from db
+	var pool errgroup.Group
+	var mu sync.Mutex
+	pool.SetLimit(10)
 	for _, actressID := range movie.Actresses {
-		actress := new(model.Actress)
-		err = model.GetColActress().
-			FindOne(ctx, bson.M{"_id": actressID}).
-			Decode(actress)
-		if err != nil {
-			logger.Warn("get actress info failed", zap.String("actress_id", actressID.Hex()), zap.Error(err))
-			continue
-		}
-
-		name := actress.Name
-		var uniqueOtherNames []string
-		for _, n := range actress.OtherNames {
-			if n != name {
-				uniqueOtherNames = append(uniqueOtherNames, n)
+		pool.Go(func() (err error) {
+			actress := new(model.Actress)
+			err = model.GetColActress().
+				FindOne(ctx, bson.M{"_id": actressID}).
+				Decode(actress)
+			if err != nil {
+				return errors.Wrapf(err, "get actress info by id %s", actressID.Hex())
 			}
-		}
-		if len(uniqueOtherNames) > 0 {
-			name = fmt.Sprintf("%s(%s)", name, strings.Join(uniqueOtherNames, ","))
-		}
 
-		resp.Actresses = append(resp.Actresses, name)
+			name := actress.Name
+			var uniqueOtherNames []string
+			for _, n := range actress.OtherNames {
+				if n != name {
+					uniqueOtherNames = append(uniqueOtherNames, n)
+				}
+			}
+			if len(uniqueOtherNames) > 0 {
+				name = fmt.Sprintf("%s(%s)", name, strings.Join(uniqueOtherNames, ","))
+			}
+
+			mu.Lock()
+			resp.Actresses = append(resp.Actresses, name)
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	err = pool.Wait()
+	if err != nil {
+		logger.Warn("get actress info", zap.Error(err))
 	}
 
 	// generate downloads
