@@ -24,7 +24,7 @@ import (
 var (
 	httpcli     *http.Client
 	runningUrls sync.Map
-	taskChan    = make(chan taskItem, 1)
+	taskChan    = make(chan taskItem, 20)
 )
 
 func init() {
