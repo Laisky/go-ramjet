@@ -17,7 +17,7 @@ func TestFetchDynamicURLContent(t *testing.T) {
 	ctx := context.Background()
 	url := "https://medium.com/applied-mpc/a-crash-course-on-mpc-part-3-c3f302153929"
 
-	content, err := fetchDynamicURLContent(ctx, url)
+	content, err := FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 }
@@ -26,7 +26,7 @@ func TestGoogleSearchBasic(t *testing.T) {
 	ctx := context.Background()
 	url := "https://www.google.com/search?q=site%3Amedium.com+applied+mpc"
 
-	content, err := fetchDynamicURLContent(ctx, url)
+	content, err := FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 

@@ -4,6 +4,7 @@ import (
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/arweave/localstorage"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -15,6 +16,8 @@ func bindTask() {
 	if err := config.SetupConfig(); err != nil {
 		log.Logger.Panic("setup arweave config", zap.Error(err))
 	}
+
+	go localstorage.RunSaveUrlContent()
 
 	bindHTTP()
 }

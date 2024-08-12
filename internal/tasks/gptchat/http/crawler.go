@@ -32,8 +32,40 @@ var (
 	chromedpSema = semaphore.NewWeighted(2)
 )
 
-// fetchDynamicURLContent fetch dynamic url content, will render js by chromedp
-func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, err error) {
+type fetchURLOption struct {
+	duration time.Duration
+}
+
+func (o *fetchURLOption) apply(opts ...FetchURLOption) (*fetchURLOption, error) {
+	// set default
+	o.duration = 10 * time.Second
+
+	// apply options
+	for _, opt := range opts {
+		if err := opt(o); err != nil {
+			return nil, err
+		}
+	}
+
+	return o, nil
+}
+
+type FetchURLOption func(*fetchURLOption) error
+
+func WithDuration(duration time.Duration) FetchURLOption {
+	return func(opt *fetchURLOption) error {
+		opt.duration = duration
+		return nil
+	}
+}
+
+// FetchDynamicURLContent fetch dynamic url content, will render js by chromedp
+func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchURLOption) (content []byte, err error) {
+	opt, err := new(fetchURLOption).apply(opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "apply fetch url option")
+	}
+
 	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
 		With(zap.String("url", url))
 	logger.Debug("fetch dynamic url")
@@ -57,8 +89,7 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 	}
 
 	var (
-		finishCh = make(chan struct{})
-		mu       sync.Mutex
+		finishCh = make(chan []byte, 1)
 	)
 	go func() {
 		defer close(finishCh)
@@ -67,40 +98,26 @@ func fetchDynamicURLContent(ctx context.Context, url string) (content []byte, er
 			network.Enable(),
 			chromedp.Navigate(url),
 			network.SetExtraHTTPHeaders(network.Headers(headers)),
-			chromedp.Sleep(5 * time.Second), // Wait for the page to load
+			chromedp.Sleep(opt.duration), // Wait for the page to load
 			chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
 		}); err != nil {
-			logger.Debug("fetch url first time failed, will try next time", zap.Error(err))
-			if err = chromedp.Run(chromeCtx, chromedp.Tasks{
-				network.Enable(),
-				chromedp.Navigate(url),
-				network.SetExtraHTTPHeaders(network.Headers(headers)),
-				chromedp.Sleep(time.Second * 30), // Wait longer
-				chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
-			}); err != nil {
-				logger.Warn("fetch url failed", zap.Error(err))
-				return
-			}
+			logger.Debug("fetch url first time failed", zap.Error(err))
+			return
 		}
 
-		mu.Lock()
-		content = []byte(htmlContent)
-		mu.Unlock()
-
 		logger.Info("fetch url success")
-		urlContentCache.Store(url, []byte(htmlContent)) // save cache
+		finishCh <- []byte(htmlContent)
+		urlContentCache.Store(url, []byte(htmlContent)) // update cache
 	}()
 
 	select {
 	case <-ctx.Done():
-	case <-finishCh:
+		return nil, errors.Errorf("no content find by chromedp for %q", url)
+	case content = <-finishCh:
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-
 	if len(content) == 0 {
-		return nil, errors.Errorf("no content find by chromedp")
+		return nil, errors.Errorf("no content find by chromedp for %q", url)
 	}
 
 	if bodyContent, err := extractHTMLBody(content); err != nil {
@@ -175,7 +192,7 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 
 	searchCtx, searchCancel := context.WithTimeout(ctx, 20*time.Second)
 	defer searchCancel()
-	searchContent, err := fetchDynamicURLContent(searchCtx, "https://www.google.com/search?q="+query)
+	searchContent, err := FetchDynamicURLContent(searchCtx, "https://www.google.com/search?q="+query)
 	if err != nil {
 		return "", errors.Wrapf(err, "fetch %q", query)
 	}

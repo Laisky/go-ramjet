@@ -5,6 +5,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/ario"
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/ario/dns"
+	"github.com/Laisky/go-ramjet/internal/tasks/arweave/localstorage"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -16,4 +17,5 @@ func bindHTTP() {
 	grp.GET("/dns", dns.ListReocrds)
 	grp.GET("/dns/:name", dns.GetRecord)
 	grp.GET("/alias/:name", dns.Query)
+	grp.GET("/proxy", localstorage.CacheHandler)
 }

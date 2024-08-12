@@ -566,8 +566,8 @@ var (
 	urlRegexp       = regexp.MustCompile(`https:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
 )
 
-// fetchURLContent fetch url content
-func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) {
+// FetchURLContent fetch url content
+func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) {
 	content, ok := urlContentCache.Load(url)
 	if ok {
 		log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
@@ -592,7 +592,7 @@ func fetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	switch {
 	case strings.Contains(contentType, "text/html") ||
 		strings.Contains(contentType, "application/xhtml+xml"):
-		content, err = fetchDynamicURLContent(ctx, url)
+		content, err = FetchDynamicURLContent(ctx, url)
 	default:
 		content, err = fetchStaticURLContent(ctx, url)
 	}
@@ -725,7 +725,7 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 	for _, url := range urls {
 		url := url
 		pool.Go(func() (err error) {
-			content, err := fetchURLContent(gctx, url)
+			content, err := FetchURLContent(gctx, url)
 			if err != nil {
 				return errors.Wrap(err, "fetch url content")
 			}
