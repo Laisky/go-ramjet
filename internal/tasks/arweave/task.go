@@ -17,7 +17,7 @@ func bindTask() {
 		log.Logger.Panic("setup arweave config", zap.Error(err))
 	}
 
-	go localstorage.RunSaveUrlContent()
+	localstorage.RunSaveUrlContent()
 
 	bindHTTP()
 }

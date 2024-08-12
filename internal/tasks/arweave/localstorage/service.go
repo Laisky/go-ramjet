@@ -121,46 +121,50 @@ func LoadContentFromS3(ctx context.Context, url string) (io.ReadCloser, error) {
 
 // RunSaveUrlContent run save url content
 func RunSaveUrlContent() {
-	for task := range taskChan {
-		err := func() error {
-			defer runningUrls.Delete(task.url)
+	for i := 0; i < 2; i++ {
+		go func() {
+			for task := range taskChan {
+				err := func() error {
+					defer runningUrls.Delete(task.url)
 
-			taskCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
+					taskCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					defer cancel()
 
-			content, err := gpthttp.FetchDynamicURLContent(context.Background(),
-				task.url,
-				gpthttp.WithDuration(time.Second*30),
-			)
-			if err != nil {
-				return errors.Wrapf(err, "fetch url %s", task.url)
+					content, err := gpthttp.FetchDynamicURLContent(taskCtx,
+						task.url,
+						gpthttp.WithDuration(time.Second*30),
+					)
+					if err != nil {
+						return errors.Wrapf(err, "fetch url %s", task.url)
+					}
+
+					objkey := url2objkey(task.url)
+					opt := minio.PutObjectOptions{}
+					opt.Header().Add("Content-Type", "text/html")
+					_, err = config.Instance.S3Cli.PutObject(taskCtx,
+						config.Instance.S3.Bucket,
+						objkey2path(objkey),
+						bytes.NewReader(content),
+						int64(len(content)),
+						opt,
+					)
+					if err != nil {
+						return errors.Wrapf(err, "save url %s", task.url)
+					}
+
+					log.Logger.Info("save url content",
+						zap.String("url", task.url),
+						zap.String("objkey", objkey))
+					return nil
+				}()
+				if err != nil {
+					log.Logger.Error("save url content",
+						zap.String("url", task.url),
+						zap.Error(err),
+					)
+				}
 			}
-
-			objkey := url2objkey(task.url)
-			opt := minio.PutObjectOptions{}
-			opt.Header().Add("Content-Type", "text/html")
-			_, err = config.Instance.S3Cli.PutObject(taskCtx,
-				config.Instance.S3.Bucket,
-				objkey2path(objkey),
-				bytes.NewReader(content),
-				int64(len(content)),
-				opt,
-			)
-			if err != nil {
-				return errors.Wrapf(err, "save url %s", task.url)
-			}
-
-			log.Logger.Info("save url content",
-				zap.String("url", task.url),
-				zap.String("objkey", objkey))
-			return nil
 		}()
-		if err != nil {
-			log.Logger.Error("save url content",
-				zap.String("url", task.url),
-				zap.Error(err),
-			)
-		}
 	}
 }
 
