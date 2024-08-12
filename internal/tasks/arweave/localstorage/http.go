@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
@@ -51,6 +52,7 @@ func CacheHandler(ctx *gin.Context) {
 		return nil
 	})
 	pool.Go(func() error {
+		time.Sleep(time.Second)
 		reader, err := LoadContentFromS3(taskCtx, targetUrl)
 		if err != nil {
 			return errors.Wrapf(err, "load content from s3 %q", targetUrl)
