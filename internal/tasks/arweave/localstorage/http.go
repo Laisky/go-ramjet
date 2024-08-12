@@ -77,7 +77,7 @@ func CacheHandler(ctx *gin.Context) {
 	select {
 	case result := <-resultChan:
 		defer result.reader.Close()
-		ctx.Header("X-Cache-Status", result.cacheStatus)
+		ctx.Header("X-Laisky-Cache-Status", result.cacheStatus)
 		_, err = io.Copy(ctx.Writer, result.reader)
 		if web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl)) {
 			return
