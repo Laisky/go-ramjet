@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -54,11 +55,19 @@ func init() {
 	}
 }
 
+// RegexpArweaveFileID matches arweave file id
+var RegexpArweaveFileID = regexp.MustCompile(`^[a-zA-Z0-9_-]{40,100}$`)
+
 // GatewayHandler redirects request to multiple arweave gateways,
 // and returns the first response.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	domain := ctx.Query("domain")
+
+	if !RegexpArweaveFileID.MatchString(fileKey) {
+		web.AbortErr(ctx, errors.Errorf("invalid file key %q", fileKey))
+		return
+	}
 
 	logger := gmw.GetLogger(ctx).With(
 		zap.String("method", ctx.Request.Method),
