@@ -20,6 +20,7 @@ var (
 func init() {
 	Server = gin.New()
 	Server.RedirectTrailingSlash = false
+
 	Server.Use(
 		gin.Recovery(),
 		gmw.NewLoggerMiddleware(

@@ -3,6 +3,7 @@ package http
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
@@ -61,6 +62,7 @@ func Search(ctx *gin.Context) {
 				mutex.Lock()
 				movies = append(movies, movie)
 				if len(movies) > 100 {
+					mutex.Unlock()
 					return nil
 				}
 				mutex.Unlock()
@@ -78,5 +80,5 @@ func Search(ctx *gin.Context) {
 	// update cache
 	searchCache.Store(query, movies)
 
-	ctx.JSON(200, movies)
+	ctx.JSON(http.StatusOK, movies)
 }
