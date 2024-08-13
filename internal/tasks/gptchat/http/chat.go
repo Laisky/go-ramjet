@@ -562,7 +562,7 @@ const (
 )
 
 var (
-	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), 24*time.Hour)
+	urlContentCache = gutils.NewExpCache[[]byte](context.Background(), time.Hour)
 	urlRegexp       = regexp.MustCompile(`https:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
 )
 
@@ -600,7 +600,6 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return nil, errors.Wrapf(err, "fetch url %q", url)
 	}
 
-	urlContentCache.Store(url, content) // save cache
 	return content, nil
 }
 

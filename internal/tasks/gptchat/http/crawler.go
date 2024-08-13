@@ -62,6 +62,11 @@ func WithDuration(duration time.Duration) FetchURLOption {
 // FetchDynamicURLContent fetch dynamic url content, will render js by chromedp
 func FetchDynamicURLContent(ctx context.Context,
 	url string, opts ...FetchURLOption) (content []byte, err error) {
+	// check cache
+	if content, ok := urlContentCache.Load(url); ok {
+		return content, nil
+	}
+
 	opt, err := new(fetchURLOption).apply(opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "apply fetch url option")
@@ -83,7 +88,7 @@ func FetchDynamicURLContent(ctx context.Context,
 	}
 
 	// give chrome more time to run in background
-	chromeCtx, cancel := chromedp.NewContext(context.Background())
+	chromeCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
 	if err = chromedpSema.Acquire(ctx, 1); err != nil {
@@ -92,34 +97,19 @@ func FetchDynamicURLContent(ctx context.Context,
 		defer chromedpSema.Release(1)
 	}
 
-	var (
-		finishCh = make(chan []byte, 1)
-	)
-	go func() {
-		defer close(finishCh)
-		var htmlContent string
-		if err := chromedp.Run(chromeCtx, chromedp.Tasks{
-			network.Enable(),
-			chromedp.Navigate(url),
-			network.SetExtraHTTPHeaders(network.Headers(headers)),
-			chromedp.Sleep(opt.duration), // Wait for the page to load
-			chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
-		}); err != nil {
-			logger.Warn("fetch url failed", zap.Error(err))
-			return
-		}
-
-		logger.Info("fetch url success")
-		finishCh <- []byte(htmlContent)
-		urlContentCache.Store(url, []byte(htmlContent)) // update cache
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, errors.Errorf("fetch url timeout for %q", url)
-	case content = <-finishCh:
+	var htmlContent string
+	if err = chromedp.Run(chromeCtx, chromedp.Tasks{
+		network.Enable(),
+		chromedp.Navigate(url),
+		network.SetExtraHTTPHeaders(network.Headers(headers)),
+		chromedp.Sleep(opt.duration), // Wait for the page to load
+		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
+	}); err != nil {
+		return nil, errors.Wrapf(err, "run chromedp for %q", url)
 	}
 
+	logger.Info("fetch url success")
+	content = []byte(htmlContent)
 	if len(content) == 0 {
 		return nil, errors.Errorf("no content find by chromedp for %q", url)
 	}
@@ -129,6 +119,9 @@ func FetchDynamicURLContent(ctx context.Context,
 	} else {
 		content = bodyContent
 	}
+
+	// update cache
+	urlContentCache.Store(url, content)
 
 	return content, nil
 }
