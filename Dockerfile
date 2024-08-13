@@ -46,7 +46,7 @@ RUN go build
 FROM debian:bullseye
 
 RUN apt-get update
-RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
+RUN apt-get install -y --no-install-recommends ca-certificates haveged wget tini \
     # for google-chrome
     # libappindicator1 fonts-liberation xdg-utils wget \
     # libasound2 libatk-bridge2.0-0 libatspi2.0-0 libcurl3-gnutls libcurl3-nss \
@@ -78,4 +78,4 @@ COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.1 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.1
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
 
-ENTRYPOINT ["/app/go-ramjet"]
+ENTRYPOINT [ "tini", "--", "/app/go-ramjet" ]
