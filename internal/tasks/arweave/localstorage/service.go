@@ -13,12 +13,13 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v5"
-	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
-	gpthttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
-	"github.com/Laisky/go-ramjet/library/log"
 	gutils "github.com/Laisky/go-utils/v4"
 	"github.com/Laisky/zap"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
+	gpthttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
