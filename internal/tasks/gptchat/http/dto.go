@@ -400,6 +400,56 @@ type DrawImageByTextRequest struct {
 // 	return len(r.Prompt)
 // }
 
+// DrawImageByFluxProRequest draw image by fluxpro
+//
+// https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
+type DrawImageByFluxProRequest struct {
+	Input FluxInput `json:"input"`
+}
+
+// FluxInput is input of DrawImageByFluxProRequest
+type FluxInput struct {
+	Steps           int    `json:"steps" binding:"required,min=1"`
+	Prompt          string `json:"prompt" binding:"required,min=5"`
+	Guidance        int    `json:"guidance" binding:"required,min=2,max=5"`
+	Interval        int    `json:"interval" binding:"required,min=1,max=4"`
+	AspectRatio     string `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
+	SafetyTolerance int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
+	Seed            int    `json:"seed"`
+}
+
+// DrawImageByFluxProResponse is response of DrawImageByFluxProRequest
+//
+// https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
+type DrawImageByFluxProResponse struct {
+	CompletedAt time.Time                 `json:"completed_at"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	DataRemoved bool                      `json:"data_removed"`
+	Error       string                    `json:"error"`
+	ID          string                    `json:"id"`
+	Input       DrawImageByFluxProRequest `json:"input"`
+	Logs        interface{}               `json:"logs"`
+	Metrics     FluxMetrics               `json:"metrics"`
+	Output      []string                  `json:"output"`
+	StartedAt   time.Time                 `json:"started_at"`
+	Status      string                    `json:"status"`
+	URLs        FluxURLs                  `json:"urls"`
+	Version     string                    `json:"version"`
+}
+
+// FluxMetrics is metrics of DrawImageByFluxProResponse
+type FluxMetrics struct {
+	ImageCount  int     `json:"image_count"`
+	PredictTime float64 `json:"predict_time"`
+	TotalTime   float64 `json:"total_time"`
+}
+
+// FluxURLs is urls of DrawImageByFluxProResponse
+type FluxURLs struct {
+	Get    string `json:"get"`
+	Cancel string `json:"cancel"`
+}
+
 // DrawImageByImageRequest draw image by image and prompt
 type DrawImageByImageRequest struct {
 	Prompt      string `json:"prompt" binding:"required,min=1"`

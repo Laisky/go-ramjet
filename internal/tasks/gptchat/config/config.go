@@ -65,6 +65,9 @@ func SetupConfig() (err error) {
 	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
 		&Config.LimitUploadFileBytes, 20*1024*1024)
+	Config.FluxProAPI = trimUrl(gutils.OptionalVal(
+		// &Config.FluxProAPI, "https://api.replicate.com/v1/models/black-forest-labs/flux-pro/predictions"))
+		&Config.FluxProAPI, "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions"))
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
@@ -125,6 +128,12 @@ type OpenAI struct {
 	// S3 (optional) s3 config
 	S3           s3Config `json:"s3" mapstructure:"s3"`
 	NvidiaApikey string   `json:"-" mapstructure:"nvidia_apikey"`
+	// FluxProApiKey is the api key for flux pro
+	//
+	// https://replicate.com/account/api-tokens
+	FluxProApiKey string `json:"-" mapstructure:"fluxpro_apikey"`
+	// FluxProAPI is the api url for flux pro
+	FluxProAPI string `json:"fluxpro_api" mapstructure:"fluxpro_api"`
 
 	// PaymentStripeKey (optional) stripe key
 	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`

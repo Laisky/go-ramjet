@@ -46,7 +46,9 @@ const CompletionModelDavinci3 = 'text-davinci-003';
 const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
-const ImageModelImg2Img = 'img-to-img';
+const ImageModelFluxPro = 'flux-pro';
+const ImageModelFluxSchnell = 'flux-schnell';
+// const ImageModelImg2Img = 'img-to-img';
 
 // casual chat models
 
@@ -92,9 +94,9 @@ const VisionModels = [
     ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     ChatModelClaude35Sonnet8K,
-    ChatModelClaude3Haiku,
+    ChatModelClaude3Haiku
     // ImageModelSdxlTurbo,
-    ImageModelImg2Img
+    // ImageModelImg2Img
 ];
 const QaModels = [
     QAModelBasebit,
@@ -106,7 +108,9 @@ const QaModels = [
 const ImageModels = [
     ImageModelDalle3,
     ImageModelSdxlTurbo,
-    ImageModelImg2Img
+    ImageModelFluxPro,
+    ImageModelFluxSchnell
+    // ImageModelImg2Img
 ];
 const CompletionModels = [
     CompletionModelDavinci3
@@ -128,8 +132,8 @@ const FreeModels = [
     QAModelBasebit,
     QAModelSecurity,
     QAModelImmigrate,
-    ImageModelSdxlTurbo,
-    ImageModelImg2Img
+    ImageModelSdxlTurbo
+    // ImageModelImg2Img
 ];
 const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
 
@@ -1850,27 +1854,18 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     });
 }
 
-async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
-    case ImageModelImg2Img:
-        url = '/images/generations/lcm';
+    case ImageModelFluxPro:
+        url = '/images/generations/flux/flux-pro';
+        break;
+    case ImageModelFluxSchnell:
+        url = '/images/generations/flux/flux-schnell';
         break;
     default:
         throw new Error(`unknown image model: ${selectedModel}`);
     }
-
-    // get first image in store
-    if (chatVisionSelectedFileStore.length === 0) {
-        throw new Error('no image selected');
-    }
-    const imageBase64 = chatVisionSelectedFileStore[0].contentB64;
-
-    // insert image to user input & hisotry
-    await appendImg2UserInput(chatID, imageBase64, `${libs.DateStr()}.png`);
-
-    chatVisionSelectedFileStore = [];
-    updateChatVisionSelectedFileStore();
 
     const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
@@ -1881,9 +1876,15 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
             'X-Laisky-Api-Base': sconfig.api_base
         },
         body: JSON.stringify({
-            model: selectedModel,
-            prompt,
-            image_base64: imageBase64
+            input: {
+                prompt,
+                steps: 25,
+                aspect_ratio: '1:1',
+                safety_tolerance: 5,
+                guidance: 3,
+                interval: 2,
+                seed: Date.now()
+            }
         })
     });
     if (!resp.ok || resp.status !== 200) {
@@ -1900,8 +1901,13 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
     // save img to storage no matter it's done or not
     let attachHTML = '';
     respData.image_urls.forEach((url) => {
-        attachHTML += `<img src="${url}">`;
-    })
+        attachHTML += `<div class="ai-resp-image">
+            <div class="hover-btns">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <img src="${url}">
+        </div>`
+    });
 
     await saveChats2Storage({
         role: RoleAI,
@@ -1910,6 +1916,71 @@ async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle
         content: attachHTML
     });
 }
+
+// =====================================
+// DO NOT DELETE THIS COMMENTED CODE
+// THERE IS NO IMG-2-IMG MODEL NOW, BUT IT MAY BE USED IN THE FUTURE
+// =====================================
+// async function sendImg2ImgPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+//     let url;
+//     switch (selectedModel) {
+//     case ImageModelImg2Img:
+//         url = '/images/generations/lcm';
+//         break;
+//     default:
+//         throw new Error(`unknown image model: ${selectedModel}`);
+//     }
+
+//     // get first image in store
+//     if (chatVisionSelectedFileStore.length === 0) {
+//         throw new Error('no image selected');
+//     }
+//     const imageBase64 = chatVisionSelectedFileStore[0].contentB64;
+
+//     // insert image to user input & hisotry
+//     await appendImg2UserInput(chatID, imageBase64, `${libs.DateStr()}.png`);
+
+//     chatVisionSelectedFileStore = [];
+//     updateChatVisionSelectedFileStore();
+
+//     const sconfig = await getChatSessionConfig();
+//     const resp = await fetch(url, {
+//         method: 'POST',
+//         headers: {
+//             Authorization: 'Bearer ' + sconfig.api_token,
+//             'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+//             'X-Laisky-Api-Base': sconfig.api_base
+//         },
+//         body: JSON.stringify({
+//             model: selectedModel,
+//             prompt,
+//             image_base64: imageBase64
+//         })
+//     });
+//     if (!resp.ok || resp.status !== 200) {
+//         throw new Error(`[${resp.status}]: ${await resp.text()}`);
+//     }
+//     const respData = await resp.json();
+
+//     currentAIRespEle.dataset.status = 'waiting';
+//     currentAIRespEle.dataset.taskType = 'image';
+//     currentAIRespEle.dataset.model = selectedModel;
+//     currentAIRespEle.dataset.taskId = respData.task_id;
+//     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
+
+//     // save img to storage no matter it's done or not
+//     let attachHTML = '';
+//     respData.image_urls.forEach((url) => {
+//         attachHTML += `<img src="${url}">`;
+//     })
+
+//     await saveChats2Storage({
+//         role: RoleAI,
+//         chatID,
+//         model: selectedModel,
+//         content: attachHTML
+//     });
+// }
 
 /**
  * Sends a prompt to the server for the selected model and updates the current AI response element with the task information.
@@ -2256,11 +2327,15 @@ async function sendChat2Server (chatID, reqPrompt) {
             case ImageModelDalle3:
                 await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
-            case ImageModelImg2Img:
-                await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                break;
+            // case ImageModelImg2Img:
+            //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+            //     break;
             case ImageModelSdxlTurbo:
                 await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                break;
+            case ImageModelFluxPro:
+            case ImageModelFluxSchnell:
+                await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
             default:
                 throw new Error(`unknown image model: ${selectedModel}`);

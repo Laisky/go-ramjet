@@ -27,6 +27,211 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+// DrawByFlux draw image by flux-pro
+func DrawByFlux(ctx *gin.Context) {
+	model := strings.TrimSpace(ctx.Param("model"))
+	if model == "" {
+		web.AbortErr(ctx, errors.New("empty model"))
+	}
+
+	var price db.Price
+	var imgExt string
+	switch model {
+	case "flux-pro":
+		imgExt = ".webp"
+		price = db.PriceTxt2ImageFluxPro
+	case "flux-schnell":
+		imgExt = ".webp"
+		price = db.PriceTxt2ImageSchnell
+	default:
+		web.AbortErr(ctx, errors.Errorf("unknown model %q", model))
+		return
+	}
+
+	taskID := gutils.RandomStringWithLength(36)
+	logger := gmw.GetLogger(ctx).Named("image_flux").With(
+		zap.String("task_id", taskID),
+		zap.String("model", model),
+	)
+	gmw.SetLogger(ctx, logger)
+
+	req := new(DrawImageByFluxProRequest)
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
+		return
+	}
+
+	user, err := getUserByAuthHeader(ctx)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	if err = user.IsModelAllowed(ctx, "flux-pro", 0); web.AbortErr(ctx, err) {
+		return
+	}
+
+	if err := checkUserExternalBilling(gmw.Ctx(ctx),
+		user, price, "txt2image:"+model); web.AbortErr(ctx, err) {
+		return
+	}
+
+	go func() {
+		logger.Debug("start image drawing task")
+		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		defer cancel()
+
+		if err := func() (err error) {
+			upstreamReqBody, err := json.Marshal(req)
+			if err != nil {
+				return errors.Wrap(err, "marshal request body")
+			}
+
+			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
+				config.Config.FluxProAPI, bytes.NewReader(upstreamReqBody))
+			if web.AbortErr(ctx, errors.Wrap(err, "new request")) {
+				return
+			}
+
+			upstreamReq.Header.Add("Content-Type", "application/json")
+			upstreamReq.Header.Add("Authorization", "Bearer "+config.Config.FluxProApiKey)
+
+			resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
+			if err != nil {
+				return errors.Wrap(err, "do request")
+			}
+			defer gutils.LogErr(resp.Body.Close, logger)
+
+			if resp.StatusCode != http.StatusCreated {
+				payload, _ := io.ReadAll(resp.Body)
+				return errors.Errorf("bad status code [%d]%s",
+					resp.StatusCode, string(payload))
+			}
+
+			respData := new(DrawImageByFluxProResponse)
+			if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
+				return errors.Wrap(err, "decode response")
+			}
+
+			var imgContent []byte
+			for {
+				err = func() error {
+					// get task
+					taskReq, err := http.NewRequestWithContext(taskCtx,
+						http.MethodGet, respData.URLs.Get, nil)
+					if err != nil {
+						return errors.Wrap(err, "new request")
+					}
+
+					taskReq.Header.Set("Authorization", "Bearer "+config.Config.FluxProApiKey)
+					taskResp, err := httpcli.Do(taskReq) //nolint: bodyclose
+					if err != nil {
+						return errors.Wrap(err, "get task")
+					}
+					defer gutils.LogErr(taskResp.Body.Close, logger)
+
+					if taskResp.StatusCode != http.StatusOK {
+						payload, _ := io.ReadAll(taskResp.Body)
+						return errors.Errorf("bad status code [%d]%s",
+							taskResp.StatusCode, string(payload))
+					}
+
+					taskBody, err := io.ReadAll(taskResp.Body)
+					if err != nil {
+						return errors.Wrap(err, "read task response")
+					}
+
+					taskData := new(DrawImageByFluxProResponse)
+					if err = json.Unmarshal(taskBody, taskData); err != nil {
+						return errors.Wrapf(err, "decode task response %s", string(taskBody))
+					}
+
+					switch taskData.Status {
+					case "succeeded":
+					case "failed", "canceled":
+						return errors.Errorf("task failed: %s", taskData.Status)
+					default:
+						logger.Debug("wait image task done",
+							zap.String("status", taskData.Status))
+						time.Sleep(time.Second * 3)
+						return nil
+					}
+
+					if len(taskData.Output) == 0 {
+						return errors.New("empty image url")
+					}
+
+					// download image
+					logger.Debug("try to download image",
+						zap.String("img_url", taskData.Output[0]))
+					downloadReq, err := http.NewRequestWithContext(taskCtx,
+						http.MethodGet, taskData.Output[0], nil)
+					if err != nil {
+						return errors.Wrap(err, "new request")
+					}
+
+					imgResp, err := httpcli.Do(downloadReq) //nolint: bodyclose
+					if err != nil {
+						return errors.Wrap(err, "download image")
+					}
+					defer gutils.LogErr(imgResp.Body.Close, logger)
+
+					// upload image
+					imgContent, err = io.ReadAll(imgResp.Body)
+					if err != nil {
+						return errors.Wrap(err, "read image")
+					}
+
+					return nil
+				}()
+				if err != nil {
+					return errors.Wrap(err, "wait image task done")
+				}
+
+				if len(imgContent) != 0 {
+					break
+				}
+			}
+
+			return uploadImage2Minio(taskCtx,
+				drawImageByTxtObjkeyPrefix(taskID)+"-0",
+				req.Input.Prompt,
+				imgContent,
+				imgExt,
+			)
+		}(); err != nil {
+			// upload error msg
+			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
+				req.Input.Prompt, err.Error()))
+			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
+			if _, err := s3.GetCli().PutObject(taskCtx,
+				config.Config.S3.Bucket,
+				objkey,
+				bytes.NewReader(msg),
+				int64(len(msg)),
+				minio.PutObjectOptions{
+					ContentType: "text/plain",
+				}); err != nil {
+				logger.Error("upload error msg", zap.Error(err))
+			}
+
+			logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
+			return
+		}
+
+		logger.Info("succeed draw image done")
+	}()
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"task_id": taskID,
+		"image_urls": []string{
+			fmt.Sprintf("https://%s/%s/%s-0%s",
+				config.Config.S3.Endpoint,
+				config.Config.S3.Bucket,
+				drawImageByTxtObjkeyPrefix(taskID), imgExt,
+			),
+		},
+	})
+}
+
 func DrawByLcmHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 	logger := gmw.GetLogger(ctx).Named("image").With(
@@ -115,7 +320,11 @@ func DrawByLcmHandler(ctx *gin.Context) {
 				}
 
 				return uploadImage2Minio(taskCtx,
-					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Prompt, img)
+					drawImageByImageObjkeyPrefix(taskID)+"-"+subtask,
+					req.Prompt,
+					img,
+					".png",
+				)
 			}(); err != nil {
 				// upload error msg
 				msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
@@ -231,6 +440,7 @@ func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
 				objkeyPrefix+"-0",
 				rawreq.Text,
 				imgcontent,
+				".png",
 			)
 			if err != nil {
 				return errors.Wrap(err, "upload image")
@@ -350,7 +560,11 @@ func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 
 				pool.Go(func() (err error) {
 					return uploadImage2Minio(taskCtx,
-						drawImageByImageObjkeyPrefix(taskID)+"-"+subtask, req.Text, imgBytes)
+						drawImageByImageObjkeyPrefix(taskID)+"-"+subtask,
+						req.Text,
+						imgBytes,
+						".png",
+					)
 				})
 			}
 
@@ -515,7 +729,12 @@ func drawImageByOpenaiDalle(ctx context.Context,
 		return errors.Wrap(err, "decode image")
 	}
 
-	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID)+"-0", prompt, imgContent); err != nil {
+	if err = uploadImage2Minio(ctx,
+		drawImageByTxtObjkeyPrefix(taskID)+"-0",
+		prompt,
+		imgContent,
+		".png",
+	); err != nil {
 		return errors.Wrap(err, "upload image")
 	}
 
@@ -585,7 +804,12 @@ func drawImageByAzureDalle(ctx context.Context,
 		return errors.Wrap(err, "read image")
 	}
 
-	if err = uploadImage2Minio(ctx, drawImageByTxtObjkeyPrefix(taskID)+"-0", prompt, imgContent); err != nil {
+	if err = uploadImage2Minio(ctx,
+		drawImageByTxtObjkeyPrefix(taskID)+"-0",
+		prompt,
+		imgContent,
+		".png",
+	); err != nil {
 		return errors.Wrap(err, "upload image")
 	}
 
@@ -604,19 +828,27 @@ func drawImageByImageObjkeyPrefix(taskid string) string {
 	return fmt.Sprintf("image-by-image/%s/%s/%s", year, month, taskid)
 }
 
-func uploadImage2Minio(ctx context.Context, objkeyPrefix, prompt string, img_content []byte) (err error) {
+func uploadImage2Minio(ctx context.Context,
+	objkeyPrefix,
+	prompt string,
+	imgContent []byte,
+	imgExt string,
+) (err error) {
 	logger := gmw.GetLogger(ctx)
 	s3cli := s3.GetCli()
 
-	var pool errgroup.Group
+	if imgExt == "" {
+		imgExt = ".png"
+	}
 
 	// upload image
+	var pool errgroup.Group
 	pool.Go(func() (err error) {
 		_, err = s3cli.PutObject(ctx,
 			config.Config.S3.Bucket,
-			objkeyPrefix+".png",
-			bytes.NewReader(img_content),
-			int64(len(img_content)),
+			objkeyPrefix+imgExt,
+			bytes.NewReader(imgContent),
+			int64(len(imgContent)),
 			minio.PutObjectOptions{
 				ContentType: "image/png",
 			},
