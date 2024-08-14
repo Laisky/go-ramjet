@@ -367,7 +367,8 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"sdxl-turbo",
 		"gemini-pro",
 		"gemini-pro-vision":
-	case "dall-e-3":
+	case "dall-e-3", // limited to free users
+		"flux-schnell":
 		if c.NoLimitImageModels {
 			return nil
 		}
