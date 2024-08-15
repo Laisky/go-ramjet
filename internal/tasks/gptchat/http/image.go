@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -75,6 +76,7 @@ func DrawByFlux(ctx *gin.Context) {
 		defer cancel()
 
 		var pool errgroup.Group
+		anySucceed := int32(0)
 		for i := range nImage {
 			i := i
 			req.Input.Seed = rand.Int()
@@ -198,6 +200,7 @@ func DrawByFlux(ctx *gin.Context) {
 					}
 				}
 
+				atomic.AddInt32(&anySucceed, 1)
 				return uploadImage2Minio(taskCtx,
 					fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
 					req.Input.Prompt,
@@ -213,18 +216,25 @@ func DrawByFlux(ctx *gin.Context) {
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
 				req.Input.Prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			if _, err := s3.GetCli().PutObject(taskCtx,
-				config.Config.S3.Bucket,
-				objkey,
-				bytes.NewReader(msg),
-				int64(len(msg)),
-				minio.PutObjectOptions{
-					ContentType: "text/plain",
-				}); err != nil {
-				logger.Error("upload error msg", zap.Error(err))
+			if anySucceed == 0 {
+				if _, err := s3.GetCli().PutObject(taskCtx,
+					config.Config.S3.Bucket,
+					objkey,
+					bytes.NewReader(msg),
+					int64(len(msg)),
+					minio.PutObjectOptions{
+						ContentType: "text/plain",
+					}); err != nil {
+					logger.Error("upload error msg", zap.Error(err))
+				}
 			}
 
-			logger.Error("failed to draw image", zap.Error(err), zap.String("objkey", objkey))
+			logger.Error("failed to draw som image",
+				zap.Int("required", nImage),
+				zap.Int32("succeed", anySucceed),
+				zap.String("objkey", objkey),
+				zap.Error(err),
+			)
 			return
 		}
 
