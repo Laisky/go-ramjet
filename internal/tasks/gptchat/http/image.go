@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image/png"
 	"io"
 	"math/rand"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 	"github.com/minio/minio-go/v7"
+	"golang.org/x/image/webp"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -37,7 +39,7 @@ func DrawByFlux(ctx *gin.Context) {
 	}
 
 	var price db.Price
-	imgExt := ".webp"
+	imgExt := ".png"
 	nImage := 1
 	switch model {
 	case "flux-pro":
@@ -57,7 +59,7 @@ func DrawByFlux(ctx *gin.Context) {
 	)
 	gmw.SetLogger(ctx, logger)
 
-	req := new(DrawImageByFluxProRequest)
+	req := new(DrawImageByFluxReplicateRequest)
 	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
 		return
 	}
@@ -85,16 +87,21 @@ func DrawByFlux(ctx *gin.Context) {
 				logger := logger.With(zap.Int("n_img", i))
 				taskCtx := gmw.SetLogger(taskCtx, logger)
 
+				// first try segmind, since of segmind is free
+				imgContent, err := drawFluxBySegmind(taskCtx, model, req)
+				if err != nil {
+					logger.Warn("failed to draw image by segmind, try replicate", zap.Error(err))
+
+					imgContent, err = drawFluxByReplicate(taskCtx, model, req)
+					if err != nil {
+						return errors.Wrap(err, "draw image")
+					}
+				}
+
 				if err := checkUserExternalBilling(taskCtx,
 					user, price, "txt2image:"+model); err != nil {
 					return errors.Wrapf(err, "check user external billing for %d image", i)
 				}
-
-				imgContent, err := drawFluxByReplicate(taskCtx, model, req)
-				if err != nil {
-					return errors.Wrap(err, "draw image")
-				}
-
 				atomic.AddInt32(&anySucceed, 1)
 				return uploadImage2Minio(taskCtx,
 					fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
@@ -150,10 +157,12 @@ func DrawByFlux(ctx *gin.Context) {
 }
 
 // drawFluxByReplicate draw image by replicate service
-func drawFluxByReplicate(ctx context.Context, model string, req *DrawImageByFluxProRequest) (img []byte, err error) {
+func drawFluxByReplicate(ctx context.Context,
+	model string, req *DrawImageByFluxReplicateRequest) (img []byte, err error) {
 	logger := gmw.GetLogger(ctx)
+	logger.Debug("draw image by replicate")
 
-	upstreamReqData := new(DrawImageByFluxProRequest)
+	upstreamReqData := new(DrawImageByFluxReplicateRequest)
 	if err = copier.Copy(upstreamReqData, req); err != nil {
 		return nil, errors.Wrap(err, "copy request")
 	}
@@ -276,6 +285,91 @@ func drawFluxByReplicate(ctx context.Context, model string, req *DrawImageByFlux
 		if len(imgContent) != 0 {
 			break
 		}
+	}
+
+	imgContent, err = ConvertWebPToPNG(imgContent)
+	if err != nil {
+		return nil, errors.Wrap(err, "convert webp to png")
+	}
+
+	return imgContent, nil
+}
+
+// ConvertWebPToPNG converts a WebP image to PNG format
+func ConvertWebPToPNG(webpData []byte) ([]byte, error) {
+	// Decode the WebP image
+	img, err := webp.Decode(bytes.NewReader(webpData))
+	if err != nil {
+		return nil, errors.Wrap(err, "decode webp")
+	}
+
+	// Encode the image as PNG
+	var pngBuffer bytes.Buffer
+	if err := png.Encode(&pngBuffer, img); err != nil {
+		return nil, errors.Wrap(err, "encode png")
+	}
+
+	return pngBuffer.Bytes(), nil
+}
+
+// drawFluxBySegmind draw image by replicate service
+func drawFluxBySegmind(ctx context.Context,
+	model string, req *DrawImageByFluxReplicateRequest) (img []byte, err error) {
+	logger := gmw.GetLogger(ctx)
+	logger.Debug("draw image by segmind")
+
+	upstreamReqData := &DrawImageByFluxSegmind{
+		Prompt:      req.Input.Prompt,
+		Steps:       req.Input.Steps,
+		Seed:        rand.Int(),
+		SamplerName: "euler",
+		Scheduler:   "normal",
+		Samples:     1,
+		Width:       2048,
+		Height:      2048,
+		Denoise:     1,
+	}
+
+	upstreamReqBody, err := json.Marshal(upstreamReqData)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal request")
+	}
+
+	var api string
+	switch model {
+	// case "flux-pro":
+	// 	api = "https://api.segmind.com/v1/flux-pro"
+	case "flux-schnell":
+		api = "https://api.segmind.com/v1/flux-schnell"
+	default:
+		return nil, errors.Errorf("unknown model %q", model)
+	}
+
+	logger.Debug("send request to segmind", zap.String("api", api))
+	upstreamReq, err := http.NewRequestWithContext(ctx,
+		http.MethodPost, api, bytes.NewReader(upstreamReqBody))
+	if err != nil {
+		return nil, errors.Wrap(err, "new request to draw image")
+	}
+
+	upstreamReq.Header.Add("Content-Type", "application/json")
+	upstreamReq.Header.Add("x-api-key", config.Config.SegmindApikey)
+
+	resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
+	if err != nil {
+		return nil, errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, logger)
+
+	if resp.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("bad status code [%d]%s",
+			resp.StatusCode, string(payload))
+	}
+
+	imgContent, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read image")
 	}
 
 	return imgContent, nil

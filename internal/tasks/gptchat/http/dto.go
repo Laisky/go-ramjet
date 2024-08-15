@@ -400,10 +400,43 @@ type DrawImageByTextRequest struct {
 // 	return len(r.Prompt)
 // }
 
-// DrawImageByFluxProRequest draw image by fluxpro
+// DrawImageByFluxSegmind is request to draw image by flux schnell
+//
+// https://www.segmind.com/models/flux-schnell/api
+type DrawImageByFluxSegmind struct {
+	// Prompt is the text prompt for generating the image
+	Prompt string `json:"prompt" binding:"required"`
+
+	// Steps is the number of inference steps for image generation
+	// min: 1, max: 100
+	Steps int `json:"steps" binding:"required,min=1,max=100"`
+
+	// Seed is the seed for random number generation
+	Seed int `json:"seed"`
+
+	// SamplerName is the sampler for the image generation process
+	SamplerName string `json:"sampler_name" binding:"required"`
+
+	// Scheduler is the scheduler for the image generation process
+	Scheduler string `json:"scheduler" binding:"required"`
+
+	// Samples is the number of samples to generate
+	Samples int `json:"samples" binding:"required"`
+
+	// Width is the image width, can be between 512 and 2048 in multiples of 8
+	Width int `json:"width" binding:"required,min=512,max=2048"`
+
+	// Height is the image height, can be between 512 and 2048 in multiples of 8
+	Height int `json:"height" binding:"required,min=512,max=2048"`
+
+	// Denoise is the denoise level for the generated image
+	Denoise float64 `json:"denoise" binding:"required"`
+}
+
+// DrawImageByFluxReplicateRequest draw image by fluxpro
 //
 // https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
-type DrawImageByFluxProRequest struct {
+type DrawImageByFluxReplicateRequest struct {
 	Input FluxInput `json:"input"`
 }
 
@@ -422,19 +455,19 @@ type FluxInput struct {
 //
 // https://replicate.com/black-forest-labs/flux-pro?prediction=kg1krwsdf9rg80ch1sgsrgq7h8&output=json
 type DrawImageByFluxProResponse struct {
-	CompletedAt time.Time                 `json:"completed_at"`
-	CreatedAt   time.Time                 `json:"created_at"`
-	DataRemoved bool                      `json:"data_removed"`
-	Error       string                    `json:"error"`
-	ID          string                    `json:"id"`
-	Input       DrawImageByFluxProRequest `json:"input"`
-	Logs        interface{}               `json:"logs"`
-	Metrics     FluxMetrics               `json:"metrics"`
-	Output      []string                  `json:"output"`
-	StartedAt   time.Time                 `json:"started_at"`
-	Status      string                    `json:"status"`
-	URLs        FluxURLs                  `json:"urls"`
-	Version     string                    `json:"version"`
+	CompletedAt time.Time                       `json:"completed_at"`
+	CreatedAt   time.Time                       `json:"created_at"`
+	DataRemoved bool                            `json:"data_removed"`
+	Error       string                          `json:"error"`
+	ID          string                          `json:"id"`
+	Input       DrawImageByFluxReplicateRequest `json:"input"`
+	Logs        interface{}                     `json:"logs"`
+	Metrics     FluxMetrics                     `json:"metrics"`
+	Output      []string                        `json:"output"`
+	StartedAt   time.Time                       `json:"started_at"`
+	Status      string                          `json:"status"`
+	URLs        FluxURLs                        `json:"urls"`
+	Version     string                          `json:"version"`
 }
 
 // FluxMetrics is metrics of DrawImageByFluxProResponse

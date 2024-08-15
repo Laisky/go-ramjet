@@ -129,6 +129,10 @@ type OpenAI struct {
 	//
 	// https://replicate.com/account/api-tokens
 	ReplicateApikey string `json:"-" mapstructure:"replicate_apikey"`
+	// SegmindApikey is the api key for segmind
+	//
+	// https://cloud.segmind.com/console/api-keys
+	SegmindApikey string `json:"-" mapstructure:"segmind_apikey"`
 
 	// PaymentStripeKey (optional) stripe key
 	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`
