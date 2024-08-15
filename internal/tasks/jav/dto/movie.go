@@ -2,10 +2,10 @@
 package dto
 
 type MovieResponse struct {
-	Code        string   `json:"code"`
-	ImageURLs   []string `json:"image_urls"`
-	Tags        []string `json:"tags"`
-	Description string   `json:"description"`
-	Actresses   []string `json:"actresses"`
-	Downloads   []string `json:"downloads"`
+	Code         string   `json:"code"`
+	ImageURLs    []string `json:"image_urls"`
+	Tags         []string `json:"tags"`
+	Descriptions []string `json:"descriptions"`
+	Actresses    []string `json:"actresses"`
+	Downloads    []string `json:"downloads"`
 }

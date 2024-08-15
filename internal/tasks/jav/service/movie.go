@@ -41,10 +41,10 @@ func GetMovieInfo(ctx context.Context, movieID primitive.ObjectID) (*dto.MovieRe
 	}
 
 	resp := &dto.MovieResponse{
-		Code:        movie.Name,
-		ImageURLs:   movie.ImgUrls,
-		Tags:        movie.Tags,
-		Description: movie.Description,
+		Code:         movie.Name,
+		ImageURLs:    movie.ImgUrls,
+		Tags:         movie.Tags,
+		Descriptions: movie.Descriptions,
 	}
 
 	// get actress from db
