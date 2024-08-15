@@ -35,13 +35,13 @@ func DrawByFlux(ctx *gin.Context) {
 	}
 
 	var price db.Price
-	var imgExt string
+	imgExt := ".webp"
+	nImage := 1
 	switch model {
 	case "flux-pro":
-		imgExt = ".webp"
 		price = db.PriceTxt2ImageFluxPro
 	case "flux-schnell":
-		imgExt = ".webp"
+		nImage = 4
 		price = db.PriceTxt2ImageSchnell
 	default:
 		web.AbortErr(ctx, errors.Errorf("unknown model %q", model))
@@ -69,135 +69,146 @@ func DrawByFlux(ctx *gin.Context) {
 		return
 	}
 
-	if err := checkUserExternalBilling(gmw.Ctx(ctx),
-		user, price, "txt2image:"+model); web.AbortErr(ctx, err) {
-		return
-	}
-
 	go func() {
 		logger.Debug("start image drawing task")
 		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
 		defer cancel()
 
-		if err := func() (err error) {
+		var pool errgroup.Group
+		for i := range nImage {
+			i := i
+			req.Input.Seed = rand.Int()
 			upstreamReqBody, err := json.Marshal(req)
 			if err != nil {
-				return errors.Wrap(err, "marshal request body")
+				logger.Error("marshal request", zap.Error(err))
+				continue
 			}
 
-			upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
-				config.Config.FluxProAPI, bytes.NewReader(upstreamReqBody))
-			if web.AbortErr(ctx, errors.Wrap(err, "new request")) {
-				return
-			}
+			pool.Go(func() (err error) {
+				logger := logger.With(zap.Int("n_img", i))
 
-			upstreamReq.Header.Add("Content-Type", "application/json")
-			upstreamReq.Header.Add("Authorization", "Bearer "+config.Config.FluxProApiKey)
+				if err := checkUserExternalBilling(taskCtx,
+					user, price, "txt2image:"+model); err != nil {
+					return errors.Wrapf(err, "check user external billing for %d image", i)
+				}
 
-			resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
-			if err != nil {
-				return errors.Wrap(err, "do request")
-			}
-			defer gutils.LogErr(resp.Body.Close, logger)
-
-			if resp.StatusCode != http.StatusCreated {
-				payload, _ := io.ReadAll(resp.Body)
-				return errors.Errorf("bad status code [%d]%s",
-					resp.StatusCode, string(payload))
-			}
-
-			respData := new(DrawImageByFluxProResponse)
-			if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
-				return errors.Wrap(err, "decode response")
-			}
-
-			var imgContent []byte
-			for {
-				err = func() error {
-					// get task
-					taskReq, err := http.NewRequestWithContext(taskCtx,
-						http.MethodGet, respData.URLs.Get, nil)
-					if err != nil {
-						return errors.Wrap(err, "new request")
-					}
-
-					taskReq.Header.Set("Authorization", "Bearer "+config.Config.FluxProApiKey)
-					taskResp, err := httpcli.Do(taskReq) //nolint: bodyclose
-					if err != nil {
-						return errors.Wrap(err, "get task")
-					}
-					defer gutils.LogErr(taskResp.Body.Close, logger)
-
-					if taskResp.StatusCode != http.StatusOK {
-						payload, _ := io.ReadAll(taskResp.Body)
-						return errors.Errorf("bad status code [%d]%s",
-							taskResp.StatusCode, string(payload))
-					}
-
-					taskBody, err := io.ReadAll(taskResp.Body)
-					if err != nil {
-						return errors.Wrap(err, "read task response")
-					}
-
-					taskData := new(DrawImageByFluxProResponse)
-					if err = json.Unmarshal(taskBody, taskData); err != nil {
-						return errors.Wrapf(err, "decode task response %s", string(taskBody))
-					}
-
-					switch taskData.Status {
-					case "succeeded":
-					case "failed", "canceled":
-						return errors.Errorf("task failed: %s", taskData.Status)
-					default:
-						logger.Debug("wait image task done",
-							zap.String("status", taskData.Status))
-						time.Sleep(time.Second * 3)
-						return nil
-					}
-
-					if len(taskData.Output) == 0 {
-						return errors.New("empty image url")
-					}
-
-					// download image
-					logger.Debug("try to download image",
-						zap.String("img_url", taskData.Output[0]))
-					downloadReq, err := http.NewRequestWithContext(taskCtx,
-						http.MethodGet, taskData.Output[0], nil)
-					if err != nil {
-						return errors.Wrap(err, "new request")
-					}
-
-					imgResp, err := httpcli.Do(downloadReq) //nolint: bodyclose
-					if err != nil {
-						return errors.Wrap(err, "download image")
-					}
-					defer gutils.LogErr(imgResp.Body.Close, logger)
-
-					// upload image
-					imgContent, err = io.ReadAll(imgResp.Body)
-					if err != nil {
-						return errors.Wrap(err, "read image")
-					}
-
-					return nil
-				}()
+				upstreamReq, err := http.NewRequestWithContext(taskCtx, http.MethodPost,
+					config.Config.FluxProAPI, bytes.NewReader(upstreamReqBody))
 				if err != nil {
-					return errors.Wrap(err, "wait image task done")
+					return errors.Wrapf(err, "new request to draw %d image", i)
 				}
 
-				if len(imgContent) != 0 {
-					break
-				}
-			}
+				upstreamReq.Header.Add("Content-Type", "application/json")
+				upstreamReq.Header.Add("Authorization", "Bearer "+config.Config.FluxProApiKey)
 
-			return uploadImage2Minio(taskCtx,
-				drawImageByTxtObjkeyPrefix(taskID)+"-0",
-				req.Input.Prompt,
-				imgContent,
-				imgExt,
-			)
-		}(); err != nil {
+				resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
+				if err != nil {
+					return errors.Wrap(err, "do request")
+				}
+				defer gutils.LogErr(resp.Body.Close, logger)
+
+				if resp.StatusCode != http.StatusCreated {
+					payload, _ := io.ReadAll(resp.Body)
+					return errors.Errorf("bad status code [%d]%s",
+						resp.StatusCode, string(payload))
+				}
+
+				respData := new(DrawImageByFluxProResponse)
+				if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
+					return errors.Wrap(err, "decode response")
+				}
+
+				var imgContent []byte
+				for {
+					err = func() error {
+						// get task
+						taskReq, err := http.NewRequestWithContext(taskCtx,
+							http.MethodGet, respData.URLs.Get, nil)
+						if err != nil {
+							return errors.Wrap(err, "new request")
+						}
+
+						taskReq.Header.Set("Authorization", "Bearer "+config.Config.FluxProApiKey)
+						taskResp, err := httpcli.Do(taskReq) //nolint: bodyclose
+						if err != nil {
+							return errors.Wrap(err, "get task")
+						}
+						defer gutils.LogErr(taskResp.Body.Close, logger)
+
+						if taskResp.StatusCode != http.StatusOK {
+							payload, _ := io.ReadAll(taskResp.Body)
+							return errors.Errorf("bad status code [%d]%s",
+								taskResp.StatusCode, string(payload))
+						}
+
+						taskBody, err := io.ReadAll(taskResp.Body)
+						if err != nil {
+							return errors.Wrap(err, "read task response")
+						}
+
+						taskData := new(DrawImageByFluxProResponse)
+						if err = json.Unmarshal(taskBody, taskData); err != nil {
+							return errors.Wrapf(err, "decode task response %s", string(taskBody))
+						}
+
+						switch taskData.Status {
+						case "succeeded":
+						case "failed", "canceled":
+							return errors.Errorf("task failed: %s", taskData.Status)
+						default:
+							logger.Debug("wait image task done",
+								zap.String("status", taskData.Status))
+							time.Sleep(time.Second * 3)
+							return nil
+						}
+
+						if len(taskData.Output) == 0 {
+							return errors.New("empty image url")
+						}
+
+						// download image
+						logger.Debug("try to download image",
+							zap.String("img_url", taskData.Output[0]))
+						downloadReq, err := http.NewRequestWithContext(taskCtx,
+							http.MethodGet, taskData.Output[0], nil)
+						if err != nil {
+							return errors.Wrap(err, "new request")
+						}
+
+						imgResp, err := httpcli.Do(downloadReq) //nolint: bodyclose
+						if err != nil {
+							return errors.Wrap(err, "download image")
+						}
+						defer gutils.LogErr(imgResp.Body.Close, logger)
+
+						// upload image
+						imgContent, err = io.ReadAll(imgResp.Body)
+						if err != nil {
+							return errors.Wrap(err, "read image")
+						}
+
+						return nil
+					}()
+					if err != nil {
+						return errors.Wrap(err, "wait image task done")
+					}
+
+					if len(imgContent) != 0 {
+						break
+					}
+				}
+
+				return uploadImage2Minio(taskCtx,
+					fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
+					req.Input.Prompt,
+					imgContent,
+					imgExt,
+				)
+			})
+		}
+
+		err = pool.Wait()
+		if err != nil {
 			// upload error msg
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
 				req.Input.Prompt, err.Error()))
@@ -220,15 +231,18 @@ func DrawByFlux(ctx *gin.Context) {
 		logger.Info("succeed draw image done")
 	}()
 
+	var imgUrls []string
+	for i := 0; i < nImage; i++ {
+		imgUrls = append(imgUrls, fmt.Sprintf("https://%s/%s/%s-%d%s",
+			config.Config.S3.Endpoint,
+			config.Config.S3.Bucket,
+			drawImageByTxtObjkeyPrefix(taskID), i, imgExt,
+		))
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"task_id": taskID,
-		"image_urls": []string{
-			fmt.Sprintf("https://%s/%s/%s-0%s",
-				config.Config.S3.Endpoint,
-				config.Config.S3.Bucket,
-				drawImageByTxtObjkeyPrefix(taskID), imgExt,
-			),
-		},
+		"task_id":    taskID,
+		"image_urls": imgUrls,
 	})
 }
 

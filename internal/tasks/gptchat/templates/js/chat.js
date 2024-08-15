@@ -1054,6 +1054,7 @@ async function fetchImageDrawingResultBackground () {
             await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
                 const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
+                // const errFileUrl = imageUrl.replace(/(\.\w+)$/, '.err.txt');
                 const errFileResp = await fetch(`${errFileUrl}?rr=${libs.RandomString(12)}`, {
                     method: 'GET',
                     cache: 'no-cache'
@@ -1133,6 +1134,10 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         if (succeedImageUrls.length > 1) {
             item.classList.add('multi-images');
         }
+    }
+
+    if (processingImageUrls.length === 0) {
+        renderAfterAiResp(chatID, false);
     }
 }
 
