@@ -1061,7 +1061,7 @@ async function fetchImageDrawingResultBackground () {
                 });
                 if (errFileResp.ok || errFileResp.status === 200) {
                     const errText = await errFileResp.text();
-                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
+                    item.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
                     checkIsImageAllSubtaskDone(item, imageUrl, false);
                     await saveChats2Storage({
                         role: RoleAI,
@@ -1117,26 +1117,31 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         item.dataset.imageUrls = JSON.stringify(processingImageUrls);
     }
 
-    if (processingImageUrls.length === 0 && succeedImageUrls.length > 0) {
-        item.dataset.status = 'done';
-        let imgHTML = '';
-        succeedImageUrls.forEach((url) => {
-            imgHTML += `<div class="ai-resp-image">
+    if (processingImageUrls.length === 0) {
+        if (succeedImageUrls.length > 0) {
+            let imgHTML = '';
+            succeedImageUrls.forEach((url) => {
+                imgHTML += `<div class="ai-resp-image">
                 <div class="hover-btns">
-                    <i class="bi bi-pencil-square"></i>
+                <i class="bi bi-pencil-square"></i>
                 </div>
                 <img src="${url}">
-            </div>`;
-        });
-        item.innerHTML = imgHTML;
-        bindImageOperationInAiResp(chatID);
+                </div>`;
+            });
+            item.innerHTML = imgHTML;
+            bindImageOperationInAiResp(chatID);
 
-        if (succeedImageUrls.length > 1) {
-            item.classList.add('multi-images');
+            if (succeedImageUrls.length > 1) {
+                item.classList.add('multi-images');
+            }
+        } else {
+            // remove holding animation elements
+            item.querySelectorAll('.placeholder-glow').forEach((ele) => {
+                ele.remove();
+            });
         }
-    }
 
-    if (processingImageUrls.length === 0) {
+        item.dataset.status = 'done';
         renderAfterAiResp(chatID, false);
     }
 }

@@ -216,17 +216,15 @@ func DrawByFlux(ctx *gin.Context) {
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
 				req.Input.Prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			if anySucceed == 0 {
-				if _, err := s3.GetCli().PutObject(taskCtx,
-					config.Config.S3.Bucket,
-					objkey,
-					bytes.NewReader(msg),
-					int64(len(msg)),
-					minio.PutObjectOptions{
-						ContentType: "text/plain",
-					}); err != nil {
-					logger.Error("upload error msg", zap.Error(err))
-				}
+			if _, err := s3.GetCli().PutObject(taskCtx,
+				config.Config.S3.Bucket,
+				objkey,
+				bytes.NewReader(msg),
+				int64(len(msg)),
+				minio.PutObjectOptions{
+					ContentType: "text/plain",
+				}); err != nil {
+				logger.Error("upload error msg", zap.Error(err))
 			}
 
 			logger.Error("failed to draw som image",
