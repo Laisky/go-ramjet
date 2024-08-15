@@ -65,7 +65,7 @@ func DrawByFlux(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, "flux-pro", 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, model, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
