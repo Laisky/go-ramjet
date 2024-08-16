@@ -87,8 +87,11 @@ func DrawByFlux(ctx *gin.Context) {
 				logger := logger.With(zap.Int("n_img", i))
 				taskCtx := gmw.SetLogger(taskCtx, logger)
 
-				// first try segmind, since of segmind is free
-				imgContent, err := drawFluxBySegmind(taskCtx, model, req)
+				// first try segmind, since of segmind has some free quota.
+				// but segmind could be very slow, so we will try replicate if segmind failed.
+				taskSegmindCtx, cancel := context.WithTimeout(taskCtx, time.Minute*2)
+				defer cancel()
+				imgContent, err := drawFluxBySegmind(taskSegmindCtx, model, req)
 				if err != nil {
 					logger.Warn("failed to draw image by segmind, try replicate", zap.Error(err))
 
