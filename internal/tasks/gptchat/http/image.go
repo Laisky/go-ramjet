@@ -89,16 +89,21 @@ func DrawByFlux(ctx *gin.Context) {
 
 				// first try segmind, since of segmind has some free quota.
 				// but segmind could be very slow, so we will try replicate if segmind failed.
-				taskSegmindCtx, cancel := context.WithTimeout(taskCtx, time.Minute*2)
-				defer cancel()
-				imgContent, err := drawFluxBySegmind(taskSegmindCtx, model, req)
-				if err != nil {
-					logger.Warn("failed to draw image by segmind, try replicate", zap.Error(err))
+				// taskSegmindCtx, cancel := context.WithTimeout(taskCtx, time.Minute*2)
+				// defer cancel()
+				// imgContent, err := drawFluxBySegmind(taskSegmindCtx, model, req)
+				// if err != nil {
+				// 	logger.Warn("failed to draw image by segmind, try replicate", zap.Error(err))
 
-					imgContent, err = drawFluxByReplicate(taskCtx, model, req)
-					if err != nil {
-						return errors.Wrap(err, "draw image")
-					}
+				// 	imgContent, err = drawFluxByReplicate(taskCtx, model, req)
+				// 	if err != nil {
+				// 		return errors.Wrap(err, "draw image")
+				// 	}
+				// }
+
+				imgContent, err := drawFluxByReplicate(taskCtx, model, req)
+				if err != nil {
+					return errors.Wrap(err, "draw image")
 				}
 
 				if err := checkUserExternalBilling(taskCtx,
