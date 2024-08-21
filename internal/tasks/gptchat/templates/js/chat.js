@@ -503,6 +503,7 @@ async function dataMigrate () {
 
         // move session config
         if (!sconfig) {
+            console.log(`generate new session config for ${sid} during data migrate`);
             sconfig = newSessionConfig();
 
             sconfig.api_token = libs.GetLocalStorage('config_api_token_value') || sconfig.api_token;
@@ -514,23 +515,19 @@ async function dataMigrate () {
             sconfig.n_contexts = libs.GetLocalStorage('config_api_n_contexts') || sconfig.n_contexts;
             sconfig.system_prompt = libs.GetLocalStorage('config_api_static_context') || sconfig.system_prompt;
             sconfig.selected_model = libs.GetLocalStorage('config_chat_model') || sconfig.selected_model;
-
-            await libs.KvSet(skey, sconfig);
         }
-    }
 
-    // set api token from url params
-    {
+        // set api token from url params
         const apikey = new URLSearchParams(location.search).get('apikey');
-
         if (apikey) {
             // remove apikey from url params
             const url = new URL(location.href);
             url.searchParams.delete('apikey');
             window.history.pushState({}, document.title, url);
             sconfig.api_token = apikey;
-            await libs.KvSet(skey, sconfig);
         }
+
+        await libs.KvSet(skey, sconfig);
     }
 
     // list all session configs
@@ -541,11 +538,13 @@ async function dataMigrate () {
 
         let eachSconfig = await libs.KvGet(key);
         if (!eachSconfig) {
+            console.log(`generate new session config for ${key}`);
             eachSconfig = newSessionConfig();
         }
 
         // set default api_token
         if (!eachSconfig.api_token || eachSconfig.api_token === 'DEFAULT_PROXY_TOKEN') {
+            console.log(`generate new api_token for ${key}`);
             eachSconfig.api_token = 'FREETIER-' + libs.RandomString(32);
         }
         // set default api_base
@@ -1295,6 +1294,7 @@ async function setupSessionManager () {
             await libs.KvSet(skey, []);
 
             // create session config
+            console.log('generate new session config for 1 during setup session manager');
             await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
         }
 
@@ -1408,6 +1408,7 @@ async function setupSessionManager () {
                 // save new session history and config
                 await libs.KvSet(kvSessionKey(newSessionID), []);
                 const oldSessionConfig = await getChatSessionConfig();
+                console.log(`generate new session config for ${newSessionID} during new session`);
                 const sconfig = newSessionConfig();
 
                 // keep old session's api token and api base
@@ -2337,9 +2338,9 @@ async function sendChat2Server (chatID, reqPrompt) {
             case ImageModelDalle3:
                 await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
-            // case ImageModelImg2Img:
-            //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-            //     break;
+                // case ImageModelImg2Img:
+                //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                //     break;
             case ImageModelSdxlTurbo:
                 await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
