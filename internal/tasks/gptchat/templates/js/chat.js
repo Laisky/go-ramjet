@@ -2330,7 +2330,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         break;
     case 'image':
         if (!IsImageModel(selectedModel) && sconfig.chat_switch.all_in_one) {
-            selectedModel = ImageModelDalle3;
+            selectedModel = ImageModelFluxSchnell;
         }
 
         try {
