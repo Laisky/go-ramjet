@@ -86,7 +86,6 @@ func CreateRecord(ctx *gin.Context) {
 		notfound = true
 	}
 
-	fmt.Println(notfound)
 	objCnt, err := io.ReadAll(obj)
 	if err != nil {
 		if minio.ToErrorResponse(err).Code != "NoSuchKey" {
@@ -249,7 +248,7 @@ func getRecord(ctx context.Context, name string) (recordItem recordItem, err err
 
 	record := new(Record)
 	if err = json.NewDecoder(obj).Decode(record); err != nil {
-		return recordItem, errors.Wrap(err, "decode record")
+		return recordItem, errors.Wrapf(err, "decode record %q", objpath)
 	}
 
 	for _, recordItem = range record.Records {
