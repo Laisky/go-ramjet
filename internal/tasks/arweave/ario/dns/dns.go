@@ -304,11 +304,17 @@ func Query(ctx *gin.Context) {
 	}
 
 	ctx.Header("X-Ar-File-Id", record.FileID)
-	ctx.Status(resp.StatusCode)
+	if resp.StatusCode/100 != 2 {
+		ctx.AbortWithError(resp.StatusCode, errors.Errorf("fetch %q, got %d", record.FileID, resp.StatusCode))
+		return
+	}
+
 	_, err = io.Copy(ctx.Writer, resp.Body)
 	if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
 		return
 	}
+
+	ctx.Status(resp.StatusCode)
 }
 
 var listRecordsCache = gutils.NewSingleItemExpCache[[]recordItem](10 * time.Minute)

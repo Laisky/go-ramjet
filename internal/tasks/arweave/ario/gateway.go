@@ -75,7 +75,7 @@ func GatewayHandler(ctx *gin.Context) {
 	)
 
 	firstFinished := make(chan *http.Response)
-	taskCtx, taskCancel := context.WithCancel(ctx.Request.Context())
+	taskCtx, taskCancel := context.WithCancel(gmw.Ctx(ctx))
 	defer taskCancel()
 
 	var pool errgroup.Group
@@ -88,16 +88,19 @@ func GatewayHandler(ctx *gin.Context) {
 		}
 
 		pool.Go(func() error {
-			logger.Debug("fetching file", zap.String("target_url", url))
-			req, err := http.NewRequestWithContext(taskCtx, ctx.Request.Method, url, ctx.Request.Body)
+			logger := logger.With(zap.String("target_url", url))
+			logger.Debug("fetching file")
+
+			req, err := http.NewRequestWithContext(taskCtx,
+				ctx.Request.Method, url, ctx.Request.Body)
 			if err != nil {
-				return errors.Wrap(err, "new request")
+				return errors.Wrapf(err, "new request %q", url)
 			}
 
 			req.Header = ctx.Request.Header
 			resp, err := httpcli.Do(req)
 			if err != nil {
-				return errors.Wrap(err, "do request")
+				return errors.Wrapf(err, "do request %q", url)
 			}
 
 			if resp.StatusCode == http.StatusOK {
