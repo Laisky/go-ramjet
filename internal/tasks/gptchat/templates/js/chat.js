@@ -1362,6 +1362,9 @@ async function setupSessionManager () {
         document
             .querySelector('#sessionManager .btn.new-session')
             .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+                // const evtTarget = libs.evtTarget(evt);
+
                 let maxSessionID = 0;
                 (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
@@ -2821,6 +2824,7 @@ async function bindUserInputSelectFilesBtn () {
             inputEle.accept = 'image/*';
 
             inputEle.addEventListener('change', async (evt) => {
+                const evtTarget = libs.evtTarget(evt);
                 const files = evtTarget.files;
                 for (const file of files) {
                     readFileForVision(file);
@@ -3200,6 +3204,8 @@ async function bindTalkBtnHandler () {
         mediaRecorder.start();
 
         mediaRecorder.onstop = async (evt) => {
+            evt.stopPropagation();
+
             if (Date.now() - startRecordingAt < 500) {
                 console.debug('discard recording because of too short');
                 return;
@@ -4882,17 +4888,18 @@ async function setupPrivateDataset () {
                     .forEach((ele) => {
                         ele.addEventListener('change', async (evt) => {
                             evt.stopPropagation();
+                            const evtTarget = libs.evtTarget(evt);
 
-                            if (!libs.evtTarget(evt).checked) {
+                            if (!evtTarget.checked) {
                                 // at least one chatbot should be selected
-                                libs.evtTarget(evt).checked = true;
+                                evtTarget.checked = true;
                                 return;
                             } else {
                                 // uncheck other chatbot
                                 datasetListEle
                                     .querySelectorAll('div[data-field="dataset"] .chatbot-item input[type="checkbox"]')
                                     .forEach((ele) => {
-                                        if (ele !== libs.evtTarget(evt)) {
+                                        if (ele !== evtTarget) {
                                             ele.checked = false;
                                         }
                                     });
@@ -4938,7 +4945,9 @@ async function setupPrivateDataset () {
             .querySelector('div[data-field="buttons"] a[data-fn="share-bot"]')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                new window.bootstrap.Dropdown(libs.evtTarget(evt).closest('.dropdown')).hide();
+                const evtTarget = libs.evtTarget(evt);
+
+                new window.bootstrap.Dropdown(evtTarget.closest('.dropdown')).hide();
 
                 const checkedChatbotEle = pdfchatModalEle
                     .querySelector('div[data-field="dataset"] .chatbot-item input[type="checkbox"]:checked');
@@ -4993,7 +5002,9 @@ async function setupPrivateDataset () {
             .querySelector('div[data-field="buttons"] a[data-fn="build-bot"]')
             .addEventListener('click', async (evt) => {
                 evt.stopPropagation();
-                new window.bootstrap.Dropdown(libs.evtTarget(evt).closest('.dropdown')).hide();
+                const evtTarget = libs.evtTarget(evt);
+
+                new window.bootstrap.Dropdown(evtTarget.closest('.dropdown')).hide();
 
                 const selectedDatasets = [];
                 pdfchatModalEle
