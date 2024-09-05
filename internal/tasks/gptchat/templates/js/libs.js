@@ -124,6 +124,7 @@ export const KvAddListener = (keyPrefix, callback, callbackName) => {
         }
     }
 };
+
 /**
  * Remove listener for keyPrefix by callbackName
  *
@@ -142,6 +143,7 @@ export const KvRemoveListener = (keyPrefix, callbackName) => {
         }
     }
 };
+
 /**
  * Set data to indexeddb
  *
@@ -152,30 +154,25 @@ export const KvSet = async (key, val) => {
     initKv();
     console.debug(`KvSet: ${key}`);
     const marshaledVal = JSON.stringify(val);
-    let oldVal = null;
+
+    let oldVal;
     try {
+        const oldDocu = await kv.get(key);
+        oldVal = oldDocu ? JSON.parse(oldDocu.val) : null;
+
         await kv.put({
             _id: key,
+            _rev: oldDocu ? oldDocu._rev : undefined,
             val: marshaledVal
         });
     } catch (error) {
         if (error.status === 409) {
-            // Fetch the current document
-            const doc = await kv.get(key);
-            if (doc && doc.val) {
-                oldVal = JSON.parse(doc.val);
-            }
-
-            // Save the new document with the _rev of the current document
-            await kv.put({
-                _id: key,
-                _rev: doc._rev,
-                val: marshaledVal
-            });
-        } else {
-            console.error(`KvSet for key=${key}, val=${val} got error ${error.status}`);
-            throw error;
+            // ignore conflict error
+            return;
         }
+
+        console.error(`KvSet for key ${key}, val ${marshaledVal} failed: ${error}`);
+        throw error;
     }
 
     // notify listeners
@@ -192,6 +189,7 @@ export const KvSet = async (key, val) => {
         }
     });
 };
+
 /** get data from indexeddb
  *
  * @param {str} key
@@ -216,6 +214,7 @@ export const KvGet = async (key) => {
         throw error;
     }
 };
+
 /** check if key exists in indexeddb
  *
  * @param {*} key
@@ -236,6 +235,7 @@ export const KvExists = async (key) => {
         throw error;
     }
 };
+
 /** rename key in indexeddb
  *
  * @param {str} oldKey
@@ -252,6 +252,7 @@ export const KvRename = async (oldKey, newKey) => {
     await KvSet(newKey, oldVal);
     await KvDel(oldKey);
 };
+
 // delete data from indexeddb
 export const KvDel = async (key) => {
     initKv();
@@ -282,6 +283,7 @@ export const KvDel = async (key) => {
         }
     });
 };
+
 // list all keys from indexeddb
 export const KvList = async () => {
     initKv();
