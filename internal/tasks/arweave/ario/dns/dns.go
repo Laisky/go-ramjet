@@ -143,8 +143,8 @@ func CreateRecord(ctx *gin.Context) {
 			if item.Name == req.Name {
 				// check owner
 				switch {
-				case item.Owner == nil && req.Owner == nil:
-					// owner == nil means this is super admin
+				case item.Owner == nil && (req.Owner == nil || req.Owner.TelegramUID == 861999008):
+					// owner == nil means it is owned by super admin
 				case item.Owner != nil && req.Owner != nil && item.Owner.TelegramUID == req.Owner.TelegramUID:
 					// owner is the same
 				default:
