@@ -954,18 +954,18 @@ async function activeSessionChatHistory () {
 }
 
 async function activeSessionID () {
-    let activeSession = document.querySelector('#sessionManager .card-body button.active');
-    if (activeSession) {
-        return parseInt(activeSession.dataset.session);
+    const itemEle = document.querySelector('#sessionManager .card-body button.active');
+    if (itemEle) {
+        return parseInt(itemEle.closest('.session').dataset.session);
     }
 
-    activeSession = await libs.KvGet(KvKeyPrefixSelectedSession);
+    let activeSession = await libs.KvGet(KvKeyPrefixSelectedSession);
     if (activeSession) {
-        if (!document.querySelector(`#sessionManager .card-body button[data-session="${activeSession}"]`)) {
+        if (!document.querySelector(`#sessionManager .card-body .session[data-session="${activeSession}"]`)) {
             // if session not exists on tabs, choose first tab's session as active session
-            const firstSessionBtn = document.querySelector('#sessionManager .card-body button');
-            if (firstSessionBtn) {
-                activeSession = parseInt(firstSessionBtn.dataset.session || '1');
+            const firstSessionEle = document.querySelector('#sessionManager .card-body .session');
+            if (firstSessionEle) {
+                activeSession = parseInt(firstSessionEle.dataset.session || '1');
                 await libs.KvSet(KvKeyPrefixSelectedSession, activeSession);
             }
         }
@@ -996,11 +996,12 @@ async function changeSession (activeSid) {
     // deactive all sessions
     document
         .querySelectorAll(`
-            #sessionManager .sessions .list-group-item,
-            #chatContainer .sessions .list-group-item
+            #sessionManager .sessions .session,
+            #chatContainer .sessions .session
         `)
-        .forEach((item) => {
-            if (parseInt(item.dataset.session) === activeSid) {
+        .forEach((ele) => {
+            const item = ele.querySelector('.list-group-item');
+            if (parseInt(ele.dataset.session) === activeSid) {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
