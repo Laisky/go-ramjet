@@ -157,8 +157,15 @@ export const KvSet = async (key, val) => {
 
     let oldVal;
     try {
-        const oldDocu = await kv.get(key);
-        oldVal = oldDocu ? JSON.parse(oldDocu.val) : null;
+        let oldDocu = null;
+        try {
+            oldDocu = await kv.get(key);
+            oldVal = oldDocu ? JSON.parse(oldDocu.val) : null;
+        } catch (error) {
+            if (error.status !== 404) {
+                throw error;
+            }
+        }
 
         await kv.put({
             _id: key,
