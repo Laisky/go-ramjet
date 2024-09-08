@@ -1,377 +1,292 @@
 .modal.show .modal-content {
-  z-index: 1100;
-}
+  z-index: 1100; }
 
 .modal#modal-dropfile {
-  background-color: #b0edd0;
-}
+  background-color: #b0edd0; }
 
 #singleInputModal,
 #deleteCheckModal {
-  z-index: 1500;
-}
+  z-index: 1500; }
 
 #offcanvasSession {
-  padding: 0px;
-}
-#offcanvasSession .offcanvas-body {
-  padding: 0px;
-}
-#offcanvasSession .offcanvas-body button {
-  width: 100%;
-  border-style: none;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card {
-  height: 100%;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-header {
-  padding: 0px;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-body {
-  padding: 0px;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group {
-  border-radius: 0%;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group button.session {
-  padding: 2px;
-  cursor: auto;
-  display: flex;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-body .list-group button.session i.bi {
-  cursor: pointer;
-  padding-left: 5px;
-}
-#offcanvasSession .offcanvas-body #sessionManager.card .card-footer {
-  padding: 0px;
-}
+  padding: 0px; }
+  #offcanvasSession .offcanvas-body {
+    padding: 0px; }
+    #offcanvasSession .offcanvas-body button {
+      width: 100%;
+      border-style: none; }
+    #offcanvasSession .offcanvas-body #sessionManager.card {
+      height: 100%; }
+      #offcanvasSession .offcanvas-body #sessionManager.card .card-header {
+        padding: 0px; }
+      #offcanvasSession .offcanvas-body #sessionManager.card .card-body {
+        padding: 0px; }
+        #offcanvasSession .offcanvas-body #sessionManager.card .card-body .session {
+          border-radius: 0%; }
+          #offcanvasSession .offcanvas-body #sessionManager.card .card-body .session button {
+            padding: 2px;
+            cursor: auto;
+            display: flex; }
+            #offcanvasSession .offcanvas-body #sessionManager.card .card-body .session button i.bi {
+              cursor: pointer;
+              padding-left: 5px; }
+      #offcanvasSession .offcanvas-body #sessionManager.card .card-footer {
+        padding: 0px; }
 
 #chatContainer {
   position: relative;
-  padding: 0px;
-}
-#chatContainer .pinned-refs {
-  z-index: 1000;
-  background-color: #d1d1d1;
-  position: absolute;
-  left: 45px;
-  top: 40px;
-  max-width: 50%;
-  overflow: hidden;
-  text-align: left;
-}
-#chatContainer .pinned-refs p {
-  padding-left: 5px;
-  padding-right: 5px;
-  margin-bottom: 0px;
-  text-wrap: nowrap;
-}
-#chatContainer .pinned-refs p .bi-trash {
-  cursor: pointer;
-}
-#chatContainer .chatManager {
-  padding: 0px;
-  padding-left: 0px;
-  position: relative;
-}
-#chatContainer .chatManager .alerts-container {
-  width: 100%;
-  padding-top: 40px;
-  position: absolute;
-  display: flex;
-  justify-content: space-around;
-  z-index: 10;
-}
-#chatContainer .chatManager .alerts-container .alerts {
-  width: 80%;
-}
-#chatContainer .chatManager .alerts-container .alerts .alert {
-  margin-bottom: 5px;
-}
-#chatContainer .chatManager .card.text-center {
-  height: 100svh;
-  flex-direction: column;
-  position: relative;
-  padding-top: 40px;
-  display: flex;
-  justify-content: space-between;
-}
-#chatContainer .chatManager .card.text-center .alert {
-  margin-bottom: 1px;
-  z-index: 1099;
-}
-#chatContainer .chatManager .card.text-center .conservations {
-  padding: 0px;
-  position: relative;
-  overflow-y: scroll;
-  display: flex;
-  flex-direction: row;
-}
-#chatContainer .chatManager .card.text-center .conservations .row {
-  margin: 0px;
-  padding: 0px;
-}
-#chatContainer .chatManager .card.text-center .conservations .row > * {
-  padding-left: 0px;
-  overflow-x: auto;
-}
-#chatContainer .chatManager .card.text-center .conservations .sessions {
-  position: fixed;
-  height: 100%;
-  width: 44px;
-  border: none;
-  border-right: 1px dashed #e2e3e5;
-  z-index: 50;
-  font-size: 0.8em;
-}
-#chatContainer .chatManager .card.text-center .conservations .sessions button {
-  padding: 5px;
-  border: none;
-  border-radius: 0px;
-  border-bottom: 1px solid #a59d9d;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats {
-  padding: 0px;
-  padding-left: 44px;
-  width: 100%;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats img {
-  max-height: 500px;
-  border-width: 5px 5px 5px 5px;
-  box-shadow: 1px 1px 5px #333;
-  -webkit-box-shadow: 1px 1px 5px #333;
-  -moz-box-shadow: 1px 1px 5px #333;
-  margin: 2px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .icon {
-  width: 25px;
-  padding: 0px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .bi {
-  z-index: 50;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human {
-  position: relative;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human pre {
-  margin-bottom: 3px;
-  font-size: 0.9em;
-  white-space: pre-wrap;
-  max-height: 200px;
-  overflow-y: scroll;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control {
-  position: absolute;
-  right: 5px;
-  flex-direction: row-reverse;
-  opacity: 0.5;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control:hover {
-  opacity: 1;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
-  margin-right: 5px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-pencil-square,
-#chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
-  cursor: pointer;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai {
-  margin-bottom: 5px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .icon {
-  margin-top: 0.5em;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response {
-  position: relative;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response p {
-  margin-bottom: 0.5em;
-  margin-top: 0.5em;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response pre.mermaid {
-  background-color: white;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response audio.ai-resp-audio {
-  margin-bottom: 10px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image {
-  display: inline-block;
-  position: relative;
-  width: fit-content;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image img {
-  display: block;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns {
-  display: none;
-  position: absolute;
-  background-color: #dee2e6;
-  padding: 4px;
-  opacity: 0.8;
-  top: 5px;
-  right: 5px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns .bi {
-  cursor: pointer;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image:hover .hover-btns {
-  display: block;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info {
-  position: absolute;
-  right: 1px;
-  bottom: 1px;
-  margin: 0;
-  font-size: small;
-  opacity: 0.6;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info i {
-  padding-left: 2px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator {
-  text-align: center;
-  cursor: default;
-  position: relative;
-  z-index: 1;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
-  opacity: 0.6;
-  padding: 1px;
-  width: 30px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:hover {
-  opacity: 1;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn=reload] {
-  width: 80px;
-}
-#chatContainer .chatManager .card.text-center .conservations .chats .card-body pre {
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
-}
-#chatContainer .chatManager .card.text-center .card-footer {
-  position: relative;
-  padding: 0px;
-  z-index: 60;
-}
-#chatContainer .chatManager .card.text-center .card-footer .pinned-files {
-  z-index: 1000;
-  background-color: #d1d1d1;
-  position: fixed;
-  bottom: 108px;
-  max-width: 50%;
-  overflow: hidden;
-  text-align: left;
-}
-#chatContainer .chatManager .card.text-center .card-footer .pinned-files p {
-  padding-left: 5px;
-  padding-right: 5px;
-  margin-bottom: 0px;
-  text-wrap: nowrap;
-}
-#chatContainer .chatManager .card.text-center .card-footer .pinned-files p .bi-trash {
-  cursor: pointer;
-}
-#chatContainer .chatManager .card.text-center .card-footer .scroll-down {
-  position: fixed;
-  bottom: 120px;
-  right: 10px;
-  z-index: 1000;
-  font-size: larger;
-  cursor: pointer;
-  opacity: 0.5;
-}
-#chatContainer .chatManager .card.text-center .card-footer .scroll-down:hover {
-  opacity: 1;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group {
-  margin-bottom: 0px !important;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group textarea {
-  height: 80px;
-}
-#chatContainer .chatManager .card.text-center .card-footer .user-input {
-  background-color: #f4f4f4;
-}
-#chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn=record] {
-  width: 100%;
-  height: 80px;
-}
-#chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn=record]:hover {
-  color: #6c757d;
-  background-color: inherit;
-}
-#chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn=record]:active {
-  background-color: #6c757d;
-  color: #ffffff;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller {
-  padding-left: 5px;
-  background-color: #f4f4f4;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller i.bi {
-  color: #084196;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller .form-check-reverse {
-  margin-bottom: 0px;
-  padding-right: 10px;
-}
-#chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller .form-check-reverse .form-check-input {
-  margin-right: 0px;
-  margin-left: 2px;
-}
-#chatContainer .code-toolbar {
-  font-size: small;
-}
+  padding: 0px; }
+  #chatContainer .pinned-refs {
+    z-index: 1000;
+    background-color: #d1d1d1;
+    position: absolute;
+    left: 45px;
+    top: 40px;
+    max-width: 50%;
+    overflow: hidden;
+    text-align: left; }
+    #chatContainer .pinned-refs p {
+      padding-left: 5px;
+      padding-right: 5px;
+      margin-bottom: 0px;
+      text-wrap: nowrap; }
+      #chatContainer .pinned-refs p .bi-trash {
+        cursor: pointer; }
+  #chatContainer .chatManager {
+    padding: 0px;
+    padding-left: 0px;
+    position: relative; }
+    #chatContainer .chatManager .alerts-container {
+      width: 100%;
+      padding-top: 40px;
+      position: absolute;
+      display: flex;
+      justify-content: space-around;
+      z-index: 10; }
+      #chatContainer .chatManager .alerts-container .alerts {
+        width: 80%; }
+        #chatContainer .chatManager .alerts-container .alerts .alert {
+          margin-bottom: 5px; }
+    #chatContainer .chatManager .card.text-center {
+      height: 100svh;
+      flex-direction: column;
+      position: relative;
+      padding-top: 40px;
+      display: flex;
+      justify-content: space-between; }
+      #chatContainer .chatManager .card.text-center .alert {
+        margin-bottom: 1px;
+        z-index: 1099; }
+      #chatContainer .chatManager .card.text-center .conservations {
+        padding: 0px;
+        position: relative;
+        overflow-y: scroll;
+        display: flex;
+        flex-direction: row; }
+        #chatContainer .chatManager .card.text-center .conservations .row {
+          margin: 0px;
+          padding: 0px; }
+          #chatContainer .chatManager .card.text-center .conservations .row > * {
+            padding-left: 0px;
+            overflow-x: auto; }
+        #chatContainer .chatManager .card.text-center .conservations .sessions {
+          position: fixed;
+          height: 100%;
+          width: 44px;
+          border: none;
+          border-right: 1px dashed #e2e3e5;
+          z-index: 50;
+          font-size: 0.8em; }
+          #chatContainer .chatManager .card.text-center .conservations .sessions button {
+            padding: 5px;
+            border: none;
+            border-radius: 0px;
+            border-bottom: 1px solid #a59d9d; }
+        #chatContainer .chatManager .card.text-center .conservations .chats {
+          padding: 0px;
+          padding-left: 44px;
+          width: 100%; }
+          #chatContainer .chatManager .card.text-center .conservations .chats img {
+            max-height: 500px;
+            border-width: 5px 5px 5px 5px;
+            box-shadow: 1px 1px 5px #333;
+            -webkit-box-shadow: 1px 1px 5px #333;
+            -moz-box-shadow: 1px 1px 5px #333;
+            margin: 2px; }
+          #chatContainer .chatManager .card.text-center .conservations .chats .icon {
+            width: 25px;
+            padding: 0px; }
+          #chatContainer .chatManager .card.text-center .conservations .chats .bi {
+            z-index: 50; }
+          #chatContainer .chatManager .card.text-center .conservations .chats .role-human {
+            position: relative; }
+            #chatContainer .chatManager .card.text-center .conservations .chats .role-human pre {
+              margin-bottom: 3px;
+              font-size: 0.9em;
+              white-space: pre-wrap;
+              max-height: 200px;
+              overflow-y: scroll; }
+            #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control {
+              position: absolute;
+              right: 5px;
+              flex-direction: row-reverse;
+              opacity: 0.5; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control:hover {
+                opacity: 1; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
+                margin-right: 5px; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-pencil-square,
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-human .control .bi-trash {
+                cursor: pointer; }
+          #chatContainer .chatManager .card.text-center .conservations .chats .role-ai {
+            margin-bottom: 5px; }
+            #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .icon {
+              margin-top: 0.5em; }
+            #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response {
+              position: relative; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response p {
+                margin-bottom: 0.5em;
+                margin-top: 0.5em; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response pre.mermaid {
+                background-color: white; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response audio.ai-resp-audio {
+                margin-bottom: 10px; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image {
+                display: inline-block;
+                position: relative;
+                width: fit-content; }
+                #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image img {
+                  display: block; }
+                #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns {
+                  display: none;
+                  position: absolute;
+                  background-color: #dee2e6;
+                  padding: 4px;
+                  opacity: 0.8;
+                  top: 5px;
+                  right: 5px; }
+                  #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image .hover-btns .bi {
+                    cursor: pointer; }
+                #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .ai-resp-image:hover .hover-btns {
+                  display: block; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info {
+                position: absolute;
+                right: 1px;
+                bottom: 1px;
+                margin: 0;
+                font-size: small;
+                opacity: 0.6; }
+                #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response div.info i {
+                  padding-left: 2px; }
+              #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator {
+                text-align: center;
+                cursor: default;
+                position: relative;
+                z-index: 1; }
+                #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn {
+                  opacity: 0.6;
+                  padding: 1px;
+                  width: 30px; }
+                  #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn:hover {
+                    opacity: 1; }
+                  #chatContainer .chatManager .card.text-center .conservations .chats .role-ai .ai-response .operator .btn[data-fn="reload"] {
+                    width: 80px; }
+          #chatContainer .chatManager .card.text-center .conservations .chats .card-body pre {
+            overflow-wrap: break-word;
+            white-space: pre-wrap; }
+      #chatContainer .chatManager .card.text-center .card-footer {
+        position: relative;
+        padding: 0px;
+        z-index: 60; }
+        #chatContainer .chatManager .card.text-center .card-footer .pinned-files {
+          z-index: 1000;
+          background-color: #d1d1d1;
+          position: fixed;
+          bottom: 108px;
+          max-width: 50%;
+          overflow: hidden;
+          text-align: left; }
+          #chatContainer .chatManager .card.text-center .card-footer .pinned-files p {
+            padding-left: 5px;
+            padding-right: 5px;
+            margin-bottom: 0px;
+            text-wrap: nowrap; }
+            #chatContainer .chatManager .card.text-center .card-footer .pinned-files p .bi-trash {
+              cursor: pointer; }
+        #chatContainer .chatManager .card.text-center .card-footer .scroll-down {
+          position: fixed;
+          bottom: 120px;
+          right: 10px;
+          z-index: 1000;
+          font-size: larger;
+          cursor: pointer;
+          opacity: 0.5; }
+          #chatContainer .chatManager .card.text-center .card-footer .scroll-down:hover {
+            opacity: 1; }
+        #chatContainer .chatManager .card.text-center .card-footer .input-group {
+          margin-bottom: 0px !important; }
+          #chatContainer .chatManager .card.text-center .card-footer .input-group textarea {
+            height: 80px; }
+        #chatContainer .chatManager .card.text-center .card-footer .user-input {
+          background-color: #f4f4f4; }
+          #chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn="record"] {
+            width: 100%;
+            height: 80px; }
+            #chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn="record"]:hover {
+              color: #6c757d;
+              background-color: inherit; }
+            #chatContainer .chatManager .card.text-center .card-footer .user-input .btn[data-fn="record"]:active {
+              background-color: #6c757d;
+              color: #ffffff; }
+        #chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller {
+          padding-left: 5px;
+          background-color: #f4f4f4; }
+          #chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller i.bi {
+            color: #084196; }
+          #chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller .form-check-reverse {
+            margin-bottom: 0px;
+            padding-right: 10px; }
+            #chatContainer .chatManager .card.text-center .card-footer .input-group.chat-controller .form-check-reverse .form-check-input {
+              margin-right: 0px;
+              margin-left: 2px; }
+  #chatContainer .code-toolbar {
+    font-size: small; }
 
 #modal-draw-canvas .modal-dialog {
   width: max-content;
-  max-width: 80%;
-}
-#modal-draw-canvas .modal-dialog .modal-body {
-  max-height: 80vh;
-  overflow: auto;
-  padding: 5px;
-}
-#modal-draw-canvas .modal-dialog .modal-footer {
-  padding: 5px;
-}
-#modal-draw-canvas .modal-dialog .modal-footer .prompt {
-  width: 100%;
-  margin: 0px;
-}
-#modal-draw-canvas .modal-dialog .modal-footer .prompt .btn {
-  margin-top: 5px;
-}
+  max-width: 80%; }
+  #modal-draw-canvas .modal-dialog .modal-body {
+    max-height: 80vh;
+    overflow: auto;
+    padding: 5px; }
+  #modal-draw-canvas .modal-dialog .modal-footer {
+    padding: 5px; }
+    #modal-draw-canvas .modal-dialog .modal-footer .prompt {
+      width: 100%;
+      margin: 0px; }
+      #modal-draw-canvas .modal-dialog .modal-footer .prompt .btn {
+        margin-top: 5px; }
 
 #modal-pdfchat .modal-dialog {
   max-width: 85%;
-  min-width: 600px;
-}
+  min-width: 600px; }
 #modal-pdfchat .modal-body .input-group,
 #modal-pdfchat .modal-body .mb-3 {
-  margin-bottom: 3px !important;
-}
-#modal-pdfchat div[data-field=buttons] .btn {
-  border-radius: 0px;
-}
-#modal-pdfchat div[data-field=dataset] {
-  border: 1px solid rgb(133, 124, 124);
+  margin-bottom: 3px !important; }
+#modal-pdfchat div[data-field="buttons"] .btn {
+  border-radius: 0px; }
+#modal-pdfchat div[data-field="dataset"] {
+  border: 1px solid #857c7c;
   max-height: 600px;
-  overflow: scroll;
-}
-#modal-pdfchat div[data-field=dataset] .row,
-#modal-pdfchat div[data-field=dataset] .container-fluid {
-  padding-left: 0px;
-  padding-right: 0px;
-}
-#modal-pdfchat div[data-field=dataset] label[for=flexSwitchCheckChecked] {
-  max-width: 130px;
-  word-break: break-all;
-}
-#modal-pdfchat div[data-field=dataset] .dataset-item .bi-trash {
-  cursor: pointer;
-}
+  overflow: scroll; }
+  #modal-pdfchat div[data-field="dataset"] .row,
+  #modal-pdfchat div[data-field="dataset"] .container-fluid {
+    padding-left: 0px;
+    padding-right: 0px; }
+  #modal-pdfchat div[data-field="dataset"] label[for="flexSwitchCheckChecked"] {
+    max-width: 130px;
+    word-break: break-all; }
+  #modal-pdfchat div[data-field="dataset"] .dataset-item .bi-trash {
+    cursor: pointer; }
 
 /*# sourceMappingURL=chat.css.map */

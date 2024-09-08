@@ -977,12 +977,11 @@ async function activeSessionID () {
 }
 
 async function listenSessionSwitch (evt) {
-    let ele = libs.evtTarget(evt);
-    if (!ele.classList.contains('list-group-item')) {
-        ele = ele.closest('.list-group-item');
-    }
+    const ele = libs.evtTarget(evt);
+    // if (!ele.classList.contains('list-group-item')) {
+    //     ele = ele.closest('.list-group-item');
+    // }
     const activeSid = parseInt(ele.dataset.session);
-
     await changeSession(activeSid);
 }
 
@@ -1251,9 +1250,15 @@ function bindSessionDeleteBtn () {
                 await libs.KvDel(`${KvKeyPrefixSessionHistory}${deleteSid}`);
                 await libs.KvDel(`${KvKeyPrefixSessionConfig}${deleteSid}`);
                 document
-                    .querySelector(`#sessionManager .sessions [data-session="${deleteSid}"]`).remove();
+                    .querySelectorAll(`#sessionManager .sessions [data-session="${deleteSid}"]`)
+                    .forEach((item) => {
+                        item.remove();
+                    });
                 chatContainer
-                    .querySelector(`.sessions [data-session="${deleteSid}"]`).remove();
+                    .querySelectorAll(`.sessions [data-session="${deleteSid}"]`)
+                    .forEach((item) => {
+                        item.remove();
+                    });
 
                 if (activeSid === deleteSid) {
                     // current active session has been deleted, so need to switch to new session
@@ -1312,8 +1317,8 @@ async function setupSessionManager () {
                 .querySelector('#sessionManager .sessions')
                 .insertAdjacentHTML(
                     'beforeend',
-                    `<div class="list-group">
-                        <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
+                    `<div class="list-group session" data-session="${sessionID}">
+                        <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true">
                             <div class="col">${sessionName}</div>
                             <i class="bi bi-pencil-square"></i>
                             <i class="bi bi-trash col-auto"></i>
@@ -1323,8 +1328,8 @@ async function setupSessionManager () {
                 .querySelector('.sessions')
                 .insertAdjacentHTML(
                     'beforeend',
-                    `<div class="list-group">
-                        <button type="button" class="list-group-item list-group-item-action session ${active}" aria-current="true" data-session="${sessionID}">
+                    `<div class="list-group session" data-session="${sessionID}">
+                        <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true">
                             <div class="col">${sessionName}</div>
                         </button>
                     </div>`);
@@ -1391,8 +1396,8 @@ async function setupSessionManager () {
                     .querySelector('#sessionManager .sessions')
                     .insertAdjacentHTML(
                         'beforeend',
-                        `<div class="list-group">
-                            <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
+                        `<div class="list-group session" data-session="${newSessionID}">
+                            <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
                                 <div class="col">${newSessionID}</div>
                                 <i class="bi bi-pencil-square"></i>
                                 <i class="bi bi-trash col-auto"></i>
@@ -1402,8 +1407,8 @@ async function setupSessionManager () {
                     .querySelector('.sessions')
                     .insertAdjacentHTML(
                         'beforeend',
-                        `<div class="list-group">
-                            <button type="button" class="list-group-item list-group-item-action active session" aria-current="true" data-session="${newSessionID}">
+                        `<div class="list-group session" data-session="${newSessionID}">
+                            <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
                                 <div class="col">${newSessionID}</div>
                             </button>
                         </div>`);
@@ -1424,8 +1429,8 @@ async function setupSessionManager () {
                 // bind session switch listener for new session
                 document
                     .querySelector(`
-                        #sessionManager .sessions [data-session="${newSessionID}"],
-                        #chatContainer .sessions [data-session="${newSessionID}"]
+                        #sessionManager .sessions .session[data-session="${newSessionID}"],
+                        #chatContainer .sessions .session[data-session="${newSessionID}"]
                     `)
                     .addEventListener('click', listenSessionSwitch);
 
@@ -1439,8 +1444,8 @@ async function setupSessionManager () {
     {
         document
             .querySelectorAll(`
-                #sessionManager .sessions .list-group .session,
-                #chatContainer .sessions .list-group .session
+                #sessionManager .sessions .session,
+                #chatContainer .sessions .session
             `)
             .forEach((item) => {
                 item.addEventListener('click', listenSessionSwitch);
@@ -2816,7 +2821,7 @@ async function bindUserInputSelectFilesBtn () {
     chatContainer.querySelector('.user-input .btn.upload')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
-            const evtTarget = libs.evtTarget(evt);
+            // const evtTarget = libs.evtTarget(evt);
 
             const inputEle = document.createElement('input');
             inputEle.type = 'file';
