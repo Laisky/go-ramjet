@@ -133,7 +133,7 @@ func GatewayHandler(ctx *gin.Context) {
 	case resp := <-firstFinished:
 		func() {
 			defer resp.Body.Close()
-			reqUrl := resp.Request.URL.RequestURI()
+			reqUrl := resp.Request.URL.String()
 			logger := logger.With(zap.String("upstream", reqUrl))
 			logger.Info("got response")
 
