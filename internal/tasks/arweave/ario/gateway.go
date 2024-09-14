@@ -23,6 +23,7 @@ var ArweaveGateways = []string{
 	"https://akrd.net/",
 	"https://permagate.io/",
 	"https://ar-io.dev/",
+	"https://g8way.io/",
 	"https://vilenarios.com/",
 	"https://arbr.pro/",
 	"https://frostor.xyz/",
@@ -33,11 +34,12 @@ var ArweaveGateways = []string{
 	"https://yukovskibot.com/",
 	"https://karakartal.store/",
 	"https://ruangnode.xyz/",
+	// expired domains
 	// "https://rerererararags.store/",
 	// "https://jaxtothehell.xyz/",
 	// "https://logosnodos.site/",
 	// "https://budavlebac.online/",
-	// "https://testnetnodes.xyz/",  // domain expires
+	// "https://testnetnodes.xyz/",
 	// "https://aleko0o.store/",
 }
 
