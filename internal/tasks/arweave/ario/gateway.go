@@ -26,19 +26,19 @@ var ArweaveGateways = []string{
 	"https://vilenarios.com/",
 	"https://arbr.pro/",
 	"https://frostor.xyz/",
-	// "https://logosnodos.site/",
 	"https://ariospeedwagon.com/",
 	"https://vikanren.buzz/",
 	"https://jaxtothehell.xyz/",
 	"https://sulapan.com/",
 	"https://arweave.fllstck.dev/",
 	"https://yukovskibot.com/",
-	"https://rerererararags.store/",
-	// "https://testnetnodes.xyz/",  // domain expires
-	// "https://budavlebac.online/",
+	// "https://rerererararags.store/",
 	"https://karakartal.store/",
-	// "https://aleko0o.store/",
 	"https://ruangnode.xyz/",
+	// "https://logosnodos.site/",
+	// "https://budavlebac.online/",
+	// "https://testnetnodes.xyz/",  // domain expires
+	// "https://aleko0o.store/",
 }
 
 var (
