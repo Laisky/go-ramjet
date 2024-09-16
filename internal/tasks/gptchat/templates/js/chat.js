@@ -2700,22 +2700,17 @@ async function tts (chatID, text) {
         HideSpinner();
     }
 
-    try {
-        // sometimes browser will block audio play,
-        // try to play audio automately, if failed, add a play button.
-        await audio.play();
-        chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
-        return;
-    } catch (err) {
-        console.error(`failed to play audio automately: ${err}`);
-    }
-
-    // audio.addEventListener('click', async (evt) => {
-    //     evt.stopPropagation();
-    //     audio.play().catch((err) => {
-    //         showalert('danger', `Failed to play audio: ${err}`);
-    //     });
-    // });
+    // comment this block since of do not try auto play audio,
+    // always showthe audio control widget.
+    // try {
+    //     // sometimes browser will block audio play,
+    //     // try to play audio automately, if failed, add a play button.
+    //     await audio.play();
+    //     chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
+    //     return;
+    // } catch (err) {
+    //     console.error(`failed to play audio automately: ${err}`);
+    // }
 
     // for mobile device, autoplay is disabled, so we need to add a play button,
     // and play audio when user click the button.
@@ -2728,6 +2723,14 @@ async function tts (chatID, text) {
     chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
     chatContainer.querySelector(`#${chatID} .ai-response`)
         .insertAdjacentElement('beforeend', audio);
+
+    // try autoplay
+    try {
+        await audio.play();
+    } catch (err) {
+        console.error(`failed to play audio: ${err}`);
+    }
+
 }
 
 function combineRefs (arr) {
