@@ -1010,8 +1010,8 @@ async function changeSession (activeSid) {
 
     // restore session history
     chatContainer.querySelector('.conservations .chats').innerHTML = '';
-    await Promise.all(Array.from(await sessionChatHistory(activeSid)).map(async (item) => {
-        append2Chats({
+    for (const item of await sessionChatHistory(activeSid)) {
+        await append2Chats({
             chatID: item.chatID,
             role: item.role,
             content: item.content,
@@ -1024,7 +1024,7 @@ async function changeSession (activeSid) {
         if (item.role === RoleAI) {
             await renderAfterAiResp(item.chatID, false);
         }
-    }));
+    }
 
     await libs.KvSet(KvKeyPrefixSelectedSession, activeSid);
     await updateConfigFromSessionConfig();
