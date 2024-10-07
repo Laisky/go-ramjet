@@ -554,17 +554,22 @@ async function dataMigrate () {
             eachSconfig.api_base = 'https://api.openai.com';
         }
 
-        // set default chat controller
+        // set default chat controller,
+        // if add new field, should also add set default value below
         if (!eachSconfig.chat_switch) {
             eachSconfig.chat_switch = {
                 all_in_one: false,
                 disable_https_crawler: true,
                 enable_google_search: false,
-                enable_talk: false
+                enable_talk: false,
+                draw_n_images: 1
             };
         }
-        if (eachSconfig.chat_switch.all_in_one === undefined) {
+        if (!eachSconfig.chat_switch.all_in_one) {
             eachSconfig.chat_switch.all_in_one = false;
+        }
+        if (!eachSconfig.chat_switch.draw_n_images) {
+            eachSconfig.chat_switch.draw_n_images = 1;
         }
 
         // change model
@@ -3049,28 +3054,36 @@ async function setupChatSwitchs () {
         chatContainer
             .querySelector('#switchChatEnableGoogleSearch')
             .addEventListener('change', async (evt) => {
-                evt.stopPropagation()
-                const switchEle = libs.evtTarget(evt)
-                const sconfig = await getChatSessionConfig()
-                sconfig.chat_switch.enable_google_search = switchEle.checked
-                await saveChatSessionConfig(sconfig)
+                evt.stopPropagation();
+                const switchEle = libs.evtTarget(evt);
+                const sconfig = await getChatSessionConfig();
+                sconfig.chat_switch.enable_google_search = switchEle.checked;
+                await saveChatSessionConfig(sconfig);
             });
 
         chatContainer
-            .querySelector('#switchChatEnableAllInOne')
+            .querySelector('#selectDrawNImage')
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation()
-                const switchEle = libs.evtTarget(evt)
-                const sconfig = await getChatSessionConfig()
-                sconfig.chat_switch.all_in_one = switchEle.checked
-                await saveChatSessionConfig(sconfig)
+                const switchEle = libs.evtTarget(evt);
+                const sconfig = await getChatSessionConfig();
+                sconfig.chat_switch.draw_n_images = parseInt(switchEle.value);
+                await saveChatSessionConfig(sconfig);
             });
 
         chatContainer
             .querySelector('#switchChatEnableAutoSync')
             .addEventListener('change', async (evt) => {
-                evt.stopPropagation()
-                const switchEle = libs.evtTarget(evt)
+                evt.stopPropagation();
+                const switchEle = libs.evtTarget(evt);
+                await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
+            });
+
+        chatContainer
+            .querySelector('#switchChatEnableAutoSync')
+            .addEventListener('change', async (evt) => {
+                evt.stopPropagation();
+                const switchEle = libs.evtTarget(evt);
                 await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
             });
         let userConfigSyncer;
@@ -3108,11 +3121,11 @@ async function setupChatSwitchs () {
         chatContainer
             .querySelector('#switchChatEnableTalking')
             .addEventListener('change', async (evt) => {
-                evt.stopPropagation()
-                const switchEle = libs.evtTarget(evt)
-                const sconfig = await getChatSessionConfig()
-                sconfig.chat_switch.enable_talk = switchEle.checked
-                await saveChatSessionConfig(sconfig)
+                evt.stopPropagation();
+                const switchEle = libs.evtTarget(evt);
+                const sconfig = await getChatSessionConfig();
+                sconfig.chat_switch.enable_talk = switchEle.checked;
+                await saveChatSessionConfig(sconfig);
             });
 
         // bind listener for all chat switchs
@@ -3875,14 +3888,11 @@ async function updateConfigFromSessionConfig () {
     }
 
     // update chat controller
-    chatContainer.querySelector('#switchChatEnableHttpsCrawler')
-        .checked = !sconfig.chat_switch.disable_https_crawler;
-    chatContainer.querySelector('#switchChatEnableGoogleSearch')
-        .checked = sconfig.chat_switch.enable_google_search;
-    chatContainer.querySelector('#switchChatEnableAllInOne')
-        .checked = sconfig.chat_switch.all_in_one;
-    chatContainer.querySelector('#switchChatEnableAutoSync')
-        .checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
+    chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
+    chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
+    chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
+    chatContainer.querySelector('#switchChatEnableAutoSync').checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
+    chatContainer.querySelector('#selectDrawNImage').value = sconfig.chat_switch.draw_n_images;
     await bindTalkSwitchHandler(sconfig.chat_switch.enable_talk);
 
     // update selected model
