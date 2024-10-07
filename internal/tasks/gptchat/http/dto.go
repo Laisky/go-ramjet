@@ -449,6 +449,7 @@ type FluxInput struct {
 	AspectRatio     string `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
 	SafetyTolerance int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
 	Seed            int    `json:"seed"`
+	NImages         int    `json:"n_images" binding:"required,min=1,max=8"`
 }
 
 // DrawImageByFluxProResponse is response of DrawImageByFluxProRequest

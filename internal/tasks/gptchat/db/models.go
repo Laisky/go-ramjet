@@ -37,12 +37,13 @@ const (
 	// PriceTxt2ImageFluxPro is the price for txt2image flux pro
 	//
 	// https://replicate.com/pricing
-	PriceTxt2ImageFluxPro Price = 27500      // 0.055 usd
-	PriceTxt2ImageSchnell Price = 1500       // 0.003 usd
-	PriceUploadFile       Price = 2500       // 0.005 usd
-	PriceTTS              Price = 20         // 0.00004 usd
-	PriceUSD              Price = 500000     // 1 usd
-	PriceRMB              Price = 500000 / 8 // 1 rmb
+	PriceTxt2ImageFluxPro11 Price = 20000      // 0.040 usd
+	PriceTxt2ImageFluxPro   Price = 27500      // 0.055 usd
+	PriceTxt2ImageSchnell   Price = 1500       // 0.003 usd
+	PriceUploadFile         Price = 2500       // 0.005 usd
+	PriceTTS                Price = 20         // 0.00004 usd
+	PriceUSD                Price = 500000     // 1 usd
+	PriceRMB                Price = 500000 / 8 // 1 rmb
 )
 
 // BillingType billing type

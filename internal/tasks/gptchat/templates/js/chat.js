@@ -47,6 +47,7 @@ const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 const ImageModelFluxPro = 'flux-pro';
+const ImageModelFluxPro11 = 'flux-1.1-pro';
 const ImageModelFluxSchnell = 'flux-schnell';
 // const ImageModelImg2Img = 'img-to-img';
 
@@ -109,6 +110,7 @@ const ImageModels = [
     ImageModelDalle3,
     ImageModelSdxlTurbo,
     ImageModelFluxPro,
+    ImageModelFluxPro11,
     ImageModelFluxSchnell
     // ImageModelImg2Img
 ];
@@ -1875,17 +1877,9 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
 }
 
 async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
-    let url;
-    switch (selectedModel) {
-    case ImageModelFluxPro:
-        url = '/images/generations/flux/flux-pro';
-        break;
-    case ImageModelFluxSchnell:
-        url = '/images/generations/flux/flux-schnell';
-        break;
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`);
-    }
+    const nImage = parseInt(document.getElementById('selectDrawNImage').value);
+    const url = `/images/generations/flux/${selectedModel}`;
+    console.debug(`sendFluxProPrompt2Server, url=${url}`);
 
     const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
@@ -1903,7 +1897,8 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
                 safety_tolerance: 5,
                 guidance: 3,
                 interval: 2,
-                seed: Date.now()
+                seed: Date.now(),
+                n_images: nImage
             }
         })
     });
@@ -2354,6 +2349,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
             case ImageModelFluxPro:
+            case ImageModelFluxPro11:
             case ImageModelFluxSchnell:
                 await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
@@ -2730,7 +2726,6 @@ async function tts (chatID, text) {
     } catch (err) {
         console.error(`failed to play audio: ${err}`);
     }
-
 }
 
 function combineRefs (arr) {

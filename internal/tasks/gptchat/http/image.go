@@ -38,14 +38,21 @@ func DrawByFlux(ctx *gin.Context) {
 		web.AbortErr(ctx, errors.New("empty model"))
 	}
 
+	req := new(DrawImageByFluxReplicateRequest)
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
+		return
+	}
+
+	nImage := req.Input.NImages
+
 	var price db.Price
 	imgExt := ".png"
-	nImage := 1
 	switch model {
 	case "flux-pro":
 		price = db.PriceTxt2ImageFluxPro
+	case "flux-1.1-pro":
+		price = db.PriceTxt2ImageFluxPro11
 	case "flux-schnell":
-		nImage = 4
 		price = db.PriceTxt2ImageSchnell
 	default:
 		web.AbortErr(ctx, errors.Errorf("unknown model %q", model))
@@ -56,13 +63,9 @@ func DrawByFlux(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx).Named("image_flux").With(
 		zap.String("task_id", taskID),
 		zap.String("model", model),
+		zap.Int("n", nImage),
 	)
 	gmw.SetLogger(ctx, logger)
-
-	req := new(DrawImageByFluxReplicateRequest)
-	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
-		return
-	}
 
 	user, err := getUserByAuthHeader(ctx)
 	if web.AbortErr(ctx, err) {
