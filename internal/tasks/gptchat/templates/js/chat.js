@@ -148,7 +148,7 @@ const KvKeyPrefixSessionHistory = 'chat_user_session_';
 const KvKeyPrefixSessionConfig = 'chat_user_config_';
 const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
-const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
+// const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
 const KvKeyVersionDate = 'config_version_date';
 
 const RoleHuman = 'user';
@@ -3071,52 +3071,52 @@ async function setupChatSwitchs () {
                 await saveChatSessionConfig(sconfig);
             });
 
-        chatContainer
-            .querySelector('#switchChatEnableAutoSync')
-            .addEventListener('change', async (evt) => {
-                evt.stopPropagation();
-                const switchEle = libs.evtTarget(evt);
-                await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
-            });
+        // chatContainer
+        //     .querySelector('#switchChatEnableAutoSync')
+        //     .addEventListener('change', async (evt) => {
+        //         evt.stopPropagation();
+        //         const switchEle = libs.evtTarget(evt);
+        //         await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
+        //     });
 
-        chatContainer
-            .querySelector('#switchChatEnableAutoSync')
-            .addEventListener('change', async (evt) => {
-                evt.stopPropagation();
-                const switchEle = libs.evtTarget(evt);
-                await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
-            });
-        let userConfigSyncer;
-        libs.KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
-            if (op !== libs.KvOp.SET) {
-                return;
-            }
+        // chatContainer
+        //     .querySelector('#switchChatEnableAutoSync')
+        //     .addEventListener('change', async (evt) => {
+        //         evt.stopPropagation();
+        //         const switchEle = libs.evtTarget(evt);
+        //         await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
+        //     });
+        // let userConfigSyncer;
+        // libs.KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
+        //     if (op !== libs.KvOp.SET) {
+        //         return;
+        //     }
 
-            // update ui
-            const switchEle = chatContainer.querySelector('#switchChatEnableAutoSync');
-            switchEle.checked = newVal;
+        //     // update ui
+        //     const switchEle = chatContainer.querySelector('#switchChatEnableAutoSync');
+        //     switchEle.checked = newVal;
 
-            // update background syncer
-            if (!newVal) {
-                console.debug('stop user config syncer');
-                if (userConfigSyncer) {
-                    clearTimeout(userConfigSyncer);
-                    userConfigSyncer = null;
-                }
+        //     // update background syncer
+        //     if (!newVal) {
+        //         console.debug('stop user config syncer');
+        //         if (userConfigSyncer) {
+        //             clearTimeout(userConfigSyncer);
+        //             userConfigSyncer = null;
+        //         }
 
-                return;
-            }
+        //         return;
+        //     }
 
-            if (userConfigSyncer) {
-                return;
-            }
+        //     if (userConfigSyncer) {
+        //         return;
+        //     }
 
-            console.debug('start user config syncer');
-            // await syncUserConfig();
-            userConfigSyncer = setTimeout(async () => {
-                await syncUserConfig();
-            }, 1800 * 1000);
-        });
+        //     console.debug('start user config syncer');
+        //     // await syncUserConfig();
+        //     userConfigSyncer = setTimeout(async () => {
+        //         await syncUserConfig();
+        //     }, 1800 * 1000);
+        // });
 
         chatContainer
             .querySelector('#switchChatEnableTalking')
@@ -3891,7 +3891,7 @@ async function updateConfigFromSessionConfig () {
     chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
     chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
     chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
-    chatContainer.querySelector('#switchChatEnableAutoSync').checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
+    // chatContainer.querySelector('#switchChatEnableAutoSync').checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
     chatContainer.querySelector('#selectDrawNImage').value = sconfig.chat_switch.draw_n_images;
     await bindTalkSwitchHandler(sconfig.chat_switch.enable_talk);
 
@@ -4119,12 +4119,25 @@ async function setupConfig () {
 
     // bind upload & download configs
     {
-        configContainer.querySelector('.btn[data-app-fn="cloud-sync"]')
+        configContainer.querySelector('.btn[data-app-fn="upload-config"]')
             .addEventListener('click', async (evt) => {
                 try {
                     ShowSpinner();
-                    await syncUserConfig(evt);
+                    await uploadUserConfig(evt);
                     location.reload();
+                } catch (err) {
+                    console.error(err);
+                    showalert('danger', `sync user config failed: ${err}`);
+                } finally {
+                    HideSpinner();
+                }
+            });
+
+        configContainer.querySelector('.btn[data-app-fn="download-config"]')
+            .addEventListener('click', async (evt) => {
+                try {
+                    ShowSpinner();
+                    await downloadUserConfig(evt);
                 } catch (err) {
                     console.error(err);
                     showalert('danger', `sync user config failed: ${err}`);
@@ -4143,10 +4156,10 @@ async function setupConfig () {
     libs.EnableTooltipsEverywhere();
 }
 
-async function syncUserConfig (evt) {
-    await downloadUserConfig(evt);
-    await uploadUserConfig(evt);
-}
+// async function syncUserConfig (evt) {
+//     await downloadUserConfig(evt);
+//     await uploadUserConfig(evt);
+// }
 
 async function uploadUserConfig (evt) {
     console.debug('uploadUserConfig');

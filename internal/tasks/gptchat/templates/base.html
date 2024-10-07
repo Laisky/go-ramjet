@@ -187,9 +187,15 @@
                 <i class="bi bi-file-earmark-check"></i>
             </button>
 
-            <button class="btn btn-primary" data-app-fn="cloud-sync" data-bs-toggle="tooltip" data-bs-placement="top" title="Synchronization with the cloud, all data is encrypted by the sync key.">
-                <i class="bi bi-clouds"></i>
+            <button class="btn btn-primary dropdown-toggle" type="button" id="cloudSyncDropdown"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                title="Synchronization with the cloud, all data is encrypted by the sync key.">
+                <i class="bi bi-clouds"></i> Backup
             </button>
+            <ul class="dropdown-menu" aria-labelledby="cloudSyncDropdown">
+                <li><a class="btn dropdown-item" href="#" data-app-fn="upload-config">Upload</a></li>
+                <li><a class="btn dropdown-item" href="#" data-app-fn="download-config">Download</a></li>
+            </ul>
 
             <!-- <div class="btn-group" role="group">
                 <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown"
@@ -318,36 +324,37 @@
     {{block "body" .}}
     {{end}}
 
-    <script src="https://js.sentry-cdn.com/b69cdec9bcfe0a72438804bef2fecab5.min.js" crossorigin="anonymous" async></script>
+    <script src="https://js.sentry-cdn.com/b69cdec9bcfe0a72438804bef2fecab5.min.js" crossorigin="anonymous"
+        async></script>
     <script type="module">
         (async () => {
             window.Version = "{{.Version}}";
             window.data = JSON.parse({{ .DataJSON }});
 
 
-            // modules need to load before main.js
-            window.libs = await import("/static/{{.LibJs}}");
-            let futures = [];
-            futures.push(window.libs.LoadJsModules([
-                "{{.BootstrapJs}}",
-                // "{{.SeeJs}}",
-                "{{.PrismJs}}",
-                "{{.FuseJs}}",
-                "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
-                "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
-                "/static/{{.DataJs}}",
-                "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
-                "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
-            ]));
-            futures.push(window.libs.LoadJsModules([
-                "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js",
-            ], "module"));
-            await Promise.all(futures);
+        // modules need to load before main.js
+        window.libs = await import("/static/{{.LibJs}}");
+        let futures = [];
+        futures.push(window.libs.LoadJsModules([
+            "{{.BootstrapJs}}",
+            // "{{.SeeJs}}",
+            "{{.PrismJs}}",
+            "{{.FuseJs}}",
+            "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
+            "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
+            "/static/{{.DataJs}}",
+            "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
+            "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
+        ]));
+        futures.push(window.libs.LoadJsModules([
+            "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js",
+        ], "module"));
+        await Promise.all(futures);
 
-            window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js")).SSE;
+        window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js")).SSE;
 
-            await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
-        })();
+        await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
+        }) ();
     </script>
 
     {{block "ga" .}}
