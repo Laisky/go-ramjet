@@ -3045,7 +3045,7 @@ async function setupChatSwitchs () {
                 // clear pinned https urls
                 if (!switchEle.checked) {
                     await libs.KvSet(KvKeyPinnedMaterials, '');
-                    await await restorePinnedMaterials();
+                    await restorePinnedMaterials();
                 }
 
                 await saveChatSessionConfig(sconfig);
@@ -3421,7 +3421,8 @@ async function uploadFileAsInputUrls (file, fileExt) {
             'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
-        body: formData
+        body: formData,
+        redirect: 'follow'
     });
 
     if (!resp.ok) {
