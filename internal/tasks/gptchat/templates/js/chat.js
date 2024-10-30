@@ -1378,6 +1378,8 @@ async function setupSessionManager () {
                 evt.stopPropagation();
                 // const evtTarget = libs.evtTarget(evt);
 
+                const oldSessionConfig = await getChatSessionConfig();
+
                 let maxSessionID = 0;
                 (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
@@ -1423,7 +1425,6 @@ async function setupSessionManager () {
 
                 // save new session history and config
                 await libs.KvSet(kvSessionKey(newSessionID), []);
-                const oldSessionConfig = await getChatSessionConfig();
                 console.log(`generate new session config for ${newSessionID} during new session`);
                 const sconfig = newSessionConfig();
 

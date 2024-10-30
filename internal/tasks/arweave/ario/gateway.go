@@ -20,7 +20,6 @@ import (
 )
 
 var ArweaveGateways = []string{
-	// "https://akrd.net/",
 	"https://permagate.io/",
 	"https://ar-io.dev/",
 	"https://g8way.io/",
@@ -36,6 +35,7 @@ var ArweaveGateways = []string{
 	// "https://karakartal.store/",
 	// "https://ruangnode.xyz/",
 	// expired domains
+	// "https://akrd.net/",
 	// "https://rerererararags.store/",
 	// "https://jaxtothehell.xyz/",
 	// "https://logosnodos.site/",
