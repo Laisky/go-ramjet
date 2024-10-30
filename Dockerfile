@@ -75,7 +75,7 @@ RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
-COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.1 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.1
+COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.4 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.4
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
 
 ENTRYPOINT ["/app/go-ramjet"]
