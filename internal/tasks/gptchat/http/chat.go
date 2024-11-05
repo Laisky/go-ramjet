@@ -438,6 +438,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-3.5-sonnet",
 			"claude-3.5-sonnet-8k",
 			"claude-3-haiku",
+			"claude-3.5-haiku",
 			"gpt-4o",
 			"gpt-4o-mini",
 			"gpt-4-turbo-2024-04-09",
