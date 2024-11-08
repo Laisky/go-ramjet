@@ -139,11 +139,11 @@
                 }
 
                 .sessions {
+                    position: fixed;
+                    width: 44px;
                     .session-tabs {
-                        // position: fixed;
                         // height: 100%;
                         // background-color: #f4f4f4;
-                        width: 44px;
                         border: none;
                         border-right: 1px dashed #e2e3e5;
                         z-index: 50;
@@ -169,7 +169,7 @@
 
                 .chats {
                     padding: 0px;
-                    // padding-left: 44px;
+                    padding-left: 44px;
                     width: 100%;
                     // overflow-y: scroll;
 

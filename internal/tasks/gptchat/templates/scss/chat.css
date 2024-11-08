@@ -89,24 +89,27 @@
           #chatContainer .chatManager .card.text-center .conservations .row > * {
             padding-left: 0px;
             overflow-x: auto; }
-        #chatContainer .chatManager .card.text-center .conservations .sessions .session-tabs {
-          width: 44px;
-          border: none;
-          border-right: 1px dashed #e2e3e5;
-          z-index: 50;
-          font-size: 0.8em; }
-          #chatContainer .chatManager .card.text-center .conservations .sessions .session-tabs button {
-            padding: 5px;
+        #chatContainer .chatManager .card.text-center .conservations .sessions {
+          position: fixed;
+          width: 44px; }
+          #chatContainer .chatManager .card.text-center .conservations .sessions .session-tabs {
             border: none;
-            border-radius: 0px;
-            border-bottom: 1px solid #a59d9d; }
-        #chatContainer .chatManager .card.text-center .conservations .sessions .session-ops {
-          margin-top: 3px; }
-          #chatContainer .chatManager .card.text-center .conservations .sessions .session-ops button {
-            border: none;
-            border-radius: 0px; }
+            border-right: 1px dashed #e2e3e5;
+            z-index: 50;
+            font-size: 0.8em; }
+            #chatContainer .chatManager .card.text-center .conservations .sessions .session-tabs button {
+              padding: 5px;
+              border: none;
+              border-radius: 0px;
+              border-bottom: 1px solid #a59d9d; }
+          #chatContainer .chatManager .card.text-center .conservations .sessions .session-ops {
+            margin-top: 3px; }
+            #chatContainer .chatManager .card.text-center .conservations .sessions .session-ops button {
+              border: none;
+              border-radius: 0px; }
         #chatContainer .chatManager .card.text-center .conservations .chats {
           padding: 0px;
+          padding-left: 44px;
           width: 100%; }
           #chatContainer .chatManager .card.text-center .conservations .chats img {
             max-height: 500px;
