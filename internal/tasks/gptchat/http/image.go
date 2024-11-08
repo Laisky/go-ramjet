@@ -129,7 +129,12 @@ func DrawByFlux(ctx *gin.Context) {
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
 				req.Input.Prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			if _, err := s3.GetCli().PutObject(taskCtx,
+			s3cli, err := s3.GetCli()
+			if err != nil {
+				logger.Error("get s3 client", zap.Error(err))
+			}
+
+			if _, err := s3cli.PutObject(taskCtx,
 				config.Config.S3.Bucket,
 				objkey,
 				bytes.NewReader(msg),
@@ -483,7 +488,12 @@ func DrawByLcmHandler(ctx *gin.Context) {
 				// upload error msg
 				msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
 				objkey := drawImageByImageObjkeyPrefix(taskID) + ".err.txt"
-				if _, err := s3.GetCli().PutObject(taskCtx,
+				s3cli, err := s3.GetCli()
+				if err != nil {
+					logger.Error("get s3 client", zap.Error(err))
+				}
+
+				if _, err := s3cli.PutObject(taskCtx,
 					config.Config.S3.Bucket,
 					objkey,
 					bytes.NewReader(msg),
@@ -607,7 +617,12 @@ func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
 			// upload error msg
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", rawreq.Text, err.Error()))
 			objkey := objkeyPrefix + ".err.txt"
-			if _, err := s3.GetCli().PutObject(ctx,
+			s3cli, err := s3.GetCli()
+			if err != nil {
+				logger.Error("get s3 client", zap.Error(err))
+			}
+
+			if _, err := s3cli.PutObject(ctx,
 				config.Config.S3.Bucket,
 				objkey,
 				bytes.NewReader(msg),
@@ -731,7 +746,12 @@ func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 			// upload error msg
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Text, err.Error()))
 			objkey := drawImageByImageObjkeyPrefix(taskID) + ".err.txt"
-			if _, err := s3.GetCli().PutObject(taskCtx,
+			s3cli, err := s3.GetCli()
+			if err != nil {
+				logger.Error("get s3 client", zap.Error(err))
+			}
+
+			if _, err := s3cli.PutObject(taskCtx,
 				config.Config.S3.Bucket,
 				objkey,
 				bytes.NewReader(msg),
@@ -809,7 +829,12 @@ func DrawByDalleHandler(ctx *gin.Context) {
 			// upload error msg
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			if _, err := s3.GetCli().PutObject(taskCtx,
+			s3cli, err := s3.GetCli()
+			if err != nil {
+				logger.Error("get s3 client", zap.Error(err))
+			}
+
+			if _, err := s3cli.PutObject(taskCtx,
 				config.Config.S3.Bucket,
 				objkey,
 				bytes.NewReader(msg),
@@ -989,7 +1014,10 @@ func uploadImage2Minio(ctx context.Context,
 	imgExt string,
 ) (err error) {
 	logger := gmw.GetLogger(ctx)
-	s3cli := s3.GetCli()
+	s3cli, err := s3.GetCli()
+	if err != nil {
+		return errors.Wrap(err, "get s3 client")
+	}
 
 	if imgExt == "" {
 		imgExt = ".png"

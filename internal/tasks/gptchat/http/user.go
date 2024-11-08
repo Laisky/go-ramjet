@@ -103,7 +103,12 @@ func UploadUserConfig(ctx *gin.Context) {
 	}
 
 	// upload cipher to s3
-	if _, err := s3.GetCli().PutObject(gmw.Ctx(ctx),
+	s3cli, err := s3.GetCli()
+	if err != nil {
+		logger.Error("get s3 client", zap.Error(err))
+	}
+
+	if _, err := s3cli.PutObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
 		bytes.NewReader(cipher),
@@ -132,7 +137,12 @@ func DownloadUserConfig(ctx *gin.Context) {
 	opt.Set("Cache-Control", "no-cache")
 	opt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
 
-	object, err := s3.GetCli().GetObject(gmw.Ctx(ctx),
+	s3cli, err := s3.GetCli()
+	if err != nil {
+		logger.Error("get s3 client", zap.Error(err))
+	}
+
+	object, err := s3cli.GetObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
 		opt,

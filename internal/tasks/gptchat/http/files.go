@@ -75,7 +75,11 @@ func UploadFiles(ctx *gin.Context) {
 	objkeyPrefix := fmt.Sprintf("user-files/%s/%s/%s",
 		fileHash[:2], fileHash[2:4], fileHash)
 
-	s3cli := s3.GetCli()
+	s3cli, err := s3.GetCli()
+	if web.AbortErr(ctx, errors.Wrap(err, "get s3 client")) {
+		return
+	}
+
 	_, err = s3cli.PutObject(ctx,
 		config.Config.S3.Bucket,
 		objkeyPrefix+ext,

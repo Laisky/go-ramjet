@@ -10,9 +10,8 @@ import (
 	utils "github.com/Laisky/go-utils/v4"
 	glog "github.com/Laisky/go-utils/v4/log"
 	"github.com/Laisky/zap"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	s3lib "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/feeds"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/s3"
@@ -120,7 +119,11 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 	logger := w.logger.Named("s3")
 	logger.Info("run Write2File", zap.String("s3", endpoint))
 
-	s3cli, err := s3.NewClient(ctx, endpoint, accessKey, accessSecret)
+	s3cli, err := s3.GetCli(
+		endpoint,
+		accessKey,
+		accessSecret,
+	)
 	if err != nil {
 		return errors.Wrap(err, "new s3 client")
 	}
@@ -130,12 +133,15 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 		return errors.Wrap(err, "to rss")
 	}
 
-	if _, err = s3cli.PutObject(ctx, &s3lib.PutObjectInput{
-		Bucket:      aws.String(bucket),
-		Key:         aws.String(objKey),
-		Body:        strings.NewReader(payload),
-		ContentType: aws.String("application/rss+xml"),
-	}); err != nil {
+	if _, err = s3cli.PutObject(ctx,
+		bucket,
+		objKey,
+		strings.NewReader(payload),
+		int64(len([]byte(payload))),
+		minio.PutObjectOptions{
+			ContentType: "application/xml",
+		},
+	); err != nil {
 		return errors.Wrapf(err, "put object %v", objKey)
 	}
 

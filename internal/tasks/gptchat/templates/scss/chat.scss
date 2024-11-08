@@ -139,20 +139,31 @@
                 }
 
                 .sessions {
-                    position: fixed;
-                    height: 100%;
-                    // background-color: #f4f4f4;
-                    width: 44px;
-                    border: none;
-                    border-right: 1px dashed #e2e3e5;
-                    z-index: 50;
-                    font-size: 0.8em;
-
-                    button {
-                        padding: 5px;
+                    .session-tabs {
+                        // position: fixed;
+                        // height: 100%;
+                        // background-color: #f4f4f4;
+                        width: 44px;
                         border: none;
-                        border-radius: 0px;
-                        border-bottom: 1px solid #a59d9d;
+                        border-right: 1px dashed #e2e3e5;
+                        z-index: 50;
+                        font-size: 0.8em;
+
+                        button {
+                            padding: 5px;
+                            border: none;
+                            border-radius: 0px;
+                            border-bottom: 1px solid #a59d9d;
+                        }
+                    }
+
+                    .session-ops {
+                        margin-top: 3px;
+                        button {
+                            // padding: 0px;
+                            border: none;
+                            border-radius: 0px;
+                        }
                     }
                 }
 

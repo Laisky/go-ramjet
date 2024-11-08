@@ -1007,7 +1007,7 @@ async function changeSession (activeSid) {
     document
         .querySelectorAll(`
             #sessionManager .sessions .session,
-            #chatContainer .sessions .session
+            #chatContainer .sessions .session-tabs .session
         `)
         .forEach((ele) => {
             const item = ele.querySelector('.list-group-item');
@@ -1336,7 +1336,7 @@ async function setupSessionManager () {
                         </button>
                     </div>`);
             chatContainer
-                .querySelector('.sessions')
+                .querySelector('.sessions .session-tabs')
                 .insertAdjacentHTML(
                     'beforeend',
                     `<div class="list-group session" data-session="${sessionID}">
@@ -1396,7 +1396,7 @@ async function setupSessionManager () {
                 // deactive all sessions
                 document.querySelectorAll(`
                     #sessionManager .sessions .list-group-item.active,
-                    #chatContainer .sessions .list-group-item.active
+                    #chatContainer .sessions .session-tabs .list-group-item.active
                 `).forEach((item) => {
                     item.classList.remove('active');
                 });
@@ -1442,7 +1442,7 @@ async function setupSessionManager () {
                 document
                     .querySelector(`
                         #sessionManager .sessions .session[data-session="${newSessionID}"],
-                        #chatContainer .sessions .session[data-session="${newSessionID}"]
+                        #chatContainer .sessions .session-tabs .session[data-session="${newSessionID}"]
                     `)
                     .addEventListener('click', listenSessionSwitch);
 
@@ -1457,7 +1457,7 @@ async function setupSessionManager () {
         document
             .querySelectorAll(`
                 #sessionManager .sessions .session,
-                #chatContainer .sessions .session
+                #chatContainer .sessions .session-tabs .session
             `)
             .forEach((item) => {
                 item.addEventListener('click', listenSessionSwitch);
@@ -4079,12 +4079,14 @@ async function setupConfig () {
 
     // bind clear-chats button
     {
-        configContainer.querySelector('.btn.clear-chats')
-            .addEventListener('click', async (evt) => {
-                evt.stopPropagation();
+        document.querySelectorAll('.btn.clear-chats')
+            .forEach((ele) => {
+                ele.addEventListener('click', async (evt) => {
+                    evt.stopPropagation();
 
-                ConfirmModal('Clear all chat records in the current session?', async () => {
-                    clearSessionAndChats(evt, await activeSessionID());
+                    ConfirmModal('Clear current chat history but keep the session settings?', async () => {
+                        clearSessionAndChats(evt, await activeSessionID());
+                    });
                 });
             });
     }
