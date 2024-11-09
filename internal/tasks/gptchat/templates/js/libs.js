@@ -24,6 +24,32 @@ export const LoadJsModules = async (moduleUrls, moduleType) => {
 };
 
 /**
+ * check whether objParent is a super set of obj
+ *
+ * @param {Object} objParent
+ * @param {Object} obj
+ * @returns true if every property in objNew also exists in objOld
+ */
+export const Compatible = (objNew, objOld) => {
+    // Handle null/undefined
+    if (objNew === null || objOld === null) return false;
+    if (typeof objNew !== 'object') return objNew === objOld;
+
+    // Handle arrays
+    if (Array.isArray(objNew)) {
+        if (!Array.isArray(objOld)) return false;
+        if (objNew.length > objOld.length) return false;
+        return objNew.every((val, idx) => Compatible(val, objOld[idx]));
+    }
+
+    // Check all properties in objNew exist in objOld
+    return Object.keys(objNew).every(key => {
+        if (!(key in objOld)) return false;
+        return Compatible(objNew[key], objOld[key]);
+    });
+};
+
+/**
  * async wait for milliseconds
  *
  * @param {*} milliseconds

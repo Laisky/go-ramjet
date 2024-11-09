@@ -153,6 +153,7 @@ const KvKeyPrefixSelectedSession = 'config_selected_session';
 const KvKeySyncKey = 'config_sync_key';
 // const KvKeyAutoSyncUserConfig = 'config_auto_sync_user_config';
 const KvKeyVersionDate = 'config_version_date';
+const KvKeyUserInfo = 'config_user_info';
 
 const RoleHuman = 'user';
 const RoleSystem = 'system';
@@ -298,7 +299,7 @@ async function main (event) {
     await setupHeader();
     setupSingleInputModal();
 
-    await checkUpgrade();
+    checkUpgrade(); // run in background
     await setupChatJs();
 };
 main();
@@ -712,47 +713,25 @@ async function setupModals () {
         });
 }
 
-/** setup header bar
- *
- */
-async function setupHeader () {
+async function setupByUserInfo (userInfo) {
     const headerBarEle = document.getElementById('headerbar');
     let allowedModels = [];
-    const sconfig = await getChatSessionConfig();
+    let selectedModel = await OpenaiSelectedModel();
 
     // setup chat models
     {
-        // set default chat model
-        let selectedModel = await OpenaiSelectedModel();
-
-        // get users' models
-        const headers = new Headers();
-        headers.append('Authorization', 'Bearer ' + sconfig.api_token);
-        const response = await fetch('/user/me', {
-            method: 'GET',
-            cache: 'no-cache',
-            headers
-        });
-
-        if (response.status !== 200) {
-            throw new Error('failed to get user info, please refresh your browser.');
-        }
-
-        const modelsContainer = document.querySelector('#headerbar .chat-models');
-        let modelsEle = '';
-        const respData = await response.json();
-        if (respData.allowed_models.includes('*')) {
-            respData.allowed_models = Array.from(AllModels);
+        if (userInfo.allowed_models.includes('*')) {
+            userInfo.allowed_models = Array.from(AllModels);
         } else {
-            respData.allowed_models.push(QAModelCustom, QAModelShared);
+            userInfo.allowed_models.push(QAModelCustom, QAModelShared);
         }
-        respData.allowed_models = respData.allowed_models.filter((model) => {
+        userInfo.allowed_models = userInfo.allowed_models.filter((model) => {
             return AllModels.includes(model);
         });
 
-        respData.allowed_models.sort();
-        await libs.KvSet(KvKeyAllowedModels, respData.allowed_models);
-        allowedModels = respData.allowed_models;
+        userInfo.allowed_models.sort();
+        await libs.KvSet(KvKeyAllowedModels, userInfo.allowed_models);
+        allowedModels = userInfo.allowed_models;
 
         if (!allowedModels.includes(selectedModel)) {
             selectedModel = '';
@@ -771,12 +750,10 @@ async function setupHeader () {
             await saveChatSessionConfig(sconfig);
         }
 
-        // add hint to input text
-        // chatPromptInputEle.attributes
-        //     .placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
-
+        const modelsContainer = document.querySelector('#headerbar .chat-models');
         const unsupportedModels = [];
-        respData.allowed_models.forEach((model) => {
+        let modelsEle = '';
+        userInfo.allowed_models.forEach((model) => {
             if (!ChatModels.includes(model)) {
                 unsupportedModels.push(model);
                 return;
@@ -790,13 +767,6 @@ async function setupHeader () {
         });
         modelsContainer.innerHTML = modelsEle;
     }
-
-    // FIXME
-    // if (unsupportedModels.length > 0) {
-    //     showalert("warning", `there are some models enabled for your account, but not supported in the frontend, `
-    //         + `maybe you need refresh your browser. if this warning still exists, `
-    //         + `please contact us via <a href="mailto:chat-support@laisky.com">chat-support@laisky.com</a>. unsupported models: ${unsupportedModels.join(", ")}`);
-    // }
 
     // setup chat qa models
     {
@@ -874,6 +844,46 @@ async function setupHeader () {
             }
         });
     });
+}
+
+async function loadAndUpdateUserInfo (oldUserInfo) {
+    const sconfig = await getChatSessionConfig();
+
+    // get users' models
+    const headers = new Headers();
+    headers.append('Authorization', 'Bearer ' + sconfig.api_token);
+    const response = await fetch('/user/me', {
+        method: 'GET',
+        cache: 'no-cache',
+        headers
+    });
+
+    if (response.status !== 200) {
+        throw new Error('failed to get user info, please refresh your browser.');
+    }
+
+    const newUserInfo = await response.json();
+    await libs.KvSet(KvKeyUserInfo, newUserInfo);
+
+    // if user info changed, update it
+    if (!oldUserInfo || !libs.Compatible(oldUserInfo, newUserInfo)) {
+        await setupByUserInfo(newUserInfo);
+    }
+}
+
+/**
+ * setup header bar
+ */
+async function setupHeader () {
+    // get user info from cache
+    const userInfo = await libs.KvGet(KvKeyUserInfo);
+    if (userInfo) {
+        console.log('use cached user info');
+        await setupByUserInfo(userInfo);
+        loadAndUpdateUserInfo(userInfo);
+    } else {
+        await loadAndUpdateUserInfo();
+    }
 }
 
 // eslint-disable-next-line no-unused-vars
