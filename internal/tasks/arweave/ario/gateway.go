@@ -24,6 +24,7 @@ var ArweaveGateways = []string{
 	"https://ar-io.dev/",
 	"https://g8way.io/",
 	// non official domains
+	"https://s3.laisky.com/public/arweave/uploadcache/",
 	// "https://vilenarios.com/",
 	// "https://arbr.pro/",
 	// "https://frostor.xyz/",
