@@ -810,6 +810,16 @@ async function setupByUserInfo (userInfo) {
         imageModelsContainer.innerHTML = modelsEle;
     }
 
+    // add active to selected model
+    document.querySelectorAll('#headerbar .chat-models li a, ' +
+        '#headerbar .qa-models li a, ' +
+        '#headerbar .image-models li a'
+    ).forEach((elem) => {
+        if (elem.dataset.model === selectedModel) {
+            elem.classList.add('active');
+        }
+    });
+
     // listen click events
     const modelElems = document
         .querySelectorAll('#headerbar .chat-models li a, ' +
@@ -831,7 +841,7 @@ async function setupByUserInfo (userInfo) {
             sconfig.selected_model = selectedModel;
             await saveChatSessionConfig(sconfig);
 
-            // add active to class
+            // add active to dropdown-toggle
             document.querySelectorAll('#headerbar .navbar-nav a.dropdown-toggle')
                 .forEach((elem) => {
                     elem.classList.remove('active');
@@ -867,6 +877,7 @@ async function loadAndUpdateUserInfo (oldUserInfo) {
 
     // if user info changed, update it
     if (!oldUserInfo || !libs.Compatible(oldUserInfo, newUserInfo)) {
+        console.log('user info changed, update it');
         await setupByUserInfo(newUserInfo);
     }
 }
