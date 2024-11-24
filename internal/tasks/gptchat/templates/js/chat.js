@@ -98,9 +98,11 @@ const VisionModels = [
     ChatModelClaude35Sonnet,
     // ChatModelClaude35Sonnet8K,
     ChatModelClaude3Haiku,
-    ChatModelClaude35Haiku
+    ChatModelClaude35Haiku,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
+    ImageModelFluxPro,
+    ImageModelFluxPro11
 ];
 const QaModels = [
     QAModelBasebit,
@@ -1912,6 +1914,37 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
     console.debug(`sendFluxProPrompt2Server, url=${url}`);
 
     const sconfig = await getChatSessionConfig();
+
+    const payload = {
+        input: {
+            prompt,
+            steps: 25,
+            aspect_ratio: '1:1',
+            safety_tolerance: 5,
+            guidance: 3,
+            interval: 2,
+            seed: Date.now(),
+            n_images: nImage
+        }
+    };
+
+    // add image_prompt for vision model
+    if (VisionModels.includes(selectedModel)) {
+        // get first image in store
+        if (chatVisionSelectedFileStore.length !== 0) {
+            const imageBase64 = chatVisionSelectedFileStore[0].contentB64;
+
+            // insert image to user input & hisotry
+            await appendImg2UserInput(chatID, imageBase64, `${libs.DateStr()}.png`);
+
+            chatVisionSelectedFileStore = [];
+            updateChatVisionSelectedFileStore();
+
+            // https://replicate.com/black-forest-labs/flux-pro/api/learn-more#option-3-data-uri
+            payload.input.image_prompt = `data:application/octet-stream;base64,${imageBase64}`;
+        }
+    }
+
     const resp = await fetch(url, {
         method: 'POST',
         headers: {
@@ -1919,18 +1952,7 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
             'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
             'X-Laisky-Api-Base': sconfig.api_base
         },
-        body: JSON.stringify({
-            input: {
-                prompt,
-                steps: 25,
-                aspect_ratio: '1:1',
-                safety_tolerance: 5,
-                guidance: 3,
-                interval: 2,
-                seed: Date.now(),
-                n_images: nImage
-            }
-        })
+        body: JSON.stringify(payload)
     });
     if (!resp.ok || resp.status !== 200) {
         throw new Error(`[${resp.status}]: ${await resp.text()}`);

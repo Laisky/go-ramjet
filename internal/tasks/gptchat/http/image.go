@@ -129,23 +129,23 @@ func DrawByFlux(ctx *gin.Context) {
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
 				req.Input.Prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			s3cli, err := s3.GetCli()
-			if err != nil {
-				logger.Error("get s3 client", zap.Error(err))
+			s3cli, errS3 := s3.GetCli()
+			if errS3 != nil {
+				logger.Error("get s3 client", zap.Error(errS3))
 			}
 
-			if _, err := s3cli.PutObject(taskCtx,
+			if _, errS3 := s3cli.PutObject(taskCtx,
 				config.Config.S3.Bucket,
 				objkey,
 				bytes.NewReader(msg),
 				int64(len(msg)),
 				minio.PutObjectOptions{
 					ContentType: "text/plain",
-				}); err != nil {
-				logger.Error("upload error msg", zap.Error(err))
+				}); errS3 != nil {
+				logger.Error("upload error msg", zap.Error(errS3))
 			}
 
-			logger.Error("failed to draw som image",
+			logger.Error("failed to draw some images",
 				zap.Int("required", nImage),
 				zap.Int32("succeed", anySucceed),
 				zap.String("objkey", objkey),
@@ -189,14 +189,7 @@ func drawFluxByReplicate(ctx context.Context,
 		return nil, errors.Wrap(err, "marshal request")
 	}
 
-	var api string
-	switch model {
-	case "flux-pro":
-		api = "https://api.replicate.com/v1/models/black-forest-labs/flux-pro/predictions"
-	case "flux-schnell":
-		api = "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions"
-	}
-
+	api := fmt.Sprintf("https://api.replicate.com/v1/models/black-forest-labs/%s/predictions", model)
 	upstreamReq, err := http.NewRequestWithContext(ctx,
 		http.MethodPost, api, bytes.NewReader(upstreamReqBody))
 	if err != nil {
@@ -218,9 +211,24 @@ func drawFluxByReplicate(ctx context.Context,
 			resp.StatusCode, string(payload))
 	}
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read response")
+	}
+
 	respData := new(DrawImageByFluxProResponse)
-	if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
-		return nil, errors.Wrap(err, "decode response")
+	if err = json.Unmarshal(respBody, respData); err != nil {
+		// try v2
+		respDataV2 := new(DrawImageByFluxProResponseV2)
+		if err = json.Unmarshal(respBody, respDataV2); err != nil {
+			return nil, errors.Wrapf(err, "decode response: %s", string(respBody))
+		}
+
+		if err = copier.Copy(respData, respDataV2); err != nil {
+			return nil, errors.Wrap(err, "copy response")
+		}
+
+		respData.Output = []string{respDataV2.Output}
 	}
 
 	var imgContent []byte
@@ -253,7 +261,17 @@ func drawFluxByReplicate(ctx context.Context,
 
 			taskData := new(DrawImageByFluxProResponse)
 			if err = json.Unmarshal(taskBody, taskData); err != nil {
-				return errors.Wrapf(err, "decode task response %s", string(taskBody))
+				// try v2
+				taskDataV2 := new(DrawImageByFluxProResponseV2)
+				if err = json.Unmarshal(taskBody, taskDataV2); err != nil {
+					return errors.Wrapf(err, "decode task response: %s", string(taskBody))
+				}
+
+				if err = copier.Copy(taskData, taskDataV2); err != nil {
+					return errors.Wrap(err, "copy task response")
+				}
+
+				taskData.Output = []string{taskDataV2.Output}
 			}
 
 			switch taskData.Status {

@@ -444,6 +444,7 @@ type DrawImageByFluxReplicateRequest struct {
 type FluxInput struct {
 	Steps           int    `json:"steps" binding:"required,min=1"`
 	Prompt          string `json:"prompt" binding:"required,min=5"`
+	ImagePrompt     string `json:"image_prompt"`
 	Guidance        int    `json:"guidance" binding:"required,min=2,max=5"`
 	Interval        int    `json:"interval" binding:"required,min=1,max=4"`
 	AspectRatio     string `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
@@ -462,9 +463,26 @@ type DrawImageByFluxProResponse struct {
 	Error       string                          `json:"error"`
 	ID          string                          `json:"id"`
 	Input       DrawImageByFluxReplicateRequest `json:"input"`
-	Logs        interface{}                     `json:"logs"`
+	Logs        string                          `json:"logs"`
 	Metrics     FluxMetrics                     `json:"metrics"`
 	Output      []string                        `json:"output"`
+	StartedAt   time.Time                       `json:"started_at"`
+	Status      string                          `json:"status"`
+	URLs        FluxURLs                        `json:"urls"`
+	Version     string                          `json:"version"`
+}
+
+// DrawImageByFluxProResponseV2 Output type changed to string
+type DrawImageByFluxProResponseV2 struct {
+	CompletedAt time.Time                       `json:"completed_at"`
+	CreatedAt   time.Time                       `json:"created_at"`
+	DataRemoved bool                            `json:"data_removed"`
+	Error       string                          `json:"error"`
+	ID          string                          `json:"id"`
+	Input       DrawImageByFluxReplicateRequest `json:"input"`
+	Logs        string                          `json:"logs"`
+	Metrics     FluxMetrics                     `json:"metrics"`
+	Output      string                          `json:"output"`
 	StartedAt   time.Time                       `json:"started_at"`
 	Status      string                          `json:"status"`
 	URLs        FluxURLs                        `json:"urls"`
