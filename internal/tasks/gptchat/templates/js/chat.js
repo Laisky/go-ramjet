@@ -48,7 +48,9 @@ const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 // const ImageModelFluxPro = 'flux-pro';
+const ImageModelFluxDev = 'flux-dev';
 const ImageModelFluxPro11 = 'flux-1.1-pro';
+const ImageModelFluxProUltra11 = 'flux-1.1-pro-ultra';
 const ImageModelFluxSchnell = 'flux-schnell';
 // const ImageModelImg2Img = 'img-to-img';
 
@@ -102,7 +104,9 @@ const VisionModels = [
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
     // ImageModelFluxPro,
-    ImageModelFluxPro11
+    ImageModelFluxPro11,
+    ImageModelFluxProUltra11,
+    ImageModelFluxDev
 ];
 const QaModels = [
     QAModelBasebit,
@@ -116,6 +120,8 @@ const ImageModels = [
     ImageModelSdxlTurbo,
     // ImageModelFluxPro,
     ImageModelFluxPro11,
+    ImageModelFluxDev,
+    ImageModelFluxProUltra11,
     ImageModelFluxSchnell
     // ImageModelImg2Img
 ];
@@ -2408,6 +2414,8 @@ async function sendChat2Server (chatID, reqPrompt) {
                 break;
                 // case ImageModelFluxPro:
             case ImageModelFluxPro11:
+            case ImageModelFluxDev:
+            case ImageModelFluxProUltra11:
             case ImageModelFluxSchnell:
                 await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;

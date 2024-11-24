@@ -48,12 +48,16 @@ func DrawByFlux(ctx *gin.Context) {
 	var price db.Price
 	imgExt := ".png"
 	switch model {
+	case "flux-dev":
+		price = db.PriceTxt2ImageFluxDev
+	case "flux-schnell":
+		price = db.PriceTxt2ImageSchnell
 	case "flux-pro":
 		price = db.PriceTxt2ImageFluxPro
 	case "flux-1.1-pro":
 		price = db.PriceTxt2ImageFluxPro11
-	case "flux-schnell":
-		price = db.PriceTxt2ImageSchnell
+	case "flux-1.1-pro-ultra":
+		price = db.PriceTxt2ImageFluxProUltra11
 	default:
 		web.AbortErr(ctx, errors.Errorf("unknown model %q", model))
 		return
