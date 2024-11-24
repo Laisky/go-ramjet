@@ -47,7 +47,7 @@ const CompletionModelDavinci3 = 'text-davinci-003';
 const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
-const ImageModelFluxPro = 'flux-pro';
+// const ImageModelFluxPro = 'flux-pro';
 const ImageModelFluxPro11 = 'flux-1.1-pro';
 const ImageModelFluxSchnell = 'flux-schnell';
 // const ImageModelImg2Img = 'img-to-img';
@@ -101,7 +101,7 @@ const VisionModels = [
     ChatModelClaude35Haiku,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
-    ImageModelFluxPro,
+    // ImageModelFluxPro,
     ImageModelFluxPro11
 ];
 const QaModels = [
@@ -114,7 +114,7 @@ const QaModels = [
 const ImageModels = [
     ImageModelDalle3,
     ImageModelSdxlTurbo,
-    ImageModelFluxPro,
+    // ImageModelFluxPro,
     ImageModelFluxPro11,
     ImageModelFluxSchnell
     // ImageModelImg2Img
@@ -143,6 +143,12 @@ const FreeModels = [
     // ImageModelImg2Img
 ];
 const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
+
+// const ModelPriceUSD = {
+//     ImageModelDalle3: '0.04',
+//     ImageModelFluxPro11: '0.04',
+//     ImageModelFluxSchnell: '0.003'
+// };
 
 // custom dataset's end-to-end password
 const KvKeyPinnedMaterials = 'config_api_pinned_materials';
@@ -2400,7 +2406,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             case ImageModelSdxlTurbo:
                 await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
-            case ImageModelFluxPro:
+                // case ImageModelFluxPro:
             case ImageModelFluxPro11:
             case ImageModelFluxSchnell:
                 await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
