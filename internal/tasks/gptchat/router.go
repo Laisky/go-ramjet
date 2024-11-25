@@ -67,6 +67,7 @@ func bindHTTP() {
 	apiWithRatelimiter.POST("/images/generations", ihttp.DrawByDalleHandler)
 	apiWithRatelimiter.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
 	apiWithRatelimiter.POST("/images/generations/flux/:model", ihttp.DrawByFlux)
+	apiWithRatelimiter.POST("/images/edit/flux/:model", ihttp.InpaitingByFlux)
 	apiWithRatelimiter.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandlerByNvidia)
 	apiWithRatelimiter.POST("/chat/oneshot", ihttp.OneShotChatHandler)
 	apiWithRatelimiter.POST("/files/chat", ihttp.UploadFiles)

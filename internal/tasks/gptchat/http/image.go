@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"image/png"
 	"io"
 	"math/rand"
@@ -20,7 +21,6 @@ import (
 	"github.com/Laisky/go-utils/v4/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"github.com/minio/minio-go/v7"
 	"golang.org/x/image/webp"
 	"golang.org/x/sync/errgroup"
@@ -43,8 +43,24 @@ func DrawByFlux(ctx *gin.Context) {
 		return
 	}
 
-	nImage := req.Input.NImages
+	replicateFluxHandler(ctx, req.Input.NImages, model, req.Input.Prompt, req)
+}
 
+func InpaitingByFlux(ctx *gin.Context) {
+	model := strings.TrimSpace(ctx.Param("model"))
+	if model == "" {
+		web.AbortErr(ctx, errors.New("empty model"))
+	}
+
+	req := new(InpaintingImageByFlusReplicateRequest)
+	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
+		return
+	}
+
+	replicateFluxHandler(ctx, 1, model, req.Input.Prompt, req)
+}
+
+func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, req any) {
 	var price db.Price
 	imgExt := ".png"
 	switch model {
@@ -54,6 +70,8 @@ func DrawByFlux(ctx *gin.Context) {
 		price = db.PriceTxt2ImageSchnell
 	case "flux-pro":
 		price = db.PriceTxt2ImageFluxPro
+	case "flux-fill-pro":
+		price = db.PriceTxt2ImageFluxFillPro
 	case "flux-1.1-pro":
 		price = db.PriceTxt2ImageFluxPro11
 	case "flux-1.1-pro-ultra":
@@ -94,23 +112,17 @@ func DrawByFlux(ctx *gin.Context) {
 				logger := logger.With(zap.Int("n_img", i))
 				taskCtx := gmw.SetLogger(taskCtx, logger)
 
-				// first try segmind, since of segmind has some free quota.
-				// but segmind could be very slow, so we will try replicate if segmind failed.
-				// taskSegmindCtx, cancel := context.WithTimeout(taskCtx, time.Minute*2)
-				// defer cancel()
-				// imgContent, err := drawFluxBySegmind(taskSegmindCtx, model, req)
-				// if err != nil {
-				// 	logger.Warn("failed to draw image by segmind, try replicate", zap.Error(err))
-
-				// 	imgContent, err = drawFluxByReplicate(taskCtx, model, req)
-				// 	if err != nil {
-				// 		return errors.Wrap(err, "draw image")
-				// 	}
-				// }
-
-				imgContent, err := drawFluxByReplicate(taskCtx, model, req)
+				var imgContent []byte
+				switch r := req.(type) {
+				case *DrawImageByFluxReplicateRequest:
+					imgContent, err = drawFluxByReplicate(taskCtx, model, r)
+				case *InpaintingImageByFlusReplicateRequest:
+					imgContent, err = inpaitingFluxByReplicate(taskCtx, model, r)
+				default:
+					err = errors.Errorf("unknown request type %T", req)
+				}
 				if err != nil {
-					return errors.Wrap(err, "draw image")
+					return errors.WithStack(err)
 				}
 
 				if err := checkUserExternalBilling(taskCtx,
@@ -120,7 +132,7 @@ func DrawByFlux(ctx *gin.Context) {
 				atomic.AddInt32(&anySucceed, 1)
 				return uploadImage2Minio(taskCtx,
 					fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
-					req.Input.Prompt,
+					prompt,
 					imgContent,
 					imgExt,
 				)
@@ -131,7 +143,7 @@ func DrawByFlux(ctx *gin.Context) {
 		if err != nil {
 			// upload error msg
 			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
-				req.Input.Prompt, err.Error()))
+				prompt, err.Error()))
 			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
 			s3cli, errS3 := s3.GetCli()
 			if errS3 != nil {
@@ -182,20 +194,49 @@ func drawFluxByReplicate(ctx context.Context,
 	logger := gmw.GetLogger(ctx)
 	logger.Debug("draw image by replicate")
 
-	upstreamReqData := new(DrawImageByFluxReplicateRequest)
-	if err = copier.Copy(upstreamReqData, req); err != nil {
-		return nil, errors.Wrap(err, "copy request")
-	}
-	upstreamReqData.Input.Seed = rand.Int()
+	req.Input.Seed = rand.Int()
 
-	upstreamReqBody, err := json.Marshal(upstreamReqData)
+	upstreamReqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal request")
 	}
 
+	img, err = requestFluxImageAPI(ctx, model, upstreamReqBody)
+	if err != nil {
+		return nil, errors.Wrap(err, "request flux image api")
+	}
+
+	return img, nil
+}
+
+func inpaitingFluxByReplicate(ctx context.Context,
+	model string, req *InpaintingImageByFlusReplicateRequest) (img []byte, err error) {
+	logger := gmw.GetLogger(ctx)
+	logger.Debug("inpaiting image by replicate")
+
+	req.Input.Seed = rand.Int()
+	req.Input.OutputFormat = "png"
+
+	upstreamReqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal request")
+	}
+
+	img, err = requestFluxImageAPI(ctx, model, upstreamReqBody)
+	if err != nil {
+		return nil, errors.Wrap(err, "request flux image api")
+	}
+
+	return img, nil
+}
+
+func requestFluxImageAPI(ctx context.Context,
+	model string, reqBody []byte) (img []byte, err error) {
+	logger := gmw.GetLogger(ctx)
+
 	api := fmt.Sprintf("https://api.replicate.com/v1/models/black-forest-labs/%s/predictions", model)
 	upstreamReq, err := http.NewRequestWithContext(ctx,
-		http.MethodPost, api, bytes.NewReader(upstreamReqBody))
+		http.MethodPost, api, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, errors.Wrap(err, "new request to draw image")
 	}
@@ -222,17 +263,7 @@ func drawFluxByReplicate(ctx context.Context,
 
 	respData := new(DrawImageByFluxProResponse)
 	if err = json.Unmarshal(respBody, respData); err != nil {
-		// try v2
-		respDataV2 := new(DrawImageByFluxProResponseV2)
-		if err = json.Unmarshal(respBody, respDataV2); err != nil {
-			return nil, errors.Wrapf(err, "decode response: %s", string(respBody))
-		}
-
-		if err = copier.Copy(respData, respDataV2); err != nil {
-			return nil, errors.Wrap(err, "copy response")
-		}
-
-		respData.Output = []string{respDataV2.Output}
+		return nil, errors.Wrap(err, "decode response")
 	}
 
 	var imgContent []byte
@@ -265,17 +296,7 @@ func drawFluxByReplicate(ctx context.Context,
 
 			taskData := new(DrawImageByFluxProResponse)
 			if err = json.Unmarshal(taskBody, taskData); err != nil {
-				// try v2
-				taskDataV2 := new(DrawImageByFluxProResponseV2)
-				if err = json.Unmarshal(taskBody, taskDataV2); err != nil {
-					return errors.Wrapf(err, "decode task response: %s", string(taskBody))
-				}
-
-				if err = copier.Copy(taskData, taskDataV2); err != nil {
-					return errors.Wrap(err, "copy task response")
-				}
-
-				taskData.Output = []string{taskDataV2.Output}
+				return errors.Wrap(err, "decode task response")
 			}
 
 			switch taskData.Status {
@@ -289,15 +310,19 @@ func drawFluxByReplicate(ctx context.Context,
 				return nil
 			}
 
-			if len(taskData.Output) == 0 {
+			output, err := taskData.GetOutput()
+			if err != nil {
+				return errors.Wrap(err, "get output")
+			}
+			if len(output) == 0 {
 				return errors.New("empty image url")
 			}
 
 			// download image
 			logger.Debug("try to download image",
-				zap.String("img_url", taskData.Output[0]))
+				zap.String("img_url", output[0]))
 			downloadReq, err := http.NewRequestWithContext(ctx,
-				http.MethodGet, taskData.Output[0], nil)
+				http.MethodGet, output[0], nil)
 			if err != nil {
 				return errors.Wrap(err, "new request")
 			}
@@ -325,7 +350,7 @@ func drawFluxByReplicate(ctx context.Context,
 		}
 	}
 
-	imgContent, err = ConvertWebPToPNG(imgContent)
+	imgContent, err = ConvertImageToPNG(imgContent)
 	if err != nil {
 		return nil, errors.Wrap(err, "convert webp to png")
 	}
@@ -333,8 +358,28 @@ func drawFluxByReplicate(ctx context.Context,
 	return imgContent, nil
 }
 
-// ConvertWebPToPNG converts a WebP image to PNG format
-func ConvertWebPToPNG(webpData []byte) ([]byte, error) {
+// ConvertImageToPNG converts a WebP image to PNG format
+func ConvertImageToPNG(webpData []byte) ([]byte, error) {
+	// bypass if it's already a PNG image
+	if bytes.HasPrefix(webpData, []byte("\x89PNG")) {
+		return webpData, nil
+	}
+
+	// check if is jpeg, convert to png
+	if bytes.HasPrefix(webpData, []byte("\xff\xd8\xff")) {
+		img, _, err := image.Decode(bytes.NewReader(webpData))
+		if err != nil {
+			return nil, errors.Wrap(err, "decode jpeg")
+		}
+
+		var pngBuffer bytes.Buffer
+		if err := png.Encode(&pngBuffer, img); err != nil {
+			return nil, errors.Wrap(err, "encode png")
+		}
+
+		return pngBuffer.Bytes(), nil
+	}
+
 	// Decode the WebP image
 	img, err := webp.Decode(bytes.NewReader(webpData))
 	if err != nil {

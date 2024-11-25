@@ -3,6 +3,7 @@ package http
 import (
 	"time"
 
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/zap"
 	"github.com/pkoukk/tiktoken-go"
@@ -441,6 +442,8 @@ type DrawImageByFluxReplicateRequest struct {
 }
 
 // FluxInput is input of DrawImageByFluxProRequest
+//
+// https://replicate.com/black-forest-labs/flux-1.1-pro/api/schema
 type FluxInput struct {
 	Steps           int    `json:"steps" binding:"required,min=1"`
 	Prompt          string `json:"prompt" binding:"required,min=5"`
@@ -451,6 +454,30 @@ type FluxInput struct {
 	SafetyTolerance int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
 	Seed            int    `json:"seed"`
 	NImages         int    `json:"n_images" binding:"required,min=1,max=8"`
+	Width           int    `json:"width" binding:"required,min=256,max=1440"`
+	Height          int    `json:"height" binding:"required,min=256,max=1440"`
+}
+
+// InpaintingImageByFlusReplicateRequest is request to inpainting image by flux pro
+//
+// https://replicate.com/black-forest-labs/flux-fill-pro/api/schema
+type InpaintingImageByFlusReplicateRequest struct {
+	Input FluxInpaintingInput `json:"input"`
+}
+
+// FluxInpaintingInput is input of DrawImageByFluxProRequest
+//
+// https://replicate.com/black-forest-labs/flux-fill-pro/api/schema
+type FluxInpaintingInput struct {
+	Mask             string `json:"mask" binding:"required"`
+	Image            string `json:"image" binding:"required"`
+	Seed             int    `json:"seed"`
+	Steps            int    `json:"steps" binding:"required,min=1"`
+	Prompt           string `json:"prompt" binding:"required,min=5"`
+	Guidance         int    `json:"guidance" binding:"required,min=2,max=5"`
+	OutputFormat     string `json:"output_format"`
+	SafetyTolerance  int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
+	PromptUnsampling bool   `json:"prompt_unsampling"`
 }
 
 // DrawImageByFluxProResponse is response of DrawImageByFluxProRequest
@@ -465,28 +492,37 @@ type DrawImageByFluxProResponse struct {
 	Input       DrawImageByFluxReplicateRequest `json:"input"`
 	Logs        string                          `json:"logs"`
 	Metrics     FluxMetrics                     `json:"metrics"`
-	Output      []string                        `json:"output"`
-	StartedAt   time.Time                       `json:"started_at"`
-	Status      string                          `json:"status"`
-	URLs        FluxURLs                        `json:"urls"`
-	Version     string                          `json:"version"`
+	// Output could be `string` or `[]string`
+	Output    any       `json:"output"`
+	StartedAt time.Time `json:"started_at"`
+	Status    string    `json:"status"`
+	URLs      FluxURLs  `json:"urls"`
+	Version   string    `json:"version"`
 }
 
-// DrawImageByFluxProResponseV2 Output type changed to string
-type DrawImageByFluxProResponseV2 struct {
-	CompletedAt time.Time                       `json:"completed_at"`
-	CreatedAt   time.Time                       `json:"created_at"`
-	DataRemoved bool                            `json:"data_removed"`
-	Error       string                          `json:"error"`
-	ID          string                          `json:"id"`
-	Input       DrawImageByFluxReplicateRequest `json:"input"`
-	Logs        string                          `json:"logs"`
-	Metrics     FluxMetrics                     `json:"metrics"`
-	Output      string                          `json:"output"`
-	StartedAt   time.Time                       `json:"started_at"`
-	Status      string                          `json:"status"`
-	URLs        FluxURLs                        `json:"urls"`
-	Version     string                          `json:"version"`
+func (r *DrawImageByFluxProResponse) GetOutput() ([]string, error) {
+	switch v := r.Output.(type) {
+	case string:
+		return []string{v}, nil
+	case []string:
+		return v, nil
+	case nil:
+		return nil, nil
+	case []interface{}:
+		// convert []interface{} to []string
+		ret := make([]string, len(v))
+		for idx, vv := range v {
+			if vvv, ok := vv.(string); ok {
+				ret[idx] = vvv
+			} else {
+				return nil, errors.Errorf("unknown output type: [%T]%v", vv, vv)
+			}
+		}
+
+		return ret, nil
+	default:
+		return nil, errors.Errorf("unknown output type: [%T]%v", r.Output, r.Output)
+	}
 }
 
 // FluxMetrics is metrics of DrawImageByFluxProResponse

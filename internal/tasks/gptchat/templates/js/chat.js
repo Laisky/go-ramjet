@@ -44,7 +44,7 @@ const QAModelImmigrate = 'qa-immigrate';
 const QAModelCustom = 'qa-custom';
 const QAModelShared = 'qa-shared';
 const CompletionModelDavinci3 = 'text-davinci-003';
-const ImageModelDalle2 = 'dall-e-2';
+// const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 // const ImageModelFluxPro = 'flux-pro';
@@ -413,10 +413,28 @@ async function showImageEditModal (chatID, imgSrc) {
             maskData[i] = imageData.data[i];
         }
 
+        // This is for dall-e-2 inpainting
+        //
         // set alpha to where the image is been drawn to yellow
+        // for (let i = 0; i < imageData.data.length; i += 4) {
+        //     if (imageData.data[i] >= 250 && imageData.data[i + 1] >= 250 && imageData.data[i + 2] <= 5) {
+        //         maskData[i + 3] = 0; // set alpha to 0
+        //     }
+        // }
+
+        // This is for flux inpainting
+        //
+        // set color to black where the image is been drawn to yellow,
+        // and set remaining color to white
         for (let i = 0; i < imageData.data.length; i += 4) {
             if (imageData.data[i] >= 250 && imageData.data[i + 1] >= 250 && imageData.data[i + 2] <= 5) {
-                maskData[i + 3] = 0; // set alpha to 0
+                maskData[i] = 255;
+                maskData[i + 1] = 255;
+                maskData[i + 2] = 255;
+            } else {
+                maskData[i] = 0;
+                maskData[i + 1] = 0;
+                maskData[i + 2] = 0;
             }
         }
 
@@ -438,55 +456,157 @@ async function showImageEditModal (chatID, imgSrc) {
 
         const rawImgBlob = await (await fetch(imgSrc)).blob();
 
-        const formData = new FormData();
-        formData.append('image', rawImgBlob, 'image.png');
-        formData.append('mask', maskBlob, 'mask.png');
-        formData.append('prompt', prompt);
-        formData.append('model', ImageModelDalle2);
-        formData.append('response_format', 'b64_json');
-
         imgEditModal.hide();
 
-        try {
-            ShowSpinner();
-            await reloadAiResp(chatID, async () => {
-                const sconfig = await getChatSessionConfig();
-                const resp = await fetch('/oneapi/v1/images/edits', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        Authorization: `Bearer ${sconfig.api_token}`
-                    }
-                });
-                const respData = await resp.json();
-                const respImageData = respData.data[0].b64_json;
-                const content = `<div class="ai-resp-image">
-                        <div class="hover-btns">
-                            <i class="bi bi-pencil-square"></i>
-                        </div>
-                        <img src="data:image/png;base64,${respImageData}">
-                    </div>`
-
-                await append2Chats({
-                    chatID,
-                    role: RoleAI,
-                    model: ImageModelDalle2,
-                    content
-                });
-                await saveChats2Storage({
-                    role: RoleAI,
-                    chatID,
-                    model: ImageModelDalle2,
-                    content
-                });
-            });
-        } catch (e) {
-            abortAIResp(e);
-        } finally {
-            HideSpinner();
-        }
+        // inpaintingImageByDalle(chatID, prompt, rawImgBlob, maskBlob);
+        inpaintingImageByFlux(chatID, prompt, rawImgBlob, maskBlob);
     };
 }
+
+/**
+ * replace data url's prefix to `data:application/octet-stream;base64,`
+ */
+function replaceDataUrlPrefix (dataUrl) {
+    return dataUrl.replace(/^data:image\/(png|jpeg);base64,/, 'data:application/octet-stream;base64,');
+}
+
+async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
+    globalAIRespEle = chatContainer
+        .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    const selectedModel = globalAIRespEle.dataset.model;
+
+    const rawImgBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(rawImgBlob);
+    });
+    const maskBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(maskBlob);
+    });
+
+    console.log(rawImgBase64);
+
+    // replace data url's prefix to `data:application/octet-stream;base64,`
+    // const rawImgUrl = replaceDataUrlPrefix(rawImgBase64);
+    // const rawMaskUrl = replaceDataUrlPrefix(maskBase64);
+
+    const reqBody = {
+        input: {
+            prompt,
+            mask: maskBase64,
+            image: rawImgBase64,
+            // mask: rawMaskUrl,
+            // image: rawImgUrl,
+            seed: Date.now(),
+            steps: 30,
+            guidance: 3,
+            safety_tolerance: 5,
+            prompt_upsampling: false
+        }
+    };
+
+    ShowSpinner();
+    try {
+        const sconfig = await getChatSessionConfig();
+        const resp = await fetch('/images/edit/flux/flux-fill-pro', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ' + sconfig.api_token,
+                'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                'X-Laisky-Api-Base': sconfig.api_base
+            },
+            body: JSON.stringify(reqBody)
+        });
+        if (!resp.ok || resp.status !== 200) {
+            throw new Error(`[${resp.status}]: ${await resp.text()}`);
+        }
+        const respData = await resp.json();
+
+        globalAIRespEle.dataset.status = 'waiting';
+        globalAIRespEle.dataset.taskType = 'image';
+        globalAIRespEle.dataset.taskId = respData.task_id;
+        globalAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
+        globalAIRespEle.innerHTML = `
+            <p dir="auto" class="card-text placeholder-glow">
+                <span class="placeholder col-7"></span>
+                <span class="placeholder col-4"></span>
+                <span class="placeholder col-4"></span>
+                <span class="placeholder col-6"></span>
+                <span class="placeholder col-8"></span>
+            </p>`;
+
+        // save img to storage no matter it's done or not
+        let attachHTML = '';
+        respData.image_urls.forEach((url) => {
+            attachHTML += `<div class="ai-resp-image">
+            <div class="hover-btns">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <img src="${url}">
+        </div>`
+        });
+
+        await saveChats2Storage({
+            role: RoleAI,
+            chatID,
+            model: selectedModel,
+            content: attachHTML
+        });
+    } catch (e) {
+        abortAIResp(e);
+    } finally {
+        HideSpinner();
+    }
+}
+
+// async function inpaintingImageByDalle (chatID, prompt, rawImgBlob, maskBlob) {
+//     const formData = new FormData();
+//     formData.append('image', rawImgBlob, 'image.png');
+//     formData.append('mask', maskBlob, 'mask.png');
+//     formData.append('prompt', prompt);
+//     formData.append('model', ImageModelDalle2);
+//     formData.append('response_format', 'b64_json');
+
+//     try {
+//         await reloadAiResp(chatID, async () => {
+//             const sconfig = await getChatSessionConfig();
+//             const resp = await fetch('/oneapi/v1/images/edits', {
+//                 method: 'POST',
+//                 body: formData,
+//                 headers: {
+//                     Authorization: `Bearer ${sconfig.api_token}`
+//                 }
+//             });
+//             const respData = await resp.json();
+//             const respImageData = respData.data[0].b64_json;
+//             const content = `<div class="ai-resp-image">
+//                     <div class="hover-btns">
+//                         <i class="bi bi-pencil-square"></i>
+//                     </div>
+//                     <img src="data:image/png;base64,${respImageData}">
+//                 </div>`
+
+//             await append2Chats({
+//                 chatID,
+//                 role: RoleAI,
+//                 model: ImageModelDalle2,
+//                 content
+//             });
+//             await saveChats2Storage({
+//                 role: RoleAI,
+//                 chatID,
+//                 model: ImageModelDalle2,
+//                 content
+//             });
+//         });
+//     } catch (e) {
+//         abortAIResp(e);
+//     } finally {
+//         HideSpinner();
+//     }
+// }
 
 async function dataMigrate () {
     const sid = await activeSessionID();
@@ -1930,8 +2050,10 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
     const payload = {
         input: {
             prompt,
-            steps: 25,
+            steps: 30,
             aspect_ratio: '1:1',
+            height: 1440,
+            width: 1440,
             safety_tolerance: 5,
             guidance: 3,
             interval: 2,

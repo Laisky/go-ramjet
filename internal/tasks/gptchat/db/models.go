@@ -40,6 +40,7 @@ const (
 	PriceTxt2ImageFluxPro11      Price = 20000      // 0.040 usd
 	PriceTxt2ImageFluxProUltra11 Price = 30000      // 0.060 usd
 	PriceTxt2ImageFluxPro        Price = 27500      // 0.055 usd
+	PriceTxt2ImageFluxFillPro    Price = 25000      // 0.05 usd
 	PriceTxt2ImageFluxDev        Price = 12500      // 0.025 usd
 	PriceTxt2ImageSchnell        Price = 1500       // 0.003 usd
 	PriceUploadFile              Price = 2500       // 0.005 usd
