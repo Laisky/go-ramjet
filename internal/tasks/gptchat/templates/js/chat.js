@@ -14,6 +14,8 @@ const ChatModelTurbo35 = 'gpt-3.5-turbo';
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT4O = 'gpt-4o';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
+const ChatModelGPTO1Preview = 'o1-preview';
+const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 const ChatModelDeepSeekCoder = 'deepseek-coder';
 // const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
@@ -64,6 +66,8 @@ const ChatModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelGPT4OMini,
+    ChatModelGPTO1Preview,
+    ChatModelGPTO1Mini,
     ChatModelDeepSeekChat,
     ChatModelDeepSeekCoder,
     // ChatModelGPT4Turbo1106,
@@ -466,9 +470,9 @@ async function showImageEditModal (chatID, imgSrc) {
 /**
  * replace data url's prefix to `data:application/octet-stream;base64,`
  */
-function replaceDataUrlPrefix (dataUrl) {
-    return dataUrl.replace(/^data:image\/(png|jpeg);base64,/, 'data:application/octet-stream;base64,');
-}
+// function replaceDataUrlPrefix (dataUrl) {
+//     return dataUrl.replace(/^data:image\/(png|jpeg);base64,/, 'data:application/octet-stream;base64,');
+// }
 
 async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
     globalAIRespEle = chatContainer
