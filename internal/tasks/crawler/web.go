@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	gmw "github.com/Laisky/gin-middlewares/v5"
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/library/web"

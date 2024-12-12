@@ -4,7 +4,7 @@ package utils
 import (
 	"fmt"
 
-	galgo "github.com/Laisky/go-utils/v4/algorithm"
+	galgo "github.com/Laisky/go-utils/v5/algorithm"
 	tiktoken "github.com/pkoukk/tiktoken-go"
 )
 

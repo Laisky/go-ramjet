@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v5"
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/go-utils/v4/json"
+	gmw "github.com/Laisky/gin-middlewares/v6"
+	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

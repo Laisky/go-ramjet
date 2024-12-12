@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 
-	gmw "github.com/Laisky/gin-middlewares/v5"
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 )

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/go-utils/v4/json"
+	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/testify/require"
 
 	"github.com/Laisky/go-ramjet/library/log"

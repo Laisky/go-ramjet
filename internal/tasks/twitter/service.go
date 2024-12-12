@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/Laisky/errors/v2"
-	glog "github.com/Laisky/go-utils/v4/log"
+	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"
 )

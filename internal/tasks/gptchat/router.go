@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	gutils "github.com/Laisky/go-utils/v4"
+	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"

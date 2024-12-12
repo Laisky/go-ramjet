@@ -6,35 +6,35 @@ toolchain go1.23.0
 
 require (
 	github.com/Laisky/errors/v2 v2.0.1
-	github.com/Laisky/gin-middlewares/v5 v5.0.4
+	github.com/Laisky/gin-middlewares/v6 v6.0.0
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v4 v4.10.0
+	github.com/Laisky/go-utils/v5 v5.0.0-20241212011255-c6008c31ffaf
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20241117031218-0217f7ce5e3c
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
 	github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0
-	github.com/baidubce/bce-sdk-go v0.9.201
-	github.com/chromedp/cdproto v0.0.0-20241110205750-a72e6703cd9b
+	github.com/baidubce/bce-sdk-go v0.9.206
+	github.com/chromedp/cdproto v0.0.0-20241208230723-d1c7de7e5dd2
 	github.com/chromedp/chromedp v0.11.2
-	github.com/deckarep/golang-set/v2 v2.6.0
+	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/fsouza/go-dockerclient v1.12.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gorilla/feeds v1.2.0
 	github.com/jinzhu/copier v0.4.0
-	github.com/minio/minio-go/v7 v7.0.80
+	github.com/minio/minio-go/v7 v7.0.81
 	github.com/pkg/errors v0.9.1
 	github.com/pkoukk/tiktoken-go v0.1.7
 	github.com/spf13/cobra v1.8.1
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/stripe/stripe-go/v76 v76.25.0
 	github.com/yanyiwu/gojieba v1.4.4
 	go.mongodb.org/mongo-driver v1.17.1
-	golang.org/x/image v0.22.0
-	golang.org/x/net v0.31.0
-	golang.org/x/sync v0.9.0
+	golang.org/x/image v0.23.0
+	golang.org/x/net v0.32.0
+	golang.org/x/sync v0.10.0
 	google.golang.org/protobuf v1.35.2
 	gorm.io/driver/clickhouse v0.6.1
 	gorm.io/gorm v1.25.12
@@ -48,8 +48,10 @@ require (
 	github.com/GoWebProd/uuid7 v0.0.0-20231130161441-17ee54b097d4 // indirect
 	github.com/Laisky/errors v0.9.2-0.20221107084216-4b771a197718 // indirect
 	github.com/Laisky/fast-skiplist/v2 v2.0.1 // indirect
+	github.com/Laisky/gin-middlewares/v5 v5.0.4 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.1 // indirect
 	github.com/Laisky/go-utils/v3 v3.0.1 // indirect
+	github.com/Laisky/go-utils/v4 v4.10.0 // indirect
 	github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b // indirect
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -140,7 +142,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.13.0 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
-	github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a // indirect
+	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -151,14 +153,14 @@ require (
 	go.dedis.ch/kyber/v3 v3.1.0 // indirect
 	go.opentelemetry.io/otel v1.29.0 // indirect
 	go.opentelemetry.io/otel/trace v1.29.0 // indirect
-	go.uber.org/automaxprocs v1.5.3 // indirect
+	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.29.0 // indirect
+	golang.org/x/crypto v0.30.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.26.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect

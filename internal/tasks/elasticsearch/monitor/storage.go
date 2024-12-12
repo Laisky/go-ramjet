@@ -8,7 +8,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 
 	chaining "github.com/Laisky/go-chaining"
-	"github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 )
 

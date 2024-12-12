@@ -9,9 +9,9 @@ import (
 	"sync"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v5"
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	gconfig "github.com/Laisky/go-config/v2"
-	gutils "github.com/Laisky/go-utils/v4"
+	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/library/log"

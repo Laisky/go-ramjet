@@ -14,7 +14,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-utils/v4"
+	"github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 	"github.com/baidubce/bce-sdk-go/bce"
 	"github.com/baidubce/bce-sdk-go/services/bos"

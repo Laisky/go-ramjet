@@ -10,8 +10,8 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/go-utils/v4/json"
+	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/semaphore"
 

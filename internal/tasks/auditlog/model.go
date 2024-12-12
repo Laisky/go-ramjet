@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	gutils "github.com/Laisky/go-utils/v4"
-	gcrypto "github.com/Laisky/go-utils/v4/crypto"
+	gutils "github.com/Laisky/go-utils/v5"
+	gcrypto "github.com/Laisky/go-utils/v5/crypto"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson/primitive"

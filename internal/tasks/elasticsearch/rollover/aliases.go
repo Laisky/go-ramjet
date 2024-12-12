@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/Laisky/errors/v2"
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/go-utils/v4/json"
+	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/library/log"

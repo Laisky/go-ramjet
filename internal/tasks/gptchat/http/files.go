@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v5"
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"

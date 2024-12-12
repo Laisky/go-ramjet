@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	gutils "github.com/Laisky/go-utils/v4"
-	"github.com/Laisky/go-utils/v4/json"
-	glog "github.com/Laisky/go-utils/v4/log"
+	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v5/json"
+	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"

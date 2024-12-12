@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/Laisky/errors/v2"
-	utils "github.com/Laisky/go-utils/v4"
-	glog "github.com/Laisky/go-utils/v4/log"
+	utils "github.com/Laisky/go-utils/v5"
+	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/Laisky/zap"
 	"github.com/gorilla/feeds"
 	"github.com/minio/minio-go/v7"

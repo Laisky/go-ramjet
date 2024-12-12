@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	gmw "github.com/Laisky/gin-middlewares/v5"
-	glog "github.com/Laisky/go-utils/v4/log"
+	gmw "github.com/Laisky/gin-middlewares/v6"
+	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
