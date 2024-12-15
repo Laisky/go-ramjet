@@ -444,7 +444,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4o",
 			"gpt-4o-mini",
 			"gpt-4-turbo-2024-04-09",
-			"gpt-4-turbo":
+			"gpt-4-turbo",
+			"gemini-2.0-flash":
 			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])

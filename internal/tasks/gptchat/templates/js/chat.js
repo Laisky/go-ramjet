@@ -32,8 +32,9 @@ const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
-const ChatModelGeminiPro = 'gemini-pro';
-const ChatModelGeminiProVision = 'gemini-pro-vision';
+// const ChatModelGeminiPro = 'gemini-pro';
+// const ChatModelGeminiProVision = 'gemini-pro-vision';
+const ChatModelGemini2Flash = 'gemini-2.0-flash';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 const ChatModelGroqGemma7b = 'gemma-7b-it';
@@ -86,8 +87,9 @@ const ChatModels = [
     ChatModelGroqllama3With8B,
     ChatModelGroqllama3With405B,
     // ChatModelGPT4Vision,
-    ChatModelGeminiPro,
-    ChatModelGeminiProVision
+    // ChatModelGeminiPro,
+    // ChatModelGeminiProVision,
+    ChatModelGemini2Flash
     // ChatModelTurbo35_16K,
     // ChatModelTurbo35_0613,
     // ChatModelTurbo35_0613_16K,
@@ -99,7 +101,8 @@ const VisionModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelGPT4OMini,
-    ChatModelGeminiProVision,
+    // ChatModelGeminiProVision,
+    ChatModelGemini2Flash,
     // ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     // ChatModelClaude35Sonnet8K,
@@ -144,8 +147,9 @@ const FreeModels = [
     ChatModelDeepSeekChat,
     ChatModelDeepSeekCoder,
     // ChatModelTurbo35V0125,
-    ChatModelGeminiPro,
-    ChatModelGeminiProVision,
+    // ChatModelGeminiPro,
+    // ChatModelGeminiProVision,
+    ChatModelGemini2Flash,
     QAModelBasebit,
     QAModelSecurity,
     QAModelImmigrate,
@@ -1734,7 +1738,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const systemPrompt = await OpenaiChatStaticContext();
     const selectedModel = await OpenaiSelectedModel();
 
-    if (selectedModel === ChatModelGeminiPro || N <= 1) {
+    if (selectedModel === ChatModelGemini2Flash || N <= 1) {
         // one-api's gemoni-pro do not support context
         return [{
             role: RoleSystem,
