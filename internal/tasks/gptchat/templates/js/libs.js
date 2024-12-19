@@ -340,7 +340,7 @@ export const KvClear = async () => {
                 for (let i = 0; i < kvListeners[keyPrefix].length; i++) {
                     const callbackObj = kvListeners[keyPrefix][i];
                     if (typeof callbackObj === 'object') {
-                        callbackObj.callback(key, KvOp.SET, null, null);
+                        callbackObj.callback(key, KvOp.DEL, null, null);
                     } else {
                         callbackObj(key, KvOp.DEL, null, null);
                     }
