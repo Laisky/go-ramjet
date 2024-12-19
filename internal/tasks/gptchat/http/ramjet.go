@@ -146,6 +146,9 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	// req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
 	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
 	req.Header.Set("X-Laisky-User-Id", user.UserName)
+	if user.IsFree {
+		req.Header.Set("X-Laisky-User-Is-Free", "true")
+	}
 
 	// if set header "Accept-Encoding" manually,
 	// golang's http client will not auto decompress response body
