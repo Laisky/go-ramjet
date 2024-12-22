@@ -198,9 +198,9 @@ func Chat(ctx *gin.Context) {
 	tplArg.BootstrapIcons = gutils.OptionalVal(&tplArg.BootstrapIcons,
 		"https://s3.laisky.com/static/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css")
 	tplArg.BootstrapJs = gutils.OptionalVal(&tplArg.BootstrapJs,
-		"https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js")
+		"https://s3.laisky.com/static/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js")
 	tplArg.BootstrapCss = gutils.OptionalVal(&tplArg.BootstrapCss,
-		"https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css")
+		"https://s3.laisky.com/static/twitter-bootstrap/5.3.3/css/bootstrap.min.css")
 	tplArg.ShowdownJs = gutils.OptionalVal(&tplArg.ShowdownJs,
 		"https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js")
 	tplArg.SeeJs = gutils.OptionalVal(&tplArg.SeeJs,

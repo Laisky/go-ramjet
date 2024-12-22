@@ -316,6 +316,7 @@ async function main (event) {
     }
     mainRunned = true;
 
+    setupDarkMode();
     await setupModals();
     await dataMigrate();
     await setupHeader();
@@ -325,6 +326,12 @@ async function main (event) {
     await setupChatJs();
 };
 main();
+
+async function setupDarkMode () {
+    setInterval(() => {
+        document.documentElement.setAttribute('data-bs-theme', (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    }, 1000);
+}
 
 /**
  * show image edit modal
@@ -1233,7 +1240,7 @@ async function fetchImageDrawingResultBackground () {
                 });
                 if (errFileResp.ok || errFileResp.status === 200) {
                     const errText = await errFileResp.text();
-                    item.innerHTML += `<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${errText}</pre>`;
+                    item.innerHTML += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${errText}</pre>`;
                     checkIsImageAllSubtaskDone(item, imageUrl, false);
                     await saveChats2Storage({
                         role: RoleAI,
@@ -2561,7 +2568,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         return chatID;
     default:
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
-                '<pre style="background-color: #f8e8e8; text-wrap: pretty;">' +
+                '<pre style="text-wrap: pretty;">' +
                 `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
         await saveChats2Storage({
             role: RoleAI,
@@ -2998,9 +3005,9 @@ async function abortAIResp (err) {
     }
 
     if (globalAIRespEle.dataset.status === 'waiting') {
-        globalAIRespEle.dataset.aiRawResp = encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
+        globalAIRespEle.dataset.aiRawResp = encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
     } else {
-        globalAIRespEle.dataset.respExtras += encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="background-color: #f8e8e8; text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
+        globalAIRespEle.dataset.respExtras += encodeURIComponent(`<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`);
     }
 
     await renderAfterAiResp(chatID, true);
@@ -3732,7 +3739,7 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
                 <i class="bi bi-trash"></i>
             </div>
         </div>
-        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+        <div class="container-fluid row role-ai" data-chatid="${chatID}">
             <div class="col-auto icon">${robotIcon}</div>
             <div class="col text-start ai-response" data-status="waiting" data-model="${selecedModel}">
                 <p class="card-text placeholder-glow">
@@ -3908,7 +3915,7 @@ async function append2Chats (chatItem) {
         content = libs.escapeHtml(content);
         if (!isHistory) {
             waitAI = `
-                        <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                        <div class="container-fluid row role-ai" data-chatid="${chatID}">
                             <div class="col-auto icon">${robotIcon}</div>
                             <div class="col text-start ai-response" data-status="waiting" data-model="${model}">
                                 <p dir="auto" class="card-text placeholder-glow">
@@ -3940,7 +3947,7 @@ async function append2Chats (chatItem) {
         break;
     case RoleAI:
         chatEleHtml = `
-                <div class="container-fluid row role-ai" style="background-color: #f4f4f4;" data-chatid="${chatID}">
+                <div class="container-fluid row role-ai" data-chatid="${chatID}">
                         <div class="col-auto icon">${robotIcon}</div>
                         <div class="col text-start ai-response" data-status="waiting" data-ai-raw-resp="${encodeURIComponent(rawContent)}" data-resp-extras="${encodeURIComponent(attachHTML)}" data-cost-usd="${costUsd}" data-model="${model}">
                             ${content}
