@@ -1044,6 +1044,9 @@ async function setupHeader () {
     } else {
         await loadAndUpdateUserInfo();
     }
+
+    // click header to scroll to top
+    document.getElementById('headerbar').addEventListener('click', scrollChatToTop);
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -1725,6 +1728,23 @@ async function saveChats2Storage (chatItem) {
 function scrollChatToDown () {
     libs.ScrollDown(document.querySelector('html'));
     libs.ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
+}
+
+function scrollChatToTop (evt) {
+    // evt.preventDefault();
+    // evt.stopPropagation();
+
+    // do not scroll to top if user is clicking on the dropdowns in the header
+    if (evt.target.closest('.dropdown-menu') || evt.target.closest('.dropdown-toggle')) {
+        return;
+    }
+
+    chatContainer.querySelector('.chatManager .conservations')
+        .scrollTo({
+            top: 0,
+            left: 0,
+            behavior: 'smooth'
+        });
 }
 
 function scrollToChat (chatEle) {
