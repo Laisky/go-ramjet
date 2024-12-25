@@ -171,7 +171,7 @@ SWITCH_FOR_USER:
 		if strings.Contains(user.ImageUrl, "https://oneapi.laisky.com") {
 			// billing by oneapi, no need to enable external billing
 			user.EnableExternalImageBilling = false
-			user.NoLimitImageModels = true
+			// user.NoLimitImageModels = true
 		} else {
 			// if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
 			// 	logger.Error("get oneapi uid", zap.Error(err))
@@ -209,10 +209,10 @@ SWITCH_FOR_USER:
 			ImageUrl:               "https://api.openai.com/v1/images/generations",
 			AllowedModels:          OpenaiModelList, // only allow openai models
 			NoLimitExpensiveModels: true,
-			NoLimitOpenaiModels:    true,
-			NoLimitImageModels:     true,
-			BYOK:                   true,
-			APIBase:                config.Config.API,
+			// NoLimitOpenaiModels:    true,
+			// NoLimitImageModels:     true,
+			BYOK:    true,
+			APIBase: config.Config.API,
 		}
 
 		// only BYOK user can set api base

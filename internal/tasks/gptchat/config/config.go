@@ -208,10 +208,12 @@ type UserConfig struct {
 	AllowedModels []string `json:"allowed_models" mapstructure:"allowed_models"`
 	// NoLimitExpensiveModels (optional) skip rate limiter for expensive models
 	NoLimitExpensiveModels bool `json:"no_limit_expensive_models" mapstructure:"no_limit_expensive_models"`
+
 	// NoLimitImageModels (optional) skip rate limiter for image models
-	NoLimitImageModels bool `json:"no_limit_image_models" mapstructure:"no_limit_image_models"`
+	// NoLimitImageModels bool `json:"no_limit_image_models" mapstructure:"no_limit_image_models"`
 	// NoLimitOpenaiModels (optional) skip rate limiter for models that only supported by openai
-	NoLimitOpenaiModels bool `json:"no_limit_openai_models" mapstructure:"no_limit_openai_models"`
+	// NoLimitOpenaiModels bool `json:"no_limit_openai_models" mapstructure:"no_limit_openai_models"`
+
 	// LimitPromptTokenLength (optional) set limit for prompt token length, <=0 means no limit
 	LimitPromptTokenLength int `json:"limit_prompt_token_length" mapstructure:"limit_prompt_token_length"`
 	// EnableExternalImageBilling (optional) enable external image billing
@@ -307,9 +309,14 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 
 	logger := gmw.GetLogger(ctx)
 
-	if c.BYOK { // bypass if user bring their own token
+	switch {
+	case c.BYOK: // bypass if user bring their own token
 		logger.Debug("bypass rate limit for BYOK user")
 		return nil
+	case c.NoLimitExpensiveModels:
+		logger.Debug("bypass rate limit for no_limit_expensive_models user")
+		return nil
+	default:
 	}
 
 	if len(c.AllowedModels) == 0 {
