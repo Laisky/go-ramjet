@@ -287,7 +287,7 @@ func setupRateLimiter() {
 	}
 	logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
 
-	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+	if freeModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
 		gutils.RateLimiterArgs{
 			Max:     3,
 			NPerSec: 1,
