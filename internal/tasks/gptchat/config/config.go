@@ -47,8 +47,8 @@ func SetupConfig() (err error) {
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
-	Config.RateLimitImageModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitImageModelsIntervalSeconds, 600)
+	Config.RateLimitFreeModelsIntervalSeconds = gutils.OptionalVal(
+		&Config.RateLimitFreeModelsIntervalSeconds, 1)
 	Config.DefaultImageToken = gutils.OptionalVal(
 		&Config.DefaultImageToken, Config.Token)
 	// Config.DefaultImageTokenType = gutils.OptionalVal(
@@ -102,10 +102,10 @@ type OpenAI struct {
 	//
 	// default to https://{{API}}/v1/images/generations
 	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
-	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 60
+	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 600
 	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
-	// RateLimitImageModelsIntervalSeconds (optional) rate limit interval seconds for image models, default is 600
-	RateLimitImageModelsIntervalSeconds int `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
+	// RateLimitFreeModelsIntervalSeconds (optional) rate limit interval seconds for free models, default is 1
+	RateLimitFreeModelsIntervalSeconds int `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
 	// Proxy (optional) proxy url to send request
 	Proxy string `json:"-" mapstructure:"proxy"`
 	// UserTokens (optional) paid user's tenant tokens
@@ -256,8 +256,8 @@ func (c *UserConfig) Valid() error {
 }
 
 var (
-	onceLimiter                                 sync.Once
-	expensiveModelRateLimiter, imageRateLimiter *gutils.RateLimiter
+	onceLimiter                                     sync.Once
+	freeModelRateLimiter, expensiveModelRateLimiter *gutils.RateLimiter
 )
 
 // setupRateLimiter setup ratelimiter depends on loaded config
@@ -277,29 +277,24 @@ func setupRateLimiter() {
 	// 	logger.Info("set overall ratelimiter", zap.Int("burst", 10))
 	// }
 
-	{
-		burst := int(float64(Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
-		if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-			gutils.RateLimiterArgs{
-				Max:     burst,
-				NPerSec: 1,
-			}); err != nil {
-			log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
-		}
-		logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
+	burst := int(float64(Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
+	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+		gutils.RateLimiterArgs{
+			Max:     burst,
+			NPerSec: 1,
+		}); err != nil {
+		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
 	}
+	logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
 
-	{
-		burst := int(float64(Config.RateLimitImageModelsIntervalSeconds) * burstRatio)
-		if imageRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-			gutils.RateLimiterArgs{
-				Max:     burst,
-				NPerSec: 1,
-			}); err != nil {
-			log.Logger.Panic("new imageRateLimiter", zap.Error(err))
-		}
-		logger.Info("set ratelimiter for image models", zap.Int("burst", burst))
+	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
+		gutils.RateLimiterArgs{
+			Max:     3,
+			NPerSec: 1,
+		}); err != nil {
+		log.Logger.Panic("new freeModelRateLimiter", zap.Error(err))
 	}
+	logger.Info("set ratelimiter for free models", zap.Int("burst", burst))
 }
 
 // IsModelAllowed check if model is allowed
@@ -367,20 +362,8 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"gemini-pro",
 		"gemini-pro-vision",
 		"gemini-2.0-flash":
-	case "dall-e-3", // limited to free users
-		"flux-schnell":
-		if c.NoLimitImageModels {
-			return nil
-		}
-
-		ratelimiter = imageRateLimiter
-		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_image_models_interval_secs")
-	case "gpt-4-vision-preview": // only openai supports
-		if c.NoLimitExpensiveModels {
-			return nil
-		}
-
-		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+		ratelimiter = freeModelRateLimiter
+		ratelimitCost = 1
 	default: // expensive model
 		if c.NoLimitExpensiveModels {
 			return nil
