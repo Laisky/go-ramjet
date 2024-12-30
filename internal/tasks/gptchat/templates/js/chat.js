@@ -35,6 +35,7 @@ const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 // const ChatModelGeminiPro = 'gemini-pro';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGemini2Flash = 'gemini-2.0-flash';
+const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 const ChatModelGroqGemma7b = 'gemma-7b-it';
@@ -89,7 +90,8 @@ const ChatModels = [
     // ChatModelGPT4Vision,
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
-    ChatModelGemini2Flash
+    ChatModelGemini2Flash,
+    ChatModelGemini2FlashThinking
     // ChatModelTurbo35_16K,
     // ChatModelTurbo35_0613,
     // ChatModelTurbo35_0613_16K,
@@ -103,6 +105,7 @@ const VisionModels = [
     ChatModelGPT4OMini,
     // ChatModelGeminiProVision,
     ChatModelGemini2Flash,
+    ChatModelGemini2FlashThinking,
     // ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     // ChatModelClaude35Sonnet8K,
@@ -1765,7 +1768,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const systemPrompt = await OpenaiChatStaticContext();
     const selectedModel = await OpenaiSelectedModel();
 
-    if (selectedModel === ChatModelGemini2Flash || N <= 1) {
+    if (selectedModel === ChatModelGemini2Flash || selectedModel === ChatModelGemini2FlashThinking || N <= 1) {
         // one-api's gemoni-pro do not support context
         return [{
             role: RoleSystem,
