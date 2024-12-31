@@ -58,6 +58,8 @@ const ImageModelFluxProUltra11 = 'flux-1.1-pro-ultra';
 const ImageModelFluxSchnell = 'flux-schnell';
 // const ImageModelImg2Img = 'img-to-img';
 
+const DefaultModel = ChatModelGPT4OMini;
+
 // casual chat models
 
 const ChatModels = [
@@ -249,10 +251,10 @@ function HideSpinner () {
 
 async function OpenaiSelectedModel () {
     const sconfig = await getChatSessionConfig();
-    let selectedModel = sconfig.selected_model || ChatModelGPT4OMini;
+    let selectedModel = sconfig.selected_model || DefaultModel;
 
     if (!AllModels.includes(selectedModel)) {
-        selectedModel = ChatModelGPT4OMini;
+        selectedModel = DefaultModel;
     }
 
     return selectedModel;
@@ -730,7 +732,7 @@ async function dataMigrate () {
 
         // change model
         if (!eachSconfig.selected_model || !AllModels.includes(eachSconfig.selected_model)) {
-            eachSconfig.selected_model = ChatModelGPT4OMini;
+            eachSconfig.selected_model = DefaultModel;
         }
 
         console.debug('migrate session config: ', key, eachSconfig);
@@ -886,16 +888,20 @@ async function setupByUserInfo (userInfo) {
         allowedModels = userInfo.allowed_models;
 
         if (!allowedModels.includes(selectedModel)) {
-            selectedModel = '';
-            AllModels.forEach((model) => {
-                if (selectedModel !== '' || !allowedModels.includes(model)) {
-                    return;
-                }
+            if (allowedModels.includes(DefaultModel)) {
+                selectedModel = DefaultModel;
+            } else {
+                selectedModel = '';
+                AllModels.forEach((model) => {
+                    if (selectedModel !== '' || !allowedModels.includes(model)) {
+                        return;
+                    }
 
-                if (model.startsWith('gpt-') || model.startsWith('gemini-')) {
-                    selectedModel = model;
-                }
-            });
+                    if (ChatModels.includes(model)) {
+                        selectedModel = model;
+                    }
+                });
+            }
 
             const sconfig = await getChatSessionConfig();
             sconfig.selected_model = selectedModel;
@@ -2242,7 +2248,7 @@ async function detectPromptTaskType (model, prompt) {
                     },
                     method: 'POST',
                     body: JSON.stringify({
-                        model: ChatModelGPT4OMini,
+                        model: DefaultModel,
                         max_tokens: 50,
                         stream: false,
                         messages: [
@@ -2538,7 +2544,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     question: ${reqPrompt}
                     `
             }];
-            const model = ChatModelGPT4OMini; // rewrite chat model
+            const model = DefaultModel; // rewrite chat model
 
             reqBody = JSON.stringify({
                 model,
@@ -4071,7 +4077,7 @@ function newSessionConfig () {
         frequency_penalty: 0,
         n_contexts: 6,
         system_prompt: '# Core Capabilities and Behavior\n\nI am an AI assistant focused on being helpful, direct, and accurate. I aim to:\n\n- Provide factual responses about past events\n- Think through problems systematically step-by-step\n- Use clear, varied language without repetitive phrases\n- Give concise answers to simple questions while offering to elaborate if needed\n- Format code and text using proper Markdown\n- Engage in authentic conversation by asking relevant follow-up questions\n\n# Knowledge and Limitations \n\n- My knowledge cutoff is April 2024\n- I cannot open URLs or external links\n- I acknowledge uncertainty about very obscure topics\n- I note when citations may need verification\n- I aim to be accurate but may occasionally make mistakes\n\n# Task Handling\n\nI can assist with:\n- Analysis and research\n- Mathematics and coding\n- Creative writing and teaching\n- Question answering\n- Role-play and discussions\n\nFor sensitive topics, I:\n- Provide factual, educational information\n- Acknowledge risks when relevant\n- Default to legal interpretations\n- Avoid promoting harmful activities\n- Redirect harmful requests to constructive alternatives\n\n# Formatting Standards\n\nI use consistent Markdown formatting:\n- Headers with single space after #\n- Blank lines around sections\n- Consistent emphasis markers (* or _)\n- Proper list alignment and nesting\n- Clean code block formatting\n\n# Interaction Style\n\n- I am intellectually curious\n- I show empathy for human concerns\n- I vary my language naturally\n- I engage authentically without excessive caveats\n- I aim to be helpful while avoiding potential misuse',
-        selected_model: ChatModelGPT4OMini,
+        selected_model: DefaultModel,
         chat_switch: {
             all_in_one: false,
             disable_https_crawler: true,
