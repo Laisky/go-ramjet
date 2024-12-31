@@ -4,7 +4,7 @@ const libs = window.libs;
 
 const robotIcon = '🤖️';
 
-const ChatModelTurbo35 = 'gpt-3.5-turbo';
+// const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
 // const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
 // const ChatModelTurbo35_16K = "gpt-3.5-turbo-16k";
@@ -17,17 +17,17 @@ const ChatModelGPT4OMini = 'gpt-4o-mini';
 const ChatModelGPTO1Preview = 'o1-preview';
 const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
-const ChatModelDeepSeekCoder = 'deepseek-coder';
+// const ChatModelDeepSeekCoder = 'deepseek-coder';
 // const ChatModelGPT4Turbo1106 = 'gpt-4-1106-preview';
 // const ChatModelGPT4Turbo0125 = 'gpt-4-0125-preview';
 // const ChatModelGPT4Vision = 'gpt-4-vision-preview';
 // const ChatModelClaude1 = 'claude-instant-1';
 // const ChatModelClaude2 = 'claude-2';
-// const ChatModelClaude3Opus = 'claude-3-opus';
+const ChatModelClaude3Opus = 'claude-3-opus';
 // const ChatModelClaude3Sonnet = 'claude-3-sonnet';
 const ChatModelClaude35Sonnet = 'claude-3.5-sonnet';
 // const ChatModelClaude35Sonnet8K = 'claude-3.5-sonnet-8k';
-const ChatModelClaude3Haiku = 'claude-3-haiku';
+// const ChatModelClaude3Haiku = 'claude-3-haiku';
 const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
@@ -38,10 +38,10 @@ const ChatModelGemini2Flash = 'gemini-2.0-flash';
 const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
-const ChatModelGroqGemma7b = 'gemma-7b-it';
-const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
-const ChatModelGroqllama3With70B = 'llama-3.1-70b-versatile';
-const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
+const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
+// const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
+const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
+// const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
 const QAModelImmigrate = 'qa-immigrate';
@@ -61,7 +61,7 @@ const ImageModelFluxSchnell = 'flux-schnell';
 // casual chat models
 
 const ChatModels = [
-    ChatModelTurbo35,
+    // ChatModelTurbo35,
     // ChatModelTurbo35V1106,
     // ChatModelTurbo35V0125,
     // ChatModelGPT4,
@@ -71,22 +71,22 @@ const ChatModels = [
     ChatModelGPTO1Preview,
     ChatModelGPTO1Mini,
     ChatModelDeepSeekChat,
-    ChatModelDeepSeekCoder,
+    // ChatModelDeepSeekCoder,
     // ChatModelGPT4Turbo1106,
     // ChatModelGPT4Turbo0125,
     // ChatModelClaude1,
     // ChatModelClaude2,
-    // ChatModelClaude3Opus,
+    ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     // ChatModelClaude35Sonnet8K,
-    ChatModelClaude3Haiku,
+    // ChatModelClaude3Haiku,
     ChatModelClaude35Haiku,
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
-    ChatModelGroqGemma7b,
+    ChatModelGroqGemma2With9B,
     ChatModelGroqllama3With70B,
-    ChatModelGroqllama3With8B,
-    ChatModelGroqllama3With405B,
+    // ChatModelGroqllama3With8B,
+    // ChatModelGroqllama3With405B,
     // ChatModelGPT4Vision,
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
@@ -106,10 +106,10 @@ const VisionModels = [
     // ChatModelGeminiProVision,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking,
-    // ChatModelClaude3Opus,
+    ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     // ChatModelClaude35Sonnet8K,
-    ChatModelClaude3Haiku,
+    // ChatModelClaude3Haiku,
     ChatModelClaude35Haiku,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
@@ -141,14 +141,14 @@ const CompletionModels = [
 const FreeModels = [
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
-    ChatModelGroqGemma7b,
+    ChatModelGroqGemma2With9B,
     ChatModelGroqllama3With70B,
-    ChatModelGroqllama3With8B,
-    ChatModelGroqllama3With405B,
-    ChatModelTurbo35,
+    // ChatModelGroqllama3With8B,
+    // ChatModelGroqllama3With405B,
+    // ChatModelTurbo35,
     ChatModelGPT4OMini,
     ChatModelDeepSeekChat,
-    ChatModelDeepSeekCoder,
+    // ChatModelDeepSeekCoder,
     // ChatModelTurbo35V0125,
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
