@@ -1772,16 +1772,6 @@ async function getLastNChatMessages (N, ignoredChatID) {
     console.debug('getLastNChatMessages', N, ignoredChatID);
 
     const systemPrompt = await OpenaiChatStaticContext();
-    const selectedModel = await OpenaiSelectedModel();
-
-    if (selectedModel === ChatModelGemini2Flash || selectedModel === ChatModelGemini2FlashThinking || N <= 1) {
-        // one-api's gemoni-pro do not support context
-        return [{
-            role: RoleSystem,
-            content: systemPrompt
-        }];
-    }
-
     const latestMessages = [];
     const historyMessages = await activeSessionChatHistory();
     let nHuman = 1;
