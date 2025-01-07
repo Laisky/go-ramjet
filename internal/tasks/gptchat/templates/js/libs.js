@@ -105,10 +105,31 @@ export const DateStr = () => {
 // {key: [callback1, callback2, {name, callback}]}
 const kvListeners = {};
 let kv;
+let kvInitializing = false;
+let kvInitialized = false;
 
 function initKv () {
-    if (!kv) {
+    if (kvInitialized && kv) {
+        return;
+    }
+
+    if (kvInitializing) {
+        return new Promise(resolve => {
+            const checkInterval = setInterval(() => {
+                if (kvInitialized) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+
+    kvInitializing = true;
+    try {
         kv = new window.PouchDB('mydatabase');
+        kvInitialized = true;
+    } finally {
+        kvInitializing = false;
     }
 }
 
@@ -350,7 +371,8 @@ export const KvClear = async () => {
     });
 
     await kv.destroy();
-    kv = new window.PouchDB('mydatabase');
+    kv = null;
+    initKv();
 };
 
 export const SetLocalStorage = (key, val) => {

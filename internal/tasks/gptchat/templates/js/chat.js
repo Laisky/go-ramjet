@@ -4378,6 +4378,7 @@ async function setupConfig () {
                 try {
                     ShowSpinner();
                     await downloadUserConfig(evt);
+                    location.reload();
                 } catch (err) {
                     console.error(err);
                     showalert('danger', `sync user config failed: ${err}`);
