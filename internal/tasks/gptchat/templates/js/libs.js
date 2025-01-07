@@ -375,23 +375,66 @@ export const Markdown2HTML = async (markdownString) => {
     if (!window.marked) {
         await LoadJsModules([
             'https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js',
-            'https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js'
+            'https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js',
+            'https://s3.laisky.com/static/mathjax/2.7.3/MathJax-2.7.3/MathJax.js?config=TeX-MML-AM_CHTML'
         ]);
     }
 
     const marked = window.marked;
     const renderer = new marked.Renderer();
+
     renderer.code = (code, language) => {
         code = sanitizeHTML(code);
         if (code.match(/^sequenceDiagram/) || code.match(/^graph/)) {
-            return '<pre class="mermaid">' + code + '</pre>';
-        } else {
-            return `<pre class="language-${language}"><code class="language-${language}">` + code + '</code></pre>';
+            return `<pre class="mermaid">${code}</pre>`;
         }
-    }
-    marked.use({ renderer });
+        return `<pre class="language-${language}"><code class="language-${language}">${code}</code></pre>`;
+    };
 
-    return marked.parse(markdownString);
+    // Add custom tokenizers for math
+    marked.use({
+        extensions: [{
+            name: 'math',
+            level: 'inline',
+            start (src) {
+                return src.match(/\\\[|\\\(|\$\$|\$/)?.index;
+            },
+            tokenizer (src) {
+                // Display math \[...\] or $$...$$
+                const displayMatch = src.match(/^\\\[([\s\S]*?)\\\]/) || src.match(/^\$\$([\s\S]*?)\$\$/);
+                if (displayMatch) {
+                    return {
+                        type: 'math',
+                        raw: displayMatch[0],
+                        text: displayMatch[1],
+                        display: true
+                    };
+                }
+
+                // Inline math \(...\) or $...$
+                const inlineMatch = src.match(/^\\\(([\s\S]*?)\\\)/) || src.match(/^\$([\s\S]*?)\$/);
+                if (inlineMatch) {
+                    return {
+                        type: 'math',
+                        raw: inlineMatch[0],
+                        text: inlineMatch[1],
+                        display: false
+                    };
+                }
+            },
+            renderer (token) {
+                if (token.display) {
+                    return `<span class="mathjax-display">\\[${token.text}\\]</span>`;
+                }
+                return `<span class="mathjax-inline">\\(${token.text}\\)</span>`;
+            }
+        }]
+    });
+
+    marked.use({ renderer });
+    const html = marked.parse(markdownString);
+
+    return html;
 };
 
 export const ScrollDown = (element) => {
