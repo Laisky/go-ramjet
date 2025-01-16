@@ -107,7 +107,8 @@ func GatewayHandler(ctx *gin.Context) {
 				return errors.Wrapf(err, "do request %q", url)
 			}
 
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode == http.StatusOK ||
+				resp.StatusCode == http.StatusNotModified {
 				select {
 				case firstFinished <- resp: // close body later
 				case <-taskCtx.Done():
