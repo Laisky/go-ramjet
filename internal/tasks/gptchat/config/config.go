@@ -356,6 +356,7 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"gpt-4o-mini",
 		// "llama2-70b-4096",
 		"deepseek-chat",
+		"deepseek-reasoner",
 		"deepseek-coder",
 		"gemma2-9b-it",
 		"llama3-8b-8192",
