@@ -2660,18 +2660,35 @@ async function sendChat2Server (chatID, reqPrompt) {
                     isChatRespDone = true;
                 }
 
-                switch (globalAIRespData.status) {
-                case 'waiting':
-                    globalAIRespData.status = 'writing';
-                    globalAIRespEle.innerHTML = respChunk;
-                    break;
-                case 'writing':
-                    if (respChunk) {
-                        globalAIRespEle.innerHTML = await libs.Markdown2HTML(globalAIRespData.rawContent);
-                        scrollToChat(globalAIRespEle);
-                    }
+                let renderedHTML = '';
+                if (reasoningChunk || respChunk) {
+                    switch (globalAIRespData.status) {
+                    case 'waiting':
+                        globalAIRespData.status = 'writing';
+                        globalAIRespEle.innerHTML = respChunk;
+                        break;
+                    case 'writing':
+                        if (globalAIRespData.reasoningContent) {
+                            renderedHTML += `<p class="d-inline-flex gap-1">
+                                <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatID}" aria-expanded="false" aria-controls="collapseExample">
+                                    Thinking...
+                                </button>
+                                </p>
+                                <div class="collapse" id="chatReasoning_${chatID}">
+                                <div class="card card-body">
+                                    ${await libs.Markdown2HTML(globalAIRespData.reasoningContent)}
+                                </div>
+                            </div>`;
+                        }
 
-                    break;
+                        if (globalAIRespData.rawContent) {
+                            renderedHTML += await libs.Markdown2HTML(globalAIRespData.rawContent);
+                        }
+
+                        globalAIRespEle.innerHTML = renderedHTML;
+                        scrollToChat(globalAIRespEle);
+                        break;
+                    }
                 }
             } catch (err) {
                 await abortAIResp(err);
@@ -2726,7 +2743,25 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
     const attachHTML = chatData.attachHTML || '';
 
     if (rawContent && rawContent !== 'undefined') {
-        aiRespEle.innerHTML = await libs.Markdown2HTML(rawContent);
+        let renderedHTML = '';
+        if (chatData.reasoningContent) {
+            renderedHTML += `<p class="d-inline-flex gap-1">
+                <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="false" aria-controls="collapseExample">
+                    Button with data-bs-target
+                </button>
+                </p>
+                <div class="collapse" id="chatReasoning_${chatData.chatID}">
+                <div class="card card-body">
+                    ${await libs.Markdown2HTML(chatData.reasoningContent)}
+                </div>
+            </div>`;
+        }
+
+        if (chatData.rawContent) {
+            renderedHTML += await libs.Markdown2HTML(chatData.rawContent);
+        }
+
+        aiRespEle.innerHTML = renderedHTML;
         aiRespEle.innerHTML += attachHTML;
     }
 
@@ -3024,7 +3059,7 @@ async function abortAIResp (err) {
         return;
     }
 
-    const chatID = globalAIRespEle.closest('.role-ai').dataset.chatid;
+    // const chatID = globalAIRespEle.closest('.role-ai').dataset.chatid;
     let errMsg;
     if (err.data) {
         errMsg = err.data;
