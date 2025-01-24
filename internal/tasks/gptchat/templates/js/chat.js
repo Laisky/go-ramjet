@@ -1240,6 +1240,7 @@ async function fetchImageDrawingResultBackground () {
         // const taskId = item.dataset.taskId;
         const imageUrls = JSON.parse(item.dataset.imageUrls) || [];
         const chatId = item.closest('.role-ai').dataset.chatid;
+        const chatData = await libs.KvGet(`${KvKeyChatData}${RoleAI}_${chatId}`) || {};
 
         try {
             await Promise.all(imageUrls.map(async (imageUrl) => {
@@ -1257,7 +1258,7 @@ async function fetchImageDrawingResultBackground () {
                     await saveChats2Storage({
                         role: RoleAI,
                         chatID: chatId,
-                        model: item.dataset.model,
+                        model: chatData.model,
                         content: item.innerHTML
                     });
                     return;
@@ -1333,7 +1334,7 @@ function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         }
 
         item.dataset.status = 'done';
-        renderAfterAiResp(chatID, false);
+        renderAfterAiResp(globalAIRespData, false);
     }
 }
 
@@ -1844,8 +1845,8 @@ function isAllowChatPrompInput () {
  * @returns {object} An object containing the response content and reasoning content.
  */
 function parseChatResp (chatmodel, payload) {
-    let respContent = '';
-    let reasoningContent = '';
+    let respChunk = '';
+    let reasoningChunk = '';
     if (!payload.choices || payload.choices.length === 0) {
         payload.choices = [{
             delta: {
@@ -1856,17 +1857,17 @@ function parseChatResp (chatmodel, payload) {
     }
 
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
-        respContent = payload.choices[0].delta.content || '';
-        reasoningContent = payload.choices[0].delta.reasoning_content || '';
+        respChunk = payload.choices[0].delta.content || '';
+        reasoningChunk = payload.choices[0].delta.reasoning_content || '';
     } else if (IsCompletionModel(chatmodel)) {
-        respContent = payload.choices[0].text || '';
+        respChunk = payload.choices[0].text || '';
     } else {
         showalert('error', `Unknown chat model ${chatmodel}`);
     }
 
     return {
-        respContent,
-        reasoningContent
+        respChunk,
+        reasoningChunk
     }
 }
 
@@ -2362,14 +2363,14 @@ async function sendChat2Server (chatID, reqPrompt) {
 
     // these extras will append to the tail of AI's response
     globalAIRespData = {
-        chatID: '',
-        role: '',
+        chatID,
+        role: RoleAI,
         content: '',
         attachHTML: '',
         rawContent: '',
         reasoningContent: '',
         costUsd: '',
-        model: '',
+        model: selectedModel,
         reqeustid: ''
     };
     let reqBody = null;
@@ -2662,20 +2663,14 @@ async function sendChat2Server (chatID, reqPrompt) {
                 switch (globalAIRespData.status) {
                 case 'waiting':
                     globalAIRespData.status = 'writing';
-
-                    if (respChunk) {
-                        globalAIRespEle.innerHTML = respChunk;
-                    } else {
-                        globalAIRespEle.innerHTML = '';
-                    }
-
+                    globalAIRespEle.innerHTML = respChunk;
                     break;
                 case 'writing':
                     if (respChunk) {
                         globalAIRespEle.innerHTML = await libs.Markdown2HTML(globalAIRespData.rawContent);
+                        scrollToChat(globalAIRespEle);
                     }
 
-                    scrollToChat(globalAIRespEle);
                     break;
                 }
             } catch (err) {
@@ -2773,7 +2768,7 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
         console.error('mermaid run error:', err);
     }
 
-    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${aiRespEle.dataset.model || ''}</i></div>`);
+    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
 
     // add cost tips
     let costUsd = chatData.costUsd;
@@ -2793,7 +2788,6 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
                     .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
             }
         } else if (costUsd) {
-            chatData.costUsd = costUsd;
             aiRespEle.querySelector('div.info')
                 .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
         }
@@ -3062,7 +3056,7 @@ async function abortAIResp (err) {
         globalAIRespData.attachHTML += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
     }
 
-    await renderAfterAiResp(chatID, true);
+    await renderAfterAiResp(globalAIRespData, true);
     // scrollToChat(globalAIRespEle);
     // await appendChats2Storage(RoleAI, chatID, globalAIRespEle.innerHTML);
 }
@@ -3804,7 +3798,7 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
             </div>
         </div>`;
 
-    chatEle.querySelector('.role-ai').dataset.status = 'waiting';
+    chatEle.dataset.status = 'waiting';
 
     // bind delete and edit button
     chatEle.querySelector('.role-human .bi-trash')
