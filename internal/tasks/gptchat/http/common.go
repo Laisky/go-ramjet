@@ -148,6 +148,7 @@ SWITCH_FOR_USER:
 		return nil, errors.Errorf("can not find freetier user %q in settings",
 			config.FreetierUserToken)
 	case strings.HasPrefix(userToken, "laisky-"):
+	case strings.HasPrefix(userToken, "sk-"):
 		if len(userToken) < 15 {
 			return nil, errors.Errorf("invalid laisky's oneapi token %q", userToken)
 		}

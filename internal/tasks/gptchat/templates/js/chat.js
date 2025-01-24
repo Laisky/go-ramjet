@@ -2809,6 +2809,7 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
     let costUsd = chatData.costUsd;
     const sconfig = await getChatSessionConfig();
     if (sconfig.api_token.startsWith('laisky-') ||
+        sconfig.api_token.startsWith('sk-') ||
         sconfig.api_token.startsWith('FREETIER-')) {
         if (!costUsd && chatData.reqeustid) {
             // do not block the main thread
