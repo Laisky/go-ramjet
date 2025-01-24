@@ -547,7 +547,7 @@ async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
         }
         const respData = await resp.json();
 
-        globalAIRespData.status = 'waiting';
+        globalAIRespEle.dataset.status = 'waiting';
         globalAIRespEle.dataset.taskType = 'image';
         globalAIRespEle.dataset.taskId = respData.task_id;
         globalAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -2662,19 +2662,19 @@ async function sendChat2Server (chatID, reqPrompt) {
 
                 let renderedHTML = '';
                 if (reasoningChunk || respChunk) {
-                    switch (globalAIRespData.status) {
+                    switch (globalAIRespEle.dataset.status) {
                     case 'waiting':
-                        globalAIRespData.status = 'writing';
+                        globalAIRespEle.dataset.status = 'writing';
                         globalAIRespEle.innerHTML = respChunk;
                         break;
                     case 'writing':
                         if (globalAIRespData.reasoningContent) {
                             renderedHTML += `<p class="d-inline-flex gap-1">
-                                <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatID}" aria-expanded="false" aria-controls="collapseExample">
+                                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatID}" aria-expanded="true" aria-controls="collapseExample">
                                     Thinking...
                                 </button>
                                 </p>
-                                <div class="collapse" id="chatReasoning_${chatID}">
+                                <div class="collapse show" id="chatReasoning_${chatID}">
                                 <div class="card card-body">
                                     ${await libs.Markdown2HTML(globalAIRespData.reasoningContent)}
                                 </div>
@@ -2745,12 +2745,14 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
     if (rawContent && rawContent !== 'undefined') {
         let renderedHTML = '';
         if (chatData.reasoningContent) {
+            const expanded = saveStorage ? 'true' : 'false';
+            const showed = saveStorage ? ' show' : '';
             renderedHTML += `<p class="d-inline-flex gap-1">
-                <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="false" aria-controls="collapseExample">
+                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="${expanded}" aria-controls="collapseExample">
                     Thinking...
                 </button>
                 </p>
-                <div class="collapse" id="chatReasoning_${chatData.chatID}">
+                <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
                 <div class="card card-body">
                     ${await libs.Markdown2HTML(chatData.reasoningContent)}
                 </div>
@@ -2917,9 +2919,11 @@ async function addOperateBtnBelowAiResponse (chatID) {
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
 
+            const chatData = await libs.KvGet(`${KvKeyChatData}${RoleAI}_${chatID}`) || {};
+
             // aiRespEle.dataset.copyBinded = true;
             let copyContent = '';
-            if (chatData.rawContent) {
+            if (!chatData.rawContent) {
                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
             } else {
                 copyContent = chatData.rawContent;
@@ -3083,7 +3087,7 @@ async function abortAIResp (err) {
         showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。');
     }
 
-    if (globalAIRespData.status === 'waiting') {
+    if (globalAIRespEle.dataset.status === 'waiting') {
         globalAIRespData.rawContent = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
     } else {
         globalAIRespData.rawContent += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
@@ -3831,7 +3835,6 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
             </div>
         </div>`;
 
-    // FIXME: should change chat data
     chatEle.dataset.status = 'waiting';
 
     // bind delete and edit button
