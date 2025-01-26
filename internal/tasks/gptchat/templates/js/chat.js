@@ -1956,16 +1956,7 @@ function getPinnedMaterials () {
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
 async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
-    let url;
-
-    switch (selectedModel) {
-    case ImageModelDalle3:
-        url = '/images/generations';
-        break;
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`);
-    }
-
+    const url = '/images/generations';
     const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
         method: 'POST',
