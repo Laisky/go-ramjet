@@ -1548,7 +1548,7 @@ async function setupSessionManager () {
             });
     }
 
-    // new session
+    // add new session
     {
         document
             .querySelector('#sessionManager .btn.new-session')
@@ -1592,7 +1592,7 @@ async function setupSessionManager () {
                             </button>
                         </div>`);
                 chatContainer
-                    .querySelector('.sessions')
+                    .querySelector('.sessions .session-tabs')
                     .insertAdjacentHTML(
                         'beforeend',
                         `<div class="list-group session" data-session="${newSessionID}">

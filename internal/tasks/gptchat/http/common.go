@@ -2,10 +2,7 @@ package http
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,53 +183,54 @@ SWITCH_FOR_USER:
 			// }
 		}
 	default: // use server's token in settings
-		for _, u := range config.Config.UserTokens {
-			if u.Token == userToken {
-				logger.Debug("paid user", zap.String("user", u.UserName))
-				if err = u.Valid(); err != nil {
-					return nil, errors.Wrap(err, "valid paid user")
-				}
+		return nil, errors.New("invalid token")
+		// for _, u := range config.Config.UserTokens {
+		// 	if u.Token == userToken {
+		// 		logger.Debug("paid user", zap.String("user", u.UserName))
+		// 		if err = u.Valid(); err != nil {
+		// 			return nil, errors.Wrap(err, "valid paid user")
+		// 		}
 
-				user = u
-				break SWITCH_FOR_USER
-			}
-		}
+		// 		user = u
+		// 		break SWITCH_FOR_USER
+		// 	}
+		// }
 
-		// use user's own openai/azure or whatever token
-		hashed := sha256.Sum256([]byte(userToken))
-		username := hex.EncodeToString(hashed[:])[:16]
-		logger.Debug("use user's own token", zap.String("user", username))
-		user = &config.UserConfig{ // default to openai user
-			UserName:               username,
-			Token:                  userToken,
-			OpenaiToken:            userToken,
-			ImageToken:             userToken,
-			ImageUrl:               "https://api.openai.com/v1/images/generations",
-			AllowedModels:          OpenaiModelList, // only allow openai models
-			NoLimitExpensiveModels: true,
-			// NoLimitOpenaiModels:    true,
-			// NoLimitImageModels:     true,
-			BYOK:    true,
-			APIBase: config.Config.API,
-		}
+		// // use user's own openai/azure or whatever token
+		// hashed := sha256.Sum256([]byte(userToken))
+		// username := hex.EncodeToString(hashed[:])[:16]
+		// logger.Debug("use user's own token", zap.String("user", username))
+		// user = &config.UserConfig{ // default to openai user
+		// 	UserName:               username,
+		// 	Token:                  userToken,
+		// 	OpenaiToken:            userToken,
+		// 	ImageToken:             userToken,
+		// 	ImageUrl:               "https://api.openai.com/v1/images/generations",
+		// 	AllowedModels:          OpenaiModelList, // only allow openai models
+		// 	NoLimitExpensiveModels: true,
+		// 	// NoLimitOpenaiModels:    true,
+		// 	// NoLimitImageModels:     true,
+		// 	BYOK:    true,
+		// 	APIBase: config.Config.API,
+		// }
 
-		// only BYOK user can set api base
-		userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
-		if userApiBase != "" {
-			user.APIBase = userApiBase
+		// // only BYOK user can set api base
+		// userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
+		// if userApiBase != "" {
+		// 	user.APIBase = userApiBase
 
-			// set image url
-			switch {
-			case strings.Contains(userApiBase, "openai.azure.com"):
-				user.ImageUrl = userApiBase
-			case strings.Contains(userApiBase, "api.openai.com"):
-				user.ImageUrl = "https://api.openai.com/v1/images/generations"
-			default:
-				user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
-			}
+		// 	// set image url
+		// 	switch {
+		// 	case strings.Contains(userApiBase, "openai.azure.com"):
+		// 		user.ImageUrl = userApiBase
+		// 	case strings.Contains(userApiBase, "api.openai.com"):
+		// 		user.ImageUrl = "https://api.openai.com/v1/images/generations"
+		// 	default:
+		// 		user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
+		// 	}
 
-			logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
-		}
+		// 	logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
+		// }
 	}
 
 	if err = user.Valid(); err != nil {
