@@ -14,7 +14,8 @@ const robotIcon = '🤖️';
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT4O = 'gpt-4o';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
-const ChatModelGPTO1Preview = 'o1-preview';
+// const ChatModelGPTO1Preview = 'o1-preview';
+const ChatModelGPTO1 = 'o1';
 const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 const ChatModelDeepSeekResoner = 'deepseek-reasoner';
@@ -71,7 +72,8 @@ const ChatModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelGPT4OMini,
-    ChatModelGPTO1Preview,
+    // ChatModelGPTO1Preview,
+    ChatModelGPTO1,
     ChatModelGPTO1Mini,
     ChatModelDeepSeekChat,
     ChatModelDeepSeekResoner,
