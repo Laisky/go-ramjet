@@ -419,6 +419,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"o1",
 			"o1-preview",
 			"o1-mini",
+			"o3-mini",
 			"claude-instant-1",
 			"claude-2",
 			// "mixtral-8x7b-32768",

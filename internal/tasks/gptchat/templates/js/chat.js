@@ -1858,9 +1858,24 @@ function parseChatResp (chatmodel, payload) {
         }];
     }
 
+    // Currently only deepseek-r1 supports returning thoughts,
+    // and different providers have two methods.
+    // The official deepseek returns thoughts via delta.reasoning_content,
+    // whereas other providers wrap thoughts with <think></think>.
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
-        respChunk = payload.choices[0].delta.content || '';
+        if (payload.choices[0].delta.content === '<think>') {
+            globalAIRespData.isThinking = true;
+        } else if (payload.choices[0].delta.content === '</think>') {
+            globalAIRespData.isThinking = false;
+        }
+
         reasoningChunk = payload.choices[0].delta.reasoning_content || '';
+
+        if (globalAIRespData.isThinking) {
+            reasoningChunk = payload.choices[0].delta.content || '';
+        } else {
+            respChunk = payload.choices[0].delta.content || '';
+        }
     } else if (IsCompletionModel(chatmodel)) {
         respChunk = payload.choices[0].text || '';
     } else {
@@ -2361,6 +2376,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         content: '',
         attachHTML: '',
         rawContent: '',
+        isThinking: false,
         reasoningContent: '',
         costUsd: '',
         model: selectedModel,
