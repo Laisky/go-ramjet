@@ -16,7 +16,8 @@ const ChatModelGPT4O = 'gpt-4o';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
 const ChatModelGPTO1Preview = 'o1-preview';
 // const ChatModelGPTO1 = 'o1';
-const ChatModelGPTO1Mini = 'o1-mini';
+// const ChatModelGPTO1Mini = 'o1-mini';
+const ChatModelGPTO3Mini = 'o3-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
 const ChatModelDeepSeekResoner = 'deepseek-reasoner';
 // const ChatModelDeepSeekCoder = 'deepseek-coder';
@@ -74,7 +75,8 @@ const ChatModels = [
     ChatModelGPT4OMini,
     ChatModelGPTO1Preview,
     // ChatModelGPTO1,
-    ChatModelGPTO1Mini,
+    // ChatModelGPTO1Mini,
+    ChatModelGPTO3Mini,
     ChatModelDeepSeekChat,
     ChatModelDeepSeekResoner,
     // ChatModelDeepSeekCoder,
