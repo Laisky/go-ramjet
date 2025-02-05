@@ -9,33 +9,34 @@ require (
 	github.com/Laisky/gin-middlewares/v6 v6.0.0
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v5 v5.0.0-20241212011255-c6008c31ffaf
+	github.com/Laisky/go-utils/v5 v5.0.0
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20241117031218-0217f7ce5e3c
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250205110607-a5d694e1b876
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
 	github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0
-	github.com/baidubce/bce-sdk-go v0.9.206
-	github.com/chromedp/cdproto v0.0.0-20241208230723-d1c7de7e5dd2
-	github.com/chromedp/chromedp v0.11.2
+	github.com/baidubce/bce-sdk-go v0.9.215
+	github.com/chromedp/cdproto v0.0.0-20250203011601-a3c71a042730
+	github.com/chromedp/chromedp v0.12.1
 	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/fsouza/go-dockerclient v1.12.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gorilla/feeds v1.2.0
 	github.com/jinzhu/copier v0.4.0
-	github.com/minio/minio-go/v7 v7.0.81
+	github.com/minio/minio-go/v7 v7.0.84
 	github.com/pkg/errors v0.9.1
 	github.com/pkoukk/tiktoken-go v0.1.7
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	github.com/stripe/stripe-go/v76 v76.25.0
-	github.com/yanyiwu/gojieba v1.4.4
-	go.mongodb.org/mongo-driver v1.17.1
-	golang.org/x/image v0.23.0
-	golang.org/x/net v0.32.0
-	golang.org/x/sync v0.10.0
-	google.golang.org/protobuf v1.35.2
+	github.com/yanyiwu/gojieba v1.4.5
+	go.mongodb.org/mongo-driver v1.17.2
+	golang.org/x/image v0.24.0
+	golang.org/x/net v0.34.0
+	golang.org/x/sync v0.11.0
+	google.golang.org/protobuf v1.36.4
 	gorm.io/driver/clickhouse v0.6.1
 	gorm.io/gorm v1.25.12
 )
@@ -48,10 +49,9 @@ require (
 	github.com/GoWebProd/uuid7 v0.0.0-20231130161441-17ee54b097d4 // indirect
 	github.com/Laisky/errors v0.9.2-0.20221107084216-4b771a197718 // indirect
 	github.com/Laisky/fast-skiplist/v2 v2.0.1 // indirect
-	github.com/Laisky/gin-middlewares/v5 v5.0.4 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.1 // indirect
+	github.com/Laisky/go-redis/v2 v2.0.0-20250202145116-ec4687947d54 // indirect
 	github.com/Laisky/go-utils/v3 v3.0.1 // indirect
-	github.com/Laisky/go-utils/v4 v4.10.0 // indirect
 	github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b // indirect
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -66,6 +66,7 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/docker/docker v27.1.2+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
@@ -84,7 +85,7 @@ require (
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
-	github.com/goccy/go-json v0.10.3 // indirect
+	github.com/goccy/go-json v0.10.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -99,11 +100,11 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
@@ -151,16 +152,16 @@ require (
 	github.com/xlzd/gotp v0.1.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.dedis.ch/kyber/v3 v3.1.0 // indirect
-	go.opentelemetry.io/otel v1.29.0 // indirect
-	go.opentelemetry.io/otel/trace v1.29.0 // indirect
+	go.opentelemetry.io/otel v1.32.0 // indirect
+	go.opentelemetry.io/otel/trace v1.32.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.30.0 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
