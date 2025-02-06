@@ -61,6 +61,8 @@ type FrontendReq struct {
 	Temperature      float64              `json:"temperature"`
 	TopP             float64              `json:"top_p"`
 	N                int                  `json:"n"`
+	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
+	ReasoningEffort string `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
 
 	// LaiskyExtra some special config for laisky
 	LaiskyExtra *struct {
@@ -122,7 +124,9 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	Temperature      float64               `json:"temperature"`
 	TopP             float64               `json:"top_p"`
 	N                int                   `json:"n"`
-	Tools            []OpenaiChatReqTool   `json:"tools,omitempty"`
+	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
+	ReasoningEffort string              `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
+	Tools           []OpenaiChatReqTool `json:"tools,omitempty"`
 }
 
 // OpenaiChatReqTool define tools

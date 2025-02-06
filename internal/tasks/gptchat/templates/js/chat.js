@@ -63,6 +63,10 @@ const ImageModelFluxSchnell = 'flux-schnell';
 
 const DefaultModel = ChatModelGPT4OMini;
 
+const ChatTaskTypeChat = 'chat';
+const ChatTaskTypeImage = 'image';
+const ChatTaskTypeDeepResearch = 'deepresearch';
+
 // casual chat models
 
 const ChatModels = [
@@ -119,6 +123,7 @@ const VisionModels = [
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
     ChatModelClaude35Haiku,
+    ChatModelGPTO1Preview,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
     // ImageModelFluxPro,
@@ -552,7 +557,7 @@ async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
         const respData = await resp.json();
 
         globalAIRespEle.dataset.status = 'waiting';
-        globalAIRespEle.dataset.taskType = 'image';
+        globalAIRespEle.dataset.taskType = ChatTaskTypeImage;
         globalAIRespEle.dataset.taskId = respData.task_id;
         globalAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
         globalAIRespEle.innerHTML = `
@@ -1234,7 +1239,7 @@ async function changeSession (activeSid) {
  */
 async function fetchImageDrawingResultBackground () {
     const elements = chatContainer
-        .querySelectorAll('.role-ai .ai-response[data-task-type="image"][data-status="waiting"]') || [];
+        .querySelectorAll(`.role-ai .ai-response[data-task-type=${ChatTaskTypeImage}][data-status="waiting"]`) || [];
 
     await Promise.all(Array.from(elements).map(async (item) => {
         if (item.dataset.status !== 'waiting') {
@@ -1282,6 +1287,57 @@ async function fetchImageDrawingResultBackground () {
             }))
         } catch (err) {
             console.warn('fetch img result, ' + err);
+        };
+    }));
+}
+
+/**
+ * Fetches the deep research result background for the AI response and displays it in the chat container.
+ */
+async function fetchDeepResearchResultBackground () {
+    const elements = chatContainer
+        .querySelectorAll(`.role-ai .ai-response[data-task-type=${ChatTaskTypeDeepResearch}][data-status="waiting"]`) || [];
+
+    await Promise.all(Array.from(elements).map(async (item) => {
+        if (item.dataset.status !== 'waiting') {
+            return;
+        }
+
+        const taskId = item.dataset.taskId;
+        const chatId = item.closest('.role-ai').dataset.chatid;
+
+        try {
+            const resp = await fetch(`/deepresearch/${taskId}`, {
+                method: 'GET',
+                cache: 'no-cache'
+            });
+            if (!resp.ok || resp.status !== 200) {
+                return;
+            }
+
+            const respData = await resp.json();
+
+            switch (respData.status) {
+            case 'pending':
+            case 'running':
+                return;
+            case 'failed':
+                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
+                item.dataset.status = 'done';
+                break;
+            case 'success':
+                item.innerHTML = libs.Markdown2HTML(respData.result_article);
+                item.dataset.status = 'done';
+                await saveChats2Storage({
+                    chatID: chatId,
+                    role: RoleAI,
+                    model: 'deep-research',
+                    rawContent: respData.result_article,
+                    content: item.innerHTML
+                });
+            }
+        } catch (err) {
+            console.warn('fetch deep research result, ' + err);
         };
     }));
 }
@@ -1681,6 +1737,16 @@ async function saveChats2Storage (chatData) {
         throw new Error('chatID is required');
     }
 
+    // Merge new chat data into existing data:
+    // For each property in chatData, only override if the new value is non-null and non-undefined.
+    const oldChatData = (await libs.KvGet(`${KvKeyChatData}${chatData.role}_${chatData.chatID}`)) || {};
+    for (const key in chatData) {
+        if (chatData[key] !== undefined && chatData[key] !== null) {
+            oldChatData[key] = chatData[key];
+        }
+    }
+    chatData = oldChatData;
+
     const storageActiveSessionKey = kvSessionKey(await activeSessionID());
     const session = await activeSessionChatHistory();
 
@@ -1995,7 +2061,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     const respData = await resp.json();
 
     currentAIRespEle.dataset.status = 'waiting';
-    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
     currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -2061,7 +2127,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     const respData = await resp.json();
 
     currentAIRespEle.dataset.status = 'waiting';
-    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
     currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -2139,7 +2205,7 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
     const respData = await resp.json();
 
     currentAIRespEle.dataset.status = 'waiting';
-    currentAIRespEle.dataset.taskType = 'image';
+    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
     currentAIRespEle.dataset.model = selectedModel;
     currentAIRespEle.dataset.taskId = respData.task_id;
     currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);

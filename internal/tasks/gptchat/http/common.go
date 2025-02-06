@@ -28,7 +28,7 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 		return useri.(*config.UserConfig), nil
 	}
 
-	userToken := strings.TrimPrefix(gctx.Request.Header.Get("Authorization"), "Bearer ")
+	userToken := strings.TrimPrefix(gctx.Request.Header.Get("authorization"), "Bearer ")
 	if userToken == "" {
 		log.Logger.Debug("user token not found in header, use freetier token instead")
 		userToken = config.FreetierUserToken

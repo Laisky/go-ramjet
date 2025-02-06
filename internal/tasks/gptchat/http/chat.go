@@ -416,8 +416,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-1106",
 			"gpt-3.5-turbo-0125",
-			"o1",
-			"o1-preview",
 			"o1-mini",
 			"o3-mini",
 			"claude-instant-1",
@@ -438,12 +436,19 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				return nil, nil, errors.Wrap(err, "copy to chat req")
 			}
 
+			if strings.HasPrefix(frontendReq.Model, "o1") ||
+				strings.HasPrefix(frontendReq.Model, "o3") {
+				req.ReasoningEffort = "high"
+			}
+
 			openaiReq = req
 		case "claude-3-opus", // support text and vision at the same time
 			"claude-3.5-sonnet",
 			"claude-3.5-sonnet-8k",
 			"claude-3-haiku",
 			"claude-3.5-haiku",
+			"o1",
+			"o1-preview",
 			"gpt-4o",
 			"gpt-4o-mini",
 			"gpt-4-turbo-2024-04-09",
@@ -535,6 +540,9 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 	}
 
+	logger.Debug("send request to upstream server",
+		zap.String("url", newUrl),
+		zap.ByteString("payload", reqBody))
 	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
 		ctx.Request.Method, newUrl, bytes.NewReader(reqBody))
 	if err != nil {
