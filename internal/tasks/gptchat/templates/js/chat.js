@@ -42,6 +42,7 @@ const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
+const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
 // const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
@@ -74,6 +75,7 @@ const ChatTaskStatusDone = 'done';
 // casual chat models
 
 const ChatModels = [
+    ChatModelDeepResearch,
     // ChatModelTurbo35,
     // ChatModelTurbo35V1106,
     // ChatModelTurbo35V0125,
@@ -128,6 +130,7 @@ const VisionModels = [
     // ChatModelClaude3Haiku,
     ChatModelClaude35Haiku,
     ChatModelGPTO1Preview,
+    ChatModelGemini2Flash,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
     // ImageModelFluxPro,
@@ -176,7 +179,12 @@ const FreeModels = [
     ImageModelSdxlTurbo
     // ImageModelImg2Img
 ];
-const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
+const AllModels = [].concat(
+    ChatModels,
+    QaModels,
+    ImageModels,
+    CompletionModels
+);
 
 // const ModelPriceUSD = {
 //     ImageModelDalle3: '0.04',
@@ -1106,6 +1114,7 @@ async function setupChatJs () {
     await setupPrivateDataset();
     setupGlobalAiRespHeartbeatTimer();
     setInterval(fetchImageDrawingResultBackground, 3000);
+    setInterval(fetchDeepResearchResultBackground, 3000);
 }
 
 function newChatID () {
@@ -1312,57 +1321,6 @@ async function fetchImageDrawingResultBackground () {
     }));
 }
 
-/**
- * Fetches the deep research result background for the AI response and displays it in the chat container.
- */
-async function fetchDeepResearchResultBackground () {
-    const elements = chatContainer
-        .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
-
-    await Promise.all(Array.from(elements).map(async (item) => {
-        if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
-            return;
-        }
-
-        const taskId = item.dataset.taskId;
-        const chatId = item.closest('.role-ai').dataset.chatid;
-
-        try {
-            const resp = await fetch(`/deepresearch/${taskId}`, {
-                method: 'GET',
-                cache: 'no-cache'
-            });
-            if (!resp.ok || resp.status !== 200) {
-                return;
-            }
-
-            const respData = await resp.json();
-
-            switch (respData.status) {
-            case 'pending':
-            case 'running':
-                return;
-            case 'failed':
-                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
-                item.dataset.taskStatus = ChatTaskStatusDone;
-                break;
-            case 'success':
-                item.innerHTML = libs.Markdown2HTML(respData.result_article);
-                item.dataset.taskStatus = ChatTaskStatusDone;
-                await saveChats2Storage({
-                    chatID: chatId,
-                    role: RoleAI,
-                    model: 'deep-research',
-                    rawContent: respData.result_article,
-                    content: item.innerHTML
-                });
-            }
-        } catch (err) {
-            console.warn('fetch deep research result, ' + err);
-        };
-    }));
-}
-
 /** append chat to chat container
  *
  * @param {element} item ai respnse
@@ -1422,6 +1380,65 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
 
         renderAfterAiResp(chatData, false);
     }
+}
+
+/**
+* Fetches the deep research result background for the AI response and displays it in the chat container.
+*/
+async function fetchDeepResearchResultBackground () {
+    const elements = chatContainer
+        .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
+
+    await Promise.all(Array.from(elements).map(async (item) => {
+        if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
+            return;
+        }
+
+        const chatId = item.closest('.role-ai').dataset.chatid;
+        const chatData = await getChatData(chatId, RoleAI) || {};
+        const taskId = chatData.taskId;
+
+        try {
+            const resp = await fetch(`/deepresearch/${taskId}`, {
+                method: 'GET',
+                cache: 'no-cache'
+            });
+            if (!resp.ok || resp.status !== 200) {
+                return;
+            }
+
+            const respData = await resp.json();
+
+            switch (respData.status) {
+            case 'pending':
+            case 'running':
+                return;
+            case 'failed':
+                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
+                item.dataset.taskStatus = ChatTaskStatusDone;
+                await updateChatData({
+                    chatID: chatId,
+                    role: RoleAI,
+                    taskStatus: ChatTaskStatusDone,
+                    content: item.innerHTML
+                });
+                break;
+            case 'success':
+                item.innerHTML = libs.Markdown2HTML(respData.result_article);
+                item.dataset.taskStatus = ChatTaskStatusDone;
+                await saveChats2Storage({
+                    chatID: chatId,
+                    role: RoleAI,
+                    model: 'deep-research',
+                    rawContent: respData.result_article,
+                    taskStatus: ChatTaskStatusDone,
+                    content: item.innerHTML
+                });
+            }
+        } catch (err) {
+            console.warn('fetch deep research result, ' + err);
+        };
+    }));
 }
 
 /**
@@ -2397,7 +2414,9 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
  * @returns chat/complete/image/qa/unknown
  */
 async function detectPromptTaskType (model, prompt) {
-    if (IsChatModel(model)) {
+    if (model === ChatModelDeepResearch) {
+        return 'deepresearch';
+    } else if (IsChatModel(model)) {
         const sconfig = await getChatSessionConfig();
         if (sconfig.chat_switch.all_in_one) {
             try {
@@ -2770,6 +2789,53 @@ async function sendChat2Server (chatID, reqPrompt) {
             unlockChatInput();
         }
 
+        return chatID;
+    case 'deepresearch': //  new case for deep-research
+        try {
+            const resp = await fetch('/deepresearch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + sconfig.api_token,
+                    'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                    'X-Laisky-Api-Base': sconfig.api_base
+                },
+                body: JSON.stringify({ prompt: reqPrompt })
+            });
+
+            if (!resp.ok || resp.status !== 200) {
+                throw new Error(`[${resp.status}]: ${await resp.text()}`);
+            }
+
+            const respData = await resp.json();
+            console.log('deepresearch', respData)
+            globalAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+            globalAIRespEle.dataset.taskType = ChatTaskTypeDeepResearch;
+
+            // Save task ID and other relevant data to chatData
+            const chatData = await getChatData(chatID, RoleAI) || {};
+            chatData.chatID = chatID;
+            chatData.role = RoleAI;
+            chatData.model = selectedModel;
+            chatData.taskId = respData.task_id;
+            chatData.taskStatus = ChatTaskStatusWaiting;
+            chatData.taskType = ChatTaskTypeDeepResearch;
+
+            await saveChats2Storage(chatData);
+
+            globalAIRespEle.innerHTML = `
+                <p dir="auto" class="card-text placeholder-glow">
+                    <span class="placeholder col-7"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-4"></span>
+                    <span class="placeholder col-6"></span>
+                    <span class="placeholder col-8"></span>
+                </p>`;
+        } catch (err) {
+            await abortAIResp(err);
+        } finally {
+            unlockChatInput();
+        }
         return chatID;
     default:
         globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
