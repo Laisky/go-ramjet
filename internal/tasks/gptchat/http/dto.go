@@ -450,7 +450,7 @@ type DrawImageByFluxReplicateRequest struct {
 // https://replicate.com/black-forest-labs/flux-1.1-pro/api/schema
 type FluxInput struct {
 	Steps           int    `json:"steps" binding:"required,min=1"`
-	Prompt          string `json:"prompt" binding:"required,min=5"`
+	Prompt          string `json:"prompt" binding:"required,min=1"`
 	ImagePrompt     string `json:"image_prompt,omitempty"`
 	Guidance        int    `json:"guidance" binding:"required,min=2,max=5"`
 	Interval        int    `json:"interval" binding:"required,min=1,max=4"`
