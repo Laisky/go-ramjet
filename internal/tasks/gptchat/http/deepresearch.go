@@ -31,6 +31,15 @@ func CreateDeepResearchHandler(c *gin.Context) {
 		return
 	}
 
+	// =====================================
+	// FOR TEST
+	// =====================================
+	// c.JSON(http.StatusOK, gin.H{
+	// 	"task_id": "0194de67-9011-71c6-8006-6b39c7a11145",
+	// })
+	// return
+	// =====================================
+
 	taskID, err := rutils.GetCli().AddLLMStormTask(c.Request.Context(), req.Prompt, user.Token)
 	if web.AbortErr(c, errors.WithStack(err)) {
 		return

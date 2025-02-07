@@ -599,8 +599,8 @@ async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
             model: selectedModel,
             content: attachHTML
         });
-    } catch (e) {
-        abortAIResp(e);
+    } catch (err) {
+        abortAIResp(`Failed to send request: ${err}`);
     } finally {
         HideSpinner();
     }
@@ -1263,62 +1263,73 @@ async function changeSession (activeSid) {
     libs.EnableTooltipsEverywhere();
 }
 
+let mutexFetchImageDrawingResultBackground = false;
+
 /**
  * Fetches the image drawing result background for the AI response and displays it in the chat container.
  * @returns {Promise<void>}
  */
 async function fetchImageDrawingResultBackground () {
-    const elements = chatContainer
-        .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeImage}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
+    if (mutexFetchImageDrawingResultBackground) {
+        return;
+    }
 
-    await Promise.all(Array.from(elements).map(async (item) => {
-        if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
-            return;
-        }
+    mutexFetchImageDrawingResultBackground = true;
+    try {
+        const elements = chatContainer
+            .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeImage}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
 
-        // const taskId = item.dataset.taskId;
-        const chatId = item.closest('.role-ai').dataset.chatid;
-        const chatData = await getChatData(chatId, RoleAI) || {};
-        const imageUrls = chatData.taskData || [];
+        await Promise.all(Array.from(elements).map(async (item) => {
+            if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
+                return;
+            }
 
-        try {
-            await Promise.all(imageUrls.map(async (imageUrl) => {
+            // const taskId = item.dataset.taskId;
+            const chatID = item.closest('.role-ai').dataset.chatid;
+            const chatData = await getChatData(chatID, RoleAI) || {};
+            const imageUrls = chatData.taskData || [];
+
+            try {
+                await Promise.all(imageUrls.map(async (imageUrl) => {
                 // check any err msg
-                const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
-                // const errFileUrl = imageUrl.replace(/(\.\w+)$/, '.err.txt');
-                const errFileResp = await fetch(`${errFileUrl}?rr=${libs.RandomString(12)}`, {
-                    method: 'GET',
-                    cache: 'no-cache'
-                });
-                if (errFileResp.ok || errFileResp.status === 200) {
-                    const errText = await errFileResp.text();
-                    item.innerHTML += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${errText}</pre>`;
-                    await checkIsImageAllSubtaskDone(item, imageUrl, false);
-                    await saveChats2Storage({
-                        role: RoleAI,
-                        chatID: chatId,
-                        model: chatData.model,
-                        content: item.innerHTML
+                    const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
+                    // const errFileUrl = imageUrl.replace(/(\.\w+)$/, '.err.txt');
+                    const errFileResp = await fetch(`${errFileUrl}?rr=${libs.RandomString(12)}`, {
+                        method: 'GET',
+                        cache: 'no-cache'
                     });
-                    return;
-                }
+                    if (errFileResp.ok || errFileResp.status === 200) {
+                        const errText = await errFileResp.text();
+                        item.innerHTML += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${errText}</pre>`;
+                        await checkIsImageAllSubtaskDone(item, imageUrl, false);
+                        await saveChats2Storage({
+                            role: RoleAI,
+                            chatID,
+                            model: chatData.model,
+                            content: item.innerHTML
+                        });
+                        return;
+                    }
 
-                // check is image ready
-                const imgResp = await fetch(`${imageUrl}?rr=${libs.RandomString(12)}`, {
-                    method: 'GET',
-                    cache: 'no-cache'
-                });
-                if (!imgResp.ok || imgResp.status !== 200) {
-                    return;
-                }
+                    // check is image ready
+                    const imgResp = await fetch(`${imageUrl}?rr=${libs.RandomString(12)}`, {
+                        method: 'GET',
+                        cache: 'no-cache'
+                    });
+                    if (!imgResp.ok || imgResp.status !== 200) {
+                        return;
+                    }
 
-                // check is all tasks finished
-                await checkIsImageAllSubtaskDone(item, imageUrl, true);
-            }))
-        } catch (err) {
-            console.warn('fetch img result, ' + err);
-        };
-    }));
+                    // check is all tasks finished
+                    await checkIsImageAllSubtaskDone(item, imageUrl, true);
+                }))
+            } catch (err) {
+                console.warn('fetch img result, ' + err);
+            };
+        }));
+    } finally {
+        mutexFetchImageDrawingResultBackground = false;
+    }
 }
 
 /** append chat to chat container
@@ -1382,63 +1393,83 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
     }
 }
 
+let mutexFetchDeepResearchResultBackground = false;
+
 /**
 * Fetches the deep research result background for the AI response and displays it in the chat container.
 */
 async function fetchDeepResearchResultBackground () {
-    const elements = chatContainer
-        .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
+    if (mutexFetchDeepResearchResultBackground) {
+        return;
+    }
 
-    await Promise.all(Array.from(elements).map(async (item) => {
-        if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
-            return;
-        }
+    mutexFetchDeepResearchResultBackground = true;
+    try {
+        const elements = chatContainer
+            .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
 
-        const chatId = item.closest('.role-ai').dataset.chatid;
-        const chatData = await getChatData(chatId, RoleAI) || {};
-        const taskId = chatData.taskId;
-
-        try {
-            const resp = await fetch(`/deepresearch/${taskId}`, {
-                method: 'GET',
-                cache: 'no-cache'
-            });
-            if (!resp.ok || resp.status !== 200) {
+        await Promise.all(Array.from(elements).map(async (item) => {
+            if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
                 return;
             }
 
-            const respData = await resp.json();
+            const chatID = item.closest('.role-ai').dataset.chatid;
+            let chatData = await getChatData(chatID, RoleAI) || {};
+            const taskId = chatData.taskId;
 
-            switch (respData.status) {
-            case 'pending':
-            case 'running':
-                return;
-            case 'failed':
-                item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
-                item.dataset.taskStatus = ChatTaskStatusDone;
-                await updateChatData({
-                    chatID: chatId,
-                    role: RoleAI,
-                    taskStatus: ChatTaskStatusDone,
-                    content: item.innerHTML
+            try {
+                const resp = await fetch(`/deepresearch/${taskId}`, {
+                    method: 'GET',
+                    cache: 'no-cache'
                 });
-                break;
-            case 'success':
-                item.innerHTML = libs.Markdown2HTML(respData.result_article);
-                item.dataset.taskStatus = ChatTaskStatusDone;
-                await saveChats2Storage({
-                    chatID: chatId,
-                    role: RoleAI,
-                    model: 'deep-research',
-                    rawContent: respData.result_article,
-                    taskStatus: ChatTaskStatusDone,
-                    content: item.innerHTML
-                });
-            }
-        } catch (err) {
-            console.warn('fetch deep research result, ' + err);
-        };
-    }));
+                if (!resp.ok || resp.status !== 200) {
+                    return;
+                }
+
+                const respData = await resp.json();
+
+                switch (respData.status) {
+                case 'pending':
+                case 'running':
+                    return;
+                case 'failed':
+                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
+                    item.dataset.taskStatus = ChatTaskStatusDone;
+                    chatData = await updateChatData(chatID, RoleAI, {
+                        taskStatus: ChatTaskStatusDone,
+                        content: item.innerHTML
+                    });
+                    break;
+                case 'success':
+                    item.innerHTML = await libs.Markdown2HTML(respData.result_article);
+                    item.dataset.taskStatus = ChatTaskStatusDone;
+                    chatData = await updateChatData(chatID, RoleAI, {
+                        model: 'deep-research',
+                        rawContent: respData.result_article,
+                        taskStatus: ChatTaskStatusDone,
+                        content: item.innerHTML,
+                        attachHTML: `
+                            <p style="margin-bottom: 0;">
+                                <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
+                                    > toggle reference
+                                </button>
+                            </p>
+                            <div>
+                                <div class="collapse" id="chatRef-${chatID}">
+                                    <div class="card card-body">${combineRefsWithIndex(respData.result_references.url_to_unified_index)}</div>
+                                </div>
+                            </div>`
+                    });
+
+                    renderAfterAiResp(chatData, false);
+                }
+            } catch (err) {
+                console.warn('fetch deep research result, ' + err);
+            };
+        }));
+    } finally {
+        mutexFetchDeepResearchResultBackground = false;
+    }
 }
 
 /**
@@ -1802,7 +1833,10 @@ async function updateChatData (chatID, role, partialChatData) {
     let chatData = await getChatData(chatID, role);
     // Ensure we have an object to merge into
     if (typeof chatData !== 'object' || chatData === null) {
-        chatData = {};
+        chatData = {
+            chatID,
+            role
+        };
     }
 
     // Merge only defined, non-null values
@@ -2709,20 +2743,20 @@ async function sendChat2Server (chatID, reqPrompt) {
                 return chatID;
             }
 
-            globalAIRespData.attachHTML = encodeURIComponent(`
+            globalAIRespData.attachHTML = `
                     <p style="margin-bottom: 0;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
                         </button>
-                    </p>`);
+                    </p>`;
 
             if (data.url) {
-                globalAIRespData.attachHTML += encodeURIComponent(`
+                globalAIRespData.attachHTML += `
                     <div>
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
-                    </div>`);
+                    </div>`;
             }
 
             const messages = [{
@@ -2752,7 +2786,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 stop: ['\n\n']
             });
         } catch (err) {
-            await abortAIResp(err);
+            await abortAIResp(`failed to fetch qa data: ${err}`);
             return chatID;
         }
 
@@ -2784,7 +2818,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 throw new Error(`unknown image model: ${selectedModel}`);
             }
         } catch (err) {
-            await abortAIResp(err);
+            await abortAIResp(`failed to send image prompt: ${err}`);
         } finally {
             unlockChatInput();
         }
@@ -2832,7 +2866,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     <span class="placeholder col-8"></span>
                 </p>`;
         } catch (err) {
-            await abortAIResp(err);
+            await abortAIResp(`failed to send deepresearch prompt: ${err}`);
         } finally {
             unlockChatInput();
         }
@@ -2932,7 +2966,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     }
                 }
             } catch (err) {
-                await abortAIResp(err);
+                await abortAIResp(`failed to parse chat response: ${err}`);
             }
         }
 
@@ -2949,7 +2983,7 @@ async function sendChat2Server (chatID, reqPrompt) {
     })
 
     globalAIRespSSE.onerror = async (err) => {
-        await abortAIResp(err);
+        await abortAIResp(`failed to receive chat response: ${err}`);
     };
     globalAIRespSSE.stream();
 
@@ -3272,6 +3306,40 @@ function combineRefs (arr) {
         } else { // sometimes refs are just plain text, not url
             // markdown += `- \`${val}\`\n`;
             markdown += `<li><p>${sanitizedVal}</p></li>`;
+        }
+    }
+
+    return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
+}
+
+/**
+ * parse references to markdown links with index.
+ * References are sorted by their index.
+ * Each list item shows the index and the URL/text.
+ *
+ * @param {object} refObject - An object where keys are reference URLs/text and values are their index order.
+ * @returns {string} HTML unordered list with sorted references.
+ */
+function combineRefsWithIndex (refObject) {
+    const entries = [];
+    // Convert object to array of {url, index} entries
+    for (const url in refObject) {
+        if (Object.prototype.hasOwnProperty.call(refObject, url)) {
+            entries.push({ url, index: refObject[url] });
+        }
+    }
+    // sort entries by their index value in ascending order
+    entries.sort((a, b) => a.index - b.index);
+
+    let markdown = '';
+    for (const entry of entries) {
+        // decode and sanitize the url/text
+        const sanitizedVal = libs.sanitizeHTML(decodeURIComponent(entry.url));
+        // include the index in the output (e.g., "1: ..." )
+        if (entry.url.startsWith('http')) {
+            markdown += `<li>[${entry.index}] <a href="${sanitizedVal}" target="_blank">${sanitizedVal}</a></li>`;
+        } else {
+            markdown += `<li>[${entry.index}] <p>${sanitizedVal}</p></li>`;
         }
     }
 
