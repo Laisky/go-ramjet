@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/stripe/stripe-go/v76/loginlink"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/sync/errgroup"
@@ -28,9 +31,21 @@ import (
 )
 
 var (
+	chromedpSemaLimit = 2
 	// chromedpSema chromedp cost too much memory, so limit it
-	chromedpSema = semaphore.NewWeighted(2)
+	chromedpSema *semaphore.Weighted
 )
+
+func init() {
+	// set chromedp sema limit
+	if limit := os.Getenv("CHROMEDP_SEMA_LIMIT"); limit != "" {
+		if v, err := strconv.Atoi(limit); err == nil {
+			chromedpSemaLimit = v
+		}
+	}
+	chromedpSema = semaphore.NewWeighted(int64(chromedpSemaLimit))
+	log.Logger.Info("init chromedp sema", zap.Int("limit", chromedpSemaLimit))
+}
 
 type fetchURLOption struct {
 	duration time.Duration
@@ -60,23 +75,24 @@ func WithDuration(duration time.Duration) FetchURLOption {
 }
 
 // FetchDynamicURLContent fetch dynamic url content, will render js by chromedp
-func FetchDynamicURLContent(ctx context.Context,
-	url string, opts ...FetchURLOption) (content []byte, err error) {
+func FetchDynamicURLContent(ctx context.Context, url string,
+	opts ...FetchURLOption) (content []byte, err error) {
+	startAt := time.Now()
+	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
+		With(zap.String("url", url))
+
 	// check cache
 	if content, ok := urlContentCache.Load(url); ok {
+		logger.Debug("hit cache",
+			zap.Duration("cost_secs", time.Since(startAt)))
 		return content, nil
 	}
 
 	opt, err := new(fetchURLOption).apply(opts...)
 	if err != nil {
-		return nil, errors.Wrap(err, "apply fetch url option")
+		return nil, errors.Wrap(err, "apply options")
 	}
 
-	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
-		With(
-			zap.String("url", url),
-			zap.Duration("duration", opt.duration),
-		)
 	logger.Debug("fetch dynamic url")
 	headers := map[string]any{
 		//nolint: lll
@@ -87,7 +103,7 @@ func FetchDynamicURLContent(ctx context.Context,
 		"Connection":      "keep-alive",
 	}
 
-	// give chrome more time to run in background
+	// create a chrome instance
 	chromeCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
@@ -102,16 +118,50 @@ func FetchDynamicURLContent(ctx context.Context,
 		network.Enable(),
 		chromedp.Navigate(url),
 		network.SetExtraHTTPHeaders(network.Headers(headers)),
-		chromedp.Sleep(opt.duration), // Wait for the page to load
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		// Wait for document.readyState to be "complete"
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var readyState string
+			for {
+				if err := chromedp.Evaluate("document.readyState", &readyState).Do(ctx); err != nil {
+					return err
+				}
+				if readyState == "complete" {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			return nil
+		}),
+		// Additional wait: poll until the body contains enough content (adjust threshold as needed)
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var bodyHTML string
+			startWait := time.Now()
+			for {
+				if err := chromedp.InnerHTML("body", &bodyHTML, chromedp.ByQuery).Do(ctx); err != nil {
+					return err
+				}
+				// Check for non-empty render (here using 100 characters as arbitrary threshold)
+				if len(strings.TrimSpace(bodyHTML)) > 100 {
+					break
+				}
+				// Timeout after a certain duration even if the body is still empty
+				if time.Since(startWait) > opt.duration {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+			return nil
+		}),
+		// Get the full HTML
 		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
 	}); err != nil {
 		return nil, errors.Wrapf(err, "run chromedp for %q", url)
 	}
 
-	logger.Info("fetch url success")
 	content = []byte(htmlContent)
 	if len(content) == 0 {
-		return nil, errors.Errorf("no content find by chromedp for %q", url)
+		return nil, errors.Errorf("no content found by chromedp for %q", url)
 	}
 
 	if bodyContent, err := extractHTMLBody(content); err != nil {
@@ -122,6 +172,10 @@ func FetchDynamicURLContent(ctx context.Context,
 
 	// update cache
 	urlContentCache.Store(url, content)
+
+	logger.Info("succeed fetch dynamic url",
+		zap.Int("len", len(content)),
+		zap.Duration("cost_secs", time.Since(startAt)))
 
 	return content, nil
 }
@@ -221,7 +275,8 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 		}
 
 		url := url
-		pool.Go(func() (err error) {
+		// inside googleSearch, within the pool.Go(func() ...) block:
+		pool.Go(func() error {
 			logger := logger.With(zap.String("request_url", url))
 			crawlerCtx, crawlerCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer crawlerCancel()
@@ -239,13 +294,7 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 				zap.Int("before", len(addText)),
 				zap.Int("after", len(addText)))
 
-			// limit := 2500 // for paid user
-			// if user.IsFree {
-			// 	limit = user.LimitPromptTokenLength / 5
-			// }
-			// addText = utils.TrimByTokens("", addText, limit)
-
-			// summary by LLM
+			// summary by LLM within a timeout context
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer summaryCancel()
 			if summaryText, err := OneshotChat(summaryCtx, user, "", "",
@@ -258,9 +307,10 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 				addText = summaryText
 			}
 
+			// Lock, update result, then unlock immediately.
 			mu.Lock()
 			result += addText + "\n"
-			defer mu.Unlock()
+			mu.Unlock()
 
 			return nil
 		})

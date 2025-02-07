@@ -15,11 +15,13 @@ import (
 
 func TestFetchDynamicURLContent(t *testing.T) {
 	ctx := context.Background()
-	url := "https://medium.com/applied-mpc/a-crash-course-on-mpc-part-3-c3f302153929"
+	url := "https://blog.laisky.com/pages/0/"
 
 	content, err := FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)
 	require.NotNil(t, content)
+
+	t.Log(string(content))
 }
 
 func TestGoogleSearchBasic(t *testing.T) {
