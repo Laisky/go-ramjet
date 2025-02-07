@@ -20,7 +20,6 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"github.com/stripe/stripe-go/v76/loginlink"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/sync/errgroup"
