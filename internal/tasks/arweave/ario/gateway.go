@@ -23,26 +23,49 @@ var ArweaveGateways = []string{
 	"https://permagate.io/",
 	"https://ar-io.dev/",
 	"https://g8way.io/",
-	// non official domains
+	"https://arweave.net/",
+	// cache
 	"https://s3.laisky.com/public/arweave/uploadcache/",
-	// "https://vilenarios.com/",
-	// "https://arbr.pro/",
-	// "https://frostor.xyz/",
-	// "https://ariospeedwagon.com/",
-	// "https://vikanren.buzz/",
-	// "https://sulapan.com/",
-	// "https://arweave.fllstck.dev/",
-	// "https://yukovskibot.com/",
-	// "https://karakartal.store/",
-	// "https://ruangnode.xyz/",
-	// expired domains
-	// "https://akrd.net/",
-	// "https://rerererararags.store/",
-	// "https://jaxtothehell.xyz/",
-	// "https://logosnodos.site/",
-	// "https://budavlebac.online/",
-	// "https://testnetnodes.xyz/",
-	// "https://aleko0o.store/",
+	// non official domains
+	"https://vevivoofficial.xyz/",
+	"https://arweave.developerdao.com/",
+	"https://snafyr.xyz/",
+	"https://exnihilio.dnshome.de/",
+	"https://gateway.ao/",
+	"https://rikimaru111.site/",
+	"https://0xsav.xyz/",
+	"https://ar.satoshispalace.casino/",
+	"https://mssnodes.xyz/",
+	"https://kt10vip.online/",
+	"https://skindetect.online/",
+	"https://sulapan.com/",
+	"https://frostor.xyz/",
+	"https://ariogateway.online/",
+	"https://alicans.online/",
+	"https://zionalc.online/",
+	"https://nodechecker.xyz/",
+	"https://ainodes.xyz/",
+	"https://ar.ionode.online/",
+	"https://flechemano.com/",
+	"https://yusufaytn.xyz/",
+	"https://mrciga.com/",
+	"https://aralper.xyz/",
+	"https://2save.xyz/",
+	"https://ariospeedwagon.com/",
+	"https://siyantest.xyz/",
+	"https://mygeto.online/",
+	"https://love4src.com/",
+	"https://adaconna.top/",
+	"https://sooneraydin.xyz/",
+	"https://cmdexe1.xyz/",
+	"https://kabaoglu.store/",
+	"https://adora0x0.xyz/",
+	"https://khacasablanca.top/",
+	"https://fennari.xyz/",
+	"https://yukovskinode.online/",
+	"https://ioar.xyz/",
+	"https://kyotoorbust.site/",
+	"https://canduesed.me/",
 }
 
 var (
@@ -107,7 +130,10 @@ func GatewayHandler(ctx *gin.Context) {
 				return errors.Wrapf(err, "do request %q", url)
 			}
 
-			if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+			// fmt.Printf(">> url: %s, status: %d, X-Ar-Ui-Hops: %s\n", url, resp.StatusCode, resp.Header.Get("X-Ar-Ui-Hops"))
+
+			if resp.StatusCode >= 200 && resp.StatusCode < 400 &&
+				(strings.Contains(url, "s3.laisky.com") || resp.Header.Get("X-Ar-Io-Hops") != "") {
 				select {
 				case firstFinished <- resp: // close body later
 				case <-taskCtx.Done():
