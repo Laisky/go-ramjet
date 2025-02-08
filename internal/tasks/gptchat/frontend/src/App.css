@@ -1,0 +1,38 @@
+.app-container {
+    display: flex;
+    height: 100vh;
+}
+
+.app-header {
+    background-color: #f0f0f0;
+    padding: 10px;
+    text-align: center;
+    width: 100%;
+}
+
+/* Adjust styles as needed for your layout */
+.session-manager {
+    width: 200px;
+    /* Adjust as needed */
+    border-right: 1px solid #ccc;
+    padding: 10px;
+}
+
+.chat-interface {
+    flex-grow: 1;
+    padding: 10px;
+}
+
+.configuration-sidebar {
+    width: 300px;
+    /* Adjust as needed */
+    border-left: 1px solid #ccc;
+    padding: 10px;
+}
+
+.alerts-container {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000;
+}
