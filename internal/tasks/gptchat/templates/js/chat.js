@@ -1290,7 +1290,9 @@ async function fetchImageDrawingResultBackground () {
             const imageUrls = chatData.taskData || [];
 
             try {
-                await Promise.all(imageUrls.map(async (imageUrl) => {
+                // should not use Promise.all here, because we need to check each image's status
+                // one by one, not all at once to avoid data race of chatData.taskData
+                for (const imageUrl of imageUrls) {
                 // check any err msg
                     const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
                     // const errFileUrl = imageUrl.replace(/(\.\w+)$/, '.err.txt');
@@ -1322,7 +1324,7 @@ async function fetchImageDrawingResultBackground () {
 
                     // check is all tasks finished
                     await checkIsImageAllSubtaskDone(item, imageUrl, true);
-                }))
+                }
             } catch (err) {
                 console.warn('fetch img result, ' + err);
             };
@@ -1355,9 +1357,6 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
     if (succeed) {
         succeedImageUrls.push(imageUrl);
         chatData.succeedImageUrls = succeedImageUrls;
-    } else { // task failed
-        processingImageUrls = [];
-        chatData.taskData = processingImageUrls;
     }
 
     if (processingImageUrls.length === 0) {
@@ -1378,10 +1377,7 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
                 item.classList.add('multi-images');
             }
         } else {
-            // remove holding animation elements
-            item.querySelectorAll('.placeholder-glow').forEach((ele) => {
-                ele.remove();
-            });
+            item.innerHTML = '<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">No image generated</pre>';
         }
 
         item.dataset.taskStatus = ChatTaskStatusDone;
@@ -1390,6 +1386,8 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         await setChatData(chatID, RoleAI, chatData);
 
         renderAfterAiResp(chatData, false);
+    }else {
+        await setChatData(chatID, RoleAI, chatData);
     }
 }
 
@@ -1408,7 +1406,9 @@ async function fetchDeepResearchResultBackground () {
         const elements = chatContainer
             .querySelectorAll(`.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`) || [];
 
-        await Promise.all(Array.from(elements).map(async (item) => {
+        // should not use Promise.all here, because we need to check each image's status
+        // one by one, not all at once to avoid data race of chatData.taskData
+        for (const item of elements) {
             if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
                 return;
             }
@@ -1466,7 +1466,7 @@ async function fetchDeepResearchResultBackground () {
             } catch (err) {
                 console.warn('fetch deep research result, ' + err);
             };
-        }));
+        }
     } finally {
         mutexFetchDeepResearchResultBackground = false;
     }
