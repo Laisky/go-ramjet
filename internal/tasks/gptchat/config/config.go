@@ -356,8 +356,7 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"gpt-4o-mini",
 		// "llama2-70b-4096",
 		"deepseek-chat",
-		"deepseek-reasoner",
-		"deepseek-coder",
+		// "deepseek-coder",
 		"gemma2-9b-it",
 		"llama3-8b-8192",
 		"llama3-70b-8192",
@@ -365,10 +364,8 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"llama-3.3-70b-versatile",
 		"llama-3.1-405b-instruct",
 		// "mixtral-8x7b-32768",
-		"img-to-img",
-		"sdxl-turbo",
-		"gemini-pro",
-		"gemini-pro-vision",
+		// "img-to-img",
+		// "sdxl-turbo",
 		"gemini-2.0-flash":
 		ratelimiter = freeModelRateLimiter
 		ratelimitCost = 1
