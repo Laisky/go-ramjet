@@ -400,6 +400,12 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			enableHeartBeatForStreamReq(ctx)
 		}
 
+		if strings.HasPrefix(frontendReq.Model, "o1") ||
+			strings.HasPrefix(frontendReq.Model, "o3") &&
+				frontendReq.ReasoningEffort == "" {
+			frontendReq.ReasoningEffort = "high"
+		}
+
 		var openaiReq any
 	MODEL_SWITCH:
 		switch frontendReq.Model {
@@ -416,8 +422,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0613",
 			"gpt-3.5-turbo-1106",
 			"gpt-3.5-turbo-0125",
-			"o1-mini",
-			"o3-mini",
 			"claude-instant-1",
 			"claude-2",
 			// "mixtral-8x7b-32768",
@@ -436,11 +440,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				return nil, nil, errors.Wrap(err, "copy to chat req")
 			}
 
-			if strings.HasPrefix(frontendReq.Model, "o1") ||
-				strings.HasPrefix(frontendReq.Model, "o3") {
-				req.ReasoningEffort = "high"
-			}
-
 			openaiReq = req
 		case "claude-3-opus", // support text and vision at the same time
 			"claude-3.5-sonnet",
@@ -449,6 +448,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-3.5-haiku",
 			"o1",
 			"o1-preview",
+			"o1-mini",
+			"o3-mini",
 			"gpt-4o",
 			"gpt-4o-mini",
 			"gpt-4-turbo-2024-04-09",
@@ -461,7 +462,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				if err := copier.Copy(req, frontendReq); err != nil {
 					return nil, nil, errors.Wrap(err, "copy to chat req")
 				}
-
 				openaiReq = req
 				break MODEL_SWITCH
 			}
