@@ -56,8 +56,8 @@ func RunServer(addr string) {
 	httpSrv := &http.Server{
 		Addr:         addr,
 		Handler:      Server,
-		ReadTimeout:  300 * time.Second,
-		WriteTimeout: 300 * time.Second,
+		ReadTimeout:  30 * time.Minute,
+		WriteTimeout: 30 * time.Minute,
 		IdleTimeout:  300 * time.Second,
 	}
 
