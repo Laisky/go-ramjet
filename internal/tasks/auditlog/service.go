@@ -156,7 +156,7 @@ func (s *service) checkClunterFingerprint(ctx context.Context, furl string) erro
 			logger.Error("send alert", zap.Error(err))
 		}
 
-		return errors.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 
 	// save task
