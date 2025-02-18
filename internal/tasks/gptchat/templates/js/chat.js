@@ -1386,7 +1386,7 @@ async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
         await setChatData(chatID, RoleAI, chatData);
 
         renderAfterAiResp(chatData, false);
-    }else {
+    } else {
         await setChatData(chatID, RoleAI, chatData);
     }
 }
@@ -2990,6 +2990,8 @@ async function sendChat2Server (chatID, reqPrompt) {
     return chatID;
 }
 
+const muRenderAfterAiRespForChatID = {};
+
 /**
  * do render and save chat after ai response finished
  *
@@ -3014,15 +3016,23 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
         return;
     }
 
-    const rawContent = chatData.rawContent || '';
-    const attachHTML = chatData.attachHTML || '';
+    if (muRenderAfterAiRespForChatID[chatData.chatID]) {
+        console.warn(`chat ${chatData.chatID} is already in rendering`);
+        return;
+    } else {
+        muRenderAfterAiRespForChatID[chatData.chatID] = true;
+    }
 
-    if (rawContent && rawContent !== 'undefined') {
-        let renderedHTML = '';
-        if (chatData.reasoningContent) {
-            const expanded = saveStorage ? 'true' : 'false';
-            const showed = saveStorage ? ' show' : '';
-            renderedHTML += `<p class="d-inline-flex gap-1">
+    try {
+        const rawContent = chatData.rawContent || '';
+        const attachHTML = chatData.attachHTML || '';
+
+        if (rawContent && rawContent !== 'undefined') {
+            let renderedHTML = '';
+            if (chatData.reasoningContent) {
+                const expanded = saveStorage ? 'true' : 'false';
+                const showed = saveStorage ? ' show' : '';
+                renderedHTML += `<p class="d-inline-flex gap-1">
                 <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="${expanded}" aria-controls="collapseExample">
                     Thinking...
                 </button>
@@ -3032,90 +3042,93 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
                     ${await libs.Markdown2HTML(chatData.reasoningContent)}
                 </div>
             </div>`;
-        }
-
-        renderedHTML += await libs.Markdown2HTML(chatData.rawContent);
-
-        aiRespEle.innerHTML = renderedHTML;
-        aiRespEle.innerHTML += attachHTML;
-    }
-
-    // setup prism
-    {
-        // add line number
-        aiRespEle.querySelectorAll('pre').forEach((item) => {
-            item.classList.add('line-numbers');
-        });
-    }
-
-    // setup mathjax
-    try {
-        if (!window.MathJax) {
-            const script = document.createElement('script');
-            script.src = 'https://s3.laisky.com/static/mathjax/2.7.3/MathJax-2.7.3/MathJax.js?config=TeX-MML-AM_CHTML';
-            script.async = true;
-            script.onload = () => {
-                window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub]);
-            };
-            script.onerror = (e) => {
-                console.error(`failed to load mathjax: ${e}`);
-            };
-            document.head.appendChild(script);
-        } else {
-            window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub]);
-        }
-    } catch (e) {
-        console.error(`failed to render mathjax: ${e}`);
-    }
-
-    // should save html before prism formatted,
-    // because prism.js do not support formatted html.
-    chatData.content = aiRespEle.innerHTML;
-
-    try {
-        window.mermaid && await window.mermaid.run({ querySelector: 'pre.mermaid' });
-    } catch (err) {
-        console.error('mermaid run error:', err);
-    }
-
-    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
-
-    // add cost tips
-    let costUsd = chatData.costUsd;
-    const sconfig = await getChatSessionConfig();
-    if (sconfig.api_token.startsWith('laisky-') ||
-        sconfig.api_token.startsWith('sk-') ||
-        sconfig.api_token.startsWith('FREETIER-')) {
-        if (!costUsd && chatData.reqeustid) {
-            // do not block the main thread
-            const resp = await fetch(`/oneapi/api/cost/request/${chatData.reqeustid}`)
-            if (resp.ok) {
-                costUsd = (await resp.json()).cost_usd;
             }
 
-            if (costUsd) {
-                chatData.costUsd = costUsd;
+            renderedHTML += await libs.Markdown2HTML(chatData.rawContent);
+
+            aiRespEle.innerHTML = renderedHTML;
+            aiRespEle.innerHTML += attachHTML;
+        }
+
+        // setup prism
+        {
+        // add line number
+            aiRespEle.querySelectorAll('pre').forEach((item) => {
+                item.classList.add('line-numbers');
+            });
+        }
+
+        // setup mathjax
+        try {
+            if (!window.MathJax) {
+                const script = document.createElement('script');
+                script.src = 'https://s3.laisky.com/static/mathjax/2.7.3/MathJax-2.7.3/MathJax.js?config=TeX-MML-AM_CHTML';
+                script.async = true;
+                script.onload = () => {
+                    window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub]);
+                };
+                script.onerror = (e) => {
+                    console.error(`failed to load mathjax: ${e}`);
+                };
+                document.head.appendChild(script);
+            } else {
+                window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub]);
+            }
+        } catch (e) {
+            console.error(`failed to render mathjax: ${e}`);
+        }
+
+        // should save html before prism formatted,
+        // because prism.js do not support formatted html.
+        chatData.content = aiRespEle.innerHTML;
+
+        try {
+            window.mermaid && await window.mermaid.run({ querySelector: 'pre.mermaid' });
+        } catch (err) {
+            console.error('mermaid run error:', err);
+        }
+
+        aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
+
+        // add cost tips
+        let costUsd = chatData.costUsd;
+        const sconfig = await getChatSessionConfig();
+        if (sconfig.api_token.startsWith('laisky-') ||
+        sconfig.api_token.startsWith('sk-') ||
+        sconfig.api_token.startsWith('FREETIER-')) {
+            if (!costUsd && chatData.reqeustid) {
+            // do not block the main thread
+                const resp = await fetch(`/oneapi/api/cost/request/${chatData.reqeustid}`)
+                if (resp.ok) {
+                    costUsd = (await resp.json()).cost_usd;
+                }
+
+                if (costUsd) {
+                    chatData.costUsd = costUsd;
+                    aiRespEle.querySelector('div.info')
+                        .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+                }
+            } else if (costUsd) {
                 aiRespEle.querySelector('div.info')
                     .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
             }
-        } else if (costUsd) {
-            aiRespEle.querySelector('div.info')
-                .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
         }
+
+        window.Prism.highlightAllUnder(aiRespEle);
+        libs.EnableTooltipsEverywhere();
+
+        // in the scenario of restore chat, the chatEle is already in view,
+        // no need to scroll and save to storage
+        if (saveStorage) {
+            scrollToChat(aiRespEle);
+            await saveChats2Storage(chatData);
+        }
+
+        bindImageOperationInAiResp(chatData.chatID);
+        await addOperateBtnBelowAiResponse(chatData.chatID);
+    } finally {
+        muRenderAfterAiRespForChatID[chatData.chatID] = false;
     }
-
-    window.Prism.highlightAllUnder(aiRespEle);
-    libs.EnableTooltipsEverywhere();
-
-    // in the scenario of restore chat, the chatEle is already in view,
-    // no need to scroll and save to storage
-    if (saveStorage) {
-        scrollToChat(aiRespEle);
-        await saveChats2Storage(chatData);
-    }
-
-    bindImageOperationInAiResp(chatData.chatID);
-    await addOperateBtnBelowAiResponse(chatData.chatID);
 }
 
 function bindImageOperationInAiResp (chatID) {
