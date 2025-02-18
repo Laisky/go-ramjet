@@ -222,7 +222,7 @@ let chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
 
 // muRenderAfterAiRespForChatID is a mutex for rendering chat
 // to avoid rendering the same chat multiple times.
-// will be updated in renderAfterAiResp and reload.
+// will be updated in renderAfterAiResp and reloadAiResp.
 const muRenderAfterAiRespForChatID = {};
 
 let audioStream;
@@ -605,7 +605,7 @@ async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
             content: attachHTML
         });
     } catch (err) {
-        abortAIResp(`Failed to send request: ${err}`);
+        abortAIResp(`Failed to send request: ${renderError(err)}`);
     } finally {
         HideSpinner();
     }
@@ -2489,7 +2489,7 @@ async function detectPromptTaskType (model, prompt) {
                     return 'image';
                 }
             } catch (err) {
-                console.warn(`failed to request llm to detect prompt task type: ${err}`)
+                console.warn(`failed to request llm to detect prompt task type: ${renderError(err)}`)
             }
         }
 
@@ -2791,7 +2791,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 stop: ['\n\n']
             });
         } catch (err) {
-            await abortAIResp(`failed to fetch qa data: ${err}`);
+            await abortAIResp(`failed to fetch qa data: ${renderError(err)}`);
             return chatID;
         }
 
@@ -2823,7 +2823,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 throw new Error(`unknown image model: ${selectedModel}`);
             }
         } catch (err) {
-            await abortAIResp(`failed to send image prompt: ${err}`);
+            await abortAIResp(`failed to send image prompt: ${renderError(err)}`);
         } finally {
             unlockChatInput();
         }
@@ -2871,7 +2871,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     <span class="placeholder col-8"></span>
                 </p>`;
         } catch (err) {
-            await abortAIResp(`failed to send deepresearch prompt: ${err}`);
+            await abortAIResp(`failed to send deepresearch prompt: ${renderError(err)}`);
         } finally {
             unlockChatInput();
         }
@@ -2971,7 +2971,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     }
                 }
             } catch (err) {
-                await abortAIResp(`failed to parse chat response: ${err}`);
+                await abortAIResp(`failed to parse chat response: ${renderError(err)}`);
             }
         }
 
@@ -2988,11 +2988,37 @@ async function sendChat2Server (chatID, reqPrompt) {
     })
 
     globalAIRespSSE.onerror = async (err) => {
-        await abortAIResp(`failed to receive chat response: ${err}`);
+        await abortAIResp(`failed to receive chat response: ${renderError(err)}`);
     };
     globalAIRespSSE.stream();
 
     return chatID;
+}
+
+/**
+ * Aborts the current AI response and updates the current AI response element with the error message.
+ *
+ * @param {*} err
+ * @returns {string}
+ */
+function renderError (err) {
+    if (!err) {
+        return 'unknown empty error';
+    }
+
+    if (err instanceof Error) {
+        return err.message;
+    }
+
+    if (err.data) {
+        return err.data;
+    }
+
+    try {
+        return JSON.stringify(err);
+    } catch (_) {
+        return String(err);
+    }
 }
 
 /**
@@ -3279,7 +3305,7 @@ async function tts (chatID, text) {
     //     chatContainer.querySelector(`#${chatID} .ai-response .ai-resp-audio`)?.remove();
     //     return;
     // } catch (err) {
-    //     console.error(`failed to play audio automately: ${err}`);
+    //     console.error(`failed to play audio automately: ${renderError(err)}`);
     // }
 
     // for mobile device, autoplay is disabled, so we need to add a play button,
@@ -3298,7 +3324,7 @@ async function tts (chatID, text) {
     try {
         await audio.play();
     } catch (err) {
-        console.error(`failed to play audio: ${err}`);
+        console.error(`failed to play audio: ${renderError(err)}`);
     }
 }
 
@@ -3378,7 +3404,7 @@ async function abortAIResp (err) {
         err = new Error(err);
     }
 
-    console.error(`abort AI resp: ${err}`);
+    console.error(`abort AI resp: ${renderError(err)}`);
     if (globalAIRespSSE) {
         globalAIRespSSE.close();
         globalAIRespSSE = null;
@@ -3609,7 +3635,7 @@ async function setupChatInput () {
                         ShowSpinner();
                         await uploadFileAsInputUrls(file, fileExtension);
                     } catch (err) {
-                        console.error(`upload file failed: ${err}`);
+                        console.error(`upload file failed: ${renderError(err)}`);
                     } finally {
                         HideSpinner();
                     }
@@ -3906,7 +3932,7 @@ async function bindTalkBtnHandler () {
                     }
                 }, 'bindTalkBtnHandler_tts');
             } catch (err) {
-                showalert('danger', `record voice failed: ${err}`);
+                showalert('danger', `record voice failed: ${renderError(err)}`);
                 HideSpinner();
             } finally {
                 audioChunks = [];
@@ -4765,7 +4791,7 @@ async function setupConfig () {
                     location.reload();
                 } catch (err) {
                     console.error(err);
-                    showalert('danger', `sync user config failed: ${err}`);
+                    showalert('danger', `sync user config failed: ${renderError(err)}`);
                 } finally {
                     HideSpinner();
                 }
@@ -4779,7 +4805,7 @@ async function setupConfig () {
                     location.reload();
                 } catch (err) {
                     console.error(err);
-                    showalert('danger', `sync user config failed: ${err}`);
+                    showalert('danger', `sync user config failed: ${renderError(err)}`);
                 } finally {
                     HideSpinner();
                 }
