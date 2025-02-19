@@ -2067,6 +2067,7 @@ function parseChatResp (chatmodel, payload) {
         }
 
         reasoningChunk = payload.choices[0].delta.reasoning_content || '';
+        reasoningChunk = payload.choices[0].delta.reasoning || '';
 
         if (globalAIRespData.isThinking) {
             reasoningChunk = payload.choices[0].delta.content || '';
