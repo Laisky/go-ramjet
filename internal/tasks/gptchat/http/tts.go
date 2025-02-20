@@ -34,6 +34,10 @@ func TTSHanler(ctx *gin.Context) {
 		return
 	}
 
+	if err = user.IsModelAllowed(ctx.Request.Context(), "tts", 0); web.AbortErr(ctx, errors.Wrap(err, "check model allowed")) {
+		return
+	}
+
 	text, err := url.QueryUnescape(ctx.Query("text"))
 	if web.AbortErr(ctx, errors.Wrap(err, "url.QueryUnescape")) {
 		return
