@@ -14,8 +14,8 @@ const robotIcon = '🤖️';
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT4O = 'gpt-4o';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
-const ChatModelGPTO1Preview = 'o1-preview';
-// const ChatModelGPTO1 = 'o1';
+// const ChatModelGPTO1Preview = 'o1-preview';
+const ChatModelGPTO1 = 'o1';
 // const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelGPTO3Mini = 'o3-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
@@ -83,8 +83,8 @@ const ChatModels = [
     ChatModelGPT4Turbo,
     ChatModelGPT4O,
     ChatModelGPT4OMini,
-    ChatModelGPTO1Preview,
-    // ChatModelGPTO1,
+    // ChatModelGPTO1Preview,
+    ChatModelGPTO1,
     // ChatModelGPTO1Mini,
     ChatModelGPTO3Mini,
     ChatModelDeepSeekChat,
@@ -129,7 +129,8 @@ const VisionModels = [
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
     ChatModelClaude35Haiku,
-    ChatModelGPTO1Preview,
+    // ChatModelGPTO1Preview,
+    ChatModelGPTO1,
     ChatModelGemini2Flash,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
