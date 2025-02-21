@@ -2067,11 +2067,11 @@ function parseChatResp (chatmodel, payload) {
             globalAIRespData.isThinking = false;
         }
 
-        reasoningChunk = payload.choices[0].delta.reasoning_content || '';
-        reasoningChunk = payload.choices[0].delta.reasoning || '';
+        reasoningChunk += payload.choices[0].delta.reasoning_content || '';
+        reasoningChunk += payload.choices[0].delta.reasoning || '';
 
         if (globalAIRespData.isThinking) {
-            reasoningChunk = payload.choices[0].delta.content || '';
+            reasoningChunk += payload.choices[0].delta.content || '';
         } else {
             respChunk = payload.choices[0].delta.content || '';
         }
