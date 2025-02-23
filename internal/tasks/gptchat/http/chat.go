@@ -33,6 +33,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
+	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -584,6 +585,7 @@ var (
 
 // FetchURLContent fetch url content
 func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) {
+	// check cache
 	content, ok := urlContentCache.Load(url)
 	if ok {
 		log.Logger.Debug("hit cache for query mentioned url", zap.String("url", url))
@@ -608,13 +610,16 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	switch {
 	case strings.Contains(contentType, "text/html") ||
 		strings.Contains(contentType, "application/xhtml+xml"):
-		content, err = FetchDynamicURLContent(ctx, url)
+		content, err = gptTasks.FetchDynamicURLContent(ctx, url)
 	default:
 		content, err = fetchStaticURLContent(ctx, url)
 	}
 	if err != nil {
 		return nil, errors.Wrapf(err, "fetch url %q", url)
 	}
+
+	// update cache
+	urlContentCache.Store(url, content)
 
 	return content, nil
 }
@@ -630,26 +635,6 @@ func findHTMLBody(n *html.Node) *html.Node {
 		}
 	}
 	return nil
-}
-
-// extractHTMLBody extract body from html
-func extractHTMLBody(content []byte) (bodyContent []byte, err error) {
-	parsedHTML, err := html.Parse(bytes.NewReader(content))
-	if err != nil {
-		return nil, errors.Wrap(err, "parse html")
-	}
-
-	body := findHTMLBody(parsedHTML)
-	if body == nil {
-		return nil, errors.New("no body found")
-	}
-
-	var out bytes.Buffer
-	if err := html.Render(&out, body); err != nil {
-		return nil, errors.Wrap(err, "render html")
-	}
-
-	return out.Bytes(), nil
 }
 
 func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.UserConfig) {

@@ -18,7 +18,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
-	gpthttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
+	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -135,9 +135,8 @@ func RunSaveUrlContent(ctx context.Context) {
 					taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
 					defer cancel()
 
-					content, err := gpthttp.FetchDynamicURLContent(taskCtx,
+					content, err := gptTasks.FetchDynamicURLContent(taskCtx,
 						task.url,
-						gpthttp.WithDuration(time.Second*30),
 					)
 					if err != nil {
 						return errors.Wrapf(err, "fetch url %s", task.url)

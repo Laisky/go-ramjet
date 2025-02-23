@@ -10,14 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 )
 
 func TestFetchDynamicURLContent(t *testing.T) {
+	gconfig.S.Set("redis.addr", "100.122.41.16:6379")
+	gptTasks.RunDynamicWebCrawler()
+
 	ctx := context.Background()
 	url := "https://blog.laisky.com/pages/0/"
 
-	content, err := FetchDynamicURLContent(ctx, url)
+	content, err := gptTasks.FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 
@@ -25,10 +30,13 @@ func TestFetchDynamicURLContent(t *testing.T) {
 }
 
 func TestGoogleSearchBasic(t *testing.T) {
+	gconfig.S.Set("redis.addr", "100.122.41.16:6379")
+	gptTasks.RunDynamicWebCrawler()
+
 	ctx := context.Background()
 	url := "https://www.google.com/search?q=site%3Amedium.com+applied+mpc"
 
-	content, err := FetchDynamicURLContent(ctx, url)
+	content, err := gptTasks.FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 

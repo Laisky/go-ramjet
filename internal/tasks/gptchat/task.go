@@ -4,6 +4,7 @@ import (
 	"github.com/Laisky/zap"
 
 	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -15,6 +16,7 @@ func bindTask() {
 		log.Logger.Panic("setup gptchat config", zap.Error(err))
 	}
 
+	gptTasks.RunDynamicWebCrawler()
 	bindHTTP()
 }
 

@@ -15,7 +15,7 @@ var (
 	cli *rdb.DB
 )
 
-// GetCli return redis client
+// GetCli returns the redis client
 func GetCli() *rdb.DB {
 	mu.RLock()
 	if cli != nil {
@@ -31,7 +31,7 @@ func GetCli() *rdb.DB {
 		return cli
 	}
 
-	cli := rdb.NewDB(&redis.Options{
+	cli = rdb.NewDB(&redis.Options{
 		Addr: gconfig.S.GetString("redis.addr"),
 		DB:   gconfig.S.GetInt("redis.db"),
 	})

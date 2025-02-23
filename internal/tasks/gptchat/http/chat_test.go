@@ -11,6 +11,7 @@ import (
 	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/testify/require"
 
+	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -75,7 +76,7 @@ var testHTMLContent = `<!DOCTYPE html>
 	</html>`
 
 func Test_extractHTMLBody(t *testing.T) {
-	got, err := extractHTMLBody([]byte(testHTMLContent))
+	got, err := gptTasks.ExtractHTMLBody([]byte(testHTMLContent))
 	require.NoError(t, err)
 	require.Equal(t, "<body>\n\t\t\t<h1>Hello, world!</h1>\n\t\t\t<p>This is an example of an HTML5 document.</p>\n\t\t\n\t</body>", string(got))
 }
