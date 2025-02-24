@@ -57,7 +57,7 @@ func RunDynamicWebCrawler() {
 }
 
 func runDynamicWebCrawler() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctx)
