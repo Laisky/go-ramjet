@@ -57,7 +57,7 @@ func RunDynamicWebCrawler() {
 }
 
 func runDynamicWebCrawler() error {
-	ctxCrawler, cancelCrawler := context.WithTimeout(context.Background(), time.Minute)
+	ctxCrawler, cancelCrawler := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelCrawler()
 
 	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctxCrawler)
@@ -73,6 +73,7 @@ func runDynamicWebCrawler() error {
 		zap.String("task_id", task.TaskID),
 		zap.String("url", task.Url))
 	logger.Info("get task")
+	ctxCrawler = gmw.SetLogger(ctxCrawler, logger)
 
 	resultKey := rlibs.KeyPrefixTaskHTMLCrawlerResult + task.TaskID
 
@@ -166,9 +167,22 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 
 	// create chrome options with proxy settings
 	chromeOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		// Skip Chrome's first-run / welcome screens to avoid extra overhead
 		chromedp.NoDefaultBrowserCheck,
+		// Skip first run UI popup
 		chromedp.NoFirstRun,
+		// Set initial window size (important for responsive sites)
 		chromedp.WindowSize(1920, 1080),
+		// Run in headless mode (no GUI) - essential for Docker/server environments
+		chromedp.Flag("headless", true),
+		// Disable GPU acceleration - prevents issues in containerized environments
+		chromedp.Flag("disable-gpu", true),
+		// Use /tmp instead of /dev/shm - prevents crashes when /dev/shm is too small in Docker
+		chromedp.Flag("disable-dev-shm-usage", true),
+		// Disable sandbox - required for running in Docker (less secure but necessary)
+		chromedp.Flag("no-sandbox", true),
+		// Disable setuid sandbox - complementary to no-sandbox for Docker environments
+		chromedp.Flag("disable-setuid-sandbox", true),
 	)
 	if os.Getenv("CRAWLER_HTTP_PROXY") != "" {
 		logger.Debug("set proxy", zap.String("proxy", os.Getenv("CRAWLER_HTTP_PROXY")))
