@@ -57,10 +57,10 @@ func RunDynamicWebCrawler() {
 }
 
 func runDynamicWebCrawler() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+	ctxCrawler, cancelCrawler := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelCrawler()
 
-	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctx)
+	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctxCrawler)
 	if err != nil {
 		return errors.Wrap(err, "get html crawler task")
 	}
@@ -76,7 +76,7 @@ func runDynamicWebCrawler() error {
 
 	resultKey := rlibs.KeyPrefixTaskHTMLCrawlerResult + task.TaskID
 
-	content, err := dynamicFetchWorker(ctx, task.Url)
+	content, err := dynamicFetchWorker(ctxCrawler, task.Url)
 	if err != nil {
 		now := time.Now()
 		reason := fmt.Sprintf("fetch url %q", task.Url)
@@ -98,7 +98,11 @@ func runDynamicWebCrawler() error {
 		return errors.Wrap(err, "serialize task")
 	}
 
-	err = rutils.GetCli().GetDB().Set(ctx, resultKey, payload, time.Hour*24*7).Err()
+	ctxPublish, cancelPublish := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancelPublish()
+
+	err = rutils.GetCli().GetDB().
+		Set(ctxPublish, resultKey, payload, time.Hour*24*7).Err()
 	if err != nil {
 		return errors.Wrapf(err, "set task result %q", resultKey)
 	}
@@ -161,8 +165,13 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 	}
 
 	// create chrome options with proxy settings
-	chromeOpts := chromedp.DefaultExecAllocatorOptions[:]
+	chromeOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.NoDefaultBrowserCheck,
+		chromedp.NoFirstRun,
+		chromedp.WindowSize(1920, 1080),
+	)
 	if os.Getenv("HTTP_PROXY") != "" {
+		logger.Debug("set proxy", zap.String("proxy", os.Getenv("HTTP_PROXY")))
 		chromeOpts = append(chromeOpts, chromedp.ProxyServer(os.Getenv("HTTP_PROXY")))
 	}
 
