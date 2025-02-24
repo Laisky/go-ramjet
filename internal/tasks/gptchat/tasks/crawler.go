@@ -154,15 +154,24 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 		"Connection":      "keep-alive",
 	}
 
-	// create a chrome instance
-	chromeCtx, cancel := chromedp.NewContext(ctx)
-	defer cancel()
-
 	if err = chromedpSema.Acquire(ctx, 1); err != nil {
 		return nil, errors.Wrap(err, "acquire chromedp sema")
 	} else {
 		defer chromedpSema.Release(1)
 	}
+
+	// create chrome options with proxy settings
+	chromeOpts := chromedp.DefaultExecAllocatorOptions[:]
+	if os.Getenv("HTTP_PROXY") != "" {
+		chromeOpts = append(chromeOpts, chromedp.ProxyServer(os.Getenv("HTTP_PROXY")))
+	}
+
+	allocCtx, cancel := chromedp.NewExecAllocator(ctx, chromeOpts...)
+	defer cancel()
+
+	// create a chrome instance
+	chromeCtx, cancel := chromedp.NewContext(allocCtx)
+	defer cancel()
 
 	var htmlContent string
 	err = chromedp.Run(chromeCtx, chromedp.Tasks{
