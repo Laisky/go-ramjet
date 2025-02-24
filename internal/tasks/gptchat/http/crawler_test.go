@@ -82,7 +82,7 @@ func TestGoogleSearch(t *testing.T) {
 	ctx := context.Background()
 	query := "how about the weather in shanghai"
 
-	content, err := googleSearch(ctx, query, &config.UserConfig{
+	content, err := webSearch(ctx, query, &config.UserConfig{
 		IsFree: false,
 	})
 	require.NoError(t, err)

@@ -637,6 +637,16 @@ func findHTMLBody(n *html.Node) *html.Node {
 	return nil
 }
 
+var webSearchQueryPrompt = gutils.Dedent(`
+	Do not directly answer the user's question,
+	but rather analyze the user's question in the role
+	of a decision-making system scheduler.
+	Consider what additional information is needed to
+	better answer the user's question. Please return
+	the query that needs to be searched, do not contains
+	any other characters, and I will execute a
+	web search for your response.`)
+
 func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.UserConfig) {
 	logger := gmw.GetLogger(gctx)
 	logger.Debug("embedding google search")
@@ -659,16 +669,23 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	// fetch google search result
-	extra, err := googleSearch(gmw.Ctx(gctx), *lastUserPrompt, user)
+	searchQuery, err := OneshotChat(gmw.Ctx(gctx), user, defaultChatModel, webSearchQueryPrompt, *lastUserPrompt)
 	if err != nil {
-		log.Logger.Warn("google search", zap.Error(err), zap.String("prompt", *lastUserPrompt))
+		logger.Warn("google search query", zap.Error(err))
+		return
+	}
+
+	// fetch web search result
+	extra, err := webSearch(gmw.Ctx(gctx), searchQuery, user)
+	if err != nil {
+		log.Logger.Warn("web search", zap.Error(err),
+			zap.String("prompt", searchQuery))
 		return
 	}
 
 	extra, err = queryChunks(gctx, queryChunksArgs{
 		user:    user,
-		query:   *lastUserPrompt,
+		query:   searchQuery,
 		ext:     ".txt",
 		model:   r.Model,
 		content: []byte(extra),

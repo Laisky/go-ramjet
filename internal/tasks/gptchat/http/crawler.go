@@ -15,13 +15,13 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
 	gutils "github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/graphql"
 	"github.com/Laisky/zap"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -81,8 +81,20 @@ var oneshotSummarySysPrompt = gutils.Dedent(`
 
 	<article>%s</article>`)
 
-func googleSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {
-	logger := gmw.GetLogger(ctx).Named("google_search").With(zap.String("query", query))
+type searchMutation struct {
+	WebSearch struct {
+		Results []searchResults `json:"results" graphql:"results"`
+	} `graphql:"WebSearch(query: $query)"`
+}
+
+type searchResults struct {
+	Name    graphql.String `json:"name" graphql:"name"`
+	URL     graphql.String `json:"url" graphql:"url"`
+	Snippet graphql.String `json:"snippet" graphql:"snippet"`
+}
+
+func webSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {
+	logger := gmw.GetLogger(ctx).Named("web_search").With(zap.String("query", query))
 	ctx = gmw.SetLogger(ctx, logger)
 
 	// normalize query
@@ -90,41 +102,26 @@ func googleSearch(ctx context.Context, query string, user *config.UserConfig) (r
 	query = strings.ReplaceAll(query, "\n", ". ")
 	query = strings.TrimSpace(query)
 
-	searchCtx, searchCancel := context.WithTimeout(ctx, 20*time.Second)
-	defer searchCancel()
-	searchContent, err := gptTasks.FetchDynamicURLContent(searchCtx,
-		"https://www.google.com/search?q="+query)
+	muQuery := new(searchMutation)
+	err = graphql.NewClient("https://gq.laisky.com/query/", nil,
+		graphql.WithHeader("Authorization", user.OpenaiToken)).
+		Mutate(ctx, muQuery, map[string]any{
+			"query": graphql.String(query),
+		})
 	if err != nil {
-		return "", errors.Wrapf(err, "fetch %q", query)
+		return "", errors.Wrap(err, "web search")
 	}
-
-	doc, err := html.Parse(bytes.NewReader(searchContent))
-	if err != nil {
-		return "", errors.Wrap(err, "parse html")
-	}
-
-	ok, urls, err := _googleExtractor(doc)
-	if err != nil {
-		return "", errors.Wrap(err, "extract google search result")
-	}
-	if !ok || len(urls) == 0 {
-		return "", errors.Errorf("no search result")
-	}
-
-	urls = gutils.FilterSlice(urls, func(v string) bool {
-		return strings.HasPrefix(v, "https://")
-	})
 
 	var (
 		mu   sync.Mutex
 		pool errgroup.Group
 	)
-	for i, url := range urls {
+	for i, searchResult := range muQuery.WebSearch.Results {
 		if i > 4 {
 			break
 		}
 
-		url := url
+		url := string(searchResult.URL)
 		// inside googleSearch, within the pool.Go(func() ...) block:
 		pool.Go(func() error {
 			logger := logger.With(zap.String("request_url", url))
