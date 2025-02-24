@@ -170,9 +170,9 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 		chromedp.NoFirstRun,
 		chromedp.WindowSize(1920, 1080),
 	)
-	if os.Getenv("HTTP_PROXY") != "" {
-		logger.Debug("set proxy", zap.String("proxy", os.Getenv("HTTP_PROXY")))
-		chromeOpts = append(chromeOpts, chromedp.ProxyServer(os.Getenv("HTTP_PROXY")))
+	if os.Getenv("CRAWLER_HTTP_PROXY") != "" {
+		logger.Debug("set proxy", zap.String("proxy", os.Getenv("CRAWLER_HTTP_PROXY")))
+		chromeOpts = append(chromeOpts, chromedp.ProxyServer(os.Getenv("CRAWLER_HTTP_PROXY")))
 	}
 
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, chromeOpts...)

@@ -25,7 +25,7 @@ func init() {
 		gin.Recovery(),
 		gmw.NewLoggerMiddleware(
 			gmw.WithLoggerMwColored(),
-			gmw.WithLevel(glog.LevelInfo.String()),
+			gmw.WithLevel(glog.LevelDebug.String()),
 			gmw.WithLogger(log.Logger),
 		),
 	)
