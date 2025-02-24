@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -135,16 +134,15 @@ func WithDuration(duration time.Duration) FetchURLOption {
 }
 
 // dynamicFetchWorker fetch dynamic url content, will render js by chromedp
-func dynamicFetchWorker(ctx context.Context, url string,
-	opts ...FetchURLOption) (content []byte, err error) {
+func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption) (content []byte, err error) {
 	startAt := time.Now()
 	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
 		With(zap.String("url", url))
 
-	opt, err := new(fetchURLOption).apply(opts...)
-	if err != nil {
-		return nil, errors.Wrap(err, "apply options")
-	}
+	// opt, err := new(fetchURLOption).apply(opts...)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "apply options")
+	// }
 
 	logger.Debug("fetch dynamic url")
 	headers := map[string]any{
@@ -167,12 +165,13 @@ func dynamicFetchWorker(ctx context.Context, url string,
 	}
 
 	var htmlContent string
-	if err = chromedp.Run(chromeCtx, chromedp.Tasks{
+	err = chromedp.Run(chromeCtx, chromedp.Tasks{
 		network.Enable(),
-		chromedp.Navigate(url),
+		// Set headers before navigation!
 		network.SetExtraHTTPHeaders(network.Headers(headers)),
+		chromedp.Navigate(url),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		// Wait for document.readyState to be "complete"
+		// Wait for document.readyState to be complete
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var readyState string
 			for {
@@ -186,29 +185,14 @@ func dynamicFetchWorker(ctx context.Context, url string,
 			}
 			return nil
 		}),
-		// Additional wait: poll until the body contains enough content (adjust threshold as needed)
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var bodyHTML string
-			startWait := time.Now()
-			for {
-				if err := chromedp.InnerHTML("body", &bodyHTML, chromedp.ByQuery).Do(ctx); err != nil {
-					return err
-				}
-				// Check for non-empty render (here using 100 characters as arbitrary threshold)
-				if len(strings.TrimSpace(bodyHTML)) > 100 {
-					break
-				}
-				// Timeout after a certain duration even if the body is still empty
-				if time.Since(startWait) > opt.duration {
-					break
-				}
-				time.Sleep(500 * time.Millisecond)
-			}
-			return nil
-		}),
-		// Get the full HTML
+		// Additional wait: Let dynamic JS scripts finish executing.
+		// Adjust the sleep duration or use more advanced conditions as needed.
+		chromedp.Sleep(2 * time.Second),
+		// Get the full HTML after dynamic scripts have rendered
 		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
-	}); err != nil {
+	})
+
+	if err != nil {
 		return nil, errors.Wrapf(err, "run chromedp for %q", url)
 	}
 

@@ -40,7 +40,7 @@ func TestGoogleSearchBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, content)
 
-	// fmt.Println(string(content))
+	fmt.Println(string(content))
 
 	doc, err := html.Parse(bytes.NewReader(content))
 	require.NoError(t, err)
