@@ -447,6 +447,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		case "claude-3-opus", // support text and vision at the same time
 			"claude-3.5-sonnet",
 			"claude-3.5-sonnet-8k",
+			"claude-3.7-sonnet",
 			"claude-3-haiku",
 			"claude-3.5-haiku",
 			"o1",

@@ -192,7 +192,6 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, chromeOpts...)
 	defer cancel()
 
-	// create a chrome instance
 	chromeCtx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
