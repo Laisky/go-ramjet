@@ -64,6 +64,11 @@ type FrontendReq struct {
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
 	ReasoningEffort string `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
 
+	// -------------------------------------
+	// Anthropic
+	// -------------------------------------
+	Thinking *Thinking `json:"thinking,omitempty"`
+
 	// LaiskyExtra some special config for laisky
 	LaiskyExtra *struct {
 		ChatSwitch struct {
@@ -73,6 +78,12 @@ type FrontendReq struct {
 			EnableGoogleSearch bool `json:"enable_google_search"`
 		} `json:"chat_switch"`
 	} `json:"laisky_extra,omitempty"`
+}
+
+// https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#implementing-extended-thinking
+type Thinking struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens" binding:"omitempty,min=1024"`
 }
 
 // FrontendReqMessage request message from frontend
@@ -122,11 +133,16 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	FrequencyPenalty float64               `json:"frequency_penalty"`
 	Stream           bool                  `json:"stream"`
 	Temperature      float64               `json:"temperature"`
-	TopP             float64               `json:"top_p"`
+	TopP             float64               `json:"top_p,omitempty"`
 	N                int                   `json:"n"`
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
 	ReasoningEffort string              `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
 	Tools           []OpenaiChatReqTool `json:"tools,omitempty"`
+
+	// -------------------------------------
+	// Anthropic
+	// -------------------------------------
+	Thinking *Thinking `json:"thinking,omitempty"`
 }
 
 // OpenaiChatReqTool define tools

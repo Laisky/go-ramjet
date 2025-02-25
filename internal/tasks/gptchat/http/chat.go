@@ -408,6 +408,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		}
 
 		var openaiReq any
+		lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+
 	MODEL_SWITCH:
 		switch frontendReq.Model {
 		case "gpt-4-turbo-preview",
@@ -444,6 +446,34 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			}
 
 			openaiReq = req
+		case "claude-3.7-sonnet-thinking":
+			if frontendReq.MaxTokens <= 1024 {
+				return nil, nil, errors.Errorf("max tokens should be greater than 1024")
+			}
+			frontendReq.TopP = 0
+			frontendReq.Model = strings.TrimSuffix(frontendReq.Model, "-thinking")
+
+			if frontendReq.Thinking == nil {
+				frontendReq.Thinking = &Thinking{
+					Type:         "enabled",
+					BudgetTokens: int(math.Min(1024, float64(frontendReq.MaxTokens/2))),
+				}
+			}
+
+			if len(lastMessage.Files) == 0 {
+				req := new(OpenaiChatReq[string])
+				if err := copier.Copy(req, frontendReq); err != nil {
+					return nil, nil, errors.Wrap(err, "copy to chat req")
+				}
+
+				openaiReq = req
+				break MODEL_SWITCH
+			}
+
+			openaiReq, err = processVisionRequest(user, frontendReq)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "process vision request")
+			}
 		case "claude-3-opus", // support text and vision at the same time
 			"claude-3.5-sonnet",
 			"claude-3.5-sonnet-8k",
@@ -458,7 +488,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4-turbo",
 			"gemini-2.0-flash",
 			"gemini-2.0-flash-thinking":
-			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
 			if len(lastMessage.Files) == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
@@ -468,62 +497,16 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				break MODEL_SWITCH
 			}
 
-			fallthrough // jump to vision part
+			openaiReq, err = processVisionRequest(user, frontendReq)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "process vision request")
+			}
 		case "gpt-4-vision-preview", // only support vision
 			"gemini-pro-vision":
-			lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
-
-			req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
-			if err := copier.Copy(req, frontendReq); err != nil {
-				return nil, nil, errors.Wrap(err, "copy to chat req")
+			openaiReq, err = processVisionRequest(user, frontendReq)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "process vision request")
 			}
-
-			if len(lastMessage.Files) == 0 {
-				// there is no images attached, so rewrite model to non-vision model
-				req.Model = "gpt-4o-mini"
-			}
-
-			req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
-				{
-					Role: OpenaiMessageRoleUser,
-					Content: []OpenaiVisionMessageContent{
-						{
-							Type: OpenaiVisionMessageContentTypeText,
-							Text: lastMessage.Content,
-						},
-					},
-				},
-			}
-
-			totalFileSize := 0
-			for i, f := range lastMessage.Files {
-				resolution := VisionImageResolutionLow
-				// if user has permission and image size is large than 1MB,
-				// use high resolution
-				if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(lastMessage.Content) {
-					resolution = VisionImageResolutionHigh
-				}
-
-				req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
-					Type: OpenaiVisionMessageContentTypeImageUrl,
-					ImageUrl: &OpenaiVisionMessageContentImageUrl{
-						URL: fmt.Sprintf("data:%s;base64,", imageType(f.Content)) +
-							base64.StdEncoding.EncodeToString(f.Content),
-						Detail: resolution,
-					},
-				})
-
-				if i >= 6 {
-					break // only support 6 images for cost saving
-				}
-
-				totalFileSize += len(f.Content)
-				if totalFileSize > 10*1024*1024 {
-					return nil, nil, errors.Errorf("total file size should less than 10MB, got %d", totalFileSize)
-				}
-			}
-
-			openaiReq = req
 		case "text-davinci-003":
 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 			openaiReq = new(OpenaiCompletionReq)
@@ -567,6 +550,63 @@ func (r *FrontendReq) fillDefault() {
 	r.N = gutils.OptionalVal(&r.N, 1)
 	r.Model = gutils.OptionalVal(&r.Model, ChatModel())
 	// r.BestOf = gutils.OptionalVal(&r.BestOf, 1)
+}
+
+// processVisionRequest process vision request
+func processVisionRequest(user *config.UserConfig, frontendReq *FrontendReq) (*OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
+	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+
+	req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
+	if err := copier.Copy(req, frontendReq); err != nil {
+		return nil, errors.Wrap(err, "copy to chat req")
+	}
+
+	// if len(lastMessage.Files) == 0 {
+	// 	// there is no images attached, so rewrite model to non-vision model
+	// 	req.Model = "gpt-4o-mini"
+	// }
+
+	req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
+		{
+			Role: OpenaiMessageRoleUser,
+			Content: []OpenaiVisionMessageContent{
+				{
+					Type: OpenaiVisionMessageContentTypeText,
+					Text: lastMessage.Content,
+				},
+			},
+		},
+	}
+
+	totalFileSize := 0
+	for i, f := range lastMessage.Files {
+		resolution := VisionImageResolutionLow
+		// if user has permission and image size is large than 1MB,
+		// use high resolution
+		if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(lastMessage.Content) {
+			resolution = VisionImageResolutionHigh
+		}
+
+		req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
+			Type: OpenaiVisionMessageContentTypeImageUrl,
+			ImageUrl: &OpenaiVisionMessageContentImageUrl{
+				URL: fmt.Sprintf("data:%s;base64,", imageType(f.Content)) +
+					base64.StdEncoding.EncodeToString(f.Content),
+				Detail: resolution,
+			},
+		})
+
+		if i >= 6 {
+			break // only support 6 images for cost saving
+		}
+
+		totalFileSize += len(f.Content)
+		if totalFileSize > 10*1024*1024 {
+			return nil, errors.Errorf("total file size should less than 10MB, got %d", totalFileSize)
+		}
+	}
+
+	return req, nil
 }
 
 // UserQueryType user query type
