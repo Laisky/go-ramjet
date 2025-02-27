@@ -1964,7 +1964,9 @@ function scrollToChat (chatEle, force = false) {
     chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-// Add this to your setupChatJs function:
+/**
+ * Sets up scroll detection to track user scrolling during AI responses
+ */
 function setupScrollDetection () {
     const conservationsContainer = chatContainer.querySelector('.chatManager .conservations');
 

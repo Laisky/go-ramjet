@@ -838,33 +838,70 @@ export const RandomString = (length) => {
 };
 
 /**
- * Copy content to clipboard with modern approach
+ * Copy content to clipboard with better mobile support
  *
  * @param {string} content - Text to copy
  * @returns {Promise<boolean>} - Success status
  */
 export const Copy2Clipboard = async (content) => {
     try {
-        // Modern Clipboard API approach
+        // iOS detection
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        // Modern Clipboard API approach - primary method
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(content);
-            return true;
+            try {
+                await navigator.clipboard.writeText(content);
+                return true;
+            } catch (clipboardErr) {
+                console.warn('Clipboard API failed:', clipboardErr);
+                // Fall through to alternatives
+            }
         }
 
-        // For older browsers only - with clear warning about deprecation
-        console.warn('Using deprecated clipboard API. This may not work in future browser versions.');
+        // Special handling for iOS
+        if (isIOS) {
+            // Create input element and position it in the visible area
+            // (iOS requires the element to be actually visible)
+            const input = document.createElement('input');
+            input.value = content;
+            input.style.position = 'fixed';
+            input.style.top = '10px';
+            input.style.left = '10px';
+            input.style.width = '1px';
+            input.style.height = '1px';
+            input.style.opacity = '0.01';
+            input.style.zIndex = '-1'; // Behind other content but technically visible
 
-        // Create a temporary element
+            document.body.appendChild(input);
+
+            // Wait for the next frame to ensure the element is rendered
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
+            // Select the content
+            input.focus();
+            input.setSelectionRange(0, input.value.length);
+
+            // Try the copy command
+            const success = document.execCommand('copy');
+            document.body.removeChild(input);
+
+            if (success) {
+                return true;
+            }
+
+            // If that didn't work, show user instructions
+            alert('To copy: tap and hold on the text, then select "Copy"');
+            return false;
+        }
+
+        // Fallback for other browsers
         const textArea = document.createElement('textarea');
         textArea.value = content;
-
-        // Make the element invisible but functional
         textArea.style.position = 'fixed';
         textArea.style.opacity = '0';
-        textArea.style.pointerEvents = 'none';
         textArea.style.left = '-999999px';
 
-        // Ensure it's properly added to DOM and focused
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
@@ -873,20 +910,12 @@ export const Copy2Clipboard = async (content) => {
         document.body.removeChild(textArea);
 
         if (!success) {
-            console.warn('Clipboard copy failed. This browser may require a secure (HTTPS) connection or user interaction.');
+            console.warn('Clipboard copy failed. This browser may require user interaction.');
         }
 
         return success;
     } catch (err) {
         console.error('Failed to copy to clipboard:', err);
-
-        // Provide more specific error feedback
-        if (err.name === 'NotAllowedError') {
-            console.error('Permission denied. Copy operation must be triggered by user action.');
-        } else if (err.name === 'SecurityError') {
-            console.error('Clipboard operation not allowed in this context (requires HTTPS).');
-        }
-
         return false;
     }
 };
