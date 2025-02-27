@@ -3297,7 +3297,9 @@ async function addOperateBtnBelowAiResponse (chatID) {
                 copyContent = chatData.rawContent;
             }
 
-            libs.Copy2Clipboard(copyContent);
+            if (!await libs.Copy2Clipboard(copyContent)) {
+                alert('failed to copy, please copy manually');
+            }
         });
 
     // add reload button
