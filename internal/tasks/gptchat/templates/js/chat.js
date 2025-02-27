@@ -1124,6 +1124,7 @@ async function setupChatJs () {
     await setupChatSwitchs();
     await setupPromptManager();
     await setupPrivateDataset();
+    setupScrollDetection();
     setupGlobalAiRespHeartbeatTimer();
     setInterval(fetchImageDrawingResultBackground, 3000);
     setInterval(fetchDeepResearchResultBackground, 3000);
@@ -1946,8 +1947,50 @@ function scrollChatToTop (evt) {
         });
 }
 
-function scrollToChat (chatEle) {
+// Track user scrolling during AI responses
+let userManuallyScrolled = false;
+
+/**
+ * Scrolls to a specific chat element unless the user has manually scrolled
+ * @param {HTMLElement} chatEle - The chat element to scroll to
+ * @param {boolean} force - Whether to force scrolling even if the user scrolled manually
+ */
+function scrollToChat (chatEle, force = false) {
+    // Don't scroll if user has manually scrolled and we're not forcing it
+    if (userManuallyScrolled && !force && globalAIRespSSE) {
+        return;
+    }
+
     chatEle.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+// Add this to your setupChatJs function:
+function setupScrollDetection () {
+    const conservationsContainer = chatContainer.querySelector('.chatManager .conservations');
+
+    // Reset the manual scroll flag when a new response starts
+    conservationsContainer.addEventListener('wheel', function () {
+        // Only set the flag if AI is actively responding
+        if (globalAIRespSSE) {
+            userManuallyScrolled = true;
+        }
+    });
+
+    conservationsContainer.addEventListener('touchmove', function () {
+        // Only set the flag if AI is actively responding
+        if (globalAIRespSSE) {
+            userManuallyScrolled = true;
+        }
+    });
+
+    // Reset the flag when AI response ends or a new one begins
+    document.addEventListener('ai-response-start', function () {
+        userManuallyScrolled = false;
+    });
+
+    document.addEventListener('ai-response-end', function () {
+        userManuallyScrolled = false;
+    });
 }
 
 /**
@@ -2914,6 +2957,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         payload: reqBody
     });
 
+    userManuallyScrolled = false;
     globalAIRespSSE.addEventListener('message', async (evt) => {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
@@ -3555,7 +3599,7 @@ async function setupChatInput () {
 
     // change hint when models change
     {
-        libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+        await libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
             if (op !== libs.KvOp.SET) {
                 return;
             }
@@ -3584,7 +3628,7 @@ async function setupChatInput () {
 
     // bindImageUploadButton
     await autoToggleUserImageUploadBtn();
-    libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+    await libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
         if (op !== libs.KvOp.SET) {
             return;
         }
@@ -3731,7 +3775,7 @@ async function setupChatSwitchs () {
         //         await libs.KvSet(KvKeyAutoSyncUserConfig, switchEle.checked);
         //     });
         // let userConfigSyncer;
-        // libs.KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
+        // await libs.KvAddListener(KvKeyAutoSyncUserConfig, async (key, op, oldVal, newVal) => {
         //     if (op !== libs.KvOp.SET) {
         //         return;
         //     }
@@ -3773,7 +3817,7 @@ async function setupChatSwitchs () {
             });
 
         // bind listener for all chat switchs
-        libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
+        await libs.KvAddListener(KvKeyPrefixSessionConfig, async (key, op, oldVal, newVal) => {
             if (op !== libs.KvOp.SET) {
                 return;
             }
@@ -3910,7 +3954,7 @@ async function bindTalkBtnHandler () {
 
                 const chatID = await sendChat2Server(null, userPrompt);
                 const storageActiveSessionKey = kvSessionKey(await activeSessionID());
-                libs.KvAddListener(storageActiveSessionKey, async (key, op, oldVal, newVal) => {
+                await libs.KvAddListener(storageActiveSessionKey, async (key, op, oldVal, newVal) => {
                     if (op !== libs.KvOp.SET) {
                         return;
                     }
@@ -4774,7 +4818,7 @@ async function setupConfig () {
                 const syncKey = libs.evtTarget(evt).value;
                 await libs.KvSet(KvKeySyncKey, syncKey);
             });
-        libs.KvAddListener(KvKeySyncKey, async (key, op, oldVal, newVal) => {
+        await libs.KvAddListener(KvKeySyncKey, async (key, op, oldVal, newVal) => {
             if (op !== libs.KvOp.SET) {
                 return;
             }
