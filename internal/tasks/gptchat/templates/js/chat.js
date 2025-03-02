@@ -1454,7 +1454,7 @@ async function fetchDeepResearchResultBackground () {
                     });
                     break;
                 case 'success':
-                    item.innerHTML = await renderHTML(respData.result_article);
+                    item.innerHTML = await renderHTML(respData.result_article, true);
                     item.dataset.taskStatus = ChatTaskStatusDone;
                     chatData = await updateChatData(chatID, RoleAI, {
                         model: 'deep-research',
@@ -3010,7 +3010,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                                 </p>
                                 <div class="collapse show" id="chatReasoning_${chatID}">
                                 <div class="card card-body">
-                                    ${await renderHTML(globalAIRespData.reasoningContent)}
+                                    ${await renderHTML(globalAIRespData.reasoningContent, true)}
                                 </div>
                             </div>`;
                         }
@@ -3053,6 +3053,7 @@ async function sendChat2Server (chatID, reqPrompt) {
  * @type {boolean} mutex for renderHTML
  */
 let muRenderHTML = false;
+let latestRenderHTMLResult = '';
 
 /**
  * Renders HTML content from markdown, with optional force rendering.
@@ -3062,12 +3063,13 @@ let muRenderHTML = false;
  */
 async function renderHTML (markdown, force = false) {
     if (!force && muRenderHTML) {
-        return;
+        return latestRenderHTMLResult || '';
     }
     muRenderHTML = true;
 
     try {
-        return await libs.Markdown2HTML(markdown);
+        latestRenderHTMLResult = await libs.Markdown2HTML(markdown);
+        return latestRenderHTMLResult || '';
     } finally {
         muRenderHTML = false;
     }
@@ -3145,12 +3147,13 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
                 </p>
                 <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
                 <div class="card card-body">
-                    ${await renderHTML(chatData.reasoningContent)}
+                    ${await renderHTML(chatData.reasoningContent, true)}
                 </div>
             </div>`;
         }
 
         renderedHTML += await renderHTML(chatData.rawContent, true);
+        latestRenderHTMLResult = '';
 
         aiRespEle.innerHTML = renderedHTML;
         aiRespEle.innerHTML += attachHTML;
