@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
 	"github.com/stripe/stripe-go/v76"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
