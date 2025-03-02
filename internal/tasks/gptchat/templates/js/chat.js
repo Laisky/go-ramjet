@@ -1454,7 +1454,7 @@ async function fetchDeepResearchResultBackground () {
                     });
                     break;
                 case 'success':
-                    item.innerHTML = await libs.Markdown2HTML(respData.result_article);
+                    item.innerHTML = await renderHTML(respData.result_article);
                     item.dataset.taskStatus = ChatTaskStatusDone;
                     chatData = await updateChatData(chatID, RoleAI, {
                         model: 'deep-research',
@@ -3010,13 +3010,13 @@ async function sendChat2Server (chatID, reqPrompt) {
                                 </p>
                                 <div class="collapse show" id="chatReasoning_${chatID}">
                                 <div class="card card-body">
-                                    ${await libs.Markdown2HTML(globalAIRespData.reasoningContent)}
+                                    ${await renderHTML(globalAIRespData.reasoningContent)}
                                 </div>
                             </div>`;
                         }
 
                         if (globalAIRespData.rawContent) {
-                            renderedHTML += await libs.Markdown2HTML(globalAIRespData.rawContent);
+                            renderedHTML += await renderHTML(globalAIRespData.rawContent);
                         }
 
                         globalAIRespEle.innerHTML = renderedHTML;
@@ -3047,6 +3047,30 @@ async function sendChat2Server (chatID, reqPrompt) {
     globalAIRespSSE.stream();
 
     return chatID;
+}
+
+/**
+ * @type {boolean} mutex for renderHTML
+ */
+let muRenderHTML = false;
+
+/**
+ * Renders HTML content from markdown, with optional force rendering.
+ * @param {string} markdown - The HTML content to render.
+ * @param {boolean} force - Whether to force the rendering even if it's already in progress.
+ * @return {Promise<string>} - The rendered HTML content.
+ */
+async function renderHTML (markdown, force = false) {
+    if (!force && muRenderHTML) {
+        return;
+    }
+    muRenderHTML = true;
+
+    try {
+        return await libs.Markdown2HTML(markdown);
+    } finally {
+        muRenderHTML = false;
+    }
 }
 
 /**
@@ -3121,12 +3145,12 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
                 </p>
                 <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
                 <div class="card card-body">
-                    ${await libs.Markdown2HTML(chatData.reasoningContent)}
+                    ${await renderHTML(chatData.reasoningContent)}
                 </div>
             </div>`;
         }
 
-        renderedHTML += await libs.Markdown2HTML(chatData.rawContent);
+        renderedHTML += await renderHTML(chatData.rawContent, true);
 
         aiRespEle.innerHTML = renderedHTML;
         aiRespEle.innerHTML += attachHTML;
