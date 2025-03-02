@@ -296,7 +296,7 @@ func FetchDynamicURLContent(ctx context.Context, url string) ([]byte, error) {
 		switch task.Status {
 		case rlibs.TaskStatusSuccess:
 			return task.ResultHTML, nil
-		case rlibs.KeyTaskHTMLCrawlerPending,
+		case rlibs.TaskStatusPending,
 			rlibs.TaskStatusRunning:
 			time.Sleep(time.Second)
 			continue
