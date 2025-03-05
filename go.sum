@@ -74,8 +74,8 @@ github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b h1:o2BuVyXFkD
 github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b/go.mod h1:j90tUqwBaEncIzpAd6ZGPZHWjclgAyMY8fdOqsewitE=
 github.com/Laisky/graphql v1.0.6 h1:NEULGxfxo+wbsW2OmqBXOMNUGgqo8uFjWNabwuNK10g=
 github.com/Laisky/graphql v1.0.6/go.mod h1:zaKVqXmMQTnTkFJ2AA53oyBWMzlGCnzr3aodKTrtOxI=
-github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250304052813-07dce5c1be7a h1:T94YiGUZ+RkMVQKLHWPTHWMSezjPOvhQ4W0RP6tp3XQ=
-github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250304052813-07dce5c1be7a/go.mod h1:iUxaQPadOoJ4lxexuDYxFxyJG/zfoUgiSN5jZa/IvJY=
+github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250305081420-268baf45aeae h1:IsivCsGr4Jb9PjQzJMXPl5vF/d5blvUSypqyCLTgljU=
+github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250305081420-268baf45aeae/go.mod h1:iUxaQPadOoJ4lxexuDYxFxyJG/zfoUgiSN5jZa/IvJY=
 github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee h1:V1d26ZVBvLfzk9yK/bY5ga4BYGxoeyz9skxxvcfMoLQ=
 github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee/go.mod h1:cX5FfBd0q3TXPOZog5ZYaLWysWOD06RSNk6Fixc3bDc=
 github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71 h1:JyM6WS7a/lmSeXSGmEZPm2US7Jb8hbQ2mcFRu9m29g4=
