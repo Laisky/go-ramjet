@@ -3025,7 +3025,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     }
                 }
             } catch (err) {
-                await abortAIResp(`failed to parse chat response: ${renderError(err)}`);
+                await abortAIResp(`parse chat response '${evt.data}' got ${renderError(err)}`);
             }
         }
 
