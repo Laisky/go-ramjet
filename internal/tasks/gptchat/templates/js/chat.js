@@ -250,6 +250,9 @@ let singleInputCallback,
 
 // could be controlled(interrupt) anywhere, so it's global
 let globalAIRespSSE, globalAIRespEle, globalAIRespData, globalAIRespHeartBeatTimer;
+// Add these variables at the beginning of your file, near other globals
+let sseMessageBuffer = '';
+let sseMessageFragmented = false;
 
 // [
 //     {
@@ -2960,6 +2963,8 @@ async function sendChat2Server (chatID, reqPrompt) {
     });
 
     userManuallyScrolled = false;
+
+    // Modify the message event handler portion of sendChat2Server
     globalAIRespSSE.addEventListener('message', async (evt) => {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
@@ -2972,19 +2977,62 @@ async function sendChat2Server (chatID, reqPrompt) {
             }
         }
 
+        let data = evt.data;
         let isChatRespDone = false;
-        if (evt.data === '[DONE]') {
+        // Special message handling
+        if (data === '[DONE]') {
+            sseMessageBuffer = '';
+            sseMessageFragmented = false;
             isChatRespDone = true;
-        } else if (evt.data === '[HEARTBEAT]') {
+
+            if (globalAIRespSSE) {
+                globalAIRespSSE.close();
+                globalAIRespSSE = null;
+                unlockChatInput();
+            }
+
+            console.debug(`chat response done for chat ${chatID}`);
+            await renderAfterAiResp(globalAIRespData, true);
+            return chatID;
+        } else if (data === '[HEARTBEAT]') {
             return chatID;
         }
 
         // remove prefix [HEARTBEAT]
-        evt.data = evt.data.replace(/^\[HEARTBEAT\]+/, '');
+        data = data.replace(/^\[HEARTBEAT\]+/, '');
+        console.debug(`received stream data: ${data}`);
 
-        if (!isChatRespDone) {
+        // Handle message fragmentation
+        let payload = null;
+        try {
+            // Try to parse as is first
+            payload = JSON.parse(data);
+            // If successful, reset buffer
+            sseMessageBuffer = '';
+            sseMessageFragmented = false;
+        } catch (e) {
+            console.debug('Received potentially fragmented message, buffering');
+
+            // Message might be fragmented, append to buffer
+            sseMessageBuffer += data;
+            sseMessageFragmented = true;
+
+            // Try to parse the accumulated buffer
             try {
-                const payload = JSON.parse(evt.data);
+                payload = JSON.parse(sseMessageBuffer);
+                // If successful parsing the buffer, clear it
+                sseMessageBuffer = '';
+                sseMessageFragmented = false;
+            } catch (bufferErr) {
+                // Buffer still doesn't contain valid JSON, wait for more fragments
+                console.debug('Buffer still incomplete, waiting for more fragments');
+                return chatID;
+            }
+        }
+
+        // If we get here, we have a valid payload
+        if (payload && !sseMessageFragmented) {
+            try {
                 const { respChunk, reasoningChunk } = parseChatResp(selectedModel, payload);
 
                 globalAIRespData.reasoningContent += reasoningChunk;
@@ -3025,11 +3073,13 @@ async function sendChat2Server (chatID, reqPrompt) {
                     }
                 }
             } catch (err) {
-                await abortAIResp(`parse chat response '${evt.data}' got ${renderError(err)}`);
+                await abortAIResp(`Error processing payload: ${renderError(err)}`);
             }
         }
 
         if (isChatRespDone) {
+            sseMessageBuffer = '';
+            sseMessageFragmented = false;
             if (globalAIRespSSE) {
                 globalAIRespSSE.close();
                 globalAIRespSSE = null;
