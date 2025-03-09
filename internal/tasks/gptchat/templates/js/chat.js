@@ -255,6 +255,9 @@ let sseMessageBuffer = '';
 let sseMessageFragmented = false;
 let responseContainer = null;
 let reasoningContainer = null;
+// const safariSSEHeartbeatTimer = null;
+// const safariSSERetryCount = 0;
+// const MAX_SSE_RETRIES = 3;
 
 // [
 //     {
@@ -2584,6 +2587,96 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
 }
 
 /**
+ * Creates and connects to a Server-Sent Events (SSE) endpoint.
+ * @param {string} endpoint - The SSE endpoint URL.
+ * @param {object} options - Options for the SSE connection.
+ * @returns {object} The SSE object.
+ */
+// function createAndConnectSSE (endpoint, options) {
+//     const sse = new window.SSE(endpoint, options);
+
+//     // Add Safari-specific error and reconnection handling
+//     if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
+//         console.debug('Safari SSE connection handling activated');
+
+//         // Keep tabs on connection health
+//         safariSSEHeartbeatTimer = setInterval(() => {
+//             if (!globalAIRespSSE || !globalAIRespHeartBeatTimer) return;
+
+//             // If no heartbeat for 30 seconds in Safari, reconnect
+//             if (Date.now() - globalAIRespHeartBeatTimer > 30000) {
+//                 console.warn('Safari SSE connection heartbeat timeout, attempting reconnection');
+//                 try {
+//                     // Clean up existing connection
+//                     if (globalAIRespSSE) {
+//                         globalAIRespSSE.close();
+//                     }
+
+//                     // Only retry a limited number of times
+//                     if (safariSSERetryCount < MAX_SSE_RETRIES) {
+//                         safariSSERetryCount++;
+
+//                         // Create new connection with the same parameters
+//                         globalAIRespSSE = createAndConnectSSE('/api', options);
+//                     } else {
+//                         console.error('Safari SSE max retries exceeded');
+//                         abortAIResp('Connection failed after multiple attempts. Please try again.');
+//                         clearInterval(safariSSEHeartbeatTimer);
+//                     }
+//                 } catch (e) {
+//                     console.error('Safari SSE reconnection failed:', e);
+//                     abortAIResp('Connection failed after multiple attempts. Please try again.');
+//                     clearInterval(safariSSEHeartbeatTimer);
+//                 }
+//             }
+//         }, 5000);
+//     }
+
+//     // Add enhanced error handling
+//     sse.addEventListener('error', async (err) => {
+//         console.warn('SSE error:', err);
+
+//         // Try to extract any available error information
+//         let errorMessage = 'Connection error';
+//         if (err && err.data) {
+//             errorMessage = err.data;
+//         }
+
+//         // Safari-specific handling
+//         if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
+//             if (sseMessageFragmented && safariSSERetryCount < MAX_SSE_RETRIES) {
+//                 console.warn('Safari SSE reconnection attempt during fragmentation');
+//                 safariSSERetryCount++;
+
+//                 // Wait briefly - Safari sometimes needs this delay
+//                 setTimeout(() => {
+//                     if (globalAIRespSSE) {
+//                         globalAIRespSSE.close();
+//                     }
+
+//                     // Create new connection with same parameters
+//                     globalAIRespSSE = createAndConnectSSE('/api', options);
+//                 }, 1000);
+//                 return;
+//             }
+//         }
+
+//         await abortAIResp(`Failed to receive chat response: ${errorMessage}`);
+//     });
+
+//     // Add connection success handler to reset retry count
+//     sse.addEventListener('open', () => {
+//         console.debug('SSE connection established');
+//         safariSSERetryCount = 0;
+//         globalAIRespHeartBeatTimer = Date.now();
+//     });
+
+//     // Start the connection
+//     sse.stream();
+//     return sse;
+// }
+
+/**
  * Sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
  *
  * @param {string} chatID - The chat ID.
@@ -2965,6 +3058,7 @@ async function sendChat2Server (chatID, reqPrompt) {
     });
 
     userManuallyScrolled = false;
+    let isChatRespDone = false;
 
     // Modify the message event handler portion of sendChat2Server
     globalAIRespSSE.addEventListener('message', async (evt) => {
@@ -2980,7 +3074,8 @@ async function sendChat2Server (chatID, reqPrompt) {
         }
 
         let data = evt.data;
-        let isChatRespDone = false;
+        console.debug(`received stream data: ${data}`);
+
         // Special message handling
         if (data === '[DONE]') {
             sseMessageBuffer = '';
@@ -3002,7 +3097,6 @@ async function sendChat2Server (chatID, reqPrompt) {
 
         // remove prefix [HEARTBEAT]
         data = data.replace(/^\[HEARTBEAT\]+/, '');
-        console.debug(`received stream data: ${data}`);
 
         // Handle message fragmentation
         let payload = null;
@@ -3140,10 +3234,22 @@ async function sendChat2Server (chatID, reqPrompt) {
         }
     })
 
-    globalAIRespSSE.onerror = async (err) => {
-        await abortAIResp(`failed to receive chat response: ${renderError(err)}`);
-    };
+    globalAIRespSSE.addEventListener('error', async (err) => {
+        console.warn('SSE error:', err);
+        await abortAIResp(`Failed to receive chat response: ${renderError(err)}`);
+    });
+
     globalAIRespSSE.stream();
+
+    // Add this to the SSE class definition or modify it to track listeners:
+    if (!window.SSE.prototype.listeners) {
+        window.SSE.prototype.listeners = [];
+        const originalAddEventListener = window.SSE.prototype.addEventListener;
+        window.SSE.prototype.addEventListener = function (type, callback) {
+            this.listeners.push({ type, callback });
+            return originalAddEventListener.call(this, type, callback);
+        };
+    }
 
     return chatID;
 }
