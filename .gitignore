@@ -112,7 +112,7 @@ vendor
 memory.pprof
 cpu.pprof
 
-__debug_bin
+__debug_bin*
 examples/test.yml
 diff.txt
 

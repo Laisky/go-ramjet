@@ -253,6 +253,8 @@ let globalAIRespSSE, globalAIRespEle, globalAIRespData, globalAIRespHeartBeatTim
 // Add these variables at the beginning of your file, near other globals
 let sseMessageBuffer = '';
 let sseMessageFragmented = false;
+let responseContainer = null;
+let reasoningContainer = null;
 
 // [
 //     {
@@ -3035,6 +3037,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             try {
                 const { respChunk, reasoningChunk } = parseChatResp(selectedModel, payload);
 
+                // Add to our global data store
                 globalAIRespData.reasoningContent += reasoningChunk;
                 globalAIRespData.rawContent += respChunk;
 
@@ -3042,32 +3045,71 @@ async function sendChat2Server (chatID, reqPrompt) {
                     isChatRespDone = true;
                 }
 
-                let renderedHTML = '';
+                // Handle rendering differently based on task status
                 if (reasoningChunk || respChunk) {
                     switch (globalAIRespEle.dataset.taskStatus) {
                     case 'waiting':
+                        // First response - initialize the containers
                         globalAIRespEle.dataset.taskStatus = 'writing';
-                        globalAIRespEle.innerHTML = respChunk;
+                        globalAIRespEle.innerHTML = '';
+
+                        // Create containers for reasoning and response once
+                        if (globalAIRespData.reasoningContent) {
+                            const reasoningHTML = `
+                                <div class="thinking-container">
+                                    <p class="d-inline-flex gap-1">
+                                        <button class="btn btn-secondary" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#chatReasoning_${chatID}" aria-expanded="true"
+                                            aria-controls="chatReasoning_${chatID}">
+                                            Thinking...
+                                        </button>
+                                    </p>
+                                    <div class="collapse show" id="chatReasoning_${chatID}">
+                                        <div class="card card-body reasoning-content"></div>
+                                    </div>
+                                </div>`;
+                            globalAIRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
+                            reasoningContainer = globalAIRespEle.querySelector('.reasoning-content');
+
+                            // Initialize reasoning container with current content
+                            if (globalAIRespData.reasoningContent.trim()) {
+                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                            }
+                        }
+
+                        // Create response container
+                        globalAIRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
+                        responseContainer = globalAIRespEle.querySelector('.response-content');
+
+                        // Add initial content
+                        if (respChunk) {
+                            responseContainer.innerHTML = respChunk;
+                        }
                         break;
                     case 'writing':
-                        if (globalAIRespData.reasoningContent) {
-                            renderedHTML += `<p class="d-inline-flex gap-1">
-                                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatID}" aria-expanded="true" aria-controls="collapseExample">
-                                    Thinking...
-                                </button>
-                                </p>
-                                <div class="collapse show" id="chatReasoning_${chatID}">
-                                <div class="card card-body">
-                                    ${await renderHTML(globalAIRespData.reasoningContent, true)}
-                                </div>
-                            </div>`;
+                        // Incremental updates - only render the new chunks
+                        if (reasoningChunk && reasoningContainer) {
+                            // For small chunks, just append plaintext for performance
+                            if (reasoningChunk.length < 50 && !reasoningChunk.includes('\n')) {
+                                reasoningContainer.insertAdjacentText('beforeend', reasoningChunk);
+                            } else {
+                                // For larger or formatted chunks, re-render the full content
+                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                            }
                         }
 
-                        if (globalAIRespData.rawContent) {
-                            renderedHTML += await renderHTML(globalAIRespData.rawContent);
+                        if (respChunk && responseContainer) {
+                            // For response content, more care is needed since it might be partial markdown
+                            // We'll render the full content but only when necessary
+                            if (payload.choices[0].finish_reason || respChunk.includes('\n\n')) {
+                                // Complete section or paragraph - render the full content
+                                responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent);
+                            } else {
+                                // Just append the plain text for efficiency
+                                responseContainer.insertAdjacentText('beforeend', respChunk);
+                            }
                         }
 
-                        globalAIRespEle.innerHTML = renderedHTML;
                         scrollToChat(globalAIRespEle);
                         break;
                     }
@@ -3077,9 +3119,16 @@ async function sendChat2Server (chatID, reqPrompt) {
             }
         }
 
+        // When response is complete, ensure final rendering
         if (isChatRespDone) {
             sseMessageBuffer = '';
             sseMessageFragmented = false;
+
+            // Final rendering of the complete content
+            if (responseContainer) {
+                responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent, true);
+            }
+
             if (globalAIRespSSE) {
                 globalAIRespSSE.close();
                 globalAIRespSSE = null;
@@ -3187,19 +3236,24 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
 
     if (rawContent && rawContent !== 'undefined') {
         let renderedHTML = '';
-        if (chatData.reasoningContent) {
+        if (chatData.reasoningContent && chatData.reasoningContent.trim() !== '') {
             const expanded = saveStorage ? 'true' : 'false';
             const showed = saveStorage ? ' show' : '';
-            renderedHTML += `<p class="d-inline-flex gap-1">
-                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="${expanded}" aria-controls="collapseExample">
-                    Thinking...
-                </button>
-                </p>
-                <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
-                <div class="card card-body">
-                    ${await renderHTML(chatData.reasoningContent, true)}
-                </div>
-            </div>`;
+            renderedHTML += `
+                <div class="thinking-container">
+                    <p class="d-inline-flex gap-1">
+                        <button class="btn btn-secondary" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#chatReasoning_${chatData.chatID}" aria-expanded="${expanded}"
+                            aria-controls="chatReasoning_${chatData.chatID}">
+                            Thinking
+                        </button>
+                    </p>
+                    <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
+                        <div class="card card-body reasoning-content">
+                            ${await renderHTML(chatData.reasoningContent, true)}
+                        </div>
+                    </div>
+                </div>`;
         }
 
         renderedHTML += await renderHTML(chatData.rawContent, true);
