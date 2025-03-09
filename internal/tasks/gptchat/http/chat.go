@@ -145,7 +145,10 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			continue
 		}
 
+		writerMutex := ctx.MustGet("writer_mutex").(*sync.Mutex)
+		writerMutex.Lock()
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
+		writerMutex.Unlock()
 		if web.AbortErr(ctx, err) {
 			return
 		}
@@ -916,48 +919,51 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 }
 
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
-	// Set required SSE headers for better Safari compatibility
+	// Set headers first
 	gctx.Writer.Header().Set("Content-Type", "text/event-stream")
 	gctx.Writer.Header().Set("Cache-Control", "no-cache")
 	gctx.Writer.Header().Set("Connection", "keep-alive")
 	gctx.Writer.Header().Set("X-Accel-Buffering", "no")
 
-	// Use a specific context for the heartbeat goroutine
+	// Create synchronization primitives
 	heartCtx, heartCancel := context.WithCancel(context.Background())
-
-	// Create wait group to ensure clean shutdown
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// Create a mutex to protect writer access
+	var writerMutex sync.Mutex
+
+	// Store the mutex in the context for other handlers to access
+	gctx.Set("writer_mutex", &writerMutex)
 
 	// Detect iOS Safari
 	userAgent := gctx.Request.UserAgent()
 	isSafari := strings.Contains(userAgent, "Safari") && !strings.Contains(userAgent, "Chrome")
 
-	// Set appropriate heartbeat interval - more frequent for Safari
+	// Set appropriate heartbeat interval
 	heartbeatInterval := 10 * time.Second
 	if isSafari {
 		heartbeatInterval = 5 * time.Second
 	}
 
-	// Send initial heartbeat immediately for iOS Safari
+	// Send initial heartbeat for Safari
 	if isSafari {
-		// Send immediate heartbeat with proper formatting to help Safari establish the connection
+		writerMutex.Lock()
 		if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte(": connection established\ndata: [HEARTBEAT]\n\n"))); err != nil {
 			log.Logger.Warn("failed to send initial heartbeat", zap.Error(err))
+			writerMutex.Unlock()
 			heartCancel()
 			return
 		}
 		gctx.Writer.Flush()
+		writerMutex.Unlock()
 	}
 
 	go func() {
 		defer wg.Done()
-		defer heartCancel()
-
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 
-		// Monitor for client disconnect using a separate goroutine
 		disconnected := make(chan struct{})
 		go func() {
 			<-gctx.Request.Context().Done()
@@ -971,26 +977,22 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 			case <-disconnected:
 				return
 			case <-ticker.C:
-				// Send heartbeat with proper newlines for SSE
+				writerMutex.Lock()
 				if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
 					log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
+					writerMutex.Unlock()
 					return
 				}
-
-				// Ensure the heartbeat is sent immediately
 				gctx.Writer.Flush()
+				writerMutex.Unlock()
 			}
 		}
 	}()
 
-	// Setup cleanup when request is finished
-	gctx.Request.Context().Done()
+	// Setup cleanup
 	go func() {
-		// Wait for gin context to be done
 		<-gctx.Request.Context().Done()
-		// Cancel our heartbeat context
 		heartCancel()
-		// Wait for heartbeat goroutine to finish
 		wg.Wait()
 	}()
 }

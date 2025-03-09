@@ -3407,32 +3407,62 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
         console.error('mermaid run error:', err);
     }
 
-    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
-
     // add cost tips
     let costUsd = chatData.costUsd;
     const sconfig = await getChatSessionConfig();
-    if (sconfig.api_token.startsWith('laisky-') ||
-        sconfig.api_token.startsWith('sk-') ||
-        sconfig.api_token.startsWith('FREETIER-')) {
-        if (!costUsd && chatData.reqeustid) {
-            // do not block the main thread
-            const resp = await fetch(`/oneapi/api/cost/request/${chatData.reqeustid}`)
-            if (resp.ok) {
-                costUsd = (await resp.json()).cost_usd;
-            }
 
-            if (costUsd) {
-                chatData.costUsd = costUsd;
-                aiRespEle.querySelector('div.info')
-                    .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+    // First ensure the info div exists
+    aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
+    const infoDiv = aiRespEle.querySelector('div.info');
+
+    // Check if this is an API that provides cost information
+    if (sconfig.api_token.startsWith('laisky-') ||
+    sconfig.api_token.startsWith('sk-') ||
+    sconfig.api_token.startsWith('FREETIER-')) {
+    // Display existing cost if we already have it
+        if (costUsd) {
+            infoDiv.insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+        } else if (chatData.reqeustid) {
+            // Otherwise fetch the cost if we have a request ID
+            try {
+                // Add placeholder while loading
+                const costPlaceholder = document.createElement('i');
+                costPlaceholder.className = 'cost cost-loading';
+                costPlaceholder.textContent = '$ ...';
+                infoDiv.appendChild(costPlaceholder);
+
+                // Fetch cost information
+                const resp = await fetch(`/oneapi/api/cost/request/${chatData.reqeustid}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    costUsd = data.cost_usd;
+
+                    // Update the cost in the UI and save to chat data
+                    if (costUsd) {
+                        chatData.costUsd = costUsd;
+                        costPlaceholder.textContent = `$${costUsd}`;
+                        costPlaceholder.classList.remove('cost-loading');
+
+                        // Save the updated cost to storage
+                        if (saveStorage) {
+                            await setChatData(chatData.chatID, chatData.role, chatData);
+                        }
+                    } else {
+                        costPlaceholder.textContent = '$0.00';
+                    }
+                } else {
+                    console.warn('Failed to fetch cost data:', resp.status);
+                    costPlaceholder.textContent = '$?';
+                }
+            } catch (err) {
+                console.error('Error fetching cost:', err);
+                const costEle = infoDiv.querySelector('.cost');
+                if (costEle) {
+                    costEle.textContent = '$?';
+                }
             }
-        } else if (costUsd) {
-            aiRespEle.querySelector('div.info')
-                .insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
         }
     }
-
     window.Prism.highlightAllUnder(aiRespEle);
     libs.EnableTooltipsEverywhere();
 
