@@ -62,6 +62,10 @@ func runDynamicWebCrawler() error {
 
 	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctxCrawler)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil
+		}
+
 		return errors.Wrap(err, "get html crawler task")
 	}
 
