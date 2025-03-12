@@ -91,6 +91,11 @@ func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	domain := ctx.Query("domain")
 
+	if fileKey == "" {
+		ctx.Redirect(http.StatusFound, "https://ario.laisky.com/alias/doc")
+		return
+	}
+
 	if !RegexpArweaveFileID.MatchString(fileKey) {
 		web.AbortErr(ctx, errors.Errorf("invalid file key %q", fileKey))
 		return
