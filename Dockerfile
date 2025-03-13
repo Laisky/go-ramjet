@@ -1,5 +1,5 @@
 # db . -t ppcelery/go-ramjet:latest
-FROM 23-bullseye AS nodebuild
+FROM node:23-bullseye AS nodebuild
 
 RUN npm install -g sass
 WORKDIR /app
