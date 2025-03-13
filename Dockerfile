@@ -1,5 +1,5 @@
 # db . -t ppcelery/go-ramjet:latest
-FROM node:20 AS nodebuild
+FROM 23-bullseye AS nodebuild
 
 RUN npm install -g sass
 WORKDIR /app
@@ -8,7 +8,7 @@ RUN sass ./internal/tasks/gptchat/templates/scss
 
 # =====================================
 
-FROM golang:1.24.0-bullseye AS gobuild
+FROM golang:1.24.1-bullseye AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \

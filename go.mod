@@ -12,20 +12,20 @@ require (
 	github.com/Laisky/go-redis/v2 v2.0.1-0.20250303033943-e2bf697f90ac
 	github.com/Laisky/go-utils/v5 v5.0.1-0.20250228054950-e1500acd6929
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250305081420-268baf45aeae
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250309134409-df083b37bbb1
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
 	github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0
-	github.com/baidubce/bce-sdk-go v0.9.217
-	github.com/chromedp/cdproto v0.0.0-20250224005500-01948a15fe7c
-	github.com/chromedp/chromedp v0.13.0
+	github.com/baidubce/bce-sdk-go v0.9.219
+	github.com/chromedp/cdproto v0.0.0-20250311215558-29dfcc2791de
+	github.com/chromedp/chromedp v0.13.1
 	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/fsouza/go-dockerclient v1.12.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gorilla/feeds v1.2.0
 	github.com/jinzhu/copier v0.4.0
-	github.com/minio/minio-go/v7 v7.0.87
+	github.com/minio/minio-go/v7 v7.0.88
 	github.com/pkoukk/tiktoken-go v0.1.7
 	github.com/redis/go-redis/v9 v9.7.1
 	github.com/spf13/cobra v1.9.1
@@ -33,9 +33,9 @@ require (
 	github.com/stripe/stripe-go/v76 v76.25.0
 	github.com/yanyiwu/gojieba v1.4.5
 	go.mongodb.org/mongo-driver v1.17.3
-	golang.org/x/image v0.24.0
-	golang.org/x/net v0.35.0
-	golang.org/x/sync v0.11.0
+	golang.org/x/image v0.25.0
+	golang.org/x/net v0.37.0
+	golang.org/x/sync v0.12.0
 	google.golang.org/protobuf v1.36.5
 	gorm.io/driver/clickhouse v0.6.1
 	gorm.io/gorm v1.25.12
@@ -157,11 +157,11 @@ require (
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
