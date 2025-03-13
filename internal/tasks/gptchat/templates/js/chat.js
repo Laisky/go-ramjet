@@ -2113,6 +2113,7 @@ function isAllowChatPrompInput () {
 function parseChatResp (chatmodel, payload) {
     let respChunk = '';
     let reasoningChunk = '';
+    let annotations = [];
     if (!payload.choices || payload.choices.length === 0) {
         payload.choices = [{
             delta: {
@@ -2121,6 +2122,8 @@ function parseChatResp (chatmodel, payload) {
             }
         }];
     }
+
+    annotations = payload.choices[0].delta.annotations || [];
 
     // Currently only deepseek-r1 supports returning thoughts,
     // and different providers have two methods.
@@ -2149,7 +2152,8 @@ function parseChatResp (chatmodel, payload) {
 
     return {
         respChunk,
-        reasoningChunk
+        reasoningChunk,
+        annotations
     }
 }
 
@@ -3136,11 +3140,29 @@ async function sendChat2Server (chatID, reqPrompt) {
         // If we get here, we have a valid payload
         if (payload && !sseMessageFragmented) {
             try {
-                const { respChunk, reasoningChunk } = parseChatResp(selectedModel, payload);
+                const { respChunk, reasoningChunk, annotations } = parseChatResp(selectedModel, payload);
 
                 // Add to our global data store
                 globalAIRespData.reasoningContent += reasoningChunk;
                 globalAIRespData.rawContent += respChunk;
+
+                // Store annotations if they exist
+                if (annotations && annotations.length > 0) {
+                    // Initialize annotations array if it doesn't exist
+                    if (!globalAIRespData.annotations) {
+                        globalAIRespData.annotations = [];
+                    }
+
+                    // Append new annotations, avoiding duplicates
+                    annotations.forEach(annotation => {
+                        // Only add if it's not already in the array
+                        if (!globalAIRespData.annotations.some(a =>
+                            a.type === annotation.type &&
+                            a.url_citation?.url === annotation.url_citation?.url)) {
+                            globalAIRespData.annotations.push(annotation);
+                        }
+                    });
+                }
 
                 if (payload.choices[0].finish_reason) {
                     isChatRespDone = true;
@@ -3224,6 +3246,29 @@ async function sendChat2Server (chatID, reqPrompt) {
         if (isChatRespDone) {
             sseMessageBuffer = '';
             sseMessageFragmented = false;
+
+            // If we have annotations, render them as references
+            if (globalAIRespData.annotations && globalAIRespData.annotations.length > 0) {
+                const referencesHTML = parseAnnotationsAsRef(globalAIRespData.annotations);
+                if (referencesHTML) {
+                    // Create a collapsible references section similar to deepResearch format
+                    globalAIRespData.attachHTML = (globalAIRespData.attachHTML || '') +
+                        `<div>
+                            <p class="d-inline-flex gap-1">
+                                <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#chatRefs_${chatID}" aria-expanded="false"
+                                    aria-controls="chatRefs_${chatID}">
+                                    References
+                                </button>
+                            </p>
+                            <div class="collapse" id="chatRefs_${chatID}">
+                                <div class="card card-body">
+                                    ${referencesHTML}
+                                </div>
+                            </div>
+                        </div>`;
+                }
+            }
 
             // Final rendering of the complete content
             if (responseContainer) {
@@ -3676,6 +3721,55 @@ function combineRefs (arr) {
             markdown += `<li><p>${sanitizedVal}</p></li>`;
         }
     }
+
+    return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
+}
+
+/**
+ * Parses AI response annotations into formatted HTML references.
+ * Handles url_citation annotations and creates an indexed reference list.
+ *
+ * @param {Array} annotations - Array of annotation objects from AI response
+ * @returns {string} HTML unordered list with sorted, indexed references
+ */
+function parseAnnotationsAsRef (annotations) {
+    if (!annotations || !Array.isArray(annotations) || annotations.length === 0) {
+        return '';
+    }
+
+    // Create a map to track unique URLs with their citation order
+    const uniqueRefs = new Map();
+    let refIndex = 1;
+
+    // Process each annotation
+    for (const annotation of annotations) {
+        // Only handle url_citation type annotations
+        if (annotation.type === 'url_citation' && annotation.url_citation) {
+            const { url, title } = annotation.url_citation;
+
+            // Only add each URL once - keep first occurrence index
+            if (url && !uniqueRefs.has(url)) {
+                uniqueRefs.set(url, {
+                    index: refIndex++,
+                    title: title || url
+                });
+            }
+        }
+    }
+
+    // If no valid citations found, return empty string
+    if (uniqueRefs.size === 0) {
+        return '';
+    }
+
+    // Convert to HTML list items
+    let markdown = '';
+    uniqueRefs.forEach((details, url) => {
+        const sanitizedUrl = libs.sanitizeHTML(decodeURIComponent(url));
+        const sanitizedTitle = libs.sanitizeHTML(details.title);
+
+        markdown += `<li>[${details.index}] <a href="${sanitizedUrl}" target="_blank">${sanitizedTitle || sanitizedUrl}</a></li>`;
+    });
 
     return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
 }
