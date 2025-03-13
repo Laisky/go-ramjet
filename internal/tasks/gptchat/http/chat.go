@@ -487,6 +487,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"o1-preview",
 			"gpt-4o",
 			"gpt-4o-mini",
+			"gpt-4o-mini-search-preview",
 			"gpt-4-turbo-2024-04-09",
 			"gpt-4-turbo",
 			"gemini-2.0-flash",
