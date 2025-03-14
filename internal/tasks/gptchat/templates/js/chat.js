@@ -39,7 +39,7 @@ const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
-// const ChatModelGeminiPro = 'gemini-pro';
+const ChatModelGemini2Pro = 'gemini-2.0-pro';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGemini2Flash = 'gemini-2.0-flash';
 const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
@@ -116,6 +116,7 @@ const ChatModels = [
     // ChatModelGPT4Vision,
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
+    ChatModelGemini2Pro,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking
     // ChatModelTurbo35_16K,
@@ -132,6 +133,7 @@ const VisionModels = [
     ChatModelGPT4OMini,
     ChatModelGPT4OMiniSearch,
     // ChatModelGeminiProVision,
+    ChatModelGemini2Pro,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking,
     ChatModelClaude3Opus,
@@ -143,7 +145,6 @@ const VisionModels = [
     ChatModelClaude35Haiku,
     // ChatModelGPTO1Preview,
     ChatModelGPTO1,
-    ChatModelGemini2Flash,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
     // ImageModelFluxPro,

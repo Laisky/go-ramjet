@@ -491,6 +491,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4o-mini-search-preview",
 			"gpt-4-turbo-2024-04-09",
 			"gpt-4-turbo",
+			"gemini-2.0-pro",
 			"gemini-2.0-flash",
 			"gemini-2.0-flash-thinking":
 			if len(lastMessage.Files) == 0 { // no images, text only
