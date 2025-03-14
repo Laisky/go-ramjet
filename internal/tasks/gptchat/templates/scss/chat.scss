@@ -149,6 +149,7 @@
                 .sessions {
                     position: fixed;
                     width: 44px;
+
                     .session-tabs {
                         // height: 100%;
                         // background-color: #f4f4f4;
@@ -167,6 +168,7 @@
 
                     .session-ops {
                         margin-top: 3px;
+
                         button {
                             // padding: 0px;
                             border: none;
@@ -392,6 +394,7 @@
 
                 .user-input {
                     background-color: var(--chat-bg);
+
                     .btn[data-fn="record"] {
                         width: 100%;
                         height: 80px;
@@ -430,8 +433,97 @@
         }
     }
 
+    .ai-resp-references {
+        margin-top: 1rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        padding-top: 0.5rem;
+
+        h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        ul {
+            padding-left: 1.5rem;
+            margin-bottom: 0;
+
+            li {
+                font-size: 0.9rem;
+                margin-bottom: 0.25rem;
+
+                a {
+                    text-decoration: none;
+                    color: #0d6efd;
+
+                    &:hover {
+                        text-decoration: underline;
+                    }
+                }
+            }
+        }
+    }
+
+    .thinking-container {
+        margin-bottom: 1rem;
+
+        .card-body.reasoning-content {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #666;
+            background-color: rgba(0, 0, 0, 0.025);
+        }
+    }
+
     .code-toolbar {
         font-size: small;
+    }
+}
+
+#headerbar {
+    .dropdown-menu {
+        max-height: 350px;
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        // Adding custom scrollbar styling
+        &::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+
+            &:hover {
+                background: rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        // Styling for specific model dropdowns
+        &.chat-models,
+        &.qa-models,
+        &.image-models {
+            li a {
+                white-space: nowrap;
+                padding: 0.5rem 1rem;
+
+                // Add a subtle hover effect
+                &:hover {
+                    background-color: rgba(0, 0, 0, 0.05);
+                }
+
+                // Add visual distinction for active model
+                &.active {
+                    font-weight: bold;
+                    border-left: 3px solid #0d6efd;
+                }
+            }
+        }
     }
 }
 
@@ -497,6 +589,30 @@
 
         .dataset-item .bi-trash {
             cursor: pointer;
+        }
+    }
+}
+
+@media (max-width: 576px) {
+    #headerbar {
+        .dropdown-menu {
+            max-height: 250px;
+        }
+    }
+
+    #chatContainer {
+        .conservations {
+            .sessions {
+                width: 38px;
+            }
+
+            .chats {
+                padding-left: 38px;
+
+                .icon {
+                    width: 20px;
+                }
+            }
         }
     }
 }

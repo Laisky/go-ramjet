@@ -1076,6 +1076,28 @@ async function setupByUserInfo (userInfo) {
             }
         });
     });
+
+    enhanceDropdownMenus();
+}
+
+/**
+ * setup dropdown menus
+ */
+function enhanceDropdownMenus () {
+    const modelDropdowns = document.querySelectorAll('#headerbar .dropdown-menu');
+    modelDropdowns.forEach(dropdown => {
+        // If more than 8 items in dropdown, add scrollable class
+        if (dropdown.querySelectorAll('li').length > 5) {
+            dropdown.classList.add('scrollable');
+        }
+
+        // Add scroll event listener to prevent body scrolling while navigating dropdown
+        dropdown.addEventListener('wheel', (e) => {
+            if (dropdown.scrollHeight > dropdown.clientHeight) {
+                e.stopPropagation();
+            }
+        });
+    });
 }
 
 async function loadAndUpdateUserInfo (oldUserInfo) {
@@ -1322,7 +1344,7 @@ async function fetchImageDrawingResultBackground () {
                 // should not use Promise.all here, because we need to check each image's status
                 // one by one, not all at once to avoid data race of chatData.taskData
                 for (const imageUrl of imageUrls) {
-                // check any err msg
+                    // check any err msg
                     const errFileUrl = imageUrl.slice(0, imageUrl.lastIndexOf('-')) + '.err.txt';
                     // const errFileUrl = imageUrl.replace(/(\.\w+)$/, '.err.txt');
                     const errFileResp = await fetch(`${errFileUrl}?rr=${libs.RandomString(12)}`, {
@@ -3470,9 +3492,9 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
 
     // Check if this is an API that provides cost information
     if (sconfig.api_token.startsWith('laisky-') ||
-    sconfig.api_token.startsWith('sk-') ||
-    sconfig.api_token.startsWith('FREETIER-')) {
-    // Display existing cost if we already have it
+        sconfig.api_token.startsWith('sk-') ||
+        sconfig.api_token.startsWith('FREETIER-')) {
+        // Display existing cost if we already have it
         if (costUsd) {
             infoDiv.insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
         } else if (chatData.reqeustid) {
@@ -5385,7 +5407,7 @@ async function downloadUserConfig (evt) {
 
                     // insert remote chat into local by chat num
                     if (localChatNum > remoteChatNum) {
-                    // insert before
+                        // insert before
                         localHistory.splice(iLocal - 1, 0, data[key][iRemote]);
                         iRemote++;
                     }
