@@ -200,6 +200,13 @@ const AllModels = [].concat(
     ImageModels,
     CompletionModels
 );
+const modelCategories = {
+    GPT: [ChatModelGPT4O, ChatModelGPT4OSearch, ChatModelGPT4OMini, ChatModelGPT4OMiniSearch],
+    Claude: [ChatModelClaude3Opus, ChatModelClaude37Sonnet, ChatModelClaude37SonnetThinking, ChatModelClaude35Haiku],
+    Gemini: [ChatModelGemini2Pro, ChatModelGemini2Flash, ChatModelGemini2FlashThinking],
+    Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
+    Other: [ChatModelDeepResearch, ChatModelGroqGemma2With9B, ChatModelGroqllama3With70B]
+};
 
 // const ModelPriceUSD = {
 //     ImageModelDalle3: '0.04',
@@ -278,30 +285,30 @@ let reasoningContainer = null;
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
 
-function IsChatModel (model) {
+function IsChatModel(model) {
     return ChatModels.includes(model);
 };
 
-function IsQaModel (model) {
+function IsQaModel(model) {
     return QaModels.includes(model);
 };
 
-function IsCompletionModel (model) {
+function IsCompletionModel(model) {
     return CompletionModels.includes(model);
 };
 
-function IsImageModel (model) {
+function IsImageModel(model) {
     return ImageModels.includes(model);
 };
 
-function ShowSpinner () {
+function ShowSpinner() {
     document.getElementById('spinner').toggleAttribute('hidden', false);
 };
-function HideSpinner () {
+function HideSpinner() {
     document.getElementById('spinner').toggleAttribute('hidden', true);
 };
 
-async function OpenaiSelectedModel () {
+async function OpenaiSelectedModel() {
     const sconfig = await getChatSessionConfig();
     let selectedModel = sconfig.selected_model || DefaultModel;
 
@@ -317,7 +324,7 @@ async function OpenaiSelectedModel () {
  * @param {string} prompt
  * @returns {string} prompt
  */
-async function OpenaiChatStaticContext (prompt) {
+async function OpenaiChatStaticContext(prompt) {
     const sconfig = await getChatSessionConfig();
 
     if (prompt) {
@@ -328,7 +335,7 @@ async function OpenaiChatStaticContext (prompt) {
     return sconfig.system_prompt || '';
 };
 
-function SingleInputModal (title, message, callback, defaultVal) {
+function SingleInputModal(title, message, callback, defaultVal) {
     const modal = document.getElementById('singleInputModal');
     singleInputCallback = async () => {
         try {
@@ -352,7 +359,7 @@ function SingleInputModal (title, message, callback, defaultVal) {
 // params:
 //   - title: modal title
 //   - callback: async callback function
-function ConfirmModal (title, callback) {
+function ConfirmModal(title, callback) {
     deleteCheckCallback = async () => {
         try {
             ShowSpinner();
@@ -367,7 +374,7 @@ function ConfirmModal (title, callback) {
 
 // main entry
 let mainRunned = false;
-async function main (event) {
+async function main(event) {
     if (mainRunned) {
         return;
     }
@@ -384,7 +391,7 @@ async function main (event) {
 };
 main();
 
-async function setupDarkMode () {
+async function setupDarkMode() {
     setInterval(() => {
         document.documentElement.setAttribute('data-bs-theme', (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
     }, 1000);
@@ -395,7 +402,7 @@ async function setupDarkMode () {
  *
  * @param {string} imgSrc - image url or base64 encoded image
  */
-async function showImageEditModal (chatID, imgSrc) {
+async function showImageEditModal(chatID, imgSrc) {
     const modalEle = document.getElementById('modal-draw-canvas');
     const canvasContainer = modalEle.querySelector('.modal-body');
     const canvas = document.createElement('canvas');
@@ -426,7 +433,7 @@ async function showImageEditModal (chatID, imgSrc) {
     // Variables for drawing transparent areas
     let isDrawing = false;
 
-    function getMousePos (canvas, evt) {
+    function getMousePos(canvas, evt) {
         const rect = canvas.getBoundingClientRect();
         return {
             x: evt.clientX - rect.left,
@@ -435,7 +442,7 @@ async function showImageEditModal (chatID, imgSrc) {
     }
 
     // Drawing function with transparency
-    function draw (e) {
+    function draw(e) {
         if (!isDrawing) return;
         const { x, y } = getMousePos(canvas, e);
         ctx.lineJoin = 'round';
@@ -542,7 +549,7 @@ async function showImageEditModal (chatID, imgSrc) {
 //     return dataUrl.replace(/^data:image\/(png|jpeg);base64,/, 'data:application/octet-stream;base64,');
 // }
 
-async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
+async function inpaintingImageByFlux(chatID, prompt, rawImgBlob, maskBlob) {
     globalAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
     const chatData = await getChatData(chatID, RoleAI);
@@ -681,7 +688,7 @@ async function inpaintingImageByFlux (chatID, prompt, rawImgBlob, maskBlob) {
 //     }
 // }
 
-async function dataMigrate () {
+async function dataMigrate() {
     const sid = await activeSessionID();
     const skey = `${KvKeyPrefixSessionConfig}${sid}`;
     let sconfig = await libs.KvGet(skey);
@@ -833,7 +840,7 @@ async function dataMigrate () {
 /**
  * check if there is new version, if so, show modal to ask user to reload page.
  */
-async function checkUpgrade () {
+async function checkUpgrade() {
     // fetch server's version
     const resp = await fetch('/version',
         {
@@ -871,7 +878,7 @@ async function checkUpgrade () {
     }
 }
 
-function setupSingleInputModal () {
+function setupSingleInputModal() {
     singleInputCallback = null;
     singleInputModal = new window.bootstrap.Modal(document.getElementById('singleInputModal'));
     document.getElementById('singleInputModal')
@@ -887,7 +894,7 @@ function setupSingleInputModal () {
         });
 }
 
-async function setupModals () {
+async function setupModals() {
     // init delete check modal
     deleteCheckModal = new window.bootstrap.Modal(document.getElementById('deleteCheckModal'));
     document.getElementById('deleteCheckModal')
@@ -931,7 +938,7 @@ async function setupModals () {
         });
 }
 
-async function setupByUserInfo (userInfo) {
+async function setupByUserInfo(userInfo) {
     const headerBarEle = document.getElementById('headerbar');
     let allowedModels = [];
     let selectedModel = await OpenaiSelectedModel();
@@ -973,20 +980,30 @@ async function setupByUserInfo (userInfo) {
         }
 
         const modelsContainer = document.querySelector('#headerbar .chat-models');
-        const unsupportedModels = [];
+        // const unsupportedModels = [];
         let modelsEle = '';
-        userInfo.allowed_models.forEach((model) => {
-            if (!ChatModels.includes(model)) {
-                unsupportedModels.push(model);
-                return;
-            }
-
-            if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
-            } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
-            }
+        Object.entries(modelCategories).forEach(([category, models]) => {
+            modelsEle += `<li class="model-category">${category}</li>`;
+            models.forEach(model => {
+                if (allowedModels.includes(model)) {
+                    const isRecommended = [].includes(model);
+                    const isFree = FreeModels.includes(model);
+                    modelsEle += `<li><a class="dropdown-item${isRecommended ? ' recommended' : ''}${isFree ? ' free-model' : ''}" href="#" data-model="${model}">${model}</a></li>`;
+                }
+            });
         });
+        // userInfo.allowed_models.forEach((model) => {
+        //     if (!ChatModels.includes(model)) {
+        //         unsupportedModels.push(model);
+        //         return;
+        //     }
+
+        //     if (FreeModels.includes(model)) {
+        //         modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
+        //     } else {
+        //         modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+        //     }
+        // });
         modelsContainer.innerHTML = modelsEle;
     }
 
@@ -1083,7 +1100,7 @@ async function setupByUserInfo (userInfo) {
 /**
  * setup dropdown menus
  */
-function enhanceDropdownMenus () {
+function enhanceDropdownMenus() {
     const modelDropdowns = document.querySelectorAll('#headerbar .dropdown-menu');
     modelDropdowns.forEach(dropdown => {
         // If more than 8 items in dropdown, add scrollable class
@@ -1100,7 +1117,7 @@ function enhanceDropdownMenus () {
     });
 }
 
-async function loadAndUpdateUserInfo (oldUserInfo) {
+async function loadAndUpdateUserInfo(oldUserInfo) {
     const sconfig = await getChatSessionConfig();
 
     // get users' models
@@ -1129,7 +1146,7 @@ async function loadAndUpdateUserInfo (oldUserInfo) {
 /**
  * setup header bar
  */
-async function setupHeader () {
+async function setupHeader() {
     // get user info from cache
     const userInfo = await libs.KvGet(KvKeyUserInfo);
     if (userInfo) {
@@ -1155,7 +1172,7 @@ async function setupHeader () {
 }
 
 // eslint-disable-next-line no-unused-vars
-async function setupChatJs () {
+async function setupChatJs() {
     await setupSessionManager();
     await setupConfig();
     await setupChatInput();
@@ -1168,14 +1185,14 @@ async function setupChatJs () {
     setInterval(fetchDeepResearchResultBackground, 3000);
 }
 
-function newChatID () {
+function newChatID() {
     return `chat-${(new Date()).getTime()}-${libs.RandomString(6)}`;
 }
 
 /**
  * check if AI response is IDLE periodly
  */
-function setupGlobalAiRespHeartbeatTimer () {
+function setupGlobalAiRespHeartbeatTimer() {
     globalAIRespHeartBeatTimer = Date.now();
 
     setInterval(async () => {
@@ -1193,7 +1210,7 @@ function setupGlobalAiRespHeartbeatTimer () {
 // show alert
 //
 // type: primary, secondary, success, danger, warning, info, light, dark
-function showalert (type, msg) {
+function showalert(type, msg) {
     const alertEle = `<div class="alert alert-${type} alert-dismissible" role="alert">
             <div>${libs.sanitizeHTML(msg)}</div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -1205,7 +1222,7 @@ function showalert (type, msg) {
 }
 
 // check sessionID's type, secure convert to int, default is 1
-function kvSessionKey (sessionID) {
+function kvSessionKey(sessionID) {
     sessionID = parseInt(sessionID) || 1
     return `${KvKeyPrefixSessionHistory}${sessionID}`
 }
@@ -1215,7 +1232,7 @@ function kvSessionKey (sessionID) {
  * @param {*} sessionID
  * @returns {Array} An array of chat messages.
  */
-async function sessionChatHistory (sessionID) {
+async function sessionChatHistory(sessionID) {
     let data = (await libs.KvGet(kvSessionKey(sessionID)));
     if (!data) {
         return [];
@@ -1234,7 +1251,7 @@ async function sessionChatHistory (sessionID) {
  *
  * @returns {Array} An array of chat messages, oldest first.
  */
-async function activeSessionChatHistory () {
+async function activeSessionChatHistory() {
     const sid = await activeSessionID();
     if (!sid) {
         return [];
@@ -1243,7 +1260,7 @@ async function activeSessionChatHistory () {
     return await sessionChatHistory(sid);
 }
 
-async function activeSessionID () {
+async function activeSessionID() {
     const itemEle = document.querySelector('#sessionManager .card-body button.active');
     if (itemEle) {
         return parseInt(itemEle.closest('.session').dataset.session);
@@ -1266,7 +1283,7 @@ async function activeSessionID () {
     return 1;
 }
 
-async function listenSessionSwitch (evt) {
+async function listenSessionSwitch(evt) {
     const ele = libs.evtTarget(evt);
     // if (!ele.classList.contains('list-group-item')) {
     //     ele = ele.closest('.list-group-item');
@@ -1275,7 +1292,7 @@ async function listenSessionSwitch (evt) {
     await changeSession(activeSid);
 }
 
-async function changeSession (activeSid) {
+async function changeSession(activeSid) {
     if (globalAIRespSSE) { // auto stop previous sse when switch session
         console.warn('auto stop previous sse because of session switch');
         globalAIRespSSE.close();
@@ -1320,7 +1337,7 @@ let mutexFetchImageDrawingResultBackground = false;
  * Fetches the image drawing result background for the AI response and displays it in the chat container.
  * @returns {Promise<void>}
  */
-async function fetchImageDrawingResultBackground () {
+async function fetchImageDrawingResultBackground() {
     if (mutexFetchImageDrawingResultBackground) {
         return;
     }
@@ -1391,7 +1408,7 @@ async function fetchImageDrawingResultBackground () {
  * @param {string} imageUrl current subtask's image url
  * @param {boolean} succeed is current subtask succeed
  */
-async function checkIsImageAllSubtaskDone (item, imageUrl, succeed) {
+async function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
     const chatID = item.closest('.role-ai').dataset.chatid;
     const chatData = await getChatData(chatID, RoleAI) || {};
 
@@ -1447,7 +1464,7 @@ let mutexFetchDeepResearchResultBackground = false;
 /**
 * Fetches the deep research result background for the AI response and displays it in the chat container.
 */
-async function fetchDeepResearchResultBackground () {
+async function fetchDeepResearchResultBackground() {
     if (mutexFetchDeepResearchResultBackground) {
         return;
     }
@@ -1480,26 +1497,26 @@ async function fetchDeepResearchResultBackground () {
                 const respData = await resp.json();
 
                 switch (respData.status) {
-                case 'pending':
-                case 'running':
-                    return;
-                case 'failed':
-                    item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
-                    item.dataset.taskStatus = ChatTaskStatusDone;
-                    chatData = await updateChatData(chatID, RoleAI, {
-                        taskStatus: ChatTaskStatusDone,
-                        content: item.innerHTML
-                    });
-                    break;
-                case 'success':
-                    item.innerHTML = await renderHTML(respData.result_article, true);
-                    item.dataset.taskStatus = ChatTaskStatusDone;
-                    chatData = await updateChatData(chatID, RoleAI, {
-                        model: 'deep-research',
-                        rawContent: respData.result_article,
-                        taskStatus: ChatTaskStatusDone,
-                        content: item.innerHTML,
-                        attachHTML: `
+                    case 'pending':
+                    case 'running':
+                        return;
+                    case 'failed':
+                        item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
+                        item.dataset.taskStatus = ChatTaskStatusDone;
+                        chatData = await updateChatData(chatID, RoleAI, {
+                            taskStatus: ChatTaskStatusDone,
+                            content: item.innerHTML
+                        });
+                        break;
+                    case 'success':
+                        item.innerHTML = await renderHTML(respData.result_article, true);
+                        item.dataset.taskStatus = ChatTaskStatusDone;
+                        chatData = await updateChatData(chatID, RoleAI, {
+                            model: 'deep-research',
+                            rawContent: respData.result_article,
+                            taskStatus: ChatTaskStatusDone,
+                            content: item.innerHTML,
+                            attachHTML: `
                             <p style="margin-bottom: 0;">
                                 <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                                     > toggle reference
@@ -1510,9 +1527,9 @@ async function fetchDeepResearchResultBackground () {
                                     <div class="card card-body">${combineRefsWithIndex(respData.result_references.url_to_unified_index)}</div>
                                 </div>
                             </div>`
-                    });
+                        });
 
-                    renderAfterAiResp(chatData, false);
+                        renderAfterAiResp(chatData, false);
                 }
             } catch (err) {
                 console.warn('fetch deep research result, ' + err);
@@ -1531,7 +1548,7 @@ async function fetchDeepResearchResultBackground () {
  *
  * @returns {void}
  */
-async function clearSessionAndChats (evt, sessionID) {
+async function clearSessionAndChats(evt, sessionID) {
     console.debug('clearSessionAndChats', evt, sessionID)
     if (evt) {
         evt.stopPropagation();
@@ -1569,7 +1586,7 @@ async function clearSessionAndChats (evt, sessionID) {
     location.reload();
 }
 
-function bindSessionEditBtn () {
+function bindSessionEditBtn() {
     document.querySelectorAll('#sessionManager .sessions .session .bi.bi-pencil-square')
         .forEach((item) => {
             if (item.dataset.bindClicked) {
@@ -1605,7 +1622,7 @@ function bindSessionEditBtn () {
         })
 }
 
-function bindSessionDeleteBtn () {
+function bindSessionDeleteBtn() {
     const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-trash') || [];
     btns.forEach((item) => {
         if (item.dataset.bindClicked) {
@@ -1652,7 +1669,7 @@ function bindSessionDeleteBtn () {
 /** setup session manager and restore current chat history
  *
  */
-async function setupSessionManager () {
+async function setupSessionManager() {
     const selectedSessionID = await activeSessionID();
 
     // bind remove all sessions
@@ -1833,7 +1850,7 @@ async function setupSessionManager () {
  *
  * @param {string} chatid - Chat id.
  */
-async function removeChatInStorage (chatid) {
+async function removeChatInStorage(chatid) {
     if (!chatid) {
         throw new Error('chatid is required');
     }
@@ -1854,7 +1871,7 @@ async function removeChatInStorage (chatid) {
  * @param {string} role - Chat role.
  * @returns {object} The chat data object or an empty object if not found.
  */
-async function getChatData (chatID, role) {
+async function getChatData(chatID, role) {
     const key = `${KvKeyChatData}${role}_${chatID}`;
     // Return an empty object if no data is found
     return (await libs.KvGet(key)) || {};
@@ -1867,7 +1884,7 @@ async function getChatData (chatID, role) {
  * @param {string} role - Chat role.
  * @param {object} chatData - Chat data to be saved.
  */
-async function setChatData (chatID, role, chatData) {
+async function setChatData(chatID, role, chatData) {
     const key = `${KvKeyChatData}${role}_${chatID}`;
     await libs.KvSet(key, chatData);
 }
@@ -1880,7 +1897,7 @@ async function setChatData (chatID, role, chatData) {
  * @param {object} partialChatData - Partial data to update.
  * @returns {object} The updated chat data object.
  */
-async function updateChatData (chatID, role, partialChatData) {
+async function updateChatData(chatID, role, partialChatData) {
     let chatData = await getChatData(chatID, role);
     // Ensure we have an object to merge into
     if (typeof chatData !== 'object' || chatData === null) {
@@ -1915,7 +1932,7 @@ async function updateChatData (chatID, role, partialChatData) {
  *   @property {string} model - chat model
  *   @property {string} reqeustid - chat request id
 */
-async function saveChats2Storage (chatData) {
+async function saveChats2Storage(chatData) {
     if (!chatData.chatID) {
         throw new Error('chatID is required');
     }
@@ -1963,12 +1980,12 @@ async function saveChats2Storage (chatData) {
     await libs.KvSet(storageActiveSessionKey, session);
 }
 
-function scrollChatToDown () {
+function scrollChatToDown() {
     libs.ScrollDown(document.querySelector('html'));
     libs.ScrollDown(chatContainer.querySelector('.chatManager .conservations'));
 }
 
-function scrollChatToTop (evt) {
+function scrollChatToTop(evt) {
     // evt.preventDefault();
     // evt.stopPropagation();
 
@@ -1993,7 +2010,7 @@ let userManuallyScrolled = false;
  * @param {HTMLElement} chatEle - The chat element to scroll to
  * @param {boolean} force - Whether to force scrolling even if the user scrolled manually
  */
-function scrollToChat (chatEle, force = false) {
+function scrollToChat(chatEle, force = false) {
     // Don't scroll if user has manually scrolled and we're not forcing it
     if (userManuallyScrolled && !force && globalAIRespSSE) {
         return;
@@ -2005,7 +2022,7 @@ function scrollToChat (chatEle, force = false) {
 /**
  * Sets up scroll detection to track user scrolling during AI responses
  */
-function setupScrollDetection () {
+function setupScrollDetection() {
     const conservationsContainer = chatContainer.querySelector('.chatManager .conservations');
 
     // Reset the manual scroll flag when a new response starts
@@ -2041,7 +2058,7 @@ function setupScrollDetection () {
 * @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
 * @returns {Array} An array of chat messages.
 */
-async function getLastNChatMessages (N, ignoredChatID) {
+async function getLastNChatMessages(N, ignoredChatID) {
     console.debug('getLastNChatMessages', N, ignoredChatID);
 
     const systemPrompt = await OpenaiChatStaticContext();
@@ -2103,7 +2120,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
     return latestMessages;
 }
 
-function lockChatInput () {
+function lockChatInput() {
     chatContainer.querySelectorAll('.role-human .form-control btn.save').forEach((item) => {
         item.classList.add('disabled');
     });
@@ -2113,7 +2130,7 @@ function lockChatInput () {
 
     chatPromptInputBtn && chatPromptInputBtn.classList.add('disabled');
 }
-function unlockChatInput () {
+function unlockChatInput() {
     chatContainer.querySelectorAll('.role-human .form-control btn.save').forEach((item) => {
         item.classList.remove('disabled');
     });
@@ -2122,7 +2139,7 @@ function unlockChatInput () {
     });
     chatPromptInputBtn.classList.remove('disabled');
 }
-function isAllowChatPrompInput () {
+function isAllowChatPrompInput() {
     return !chatPromptInputBtn || !chatPromptInputBtn.classList.contains('disabled');
 }
 
@@ -2133,7 +2150,7 @@ function isAllowChatPrompInput () {
  * @param {object} payload
  * @returns {object} An object containing the response content and reasoning content.
  */
-function parseChatResp (chatmodel, payload) {
+function parseChatResp(chatmodel, payload) {
     let respChunk = '';
     let reasoningChunk = '';
     let annotations = [];
@@ -2186,7 +2203,7 @@ function parseChatResp (chatmodel, payload) {
  * @param {string} reqPrompt - request prompt
  * @returns {string} modified request prompt
  */
-async function userPromptEnhance (reqPrompt) {
+async function userPromptEnhance(reqPrompt) {
     const pinnedUrls = getPinnedMaterials() || [];
     const sconfig = await getChatSessionConfig();
     const urls = reqPrompt.match(httpsRegexp);
@@ -2224,7 +2241,7 @@ async function userPromptEnhance (reqPrompt) {
     return reqPrompt;
 }
 
-async function restorePinnedMaterials () {
+async function restorePinnedMaterials() {
     const urlEle = await libs.KvGet(KvKeyPinnedMaterials) || '';
     const container = document.querySelector('#chatContainer .pinned-refs');
     container.innerHTML = urlEle;
@@ -2246,7 +2263,7 @@ async function restorePinnedMaterials () {
         })
 }
 
-function getPinnedMaterials () {
+function getPinnedMaterials() {
     const urls = []
     document.querySelectorAll('#chatContainer .pinned-refs a')
         .forEach((item) => {
@@ -2264,7 +2281,7 @@ function getPinnedMaterials () {
  * @param {string} prompt - The image prompt to send to the server.
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
-async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendTxt2ImagePrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     const url = '/images/generations';
     const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
@@ -2314,14 +2331,14 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     await saveChats2Storage(chatData);
 }
 
-async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendSdxlturboPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     let url;
     switch (selectedModel) {
-    case ImageModelSdxlTurbo:
-        url = '/images/generations/sdxl-turbo';
-        break;
-    default:
-        throw new Error(`unknown image model: ${selectedModel}`);
+        case ImageModelSdxlTurbo:
+            url = '/images/generations/sdxl-turbo';
+            break;
+        default:
+            throw new Error(`unknown image model: ${selectedModel}`);
     }
 
     // get first image in store
@@ -2386,7 +2403,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     await saveChats2Storage(chatData);
 }
 
-async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+async function sendFluxProPrompt2Server(chatID, selectedModel, currentAIRespEle, prompt) {
     const nImage = parseInt(document.getElementById('selectDrawNImage').value);
     const url = `/images/generations/flux/${selectedModel}`;
     console.debug(`sendFluxProPrompt2Server, url=${url}`);
@@ -2547,7 +2564,7 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
  * @param {string} prompt - The prompt to send to the server.
  * @returns chat/complete/image/qa/unknown
  */
-async function detectPromptTaskType (model, prompt) {
+async function detectPromptTaskType(model, prompt) {
     if (model === ChatModelDeepResearch) {
         return 'deepresearch';
     } else if (IsChatModel(model)) {
@@ -2600,7 +2617,7 @@ async function detectPromptTaskType (model, prompt) {
     }
 }
 
-async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
+async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
     // insert image to user hisotry
     const text = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
@@ -2718,7 +2735,7 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
  *
  * @returns {string} The chat ID.
  */
-async function sendChat2Server (chatID, reqPrompt) {
+async function sendChat2Server(chatID, reqPrompt) {
     let selectedModel = await OpenaiSelectedModel();
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
@@ -2803,155 +2820,155 @@ async function sendChat2Server (chatID, reqPrompt) {
     console.debug(`detected prompt type ${promptType}`);
 
     switch (promptType) {
-    case 'chat':
-        messages = await getLastNChatMessages(nContexts, chatID);
-        if (reqPrompt !== '') {
-            messages.push({
-                role: RoleHuman,
-                content: reqPrompt
-            });
-        } else {
-            messages.push({
-                role: RoleHuman
-            });
-        }
+        case 'chat':
+            messages = await getLastNChatMessages(nContexts, chatID);
+            if (reqPrompt !== '') {
+                messages.push({
+                    role: RoleHuman,
+                    content: reqPrompt
+                });
+            } else {
+                messages.push({
+                    role: RoleHuman
+                });
+            }
 
-        // there are pinned files, add them to user's prompt
-        if (chatVisionSelectedFileStore.length !== 0) {
-            if (!VisionModels.includes(selectedModel)) {
-                // if selected model is not vision model, just ignore it
+            // there are pinned files, add them to user's prompt
+            if (chatVisionSelectedFileStore.length !== 0) {
+                if (!VisionModels.includes(selectedModel)) {
+                    // if selected model is not vision model, just ignore it
+                    chatVisionSelectedFileStore = [];
+                    updateChatVisionSelectedFileStore();
+                    return chatID;
+                }
+
+                messages[messages.length - 1].files = [];
+                for (const item of chatVisionSelectedFileStore) {
+                    messages[messages.length - 1].files.push({
+                        type: 'image',
+                        name: item.filename,
+                        content: item.contentB64
+                    });
+
+                    // insert image to user input & hisotry
+                    await appendImg2UserInput(chatID, item.contentB64, item.filename);
+                }
+
                 chatVisionSelectedFileStore = [];
                 updateChatVisionSelectedFileStore();
-                return chatID;
             }
 
-            messages[messages.length - 1].files = [];
-            for (const item of chatVisionSelectedFileStore) {
-                messages[messages.length - 1].files.push({
-                    type: 'image',
-                    name: item.filename,
-                    content: item.contentB64
-                });
-
-                // insert image to user input & hisotry
-                await appendImg2UserInput(chatID, item.contentB64, item.filename);
-            }
-
-            chatVisionSelectedFileStore = [];
-            updateChatVisionSelectedFileStore();
-        }
-
-        reqBody = JSON.stringify({
-            model: selectedModel,
-            stream: true,
-            max_tokens: parseInt(sconfig.max_tokens),
-            temperature: parseFloat(sconfig.temperature),
-            presence_penalty: parseFloat(sconfig.presence_penalty),
-            frequency_penalty: parseFloat(sconfig.frequency_penalty),
-            messages,
-            stop: ['\n\n'],
-            laisky_extra: {
-                chat_switch: sconfig.chat_switch
-            }
-        });
-        break;
-    case 'complete':
-        reqBody = JSON.stringify({
-            model: selectedModel,
-            stream: true,
-            max_tokens: parseInt(sconfig.max_tokens),
-            temperature: parseFloat(sconfig.temperature),
-            presence_penalty: parseFloat(sconfig.presence_penalty),
-            frequency_penalty: parseFloat(sconfig.frequency_penalty),
-            prompt: reqPrompt,
-            stop: ['\n\n']
-        });
-        break;
-    case 'qa':
-        // {
-        //     "question": "XFS 是干啥的",
-        //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
-        //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
-        // }
-
-        switch (selectedModel) {
-        case QAModelBasebit:
-        case QAModelSecurity:
-        case QAModelImmigrate:
-            window.data.qa_chat_models.forEach((item) => {
-                if (item.name === selectedModel) {
-                    url = item.url;
-                    project = item.project;
-                }
-            })
-
-            if (!project) {
-                console.error("can't find project name for chat model: " + selectedModel);
-                return chatID;
-            }
-
-            url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
-            break;
-        case QAModelCustom:
-            url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
-            break;
-        case QAModelShared:
-            // example url:
-            //
-            // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
-
-            url = `/ramjet/gptchat/ctx/share?uid=${urlParams.get('uid')}` +
-                        `&chatbot_name=${urlParams.get('chatbot_name')}` +
-                        `&q=${encodeURIComponent(reqPrompt)}`;
-            break;
-        default:
-            console.error('unknown qa chat model: ' + selectedModel);
-        }
-
-        globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
-        try {
-            const resp = await fetch(url, {
-                method: 'GET',
-                cache: 'no-cache',
-                headers: {
-                    Connection: 'keep-alive',
-                    'Content-Type': 'application/json',
-                    Authorization: 'Bearer ' + sconfig.api_token,
-                    'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
-                    'X-Laisky-Api-Base': sconfig.api_base,
-                    'X-PDFCHAT-PASSWORD': await libs.KvGet(KvKeyCustomDatasetPassword)
+            reqBody = JSON.stringify({
+                model: selectedModel,
+                stream: true,
+                max_tokens: parseInt(sconfig.max_tokens),
+                temperature: parseFloat(sconfig.temperature),
+                presence_penalty: parseFloat(sconfig.presence_penalty),
+                frequency_penalty: parseFloat(sconfig.frequency_penalty),
+                messages,
+                stop: ['\n\n'],
+                laisky_extra: {
+                    chat_switch: sconfig.chat_switch
                 }
             });
+            break;
+        case 'complete':
+            reqBody = JSON.stringify({
+                model: selectedModel,
+                stream: true,
+                max_tokens: parseInt(sconfig.max_tokens),
+                temperature: parseFloat(sconfig.temperature),
+                presence_penalty: parseFloat(sconfig.presence_penalty),
+                frequency_penalty: parseFloat(sconfig.frequency_penalty),
+                prompt: reqPrompt,
+                stop: ['\n\n']
+            });
+            break;
+        case 'qa':
+            // {
+            //     "question": "XFS 是干啥的",
+            //     "text": " XFS is a simple CLI tool that can be used to create volumes/mounts and perform simple filesystem operations.\n",
+            //     "url": "http://xego-dev.basebit.me/doc/xfs/support/xfs2_cli_instructions/"
+            // }
 
-            if (!resp.ok || resp.status !== 200) {
-                throw new Error(`[${resp.status}]: ${await resp.text()}`);
+            switch (selectedModel) {
+                case QAModelBasebit:
+                case QAModelSecurity:
+                case QAModelImmigrate:
+                    window.data.qa_chat_models.forEach((item) => {
+                        if (item.name === selectedModel) {
+                            url = item.url;
+                            project = item.project;
+                        }
+                    })
+
+                    if (!project) {
+                        console.error("can't find project name for chat model: " + selectedModel);
+                        return chatID;
+                    }
+
+                    url = `${url}?p=${project}&q=${encodeURIComponent(reqPrompt)}`;
+                    break;
+                case QAModelCustom:
+                    url = `/ramjet/gptchat/ctx/search?q=${encodeURIComponent(reqPrompt)}`;
+                    break;
+                case QAModelShared:
+                    // example url:
+                    //
+                    // https://chat2.laisky.com/?chatmodel=qa-shared&uid=public&chatbot_name=default
+
+                    url = `/ramjet/gptchat/ctx/share?uid=${urlParams.get('uid')}` +
+                        `&chatbot_name=${urlParams.get('chatbot_name')}` +
+                        `&q=${encodeURIComponent(reqPrompt)}`;
+                    break;
+                default:
+                    console.error('unknown qa chat model: ' + selectedModel);
             }
 
-            const data = await resp.json();
-            if (!data || !data.text) {
-                await abortAIResp('cannot gather sufficient context to answer the question');
-                return chatID;
-            }
+            globalAIRespEle.scrollIntoView({ behavior: 'smooth' });
+            try {
+                const resp = await fetch(url, {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    headers: {
+                        Connection: 'keep-alive',
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + sconfig.api_token,
+                        'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                        'X-Laisky-Api-Base': sconfig.api_base,
+                        'X-PDFCHAT-PASSWORD': await libs.KvGet(KvKeyCustomDatasetPassword)
+                    }
+                });
 
-            globalAIRespData.attachHTML = `
+                if (!resp.ok || resp.status !== 200) {
+                    throw new Error(`[${resp.status}]: ${await resp.text()}`);
+                }
+
+                const data = await resp.json();
+                if (!data || !data.text) {
+                    await abortAIResp('cannot gather sufficient context to answer the question');
+                    return chatID;
+                }
+
+                globalAIRespData.attachHTML = `
                     <p style="margin-bottom: 0;">
                         <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
                             > toggle reference
                         </button>
                     </p>`;
 
-            if (data.url) {
-                globalAIRespData.attachHTML += `
+                if (data.url) {
+                    globalAIRespData.attachHTML += `
                     <div>
                         <div class="collapse" id="chatRef-${chatID}">
                             <div class="card card-body">${combineRefs(data.url)}</div>
                         </div>
                     </div>`;
-            }
+                }
 
-            const messages = [{
-                role: RoleHuman,
-                content: `Use the following pieces of context to answer the users question.
+                const messages = [{
+                    role: RoleHuman,
+                    content: `Use the following pieces of context to answer the users question.
                     the context that help you answer the question is between ">>>>>>>" and "<<<<<<<",
                     the user' question that you should answer in after "<<<<<<<".
                     you should directly answer the user's question, and you can use the context to help you answer the question.
@@ -2962,92 +2979,92 @@ async function sendChat2Server (chatID, reqPrompt) {
 
                     question: ${reqPrompt}
                     `
-            }];
-            const model = DefaultModel; // rewrite chat model
+                }];
+                const model = DefaultModel; // rewrite chat model
 
-            reqBody = JSON.stringify({
-                model,
-                stream: true,
-                max_tokens: parseInt(sconfig.max_tokens),
-                temperature: parseFloat(sconfig.temperature),
-                presence_penalty: parseFloat(sconfig.presence_penalty),
-                frequency_penalty: parseFloat(sconfig.frequency_penalty),
-                messages,
-                stop: ['\n\n']
-            });
-        } catch (err) {
-            await abortAIResp(`failed to fetch qa data: ${renderError(err)}`);
+                reqBody = JSON.stringify({
+                    model,
+                    stream: true,
+                    max_tokens: parseInt(sconfig.max_tokens),
+                    temperature: parseFloat(sconfig.temperature),
+                    presence_penalty: parseFloat(sconfig.presence_penalty),
+                    frequency_penalty: parseFloat(sconfig.frequency_penalty),
+                    messages,
+                    stop: ['\n\n']
+                });
+            } catch (err) {
+                await abortAIResp(`failed to fetch qa data: ${renderError(err)}`);
+                return chatID;
+            }
+
+            break;
+        case 'image':
+            if (!IsImageModel(selectedModel) && sconfig.chat_switch.all_in_one) {
+                selectedModel = ImageModelFluxSchnell;
+            }
+
+            try {
+                switch (selectedModel) {
+                    case ImageModelDalle3:
+                        await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                        break;
+                    // case ImageModelImg2Img:
+                    //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                    //     break;
+                    case ImageModelSdxlTurbo:
+                        await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                        break;
+                    // case ImageModelFluxPro:
+                    case ImageModelFluxPro11:
+                    case ImageModelFluxDev:
+                    case ImageModelFluxProUltra11:
+                    case ImageModelFluxSchnell:
+                        await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                        break;
+                    default:
+                        throw new Error(`unknown image model: ${selectedModel}`);
+                }
+            } catch (err) {
+                await abortAIResp(`failed to send image prompt: ${renderError(err)}`);
+            } finally {
+                unlockChatInput();
+            }
+
             return chatID;
-        }
+        case 'deepresearch': //  new case for deep-research
+            try {
+                const resp = await fetch('/deepresearch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + sconfig.api_token,
+                        'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                        'X-Laisky-Api-Base': sconfig.api_base
+                    },
+                    body: JSON.stringify({ prompt: reqPrompt })
+                });
 
-        break;
-    case 'image':
-        if (!IsImageModel(selectedModel) && sconfig.chat_switch.all_in_one) {
-            selectedModel = ImageModelFluxSchnell;
-        }
+                if (!resp.ok || resp.status !== 200) {
+                    throw new Error(`[${resp.status}]: ${await resp.text()}`);
+                }
 
-        try {
-            switch (selectedModel) {
-            case ImageModelDalle3:
-                await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                break;
-                // case ImageModelImg2Img:
-                //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                //     break;
-            case ImageModelSdxlTurbo:
-                await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                break;
-                // case ImageModelFluxPro:
-            case ImageModelFluxPro11:
-            case ImageModelFluxDev:
-            case ImageModelFluxProUltra11:
-            case ImageModelFluxSchnell:
-                await sendFluxProPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
-                break;
-            default:
-                throw new Error(`unknown image model: ${selectedModel}`);
-            }
-        } catch (err) {
-            await abortAIResp(`failed to send image prompt: ${renderError(err)}`);
-        } finally {
-            unlockChatInput();
-        }
+                const respData = await resp.json();
+                console.log('deepresearch', respData)
+                globalAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+                globalAIRespEle.dataset.taskType = ChatTaskTypeDeepResearch;
 
-        return chatID;
-    case 'deepresearch': //  new case for deep-research
-        try {
-            const resp = await fetch('/deepresearch', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: 'Bearer ' + sconfig.api_token,
-                    'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
-                    'X-Laisky-Api-Base': sconfig.api_base
-                },
-                body: JSON.stringify({ prompt: reqPrompt })
-            });
+                // Save task ID and other relevant data to chatData
+                const chatData = await getChatData(chatID, RoleAI) || {};
+                chatData.chatID = chatID;
+                chatData.role = RoleAI;
+                chatData.model = selectedModel;
+                chatData.taskId = respData.task_id;
+                chatData.taskStatus = ChatTaskStatusWaiting;
+                chatData.taskType = ChatTaskTypeDeepResearch;
 
-            if (!resp.ok || resp.status !== 200) {
-                throw new Error(`[${resp.status}]: ${await resp.text()}`);
-            }
+                await saveChats2Storage(chatData);
 
-            const respData = await resp.json();
-            console.log('deepresearch', respData)
-            globalAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
-            globalAIRespEle.dataset.taskType = ChatTaskTypeDeepResearch;
-
-            // Save task ID and other relevant data to chatData
-            const chatData = await getChatData(chatID, RoleAI) || {};
-            chatData.chatID = chatID;
-            chatData.role = RoleAI;
-            chatData.model = selectedModel;
-            chatData.taskId = respData.task_id;
-            chatData.taskStatus = ChatTaskStatusWaiting;
-            chatData.taskType = ChatTaskTypeDeepResearch;
-
-            await saveChats2Storage(chatData);
-
-            globalAIRespEle.innerHTML = `
+                globalAIRespEle.innerHTML = `
                 <p dir="auto" class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -3055,24 +3072,24 @@ async function sendChat2Server (chatID, reqPrompt) {
                     <span class="placeholder col-6"></span>
                     <span class="placeholder col-8"></span>
                 </p>`;
-        } catch (err) {
-            await abortAIResp(`failed to send deepresearch prompt: ${renderError(err)}`);
-        } finally {
-            unlockChatInput();
-        }
-        return chatID;
-    default:
-        globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
+            } catch (err) {
+                await abortAIResp(`failed to send deepresearch prompt: ${renderError(err)}`);
+            } finally {
+                unlockChatInput();
+            }
+            return chatID;
+        default:
+            globalAIRespEle.innerHTML = '<p>🔥Someting in trouble...</p>' +
                 '<pre style="text-wrap: pretty;">' +
                 `unimplemented model: ${libs.sanitizeHTML(selectedModel)}</pre>`;
-        await saveChats2Storage({
-            role: RoleAI,
-            chatID,
-            model: selectedModel,
-            content: globalAIRespEle.innerHTML
-        });
-        unlockChatInput();
-        return chatID;
+            await saveChats2Storage({
+                role: RoleAI,
+                chatID,
+                model: selectedModel,
+                content: globalAIRespEle.innerHTML
+            });
+            unlockChatInput();
+            return chatID;
     }
 
     if (!reqBody) {
@@ -3194,14 +3211,14 @@ async function sendChat2Server (chatID, reqPrompt) {
                 // Handle rendering differently based on task status
                 if (reasoningChunk || respChunk) {
                     switch (globalAIRespEle.dataset.taskStatus) {
-                    case 'waiting':
-                        // First response - initialize the containers
-                        globalAIRespEle.dataset.taskStatus = 'writing';
-                        globalAIRespEle.innerHTML = '';
+                        case 'waiting':
+                            // First response - initialize the containers
+                            globalAIRespEle.dataset.taskStatus = 'writing';
+                            globalAIRespEle.innerHTML = '';
 
-                        // Create containers for reasoning and response once
-                        if (globalAIRespData.reasoningContent) {
-                            const reasoningHTML = `
+                            // Create containers for reasoning and response once
+                            if (globalAIRespData.reasoningContent) {
+                                const reasoningHTML = `
                                 <div class="thinking-container">
                                     <p class="d-inline-flex gap-1">
                                         <button class="btn btn-secondary" type="button" data-bs-toggle="collapse"
@@ -3214,50 +3231,50 @@ async function sendChat2Server (chatID, reqPrompt) {
                                         <div class="card card-body reasoning-content"></div>
                                     </div>
                                 </div>`;
-                            globalAIRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
-                            reasoningContainer = globalAIRespEle.querySelector('.reasoning-content');
+                                globalAIRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
+                                reasoningContainer = globalAIRespEle.querySelector('.reasoning-content');
 
-                            // Initialize reasoning container with current content
-                            if (globalAIRespData.reasoningContent.trim()) {
-                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                                // Initialize reasoning container with current content
+                                if (globalAIRespData.reasoningContent.trim()) {
+                                    reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                                }
                             }
-                        }
 
-                        // Create response container
-                        globalAIRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
-                        responseContainer = globalAIRespEle.querySelector('.response-content');
+                            // Create response container
+                            globalAIRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
+                            responseContainer = globalAIRespEle.querySelector('.response-content');
 
-                        // Add initial content
-                        if (respChunk) {
-                            responseContainer.innerHTML = respChunk;
-                        }
-                        break;
-                    case 'writing':
-                        // Incremental updates - only render the new chunks
-                        if (reasoningChunk && reasoningContainer) {
-                            // For small chunks, just append plaintext for performance
-                            if (reasoningChunk.length < 50 && !reasoningChunk.includes('\n')) {
-                                reasoningContainer.insertAdjacentText('beforeend', reasoningChunk);
-                            } else {
-                                // For larger or formatted chunks, re-render the full content
-                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                            // Add initial content
+                            if (respChunk) {
+                                responseContainer.innerHTML = respChunk;
                             }
-                        }
-
-                        if (respChunk && responseContainer) {
-                            // For response content, more care is needed since it might be partial markdown
-                            // We'll render the full content but only when necessary
-                            if (payload.choices[0].finish_reason || respChunk.includes('\n\n')) {
-                                // Complete section or paragraph - render the full content
-                                responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent);
-                            } else {
-                                // Just append the plain text for efficiency
-                                responseContainer.insertAdjacentText('beforeend', respChunk);
+                            break;
+                        case 'writing':
+                            // Incremental updates - only render the new chunks
+                            if (reasoningChunk && reasoningContainer) {
+                                // For small chunks, just append plaintext for performance
+                                if (reasoningChunk.length < 50 && !reasoningChunk.includes('\n')) {
+                                    reasoningContainer.insertAdjacentText('beforeend', reasoningChunk);
+                                } else {
+                                    // For larger or formatted chunks, re-render the full content
+                                    reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                                }
                             }
-                        }
 
-                        scrollToChat(globalAIRespEle);
-                        break;
+                            if (respChunk && responseContainer) {
+                                // For response content, more care is needed since it might be partial markdown
+                                // We'll render the full content but only when necessary
+                                if (payload.choices[0].finish_reason || respChunk.includes('\n\n')) {
+                                    // Complete section or paragraph - render the full content
+                                    responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent);
+                                } else {
+                                    // Just append the plain text for efficiency
+                                    responseContainer.insertAdjacentText('beforeend', respChunk);
+                                }
+                            }
+
+                            scrollToChat(globalAIRespEle);
+                            break;
                     }
                 }
             } catch (err) {
@@ -3341,7 +3358,7 @@ let latestRenderHTMLResult = '';
  * @param {boolean} force - Whether to force the rendering even if it's already in progress.
  * @return {Promise<string>} - The rendered HTML content.
  */
-async function renderHTML (markdown, force = false) {
+async function renderHTML(markdown, force = false) {
     if (!force && muRenderHTML) {
         return latestRenderHTMLResult || '';
     }
@@ -3361,7 +3378,7 @@ async function renderHTML (markdown, force = false) {
  * @param {*} err
  * @returns {string}
  */
-function renderError (err) {
+function renderError(err) {
     if (!err) {
         return 'unknown empty error';
     }
@@ -3397,7 +3414,7 @@ function renderError (err) {
  * @param {boolean} saveStorage - save to storage or not.
  *                                if it's restore chat, there is no need to save to storage.
  */
-async function renderAfterAiResp (chatData, saveStorage = false) {
+async function renderAfterAiResp(chatData, saveStorage = false) {
     const aiRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatData.chatID} .ai-response`);
     if (!aiRespEle) {
@@ -3552,7 +3569,7 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
     await addOperateBtnBelowAiResponse(chatData.chatID);
 }
 
-function bindImageOperationInAiResp (chatID) {
+function bindImageOperationInAiResp(chatID) {
     const aiRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
     if (!aiRespEle) {
@@ -3583,7 +3600,7 @@ function bindImageOperationInAiResp (chatID) {
  *
  * @param {*} chatID - chat id
  */
-async function addOperateBtnBelowAiResponse (chatID) {
+async function addOperateBtnBelowAiResponse(chatID) {
     const aiRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
     if (!aiRespEle) {
@@ -3673,7 +3690,7 @@ async function addOperateBtnBelowAiResponse (chatID) {
  *
  * @param {string} text - text to enhance
  */
-async function tts (chatID, text) {
+async function tts(chatID, text) {
     const sconfig = await getChatSessionConfig();
 
     // fetch wav bytes from tts server, play it
@@ -3732,7 +3749,7 @@ async function tts (chatID, text) {
  * @param {Array} arr - references
  * @returns {string} markdown links
  */
-function combineRefs (arr) {
+function combineRefs(arr) {
     let markdown = '';
     for (const val of arr) {
         const sanitizedVal = libs.sanitizeHTML(decodeURIComponent(val)); // Sanitize the URL
@@ -3755,7 +3772,7 @@ function combineRefs (arr) {
  * @param {Array} annotations - Array of annotation objects from AI response
  * @returns {string} HTML unordered list with sorted, indexed references
  */
-function parseAnnotationsAsRef (annotations) {
+function parseAnnotationsAsRef(annotations) {
     if (!annotations || !Array.isArray(annotations) || annotations.length === 0) {
         return '';
     }
@@ -3805,7 +3822,7 @@ function parseAnnotationsAsRef (annotations) {
  * @param {object} refObject - An object where keys are reference URLs/text and values are their index order.
  * @returns {string} HTML unordered list with sorted references.
  */
-function combineRefsWithIndex (refObject) {
+function combineRefsWithIndex(refObject) {
     const entries = [];
     // Convert object to array of {url, index} entries
     for (const url in refObject) {
@@ -3846,7 +3863,7 @@ function combineRefsWithIndex (refObject) {
 //     return result
 // }
 
-async function abortAIResp (err) {
+async function abortAIResp(err) {
     if (typeof err === 'string') {
         err = new Error(err);
     }
@@ -3903,7 +3920,7 @@ async function abortAIResp (err) {
 /**
  * click to select images
  */
-async function bindUserInputSelectFilesBtn () {
+async function bindUserInputSelectFilesBtn() {
     await libs.waitElementReady('#chatContainer .user-input .btn.upload');
     chatContainer.querySelector('.user-input .btn.upload')
         .addEventListener('click', async (evt) => {
@@ -3930,7 +3947,7 @@ async function bindUserInputSelectFilesBtn () {
 /**
  * auto display or hide user input select files button according to selected model
  */
-async function autoToggleUserImageUploadBtn () {
+async function autoToggleUserImageUploadBtn() {
     if (!chatPromptInputEle) {
         return;
     }
@@ -3958,7 +3975,7 @@ async function autoToggleUserImageUploadBtn () {
 /**
  * bind text chat input. will be skipped if talking enabled
  */
-async function setupChatInput () {
+async function setupChatInput() {
     if (!chatPromptInputEle) {
         return
     }
@@ -4071,25 +4088,25 @@ async function setupChatInput () {
 
                 const fileExtension = `.${file.name.split('.').pop().toLowerCase()}`;
                 switch (fileExtension) {
-                case '.txt':
-                case '.md':
-                case '.doc':
-                case '.docx':
-                case '.pdf':
-                case '.ppt':
-                case '.pptx':
-                    try {
-                        ShowSpinner();
-                        await uploadFileAsInputUrls(file, fileExtension);
-                    } catch (err) {
-                        console.error(`upload file failed: ${renderError(err)}`);
-                    } finally {
-                        HideSpinner();
-                    }
+                    case '.txt':
+                    case '.md':
+                    case '.doc':
+                    case '.docx':
+                    case '.pdf':
+                    case '.ppt':
+                    case '.pptx':
+                        try {
+                            ShowSpinner();
+                            await uploadFileAsInputUrls(file, fileExtension);
+                        } catch (err) {
+                            console.error(`upload file failed: ${renderError(err)}`);
+                        } finally {
+                            HideSpinner();
+                        }
 
-                    break;
-                default:
-                    readFileForVision(file);
+                        break;
+                    default:
+                        readFileForVision(file);
                 }
             }
         };
@@ -4115,7 +4132,7 @@ async function setupChatInput () {
 /**
  * bind chat switchs
  */
-async function setupChatSwitchs () {
+async function setupChatSwitchs() {
     {
         chatContainer
             .querySelector('#switchChatEnableHttpsCrawler')
@@ -4233,7 +4250,7 @@ async function setupChatSwitchs () {
     }
 }
 
-async function bindTalkSwitchHandler (newSelectedValue) {
+async function bindTalkSwitchHandler(newSelectedValue) {
     // update ui
     const switchEle = chatContainer.querySelector('#switchChatEnableTalking');
     switchEle.checked = newSelectedValue;
@@ -4277,7 +4294,7 @@ async function bindTalkSwitchHandler (newSelectedValue) {
     }
 }
 
-async function bindTalkBtnHandler () {
+async function bindTalkBtnHandler() {
     let mediaRecorder;
     let audioChunks = [];
     let startRecordingAt = Date.now();
@@ -4419,7 +4436,7 @@ async function bindTalkBtnHandler () {
 /**
  * bind paste event for chat input
  */
-async function filePasteHandler (evt) {
+async function filePasteHandler(evt) {
     if (!evt.clipboardData || !evt.clipboardData.items) {
         return;
     }
@@ -4486,7 +4503,7 @@ async function filePasteHandler (evt) {
  *
  * @param {file} file - file object
  */
-async function uploadFileAsInputUrls (file, fileExt) {
+async function uploadFileAsInputUrls(file, fileExt) {
     if (file.size > 1024 * 1024 * 20) {
         showalert('danger', 'File size exceeds the limit of 20MB');
         return;
@@ -4533,7 +4550,7 @@ async function uploadFileAsInputUrls (file, fileExt) {
  * @param {*} file - file object
  * @param {*} rewriteName - rewrite file name
  */
-function readFileForVision (file, rewriteName) {
+function readFileForVision(file, rewriteName) {
     const filename = rewriteName || file.name;
 
     // get file content as Blob
@@ -4576,7 +4593,7 @@ function readFileForVision (file, rewriteName) {
     reader.readAsArrayBuffer(file);
 }
 
-async function updateChatVisionSelectedFileStore () {
+async function updateChatVisionSelectedFileStore() {
     const pinnedFiles = chatContainer.querySelector('.pinned-files');
     pinnedFiles.innerHTML = '';
     for (const item of chatVisionSelectedFileStore) {
@@ -4601,7 +4618,7 @@ async function updateChatVisionSelectedFileStore () {
  *
  * @param {async function} overwriteSendChat2Server - overwrite sendChat2Server function
  */
-async function reloadAiResp (chatID, overwriteSendChat2Server) {
+async function reloadAiResp(chatID, overwriteSendChat2Server) {
     const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
 
     delete muRenderAfterAiRespForChatID[chatID];
@@ -4672,7 +4689,7 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
  *
  * @returns {string} - attachHTML
  */
-function putBackAttachmentsInUserInput (chatID) {
+function putBackAttachmentsInUserInput(chatID) {
     const chatEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID}`);
 
@@ -4700,7 +4717,7 @@ function putBackAttachmentsInUserInput (chatID) {
  *
  * @param {Event} evt - event
  */
-function bindEditHumanInput (evt) {
+function bindEditHumanInput(evt) {
     evt.stopPropagation();
     const evtTarget = libs.evtTarget(evt);
 
@@ -4783,7 +4800,7 @@ const deleteBtnHandler = (evt) => {
  *   @property {string} model - model name
  *   @property {string} reqeustid - request id
  */
-async function append2Chats (isHistory, chatData) {
+async function append2Chats(isHistory, chatData) {
     const chatID = chatData.chatID;
     const role = chatData.role;
     let content = chatData.content;
@@ -4798,18 +4815,18 @@ async function append2Chats (isHistory, chatData) {
     let waitAI = '';
     attachHTML = attachHTML || '';
     switch (role) {
-    case RoleSystem:
-        content = libs.escapeHtml(content);
-        chatEleHtml = `
+        case RoleSystem:
+            content = libs.escapeHtml(content);
+            chatEleHtml = `
             <div class="container-fluid row role-human">
                 <div class="col-auto icon">💻</div>
                 <div class="col text-start"><pre>${content}</pre></div>
             </div>`;
-        break;
-    case RoleHuman:
-        content = libs.escapeHtml(content);
-        if (!isHistory) {
-            waitAI = `
+            break;
+        case RoleHuman:
+            content = libs.escapeHtml(content);
+            if (!isHistory) {
+                waitAI = `
                 <div class="container-fluid row role-ai" data-chatid="${chatID}">
                     <div class="col-auto icon">${robotIcon}</div>
                     <div class="col text-start ai-response"
@@ -4824,9 +4841,9 @@ async function append2Chats (isHistory, chatData) {
                         </p>
                     </div>
                 </div>`;
-        }
+            }
 
-        chatEleHtml = `
+            chatEleHtml = `
                 <div id="${chatID}">
                     <div class="container-fluid row role-human" data-chatid="${chatID}">
                         <div class="col-auto icon">🤔️</div>
@@ -4841,10 +4858,10 @@ async function append2Chats (isHistory, chatData) {
                     </div>
                     ${waitAI}
                 </div>`;
-        break;
-    case RoleAI:
-        if (!content) {
-            content = `
+            break;
+        case RoleAI:
+            if (!content) {
+                content = `
                 <p dir="auto" class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -4852,9 +4869,9 @@ async function append2Chats (isHistory, chatData) {
                     <span class="placeholder col-6"></span>
                     <span class="placeholder col-8"></span>
                 </p>`;
-        }
+            }
 
-        chatEleHtml = `
+            chatEleHtml = `
             <div class="container-fluid row role-ai" data-chatid="${chatID}">
                     <div class="col-auto icon">${robotIcon}</div>
                     <div class="col text-start ai-response"
@@ -4863,11 +4880,11 @@ async function append2Chats (isHistory, chatData) {
                         ${content}
                     </div>
             </div>`;
-        if (!isHistory) {
-            chatOp = 'replace';
-        }
+            if (!isHistory) {
+                chatOp = 'replace';
+            }
 
-        break;
+            break;
     }
 
     if (chatOp === 'append') {
@@ -4911,7 +4928,7 @@ async function append2Chats (isHistory, chatData) {
  *
  * @param {string} sid - session id, default is active session id
  */
-async function getChatSessionConfig (sid) {
+async function getChatSessionConfig(sid) {
     if (!sid) {
         sid = await activeSessionID();
     }
@@ -4934,7 +4951,7 @@ async function getChatSessionConfig (sid) {
  * @param {Object} sconfig - session config
  * @param {string} sid - session id
  */
-async function saveChatSessionConfig (sconfig, sid) {
+async function saveChatSessionConfig(sconfig, sid) {
     if (!sid) {
         sid = await activeSessionID();
     }
@@ -4948,7 +4965,7 @@ async function saveChatSessionConfig (sconfig, sid) {
  *
  * @returns {Object} - new session config
  */
-function newSessionConfig () {
+function newSessionConfig() {
     return {
         api_token: 'FREETIER-' + libs.RandomString(32),
         api_base: 'https://api.openai.com',
@@ -4970,7 +4987,7 @@ function newSessionConfig () {
 /**
  * initialize every chat component by active session config
  */
-async function updateConfigFromSessionConfig () {
+async function updateConfigFromSessionConfig() {
     console.debug(`updateConfigFromSessionConfig for session ${(await activeSessionID())}`);
 
     const sconfig = await getChatSessionConfig();
@@ -5026,7 +5043,7 @@ async function updateConfigFromSessionConfig () {
         });
 }
 
-async function setupConfig () {
+async function setupConfig() {
     await updateConfigFromSessionConfig();
 
     //  config_api_token_value
@@ -5273,7 +5290,7 @@ async function setupConfig () {
 //     await uploadUserConfig(evt);
 // }
 
-async function uploadUserConfig (evt) {
+async function uploadUserConfig(evt) {
     console.debug('uploadUserConfig');
     evt && evt.stopPropagation();
 
@@ -5297,7 +5314,7 @@ async function uploadUserConfig (evt) {
     }
 }
 
-async function downloadUserConfig (evt) {
+async function downloadUserConfig(evt) {
     console.debug('downloadUserConfig');
     evt && evt.stopPropagation();
 
@@ -5421,7 +5438,7 @@ async function downloadUserConfig (evt) {
     }
 }
 
-async function loadPromptShortcutsFromStorage () {
+async function loadPromptShortcutsFromStorage() {
     let shortcuts = await libs.KvGet(KvKeyPromptShortCuts);
     if (!shortcuts) {
         // default prompts
@@ -5437,7 +5454,7 @@ async function loadPromptShortcutsFromStorage () {
     return shortcuts;
 }
 
-async function EditFavSystemPromptHandler (evt) {
+async function EditFavSystemPromptHandler(evt) {
     evt.stopPropagation();
     const evtTarget = libs.evtTarget(evt);
 
@@ -5504,7 +5521,7 @@ async function EditFavSystemPromptHandler (evt) {
  * @param {Object} shortcut - shortcut object
  * @param {bool} storage - whether to save to kv
  */
-async function appendPromptShortcut (shortcut, storage = false) {
+async function appendPromptShortcut(shortcut, storage = false) {
     const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
 
     // add to local storage
@@ -5557,7 +5574,7 @@ async function appendPromptShortcut (shortcut, storage = false) {
     promptShortcutContainer.appendChild(ele);
 }
 
-async function setupPromptManager () {
+async function setupPromptManager() {
     // restore shortcuts from kv
     {
         // bind default prompt shortcuts
@@ -5702,7 +5719,7 @@ async function setupPromptManager () {
 /**
  * setup private dataset modal
  */
-async function setupPrivateDataset () {
+async function setupPrivateDataset() {
     const pdfchatModalEle = document.querySelector('#modal-pdfchat');
 
     // bind header's custom qa button
@@ -5914,8 +5931,8 @@ async function setupPrivateDataset () {
                 // show processing files in grey and progress bar
                 body.datasets.forEach((dataset) => {
                     switch (dataset.taskStatus) {
-                    case ChatTaskStatusDone:
-                        datasetsHTML += `
+                        case ChatTaskStatusDone:
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -5931,9 +5948,9 @@ async function setupPrivateDataset () {
                                         </div>
                                     </div>
                                 </div>`;
-                        break;
-                    case ChatTaskStatusProcessing:
-                        datasetsHTML += `
+                            break;
+                        case ChatTaskStatusProcessing:
+                            datasetsHTML += `
                                 <div class="d-flex justify-content-between align-items-center dataset-item" data-filename="${dataset.name}">
                                     <div class="container-fluid row">
                                         <div class="col-5">
@@ -5952,7 +5969,7 @@ async function setupPrivateDataset () {
                                         </div>
                                     </div>
                                 </div>`;
-                        break;
+                            break;
                     }
                 });
 

@@ -523,6 +523,43 @@
                     border-left: 3px solid #0d6efd;
                 }
             }
+
+            li {
+                /* Group models by category */
+                &.model-category {
+                    font-weight: bold;
+                    color: #6c757d;
+                    padding: 0.5rem 1rem;
+                    border-bottom: 1px solid rgba(0,0,0,0.1);
+                    pointer-events: none;
+                }
+
+                /* Visual indication for popular/recommended models */
+                a.recommended {
+                    position: relative;
+                    &:after {
+                        content: "✨";
+                        position: absolute;
+                        right: 10px;
+                        color: #198754;
+                    }
+                }
+
+                /* Free model visual indicator */
+                a.free-model {
+                    position: relative;
+                    &:after {
+                        content: "FREE";
+                        position: absolute;
+                        right: 10px;
+                        font-size: 0.7em;
+                        background: #0dcaf0;
+                        color: white;
+                        padding: 2px 5px;
+                        border-radius: 3px;
+                    }
+                }
+            }
         }
     }
 }
