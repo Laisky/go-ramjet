@@ -201,11 +201,24 @@ const AllModels = [].concat(
     CompletionModels
 );
 const modelCategories = {
-    GPT: [ChatModelGPT4O, ChatModelGPT4OSearch, ChatModelGPT4OMini, ChatModelGPT4OMiniSearch],
-    Claude: [ChatModelClaude3Opus, ChatModelClaude37Sonnet, ChatModelClaude37SonnetThinking, ChatModelClaude35Haiku],
-    Gemini: [ChatModelGemini2Pro, ChatModelGemini2Flash, ChatModelGemini2FlashThinking],
-    Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
-    Other: [ChatModelDeepResearch, ChatModelGroqGemma2With9B, ChatModelGroqllama3With70B]
+    GPT: [ChatModelGPT4O,
+        ChatModelGPT4OSearch,
+        ChatModelGPT4OMini,
+        ChatModelGPTO1,
+        ChatModelGPTO3Mini,
+        ChatModelGPT4OMiniSearch],
+    Claude: [ChatModelClaude3Opus,
+        ChatModelClaude37Sonnet,
+        ChatModelClaude37SonnetThinking,
+        ChatModelClaude35Haiku],
+    Gemini: [ChatModelGemini2Pro,
+        ChatModelGemini2Flash,
+        ChatModelGemini2FlashThinking],
+    Deepseek: [ChatModelDeepSeekChat,
+        ChatModelDeepSeekResoner],
+    Other: [ChatModelDeepResearch,
+        ChatModelGroqGemma2With9B,
+        ChatModelGroqllama3With70B]
 };
 
 // const ModelPriceUSD = {
