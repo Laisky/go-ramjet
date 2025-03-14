@@ -409,6 +409,42 @@
                             color: #ffffff;
                         }
                     }
+
+                    &.disabled-input {
+                        background-color: #f8f9fa;
+                        transition: background-color 0.3s ease;
+                    }
+
+                    &.thinking-animation {
+                        display: inline-block;
+                        position: relative;
+
+                        &:after {
+                            content: '...';
+                            position: absolute;
+                            animation: thinking 1.5s infinite;
+                            width: 24px;
+                            text-align: left;
+                        }
+
+                        @keyframes thinking {
+                            0% {
+                                content: '.';
+                            }
+
+                            33% {
+                                content: '..';
+                            }
+
+                            66% {
+                                content: '...';
+                            }
+
+                            100% {
+                                content: '.';
+                            }
+                        }
+                    }
                 }
 
                 .input-group.chat-controller {
@@ -525,18 +561,20 @@
             }
 
             li {
+
                 /* Group models by category */
                 &.model-category {
                     font-weight: bold;
                     color: #6c757d;
                     padding: 0.5rem 1rem;
-                    border-bottom: 1px solid rgba(0,0,0,0.1);
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
                     pointer-events: none;
                 }
 
                 /* Visual indication for popular/recommended models */
                 a.recommended {
                     position: relative;
+
                     &:after {
                         content: "✨";
                         position: absolute;
@@ -548,6 +586,7 @@
                 /* Free model visual indicator */
                 a.free-model {
                     position: relative;
+
                     &:after {
                         content: "FREE";
                         position: absolute;
