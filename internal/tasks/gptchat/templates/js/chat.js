@@ -201,24 +201,34 @@ const AllModels = [].concat(
     CompletionModels
 );
 const modelCategories = {
-    GPT: [ChatModelGPT4O,
-        ChatModelGPT4OSearch,
+    OpenAI: [
         ChatModelGPT4OMini,
-        ChatModelGPTO1,
+        ChatModelGPT4O,
+        ChatModelGPT4OMiniSearch,
+        ChatModelGPT4OSearch,
         ChatModelGPTO3Mini,
-        ChatModelGPT4OMiniSearch],
-    Claude: [ChatModelClaude3Opus,
+        ChatModelGPTO1
+    ],
+    Anthropic: [
+        ChatModelClaude3Opus,
         ChatModelClaude37Sonnet,
         ChatModelClaude37SonnetThinking,
-        ChatModelClaude35Haiku],
-    Gemini: [ChatModelGemini2Pro,
+        ChatModelClaude35Haiku
+    ],
+    Google: [
+        ChatModelGemini2Pro,
         ChatModelGemini2Flash,
-        ChatModelGemini2FlashThinking],
-    Deepseek: [ChatModelDeepSeekChat,
-        ChatModelDeepSeekResoner],
-    Other: [ChatModelDeepResearch,
+        ChatModelGemini2FlashThinking
+    ],
+    Deepseek: [
+        ChatModelDeepSeekChat,
+        ChatModelDeepSeekResoner
+    ],
+    Others: [
+        ChatModelDeepResearch,
         ChatModelGroqGemma2With9B,
-        ChatModelGroqllama3With70B]
+        ChatModelGroqllama3With70B
+    ]
 };
 
 // const ModelPriceUSD = {
@@ -3818,7 +3828,8 @@ function parseAnnotationsAsRef (annotations) {
             if (url && !uniqueRefs.has(url)) {
                 uniqueRefs.set(url, {
                     index: refIndex++,
-                    title: title || url
+                    title: title || url,
+                    url
                 });
             }
         }
@@ -3830,15 +3841,22 @@ function parseAnnotationsAsRef (annotations) {
     }
 
     // Convert to HTML list items
-    let markdown = '';
+    let refsHtml = '<ul class="reference-links">';
     uniqueRefs.forEach((details, url) => {
         const sanitizedUrl = libs.sanitizeHTML(decodeURIComponent(url));
         const sanitizedTitle = libs.sanitizeHTML(details.title);
 
-        markdown += `<li>[${details.index}] <a href="${sanitizedUrl}" target="_blank">${sanitizedTitle || sanitizedUrl}</a></li>`;
+        refsHtml += `<li>
+            <span class="ref-number">[${details.index}]</span>
+            <a href="${sanitizedUrl}" target="_blank" rel="noopener noreferrer">
+                ${sanitizedTitle || sanitizedUrl}
+            </a>
+            <button class="btn btn-sm btn-light copy-link" data-url="${sanitizedUrl}"></button>
+            </li>`;
     });
+    refsHtml += '</ul>';
 
-    return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
+    return refsHtml;
 }
 
 /**

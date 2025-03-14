@@ -1,3 +1,7 @@
+// ==========================================================================
+// VARIABLES AND THEME SETTINGS
+// ==========================================================================
+
 :root {
     --chat-bg: #f4f4f4;
 }
@@ -6,24 +10,102 @@
     --chat-bg: #343a40;
 }
 
-.modal.show .modal-content {
-    z-index: 1100;
+// ==========================================================================
+// MODAL STYLES
+// ==========================================================================
+
+.modal {
+    &.show .modal-content {
+        z-index: 1100;
+    }
+
+    &#modal-dropfile {
+        background-color: #b0edd0;
+    }
+
+    &#singleInputModal,
+    &#deleteCheckModal {
+        z-index: 1500;
+    }
 }
 
-.modal#modal-dropfile {
-    background-color: #b0edd0;
+// Modal - Drawing Canvas
+#modal-draw-canvas {
+    .modal-dialog {
+        width: max-content;
+        max-width: 80%;
+
+        .modal-body {
+            max-height: 80vh;
+            overflow: auto;
+            padding: 5px;
+        }
+
+        .modal-footer {
+            padding: 5px;
+
+            .prompt {
+                width: 100%;
+                margin: 0;
+
+                .btn {
+                    margin-top: 5px;
+                }
+            }
+        }
+    }
 }
 
-#singleInputModal,
-#deleteCheckModal {
-    z-index: 1500;
+// Modal - PDF Chat
+#modal-pdfchat {
+    .modal-dialog {
+        max-width: 85%;
+        min-width: 600px;
+    }
+
+    .modal-body {
+
+        .input-group,
+        .mb-3 {
+            margin-bottom: 3px !important;
+        }
+    }
+
+    div[data-field="buttons"] .btn {
+        border-radius: 0;
+    }
+
+    div[data-field="dataset"] {
+        border: 1px solid rgb(133, 124, 124);
+        max-height: 600px;
+        overflow: scroll;
+
+        .row,
+        .container-fluid {
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        label[for="flexSwitchCheckChecked"] {
+            max-width: 130px;
+            word-break: break-all;
+        }
+
+        .dataset-item .bi-trash {
+            cursor: pointer;
+        }
+    }
 }
+
+// ==========================================================================
+// OFF-CANVAS STYLES
+// ==========================================================================
 
 #offcanvasSession {
-    padding: 0px;
+    padding: 0;
 
     .offcanvas-body {
-        padding: 0px;
+        padding: 0;
 
         button {
             width: 100%;
@@ -34,22 +116,19 @@
             height: 100%;
 
             .card-header {
-                padding: 0px;
+                padding: 0;
             }
 
             .card-body {
-                // min-height: 300px;
-                padding: 0px;
+                padding: 0;
 
                 .session {
-                    border-radius: 0%;
-                    // border-bottom: 1px solid #a59d9d;
+                    border-radius: 0;
 
                     button {
                         padding: 2px;
                         cursor: auto;
                         display: flex;
-                        // justify-content: space-between;
 
                         i.bi {
                             cursor: pointer;
@@ -60,16 +139,171 @@
             }
 
             .card-footer {
-                padding: 0px;
+                padding: 0;
             }
         }
     }
 }
 
+// ==========================================================================
+// HEADER STYLES
+// ==========================================================================
+
+#headerbar {
+    .dropdown-menu {
+        max-height: 350px;
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        // Custom scrollbar styling
+        &::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+
+            &:hover {
+                background: rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        // Dropdown model styles
+        &.chat-models,
+        &.qa-models,
+        &.image-models {
+            li {
+
+                // Model category headers
+                &.model-category {
+                    font-weight: bold;
+                    font-size: smaller;
+                    color: #6c757d;
+                    padding: 0.5rem 1rem;
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                    pointer-events: none;
+                }
+
+                // Model selection items
+                a {
+                    white-space: nowrap;
+                    padding: 0.5rem 1rem;
+
+                    // Hover effect
+                    &:hover {
+                        background-color: rgba(0, 0, 0, 0.05);
+                    }
+
+                    // Active model indicator
+                    &.active {
+                        font-weight: bold;
+                        border-left: 3px solid #0d6efd;
+                    }
+
+                    // Special model indicators
+                    &.recommended {
+                        position: relative;
+
+                        &:after {
+                            content: "✨";
+                            position: absolute;
+                            right: 10px;
+                            color: #198754;
+                        }
+                    }
+
+                    &.free-model {
+                        position: relative;
+
+                        &:after {
+                            content: "FREE";
+                            position: absolute;
+                            right: 10px;
+                            font-size: 0.7em;
+                            background: #0dcaf0;
+                            color: white;
+                            padding: 2px 5px;
+                            border-radius: 3px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================================================
+// MAIN CHAT CONTAINER STYLES
+// ==========================================================================
+
 #chatContainer {
     position: relative;
-    padding: 0px;
+    padding: 0;
 
+    // References and code display
+    .reference-links {
+        padding-left: 0;
+        list-style: none;
+        margin: 0px;
+
+        li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+
+            .ref-number {
+                flex: 0 0 30px;
+                font-weight: bold;
+            }
+
+            a {
+                flex: 1;
+                text-decoration: none;
+                color: #0d6efd;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            .copy-link {
+                padding: 2px 5px;
+                margin-left: 5px;
+                opacity: 0.5;
+
+                &:hover {
+                    opacity: 1;
+                }
+            }
+        }
+    }
+
+    .thinking-container {
+        margin-bottom: 1rem;
+
+        .card-body.reasoning-content {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #666;
+            background-color: rgba(0, 0, 0, 0.025);
+        }
+    }
+
+    .code-toolbar {
+        font-size: small;
+    }
+
+    // Pinned references section
     .pinned-refs {
         z-index: 1000;
         background-color: #d1d1d1;
@@ -83,7 +317,7 @@
         p {
             padding-left: 5px;
             padding-right: 5px;
-            margin-bottom: 0px;
+            margin-bottom: 0;
             text-wrap: nowrap;
 
             .bi-trash {
@@ -92,11 +326,13 @@
         }
     }
 
+    // Chat manager container
     .chatManager {
-        padding: 0px;
-        padding-left: 0px;
+        padding: 0;
+        padding-left: 0;
         position: relative;
 
+        // Alerts container
         .alerts-container {
             width: 100%;
             padding-top: 40px;
@@ -114,12 +350,12 @@
             }
         }
 
+        // Main card container
         .card.text-center {
             height: 100svh;
             flex-direction: column;
             position: relative;
             padding-top: 40px;
-
             display: flex;
             justify-content: space-between;
 
@@ -128,31 +364,30 @@
                 z-index: 1099;
             }
 
+            // Conversations area
             .conservations {
-                padding: 0px;
+                padding: 0;
                 position: relative;
-                // min-height: 300px;
                 overflow-y: scroll;
                 display: flex;
                 flex-direction: row;
 
                 .row {
-                    margin: 0px;
-                    padding: 0px;
+                    margin: 0;
+                    padding: 0;
 
                     >* {
-                        padding-left: 0px;
+                        padding-left: 0;
                         overflow-x: auto;
                     }
                 }
 
+                // Sessions sidebar
                 .sessions {
                     position: fixed;
                     width: 44px;
 
                     .session-tabs {
-                        // height: 100%;
-                        // background-color: #f4f4f4;
                         border: none;
                         border-right: 1px dashed #e2e3e5;
                         z-index: 50;
@@ -161,7 +396,7 @@
                         button {
                             padding: 5px;
                             border: none;
-                            border-radius: 0px;
+                            border-radius: 0;
                             border-bottom: 1px solid #a59d9d;
                         }
                     }
@@ -170,27 +405,21 @@
                         margin-top: 3px;
 
                         button {
-                            // padding: 0px;
                             border: none;
-                            border-radius: 0px;
+                            border-radius: 0;
                         }
                     }
                 }
 
+                // Chat messages area
                 .chats {
-                    padding: 0px;
+                    padding: 0;
                     padding-left: 44px;
                     width: 100%;
-                    // overflow-y: scroll;
-
-                    // > div {
-                    //     border-bottom: dotted 1px #e2e3e5;
-                    // }
 
                     img {
-                        // max-width: 90%;
                         max-height: 500px;
-                        border-width: 5px 5px 5px 5px;
+                        border-width: 5px;
                         box-shadow: 1px 1px 5px #333;
                         -webkit-box-shadow: 1px 1px 5px #333;
                         -moz-box-shadow: 1px 1px 5px #333;
@@ -199,7 +428,7 @@
 
                     .icon {
                         width: 25px;
-                        padding: 0px;
+                        padding: 0;
                     }
 
                     .bi {
@@ -212,6 +441,7 @@
                         padding: 4px;
                     }
 
+                    // User message styles
                     .role-human {
                         position: relative;
 
@@ -224,8 +454,6 @@
                         }
 
                         .control {
-                            // width: 50px;
-                            // margin-right: 5px;
                             position: absolute;
                             right: 5px;
                             flex-direction: row-reverse;
@@ -246,6 +474,7 @@
                         }
                     }
 
+                    // AI message styles
                     .role-ai {
                         margin-bottom: 5px;
                         background-color: var(--chat-bg);
@@ -270,6 +499,7 @@
                                 margin-bottom: 10px;
                             }
 
+                            // Image container in AI responses
                             .ai-resp-image {
                                 display: inline-block;
                                 position: relative;
@@ -293,13 +523,12 @@
                                     }
                                 }
 
-                                &:hover {
-                                    .hover-btns {
-                                        display: block;
-                                    }
+                                &:hover .hover-btns {
+                                    display: block;
                                 }
                             }
 
+                            // Info display (model, cost)
                             div.info {
                                 position: absolute;
                                 right: 1px;
@@ -313,21 +542,22 @@
                                 }
                             }
 
+                            // Operator buttons
                             .operator {
                                 text-align: center;
                                 cursor: default;
                                 position: relative;
                                 z-index: 1;
+                                margin-top: 3px;
 
                                 .btn {
                                     opacity: 0.6;
                                     padding: 1px;
+                                    width: 30px;
 
                                     &:hover {
                                         opacity: 1;
                                     }
-
-                                    width: 30px;
 
                                     &[data-fn="reload"] {
                                         width: 80px;
@@ -344,11 +574,13 @@
                 }
             }
 
+            // Footer with input controls
             .card-footer {
                 position: relative;
-                padding: 0px;
+                padding: 0;
                 z-index: 60;
 
+                // Pinned files display
                 .pinned-files {
                     z-index: 1000;
                     background-color: #d1d1d1;
@@ -361,7 +593,7 @@
                     p {
                         padding-left: 5px;
                         padding-right: 5px;
-                        margin-bottom: 0px;
+                        margin-bottom: 0;
                         text-wrap: nowrap;
 
                         .bi-trash {
@@ -370,6 +602,7 @@
                     }
                 }
 
+                // Scroll down button
                 .scroll-down {
                     position: fixed;
                     bottom: 120px;
@@ -385,13 +618,14 @@
                 }
 
                 .input-group {
-                    margin-bottom: 0px !important;
+                    margin-bottom: 0 !important;
 
                     textarea {
                         height: 80px;
                     }
                 }
 
+                // User input area
                 .user-input {
                     background-color: var(--chat-bg);
 
@@ -447,6 +681,7 @@
                     }
                 }
 
+                // Chat controller
                 .input-group.chat-controller {
                     padding-left: 5px;
                     background-color: var(--chat-bg);
@@ -456,11 +691,11 @@
                     }
 
                     .form-check-reverse {
-                        margin-bottom: 0px;
+                        margin-bottom: 0;
                         padding-right: 10px;
 
                         .form-check-input {
-                            margin-right: 0px;
+                            margin-right: 0;
                             margin-left: 2px;
                         }
                     }
@@ -468,206 +703,11 @@
             }
         }
     }
-
-    .ai-resp-references {
-        margin-top: 1rem;
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
-        padding-top: 0.5rem;
-
-        h4 {
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        ul {
-            padding-left: 1.5rem;
-            margin-bottom: 0;
-
-            li {
-                font-size: 0.9rem;
-                margin-bottom: 0.25rem;
-
-                a {
-                    text-decoration: none;
-                    color: #0d6efd;
-
-                    &:hover {
-                        text-decoration: underline;
-                    }
-                }
-            }
-        }
-    }
-
-    .thinking-container {
-        margin-bottom: 1rem;
-
-        .card-body.reasoning-content {
-            font-size: 0.9rem;
-            line-height: 1.5;
-            color: #666;
-            background-color: rgba(0, 0, 0, 0.025);
-        }
-    }
-
-    .code-toolbar {
-        font-size: small;
-    }
 }
 
-#headerbar {
-    .dropdown-menu {
-        max-height: 350px;
-        overflow-y: auto;
-        overflow-x: hidden;
-
-        // Adding custom scrollbar styling
-        &::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        &::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.05);
-            border-radius: 4px;
-        }
-
-        &::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-
-            &:hover {
-                background: rgba(0, 0, 0, 0.4);
-            }
-        }
-
-        // Styling for specific model dropdowns
-        &.chat-models,
-        &.qa-models,
-        &.image-models {
-            li a {
-                white-space: nowrap;
-                padding: 0.5rem 1rem;
-
-                // Add a subtle hover effect
-                &:hover {
-                    background-color: rgba(0, 0, 0, 0.05);
-                }
-
-                // Add visual distinction for active model
-                &.active {
-                    font-weight: bold;
-                    border-left: 3px solid #0d6efd;
-                }
-            }
-
-            li {
-
-                /* Group models by category */
-                &.model-category {
-                    font-weight: bold;
-                    color: #6c757d;
-                    padding: 0.5rem 1rem;
-                    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-                    pointer-events: none;
-                }
-
-                /* Visual indication for popular/recommended models */
-                a.recommended {
-                    position: relative;
-
-                    &:after {
-                        content: "✨";
-                        position: absolute;
-                        right: 10px;
-                        color: #198754;
-                    }
-                }
-
-                /* Free model visual indicator */
-                a.free-model {
-                    position: relative;
-
-                    &:after {
-                        content: "FREE";
-                        position: absolute;
-                        right: 10px;
-                        font-size: 0.7em;
-                        background: #0dcaf0;
-                        color: white;
-                        padding: 2px 5px;
-                        border-radius: 3px;
-                    }
-                }
-            }
-        }
-    }
-}
-
-#modal-draw-canvas {
-    .modal-dialog {
-        width: max-content;
-        max-width: 80%;
-
-        .modal-body {
-            max-height: 80vh;
-            overflow: auto;
-            padding: 5px;
-        }
-
-        .modal-footer {
-            padding: 5px;
-
-            .prompt {
-                width: 100%;
-                margin: 0px;
-
-                .btn {
-                    margin-top: 5px;
-                }
-            }
-        }
-    }
-}
-
-#modal-pdfchat {
-    .modal-dialog {
-        max-width: 85%;
-        min-width: 600px;
-    }
-
-    .modal-body {
-
-        .input-group,
-        .mb-3 {
-            margin-bottom: 3px !important;
-        }
-    }
-
-    div[data-field="buttons"] .btn {
-        border-radius: 0px;
-    }
-
-    div[data-field="dataset"] {
-        border: 1px solid rgb(133, 124, 124);
-        max-height: 600px;
-        overflow: scroll;
-
-        .row,
-        .container-fluid {
-            padding-left: 0px;
-            padding-right: 0px;
-        }
-
-        label[for="flexSwitchCheckChecked"] {
-            max-width: 130px;
-            word-break: break-all;
-        }
-
-        .dataset-item .bi-trash {
-            cursor: pointer;
-        }
-    }
-}
+// ==========================================================================
+// RESPONSIVE STYLES
+// ==========================================================================
 
 @media (max-width: 576px) {
     #headerbar {
