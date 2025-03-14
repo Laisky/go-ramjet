@@ -110,6 +110,11 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	CopyHeader(ctx.Writer.Header(), resp.Header)
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
 
+	// heartbeat should be enabled after header is set
+	if isStream {
+		enableHeartBeatForStreamReq(ctx)
+	}
+
 	if !isStream {
 		if _, err = io.Copy(ctx.Writer, resp.Body); web.AbortErr(ctx, err) {
 			return
@@ -398,10 +403,6 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 		if err := user.IsModelAllowed(ctx, frontendReq.Model, frontendReq.PromptTokens()); err != nil {
 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
-		}
-
-		if frontendReq.Stream {
-			enableHeartBeatForStreamReq(ctx)
 		}
 
 		if strings.HasPrefix(frontendReq.Model, "o1") ||
@@ -922,11 +923,11 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 }
 
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
-	// Set headers first
-	gctx.Writer.Header().Set("Content-Type", "text/event-stream")
-	gctx.Writer.Header().Set("Cache-Control", "no-cache")
-	gctx.Writer.Header().Set("Connection", "keep-alive")
-	gctx.Writer.Header().Set("X-Accel-Buffering", "no")
+	// // Set headers first
+	// gctx.Writer.Header().Set("Content-Type", "text/event-stream")
+	// gctx.Writer.Header().Set("Cache-Control", "no-cache")
+	// gctx.Writer.Header().Set("Connection", "keep-alive")
+	// gctx.Writer.Header().Set("X-Accel-Buffering", "no")
 
 	// Create synchronization primitives
 	heartCtx, heartCancel := context.WithCancel(context.Background())
