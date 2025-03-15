@@ -64,6 +64,7 @@ const ImageModelFluxDev = 'flux-dev';
 const ImageModelFluxPro11 = 'flux-1.1-pro';
 const ImageModelFluxProUltra11 = 'flux-1.1-pro-ultra';
 const ImageModelFluxSchnell = 'flux-schnell';
+const ImageModelImagen3 = 'imagen-3.0';
 // const ImageModelImg2Img = 'img-to-img';
 
 const DefaultModel = ChatModelGPT4OMini;
@@ -150,7 +151,8 @@ const VisionModels = [
     // ImageModelFluxPro,
     ImageModelFluxPro11,
     ImageModelFluxProUltra11,
-    ImageModelFluxDev
+    ImageModelFluxDev,
+    ImageModelImagen3
 ];
 const QaModels = [
     QAModelBasebit,
@@ -166,7 +168,8 @@ const ImageModels = [
     ImageModelFluxPro11,
     ImageModelFluxDev,
     ImageModelFluxProUltra11,
-    ImageModelFluxSchnell
+    ImageModelFluxSchnell,
+    ImageModelImagen3
     // ImageModelImg2Img
 ];
 const CompletionModels = [
@@ -200,12 +203,13 @@ const AllModels = [].concat(
     ImageModels,
     CompletionModels
 );
-const modelCategories = {
+const ModelCategories = {
     OpenAI: [
         ChatModelGPT4OMini,
         ChatModelGPT4O,
         ChatModelGPT4OMiniSearch,
         ChatModelGPT4OSearch,
+        ChatModelGPT4Turbo,
         ChatModelGPTO3Mini,
         ChatModelGPTO1
     ],
@@ -1005,7 +1009,7 @@ async function setupByUserInfo (userInfo) {
         const modelsContainer = document.querySelector('#headerbar .chat-models');
         // const unsupportedModels = [];
         let modelsEle = '';
-        Object.entries(modelCategories).forEach(([category, models]) => {
+        Object.entries(ModelCategories).forEach(([category, models]) => {
             modelsEle += `<li class="model-category">${category}</li>`;
             models.forEach(model => {
                 if (allowedModels.includes(model)) {
@@ -1015,60 +1019,53 @@ async function setupByUserInfo (userInfo) {
                 }
             });
         });
-        // userInfo.allowed_models.forEach((model) => {
-        //     if (!ChatModels.includes(model)) {
-        //         unsupportedModels.push(model);
-        //         return;
-        //     }
-
-        //     if (FreeModels.includes(model)) {
-        //         modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
-        //     } else {
-        //         modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
-        //     }
-        // });
         modelsContainer.innerHTML = modelsEle;
     }
 
     // setup chat qa models
-    {
-        const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models');
-        let modelsEle = '';
+    // {
+    //     const qaModelsContainer = headerBarEle.querySelector('.dropdown-menu.qa-models');
+    //     let modelsEle = '';
 
-        const allowedQaModels = [QAModelCustom, QAModelShared];
-        window.data.qa_chat_models.forEach((item) => {
-            allowedQaModels.push(item.name);
-        });
+    //     // Add QA category header
+    //     modelsEle += '';
 
-        allowedModels.forEach((model) => {
-            if (!QaModels.includes(model) || !allowedQaModels.includes(model)) {
-                return;
-            }
+    //     const allowedQaModels = [QAModelCustom, QAModelShared];
+    //     window.data.qa_chat_models.forEach((item) => {
+    //         if (allowedModels.includes(item.name)) {
+    //             allowedQaModels.push(item.name);
+    //             const isFree = FreeModels.includes(item.name);
+    //             modelsEle += `<li><a class="dropdown-item${isFree ? ' free-model' : ''}" href="#" data-model="${item.name}">${item.name}</a></li>`;
+    //         }
+    //     });
 
-            if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
-            } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
-            }
-        });
-        qaModelsContainer.innerHTML = modelsEle;
-    }
+    //     // Add remaining QA models
+    //     allowedModels.forEach((model) => {
+    //         if (QaModels.includes(model) && !allowedQaModels.includes(model)) {
+    //             const isFree = FreeModels.includes(model);
+    //             modelsEle += `<li><a class="dropdown-item${isFree ? ' free-model' : ''}" href="#" data-model="${model}">${model}</a></li>`;
+    //         }
+    //     });
+
+    //     qaModelsContainer.innerHTML = modelsEle;
+    // }
 
     // setup chat image models
     {
         const imageModelsContainer = headerBarEle.querySelector('.dropdown-menu.image-models');
         let modelsEle = '';
-        allowedModels.forEach((model) => {
-            if (!ImageModels.includes(model)) {
-                return;
-            }
 
-            if (FreeModels.includes(model)) {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model}</a></li>`;
-            } else {
-                modelsEle += `<li><a class="dropdown-item" href="#" data-model="${model}">${model} <i class="bi bi-coin"></i></a></li>`;
+        // Add Image category header
+        modelsEle += '';
+
+        // Process each image model
+        allowedModels.forEach((model) => {
+            if (ImageModels.includes(model)) {
+                const isFree = FreeModels.includes(model);
+                modelsEle += `<li><a class="dropdown-item${isFree ? ' free-model' : ''}" href="#" data-model="${model}">${model}</a></li>`;
             }
         });
+
         imageModelsContainer.innerHTML = modelsEle;
     }
 
@@ -3043,6 +3040,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         try {
             switch (selectedModel) {
             case ImageModelDalle3:
+            case ImageModelImagen3:
                 await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
                 // case ImageModelImg2Img:
