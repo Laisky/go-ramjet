@@ -65,6 +65,7 @@ const ImageModelFluxPro11 = 'flux-1.1-pro';
 const ImageModelFluxProUltra11 = 'flux-1.1-pro-ultra';
 const ImageModelFluxSchnell = 'flux-schnell';
 const ImageModelImagen3 = 'imagen-3.0';
+const ImageModelImagen3Fast = 'imagen-3.0-fast';
 // const ImageModelImg2Img = 'img-to-img';
 
 const DefaultModel = ChatModelGPT4OMini;
@@ -151,8 +152,9 @@ const VisionModels = [
     // ImageModelFluxPro,
     ImageModelFluxPro11,
     ImageModelFluxProUltra11,
-    ImageModelFluxDev,
-    ImageModelImagen3
+    ImageModelFluxDev
+    // ImageModelImagen3,
+    // ImageModelImagen3Fast
 ];
 const QaModels = [
     QAModelBasebit,
@@ -169,7 +171,8 @@ const ImageModels = [
     ImageModelFluxDev,
     ImageModelFluxProUltra11,
     ImageModelFluxSchnell,
-    ImageModelImagen3
+    ImageModelImagen3,
+    ImageModelImagen3Fast
     // ImageModelImg2Img
 ];
 const CompletionModels = [
@@ -3041,6 +3044,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             switch (selectedModel) {
             case ImageModelDalle3:
             case ImageModelImagen3:
+            case ImageModelImagen3Fast:
                 await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
                 // case ImageModelImg2Img:
