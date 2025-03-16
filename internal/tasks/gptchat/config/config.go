@@ -363,6 +363,7 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		"llama-3.1-8b-instant",
 		"llama-3.1-405b-instruct",
 		"llama-3.3-70b-versatile",
+		"qwen-qwq-32b",
 		// "mixtral-8x7b-32768",
 		// "img-to-img",
 		// "sdxl-turbo",

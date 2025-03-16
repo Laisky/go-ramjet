@@ -49,6 +49,7 @@ const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
 const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
+const ChatModelQwenQwq32B = 'qwen-qwq-32b';
 // const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
@@ -113,6 +114,7 @@ const ChatModels = [
     // ChatModelGroqMixtral8x7B32K,
     ChatModelGroqGemma2With9B,
     ChatModelGroqllama3With70B,
+    ChatModelQwenQwq32B,
     // ChatModelGroqllama3With8B,
     // ChatModelGroqllama3With405B,
     // ChatModelGPT4Vision,
@@ -183,6 +185,7 @@ const FreeModels = [
     // ChatModelGroqMixtral8x7B32K,
     ChatModelGroqGemma2With9B,
     ChatModelGroqllama3With70B,
+    ChatModelQwenQwq32B,
     // ChatModelGroqllama3With8B,
     // ChatModelGroqllama3With405B,
     // ChatModelTurbo35,
@@ -234,7 +237,8 @@ const ModelCategories = {
     Others: [
         ChatModelDeepResearch,
         ChatModelGroqGemma2With9B,
-        ChatModelGroqllama3With70B
+        ChatModelGroqllama3With70B,
+        ChatModelQwenQwq32B
     ]
 };
 
