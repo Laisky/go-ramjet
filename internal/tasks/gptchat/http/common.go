@@ -121,7 +121,7 @@ func getUserByToken(gctx *gin.Context, userToken string) (user *config.UserConfi
 SWITCH_FOR_USER:
 	switch {
 	case strings.HasPrefix(userToken, "FREETIER-"),
-		userToken == config.FreetierUserToken: // free user
+		userToken == config.FreetierUserToken: // free userch
 		if len(userToken) < 15 {
 			return nil, errors.Errorf("invalid freetier token %q", userToken)
 		}

@@ -125,6 +125,10 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	bodyReader := resp.Body
 	reader := bufio.NewScanner(bodyReader)
+
+	buf := make([]byte, 0, 10*1024*1024)
+	reader.Buffer(buf, len(buf))
+
 	reader.Split(bufio.ScanLines)
 
 	var respContent string
@@ -132,7 +136,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	var line []byte
 	for reader.Scan() {
 		line = bytes.TrimSpace(reader.Bytes())
-		// logger.Debug("got response line", zap.ByteString("line", line)) // debug only
+		logger.Debug("got response line", zap.ByteString("line", line)) // debug only
 
 		if len(line) == 0 {
 			continue
@@ -185,7 +189,10 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 				return lastResp.Choices[0].Delta.ToolCalls
 			}
 
-			respContent += lastResp.Choices[0].Delta.Content
+			switch v := lastResp.Choices[0].Delta.Content.(type) {
+			case string:
+				respContent += v
+			}
 		}
 
 		// new oai api will return empty choices first
@@ -204,6 +211,10 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			)
 			break
 		}
+	}
+
+	if web.AbortErr(ctx, reader.Err()) {
+		return
 	}
 
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
@@ -495,7 +506,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4-turbo",
 			"gemini-2.0-pro",
 			"gemini-2.0-flash",
-			"gemini-2.0-flash-thinking":
+			"gemini-2.0-flash-thinking",
+			"gemini-2.0-flash-exp-image-generation":
 			if len(lastMessage.Files) == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
@@ -924,11 +936,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 }
 
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
-	// // Set headers first
-	// gctx.Writer.Header().Set("Content-Type", "text/event-stream")
-	// gctx.Writer.Header().Set("Cache-Control", "no-cache")
-	// gctx.Writer.Header().Set("Connection", "keep-alive")
-	// gctx.Writer.Header().Set("X-Accel-Buffering", "no")
+	ctx := gmw.Ctx(gctx)
 
 	// Create synchronization primitives
 	heartCtx, heartCancel := context.WithCancel(context.Background())
@@ -937,8 +945,6 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 
 	// Create a mutex to protect writer access
 	var writerMutex sync.Mutex
-
-	// Store the mutex in the context for other handlers to access
 	gctx.Set("writer_mutex", &writerMutex)
 
 	// Detect iOS Safari
@@ -964,22 +970,32 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 		writerMutex.Unlock()
 	}
 
+	// Create notification channel for context cancellation
+	// This avoids the race condition by copying the request context once
+	requestDone := make(chan struct{})
+
+	// Setup the context monitor in a separate goroutine
+	go func() {
+		// Use the request context to signal when done
+		select {
+		case <-ctx.Done():
+			close(requestDone)
+		case <-heartCtx.Done():
+			// In case heartbeat is manually cancelled
+		}
+	}()
+
+	// Heartbeat sender goroutine
 	go func() {
 		defer wg.Done()
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 
-		disconnected := make(chan struct{})
-		go func() {
-			<-gctx.Request.Context().Done()
-			close(disconnected)
-		}()
-
 		for {
 			select {
 			case <-heartCtx.Done():
 				return
-			case <-disconnected:
+			case <-requestDone:
 				return
 			case <-ticker.C:
 				writerMutex.Lock()
@@ -996,7 +1012,10 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 
 	// Setup cleanup
 	go func() {
-		<-gctx.Request.Context().Done()
+		select {
+		case <-requestDone:
+			// No need to close requestDone since it was already closed by the monitor
+		}
 		heartCancel()
 		wg.Wait()
 	}()

@@ -43,6 +43,7 @@ const ChatModelGemini2Pro = 'gemini-2.0-pro';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGemini2Flash = 'gemini-2.0-flash';
 const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
+const ChatModelGemini2FlahExpImage = 'gemini-2.0-flash-exp-image-generation';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
@@ -122,7 +123,8 @@ const ChatModels = [
     // ChatModelGeminiProVision,
     ChatModelGemini2Pro,
     ChatModelGemini2Flash,
-    ChatModelGemini2FlashThinking
+    ChatModelGemini2FlashThinking,
+    ChatModelGemini2FlahExpImage
     // ChatModelTurbo35_16K,
     // ChatModelTurbo35_0613,
     // ChatModelTurbo35_0613_16K,
@@ -140,6 +142,7 @@ const VisionModels = [
     ChatModelGemini2Pro,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking,
+    ChatModelGemini2FlahExpImage,
     ChatModelClaude3Opus,
     ChatModelClaude35Sonnet,
     ChatModelClaude37Sonnet,
@@ -229,7 +232,8 @@ const ModelCategories = {
     Google: [
         ChatModelGemini2Pro,
         ChatModelGemini2Flash,
-        ChatModelGemini2FlashThinking
+        ChatModelGemini2FlashThinking,
+        ChatModelGemini2FlahExpImage
     ],
     Deepseek: [
         ChatModelDeepSeekChat,
@@ -2186,57 +2190,78 @@ function isAllowChatPrompInput () {
 }
 
 /**
- * Parses the AI response and extracts the response content and reasoning content.
+ * Parses the AI response and extracts different content types including text, images, reasoning, and annotations.
  *
- * @param {string} chatmodel
- * @param {object} payload
- * @returns {object} An object containing the response content and reasoning content.
+ * @param {string} chatmodel - The model used for generating the response
+ * @param {object} payload - The raw response payload from the API
+ * @returns {object} An object containing the extracted content components
  */
 function parseChatResp (chatmodel, payload) {
     let respChunk = '';
     let reasoningChunk = '';
     let annotations = [];
+
+    // Handle empty or malformed payload
     if (!payload.choices || payload.choices.length === 0) {
-        payload.choices = [{
-            delta: {
-                content: '',
-                text: ''
-            }
-        }];
+        console.debug('Empty or malformed payload in parseChatResp:', payload);
+        return { respChunk: '', reasoningChunk: '', annotations: [] };
     }
 
+    // Extract annotations if present
     annotations = payload.choices[0].delta.annotations || [];
 
-    // Currently only deepseek-r1 supports returning thoughts,
-    // and different providers have two methods.
-    // The official deepseek returns thoughts via delta.reasoning_content,
-    // whereas other providers wrap thoughts with <think></think>.
+    // Handle different model types and response formats
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
-        if (payload.choices[0].delta.content === '<think>') {
-            globalAIRespData.isThinking = true;
-        } else if (payload.choices[0].delta.content === '</think>') {
-            globalAIRespData.isThinking = false;
+        // Extract reasoning content (for models that support thinking/reasoning)
+        if (chatmodel.includes('thinking')) {
+            reasoningChunk += payload.choices[0].delta.reasoning_content || '';
+            reasoningChunk += payload.choices[0].delta.reasoning || '';
         }
 
-        reasoningChunk += payload.choices[0].delta.reasoning_content || '';
-        reasoningChunk += payload.choices[0].delta.reasoning || '';
+        // Handle <think> tags for reasoning in some models
+        if (payload.choices[0].delta.content === '<think>') {
+            globalAIRespData.isThinking = true;
+            return { respChunk, reasoningChunk, annotations };
+        } else if (payload.choices[0].delta.content === '</think>') {
+            globalAIRespData.isThinking = false;
+            return { respChunk, reasoningChunk, annotations };
+        }
 
+        // Process content based on whether AI is in thinking mode
         if (globalAIRespData.isThinking) {
             reasoningChunk += payload.choices[0].delta.content || '';
         } else {
-            respChunk = payload.choices[0].delta.content || '';
+            // Handle text content
+            if (typeof payload.choices[0].delta.content === 'string') {
+                respChunk = payload.choices[0].delta.content;
+            } else if (Array.isArray(payload.choices[0].delta.content)) {
+                // Handle multi-modal content (array format used by models like Gemini)
+                // {"type":"image_url","image_url":{"url":"data:image/png;base64,xxxxxxx"}}
+                for (const item of payload.choices[0].delta.content) {
+                    if (item.type === 'text') {
+                        respChunk += item.text || '';
+                    } else if (item.type === 'image_url' && item.image_url) {
+                        // For image content, create HTML markup to display it
+                        const imgSrc = item.image_url.url;
+                        const imgAlt = item.image_url.alt || 'AI-generated image';
+
+                        // Use a placeholder in the text stream that will be replaced by the actual image
+                        respChunk += `\n![${imgAlt}](${imgSrc})\n`;
+                    }
+                }
+            }
         }
     } else if (IsCompletionModel(chatmodel)) {
         respChunk = payload.choices[0].text || '';
     } else {
-        showalert('error', `Unknown chat model ${chatmodel}`);
+        console.warn(`Unknown chat model type in parseChatResp: ${chatmodel}`);
     }
 
     return {
         respChunk,
         reasoningChunk,
         annotations
-    }
+    };
 }
 
 /**

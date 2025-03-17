@@ -323,9 +323,19 @@ type OpenaiCompletionStreamRespChoice struct {
 }
 
 type OpenaiCompletionStreamRespDelta struct {
-	Role      OpenaiMessageRole                    `json:"role"`
-	Content   string                               `json:"content"`
+	Role OpenaiMessageRole `json:"role"`
+	// Content may be string or []StreamRespContent
+	Content   any                                  `json:"content"`
 	ToolCalls []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
+}
+
+type StreamRespContent struct {
+	Type     string   `json:"type"`
+	ImageUrl ImageUrl `json:"image_url"`
+}
+
+type ImageUrl struct {
+	Url string `json:"url"`
 }
 
 // OpenaiCompletionStreamRespToolCall tool call
