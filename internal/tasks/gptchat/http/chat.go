@@ -423,7 +423,11 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		}
 
 		var openaiReq any
-		lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+		// lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
+		var nImages int
+		for _, msg := range frontendReq.Messages {
+			nImages += len(msg.Files)
+		}
 
 	MODEL_SWITCH:
 		switch frontendReq.Model {
@@ -476,7 +480,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				}
 			}
 
-			if len(lastMessage.Files) == 0 {
+			if nImages == 0 {
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
 					return nil, nil, errors.Wrap(err, "copy to chat req")
@@ -508,7 +512,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gemini-2.0-flash",
 			"gemini-2.0-flash-thinking",
 			"gemini-2.0-flash-exp-image-generation":
-			if len(lastMessage.Files) == 0 { // no images, text only
+			if nImages == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
 					return nil, nil, errors.Wrap(err, "copy to chat req")
@@ -574,56 +578,82 @@ func (r *FrontendReq) fillDefault() {
 
 // processVisionRequest process vision request
 func processVisionRequest(user *config.UserConfig, frontendReq *FrontendReq) (*OpenaiChatReq[[]OpenaiVisionMessageContent], error) {
-	lastMessage := frontendReq.Messages[len(frontendReq.Messages)-1]
-
 	req := new(OpenaiChatReq[[]OpenaiVisionMessageContent])
 	if err := copier.Copy(req, frontendReq); err != nil {
 		return nil, errors.Wrap(err, "copy to chat req")
 	}
 
-	// if len(lastMessage.Files) == 0 {
-	// 	// there is no images attached, so rewrite model to non-vision model
-	// 	req.Model = "gpt-4o-mini"
-	// }
+	// Convert all messages from frontend request to vision format
+	req.Messages = make([]OpenaiReqMessage[[]OpenaiVisionMessageContent], 0, len(frontendReq.Messages))
 
-	req.Messages = []OpenaiReqMessage[[]OpenaiVisionMessageContent]{
-		{
-			Role: OpenaiMessageRoleUser,
-			Content: []OpenaiVisionMessageContent{
-				{
-					Type: OpenaiVisionMessageContentTypeText,
-					Text: lastMessage.Content,
+	var nImages int
+	for _, msg := range frontendReq.Messages {
+		// Create a new message with the same role
+		visionMsg := OpenaiReqMessage[[]OpenaiVisionMessageContent]{
+			Role:    msg.Role,
+			Content: []OpenaiVisionMessageContent{},
+		}
+
+		// Add text content if present
+		if msg.Content != "" {
+			visionMsg.Content = append(visionMsg.Content, OpenaiVisionMessageContent{
+				Type: OpenaiVisionMessageContentTypeText,
+				Text: msg.Content,
+			})
+		}
+
+		// Add image content if present
+		totalFileSize := 0
+		for _, f := range msg.Files {
+			nImages += 1
+			resolution := VisionImageResolutionLow
+			// if user has permission and image size is large than 1MB,
+			// use high resolution
+			if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(msg.Content) {
+				resolution = VisionImageResolutionHigh
+			}
+
+			visionMsg.Content = append(visionMsg.Content, OpenaiVisionMessageContent{
+				Type: OpenaiVisionMessageContentTypeImageUrl,
+				ImageUrl: &OpenaiVisionMessageContentImageUrl{
+					URL: fmt.Sprintf("data:%s;base64,", imageType(f.Content)) +
+						base64.StdEncoding.EncodeToString(f.Content),
+					Detail: resolution,
 				},
-			},
-		},
+			})
+
+			if user.IsFree {
+				if nImages >= 2 {
+					break // only support 6 images per message for cost saving
+				}
+			}
+
+			totalFileSize += len(f.Content)
+			if totalFileSize > 10*1024*1024 {
+				return nil, errors.Errorf("total file size should be less than 10MB, got %d", totalFileSize)
+			}
+		}
+
+		// If a system message has no content, skip it
+		if msg.Role == OpenaiMessageRoleSystem && len(visionMsg.Content) == 0 {
+			continue
+		}
+
+		// For empty user or AI messages, add an empty text content
+		// This handles cases where a message might only have images
+		if len(visionMsg.Content) == 0 {
+			visionMsg.Content = append(visionMsg.Content, OpenaiVisionMessageContent{
+				Type: OpenaiVisionMessageContentTypeText,
+				Text: "",
+			})
+		}
+
+		req.Messages = append(req.Messages, visionMsg)
 	}
 
-	totalFileSize := 0
-	for i, f := range lastMessage.Files {
-		resolution := VisionImageResolutionLow
-		// if user has permission and image size is large than 1MB,
-		// use high resolution
-		if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(lastMessage.Content) {
-			resolution = VisionImageResolutionHigh
-		}
-
-		req.Messages[0].Content = append(req.Messages[0].Content, OpenaiVisionMessageContent{
-			Type: OpenaiVisionMessageContentTypeImageUrl,
-			ImageUrl: &OpenaiVisionMessageContentImageUrl{
-				URL: fmt.Sprintf("data:%s;base64,", imageType(f.Content)) +
-					base64.StdEncoding.EncodeToString(f.Content),
-				Detail: resolution,
-			},
-		})
-
-		if i >= 6 {
-			break // only support 6 images for cost saving
-		}
-
-		totalFileSize += len(f.Content)
-		if totalFileSize > 10*1024*1024 {
-			return nil, errors.Errorf("total file size should less than 10MB, got %d", totalFileSize)
-		}
+	// Ensure we have at least one message
+	if len(req.Messages) == 0 {
+		return nil, errors.New("no valid messages after processing")
 	}
 
 	return req, nil

@@ -2083,12 +2083,12 @@ function setupScrollDetection () {
 }
 
 /**
-*
-* Get the last N chat messages, which will be sent to the AI as context.
+* Gets the last N chat messages to provide as context for the AI.
+* Enhanced to properly handle multi-modal content including images and text.
 *
 * @param {number} N - The number of messages to retrieve.
-* @param {string} ignoredChatID - If ignoredChatID is not null, the chat with this chatid will be ignored.
-* @returns {Array} An array of chat messages.
+* @param {string} ignoredChatID - If provided, the chat with this chatID will be ignored.
+* @returns {Array} An array of chat messages with proper content formatting.
 */
 async function getLastNChatMessages (N, ignoredChatID) {
     console.debug('getLastNChatMessages', N, ignoredChatID);
@@ -2098,55 +2098,124 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const historyMessages = await activeSessionChatHistory();
     let nHuman = 1;
     let latestRole = RoleHuman;
+
     for (let i = historyMessages.length - 1; i >= 0; i--) {
         const role = historyMessages[i].role;
         const chatID = historyMessages[i].chatID;
-        const chatData = await getChatData(chatID, role);
-        let content = chatData.rawContent || chatData.content;
+
+        // Skip ignored chatID if specified (for reload/edit cases)
+        if (ignoredChatID && ignoredChatID === chatID) {
+            continue;
+        }
+
+        // Skip system messages and consecutive messages from the same role
+        if (role !== RoleHuman && role !== RoleAI) {
+            continue;
+        }
 
         if (latestRole && latestRole === role) {
-            // if latest role is same as current role, break
-            console.warn(`latest role is same as current role, skip, latestRole=${latestRole}`);
+            console.warn(`Latest role is same as current role, skipping. latestRole=${latestRole}`);
             continue;
         }
 
-        if (role !== RoleHuman && role !== RoleAI) {
-            // exclude system message
-            continue;
+        // Get the full chat data
+        const chatData = await getChatData(chatID, role);
+
+        // Prepare message content and files
+        let messageContent = '';
+        const files = [];
+
+        if (role === RoleAI && chatData.rawContent && chatData.rawContent.includes('🔥Someting in trouble')) {
+            messageContent = 'There was an error during the AI response. Please try again.';
+        } else if (chatData.rawContent) {
+            messageContent = chatData.rawContent;
+
+            // Extract image base64 data from markdown syntax ![AI-generated image](data:image/png;base64,...)
+            const imgRegex = /!\[AI-generated image\]\((data:image\/[^)]+)\)/g;
+            const matches = [...chatData.rawContent.matchAll(imgRegex)];
+
+            if (matches.length > 0) {
+                // Remove the image markdown from the text
+                messageContent = chatData.rawContent.replace(imgRegex, '');
+
+                // Add images to files array
+                for (const match of matches) {
+                    const dataUrl = match[1];
+                    const [header, base64Data] = dataUrl.split(',');
+                    const imgType = header.match(/data:image\/([^;]+)/)[1];
+
+                    files.push({
+                        type: 'image',
+                        name: `image_${Date.now()}_${files.length}.${imgType}`,
+                        content: base64Data
+                    });
+                }
+            }
+        } else if (chatData.content) {
+            messageContent = chatData.content;
         }
 
-        if (ignoredChatID && ignoredChatID === historyMessages[i].chatID) {
-            // This is a reload request with edited chat,
-            // ignore chat with same chatid to avoid duplicate context.
-            continue;
+        // Handle attachHTML (images from previous conversations)
+        if (chatData.attachHTML) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = chatData.attachHTML;
+
+            const imgElements = tempDiv.querySelectorAll('img');
+            imgElements.forEach(img => {
+                const imgSrc = img.getAttribute('src');
+                if (imgSrc && imgSrc.startsWith('data:image/')) {
+                    const [header, base64Data] = imgSrc.split(',');
+                    const imgType = header.match(/data:image\/([^;]+)/)[1];
+
+                    files.push({
+                        type: 'image',
+                        name: img.getAttribute('data-name') || `attached_image_${Date.now()}_${files.length}.${imgType}`,
+                        content: base64Data
+                    });
+                }
+            });
         }
 
-        if (role === RoleAI && content.includes('🔥Someting in trouble')) {
-            // if AI response is error, replace it with a error message.
-            // claude does not accept empty content.
-            content = 'there is an error during AI response, please try again.';
-        }
-
-        latestRole = role;
-        // insert at the beginning, only keep role and content
-        latestMessages.unshift({
+        // Add the message to our history array
+        const message = {
             role,
-            content
-        });
+            content: messageContent
+        };
 
+        // Only add files to the message if there are any and it's a user message
+        // (files are only supported in user messages as per the API)
+        if (files.length > 0) {
+            message.files = files;
+        }
+
+        latestMessages.unshift(message);
+
+        // Update tracking variables
+        latestRole = role;
+
+        // Count human messages and break when we have enough context
         if (role === RoleHuman) {
             nHuman++;
-            if (nHuman >= N) {
+            if (nHuman > N) {
                 break;
             }
         }
     }
 
+    // Add system prompt if available
     if (systemPrompt) {
         latestMessages.unshift({
             role: RoleSystem,
             content: systemPrompt
         });
+    }
+
+    // Save pinned URLs to session config
+    const sconfig = await getChatSessionConfig();
+    const pinnedUrls = getPinnedMaterials() || [];
+    if (pinnedUrls.length > 0) {
+        sconfig.pinnedMaterials = pinnedUrls;
+        await saveChatSessionConfig(sconfig);
     }
 
     return latestMessages;
@@ -2243,7 +2312,7 @@ function parseChatResp (chatmodel, payload) {
                     } else if (item.type === 'image_url' && item.image_url) {
                         // For image content, create HTML markup to display it
                         const imgSrc = item.image_url.url;
-                        const imgAlt = item.image_url.alt || 'AI-generated image';
+                        const imgAlt = 'AI-generated image';
 
                         // Use a placeholder in the text stream that will be replaced by the actual image
                         respChunk += `\n![${imgAlt}](${imgSrc})\n`;
