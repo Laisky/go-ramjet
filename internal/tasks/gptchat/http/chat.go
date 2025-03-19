@@ -136,7 +136,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	var line []byte
 	for reader.Scan() {
 		line = bytes.TrimSpace(reader.Bytes())
-		logger.Debug("got response line", zap.ByteString("line", line)) // debug only
+		// logger.Debug("got response line", zap.ByteString("line", line)) // debug only
 
 		if len(line) == 0 {
 			continue
@@ -762,27 +762,29 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 
 	searchQuery, err := OneshotChat(gmw.Ctx(gctx), user, defaultChatModel, webSearchQueryPrompt, *lastUserPrompt)
 	if err != nil {
-		logger.Warn("google search query", zap.Error(err))
+		logger.Error("google search query", zap.Error(err))
 		return
 	}
 
 	// fetch web search result
 	extra, err := webSearch(gmw.Ctx(gctx), searchQuery, user)
 	if err != nil {
-		log.Logger.Warn("web search", zap.Error(err),
+		log.Logger.Error("web search", zap.Error(err),
 			zap.String("prompt", searchQuery))
 		return
 	}
 
-	extra, err = queryChunks(gctx, queryChunksArgs{
-		user:    user,
-		query:   searchQuery,
-		ext:     ".txt",
-		model:   r.Model,
-		content: []byte(extra),
-	})
-	if err != nil {
-		log.Logger.Warn("query chunks for search result", zap.Error(err))
+	if len([]rune(extra)) > 20000 {
+		extra, err = queryChunks(gctx, queryChunksArgs{
+			user:    user,
+			query:   searchQuery,
+			ext:     ".txt",
+			model:   r.Model,
+			content: []byte(extra),
+		})
+		if err != nil {
+			log.Logger.Warn("query chunks for search result", zap.Error(err))
+		}
 	}
 
 	// trim extra content
