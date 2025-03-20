@@ -1764,13 +1764,14 @@ async function setupSessionManager () {
         }));
 
         // restore conservation history
-        await Promise.all(Array.from(await activeSessionChatHistory()).map(async (chat) => {
+        const chatHistory = await activeSessionChatHistory();
+        for (const chat of chatHistory) {
             const chatData = await getChatData(chat.chatID, chat.role);
             append2Chats(true, chatData);
             if (chat.role === RoleAI) {
                 await renderAfterAiResp(chatData, false);
             }
-        }));
+        }
     }
 
     // add widget to scroll bottom
