@@ -2099,6 +2099,9 @@ async function getLastNChatMessages (N, ignoredChatID) {
     const historyMessages = await activeSessionChatHistory();
     let nHuman = 1;
     let latestRole = RoleHuman;
+    // Only include images from the latest conversation round,
+    // no matter they come from users or AI
+    let latestImagesFound = false;
 
     for (let i = historyMessages.length - 1; i >= 0; i--) {
         const role = historyMessages[i].role;
@@ -2183,9 +2186,8 @@ async function getLastNChatMessages (N, ignoredChatID) {
             content: messageContent
         };
 
-        // Only add files to the message if there are any and it's a user message
-        // (files are only supported in user messages as per the API)
-        if (files.length > 0) {
+        if (!latestImagesFound && files.length > 0) {
+            latestImagesFound = true;
             message.files = files;
         }
 
