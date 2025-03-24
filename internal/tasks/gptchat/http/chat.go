@@ -412,7 +412,10 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		// fmt.Println(frontendReq.Messages)
 		frontendReq.LaiskyExtra = nil
 
-		if err := user.IsModelAllowed(ctx, frontendReq.Model, frontendReq.PromptTokens()); err != nil {
+		if err := user.IsModelAllowed(ctx,
+			frontendReq.Model,
+			frontendReq.PromptTokens(),
+			int(frontendReq.MaxTokens)); err != nil {
 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
 		}
 

@@ -94,7 +94,7 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, model, 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, model, 0, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -475,7 +475,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -605,7 +605,7 @@ func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, rawreq.Model, 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, rawreq.Model, 0, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -739,7 +739,7 @@ func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -869,7 +869,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0); web.AbortErr(ctx, err) {
+	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
 		return
 	}
 

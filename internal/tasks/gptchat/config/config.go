@@ -304,7 +304,7 @@ func setupRateLimiter() {
 // # Args
 //   - model: model name
 //   - nPromptTokens: the length of prompt tokens, 0 means no limit
-func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTokens int) error {
+func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTokens, maxTokens int) error {
 	onceLimiter.Do(setupRateLimiter)
 
 	logger := gmw.GetLogger(ctx)
@@ -379,13 +379,19 @@ func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTo
 		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
 	}
 
-	if !c.NoLimitExpensiveModels && c.LimitPromptTokenLength > 0 {
-		if nPromptTokens > c.LimitPromptTokenLength {
+	if !c.NoLimitExpensiveModels {
+		if c.LimitPromptTokenLength > 0 && nPromptTokens > c.LimitPromptTokenLength {
 			return errors.Errorf(
 				"The length of the prompt you submitted is %d, exceeds the limit for free users %d, "+
 					"you need upgrade to a paid membership to use longer prompt tokens, "+
 					"more info at https://wiki.laisky.com/projects/gpt/pay/cn/",
 				nPromptTokens, c.LimitPromptTokenLength)
+		}
+
+		if maxTokens > 500 {
+			return errors.New("max_tokens is limited to 500 for free users, " +
+				"you need upgrade to a paid membership to use larger max_tokens, " +
+				"more info at https://wiki.laisky.com/projects/gpt/pay/cn/")
 		}
 	}
 

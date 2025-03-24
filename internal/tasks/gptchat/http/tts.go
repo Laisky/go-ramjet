@@ -34,7 +34,8 @@ func TTSHanler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx.Request.Context(), "tts", 0); web.AbortErr(ctx, errors.Wrap(err, "check model allowed")) {
+	if err = user.IsModelAllowed(ctx.Request.Context(),
+		"tts", 0, 0); web.AbortErr(ctx, errors.Wrap(err, "check model allowed")) {
 		return
 	}
 
