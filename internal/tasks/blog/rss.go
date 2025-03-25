@@ -67,15 +67,12 @@ func (w *RssWorker) GenerateRSS(ctx context.Context, rsscfg *rssCfg) (err error)
 			return errors.Wrap(err, "decode post")
 		}
 
-		// Sanitize content by wrapping it in CDATA
-		content := fmt.Sprintf("<![CDATA[%s]]>", p.Cnt)
-		title := fmt.Sprintf("<![CDATA[%s]]>", p.Title)
-
+		// Let the feeds library handle CDATA wrapping
 		w.feed.Items = append(w.feed.Items, &feeds.Item{
-			Title:   title,
+			Title:   p.Title,
 			Link:    &feeds.Link{Href: rsscfg.link + "p/" + p.Name + "/"},
 			Id:      rsscfg.link + "p/" + p.Name + "/",
-			Content: content,
+			Content: p.Cnt,
 			Author: &feeds.Author{
 				Name: fmt.Sprintf("%v(%v)", rsscfg.authorEmail, rsscfg.authorName),
 			},
