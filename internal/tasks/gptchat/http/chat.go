@@ -453,6 +453,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-2",
 			// "mixtral-8x7b-32768",
 			"gemma2-9b-it",
+			"gemma-3-27b-it",
 			"llama3-8b-8192",
 			"llama3-70b-8192",
 			"llama-3.1-8b-instant",
@@ -512,6 +513,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4-turbo-2024-04-09",
 			"gpt-4-turbo",
 			"gemini-2.0-pro",
+			"gemini-2.5-pro",
 			"gemini-2.0-flash",
 			"gemini-2.0-flash-thinking",
 			"gemini-2.0-flash-exp-image-generation":

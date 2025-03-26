@@ -40,13 +40,15 @@ const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
 const ChatModelGemini2Pro = 'gemini-2.0-pro';
+const ChatModelGemini25Pro = 'gemini-2.5-pro';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
 const ChatModelGemini2Flash = 'gemini-2.0-flash';
 const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 const ChatModelGemini2FlahExpImage = 'gemini-2.0-flash-exp-image-generation';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
-const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
+// const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
+const ChatModelGroqGemma3With27B = 'gemma-3-27b-it';
 const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
@@ -113,7 +115,8 @@ const ChatModels = [
     ChatModelClaude35Haiku,
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
-    ChatModelGroqGemma2With9B,
+    // ChatModelGroqGemma2With9B,
+    ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
     ChatModelQwenQwq32B,
     // ChatModelGroqllama3With8B,
@@ -122,6 +125,7 @@ const ChatModels = [
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
     ChatModelGemini2Pro,
+    ChatModelGemini25Pro,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking,
     ChatModelGemini2FlahExpImage
@@ -140,6 +144,7 @@ const VisionModels = [
     ChatModelGPT4OMiniSearch,
     // ChatModelGeminiProVision,
     ChatModelGemini2Pro,
+    ChatModelGemini25Pro,
     ChatModelGemini2Flash,
     ChatModelGemini2FlashThinking,
     ChatModelGemini2FlahExpImage,
@@ -186,7 +191,8 @@ const CompletionModels = [
 const FreeModels = [
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
-    ChatModelGroqGemma2With9B,
+    // ChatModelGroqGemma2With9B,
+    ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
     ChatModelQwenQwq32B,
     // ChatModelGroqllama3With8B,
@@ -231,9 +237,11 @@ const ModelCategories = {
     ],
     Google: [
         ChatModelGemini2Pro,
+        ChatModelGemini25Pro,
         ChatModelGemini2Flash,
         ChatModelGemini2FlashThinking,
-        ChatModelGemini2FlahExpImage
+        ChatModelGemini2FlahExpImage,
+        ChatModelGroqGemma3With27B
     ],
     Deepseek: [
         ChatModelDeepSeekChat,
@@ -241,7 +249,7 @@ const ModelCategories = {
     ],
     Others: [
         ChatModelDeepResearch,
-        ChatModelGroqGemma2With9B,
+        // ChatModelGroqGemma2With9B,
         ChatModelGroqllama3With70B,
         ChatModelQwenQwq32B
     ]
