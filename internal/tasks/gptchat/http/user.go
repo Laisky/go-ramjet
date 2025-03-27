@@ -276,8 +276,8 @@ func IsModelAllowed(ctx context.Context,
 				nPromptTokens, user.LimitPromptTokenLength)
 		}
 
-		if req.MaxTokens > 1500 {
-			return errors.New("max_tokens is limited to 1500 for free users, " +
+		if req.MaxTokens > 2000 {
+			return errors.New("max_tokens is limited to 2000 for free users, " +
 				"you need upgrade to a paid membership to use larger max_tokens, " +
 				"more info at https://wiki.laisky.com/projects/gpt/pay/")
 		}
