@@ -94,7 +94,9 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, model, 0, 0); web.AbortErr(ctx, err) {
+	if err = IsModelAllowed(ctx, user, &FrontendReq{
+		N:     nImage,
+		Model: model}); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -475,11 +477,13 @@ func DrawByLcmHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
+	const nSubTask = 2
+	if err = IsModelAllowed(ctx, user, &FrontendReq{
+		N:     nSubTask,
+		Model: req.Model}); web.AbortErr(ctx, err) {
 		return
 	}
 
-	const nSubTask = 2
 	for i := 0; i < nSubTask; i++ {
 		i := i
 		subtask := strconv.Itoa(i)
@@ -605,7 +609,9 @@ func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, rawreq.Model, 0, 0); web.AbortErr(ctx, err) {
+	if err = IsModelAllowed(ctx, user, &FrontendReq{
+		N:     1,
+		Model: rawreq.Model}); web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -739,11 +745,13 @@ func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
+	req.N = 2
+	if err = IsModelAllowed(ctx, user, &FrontendReq{
+		N:     req.N,
+		Model: req.Model}); web.AbortErr(ctx, err) {
 		return
 	}
 
-	req.N = 2
 	go func() {
 		// time.Sleep(time.Second * time.Duration(i))
 		logger.Debug("start image drawing task")
@@ -869,7 +877,11 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if err = user.IsModelAllowed(ctx, req.Model, 0, 0); web.AbortErr(ctx, err) {
+	if err = IsModelAllowed(ctx, user,
+		&FrontendReq{
+			N:     1,
+			Model: req.Model,
+		}); web.AbortErr(ctx, err) {
 		return
 	}
 

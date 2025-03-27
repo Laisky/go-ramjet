@@ -168,7 +168,9 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 			costReason = "txt2image"
 			token = user.ImageToken
 			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
-			if err = user.IsModelAllowed(gctx, model, 0, 0); err != nil {
+			if err = IsModelAllowed(gctx, user, &FrontendReq{
+				Model: model,
+			}); err != nil {
 				return errors.Wrapf(err, "check model %q", model)
 			}
 		}

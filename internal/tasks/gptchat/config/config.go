@@ -2,19 +2,13 @@
 package config
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
-	"sync"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v6"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v5"
-	"github.com/Laisky/zap"
-
-	"github.com/Laisky/go-ramjet/library/log"
 )
 
 const (
@@ -253,159 +247,6 @@ func (c *UserConfig) Valid() error {
 
 	// format normalize
 	c.APIBase = strings.TrimRight(c.APIBase, "/")
-
-	return nil
-}
-
-var (
-	onceLimiter                                     sync.Once
-	freeModelRateLimiter, expensiveModelRateLimiter *gutils.RateLimiter
-)
-
-// setupRateLimiter setup ratelimiter depends on loaded config
-func setupRateLimiter() {
-	const burstRatio = 1.2
-	var err error
-	logger := log.Logger.Named("gptchat.ratelimiter")
-
-	// {
-	// 	if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
-	// 		gutils.RateLimiterArgs{
-	// 			Max:     10,
-	// 			NPerSec: 1,
-	// 		}); err != nil {
-	// 		log.Logger.Panic("new ratelimiter", zap.Error(err))
-	// 	}
-	// 	logger.Info("set overall ratelimiter", zap.Int("burst", 10))
-	// }
-
-	burst := int(float64(Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
-	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     burst,
-			NPerSec: 1,
-		}); err != nil {
-		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
-	}
-	logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
-
-	if freeModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     3,
-			NPerSec: 1,
-		}); err != nil {
-		log.Logger.Panic("new freeModelRateLimiter", zap.Error(err))
-	}
-	logger.Info("set ratelimiter for free models", zap.Int("burst", burst))
-}
-
-// IsModelAllowed check if model is allowed
-//
-// # Args
-//   - model: model name
-//   - nPromptTokens: the length of prompt tokens, 0 means no limit
-func (c *UserConfig) IsModelAllowed(ctx context.Context, model string, nPromptTokens, maxTokens int) error {
-	onceLimiter.Do(setupRateLimiter)
-
-	logger := gmw.GetLogger(ctx)
-
-	switch {
-	case c.BYOK: // bypass if user bring their own token
-		logger.Debug("bypass rate limit for BYOK user")
-		return nil
-	case c.NoLimitExpensiveModels:
-		logger.Debug("bypass rate limit for no_limit_expensive_models user")
-		return nil
-	default:
-	}
-
-	if len(c.AllowedModels) == 0 {
-		return errors.Errorf("no allowed models for current user %q", c.UserName)
-	}
-
-	var allowed bool
-	for _, m := range c.AllowedModels {
-		if m == "*" {
-			allowed = true
-			break
-		}
-
-		if m == model {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return errors.Errorf("model %q is not allowed for user %q", model, c.UserName)
-	}
-
-	// if !globalRatelimiter.Allow() { // check rate limit
-	// 	return errors.Errorf("too many requests, please try again later")
-	// }
-
-	// rate limit only support limit by second,
-	// so we consume 60 tokens once to make it limit by minute
-	var (
-		ratelimitCost int
-		ratelimiter   = expensiveModelRateLimiter
-	)
-	switch model {
-	case "gpt-3.5-turbo", // free models
-		// "gpt-3.5-turbo-1106",
-		// "gpt-3.5-turbo-0125",
-		"gpt-4o-mini",
-		// "llama2-70b-4096",
-		"deepseek-chat",
-		// "deepseek-coder",
-		"gemma2-9b-it",
-		"gemma-3-27b-it",
-		"llama3-8b-8192",
-		"llama3-70b-8192",
-		"llama-3.1-8b-instant",
-		"llama-3.1-405b-instruct",
-		"llama-3.3-70b-versatile",
-		"qwen-qwq-32b",
-		// "mixtral-8x7b-32768",
-		// "img-to-img",
-		// "sdxl-turbo",
-		"tts",
-		"gemini-2.0-flash":
-		ratelimiter = freeModelRateLimiter
-		ratelimitCost = 1
-	default: // expensive model
-		if c.NoLimitExpensiveModels {
-			return nil
-		}
-
-		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
-	}
-
-	if !c.NoLimitExpensiveModels {
-		if c.LimitPromptTokenLength > 0 && nPromptTokens > c.LimitPromptTokenLength {
-			return errors.Errorf(
-				"The length of the prompt you submitted is %d, exceeds the limit for free users %d, "+
-					"you need upgrade to a paid membership to use longer prompt tokens, "+
-					"more info at https://wiki.laisky.com/projects/gpt/pay/cn/",
-				nPromptTokens, c.LimitPromptTokenLength)
-		}
-
-		if maxTokens > 1500 {
-			return errors.New("max_tokens is limited to 1500 for free users, " +
-				"you need upgrade to a paid membership to use larger max_tokens, " +
-				"more info at https://wiki.laisky.com/projects/gpt/pay/cn/")
-		}
-	}
-
-	// if price less than 0, means no limit
-	logger.Debug("check rate limit",
-		zap.String("model", model), zap.Int("price", ratelimitCost))
-	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
-		return errors.Errorf("This model(%s) restricts usage for free users. "+
-			"Please hold on for %d seconds before trying again, "+
-			"alternatively, you may opt to switch to the free gpt-4o-mini, "+
-			"or upgrade to a paid membership by https://wiki.laisky.com/projects/gpt/pay/cn/",
-			model, (ratelimitCost - ratelimiter.Len()))
-	}
 
 	return nil
 }
