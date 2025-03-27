@@ -216,7 +216,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		return
 	}
 
-	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIO")) != "true" {
+	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
 		if respContent != "" {
 			go saveLLMConservation(frontReq, respContent)
 		}
