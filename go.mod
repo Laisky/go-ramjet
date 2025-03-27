@@ -6,7 +6,7 @@ toolchain go1.24.0
 
 require (
 	github.com/Laisky/errors/v2 v2.0.1
-	github.com/Laisky/gin-middlewares/v6 v6.0.0
+	github.com/Laisky/gin-middlewares/v6 v6.0.1-0.20250327042835-59d80766f0c6
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-redis/v2 v2.0.1-0.20250303033943-e2bf697f90ac
@@ -87,7 +87,7 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cpy v0.0.0-20211218193943-a9c933c06932 // indirect

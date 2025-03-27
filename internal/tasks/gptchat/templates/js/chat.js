@@ -2293,10 +2293,8 @@ function parseChatResp (chatmodel, payload) {
     // Handle different model types and response formats
     if (IsChatModel(chatmodel) || IsQaModel(chatmodel)) {
         // Extract reasoning content (for models that support thinking/reasoning)
-        if (chatmodel.includes('thinking')) {
-            reasoningChunk += payload.choices[0].delta.reasoning_content || '';
-            reasoningChunk += payload.choices[0].delta.reasoning || '';
-        }
+        reasoningChunk += payload.choices[0].delta.reasoning_content || '';
+        reasoningChunk += payload.choices[0].delta.reasoning || '';
 
         // Handle <think> tags for reasoning in some models
         if (payload.choices[0].delta.content === '<think>') {

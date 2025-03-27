@@ -154,10 +154,9 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			continue
 		}
 
-		writerMutex := ctx.MustGet("writer_mutex").(*sync.Mutex)
-		writerMutex.Lock()
+		gmw.CtxLock(ctx)
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
-		writerMutex.Unlock()
+		gmw.CtxUnlock(ctx)
 		if web.AbortErr(ctx, err) {
 			return
 		}
@@ -969,17 +968,16 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 	return respData.Results, nil
 }
 
+// enableHeartBeatForStreamReq enable heartbeat for stream request
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
 	ctx := gmw.Ctx(gctx)
 
-	// Create synchronization primitives
+	// Create synchronization primitives with proper cleanup
 	heartCtx, heartCancel := context.WithCancel(context.Background())
+	defer heartCancel() // Ensure cleanup on function return
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-
-	// Create a mutex to protect writer access
-	var writerMutex sync.Mutex
-	gctx.Set("writer_mutex", &writerMutex)
 
 	// Detect iOS Safari
 	userAgent := gctx.Request.UserAgent()
@@ -993,35 +991,30 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 
 	// Send initial heartbeat for Safari
 	if isSafari {
-		writerMutex.Lock()
+		gmw.CtxLock(ctx)
 		if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte(": connection established\ndata: [HEARTBEAT]\n\n"))); err != nil {
 			log.Logger.Warn("failed to send initial heartbeat", zap.Error(err))
-			writerMutex.Unlock()
-			heartCancel()
+			gmw.CtxUnlock(ctx)
 			return
 		}
 		gctx.Writer.Flush()
-		writerMutex.Unlock()
+		gmw.CtxUnlock(ctx)
 	}
 
-	// Create notification channel for context cancellation
-	// This avoids the race condition by copying the request context once
+	// Request context monitor channel
 	requestDone := make(chan struct{})
 
-	// Setup the context monitor in a separate goroutine
+	// Setup the context monitor
 	go func() {
-		// Use the request context to signal when done
-		select {
-		case <-ctx.Done():
-			close(requestDone)
-		case <-heartCtx.Done():
-			// In case heartbeat is manually cancelled
-		}
+		<-ctx.Done()
+		close(requestDone)
 	}()
 
-	// Heartbeat sender goroutine
+	// Heartbeat sender goroutine with improved error handling
 	go func() {
 		defer wg.Done()
+		defer heartCancel() // Ensure cleanup on goroutine exit
+
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 
@@ -1032,24 +1025,22 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 			case <-requestDone:
 				return
 			case <-ticker.C:
-				writerMutex.Lock()
+				gmw.CtxLock(ctx)
 				if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
 					log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
-					writerMutex.Unlock()
+					gmw.CtxUnlock(ctx)
 					return
 				}
+
 				gctx.Writer.Flush()
-				writerMutex.Unlock()
+				gmw.CtxUnlock(ctx)
 			}
 		}
 	}()
 
-	// Setup cleanup
+	// Wait for completion before returning
 	go func() {
-		select {
-		case <-requestDone:
-			// No need to close requestDone since it was already closed by the monitor
-		}
+		<-requestDone
 		heartCancel()
 		wg.Wait()
 	}()

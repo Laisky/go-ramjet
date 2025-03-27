@@ -28,6 +28,7 @@ func init() {
 			gmw.WithLevel(glog.LevelDebug.String()),
 			gmw.WithLogger(log.Logger),
 		),
+		gmw.LockableMw(),
 	)
 }
 
