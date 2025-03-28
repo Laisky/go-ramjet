@@ -532,7 +532,7 @@ export const Markdown2HTML = async (markdownString) => {
                 }
 
                 // Inline math \(...\) or $...$
-                const inlineMatch = src.match(/^\\\(([\s\S]*?)\\\)/) || src.match(/^\$([\s\S]*?)\$/);
+                const inlineMatch = src.match(/^\\\(([\s\S]*?)\\\)/); // || src.match(/^\$([\s\S]*?)\$/);
                 if (inlineMatch) {
                     return {
                         type: 'math',
