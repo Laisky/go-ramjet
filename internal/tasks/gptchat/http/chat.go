@@ -155,7 +155,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		}
 
 		if err := gmw.CtxLock(ctx); err != nil {
-			web.AbortErr(ctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+			web.AbortErr(ctx, errors.Wrap(err, "failed to lock context"))
 			return
 		}
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
@@ -1000,14 +1000,14 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 	// Send initial heartbeat for Safari
 	if isSafari {
 		if err := gmw.CtxLock(ctx); err != nil {
-			web.AbortErr(gctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+			logger.Debug("failed to lock context for initial heartbeat", zap.Error(err))
 			return
 		}
 
 		if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte(": connection established\ndata: [HEARTBEAT]\n\n"))); err != nil {
 			log.Logger.Warn("failed to send initial heartbeat", zap.Error(err))
 			if err := gmw.CtxUnlock(ctx); err != nil {
-				web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+				logger.Debug("failed to unlock context", zap.Error(err))
 				return
 			}
 
@@ -1015,7 +1015,7 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 		}
 		gctx.Writer.Flush()
 		if err := gmw.CtxUnlock(ctx); err != nil {
-			web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+			logger.Debug("failed to unlock context", zap.Error(err))
 			return
 		}
 
