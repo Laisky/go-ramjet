@@ -154,9 +154,16 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 			continue
 		}
 
-		gmw.CtxLock(ctx)
+		if err := gmw.CtxLock(ctx); err != nil {
+			web.AbortErr(ctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+			return
+		}
 		_, err = io.Copy(ctx.Writer, bytes.NewReader(append(line, []byte("\n\n")...)))
-		gmw.CtxUnlock(ctx)
+		if err := gmw.CtxUnlock(ctx); err != nil {
+			web.AbortErr(ctx, errors.Wrap(err, "failed to unlock context"))
+			return
+		}
+
 		if web.AbortErr(ctx, err) {
 			return
 		}
@@ -991,14 +998,26 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 
 	// Send initial heartbeat for Safari
 	if isSafari {
-		gmw.CtxLock(ctx)
+		if err := gmw.CtxLock(ctx); err != nil {
+			web.AbortErr(gctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+			return
+		}
+
 		if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte(": connection established\ndata: [HEARTBEAT]\n\n"))); err != nil {
 			log.Logger.Warn("failed to send initial heartbeat", zap.Error(err))
-			gmw.CtxUnlock(ctx)
+			if err := gmw.CtxUnlock(ctx); err != nil {
+				web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+				return
+			}
+
 			return
 		}
 		gctx.Writer.Flush()
-		gmw.CtxUnlock(ctx)
+		if err := gmw.CtxUnlock(ctx); err != nil {
+			web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+			return
+		}
+
 	}
 
 	// Request context monitor channel
@@ -1025,15 +1044,27 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 			case <-requestDone:
 				return
 			case <-ticker.C:
-				gmw.CtxLock(ctx)
+				if err := gmw.CtxLock(ctx); err != nil {
+					web.AbortErr(gctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+					return
+				}
+
 				if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
 					log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
-					gmw.CtxUnlock(ctx)
+					if err := gmw.CtxUnlock(ctx); err != nil {
+						web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+						return
+					}
+
 					return
 				}
 
 				gctx.Writer.Flush()
-				gmw.CtxUnlock(ctx)
+				if err := gmw.CtxUnlock(ctx); err != nil {
+					web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+					return
+				}
+
 			}
 		}
 	}()
