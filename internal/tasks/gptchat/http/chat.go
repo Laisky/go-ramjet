@@ -978,6 +978,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 // enableHeartBeatForStreamReq enable heartbeat for stream request
 func enableHeartBeatForStreamReq(gctx *gin.Context) {
 	ctx := gmw.Ctx(gctx)
+	logger := gmw.GetLogger(gctx)
 
 	// Create synchronization primitives with proper cleanup
 	heartCtx, heartCancel := context.WithCancel(context.Background())
@@ -1045,14 +1046,14 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 				return
 			case <-ticker.C:
 				if err := gmw.CtxLock(ctx); err != nil {
-					web.AbortErr(gctx, errors.Wrap(err, "failed to lock context for initial heartbeat"))
+					logger.Debug("failed to lock context for initial heartbeat", zap.Error(err))
 					return
 				}
 
 				if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
 					log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
 					if err := gmw.CtxUnlock(ctx); err != nil {
-						web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+						logger.Debug("failed to unlock context", zap.Error(err))
 						return
 					}
 
@@ -1061,7 +1062,7 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 
 				gctx.Writer.Flush()
 				if err := gmw.CtxUnlock(ctx); err != nil {
-					web.AbortErr(gctx, errors.Wrap(err, "failed to unlock context"))
+					logger.Debug("failed to unlock context", zap.Error(err))
 					return
 				}
 
