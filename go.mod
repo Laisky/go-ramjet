@@ -12,11 +12,12 @@ require (
 	github.com/Laisky/go-redis/v2 v2.0.1-0.20250303033943-e2bf697f90ac
 	github.com/Laisky/go-utils/v5 v5.0.1-0.20250228054950-e1500acd6929
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250309134409-df083b37bbb1
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250403094315-1cec0eccf720
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
 	github.com/Microsoft/cognitive-services-speech-sdk-go v1.33.0
+	github.com/PuerkitoBio/goquery v1.10.2
 	github.com/baidubce/bce-sdk-go v0.9.219
 	github.com/chromedp/cdproto v0.0.0-20250311215558-29dfcc2791de
 	github.com/chromedp/chromedp v0.13.1
@@ -27,7 +28,7 @@ require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/minio/minio-go/v7 v7.0.88
 	github.com/pkoukk/tiktoken-go v0.1.7
-	github.com/redis/go-redis/v9 v9.7.1
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/stripe/stripe-go/v76 v76.25.0
@@ -55,6 +56,7 @@ require (
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
@@ -162,7 +164,7 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	golang.org/x/tools v0.30.0 // indirect
+	golang.org/x/tools v0.31.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
