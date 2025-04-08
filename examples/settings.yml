@@ -36,5 +36,5 @@ openai:
   #   bootstrap_css: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
   #   bootstrap_icons: "https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
   #   showdown_js: "https://s3.laisky.com/static/showdown/2.1.0/showdown.min.js"
-  #   prism_js: "https://s3.laisky.com/static/prism/1.29.0/prism.js"
-  #   prism_css: "https://s3.laisky.com/static/prism/1.29.0/prism.css"
+  #   prism_js: "https://s3.laisky.com/static/prism/1.30.0/prism.js"
+  #   prism_css: "https://s3.laisky.com/static/prism/1.30.0/prism.css"

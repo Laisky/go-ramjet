@@ -206,9 +206,9 @@ func Chat(ctx *gin.Context) {
 	tplArg.SeeJs = gutils.OptionalVal(&tplArg.SeeJs,
 		"https://s3.laisky.com/static/sse/1.0.0-patch/sse.js")
 	tplArg.PrismJs = gutils.OptionalVal(&tplArg.PrismJs,
-		"https://s3.laisky.com/static/prism/1.29.0/prism.js")
+		"https://s3.laisky.com/static/prism/1.30.0/prism.js")
 	tplArg.PrismCss = gutils.OptionalVal(&tplArg.PrismCss,
-		"https://s3.laisky.com/static/prism/1.29.0/prism.css")
+		"https://s3.laisky.com/static/prism/1.30.0/prism.css")
 	tplArg.FuseJs = gutils.OptionalVal(&tplArg.FuseJs,
 		"https://s3.laisky.com/static/fuse.js/6.6.2/fuse.min.js")
 
