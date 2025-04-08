@@ -117,6 +117,8 @@ func UploadUserConfig(ctx *gin.Context) {
 		logger.Error("get s3 client", zap.Error(err))
 	}
 
+	logger.Debug("try to upload user config",
+		zap.Int("len", len(cipher)))
 	if _, err := s3cli.PutObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
