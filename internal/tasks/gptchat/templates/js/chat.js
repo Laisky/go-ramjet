@@ -1240,9 +1240,9 @@ function setupGlobalAiRespHeartbeatTimer () {
             return;
         }
 
-        if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 60) {
-            console.warn('no heartbeat for 60s, abort AI resp');
-            await abortAIResp('no heartbeat for 60s, abort AI resp automatically');
+        if (Date.now() - globalAIRespHeartBeatTimer > 1000 * 120) {
+            console.warn('no heartbeat for 120s, abort AI resp');
+            await abortAIResp('no heartbeat for 120s, abort AI resp automatically');
         }
     }, 3000);
 }
