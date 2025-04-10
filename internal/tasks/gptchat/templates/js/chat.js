@@ -432,6 +432,7 @@ async function main (event) {
     await dataMigrate();
     await setupHeader();
     setupSingleInputModal();
+    await removeOrphanChatData();
 
     checkUpgrade(); // run in background
     await setupChatJs();
@@ -442,6 +443,88 @@ async function setupDarkMode () {
     setInterval(() => {
         document.documentElement.setAttribute('data-bs-theme', (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
     }, 1000);
+}
+
+/**
+ * scan all chat data, and remove the chat data which id does not exists in all chat session history
+ */
+async function removeOrphanChatData () {
+    console.debug('Starting orphan chat data cleanup...');
+    const allKeys = await libs.KvList();
+    const chatDataKeys = new Map(); // Map<chatID, Set<fullKey>>
+    const sessionHistoryKeys = [];
+    const validChatIDs = new Set();
+
+    // 1. Identify all individual chat data keys and session history keys
+    allKeys.forEach(key => {
+        if (key.startsWith(KvKeyChatData)) {
+            // Example key: chat_data_user_chat-1705899120122-NwN9sB
+            const parts = key.substring(KvKeyChatData.length).split('_');
+            if (parts.length >= 2) {
+                const role = parts[0];
+                const chatID = parts.slice(1).join('_'); // Rejoin in case chatID has underscores
+                if (role === RoleHuman || role === RoleAI) {
+                    if (!chatDataKeys.has(chatID)) {
+                        chatDataKeys.set(chatID, new Set());
+                    }
+                    chatDataKeys.get(chatID).add(key);
+                } else {
+                    console.warn(`Unexpected role found in chat data key: ${key}`);
+                }
+            } else {
+                console.warn(`Malformed chat data key found: ${key}`);
+            }
+        } else if (key.startsWith(KvKeyPrefixSessionHistory)) {
+            sessionHistoryKeys.push(key);
+        }
+    });
+
+    console.debug(`Found ${chatDataKeys.size} unique chatIDs in individual data.`);
+    console.debug(`Found ${sessionHistoryKeys.length} session history keys.`);
+
+    // 2. Collect all valid chatIDs from all session histories
+    for (const historyKey of sessionHistoryKeys) {
+        try {
+            const sessionHistory = await libs.KvGet(historyKey);
+            if (Array.isArray(sessionHistory)) {
+                sessionHistory.forEach(chatItem => {
+                    if (chatItem && chatItem.chatID) {
+                        validChatIDs.add(chatItem.chatID);
+                    }
+                });
+            } else {
+                console.warn(`Session history data is not an array for key: ${historyKey}`);
+            }
+        } catch (error) {
+            console.error(`Error reading session history for key ${historyKey}:`, error);
+            // Decide whether to continue or stop. Continuing seems safer for cleanup.
+        }
+    }
+
+    console.debug(`Collected ${validChatIDs.size} valid chatIDs from session histories.`);
+
+    // 3. Identify and delete orphaned chat data
+    let deletedCount = 0;
+    for (const [chatID, fullKeys] of chatDataKeys.entries()) {
+        if (!validChatIDs.has(chatID)) {
+            console.debug(`Found orphaned chatID: ${chatID}. Deleting associated data...`);
+            for (const fullKeyToDelete of fullKeys) {
+                try {
+                    await libs.KvDel(fullKeyToDelete);
+                    console.debug(`Deleted orphan data key: ${fullKeyToDelete}`);
+                    deletedCount++;
+                } catch (error) {
+                    console.error(`Error deleting orphan data key ${fullKeyToDelete}:`, error);
+                }
+            }
+        }
+    }
+
+    if (deletedCount > 0) {
+        console.log(`Orphan chat data cleanup finished. Deleted ${deletedCount} KV entries.`);
+    } else {
+        console.debug('Orphan chat data cleanup finished. No orphan data found.');
+    }
 }
 
 /**
