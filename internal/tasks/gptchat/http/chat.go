@@ -423,7 +423,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 		}
 
 		if strings.HasPrefix(frontendReq.Model, "o1") ||
-			strings.HasPrefix(frontendReq.Model, "o3") &&
+			strings.HasPrefix(frontendReq.Model, "o3") ||
+			strings.HasPrefix(frontendReq.Model, "o4") &&
 				frontendReq.ReasoningEffort == "" {
 			frontendReq.ReasoningEffort = "high"
 		}
@@ -452,6 +453,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-3.5-turbo-0125",
 			"o1-mini",
 			"o3-mini",
+			"o4-mini",
 			"claude-instant-1",
 			"claude-2",
 			// "mixtral-8x7b-32768",
@@ -509,6 +511,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-3.5-haiku",
 			"o1",
 			"o1-preview",
+			"o3",
 			"gpt-4o",
 			"gpt-4o-search-preview",
 			"gpt-4o-mini",
