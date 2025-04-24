@@ -64,6 +64,7 @@ const QAModelShared = 'qa-shared';
 const CompletionModelDavinci3 = 'text-davinci-003';
 // const ImageModelDalle2 = 'dall-e-2';
 const ImageModelDalle3 = 'dall-e-3';
+const ImageModelGptImage1 = 'gpt-image-1';
 const ImageModelSdxlTurbo = 'sdxl-turbo';
 // const ImageModelFluxPro = 'flux-pro';
 const ImageModelFluxDev = 'flux-dev';
@@ -167,7 +168,8 @@ const VisionModels = [
     // ImageModelFluxPro,
     ImageModelFluxPro11,
     ImageModelFluxProUltra11,
-    ImageModelFluxDev
+    ImageModelFluxDev,
+    ImageModelGptImage1
     // ImageModelImagen3,
     // ImageModelImagen3Fast
 ];
@@ -180,6 +182,7 @@ const QaModels = [
 ];
 const ImageModels = [
     ImageModelDalle3,
+    ImageModelGptImage1,
     ImageModelSdxlTurbo,
     // ImageModelFluxPro,
     ImageModelFluxPro11,
@@ -532,6 +535,22 @@ async function removeOrphanChatData () {
     } else {
         console.debug('Orphan chat data cleanup finished. No orphan data found.');
     }
+}
+
+/**
+ * Helper function to convert base64 string to Blob
+ * @param {string} base64 - The base64 encoded string
+ * @param {string} contentType - The content type of the blob (e.g., 'image/png')
+ * @returns {Blob}
+ */
+function base64ToBlob (base64, contentType = 'application/octet-stream') {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
 }
 
 /**
@@ -2508,6 +2527,110 @@ function getPinnedMaterials () {
     return urls;
 }
 
+async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+    if (chatVisionSelectedFileStore.length === 0) {
+        throw new Error('No images provided for image-to-image generation.');
+    }
+
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('model', selectedModel);
+    formData.append('quality', 'medium');
+    formData.append('size', '1024x1024');
+
+    // Append images and update user input display
+    let attachHTML = '';
+    for (const item of chatVisionSelectedFileStore) {
+        const blob = base64ToBlob(item.contentB64, 'image/png'); // Assuming PNG, adjust if needed
+        formData.append('image[]', blob, item.filename);
+        attachHTML += `<img src="data:image/png;base64,${item.contentB64}" data-name="${item.filename}">`;
+    }
+
+    // Insert images into user history
+    const userChatData = await getChatData(chatID, RoleHuman);
+    await saveChats2Storage({
+        role: RoleHuman,
+        chatID,
+        content: userChatData.content, // Keep original text prompt
+        attachHTML
+    });
+
+    // Update user input display in the UI
+    const userTextElement = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start`);
+    if (userTextElement) {
+        userTextElement.insertAdjacentHTML('beforeend', attachHTML);
+    }
+
+    // Clear the store after processing
+    chatVisionSelectedFileStore = [];
+    updateChatVisionSelectedFileStore();
+
+    const sconfig = await getChatSessionConfig();
+    try {
+        const resp = await fetch('/oneapi/v1/images/edits', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${sconfig.api_token}`,
+                'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                'X-Laisky-Api-Base': sconfig.api_base
+                // Content-Type is set automatically by FormData
+            },
+            body: formData
+        });
+
+        if (!resp.ok) {
+            throw new Error(`[${resp.status}]: ${await resp.text()}`);
+        }
+
+        const respData = await resp.json();
+
+        let resultHTML = '';
+        if (respData.data && respData.data.length > 0) {
+            respData.data.forEach(item => {
+                let imgSrc = '';
+                if (item.b64_json) {
+                    imgSrc = `data:image/png;base64,${item.b64_json}`;
+                } else if (item.url) {
+                    imgSrc = item.url; // Assuming direct URL if b64_json is not present
+                }
+
+                if (imgSrc) {
+                    resultHTML += `<div class="ai-resp-image">
+                        <div class="hover-btns">
+                            <i class="bi bi-pencil-square"></i>
+                        </div>
+                        <img src="${imgSrc}">
+                    </div>`;
+                }
+            });
+        } else {
+            throw new Error('No image data received in the response.');
+        }
+
+        currentAIRespEle.innerHTML = resultHTML;
+        currentAIRespEle.dataset.taskStatus = ChatTaskStatusDone; // Mark as done immediately for direct response
+        currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+
+        // Save the result to storage
+        const chatData = await getChatData(chatID, RoleAI) || {};
+        chatData.chatID = chatID;
+        chatData.role = RoleAI;
+        chatData.model = selectedModel;
+        chatData.content = resultHTML; // Save the rendered HTML
+        chatData.taskStatus = ChatTaskStatusDone;
+        chatData.taskType = ChatTaskTypeImage;
+        await saveChats2Storage(chatData);
+
+        // Final rendering steps
+        renderAfterAiResp(chatData, false); // Render without saving again
+    } catch (err) {
+        console.error('Error sending gpt-image-1 edit request:', err);
+        await abortAIResp(`Failed to generate image edit: ${renderError(err)}`);
+    } finally {
+        unlockChatInput(); // Ensure input is unlocked even on error
+    }
+}
+
 /**
  * Sends an txt2image prompt to the server for the selected model and updates the current AI response element with the task information.
  * @param {string} chatID - The chat ID.
@@ -3248,6 +3371,15 @@ async function sendChat2Server (chatID, reqPrompt) {
                 // case ImageModelImg2Img:
                 //     await sendImg2ImgPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 //     break;
+            case ImageModelGptImage1:
+                if (chatVisionSelectedFileStore.length > 0) {
+                    // Image-to-Image mode
+                    await sendGptImage1EditPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                } else {
+                    // Text-to-Image mode
+                    await sendTxt2ImagePrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
+                }
+                break;
             case ImageModelSdxlTurbo:
                 await sendSdxlturboPrompt2Server(chatID, selectedModel, globalAIRespEle, reqPrompt);
                 break;
