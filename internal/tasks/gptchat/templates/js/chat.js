@@ -1848,6 +1848,7 @@ function bindSessionDuplicateBtn () {
             // Get original session data
             const originalSconfig = await getChatSessionConfig(originalSessionID);
             const originalChatHistory = await sessionChatHistory(originalSessionID);
+            const originSessionName = originalSconfig.session_name;
 
             // Create new session config
             const newSconfig = JSON.parse(JSON.stringify(originalSconfig)); // Deep copy
@@ -1888,7 +1889,7 @@ function bindSessionDuplicateBtn () {
             // Optionally switch to the new session
             // await changeSession(newSessionID);
 
-            showalert('success', `Session ${originalSessionID} duplicated to ${newSessionID}`);
+            showalert('success', `Session "${originSessionName}" duplicated to "${newSessionName}"`);
         });
     });
 }
