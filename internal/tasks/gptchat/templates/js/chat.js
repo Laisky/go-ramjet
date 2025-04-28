@@ -2163,7 +2163,7 @@ async function updateChatData (chatID, role, partialChatData) {
  *   @property {string} reasoningContent - chat response's reasoning content
  *   @property {string} costUsd - chat cost in USD
  *   @property {string} model - chat model
- *   @property {string} reqeustid - chat request id
+ *   @property {string} requestid - chat request id
 */
 async function saveChats2Storage (chatData) {
     if (!chatData.chatID) {
@@ -2665,6 +2665,7 @@ async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIR
             throw new Error(`[${resp.status}]: ${await resp.text()}`);
         }
 
+        const requestid = resp.headers.get('x-oneapi-request-id') || '';
         const respData = await resp.json();
 
         let resultHTML = '';
@@ -2702,6 +2703,7 @@ async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIR
         chatData.content = resultHTML; // Save the rendered HTML
         chatData.taskStatus = ChatTaskStatusDone;
         chatData.taskType = ChatTaskTypeImage;
+        chatData.requestid = requestid;
         await saveChats2Storage(chatData);
 
         // Final rendering steps
@@ -3244,7 +3246,7 @@ async function sendChat2Server (chatID, reqPrompt) {
         reasoningContent: '',
         costUsd: '',
         model: selectedModel,
-        reqeustid: '',
+        requestid: '',
         taskType: ChatTaskTypeChat,
         taskStatus: null,
         taskId: null
@@ -3569,10 +3571,10 @@ async function sendChat2Server (chatID, reqPrompt) {
         globalAIRespHeartBeatTimer = Date.now();
 
         // set request id to ai response element
-        if (!globalAIRespData.reqeustid) {
+        if (!globalAIRespData.requestid) {
             const ids = evt.headers['x-oneapi-request-id'] || [];
             if (ids.length > 0) {
-                globalAIRespData.reqeustid = ids[0];
+                globalAIRespData.requestid = ids[0];
             }
         }
 
@@ -3862,7 +3864,7 @@ function renderError (err) {
  *   @property {string} reasoningContent - chat response's reasoning content
  *   @property {string} costUsd - chat cost in USD
  *   @property {string} model - chat model
- *   @property {string} reqeustid - request id
+ *   @property {string} requestid - request id
  * @param {boolean} saveStorage - save to storage or not.
  *                                if it's restore chat, there is no need to save to storage.
  */
@@ -3966,7 +3968,7 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
         // Display existing cost if we already have it
         if (costUsd) {
             infoDiv.insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
-        } else if (chatData.reqeustid) {
+        } else if (chatData.requestid) {
             // Otherwise fetch the cost if we have a request ID
             try {
                 // Add placeholder while loading
@@ -3976,7 +3978,7 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
                 infoDiv.appendChild(costPlaceholder);
 
                 // Fetch cost information
-                const resp = await fetch(`/oneapi/api/cost/request/${chatData.reqeustid}`);
+                const resp = await fetch(`/oneapi/api/cost/request/${chatData.requestid}`);
                 if (resp.ok) {
                     const data = await resp.json();
                     costUsd = data.cost_usd;
@@ -5258,7 +5260,7 @@ const deleteBtnHandler = (evt) => {
  *   @property {string} reasoningContent - raw ai reasoning response
  *   @property {string} costUsd - cost in usd
  *   @property {string} model - model name
- *   @property {string} reqeustid - request id
+ *   @property {string} requestid - request id
  */
 async function append2Chats (isHistory, chatData) {
     const chatID = chatData.chatID;
