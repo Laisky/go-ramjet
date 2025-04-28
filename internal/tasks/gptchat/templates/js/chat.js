@@ -1815,6 +1815,81 @@ function bindSessionDeleteBtn () {
     });
 }
 
+function bindSessionDuplicateBtn () {
+    const btns = document.querySelectorAll('#sessionManager .sessions .session .bi-files') || [];
+    btns.forEach((item) => {
+        if (item.dataset.bindClicked) {
+            return;
+        } else {
+            item.dataset.bindClicked = true;
+        }
+
+        item.addEventListener('click', async (evt) => {
+            evt.stopPropagation();
+            const evtTarget = libs.evtTarget(evt);
+            const sessionEle = evtTarget.closest('.session');
+            const originalSessionID = parseInt(sessionEle.dataset.session);
+
+            // Find the highest existing session ID
+            let maxSessionID = 0;
+            (await libs.KvList()).forEach((key) => {
+                if (key.startsWith(KvKeyPrefixSessionHistory)) {
+                    const id = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
+                    if (id > maxSessionID) {
+                        maxSessionID = id;
+                    }
+                }
+            });
+            const newSessionID = maxSessionID + 1;
+
+            // Get original session data
+            const originalSconfig = await getChatSessionConfig(originalSessionID);
+            const originalChatHistory = await sessionChatHistory(originalSessionID);
+
+            // Create new session config
+            const newSconfig = JSON.parse(JSON.stringify(originalSconfig)); // Deep copy
+            newSconfig.session_name = `${originalSconfig.session_name || originalSessionID}_copy`;
+
+            // Save new session data
+            await libs.KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, newSconfig);
+            await libs.KvSet(kvSessionKey(newSessionID), originalChatHistory);
+
+            // Add new session to UI
+            const newSessionName = newSconfig.session_name;
+            const sessionManagerHtml = `
+                <div class="list-group session" data-session="${newSessionID}">
+                    <button type="button" class="list-group-item list-group-item-action" aria-current="true">
+                        <div class="col">${newSessionName}</div>
+                        <i class="bi bi-pencil-square"></i>
+                        <i class="bi bi-files"></i>
+                        <i class="bi bi-trash col-auto"></i>
+                    </button>
+                </div>`;
+            const chatContainerHtml = `
+                <div class="list-group session" data-session="${newSessionID}">
+                    <button type="button" class="list-group-item list-group-item-action" aria-current="true">
+                        <div class="col">${newSessionName}</div>
+                    </button>
+                </div>`;
+
+            document.querySelector('#sessionManager .sessions').insertAdjacentHTML('beforeend', sessionManagerHtml);
+            chatContainer.querySelector('.sessions .session-tabs').insertAdjacentHTML('beforeend', chatContainerHtml);
+
+            // Bind listeners for the new session
+            const newSessionElements = document.querySelectorAll(`.session[data-session="${newSessionID}"]`);
+            newSessionElements.forEach(el => el.addEventListener('click', listenSessionSwitch));
+            bindSessionEditBtn();
+            bindSessionDeleteBtn();
+            bindSessionDuplicateBtn(); // Bind duplicate for the newly added item
+
+            // Optionally switch to the new session
+            // await changeSession(newSessionID);
+
+            showalert('success', `Session ${originalSessionID} duplicated to ${newSessionID}`);
+        });
+    });
+}
+
 /** setup session manager and restore current chat history
  *
  */
@@ -1866,6 +1941,7 @@ async function setupSessionManager () {
                         <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true">
                             <div class="col">${sessionName}</div>
                             <i class="bi bi-pencil-square"></i>
+                            <i class="bi bi-files"></i>
                             <i class="bi bi-trash col-auto"></i>
                         </button>
                     </div>`);
@@ -1886,7 +1962,7 @@ async function setupSessionManager () {
             const chatData = await getChatData(chat.chatID, chat.role);
             append2Chats(true, chatData);
             if (chat.role === RoleAI) {
-                await renderAfterAiResp(chatData, false);
+                renderAfterAiResp(chatData, false);
             }
         }
     }
@@ -1913,9 +1989,9 @@ async function setupSessionManager () {
                 let maxSessionID = 0;
                 (await libs.KvList()).forEach((key) => {
                     if (key.startsWith(KvKeyPrefixSessionHistory)) {
-                        const sessionID = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
-                        if (sessionID > maxSessionID) {
-                            maxSessionID = sessionID;
+                        const id = parseInt(key.replace(KvKeyPrefixSessionHistory, ''));
+                        if (id > maxSessionID) {
+                            maxSessionID = id;
                         }
                     }
                 });
@@ -1940,6 +2016,7 @@ async function setupSessionManager () {
                             <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
                                 <div class="col">${newSessionID}</div>
                                 <i class="bi bi-pencil-square"></i>
+                                <i class="bi bi-files"></i>
                                 <i class="bi bi-trash col-auto"></i>
                             </button>
                         </div>`);
@@ -1975,6 +2052,7 @@ async function setupSessionManager () {
 
                 bindSessionEditBtn();
                 bindSessionDeleteBtn();
+                bindSessionDuplicateBtn();
                 await updateConfigFromSessionConfig();
             })
     }
@@ -1993,6 +2071,7 @@ async function setupSessionManager () {
 
     bindSessionEditBtn();
     bindSessionDeleteBtn();
+    bindSessionDuplicateBtn();
 }
 
 /**
