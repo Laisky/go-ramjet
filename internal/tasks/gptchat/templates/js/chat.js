@@ -1762,6 +1762,8 @@ function bindSessionEditBtn () {
 
                     // update session name
                     document
+                        .querySelector(`#sessionManager .sessions [data-session="${sid}"]`).dataset.name = newSessionName;
+                    document
                         .querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
                     chatContainer
                         .querySelector(`.sessions [data-session="${sid}"] .col`)
@@ -1791,7 +1793,8 @@ function bindSessionDeleteBtn () {
 
             const activeSid = await activeSessionID();
             const deleteSid = parseInt(evtTarget.closest('.session').dataset.session);
-            ConfirmModal('Are you sure to delete this session?', async () => {
+            const deleteSessionName = evtTarget.closest('.session').dataset.name;
+            ConfirmModal(`Are you sure to delete session "${deleteSessionName}"?`, async () => {
                 await libs.KvDel(`${KvKeyPrefixSessionHistory}${deleteSid}`);
                 await libs.KvDel(`${KvKeyPrefixSessionConfig}${deleteSid}`);
                 document
@@ -1857,7 +1860,7 @@ function bindSessionDuplicateBtn () {
             // Add new session to UI
             const newSessionName = newSconfig.session_name;
             const sessionManagerHtml = `
-                <div class="list-group session" data-session="${newSessionID}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
                         <div class="col">${newSessionName}</div>
                         <i class="bi bi-pencil-square"></i>
@@ -1866,7 +1869,7 @@ function bindSessionDuplicateBtn () {
                     </button>
                 </div>`;
             const chatContainerHtml = `
-                <div class="list-group session" data-session="${newSessionID}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
                         <div class="col">${newSessionName}</div>
                     </button>
@@ -1937,7 +1940,7 @@ async function setupSessionManager () {
                 .querySelector('#sessionManager .sessions')
                 .insertAdjacentHTML(
                     'beforeend',
-                    `<div class="list-group session" data-session="${sessionID}">
+                    `<div class="list-group session" data-session="${sessionID}" data-name="${sessionName}">
                         <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true">
                             <div class="col">${sessionName}</div>
                             <i class="bi bi-pencil-square"></i>
@@ -1949,7 +1952,7 @@ async function setupSessionManager () {
                 .querySelector('.sessions .session-tabs')
                 .insertAdjacentHTML(
                     'beforeend',
-                    `<div class="list-group session" data-session="${sessionID}">
+                    `<div class="list-group session" data-session="${sessionID}" data-name="${sessionName}">
                         <button type="button" class="list-group-item list-group-item-action ${active}" aria-current="true">
                             <div class="col">${sessionName}</div>
                         </button>
@@ -2012,7 +2015,7 @@ async function setupSessionManager () {
                     .querySelector('#sessionManager .sessions')
                     .insertAdjacentHTML(
                         'beforeend',
-                        `<div class="list-group session" data-session="${newSessionID}">
+                        `<div class="list-group session" data-session="${newSessionID}" data-sesison="${newSessionID}">
                             <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
                                 <div class="col">${newSessionID}</div>
                                 <i class="bi bi-pencil-square"></i>
@@ -2024,7 +2027,7 @@ async function setupSessionManager () {
                     .querySelector('.sessions .session-tabs')
                     .insertAdjacentHTML(
                         'beforeend',
-                        `<div class="list-group session" data-session="${newSessionID}">
+                        `<div class="list-group session" data-session="${newSessionID}" data-sesison="${newSessionID}">
                             <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
                                 <div class="col">${newSessionID}</div>
                             </button>
