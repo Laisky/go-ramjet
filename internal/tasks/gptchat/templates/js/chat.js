@@ -2618,8 +2618,8 @@ async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIR
     const formData = new FormData();
     formData.append('prompt', prompt);
     formData.append('model', selectedModel);
-    formData.append('quality', 'medium');
-    formData.append('size', '1024x1024');
+    formData.append('quality', 'high');
+    formData.append('size', 'auto');
 
     // Append images and update user input display
     let attachHTML = '';
