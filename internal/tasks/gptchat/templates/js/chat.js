@@ -2244,8 +2244,7 @@ let userManuallyScrolled = false;
  * @param {boolean} force - Whether to force scrolling even if the user scrolled manually
  */
 function scrollToChat (chatEle, force = false) {
-    // Don't scroll if user has manually scrolled and we're not forcing it
-    if (userManuallyScrolled && !force && globalAIRespSSE) {
+    if (userManuallyScrolled && !force) {
         return;
     }
 
