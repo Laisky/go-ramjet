@@ -3309,11 +3309,10 @@ async function sendChat2Server (chatID, reqPrompt) {
                 }
             }
 
-            // Retrieve the existing chat data for the user's message
-            const userChatData = await getChatData(chatID, RoleHuman);
-
             // The text content should have been set when the user's message was initially created.
-            const currentTextContent = userChatData.content || '';
+            // For a new request, reqPrompt is the initial prompt.
+            // For a reload, reqPrompt is the *edited* prompt text.
+            const currentTextContent = reqPrompt;
 
             // Prepare the updated chat data for storage
             // Append new images to any existing attachHTML.
@@ -3321,7 +3320,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 role: RoleHuman,
                 chatID,
                 content: currentTextContent,
-                attachHTML: (userChatData.attachHTML || '') + accumulatedAttachHTML
+                attachHTML: accumulatedAttachHTML // Ensure attachHTML is set to the freshly built accumulatedAttachHTML
             };
 
             // Save the user's message to storage once, with all images included in attachHTML
