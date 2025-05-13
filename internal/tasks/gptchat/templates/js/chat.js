@@ -3276,15 +3276,21 @@ async function sendChat2Server (chatID, reqPrompt) {
         }
 
         // there are pinned files, add them to user's prompt
-        if (chatVisionSelectedFileStore.length !== 0) {
-            if (!VisionModels.includes(selectedModel)) {
-                // if selected model is not vision model, just ignore it
-                chatVisionSelectedFileStore = [];
-                updateChatVisionSelectedFileStore();
-                return chatID;
+        if (VisionModels.includes(selectedModel) && chatVisionSelectedFileStore.length > 0) {
+            if (messages.length === 0) {
+                // This should not happen if prompt is always present
+                messages.push({ role: RoleHuman, content: '' });
             }
 
-            messages[messages.length - 1].files = [];
+            // Ensure the last message has a files array
+            if (!messages[messages.length - 1].files) {
+                messages[messages.length - 1].files = [];
+            }
+
+            let accumulatedAttachHTML = '';
+            const userChatDisplayElement = chatContainer
+                .querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start`);
+
             for (const item of chatVisionSelectedFileStore) {
                 messages[messages.length - 1].files.push({
                     type: 'image',
@@ -3292,9 +3298,34 @@ async function sendChat2Server (chatID, reqPrompt) {
                     content: item.contentB64
                 });
 
-                // insert image to user input & hisotry
-                await appendImg2UserInput(chatID, item.contentB64, item.filename);
+                const singleImageHTML = `<img src="data:image/png;base64,${item.contentB64}" data-name="${item.filename}">`;
+                accumulatedAttachHTML += singleImageHTML;
+
+                // Insert image into the live DOM for immediate display
+                if (userChatDisplayElement) {
+                    userChatDisplayElement.insertAdjacentHTML('beforeend', singleImageHTML);
+                } else {
+                    console.warn(`User display element not found for chatID ${chatID} when appending image to DOM.`);
+                }
             }
+
+            // Retrieve the existing chat data for the user's message
+            const userChatData = await getChatData(chatID, RoleHuman);
+
+            // The text content should have been set when the user's message was initially created.
+            const currentTextContent = userChatData.content || '';
+
+            // Prepare the updated chat data for storage
+            // Append new images to any existing attachHTML.
+            const updatedUserChatData = {
+                role: RoleHuman,
+                chatID,
+                content: currentTextContent,
+                attachHTML: (userChatData.attachHTML || '') + accumulatedAttachHTML
+            };
+
+            // Save the user's message to storage once, with all images included in attachHTML
+            await saveChats2Storage(updatedUserChatData);
 
             chatVisionSelectedFileStore = [];
             updateChatVisionSelectedFileStore();
