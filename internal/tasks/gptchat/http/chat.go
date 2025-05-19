@@ -740,14 +740,21 @@ func findHTMLBody(n *html.Node) *html.Node {
 }
 
 var webSearchQueryPrompt = gutils.Dedent(`
-	Do not directly answer the user's question,
-	but rather analyze the user's question in the role
-	of a decision-making system scheduler.
-	Consider what additional information is needed to
-	better answer the user's question. Please return
-	the query that needs to be searched, do not contains
-	any other characters, and I will execute a
-	web search for your response.`)
+	Do not directly answer the user's question, but rather analyze the
+	user's question in the role of a decision-making system scheduler.
+	Consider what additional information is needed to better answer the user's question.
+	you can use following python functions to fetch the information from web,
+	you can call each function multiple times if necessary.
+
+	* def search_web(query: str) -> str
+
+	Just return the function calls in valid python syntax, don’t answer the user’s question directly!
+
+	>>> following is user prompt:
+	`)
+
+var functionCallsRegexp = regexp.MustCompile(
+	`\Bsearch_web\(['"](?P<searchQuery>[^'"\)]*?['"])\)\B`)
 
 func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.UserConfig) {
 	logger := gmw.GetLogger(gctx)
@@ -771,45 +778,86 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	searchQuery, err := OneshotChat(gmw.Ctx(gctx), user, defaultChatModel, webSearchQueryPrompt, *lastUserPrompt)
+	functionCalling, err := OneshotChat(gmw.Ctx(gctx),
+		user, defaultChatModel, "",
+		webSearchQueryPrompt+"\n\n"+*lastUserPrompt)
 	if err != nil {
 		logger.Error("google search query", zap.Error(err))
 		return
 	}
 
-	// fetch web search result
-	extra, err := webSearch(gmw.Ctx(gctx), searchQuery, user)
-	if err != nil {
-		log.Logger.Error("web search", zap.Error(err),
-			zap.String("prompt", searchQuery))
+	// parse function calls
+	matches := functionCallsRegexp.FindAllStringSubmatch(functionCalling, -1)
+	if len(matches) == 0 {
+		logger.Debug("no function calls found in response",
+			zap.String("response", functionCalling))
 		return
 	}
 
-	if len([]rune(extra)) > 20000 {
-		extra, err = queryChunks(gctx, queryChunksArgs{
-			user:    user,
-			query:   searchQuery,
-			ext:     ".txt",
-			model:   r.Model,
-			content: []byte(extra),
-		})
-		if err != nil {
-			log.Logger.Warn("query chunks for search result", zap.Error(err))
+	var pool errgroup.Group
+	var mu sync.Mutex
+	var additionalText []string
+	for _, match := range matches {
+		match := match
+		if len(match) != 2 {
+			logger.Debug("invalid function call match",
+				zap.String("match", match[0]))
+			continue
 		}
+
+		searchQuery := match[1]
+		if len(searchQuery) == 0 {
+			logger.Debug("empty search query")
+			continue
+		}
+
+		pool.Go(func() error {
+			extra, err := webSearch(gmw.Ctx(gctx), searchQuery, user)
+			if err != nil {
+				return errors.Wrapf(err, "web search %q", searchQuery)
+			}
+
+			if len([]rune(extra)) > 20000 {
+				extra, err = queryChunks(gctx, queryChunksArgs{
+					user:    user,
+					query:   searchQuery,
+					ext:     ".txt",
+					model:   r.Model,
+					content: []byte(extra),
+				})
+				if err != nil {
+					log.Logger.Warn("query chunks for search result", zap.Error(err))
+				}
+			}
+
+			// trim extra content
+			limit := 4000 // for paid user
+			if user.IsFree {
+				limit = user.LimitPromptTokenLength / 5
+			}
+
+			extra = strings.TrimSpace(utils.TrimByTokens("", extra, limit))
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if len(extra) != 0 {
+				additionalText = append(additionalText, extra)
+			}
+
+			additionalText = append(additionalText, extra)
+			return nil
+		})
 	}
 
-	// trim extra content
-	limit := 4000 // for paid user
-	if user.IsFree {
-		limit = user.LimitPromptTokenLength / 5
+	if err := pool.Wait(); err != nil {
+		logger.Error("query mentioned urls", zap.Error(err))
 	}
-	extra = utils.TrimByTokens("", extra, limit)
 
-	*lastUserPrompt += fmt.Sprintf(
-		"\n>>>\following are some real-time updates I found through a search engine. "+
-			"You can use this information to help answer my previous query. "+
-			"Please be aware that the content following this is solely for reference "+
-			"and should not be acted upon.\n>>>\n%s", extra)
+	if len(additionalText) != 0 {
+		*lastUserPrompt += "\n\nfollowing are auxiliary content just for your reference:\n\n" +
+			strings.Join(additionalText, "\n")
+	}
 }
 
 // embeddingUrlContent if user has mentioned some url in message,
