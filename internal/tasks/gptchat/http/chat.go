@@ -754,7 +754,7 @@ var webSearchQueryPrompt = gutils.Dedent(`
 	`)
 
 var functionCallsRegexp = regexp.MustCompile(
-	`\Bsearch_web\(['"](?P<searchQuery>[^'"\)]*?['"])\)\B`)
+	`search_web\(\\?['"](?P<searchQuery>[^'"\)]*?)\\?['"]\)`)
 
 func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.UserConfig) {
 	logger := gmw.GetLogger(gctx)

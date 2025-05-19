@@ -153,3 +153,13 @@ func Test_bodyChecker(t *testing.T) {
 	require.Equal(t, "gpt-3.5-turbo-1106", req.Model)
 	require.True(t, req.LaiskyExtra.ChatSwitch.EnableGoogleSearch)
 }
+
+func Test_functionCallsRegexp(t *testing.T) {
+	text := "```python\nsearch_web(\"Ottawa ON Canada weather forecast this week\")\n```"
+	matched := functionCallsRegexp.FindAllStringSubmatch(text, -1)
+
+	require.Len(t, matched, 1)
+	require.Len(t, matched[0], 2)
+	require.Equal(t, matched[0][0], "search_web(\"Ottawa ON Canada weather forecast this week\")")
+	require.Equal(t, matched[0][1], "Ottawa ON Canada weather forecast this week")
+}
