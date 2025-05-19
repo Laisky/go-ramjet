@@ -797,7 +797,13 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 	var pool errgroup.Group
 	var mu sync.Mutex
 	var additionalText []string
-	for _, match := range matches {
+	for i, match := range matches {
+		if i > 5 {
+			logger.Debug("too many function calls, skip",
+				zap.String("match", match[0]))
+			break
+		}
+
 		match := match
 		if len(match) != 2 {
 			logger.Debug("invalid function call match",
