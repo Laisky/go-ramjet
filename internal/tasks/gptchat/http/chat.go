@@ -521,6 +521,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gemini-2.0-pro",
 			"gemini-2.5-pro",
 			"gemini-2.0-flash",
+			"gemini-2.5-flash",
 			"gemini-2.0-flash-thinking",
 			"gemini-2.0-flash-exp-image-generation":
 			if nImages == 0 { // no images, text only

@@ -44,7 +44,8 @@ const ChatModelClaude35Haiku = 'claude-3.5-haiku';
 const ChatModelGemini2Pro = 'gemini-2.0-pro';
 const ChatModelGemini25Pro = 'gemini-2.5-pro';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
-const ChatModelGemini2Flash = 'gemini-2.0-flash';
+const ChatModelGemini25Flash = 'gemini-2.5-flash';
+// const ChatModelGemini2Flash = 'gemini-2.0-flash';
 const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 const ChatModelGemini2FlahExpImage = 'gemini-2.0-flash-exp-image-generation';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
@@ -131,7 +132,8 @@ const ChatModels = [
     // ChatModelGeminiProVision,
     ChatModelGemini2Pro,
     ChatModelGemini25Pro,
-    ChatModelGemini2Flash,
+    // ChatModelGemini2Flash,
+    ChatModelGemini25Flash,
     ChatModelGemini2FlashThinking,
     ChatModelGemini2FlahExpImage
     // ChatModelTurbo35_16K,
@@ -150,7 +152,8 @@ const VisionModels = [
     // ChatModelGeminiProVision,
     ChatModelGemini2Pro,
     ChatModelGemini25Pro,
-    ChatModelGemini2Flash,
+    // ChatModelGemini2Flash,
+    ChatModelGemini25Flash,
     ChatModelGemini2FlashThinking,
     ChatModelGemini2FlahExpImage,
     ChatModelClaude3Opus,
@@ -213,7 +216,8 @@ const FreeModels = [
     // ChatModelTurbo35V0125,
     // ChatModelGeminiPro,
     // ChatModelGeminiProVision,
-    ChatModelGemini2Flash,
+    // ChatModelGemini2Flash,
+    ChatModelGemini25Flash,
     QAModelBasebit,
     QAModelSecurity,
     QAModelImmigrate,
@@ -248,7 +252,8 @@ const ModelCategories = {
     Google: [
         ChatModelGemini2Pro,
         ChatModelGemini25Pro,
-        ChatModelGemini2Flash,
+        // ChatModelGemini2Flash,
+        ChatModelGemini25Flash,
         ChatModelGemini2FlashThinking,
         ChatModelGemini2FlahExpImage,
         ChatModelGroqGemma3With27B
