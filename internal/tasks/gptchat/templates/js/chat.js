@@ -1703,49 +1703,101 @@ async function fetchDeepResearchResultBackground () {
 }
 
 /**
- * Clears all user sessions and chats from local storage,
- * and resets the chat UI to its initial state.
+ * Clear chat history for specific session or all sessions
+ *
  * @param {Event} evt - The event that triggered the function (optional).
  * @param {string} sessionID - The session ID to clear (optional).
  *
  * @returns {void}
  */
-async function clearSessionAndChats (evt, sessionID) {
-    console.debug('clearSessionAndChats', evt, sessionID)
+async function clearSessionHandler (evt, sessionID) {
+    console.debug('clearSessionHandler', evt, sessionID)
     if (evt) {
         evt.stopPropagation();
     }
 
     // remove pinned materials
     await libs.KvDel(KvKeyPinnedMaterials);
+    await restorePinnedMaterials(); // Update UI for pinned materials
 
-    if (!sessionID) { // remove all session
-        const sconfig = await getChatSessionConfig();
+    if (!sessionID) { // remove all sessions and their chats
+        // Preserve essential parts of the current config for the new default session 1
+        const activeSconfig = await getChatSessionConfig(); // Get config of currently active session
+        const preservedApiToken = activeSconfig.api_token;
+        const preservedApiBase = activeSconfig.api_base;
 
         await Promise.all((await libs.KvList()).map(async (key) => {
             if (
-                key.startsWith(KvKeyPrefixSessionHistory) || // remove all sessions
+                key.startsWith(KvKeyPrefixSessionHistory) || // remove all sessions' history
                 key.startsWith(KvKeyPrefixSessionConfig) // remove all sessions' config
             ) {
                 await libs.KvDel(key);
             }
         }));
 
-        // restore session config
-        await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, sconfig);
-        await libs.KvSet(kvSessionKey(1), []);
-    } else { // only remove one session's chat, keep config
-        await Promise.all((await libs.KvList()).map(async (key) => {
-            if (
-                key.startsWith(KvKeyPrefixSessionHistory) && // remove all sessions
-                key.endsWith(`_${sessionID}`) // remove specified session
-            ) {
-                await libs.KvSet(key, []);
+        // Restore a new session 1
+        const newDefaultSconfig = newSessionConfig(); // Creates a fresh config
+        newDefaultSconfig.api_token = preservedApiToken; // Apply preserved token
+        newDefaultSconfig.api_base = preservedApiBase; // Apply preserved base URL
+
+        await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, newDefaultSconfig);
+        await libs.KvSet(kvSessionKey(1), []); // Empty history for session 1
+        await libs.KvSet(KvKeyPrefixSelectedSession, 1); // Set session 1 as selected
+
+        // Clear UI display of chats and session lists
+        chatContainer.querySelector('.conservations .chats').innerHTML = '';
+        const sessionManagerSessions = document.querySelector('#sessionManager .sessions');
+        if (sessionManagerSessions) sessionManagerSessions.innerHTML = '';
+        const chatContainerSessionTabs = chatContainer.querySelector('.sessions .session-tabs');
+        if (chatContainerSessionTabs) chatContainerSessionTabs.innerHTML = '';
+
+        // Add session 1 back to UI
+        const sessionNameForUI = newDefaultSconfig.session_name || '1';
+        const sessionManagerHtml = `
+            <div class="list-group session" data-session="1" data-name="${libs.sanitizeHTML(sessionNameForUI)}">
+                <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
+                    <div class="col">${libs.sanitizeHTML(sessionNameForUI)}</div>
+                    <i class="bi bi-pencil-square"></i>
+                    <i class="bi bi-files"></i>
+                    <i class="bi bi-trash col-auto"></i>
+                </button>
+            </div>`;
+        if (sessionManagerSessions) sessionManagerSessions.insertAdjacentHTML('beforeend', sessionManagerHtml);
+
+        const chatContainerHtml = `
+            <div class="list-group session" data-session="1" data-name="${libs.sanitizeHTML(sessionNameForUI)}">
+                <button type="button" class="list-group-item list-group-item-action active" aria-current="true">
+                    <div class="col">${libs.sanitizeHTML(sessionNameForUI)}</div>
+                </button>
+            </div>`;
+        if (chatContainerSessionTabs) chatContainerSessionTabs.insertAdjacentHTML('beforeend', chatContainerHtml);
+
+        // Bind listeners for the new session 1
+        document.querySelectorAll('#sessionManager .session[data-session="1"], #chatContainer .session[data-session="1"]').forEach(el => {
+            // Ensure listener is not added multiple times if element somehow persists
+            if (el.dataset.listenerAttached !== 'true') {
+                el.addEventListener('click', listenSessionSwitch);
+                el.dataset.listenerAttached = 'true';
             }
-        }));
+        });
+        bindSessionEditBtn();
+        bindSessionDeleteBtn();
+        bindSessionDuplicateBtn();
+
+        await changeSession(1); // Switch to and load the new session 1
+    } else { // only remove one session's chat history, keep its config
+        await libs.KvSet(kvSessionKey(sessionID), []); // Clear history in KV
+
+        const currentActiveSid = await activeSessionID();
+        if (parseInt(sessionID) === currentActiveSid) {
+            // If the cleared session is the active one, refresh its display by reloading it
+            await changeSession(currentActiveSid);
+        }
+        // If a non-active session's chats are cleared, no immediate UI change is needed for the chat display area.
+        // The next time that session is activated, it will load the empty history.
     }
 
-    location.reload();
+    // location.reload(); // This would also solve UI issues but is a harder reset and is currently commented out.
 }
 
 function bindSessionEditBtn () {
@@ -1917,7 +1969,7 @@ async function setupSessionManager () {
     {
         document
             .querySelector('#sessionManager .btn.purge')
-            .addEventListener('click', clearSessionAndChats);
+            .addEventListener('click', clearSessionHandler);
     }
 
     // restore all sessions from storage
@@ -5710,7 +5762,7 @@ async function setupConfig () {
                     evt.stopPropagation();
 
                     ConfirmModal('Clear current chat history but keep the session settings?', async () => {
-                        clearSessionAndChats(evt, await activeSessionID());
+                        clearSessionHandler(evt, await activeSessionID());
                     });
                 });
             });
