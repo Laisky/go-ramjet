@@ -475,17 +475,20 @@ type DrawImageByFluxReplicateRequest struct {
 //
 // https://replicate.com/black-forest-labs/flux-1.1-pro/api/schema
 type FluxInput struct {
-	Steps           int    `json:"steps" binding:"required,min=1"`
-	Prompt          string `json:"prompt" binding:"required,min=1"`
-	ImagePrompt     string `json:"image_prompt,omitempty"`
-	Guidance        int    `json:"guidance" binding:"required,min=2,max=5"`
-	Interval        int    `json:"interval" binding:"required,min=1,max=4"`
-	AspectRatio     string `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
-	SafetyTolerance int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
-	Seed            int    `json:"seed"`
-	NImages         int    `json:"n_images" binding:"required,min=1,max=8"`
-	Width           int    `json:"width" binding:"required,min=256,max=1440"`
-	Height          int    `json:"height" binding:"required,min=256,max=1440"`
+	Steps  int    `json:"steps" binding:"required,min=1"`
+	Prompt string `json:"prompt" binding:"required,min=1"`
+	// ImagePrompt is the image prompt, only works for flux-1.1-pro
+	ImagePrompt *string `json:"image_prompt,omitempty"`
+	// InputImage is the input image, only works for flux-kontext-pro
+	InputImage      *string `json:"input_image,omitempty"`
+	Guidance        int     `json:"guidance" binding:"required,min=2,max=5"`
+	Interval        int     `json:"interval" binding:"required,min=1,max=4"`
+	AspectRatio     string  `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
+	SafetyTolerance int     `json:"safety_tolerance" binding:"required,min=1,max=5"`
+	Seed            int     `json:"seed"`
+	NImages         int     `json:"n_images" binding:"required,min=1,max=8"`
+	Width           int     `json:"width" binding:"required,min=256,max=1440"`
+	Height          int     `json:"height" binding:"required,min=256,max=1440"`
 }
 
 // InpaintingImageByFlusReplicateRequest is request to inpainting image by flux pro

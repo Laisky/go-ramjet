@@ -72,6 +72,7 @@ const ImageModelSdxlTurbo = 'sdxl-turbo';
 // const ImageModelFluxPro = 'flux-pro';
 const ImageModelFluxDev = 'flux-dev';
 const ImageModelFluxPro11 = 'flux-1.1-pro';
+const ImageModelFluxKontextPro = 'flux-kontext-pro';
 const ImageModelFluxProUltra11 = 'flux-1.1-pro-ultra';
 const ImageModelFluxSchnell = 'flux-schnell';
 const ImageModelImagen3 = 'imagen-3.0';
@@ -176,6 +177,7 @@ const VisionModels = [
     // ImageModelImg2Img
     // ImageModelFluxPro,
     ImageModelFluxPro11,
+    ImageModelFluxKontextPro,
     ImageModelFluxProUltra11,
     ImageModelFluxDev,
     ImageModelGptImage1
@@ -195,6 +197,7 @@ const ImageModels = [
     ImageModelSdxlTurbo,
     // ImageModelFluxPro,
     ImageModelFluxPro11,
+    ImageModelFluxKontextPro,
     ImageModelFluxDev,
     ImageModelFluxProUltra11,
     ImageModelFluxSchnell,
@@ -3564,6 +3567,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                 break;
                 // case ImageModelFluxPro:
             case ImageModelFluxPro11:
+            case ImageModelFluxKontextPro:
             case ImageModelFluxDev:
             case ImageModelFluxProUltra11:
             case ImageModelFluxSchnell:

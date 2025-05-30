@@ -37,6 +37,7 @@ const (
 	// PriceTxt2ImageFluxPro is the price for txt2image flux pro
 	//
 	// https://replicate.com/pricing
+	PriceTxt2ImageFluxKontextPro      Price = 20000      // 0.040 usd
 	PriceTxt2ImageFluxPro11      Price = 20000      // 0.040 usd
 	PriceTxt2ImageFluxProUltra11 Price = 30000      // 0.060 usd
 	PriceTxt2ImageFluxPro        Price = 27500      // 0.055 usd

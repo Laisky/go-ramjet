@@ -74,6 +74,8 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 		price = db.PriceTxt2ImageFluxFillPro
 	case "flux-1.1-pro":
 		price = db.PriceTxt2ImageFluxPro11
+	case "flux-kontext-pro":
+		price = db.PriceTxt2ImageFluxKontextPro
 	case "flux-1.1-pro-ultra":
 		price = db.PriceTxt2ImageFluxProUltra11
 	default:
@@ -197,6 +199,11 @@ func drawFluxByReplicate(ctx context.Context,
 	logger.Debug("draw image by replicate")
 
 	req.Input.Seed = rand.Int()
+
+	if model == "flux-kontext-pro" && req.Input.ImagePrompt != nil {
+		req.Input.InputImage = req.Input.ImagePrompt
+		req.Input.ImagePrompt = nil
+	}
 
 	upstreamReqBody, err := json.Marshal(req)
 	if err != nil {
