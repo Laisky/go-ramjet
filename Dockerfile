@@ -1,5 +1,5 @@
 # db . -t ppcelery/go-ramjet:latest
-FROM node:23-bullseye AS nodebuild
+FROM node:24-bookworm AS nodebuild
 
 RUN npm install -g sass
 WORKDIR /app
@@ -8,7 +8,7 @@ RUN sass ./internal/tasks/gptchat/templates/scss
 
 # =====================================
 
-FROM golang:1.24.1-bullseye AS gobuild
+FROM golang:1.24.4-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
@@ -43,7 +43,7 @@ RUN go build
 # =====================================
 
 # copy executable file and certs to a pure container
-FROM debian:bullseye
+FROM debian:bookworm
 
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \

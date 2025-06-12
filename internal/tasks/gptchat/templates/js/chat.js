@@ -20,6 +20,7 @@ const ChatModelGPT4OMiniSearch = 'gpt-4o-mini-search-preview';
 const ChatModelGPTO1 = 'o1';
 // const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelGPTO3 = 'o3';
+const ChatModelGPTO3Pro = 'o3-pro';
 const ChatModelGPTO3Mini = 'o3-mini';
 const ChatModelGPTO4Mini = 'o4-mini';
 const ChatModelDeepSeekChat = 'deepseek-chat';
@@ -105,6 +106,7 @@ const ChatModels = [
     // ChatModelGPTO1Preview,
     ChatModelGPTO1,
     ChatModelGPTO3,
+    ChatModelGPTO3Pro,
     // ChatModelGPTO1Mini,
     ChatModelGPTO3Mini,
     ChatModelGPTO4Mini,
@@ -173,6 +175,7 @@ const VisionModels = [
     // ChatModelGPTO1Preview,
     ChatModelGPTO1,
     ChatModelGPTO3,
+    ChatModelGPTO3Pro,
     // ImageModelSdxlTurbo,
     // ImageModelImg2Img
     // ImageModelFluxPro,
@@ -249,7 +252,8 @@ const ModelCategories = {
         ChatModelGPTO3Mini,
         ChatModelGPTO4Mini,
         ChatModelGPTO1,
-        ChatModelGPTO3
+        ChatModelGPTO3,
+        ChatModelGPTO3Pro
     ],
     Anthropic: [
         ChatModelClaude35Haiku,
