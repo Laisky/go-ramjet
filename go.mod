@@ -10,7 +10,7 @@ require (
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-redis/v2 v2.0.1-0.20250303033943-e2bf697f90ac
-	github.com/Laisky/go-utils/v5 v5.0.1-0.20250228054950-e1500acd6929
+	github.com/Laisky/go-utils/v5 v5.1.1-0.20250330132043-119d202320c0
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20250403094315-1cec0eccf720
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
@@ -47,12 +47,12 @@ require (
 	github.com/ClickHouse/ch-go v0.61.5 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.23.2 // indirect
 	github.com/GoWebProd/gip v0.0.0-20230623090727-b60d41d5d320 // indirect
-	github.com/GoWebProd/uuid7 v0.0.0-20231130161441-17ee54b097d4 // indirect
+	github.com/GoWebProd/uuid7 v0.0.0-20241216131732-fdbee3a1a883 // indirect
 	github.com/Laisky/errors v0.9.2-0.20221107084216-4b771a197718 // indirect
 	github.com/Laisky/fast-skiplist/v2 v2.0.1 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.1 // indirect
 	github.com/Laisky/go-utils/v3 v3.0.1 // indirect
-	github.com/Laisky/golang-fifo v1.0.1-0.20240403091456-fc83d5e38c0b // indirect
+	github.com/Laisky/golang-fifo v1.0.1-0.20240403092208-1d90c6c33e11 // indirect
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
@@ -73,9 +73,9 @@ require (
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
-	github.com/gammazero/deque v0.2.1 // indirect
+	github.com/gammazero/deque v1.0.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -100,7 +100,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
@@ -145,7 +145,7 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spf13/viper v1.13.0 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
-	github.com/tailscale/hujson v0.0.0-20241010212012-29efb4a0184b // indirect
+	github.com/tailscale/hujson v0.0.0-20250226034555-ec1d1c113d33 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
