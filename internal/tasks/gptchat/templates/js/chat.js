@@ -257,6 +257,7 @@ const ModelCategories = {
         ChatModelGPT4O,
         ChatModelGPT4OMiniSearch,
         ChatModelGPT4OSearch,
+        ChatModelGPT41,
         ChatModelGPT41Mini,
         ChatModelGPT41Nano,
         ChatModelGPT4Turbo,
