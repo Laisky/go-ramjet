@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc gi
 # install azure sdk
 # https://learn.microsoft.com/en-us/azure/ai-services/speech-service/quickstarts/setup-platform?tabs=windows%2Cubuntu%2Cdotnetcli%2Cdotnet%2Cjre%2Cmaven%2Cbrowser%2Cmac%2Cpypi&pivots=programming-language-go
 RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
+# RUN apt-get install -y libssl-dev ca-certificates libasound2t64 wget # for ubuntu 24
 ENV SPEECHSDK_ROOT=/opt/azure/speech
 ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
 ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"

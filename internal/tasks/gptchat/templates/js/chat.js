@@ -12,6 +12,9 @@ const robotIcon = '🤖️';
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
 const ChatModelGPT4Turbo = 'gpt-4-turbo';
+const ChatModelGPT41 = 'gpt-4.1';
+const ChatModelGPT41Mini = 'gpt-4.1-mini';
+const ChatModelGPT41Nano = 'gpt-4.1-nano';
 const ChatModelGPT4O = 'gpt-4o';
 const ChatModelGPT4OSearch = 'gpt-4o-search-preview';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
@@ -98,11 +101,14 @@ const ChatModels = [
     // ChatModelTurbo35V1106,
     // ChatModelTurbo35V0125,
     // ChatModelGPT4,
-    ChatModelGPT4Turbo,
+    ChatModelGPT41,
+    ChatModelGPT41Mini,
+    ChatModelGPT41Nano,
     ChatModelGPT4O,
     ChatModelGPT4OSearch,
     ChatModelGPT4OMini,
     ChatModelGPT4OMiniSearch,
+    ChatModelGPT4Turbo,
     // ChatModelGPTO1Preview,
     ChatModelGPTO1,
     ChatModelGPTO3,
@@ -152,6 +158,9 @@ const ChatModels = [
 ];
 const VisionModels = [
     ChatModelGPT4Turbo,
+    ChatModelGPT41,
+    ChatModelGPT41Mini,
+    ChatModelGPT41Nano,
     ChatModelGPT4O,
     ChatModelGPT4OSearch,
     ChatModelGPT4OMini,
@@ -248,6 +257,8 @@ const ModelCategories = {
         ChatModelGPT4O,
         ChatModelGPT4OMiniSearch,
         ChatModelGPT4OSearch,
+        ChatModelGPT41Mini,
+        ChatModelGPT41Nano,
         ChatModelGPT4Turbo,
         ChatModelGPTO3Mini,
         ChatModelGPTO4Mini,
