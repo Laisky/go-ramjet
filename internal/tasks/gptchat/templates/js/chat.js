@@ -4549,12 +4549,49 @@ async function autoToggleUserImageUploadBtn () {
 }
 
 /**
+ * Add auto-resize functionality to textarea
+ */
+function setupTextareaAutoResize(textarea) {
+    if (!textarea) return;
+
+    const minHeight = 80;
+    const maxHeight = 300;
+
+    textarea.style.height = minHeight + 'px';
+    textarea.style.overflowY = 'hidden';
+    textarea.style.resize = 'none'; // Disable manual resize
+
+    const autoResize = function() {
+        this.style.height = minHeight + 'px';
+        const scrollHeight = this.scrollHeight;
+
+        if (scrollHeight > maxHeight) {
+            this.style.height = maxHeight + 'px';
+            this.style.overflowY = 'auto';
+        } else {
+            this.style.height = scrollHeight + 'px';
+            this.style.overflowY = 'hidden';
+        }
+    };
+
+    textarea.addEventListener('input', autoResize);
+    textarea.addEventListener('paste', () => {
+        // Delay to allow paste content to be processed
+        setTimeout(autoResize.bind(textarea), 10);
+    });
+}
+
+
+/**
  * bind text chat input. will be skipped if talking enabled
  */
 async function setupChatInput () {
     if (!chatPromptInputEle) {
         return
     }
+
+    // Add auto-resize functionality
+    setupTextareaAutoResize(chatPromptInputEle);
 
     // bind input press enter
     {
@@ -4865,6 +4902,9 @@ async function bindTalkSwitchHandler (newSelectedValue) {
         await libs.waitElementReady('#chatContainer .user-input .input.prompt');
         chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
         chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+
+        // Add auto-resize functionality
+        setupTextareaAutoResize(chatPromptInputEle);
 
         await setupChatInput();
     }
