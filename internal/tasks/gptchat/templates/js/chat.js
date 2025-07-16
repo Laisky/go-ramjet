@@ -4555,13 +4555,23 @@ function setupTextareaAutoResize(textarea) {
     if (!textarea) return;
 
     const minHeight = 80;
-    const maxHeight = 300;
+    // Calculate maxHeight as 35% of viewport height, with a minimum of 200px and maximum of 500px
+    const calculateMaxHeight = () => {
+        const viewportHeight = window.innerHeight;
+        const dynamicMaxHeight = Math.floor(viewportHeight * 0.35);
+        return Math.max(200, Math.min(500, dynamicMaxHeight));
+    };
+
+    let maxHeight = calculateMaxHeight();
 
     textarea.style.height = minHeight + 'px';
     textarea.style.overflowY = 'hidden';
     textarea.style.resize = 'none'; // Disable manual resize
 
     const autoResize = function() {
+        // Recalculate maxHeight in case window was resized
+        maxHeight = calculateMaxHeight();
+
         this.style.height = minHeight + 'px';
         const scrollHeight = this.scrollHeight;
 
@@ -4578,6 +4588,12 @@ function setupTextareaAutoResize(textarea) {
     textarea.addEventListener('paste', () => {
         // Delay to allow paste content to be processed
         setTimeout(autoResize.bind(textarea), 10);
+    });
+
+    // Update maxHeight when window is resized
+    window.addEventListener('resize', () => {
+        maxHeight = calculateMaxHeight();
+        autoResize.call(textarea);
     });
 }
 
