@@ -232,7 +232,7 @@ const FreeModels = [
     ChatModelGroqllama3With70B,
     // ChatModelQwenQwq32B,
     ChatModelQwen332B,
-    ChatModelKimiK2,
+    // ChatModelKimiK2,
     // ChatModelGroqllama3With8B,
     // ChatModelGroqllama3With405B,
     // ChatModelTurbo35,
