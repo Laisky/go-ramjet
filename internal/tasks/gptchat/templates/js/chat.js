@@ -61,7 +61,9 @@ const ChatModelGroqGemma3With27B = 'gemma-3-27b-it';
 const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
-const ChatModelQwenQwq32B = 'qwen-qwq-32b';
+// const ChatModelQwenQwq32B = 'qwen-qwq-32b';
+const ChatModelQwen332B = 'qwen/qwen3-32b';
+const ChatModelKimiK2 = 'moonshotai/kimi-k2-instruct';
 // const ChatModelGroqllama3With405B = 'llama-3.1-405b-instruct';
 const QAModelBasebit = 'qa-bbt-xego';
 const QAModelSecurity = 'qa-security';
@@ -137,7 +139,9 @@ const ChatModels = [
     // ChatModelGroqGemma2With9B,
     ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
-    ChatModelQwenQwq32B,
+    // ChatModelQwenQwq32B,
+    ChatModelQwen332B,
+    ChatModelKimiK2,
     // ChatModelGroqllama3With8B,
     // ChatModelGroqllama3With405B,
     // ChatModelGPT4Vision,
@@ -226,7 +230,9 @@ const FreeModels = [
     // ChatModelGroqGemma2With9B,
     ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
-    ChatModelQwenQwq32B,
+    // ChatModelQwenQwq32B,
+    ChatModelQwen332B,
+    ChatModelKimiK2,
     // ChatModelGroqllama3With8B,
     // ChatModelGroqllama3With405B,
     // ChatModelTurbo35,
@@ -293,7 +299,9 @@ const ModelCategories = {
         ChatModelDeepResearch,
         // ChatModelGroqGemma2With9B,
         ChatModelGroqllama3With70B,
-        ChatModelQwenQwq32B
+        // ChatModelQwenQwq32B,
+        ChatModelQwen332B,
+        ChatModelKimiK2
     ]
 };
 
