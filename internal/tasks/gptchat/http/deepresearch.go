@@ -25,22 +25,21 @@ func CreateDeepResearchHandler(c *gin.Context) {
 		return
 	}
 
+	if user.IsFree {
+		web.AbortErr(c, errors.New("free user cannot create deepresearch task. "+
+			"you need upgrade to a paid membership, "+
+			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
+		return
+	}
+
 	req := new(CreateDeepresearchRequest)
 	err = c.ShouldBindJSON(req)
 	if web.AbortErr(c, errors.WithStack(err)) {
 		return
 	}
 
-	// =====================================
-	// FOR TEST
-	// =====================================
-	// c.JSON(http.StatusOK, gin.H{
-	// 	"task_id": "0194de67-9011-71c6-8006-6b39c7a11145",
-	// })
-	// return
-	// =====================================
-
-	taskID, err := rutils.GetCli().AddLLMStormTask(c.Request.Context(), req.Prompt, user.Token)
+	taskID, err := rutils.GetCli().
+		AddLLMStormTask(gmw.Ctx(c), req.Prompt, user.Token)
 	if web.AbortErr(c, errors.WithStack(err)) {
 		return
 	}
@@ -57,13 +56,26 @@ func CreateDeepResearchHandler(c *gin.Context) {
 func GetDeepResearchStatusHandler(c *gin.Context) {
 	logger := gmw.GetLogger(c)
 
+	user, err := getUserByAuthHeader(c)
+	if web.AbortErr(c, errors.WithStack(err)) {
+		return
+	}
+
+	if user.IsFree {
+		web.AbortErr(c, errors.New("free user cannot create deepresearch task. "+
+			"you need upgrade to a paid membership, "+
+			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
+		return
+	}
+
 	taskID := strings.TrimSpace(c.Param("task_id"))
 	if taskID == "" {
 		web.AbortErr(c, errors.New("should set task_id"))
 		return
 	}
 
-	task, err := rutils.GetCli().GetLLMStormTaskResult(c.Request.Context(), taskID)
+	task, err := rutils.GetCli().
+		GetLLMStormTaskResult(gmw.Ctx(c), taskID)
 	if web.AbortErr(c, errors.WithStack(err)) {
 		return
 	}
