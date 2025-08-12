@@ -4212,6 +4212,11 @@ async function addOperateBtnBelowAiResponse(chatID) {
         console.warn(`can not find ai-response element for chatid=${chatID}`);
         return;
     }
+    // Idempotent: remove existing operator (if any) to avoid duplicate buttons / stale listeners
+    const existed = aiRespEle.querySelector(':scope > .operator');
+    if (existed) {
+        existed.remove();
+    }
 
     // Create a new div element just under ai-response
     const divContainer = document.createElement('div');
@@ -5580,6 +5585,14 @@ async function append2Chats(isHistory, chatData) {
 
     if (!isHistory && role === RoleHuman) {
         scrollToChat(chatEle);
+    }
+
+    // When restoring history (isHistory=true), operator buttons were not saved in chatData.content
+    // because they are injected after saving (to exclude syntax highlighting mutations).
+    // Ensure operator buttons are (re)added for historical AI messages on session switch.
+    if (isHistory && role === RoleAI) {
+        // Fire-and-forget; no need to block restore sequence.
+        addOperateBtnBelowAiResponse(chatID).catch(err => console.warn('add operator failed:', err));
     }
 
     // avoid duplicate event listener, only bind event listener for new chat
