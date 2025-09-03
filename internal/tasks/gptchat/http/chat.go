@@ -538,7 +538,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gemini-2.0-flash",
 			"gemini-2.5-flash",
 			"gemini-2.0-flash-thinking",
-			"gemini-2.0-flash-exp-image-generation":
+			"gemini-2.0-flash-exp-image-generation",
+			"gemini-2.5-flash-image-preview":
 			if nImages == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
