@@ -56,10 +56,6 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
     # libcurl4 libcurl3 libdrm2 libgbm1 libgtk-3-0 libgtk-4-1 libnspr4 libnss3 \
     # libu2f-udev libvulkan1 libxkbcommon0 \
     # --------------------------------------------
-    # for postgresql backup
-    # --------------------------------------------
-    postgresql-client \
-    # --------------------------------------------
     # general
     # --------------------------------------------
     && update-ca-certificates 2>/dev/null || true
@@ -69,6 +65,12 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
 RUN wget https://s3.laisky.com/public/google-chrome-stable_current_amd64.deb \
     && apt install -y ./google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
+
+# install pg_dump
+RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg \
+    && apt update \
+    && apt install -y postgresql-client-17
 
 # install azure sdk
 RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
