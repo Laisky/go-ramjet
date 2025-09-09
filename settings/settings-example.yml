@@ -1,6 +1,26 @@
 tasks:
   heartbeat:
     interval: 60
+  postgres:
+    # run interval in seconds
+    interval: 86400
+    # backups are streamed directly to S3; no local files will be written
+    db:
+      host: "127.0.0.1"
+      port: 5432
+      user: "postgres"
+      password: "your-password"
+      database: "your-db"
+      # optional; empty means full database dump
+      tables: [ ]
+    s3:
+      enable: true  # must be true; otherwise the task will not run
+      endpoint: "https://minio.example.com"
+      access_key: "minio-access-key"
+      access_secret: "minio-secret-key"
+      bucket: "backups"
+      # optional: prefix folder inside bucket, e.g., "db/pg"
+      object_prefix: ""
   backups:
     interval: 3600
     configs:

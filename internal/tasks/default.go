@@ -35,4 +35,6 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/jav"
 	// telegram notes
 	_ "github.com/Laisky/go-ramjet/internal/tasks/telegram/notes"
+	// postgres backup
+	_ "github.com/Laisky/go-ramjet/internal/tasks/postgres"
 )
