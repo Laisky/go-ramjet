@@ -7,9 +7,10 @@ import (
 
 	gmw "github.com/Laisky/gin-middlewares/v6"
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func setupHTMLCrawler(t *testing.T) {

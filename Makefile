@@ -1,6 +1,7 @@
 .PHONY: install
 install:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
+
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	# go install go.uber.org/nilaway/cmd/nilaway@latest
@@ -15,7 +16,7 @@ lint:
 	gofmt -s -w .
 	go vet
 	# nilaway ./...
-	golangci-lint run -c .golangci.lint.yml
+	golangci-lint run -c .golangci.yml
 	govulncheck ./...
 
 .PHONY: changelog

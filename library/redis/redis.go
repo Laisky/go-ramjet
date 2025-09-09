@@ -4,10 +4,11 @@ import (
 	"sync"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	rdb "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (

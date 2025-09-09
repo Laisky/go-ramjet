@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"testing"
 
+	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 
-	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 )

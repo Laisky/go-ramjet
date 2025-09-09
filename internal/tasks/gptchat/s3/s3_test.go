@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/s3"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/s3"
 )
 
 func TestGetCli(t *testing.T) {

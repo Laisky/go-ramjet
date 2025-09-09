@@ -8,7 +8,7 @@ RUN sass ./internal/tasks/gptchat/templates/scss
 
 # =====================================
 
-FROM golang:1.24.4-bookworm AS gobuild
+FROM golang:1.25.1-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \

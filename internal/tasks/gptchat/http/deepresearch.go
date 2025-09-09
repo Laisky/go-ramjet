@@ -6,10 +6,11 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
-	rutils "github.com/Laisky/go-ramjet/library/redis"
-	"github.com/Laisky/go-ramjet/library/web"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
+
+	rutils "github.com/Laisky/go-ramjet/library/redis"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // CreateDeepresearchRequest deepresearch request
