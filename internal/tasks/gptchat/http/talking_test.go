@@ -13,6 +13,9 @@ import (
 )
 
 func TestTranscript(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	ctx := context.Background()
 
 	err := SetupHTTPCli()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
 
@@ -16,6 +17,9 @@ import (
 )
 
 func TestFetchDynamicURLContent(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	gconfig.S.Set("redis.addr", "100.122.41.16:6379")
 	gptTasks.RunDynamicWebCrawler()
 
@@ -30,6 +34,9 @@ func TestFetchDynamicURLContent(t *testing.T) {
 }
 
 func TestGoogleSearchBasic(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	gconfig.S.Set("redis.addr", "100.122.41.16:6379")
 	gptTasks.RunDynamicWebCrawler()
 
@@ -77,6 +84,9 @@ func TestGoogleSearchBasic(t *testing.T) {
 }
 
 func TestGoogleSearch(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	SetupHTTPCli()
 
 	ctx := context.Background()
@@ -92,6 +102,9 @@ func TestGoogleSearch(t *testing.T) {
 }
 
 func Test_extractHtmlText(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	raw := []byte(`
 		<html>
 			<head>

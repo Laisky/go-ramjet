@@ -22,7 +22,7 @@ func TestGenRsyncCMD(t *testing.T) {
 	expect := "rsync -tvhz fluent.conf 172.16.4.110::ivilog_bak"
 	r := backup.GenRsyncCMD("fluent.conf", "172.16.4.110::ivilog_bak")
 	if strings.Join(r, " ") != expect {
-		t.Errorf("expect %v, got %v", expect, strings.Join(r, ""))
+		t.Errorf("expect %v, got %v", expect, strings.Join(r, " "))
 	}
 }
 
@@ -31,8 +31,9 @@ func TestRunSysCMD(t *testing.T) {
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
-	if matched, err := regexp.MatchString("users, load averages: ", got); !matched || err != nil {
-		t.Errorf("matched error, got: %v", got)
+	// match common linux uptime output like: ' 14:20:52 up 1 day,  3:22,  2 users,  load average: 0.44, 0.37, 0.36'
+	if matched, err := regexp.MatchString(`\busers?,\s+load average`, got); !matched || err != nil {
+		t.Errorf("unexpected uptime output: %q (err=%v)", got, err)
 	}
 }
 

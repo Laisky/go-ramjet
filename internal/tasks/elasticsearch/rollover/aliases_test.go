@@ -1,6 +1,7 @@
 package rollover_test
 
 import (
+	"os"
 	"regexp"
 	"testing"
 
@@ -8,6 +9,9 @@ import (
 )
 
 func TestGetAliasURL(t *testing.T) {
+	if os.Getenv("RUN_ES_ROLLOVER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_ES_ROLLOVER_IT to run")
+	}
 	var (
 		st = &rollover.IdxSetting{
 			IdxWriteAlias: "sit-cp-logs-write",
@@ -25,6 +29,9 @@ func TestGetAliasURL(t *testing.T) {
 }
 
 func TestLoadAliases(t *testing.T) {
+	if os.Getenv("RUN_ES_ROLLOVER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_ES_ROLLOVER_IT to run")
+	}
 	var (
 		st = &rollover.IdxSetting{
 			IdxWriteAlias: "sit-cp-logs-write",
@@ -51,6 +58,9 @@ func TestLoadAliases(t *testing.T) {
 }
 
 func TestIsIdxIsWriteAlias(t *testing.T) {
+	if os.Getenv("RUN_ES_ROLLOVER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_ES_ROLLOVER_IT to run")
+	}
 	var (
 		idx      = "sit-cp-logs-2018.04.01-0000002"
 		aliases1 = []*rollover.AliasesResp{

@@ -160,7 +160,8 @@ func parseGitFileReq(file string) (ret *GitFileURL, err error) {
 				ret.LineTo = uint(lineTo)
 			}
 
-			if ret.LineFrom != 0 && ret.LineFrom >= ret.LineTo {
+			// allow specifying only line_from (line_to==0 means till EOF)
+			if ret.LineTo != 0 && ret.LineFrom != 0 && ret.LineFrom >= ret.LineTo {
 				return nil, errors.Errorf("line_from %d should not bigger than line_to %d", ret.LineFrom, ret.LineTo)
 			}
 

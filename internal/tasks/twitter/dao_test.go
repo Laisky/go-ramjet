@@ -3,6 +3,7 @@ package twitter
 import (
 	"context"
 	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 
@@ -16,6 +17,9 @@ import (
 )
 
 func TestSearchDao_GetLargestID(t *testing.T) {
+	if os.Getenv("RUN_TWITTER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_TWITTER_IT to run")
+	}
 	config.LoadTest(t)
 	d, err := NewSearchDao(
 		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
@@ -28,6 +32,9 @@ func TestSearchDao_GetLargestID(t *testing.T) {
 }
 
 func TestSearchDao_SaveTweets(t *testing.T) {
+	if os.Getenv("RUN_TWITTER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_TWITTER_IT to run")
+	}
 	config.LoadTest(t)
 	d, err := NewSearchDao(
 		gconfig.Shared.GetString("tasks.twitter.clickhouse.dsn"),
@@ -46,6 +53,9 @@ func TestSearchDao_SaveTweets(t *testing.T) {
 }
 
 func TestTwitterDao_GetTweetsIter(t *testing.T) {
+	if os.Getenv("RUN_TWITTER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_TWITTER_IT to run")
+	}
 	ctx := context.Background()
 	config.LoadTest(t)
 	d, err := NewDao(context.Background(),
@@ -66,6 +76,9 @@ func TestTwitterDao_GetTweetsIter(t *testing.T) {
 }
 
 func TestElasticsearchDao_GetLargestID(t *testing.T) {
+	if os.Getenv("RUN_TWITTER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_TWITTER_IT to run")
+	}
 	ctx := context.Background()
 	logger := log.Logger.Named("test")
 	config.LoadTest(t)

@@ -2,6 +2,7 @@ package dependencies_test
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -10,7 +11,10 @@ import (
 )
 
 func TestDocker(t *testing.T) {
-	endpoint := "unix:///Users/laisky/Library/Containers/com.docker.docker/Data/docker.sock"
+	if os.Getenv("RUN_DOCKER_IT") == "" {
+		t.Skip("integration test disabled: set RUN_DOCKER_IT to run")
+	}
+	endpoint := "unix:///var/run/docker.sock"
 	client, err := docker.NewClient(endpoint)
 	if err != nil {
 		t.Fatalf("got err: %+v", err)

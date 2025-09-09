@@ -141,7 +141,7 @@ func IsFileReadyToUpload(regex, fname string, now time.Time) (ok bool, err error
 		return false, errors.Wrap(err, "parse file time error")
 	}
 
-	if now.Sub(t).Hours() <= lastFinishedBackupFileBeforeHours {
+	if now.Sub(t).Hours() < lastFinishedBackupFileBeforeHours {
 		return false, nil
 	}
 

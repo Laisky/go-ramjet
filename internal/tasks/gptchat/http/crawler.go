@@ -273,8 +273,9 @@ func _extrachHtmlText(raw []byte) (result string, err error) {
 	f(doc)
 
 	words = regexpHTMLTag.ReplaceAllString(words, "")
-	return strings.Join(
-		gutils.FilterSlice(strings.Split(words, "\n"), func(v string) bool {
-			return strings.TrimSpace(v) != ""
-		}), ", "), nil
+	// preserve sentence breaks with newline (not comma)
+	lines := gutils.FilterSlice(strings.Split(words, "\n"), func(v string) bool {
+		return strings.TrimSpace(v) != ""
+	})
+	return strings.Join(lines, "\n"), nil
 }

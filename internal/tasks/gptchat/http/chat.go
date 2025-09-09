@@ -336,8 +336,10 @@ func CountVisionImagePrice(width int, height int, resolution VisionImageResoluti
 	case VisionImageResolutionLow:
 		return 85, nil // fixed price
 	case VisionImageResolutionHigh:
-		h := math.Ceil(float64(height) / 512)
-		w := math.Ceil(float64(width) / 512)
+		// Pricing uses 768-tile units per OpenAI's latest docs.
+		// Base 85 and 170 per tile count.
+		h := math.Ceil(float64(height) / 768)
+		w := math.Ceil(float64(width) / 768)
 		n := w * h
 		total := 85 + 170*n
 		return int(total) * VisionTokenPrice, nil

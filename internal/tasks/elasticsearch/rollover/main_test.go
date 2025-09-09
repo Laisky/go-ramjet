@@ -1,6 +1,7 @@
 package rollover_test
 
 import (
+	"os"
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
@@ -13,7 +14,11 @@ import (
 
 func setUp(t testing.TB) (api string, idxSts []*rollover.IdxSetting) {
 	t.Helper()
-	if err := gconfig.Shared.LoadFromFile("/etc/go-ramjet/settings.yml"); err != nil {
+	cfg := os.Getenv("GO_RAMJET_SETTINGS")
+	if cfg == "" {
+		t.Skip("integration test disabled: set GO_RAMJET_SETTINGS to run")
+	}
+	if err := gconfig.Shared.LoadFromFile(cfg); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 

@@ -2,6 +2,7 @@ package twitter
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/Laisky/testify/require"
@@ -15,6 +16,9 @@ var (
 )
 
 func TestMongo(t *testing.T) {
+	if os.Getenv("BLOG_MONGO_ADDR") == "" {
+		t.Skip("integration test disabled: set BLOG_MONGO_ADDR to run")
+	}
 	ctx := context.Background()
 	cnt, err := b.LoadAllPostsCnt(ctx)
 	require.NoError(t, err)
@@ -25,6 +29,9 @@ func TestMongo(t *testing.T) {
 }
 
 func TestIter(t *testing.T) {
+	if os.Getenv("BLOG_MONGO_ADDR") == "" {
+		t.Skip("integration test disabled: set BLOG_MONGO_ADDR to run")
+	}
 	ctx := context.Background()
 	bid, err := primitive.ObjectIDFromHex("4db1fed00000000000000000")
 	require.NoError(t, err)

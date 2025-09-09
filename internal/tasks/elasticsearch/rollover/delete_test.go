@@ -2,6 +2,7 @@ package rollover_test
 
 import (
 	"context"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -83,7 +84,12 @@ func TestIsIdxShouldDelete(t *testing.T) {
 }
 
 func init() {
-	if err := gconfig.Shared.LoadFromFile("/Users/laisky/repo/google/configs/go-ramjet/settings.yml"); err != nil {
+	cfg := os.Getenv("GO_RAMJET_SETTINGS")
+	if cfg == "" {
+		// skip integration if not provided
+		return
+	}
+	if err := gconfig.Shared.LoadFromFile(cfg); err != nil {
 		log.Logger.Panic("setup settings", zap.Error(err))
 	}
 }

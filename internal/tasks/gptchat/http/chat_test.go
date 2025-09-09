@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 )
 
 func TestAPIHandler(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	req := &FrontendReq{
 		Model:  "gpt-4o-mini",
 		Stream: true,
@@ -76,6 +80,9 @@ var testHTMLContent = `<!DOCTYPE html>
 	</html>`
 
 func Test_extractHTMLBody(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	got, err := gptTasks.ExtractHTMLBody([]byte(testHTMLContent))
 	require.NoError(t, err)
 	require.Equal(t, "<body>\n\t\t\t<h1>Hello, world!</h1>\n\t\t\t<p>This is an example of an HTML5 document.</p>\n\t\t\n\t</body>", string(got))
@@ -146,6 +153,9 @@ func TestCountVisionImagePrice(t *testing.T) {
 }
 
 func Test_bodyChecker(t *testing.T) {
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	raw := `{"model":"gpt-3.5-turbo-1106","stream":true,"max_tokens":500,"temperature":1,"presence_penalty":0,"frequency_penalty":0,"messages":[{"role":"system","content":"The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."},{"role":"user","chatID":"chat-1705284240927-Hv8nTi","content":"1+2"},{"role":"user","content":"what is the temperature in shanghai,"}],"stop":["\n\n"],"laisky_extra":{"chat_switch":{"disable_https_crawler":false,"enable_google_search":true}}}`
 	req := new(FrontendReq)
 	err := json.Unmarshal([]byte(raw), req)
