@@ -55,21 +55,23 @@ tasks:
 The `backup_file_prefix` controls the generated S3 key and the local filename used for logs/temp files.
 
 - If `backup_file_prefix` ends with `/` (directory-like):
-	- S3 key: `<prefix><database>-YYYYMMDD.gz`
-	- Local filename: `<database>-YYYYMMDD.gz`
-	- Example: `backup_file_prefix: "backup/postgre/prod/oneapi/"` produces
-		- S3: `backup/postgre/prod/oneapi/oneapi-20250909.gz`
-		- Local filename: `oneapi-20250909.gz`
+
+  - S3 key: `<prefix><database>-YYYYMMDD.gz`
+  - Local filename: `<database>-YYYYMMDD.gz`
+  - Example: `backup_file_prefix: "backup/postgre/prod/oneapi/"` produces
+    - S3: `backup/postgre/prod/oneapi/oneapi-20250909.gz`
+    - Local filename: `oneapi-20250909.gz`
 
 - If `backup_file_prefix` does NOT end with `/` (file-like):
-	- Interpreted as `<optional_dir>/<basename>`
-	- S3 key: `<optional_dir>/<basename>-YYYYMMDD.gz`
-	- Local filename: `<basename>-YYYYMMDD.gz`
-	- Example: `backup_file_prefix: "backup/postgre/prod/oneapi/oneapi"` produces
-		- S3: `backup/postgre/prod/oneapi/oneapi-20250909.gz`
-		- Local filename: `oneapi-20250909.gz`
+  - Interpreted as `<optional_dir>/<basename>`
+  - S3 key: `<optional_dir>/<basename>-YYYYMMDD.gz`
+  - Local filename: `<basename>-YYYYMMDD.gz`
+  - Example: `backup_file_prefix: "backup/postgre/prod/oneapi/oneapi"` produces
+    - S3: `backup/postgre/prod/oneapi/oneapi-20250909.gz`
+    - Local filename: `oneapi-20250909.gz`
 
 Notes:
+
 - Leading `/` is removed, and path is normalized with forward slashes.
 - If no usable prefix/basename is present, the database name is used; otherwise falls back to `pg-backup`.
 
@@ -88,10 +90,10 @@ As a service, the task will self-schedule based on `interval` and run daily by d
 ## Modes
 
 - Streaming (default):
-	- Pipeline: `pg_dump | gzip | S3` (no local files; object size unknown until upload completes)
+  - Pipeline: `pg_dump | gzip | S3` (no local files; object size unknown until upload completes)
 - Temp file mode (`use_temp_file: true`):
-	- Pipeline: `pg_dump | gzip > temp file`, then upload file to S3
-	- Useful when you need the size beforehand or want to inspect the artifact
+  - Pipeline: `pg_dump | gzip > temp file`, then upload file to S3
+  - Useful when you need the size beforehand or want to inspect the artifact
 
 ---
 
@@ -163,19 +165,23 @@ zcat oneapi-20250909.gz | psql -h 127.0.0.1 -U postgres -d oneapi
 ## Troubleshooting
 
 - `pg_dump: command not found`
-	- Install PostgreSQL client tools and ensure `pg_dump` is in PATH
+
+  - Install PostgreSQL client tools and ensure `pg_dump` is in PATH
 
 - Authentication failures to PostgreSQL
-	- Verify host/port/user/password; ensure network and pg_hba.conf allow the connection
+
+  - Verify host/port/user/password; ensure network and pg_hba.conf allow the connection
 
 - S3 upload errors (403/NoSuchBucket)
-	- Check credentials, bucket existence, and permissions; verify endpoint URL and TLS settings
+
+  - Check credentials, bucket existence, and permissions; verify endpoint URL and TLS settings
 
 - Backup skipped unexpectedly ("already exists")
-	- The task is idempotent per day. Delete or move the object if you want to re-run for the same date
+
+  - The task is idempotent per day. Delete or move the object if you want to re-run for the same date
 
 - Large databases timing out
-	- Increase available network bandwidth, or adjust the per-DB timeout in code if needed (default 30m)
+  - Increase available network bandwidth, or adjust the per-DB timeout in code if needed (default 30m)
 
 ---
 
