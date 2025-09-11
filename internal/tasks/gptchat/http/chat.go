@@ -23,6 +23,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
+	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/zap"
@@ -413,10 +414,22 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			!frontendReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
 			frontendReq.embeddingUrlContent(ctx, user)
 		}
+
 		if frontendReq.LaiskyExtra != nil &&
 			frontendReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
+			// treat google search as expensive operation
+			if user.IsFree {
+				ratelimitCost := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+				if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
+					return nil, nil, errors.New("web search is limited for free users" +
+						"you need upgrade to a paid membership to enable this feature unlimitedly, " +
+						"more info at https://wiki.laisky.com/projects/gpt/pay/")
+				}
+			}
+
 			frontendReq.embeddingGoogleSearch(ctx, user)
 		}
+
 		// fmt.Println(frontendReq.Messages)
 		frontendReq.LaiskyExtra = nil
 
