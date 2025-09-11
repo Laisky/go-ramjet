@@ -47,7 +47,7 @@ RUN go build
 FROM debian:bookworm
 
 RUN apt-get update
-RUN apt-get install -y --no-install-recommends ca-certificates haveged wget \
+RUN apt-get install -y --no-install-recommends ca-certificates haveged wget curl gnupg \
     # --------------------------------------------
     # for google-chrome
     # --------------------------------------------
@@ -67,10 +67,11 @@ RUN wget https://s3.laisky.com/public/google-chrome-stable_current_amd64.deb \
     && rm google-chrome-stable_current_amd64.deb
 
 # install pg_dump
-RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+# Use the Debian bookworm codename directly to avoid needing lsb_release
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg \
-    && apt update \
-    && apt install -y postgresql-client-17
+    && apt-get update \
+    && apt-get install -y postgresql-client-17
 
 # install azure sdk
 RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
