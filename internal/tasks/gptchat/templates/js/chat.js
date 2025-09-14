@@ -4187,6 +4187,8 @@ async function renderAfterAiResp (chatData, saveStorage = false) {
     } finally {
         // Always release the per-chat render mutex to allow re-rendering on session switch or reload
         delete muRenderAfterAiRespForChatID[chatData.chatID];
+        // Restore user input area size & focus after rendering completes (UX improvement)
+        restoreUserInputDefaultStateAndFocus();
     }
 }
 
@@ -4613,6 +4615,8 @@ function setupTextareaAutoResize (textarea) {
     if (!textarea) return;
 
     const minHeight = 80;
+    // Persist min height for later restore when AI response finished
+    textarea.dataset.minHeight = String(minHeight);
     // Calculate maxHeight as 35% of viewport height, with a minimum of 200px and maximum of 500px
     const calculateMaxHeight = () => {
         const viewportHeight = window.innerHeight;
@@ -4653,6 +4657,26 @@ function setupTextareaAutoResize (textarea) {
         maxHeight = calculateMaxHeight();
         autoResize.call(textarea);
     });
+}
+
+/**
+ * Restore user input textarea to its default (min) height and focus it.
+ * Should be called after AI response rendered & input unlocked.
+ */
+function restoreUserInputDefaultStateAndFocus () {
+    if (!chatPromptInputEle) return;
+    try {
+        const minHeight = parseInt(chatPromptInputEle.dataset.minHeight || '80', 10);
+        chatPromptInputEle.style.height = minHeight + 'px';
+        chatPromptInputEle.style.overflowY = 'hidden';
+        // place cursor at end (some browsers keep scroll)
+        const val = chatPromptInputEle.value;
+        chatPromptInputEle.value = '';
+        chatPromptInputEle.value = val; // reassign to move caret to end consistently
+        chatPromptInputEle.focus({ preventScroll: false });
+    } catch (e) {
+        console.warn('failed to restore & focus chat input:', e);
+    }
 }
 
 /**
