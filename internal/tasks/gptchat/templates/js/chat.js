@@ -64,10 +64,11 @@ const ChatModelGemini25FlashImage = 'gemini-2.5-flash-image-preview';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 // const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
-const ChatModelGroqGemma3With27B = 'gemma-3-27b-it';
+// const ChatModelGroqGemma3With27B = 'gemma-3-27b-it';
 const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
+const ChatModelGroqLlama4 = 'meta-llama/llama-guard-4-12b';
 // const ChatModelQwenQwq32B = 'qwen-qwq-32b';
 const ChatModelQwen332B = 'qwen/qwen3-32b';
 const ChatModelKimiK2 = 'moonshotai/kimi-k2-instruct';
@@ -152,8 +153,9 @@ const ChatModels = [
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
     // ChatModelGroqGemma2With9B,
-    ChatModelGroqGemma3With27B,
+    // ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
+    ChatModelGroqLlama4,
     // ChatModelQwenQwq32B,
     ChatModelQwen332B,
     ChatModelKimiK2,
@@ -249,8 +251,9 @@ const FreeModels = [
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
     // ChatModelGroqGemma2With9B,
-    ChatModelGroqGemma3With27B,
+    // ChatModelGroqGemma3With27B,
     ChatModelGroqllama3With70B,
+    ChatModelGroqLlama4,
     // ChatModelQwenQwq32B,
     ChatModelQwen332B,
     // ChatModelKimiK2,
@@ -321,8 +324,8 @@ const ModelCategories = {
         ChatModelGemini25Flash,
         // ChatModelGemini2FlashThinking,
         // ChatModelGemini2FlahExpImage,
-        ChatModelGemini25FlashImage,
-        ChatModelGroqGemma3With27B
+        ChatModelGemini25FlashImage
+        // ChatModelGroqGemma3With27B
     ],
     Deepseek: [
         ChatModelDeepSeekChat,
@@ -332,6 +335,7 @@ const ModelCategories = {
         ChatModelDeepResearch,
         // ChatModelGroqGemma2With9B,
         ChatModelGroqllama3With70B,
+        ChatModelGroqLlama4,
         // ChatModelQwenQwq32B,
         ChatModelQwen332B,
         ChatModelKimiK2
