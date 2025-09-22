@@ -4278,18 +4278,60 @@ async function addOperateBtnBelowAiResponse (chatID) {
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
 
-            const chatData = await getChatData(chatID, RoleAI) || {};
+            // Capture the button element synchronously to avoid losing it after awaits
+            const copyBtnEle = (evt.currentTarget && evt.currentTarget instanceof Element)
+                ? evt.currentTarget
+                : (evt.target && typeof evt.target.closest === 'function'
+                    ? evt.target.closest('button[data-fn="copy"]')
+                    : aiRespEle.querySelector('button[data-fn="copy"]'));
 
             // aiRespEle.dataset.copyBinded = true;
             let copyContent = '';
-            if (!chatData.rawContent) {
+            if (!chatData || !chatData.rawContent) {
                 console.warn(`can not find ai response or ai raw response for copy, chatid=${chatID}`);
             } else {
                 copyContent = chatData.rawContent;
             }
 
-            if (!await libs.Copy2Clipboard(copyContent)) {
-                alert('failed to copy, please copy manually');
+            // Try multiple strategies for better iOS compatibility
+            // Attempt synchronous strategies first to preserve user activation on iOS
+            let copied = false;
+            try {
+                copied = await copyTextRobust(copyContent);
+            } catch (_) {
+                copied = false;
+            }
+            if (!copied) {
+                try {
+                    copied = await libs.Copy2Clipboard(copyContent);
+                } catch (e) {
+                    copied = false;
+                }
+            }
+            if (!copied) {
+                // Open modal to allow manual selection & copy for a smoother UX
+                showCopyRawModal(copyContent);
+            } else {
+                // Visual success feedback: swap icon to check and revert after a short delay
+                const btn = copyBtnEle || aiRespEle.querySelector('button[data-fn="copy"]');
+                const icon = btn ? btn.querySelector('i') : null;
+                if (btn && icon) {
+                    // Clear prior timer if any
+                    if (btn.dataset.copyIconTimerId) {
+                        try { clearTimeout(Number(btn.dataset.copyIconTimerId)); } catch (_) { /* noop */ }
+                    }
+
+                    const originalClasses = icon.getAttribute('class') || '';
+                    // Set success icon
+                    icon.setAttribute('class', 'bi bi-check2');
+
+                    const tid = setTimeout(() => {
+                        // Revert to original icon
+                        icon.setAttribute('class', originalClasses || 'bi bi-copy');
+                        delete btn.dataset.copyIconTimerId;
+                    }, 1200);
+                    btn.dataset.copyIconTimerId = String(tid);
+                }
             }
         });
 
@@ -4315,6 +4357,166 @@ async function addOperateBtnBelowAiResponse (chatID) {
         });
 
     libs.EnableTooltipsEverywhere();
+}
+
+/**
+ * Attempt to copy text to clipboard using layered strategies.
+ * Returns true on success, false otherwise.
+ * Handles iOS Safari limitations by falling back to selection-based copy.
+ *
+ * @param {string} text
+ * @returns {Promise<boolean>}
+ */
+async function copyTextRobust (text) {
+    if (!text) return false;
+
+    // 1) Hidden textarea + execCommand('copy') — synchronous to preserve user activation on iOS
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus({ preventScroll: true });
+        ta.select();
+        // iOS often requires explicit range
+        try { ta.setSelectionRange(0, ta.value.length); } catch (_) { /* noop */ }
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) return true;
+    } catch (_) { /* ignore and fallback */ }
+
+    // 2) ContentEditable element + selection range (more reliable on iOS) — synchronous
+    try {
+        const span = document.createElement('span');
+        span.textContent = text;
+        span.style.whiteSpace = 'pre';
+        span.style.userSelect = 'all';
+        span.contentEditable = 'true';
+        span.style.position = 'fixed';
+        span.style.top = '-9999px';
+        span.style.left = '-9999px';
+        span.style.opacity = '0';
+        document.body.appendChild(span);
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(span);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const ok = document.execCommand('copy');
+        selection.removeAllRanges();
+        document.body.removeChild(span);
+        if (ok) return true;
+    } catch (_) { /* ignore */ }
+
+    // 3) Async Clipboard API (secure contexts + user gesture); try last as it requires await
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch (_) { /* ignore and fallback */ }
+
+    return false;
+}
+
+/**
+ * Show a Bootstrap modal containing the raw AI response text to allow manual copy.
+ * Provides Select All and Copy buttons for convenience.
+ *
+ * @param {string} text
+ */
+function showCopyRawModal (text) {
+    let modalEle = document.getElementById('copyRawModal');
+    if (!modalEle) {
+        modalEle = document.createElement('div');
+        modalEle.id = 'copyRawModal';
+        modalEle.className = 'modal fade';
+        modalEle.tabIndex = -1;
+        modalEle.setAttribute('aria-hidden', 'true');
+        modalEle.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Raw AI Response</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea class="form-control" rows="12" readonly></textarea>
+                        <small class="text-muted d-block mt-2">Tip: On iPhone, long-press to Select All and Copy.</small>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-fn="select-all">Select All</button>
+                        <button type="button" class="btn btn-primary" data-fn="copy">Copy</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modalEle);
+    }
+
+    const textarea = modalEle.querySelector('textarea');
+    textarea.value = text || '';
+
+    // Bind events only once
+    if (!modalEle.dataset.binded) {
+        modalEle.dataset.binded = '1';
+
+        modalEle.querySelector('button[data-fn="select-all"]').addEventListener('click', () => {
+            try {
+                textarea.focus();
+                textarea.select();
+                textarea.setSelectionRange(0, textarea.value.length);
+            } catch (_) { /* noop */ }
+        });
+
+        modalEle.querySelector('button[data-fn="copy"]').addEventListener('click', async () => {
+            const ok = await copyTextRobust(textarea.value);
+            if (ok) {
+                try {
+                    const Modal = window.bootstrap?.Modal;
+                    const inst = Modal?.getInstance
+                        ? Modal.getInstance(modalEle)
+                        : (Modal ? new Modal(modalEle) : null);
+                    inst?.hide();
+                } catch (_) { /* noop */ }
+            }
+        });
+    }
+
+    // Auto-select on show for convenience
+    const onShown = () => {
+        try {
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, textarea.value.length);
+        } catch (_) { /* noop */ }
+    };
+    modalEle.addEventListener('shown.bs.modal', onShown, { once: true });
+
+    // Show modal
+    try {
+        const Modal = window.bootstrap?.Modal;
+        let instance;
+        if (Modal?.getOrCreateInstance) {
+            instance = Modal.getOrCreateInstance(modalEle, { backdrop: true });
+        } else if (Modal) {
+            instance = new Modal(modalEle, { backdrop: true });
+        } else {
+            // Fallback if Bootstrap JS not loaded
+            // As a last resort, show a prompt for manual copy
+            window.prompt('Copy the text below:', textarea.value);
+            return;
+        }
+        instance.show();
+    } catch (_) {
+        // Silent failure, user can still copy from the textarea if visible
+    }
 }
 
 /**
@@ -5415,14 +5617,30 @@ function putBackAttachmentsInUserInput (chatID) {
         .querySelectorAll('.role-human .text-start img') || [];
     let attachHTML = '';
     attachEles.forEach((ele) => {
-        const b64fileContent = ele.getAttribute('src').replace('data:image/png;base64,', '');
-        const key = ele.dataset.name || `${libs.DateStr()}.png`;
-        chatVisionSelectedFileStore.push({
-            filename: key,
-            contentB64: b64fileContent
-        });
+        const src = ele.getAttribute('src') || '';
+        // Support generic data URLs like data:image/jpeg;base64,... or data:image/png;base64,...
+        let b64fileContent = src;
+        const base64Idx = src.indexOf('base64,');
+        if (base64Idx >= 0) {
+            b64fileContent = src.substring(base64Idx + 'base64,'.length);
+        }
 
-        attachHTML += `<img src="data:image/png;base64,${b64fileContent}" data-name="${key}">`;
+        const m = src.match(/^data:image\/(\w+);base64,/);
+        const defaultExt = m ? m[1] : 'png';
+        const key = ele.dataset.name || `${libs.DateStr()}.${defaultExt}`;
+
+        // Deduplicate by content to avoid repeated pushes when toggling edit
+        if (Array.isArray(chatVisionSelectedFileStore)) {
+            const exists = chatVisionSelectedFileStore.some((i) => i.contentB64 === b64fileContent);
+            if (!exists) {
+                chatVisionSelectedFileStore.push({
+                    filename: key,
+                    contentB64: b64fileContent
+                });
+            }
+        }
+
+        attachHTML += `<img src="data:image/${defaultExt};base64,${b64fileContent}" data-name="${key}">`;
     })
     updateChatVisionSelectedFileStore();
 
@@ -5441,14 +5659,21 @@ function bindEditHumanInput (evt) {
     const chatID = evtTarget.closest('.role-human').dataset.chatid;
     const chatEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID}`);
-    const oldText = chatEle.innerHTML;
-    let text = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    // Only operate within the human message node to avoid serializing large AI DOM
+    const humanEl = chatEle.querySelector('.role-human');
+    // Keep a deep clone of the human node for cancel restore without re-parsing large HTML
+    const oldHumanEl = humanEl.cloneNode(true);
+    // Extract plain text instead of innerHTML to avoid heavy HTML strings and encoding issues
+    const preEl = chatEle.querySelector('.role-human .text-start pre');
+    const text = preEl ? preEl.textContent : '';
 
     const attachHTML = putBackAttachmentsInUserInput(chatID);
-
-    text = libs.sanitizeHTML(text);
-    chatContainer.querySelector(`#${chatID} .role-human`).innerHTML = `
-        <textarea dir="auto" class="form-control" rows="3">${text}</textarea>
+    // Build a lightweight editor node without injecting large text via innerHTML
+    const newHumanEl = document.createElement('div');
+    newHumanEl.className = humanEl.className;
+    newHumanEl.setAttribute('data-chatid', chatID);
+    newHumanEl.innerHTML = `
+        <textarea dir="auto" class="form-control" rows="3"></textarea>
         <div class="btn-group" role="group">
             <button class="btn btn-sm btn-outline-secondary save" type="button">
                 <i class="bi bi-check"></i>
@@ -5457,13 +5682,16 @@ function bindEditHumanInput (evt) {
                 <i class="bi bi-x"></i>
                 Cancel</button>
         </div>`;
+    // Set value programmatically to avoid parsing large HTML strings
+    newHumanEl.querySelector('textarea').value = text || '';
+    humanEl.replaceWith(newHumanEl);
 
-    chatEle.querySelector('.role-human .btn.save')
+    newHumanEl.querySelector('.btn.save')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
 
             // update storage with user's new prompt
-            const newtext = chatEle.querySelector('.role-human textarea').value;
+            const newtext = newHumanEl.querySelector('textarea').value;
             await saveChats2Storage({
                 chatID,
                 attachHTML,
@@ -5475,16 +5703,17 @@ function bindEditHumanInput (evt) {
             await reloadAiResp(chatID);
         });
 
-    chatEle.querySelector('.role-human .btn.cancel')
+    newHumanEl.querySelector('.btn.cancel')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
-            chatEle.innerHTML = oldText;
+            // Restore original human node without reparsing entire chat HTML
+            newHumanEl.replaceWith(oldHumanEl);
 
-            // bind delete and edit button
-            chatEle.querySelector('.role-human .bi-trash')
-                .addEventListener('click', deleteBtnHandler);
-            chatEle.querySelector('.bi.bi-pencil-square')
-                .addEventListener('click', bindEditHumanInput);
+            // bind delete and edit button on the restored node
+            oldHumanEl.querySelector('.bi-trash')
+                ?.addEventListener('click', deleteBtnHandler);
+            oldHumanEl.querySelector('.bi.bi-pencil-square')
+                ?.addEventListener('click', bindEditHumanInput);
         });
 };
 
