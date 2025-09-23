@@ -4920,6 +4920,8 @@ async function setupChatInput () {
                     return;
                 }
 
+                // Instantly restore input to default height to avoid obscuring AI response
+                restoreUserInputDefaultStateAndFocus();
                 await sendChat2Server();
                 chatPromptInputEle.value = '';
             });
@@ -4950,6 +4952,8 @@ async function setupChatInput () {
     chatPromptInputBtn
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
+            // Instantly restore input to default height to avoid obscuring AI response
+            restoreUserInputDefaultStateAndFocus();
             await sendChat2Server();
             chatPromptInputEle.value = '';
         });
