@@ -34,7 +34,13 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 		userToken = config.FreetierUserToken
 	}
 
-	return getUserByToken(gctx, userToken)
+	user, err = getUserByToken(gctx, userToken)
+	if err != nil {
+		return nil, errors.Wrap(err, "get user by token")
+	}
+
+	gctx.Set(ctxKeyUser, user)
+	return user, nil
 }
 
 type oneapiUserResponse struct {
@@ -158,7 +164,11 @@ SWITCH_FOR_USER:
 			UserName:    username,
 			Token:       userToken,
 			OpenaiToken: userToken,
-			// ImageToken:             config.Config.DefaultImageToken,
+			// Use user's own token for image generation & billing to avoid falling back to server's default.
+			// This fixes a bug where image requests were billed to the server account because ImageToken was empty
+			// and later filled by user.Valid() with the global default.
+			ImageToken: userToken,
+			BYOK:       true, // mark as bring-your-own-key for rate limiting & auditing logic
 			// ImageTokenType:         config.Config.DefaultImageTokenType,
 			// ImageUrl:               config.Config.DefaultImageUrl,
 			AllowedModels:          []string{"*"},
@@ -239,6 +249,5 @@ SWITCH_FOR_USER:
 		return nil, errors.Wrap(err, "valid user")
 	}
 
-	gctx.Set(ctxKeyUser, user)
 	return user, nil
 }
