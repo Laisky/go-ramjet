@@ -540,6 +540,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4.1-mini",
 			"gpt-4.1-nano",
 			"gpt-5",
+			"gpt-5-codex",
 			"gpt-5-mini",
 			"gpt-5-nano",
 			"gpt-4o",

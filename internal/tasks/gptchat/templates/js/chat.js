@@ -16,6 +16,7 @@ const ChatModelGPT41 = 'gpt-4.1';
 const ChatModelGPT41Mini = 'gpt-4.1-mini';
 const ChatModelGPT41Nano = 'gpt-4.1-nano';
 const ChatModelGPT5 = 'gpt-5';
+const ChatModelGPT5Codex = 'gpt-5-codex';
 const ChatModelGPT5Mini = 'gpt-5-mini';
 const ChatModelGPT5Nano = 'gpt-5-nano';
 const ChatModelGPT4O = 'gpt-4o';
@@ -115,6 +116,7 @@ const ChatModels = [
     ChatModelGPT41Mini,
     ChatModelGPT41Nano,
     ChatModelGPT5,
+    ChatModelGPT5Codex,
     ChatModelGPT5Mini,
     ChatModelGPT5Nano,
     ChatModelGPT4O,
@@ -184,6 +186,7 @@ const VisionModels = [
     ChatModelGPT41Mini,
     ChatModelGPT41Nano,
     ChatModelGPT5,
+    ChatModelGPT5Codex,
     ChatModelGPT5Mini,
     ChatModelGPT5Nano,
     ChatModelGPT4O,
@@ -298,6 +301,7 @@ const ModelCategories = {
         ChatModelGPT41Mini,
         ChatModelGPT41Nano,
         ChatModelGPT5,
+        ChatModelGPT5Codex.
         ChatModelGPT5Mini,
         ChatModelGPT5Nano,
         ChatModelGPT4Turbo,
