@@ -264,7 +264,7 @@ func IsModelAllowed(ctx context.Context,
 		"tts",
 		"gemini-2.0-flash":
 		ratelimiter = freeModelRateLimiter
-		ratelimitCost = 1
+		ratelimitCost = 5
 	default: // expensive model
 		if user.NoLimitExpensiveModels {
 			return nil
