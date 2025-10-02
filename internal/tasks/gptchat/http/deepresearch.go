@@ -29,7 +29,7 @@ func CreateDeepResearchHandler(c *gin.Context) {
 	if user.IsFree {
 		web.AbortErr(c, errors.New("free user cannot create deepresearch task. "+
 			"you need upgrade to a paid membership, "+
-			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
+			"more info at https://wiki.laisky.com/projects/gpt/pay/"))
 		return
 	}
 
@@ -65,7 +65,7 @@ func GetDeepResearchStatusHandler(c *gin.Context) {
 	if user.IsFree {
 		web.AbortErr(c, errors.New("free user cannot create deepresearch task. "+
 			"you need upgrade to a paid membership, "+
-			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
+			"more info at https://wiki.laisky.com/projects/gpt/pay/"))
 		return
 	}
 

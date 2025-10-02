@@ -302,7 +302,7 @@ func IsModelAllowed(ctx context.Context,
 		return errors.Errorf("This model(%s) restricts usage for free users. "+
 			"Please hold on for %d seconds before trying again, "+
 			"alternatively, you may opt to switch to the free gpt-4o-mini, "+
-			"or upgrade to a paid membership by https://wiki.laisky.com/projects/gpt/pay/cn/",
+			"or upgrade to a paid membership by https://wiki.laisky.com/projects/gpt/pay/",
 			req.Model, (ratelimitCost - ratelimiter.Len()))
 	}
 

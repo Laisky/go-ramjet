@@ -29,7 +29,7 @@ func UploadFiles(ctx *gin.Context) {
 	if user.IsFree {
 		web.AbortErr(ctx, errors.New("free user cannot upload files. "+
 			"you need upgrade to a paid membership, "+
-			"more info at https://wiki.laisky.com/projects/gpt/pay/cn/"))
+			"more info at https://wiki.laisky.com/projects/gpt/pay/"))
 		return
 	}
 
