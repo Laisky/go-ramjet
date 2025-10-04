@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,10 @@ import (
 var (
 	onceLimiter                                     sync.Once
 	freeModelRateLimiter, expensiveModelRateLimiter *gutils.RateLimiter
+)
+
+const (
+	freeModelRateLimitCost = 3
 )
 
 // GetCurrentUser get current user
@@ -264,7 +269,7 @@ func IsModelAllowed(ctx context.Context,
 		"tts",
 		"gemini-2.0-flash":
 		ratelimiter = freeModelRateLimiter
-		ratelimitCost = 2
+		ratelimitCost = freeModelRateLimitCost
 	default: // expensive model
 		if user.NoLimitExpensiveModels {
 			return nil
@@ -311,7 +316,7 @@ func IsModelAllowed(ctx context.Context,
 
 // setupRateLimiter setup ratelimiter depends on loaded config
 func setupRateLimiter() {
-	const burstRatio = 1.2
+	const burstRatio = 1.3
 	var err error
 	logger := log.Logger.Named("gptchat.ratelimiter")
 
@@ -326,7 +331,7 @@ func setupRateLimiter() {
 	// 	logger.Info("set overall ratelimiter", zap.Int("burst", 10))
 	// }
 
-	burst := int(float64(config.Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio)
+	burst := int(math.Ceil(float64(config.Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio))
 	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
 		gutils.RateLimiterArgs{
 			Max:     burst,
@@ -338,7 +343,7 @@ func setupRateLimiter() {
 
 	if freeModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
 		gutils.RateLimiterArgs{
-			Max:     3,
+			Max:     int(math.Ceil(float64(freeModelRateLimitCost) * burstRatio)),
 			NPerSec: 1,
 		}); err != nil {
 		log.Logger.Panic("new freeModelRateLimiter", zap.Error(err))
