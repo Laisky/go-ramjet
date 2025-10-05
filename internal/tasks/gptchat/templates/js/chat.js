@@ -430,6 +430,224 @@ let reasoningContainer = null;
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
 
+const UrlConfigBooleanFields = new Set([
+    'all_in_one',
+    'disable_https_crawler',
+    'enable_google_search',
+    'enable_talk'
+]);
+const UrlConfigIntegerFields = new Set([
+    'max_tokens',
+    'n_contexts',
+    'draw_n_images'
+]);
+const UrlConfigFloatFields = new Set([
+    'temperature',
+    'presence_penalty',
+    'frequency_penalty'
+]);
+const UrlParamAliasMap = new Map([
+    ['api_key', 'api_token'],
+    ['apikey', 'api_token'],
+    ['token', 'api_token'],
+    ['api_token', 'api_token'],
+    ['api_token_type', 'token_type'],
+    ['token_type', 'token_type'],
+    ['tokentype', 'token_type'],
+    ['api_base', 'api_base'],
+    ['base', 'api_base'],
+    ['apibase', 'api_base'],
+    ['model', 'selected_model'],
+    ['chat_model', 'selected_model'],
+    ['chatmodel', 'selected_model'],
+    ['selected_model', 'selected_model'],
+    ['selectedmodel', 'selected_model'],
+    ['system_prompt', 'system_prompt'],
+    ['prompt', 'system_prompt'],
+    ['systemprompt', 'system_prompt'],
+    ['max_token', 'max_tokens'],
+    ['max_tokens', 'max_tokens'],
+    ['maxtoken', 'max_tokens'],
+    ['maxtokens', 'max_tokens'],
+    ['temperature', 'temperature'],
+    ['presence_penalty', 'presence_penalty'],
+    ['presencepenalty', 'presence_penalty'],
+    ['frequency_penalty', 'frequency_penalty'],
+    ['frequencypenalty', 'frequency_penalty'],
+    ['context', 'n_contexts'],
+    ['contexts', 'n_contexts'],
+    ['n_contexts', 'n_contexts'],
+    ['context_len', 'n_contexts'],
+    ['contextlength', 'n_contexts'],
+    ['contextlen', 'n_contexts'],
+    ['draw_n_images', 'chat_switch.draw_n_images'],
+    ['draw_images', 'chat_switch.draw_n_images'],
+    ['drawimages', 'chat_switch.draw_n_images'],
+    ['draw', 'chat_switch.draw_n_images'],
+    ['enable_google_search', 'chat_switch.enable_google_search'],
+    ['enablegooglesearch', 'chat_switch.enable_google_search'],
+    ['chat_switch.enable_google_search', 'chat_switch.enable_google_search'],
+    ['chat_switch.enablegooglesearch', 'chat_switch.enable_google_search'],
+    ['disable_https_crawler', 'chat_switch.disable_https_crawler'],
+    ['chat_switch.disable_https_crawler', 'chat_switch.disable_https_crawler'],
+    ['disablehttpscrawler', 'chat_switch.disable_https_crawler'],
+    ['chat_switch.disablehttpscrawler', 'chat_switch.disable_https_crawler'],
+    ['https_crawler', 'chat_switch.disable_https_crawler'],
+    ['all_in_one', 'chat_switch.all_in_one'],
+    ['allinone', 'chat_switch.all_in_one'],
+    ['chat_switch.all_in_one', 'chat_switch.all_in_one'],
+    ['enable_talk', 'chat_switch.enable_talk'],
+    ['enabletalk', 'chat_switch.enable_talk'],
+    ['chat_switch.enable_talk', 'chat_switch.enable_talk'],
+    ['chat_switch.enabletalk', 'chat_switch.enable_talk']
+]);
+
+function normalizeUrlParamKey (key) {
+    return key.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function parseBooleanParamValue (value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    const normalized = String(value).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+        return true;
+    }
+    if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+        return false;
+    }
+
+    return null;
+}
+
+function parseIntegerParamValue (value) {
+    if (typeof value === 'number' && Number.isInteger(value)) {
+        return value;
+    }
+    const str = String(value).trim();
+    if (!/^-?\d+$/.test(str)) {
+        return null;
+    }
+
+    const parsed = parseInt(str, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseFloatParamValue (value) {
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+        return value;
+    }
+    const str = String(value).trim();
+    if (!/^-?\d+(\.\d+)?$/.test(str)) {
+        return null;
+    }
+
+    const parsed = parseFloat(str);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getNestedConfigValue (config, pathSegments) {
+    return pathSegments.reduce((acc, segment) => {
+        if (acc === undefined || acc === null) {
+            return undefined;
+        }
+        return acc[segment];
+    }, config);
+}
+
+function setNestedConfigValue (config, pathSegments, value) {
+    let cursor = config;
+    for (let i = 0; i < pathSegments.length - 1; i++) {
+        const segment = pathSegments[i];
+        if (cursor[segment] === undefined || cursor[segment] === null || typeof cursor[segment] !== 'object') {
+            cursor[segment] = {};
+        }
+        cursor = cursor[segment];
+    }
+    cursor[pathSegments[pathSegments.length - 1]] = value;
+}
+
+function coerceConfigValue (field, rawValue, currentValue) {
+    if (UrlConfigBooleanFields.has(field)) {
+        const parsed = parseBooleanParamValue(rawValue);
+        return parsed === null ? currentValue : parsed;
+    }
+
+    if (UrlConfigIntegerFields.has(field)) {
+        const parsed = parseIntegerParamValue(rawValue);
+        return parsed === null ? currentValue : parsed;
+    }
+
+    if (UrlConfigFloatFields.has(field)) {
+        const parsed = parseFloatParamValue(rawValue);
+        return parsed === null ? currentValue : parsed;
+    }
+
+    if (rawValue === undefined || rawValue === null) {
+        return currentValue;
+    }
+
+    return rawValue;
+}
+
+function applyUrlConfigOverrides (sconfig) {
+    const url = new URL(window.location.href);
+    const searchParams = url.searchParams;
+    const entries = Array.from(searchParams.entries());
+    let mutated = false;
+
+    entries.forEach(([rawKey, rawValue]) => {
+        const normalizedKey = normalizeUrlParamKey(rawKey);
+        const targetPath = UrlParamAliasMap.get(normalizedKey) || normalizedKey;
+        if (!targetPath) {
+            return;
+        }
+
+        const pathSegments = targetPath.split('.');
+        const rootKey = pathSegments[0];
+        if (rootKey !== 'chat_switch' && !(rootKey in sconfig)) {
+            return;
+        }
+
+        if (rootKey === 'chat_switch') {
+            if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object') {
+                sconfig.chat_switch = {};
+            }
+        }
+
+        const currentValue = getNestedConfigValue(sconfig, pathSegments);
+        const coercedValue = coerceConfigValue(pathSegments[pathSegments.length - 1], rawValue, currentValue);
+        if (coercedValue === currentValue) {
+            searchParams.delete(rawKey);
+            mutated = true;
+            return;
+        }
+
+        setNestedConfigValue(sconfig, pathSegments, coercedValue);
+        if (targetPath === 'selected_model' && typeof coercedValue === 'string' && coercedValue) {
+            if (!AllModels.includes(coercedValue)) {
+                AllModels.push(coercedValue);
+            }
+        }
+
+        searchParams.delete(rawKey);
+        mutated = true;
+    });
+
+    if (mutated) {
+        const newSearch = searchParams.toString();
+        window.history.replaceState(
+            {},
+            document.title,
+            `${url.pathname}${newSearch ? `?${newSearch}` : ''}${url.hash}`
+        );
+    }
+
+    return mutated;
+}
+
 function IsChatModel (model) {
     return ChatModels.includes(model);
 };
@@ -981,14 +1199,9 @@ async function dataMigrate () {
             sconfig.selected_model = libs.GetLocalStorage('config_chat_model') || sconfig.selected_model;
         }
 
-        // set api token from url params
-        const apikey = new URLSearchParams(location.search).get('apikey');
-        if (apikey) {
-            // remove apikey from url params
-            const url = new URL(location.href);
-            url.searchParams.delete('apikey');
-            window.history.pushState({}, document.title, url);
-            sconfig.api_token = apikey;
+        const overridesApplied = applyUrlConfigOverrides(sconfig);
+        if (overridesApplied) {
+            console.debug('applied session config overrides from URL params');
         }
 
         await libs.KvSet(skey, sconfig);
