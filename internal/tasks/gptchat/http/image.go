@@ -115,6 +115,7 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 			pool.Go(func() (err error) {
 				logger := logger.With(zap.Int("n_img", i))
 				taskCtx := gmw.SetLogger(taskCtx, logger)
+				start := time.Now()
 
 				var imgContent []byte
 				switch r := req.(type) {
@@ -130,7 +131,7 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 				}
 
 				if err := checkUserExternalBilling(taskCtx,
-					user, price, "txt2image:"+model); err != nil {
+					user, price, "txt2image:"+model, time.Since(start)); err != nil {
 					return errors.Wrapf(err, "check user external billing for %d image", i)
 				}
 				atomic.AddInt32(&anySucceed, 1)
@@ -892,23 +893,24 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.EnableExternalImageBilling {
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, db.PriceTxt2Image, "txt2image"); web.AbortErr(ctx, err) {
-			return
-		}
-	}
-
 	go func() {
 		logger.Debug("start image drawing task")
 		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
 		defer cancel()
+		start := time.Now()
 
 		switch {
 		case strings.Contains(user.ImageUrl, "openai.azure.com"):
 			err = drawImageByAzureDalle(taskCtx, user, req.Prompt, taskID)
 		default:
 			err = drawImageByOpenaiDalle(taskCtx, user, req.Prompt, taskID)
+		}
+
+		if err == nil && user.EnableExternalImageBilling {
+			if billErr := checkUserExternalBilling(taskCtx,
+				user, db.PriceTxt2Image, "txt2image", time.Since(start)); billErr != nil {
+				err = errors.Wrap(billErr, "check user external billing")
+			}
 		}
 
 		if err != nil {

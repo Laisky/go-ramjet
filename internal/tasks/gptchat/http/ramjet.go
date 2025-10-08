@@ -111,8 +111,15 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 	req.Header = ctx.Request.Header
 	req.Header.Del("Accept-Encoding") // do not disable gzip
-	if err = setUserAuth(ctx, req); web.AbortErr(ctx, err) {
+	user, cost, costReason, err := setUserAuth(ctx, req)
+	if web.AbortErr(ctx, err) {
 		return
+	}
+
+	shouldBill := user != nil && user.EnableExternalImageBilling && cost > 0
+	var billingStart time.Time
+	if shouldBill {
+		billingStart = time.Now()
 	}
 
 	resp, err := httpcli.Do(req) //nolint: bodyclose
@@ -126,6 +133,14 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		return
 	}
 
+	if shouldBill {
+		if err := checkUserExternalBilling(gmw.Ctx(ctx),
+			user, cost, costReason, time.Since(billingStart)); web.AbortErr(ctx,
+			errors.Wrapf(err, "check quota for user %q", user.UserName)) {
+			return
+		}
+	}
+
 	for k, v := range resp.Header {
 		if len(v) == 0 {
 			continue
@@ -137,10 +152,15 @@ func RamjetProxyHandler(ctx *gin.Context) {
 }
 
 // setUserAuth parse and set user auth to request header
-func setUserAuth(gctx *gin.Context, req *http.Request) error {
-	user, err := getUserByAuthHeader(gctx)
+func setUserAuth(gctx *gin.Context, req *http.Request) (
+	user *config.UserConfig,
+	cost db.Price,
+	costReason string,
+	err error,
+) {
+	user, err = getUserByAuthHeader(gctx)
 	if err != nil {
-		return errors.Wrap(err, "get user from token")
+		return nil, 0, "", errors.Wrap(err, "get user from token")
 	}
 
 	// req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
@@ -155,36 +175,22 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	req.Header.Del("Accept-Encoding")
 
 	// set token
-	var (
-		cost       db.Price
-		costReason string
-	)
-	{
-		token := user.OpenaiToken
-
-		// generate image need special token
-		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-			cost = db.PriceTxt2Image
-			costReason = "txt2image"
-			token = user.ImageToken
-			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
-			if err = IsModelAllowed(gctx, user, &FrontendReq{
-				Model: model,
-			}); err != nil {
-				return errors.Wrapf(err, "check model %q", model)
-			}
-		}
-
-		req.Header.Set("Authorization", token)
-	}
-
-	if user.EnableExternalImageBilling {
-		if err := checkUserExternalBilling(gmw.Ctx(gctx), user, cost, costReason); err != nil {
-			return errors.Wrapf(err, "check quota for user %q", user.UserName)
+	token := user.OpenaiToken
+	if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
+		cost = db.PriceTxt2Image
+		costReason = "txt2image"
+		token = user.ImageToken
+		model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
+		if err = IsModelAllowed(gctx, user, &FrontendReq{
+			Model: model,
+		}); err != nil {
+			return nil, 0, "", errors.Wrapf(err, "check model %q", model)
 		}
 	}
 
-	return nil
+	req.Header.Set("Authorization", token)
+
+	return user, cost, costReason, nil
 }
 
 // GetUserExternalBillingQuota get user external billing quota
@@ -256,58 +262,25 @@ func GetUserInternalBill(ctx context.Context,
 	return bill, nil
 }
 
-// checkUserExternalBilling save and check billing for text-to-image models
-//
-// # Steps
-//  1. get user's current quota from external billing api
-//  2. check if user has enough quota
-//  3. update user's quota
+// checkUserExternalBilling pushes the usage cost to the external billing API
+// and attaches the elapsed processing time for observability.
 func checkUserExternalBilling(ctx context.Context,
-	user *config.UserConfig, cost db.Price, costReason string) (err error) {
+	user *config.UserConfig, cost db.Price, costReason string, elapsed time.Duration) (err error) {
 	logger := log.Logger.Named("openai.billing")
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// openaiDB, err := db.GetOpenaiDB()
-	// if err != nil {
-	// 	return errors.Wrap(err, "get openai db")
-	// }
-
-	// billingCol := openaiDB.GetCol("billing")
-
-	// // create index
-	// if name, err := billingCol.Indexes().CreateOne(ctx,
-	// 	mongo.IndexModel{Keys: bson.D{
-	// 		{Key: "username", Value: 1},
-	// 		{Key: "type", Value: 1},
-	// 	},
-	// 	}); err != nil {
-	// 	logger.Warn("create index for openai.billing", zap.String("name", name), zap.Error(err))
-	// }
-
-	// // get current quota
-	// bill, err := GetUserInternalBill(ctx, user, db.BillTypeTxt2Image)
-	// if err != nil {
-	// 	return errors.Wrapf(err, "get billing for user %q", user.UserName)
-	// }
-
-	// balanceResp, err := GetUserExternalBillingQuota(ctx, user)
-	// if err != nil {
-	// 	return errors.Wrapf(err, "get billing for user %q", user.UserName)
-	// }
-
-	// // check balance
-	// if balanceResp.Data.RemainQuota <= cost {
-	// 	return errors.Errorf("user %q has not enough quota, remains %d, need %d",
-	// 		user.UserName, balanceResp.Data.RemainQuota, cost)
-	// }
-
 	// push cost to remote billing
 	var reqBody bytes.Buffer
+	elapsedMillis := elapsed.Milliseconds()
+	if elapsedMillis < 0 {
+		elapsedMillis = 0
+	}
 	if err = json.NewEncoder(&reqBody).Encode(
 		map[string]any{
-			"add_used_quota": cost,
-			"add_reason":     costReason,
+			"add_used_quota":  cost,
+			"add_reason":      costReason,
+			"elapsed_time_ms": elapsedMillis,
 		}); err != nil {
 		return errors.Wrap(err, "marshal request body")
 	}
@@ -335,7 +308,8 @@ func checkUserExternalBilling(ctx context.Context,
 	}
 	logger.Info("push cost to external billing api success",
 		zap.String("username", user.UserName),
-		zap.Int("cost", cost.Int()))
+		zap.Int("cost", cost.Int()),
+		zap.Duration("elapsed", elapsed))
 
 	// update or create
 	// if cost != 0 {

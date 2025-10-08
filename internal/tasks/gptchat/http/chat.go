@@ -1032,7 +1032,7 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 	}
 	req.Header.Set("Authorization", "Bearer "+args.user.OpenaiToken)
 
-	if err := setUserAuth(gctx, req); err != nil {
+	if _, _, _, err := setUserAuth(gctx, req); err != nil {
 		return "", errors.Wrap(err, "set user auth")
 	}
 

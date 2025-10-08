@@ -83,10 +83,7 @@ func TTSHanler(ctx *gin.Context) {
 		logger.Debug("synthesis canceled")
 	})
 
-	if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.PriceTTS, "tts"); web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
-		return
-	}
-
+	ttsStart := time.Now()
 	ssml, err := generateSSML(gmw.Ctx(ctx), user, text)
 	if err != nil {
 		logger.Warn("failed to generate ssml by llm", zap.Error(err))
@@ -136,6 +133,10 @@ func TTSHanler(ctx *gin.Context) {
 
 	// Use the temporary file's name (path) for saving
 	if err = <-stream.SaveToWavFileAsync(tempFp.Name()); web.AbortErr(ctx, errors.Wrap(err, "save to wav file")) {
+		return
+	}
+
+	if err := checkUserExternalBilling(gmw.Ctx(ctx), user, db.PriceTTS, "tts", time.Since(ttsStart)); web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
 		return
 	}
 
