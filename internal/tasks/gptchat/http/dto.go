@@ -30,7 +30,7 @@ const (
 )
 
 const (
-	defaultChatModel = "gpt-4o-mini"
+	defaultChatModel = "openai/gpt-oss-120b"
 )
 
 // ChatModel return chat model
