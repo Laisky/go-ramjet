@@ -430,6 +430,21 @@ let reasoningContainer = null;
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
 
+/**
+ * Ensure cached references to the chat prompt elements stay in sync with the live DOM.
+ * Mobile browsers occasionally recreate portions of the input toolbar, which detaches
+ * the original nodes and leaves the cached references stale.
+ */
+function ensureChatPromptElements () {
+    if (!chatPromptInputEle || !document.body.contains(chatPromptInputEle)) {
+        chatPromptInputEle = chatContainer.querySelector('.user-input .input.prompt');
+    }
+
+    if (!chatPromptInputBtn || !document.body.contains(chatPromptInputBtn)) {
+        chatPromptInputBtn = chatContainer.querySelector('.user-input .btn.send');
+    }
+}
+
 const UrlConfigBooleanFields = new Set([
     'all_in_one',
     'disable_https_crawler',
@@ -1538,8 +1553,9 @@ async function setupByUserInfo (userInfo) {
             evtTarget.closest('.dropdown').querySelector('a.dropdown-toggle').classList.add('active');
 
             // add hint to input text
+            ensureChatPromptElements();
             if (chatPromptInputBtn) {
-                chatPromptInputEle.attributes.placeholder.value = `[${selectedModel}] CTRL+Enter to send`;
+                chatPromptInputEle?.setAttribute('placeholder', `[${selectedModel}] CTRL+Enter to send`);
             }
         });
     });
@@ -2780,6 +2796,7 @@ async function getLastNChatMessages (N, ignoredChatID) {
  * Locks the chat input field and button to prevent user interaction.
  */
 function lockChatInput () {
+    ensureChatPromptElements();
     if (chatPromptInputEle) {
         chatPromptInputEle.setAttribute('disabled', 'disabled');
         chatPromptInputEle.classList.add('disabled-input');
@@ -2795,6 +2812,7 @@ function lockChatInput () {
  * Unlocks the chat input field and button to allow user interaction.
  */
 function unlockChatInput () {
+    ensureChatPromptElements();
     if (chatPromptInputEle) {
         chatPromptInputEle.removeAttribute('disabled');
         chatPromptInputEle.classList.remove('disabled-input');
@@ -2810,7 +2828,12 @@ function unlockChatInput () {
  * Checks if the chat prompt input is allowed to be used.
  */
 function isAllowChatPrompInput () {
-    return !chatPromptInputBtn || !chatPromptInputBtn.classList.contains('disabled');
+    ensureChatPromptElements();
+    if (!chatPromptInputBtn) {
+        return true;
+    }
+
+    return !chatPromptInputBtn.hasAttribute('disabled') && !chatPromptInputBtn.classList.contains('disabled');
 }
 
 /**
@@ -3531,12 +3554,14 @@ async function appendImg2UserInput (chatID, imgDataBase64, imgName) {
  * @returns {string} The chat ID.
  */
 async function sendChat2Server (chatID, reqPrompt) {
+    ensureChatPromptElements();
     let selectedModel = await OpenaiSelectedModel();
     if (!chatID) { // if chatID is empty, it's a new request
         chatID = newChatID();
 
         if (!reqPrompt) {
-            reqPrompt = libs.TrimSpace(chatPromptInputEle.value || '');
+            const currVal = chatPromptInputEle ? chatPromptInputEle.value : '';
+            reqPrompt = libs.TrimSpace(currVal || '');
         }
 
         if (chatPromptInputEle) {
@@ -5014,6 +5039,7 @@ async function bindUserInputSelectFilesBtn () {
  * auto display or hide user input select files button according to selected model
  */
 async function autoToggleUserImageUploadBtn () {
+    ensureChatPromptElements();
     if (!chatPromptInputEle) {
         return;
     }
@@ -5094,6 +5120,7 @@ function setupTextareaAutoResize (textarea) {
  * Should be called after AI response rendered & input unlocked.
  */
 function restoreUserInputDefaultStateAndFocus () {
+    ensureChatPromptElements();
     if (!chatPromptInputEle) return;
     try {
         const minHeight = parseInt(chatPromptInputEle.dataset.minHeight || '80', 10);
@@ -5113,6 +5140,7 @@ function restoreUserInputDefaultStateAndFocus () {
  * bind text chat input. will be skipped if talking enabled
  */
 async function setupChatInput () {
+    ensureChatPromptElements();
     if (!chatPromptInputEle) {
         return
     }
@@ -5168,19 +5196,25 @@ async function setupChatInput () {
             }
 
             const sconfig = newVal;
-            chatPromptInputEle.attributes.placeholder.value = `[${sconfig.selected_model}] CTRL+Enter to send`;
+            if (chatPromptInputEle) {
+                chatPromptInputEle.setAttribute('placeholder', `[${sconfig.selected_model}] CTRL+Enter to send`);
+            }
         }, 'setupChatInput_change_hint');
     }
 
     // bind input button
-    chatPromptInputBtn
-        .addEventListener('click', async (evt) => {
-            evt.stopPropagation();
-            // Instantly restore input to default height to avoid obscuring AI response
-            restoreUserInputDefaultStateAndFocus();
-            await sendChat2Server();
-            chatPromptInputEle.value = '';
-        });
+    if (chatPromptInputBtn) {
+        chatPromptInputBtn
+            .addEventListener('click', async (evt) => {
+                evt.stopPropagation();
+                // Instantly restore input to default height to avoid obscuring AI response
+                restoreUserInputDefaultStateAndFocus();
+                await sendChat2Server();
+                if (chatPromptInputEle) {
+                    chatPromptInputEle.value = '';
+                }
+            });
+    }
 
     // bindImageUploadButton
     await autoToggleUserImageUploadBtn();
@@ -5651,6 +5685,7 @@ async function filePasteHandler (evt) {
  * @param {file} file - file object
  */
 async function uploadFileAsInputUrls (file, fileExt) {
+    ensureChatPromptElements();
     if (file.size > 1024 * 1024 * 20) {
         showalert('danger', 'File size exceeds the limit of 20MB');
         return;
@@ -5689,7 +5724,9 @@ async function uploadFileAsInputUrls (file, fileExt) {
     }
 
     const url = data.url;
-    chatPromptInputEle.value = url + '\n' + chatPromptInputEle.value;
+    if (chatPromptInputEle) {
+        chatPromptInputEle.value = url + '\n' + (chatPromptInputEle.value || '');
+    }
 }
 
 /** read file content and append to vision store
@@ -5817,9 +5854,9 @@ async function reloadAiResp (chatID, overwriteSendChat2Server) {
     // chatEle.dataset.taskStatus = ChatTaskStatusWaiting;
 
     // bind delete and edit button
-    chatEle.querySelector('.role-human .bi-trash')
+    chatEle.querySelector('.role-human .control .bi-trash')
         .addEventListener('click', deleteBtnHandler);
-    chatEle.querySelector('.bi.bi-pencil-square')
+    chatEle.querySelector('.role-human .control .bi-pencil-square')
         .addEventListener('click', bindEditHumanInput);
 
     if (overwriteSendChat2Server) {
@@ -5884,15 +5921,17 @@ function bindEditHumanInput (evt) {
     evt.stopPropagation();
     const evtTarget = libs.evtTarget(evt);
 
-    const chatID = evtTarget.closest('.role-human').dataset.chatid;
-    const chatEle = chatContainer
-        .querySelector(`.chatManager .conservations .chats #${chatID}`);
+    const humanEl = evtTarget.closest('.role-human');
+    if (!humanEl) {
+        return;
+    }
+
+    const chatID = humanEl.dataset.chatid;
     // Only operate within the human message node to avoid serializing large AI DOM
-    const humanEl = chatEle.querySelector('.role-human');
     // Keep a deep clone of the human node for cancel restore without re-parsing large HTML
     const oldHumanEl = humanEl.cloneNode(true);
     // Extract plain text instead of innerHTML to avoid heavy HTML strings and encoding issues
-    const preEl = chatEle.querySelector('.role-human .text-start pre');
+    const preEl = humanEl.querySelector('.text-start pre');
     const text = preEl ? preEl.textContent : '';
 
     const attachHTML = putBackAttachmentsInUserInput(chatID);
@@ -5911,15 +5950,17 @@ function bindEditHumanInput (evt) {
                 Cancel</button>
         </div>`;
     // Set value programmatically to avoid parsing large HTML strings
-    newHumanEl.querySelector('textarea').value = text || '';
+    const textarea = newHumanEl.querySelector('textarea');
+    textarea.value = text || '';
     humanEl.replaceWith(newHumanEl);
+    textarea.focus({ preventScroll: true });
 
     newHumanEl.querySelector('.btn.save')
         .addEventListener('click', async (evt) => {
             evt.stopPropagation();
 
             // update storage with user's new prompt
-            const newtext = newHumanEl.querySelector('textarea').value;
+            const newtext = textarea.value;
             await saveChats2Storage({
                 chatID,
                 attachHTML,
@@ -5938,9 +5979,9 @@ function bindEditHumanInput (evt) {
             newHumanEl.replaceWith(oldHumanEl);
 
             // bind delete and edit button on the restored node
-            oldHumanEl.querySelector('.bi-trash')
+            oldHumanEl.querySelector('.control .bi-trash')
                 ?.addEventListener('click', deleteBtnHandler);
-            oldHumanEl.querySelector('.bi.bi-pencil-square')
+            oldHumanEl.querySelector('.control .bi-pencil-square')
                 ?.addEventListener('click', bindEditHumanInput);
         });
 };
@@ -6098,9 +6139,9 @@ async function append2Chats (isHistory, chatData) {
     // avoid duplicate event listener, only bind event listener for new chat
     if (role === RoleHuman) {
         // bind delete and edit button
-        chatEle.querySelector('.role-human .bi-trash')
+        chatEle.querySelector('.role-human .control .bi-trash')
             .addEventListener('click', deleteBtnHandler);
-        chatEle.querySelector('.bi.bi-pencil-square')
+        chatEle.querySelector('.role-human .control .bi-pencil-square')
             .addEventListener('click', bindEditHumanInput);
     }
 }
