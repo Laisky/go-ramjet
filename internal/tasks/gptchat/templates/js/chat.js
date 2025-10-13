@@ -2291,9 +2291,15 @@ async function setupSessionManager () {
             allSessionKeys.push(skey);
             await libs.KvSet(skey, []);
 
-            // create session config
-            console.log('generate new session config for 1 during setup session manager');
-            await libs.KvSet(`${KvKeyPrefixSessionConfig}1`, newSessionConfig());
+            // create session config if missing so URL overrides survive first load
+            const configKey = `${KvKeyPrefixSessionConfig}1`;
+            const existingConfig = await libs.KvGet(configKey);
+            if (!existingConfig) {
+                console.log('generate new session config for 1 during setup session manager');
+                await libs.KvSet(configKey, newSessionConfig());
+            } else {
+                console.debug('reuse existing session config for 1 during setup session manager');
+            }
         }
 
         await Promise.all(allSessionKeys.map(async (key) => {
