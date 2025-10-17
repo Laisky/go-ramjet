@@ -64,30 +64,32 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	// read cache
-	if cacheKey, err := req2CacheKey(frontReq); err != nil {
-		logger.Warn("marshal req for cache key", zap.Error(err))
-	} else if respContent, ok := llmRespCache.Load(cacheKey); ok {
-		res := &OpenaiCompletionStreamResp{
-			Choices: []OpenaiCompletionStreamRespChoice{
-				{
-					Delta: OpenaiCompletionStreamRespDelta{
-						Content: respContent,
+	if frontReq != nil && len(frontReq.Messages) > 0 {
+		if cacheKey, err := req2CacheKey(frontReq); err != nil {
+			logger.Warn("marshal req for cache key", zap.Error(err))
+		} else if respContent, ok := llmRespCache.Load(cacheKey); ok {
+			res := &OpenaiCompletionStreamResp{
+				Choices: []OpenaiCompletionStreamRespChoice{
+					{
+						Delta: OpenaiCompletionStreamRespDelta{
+							Content: respContent,
+						},
+						FinishReason: "stop",
 					},
-					FinishReason: "stop",
 				},
-			},
-		}
-		if data, err := json.Marshal(res); err != nil {
-			logger.Warn("marshal resp", zap.Error(err))
-		} else {
-			data = append([]byte("data: "), data...)
-			data = append(data, []byte("\n\n")...)
-
-			if _, err = io.Copy(ctx.Writer, bytes.NewReader(data)); err != nil {
-				logger.Warn("resp from cache", zap.Error(err))
+			}
+			if data, err := json.Marshal(res); err != nil {
+				logger.Warn("marshal resp", zap.Error(err))
 			} else {
-				logger.Debug("hit cache for llm response")
-				return
+				data = append([]byte("data: "), data...)
+				data = append(data, []byte("\n\n")...)
+
+				if _, err = io.Copy(ctx.Writer, bytes.NewReader(data)); err != nil {
+					logger.Warn("resp from cache", zap.Error(err))
+				} else {
+					logger.Debug("hit cache for llm response")
+					return
+				}
 			}
 		}
 	}
@@ -103,8 +105,12 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		modelName := "<unknown>"
+		if frontReq != nil && frontReq.Model != "" {
+			modelName = frontReq.Model
+		}
 		web.AbortErr(ctx, errors.Errorf("request model %q got [%d]%s",
-			frontReq.Model, resp.StatusCode, string(body)))
+			modelName, resp.StatusCode, string(body)))
 		return
 	}
 
@@ -225,7 +231,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
-		if respContent != "" {
+		if frontReq != nil && len(frontReq.Messages) > 0 && respContent != "" {
 			go saveLLMConservation(frontReq, respContent)
 		}
 	}
@@ -261,6 +267,10 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 }
 
 func req2CacheKey(req *FrontendReq) (string, error) {
+	if req == nil {
+		return "", errors.New("empty frontend request")
+	}
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		return "", errors.Wrap(err, "marshal req")
@@ -287,6 +297,16 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 
 func saveLLMConservation(req *FrontendReq, respContent string) {
 	logger := log.Logger.Named("save_llm")
+
+	if req == nil {
+		logger.Debug("skip saving conservation for empty request")
+		return
+	}
+
+	if len(req.Messages) == 0 {
+		logger.Debug("skip saving conservation for request without messages")
+		return
+	}
 
 	// save to cache
 	if cacheKey, err := req2CacheKey(req); err != nil {
@@ -591,6 +611,10 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", reqBody),
 
+	}
+
+	if frontendReq == nil {
+		frontendReq = &FrontendReq{}
 	}
 
 	logger.Debug("send request to upstream server",

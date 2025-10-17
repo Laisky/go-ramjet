@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/testify/require"
+	"github.com/gin-gonic/gin"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/library/log"
 )
@@ -172,4 +176,92 @@ func Test_functionCallsRegexp(t *testing.T) {
 	require.Len(t, matched[0], 2)
 	require.Equal(t, matched[0][0], "search_web(\"Ottawa ON Canada weather forecast this week\")")
 	require.Equal(t, matched[0][1], "Ottawa ON Canada weather forecast this week")
+}
+
+func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("{\"error\":\"boom\"}"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:             "srv-token",
+		DefaultImageToken: "srv-image-token",
+		DefaultImageUrl:   upstream.URL + "/v1/images/generations",
+		API:               strings.TrimRight(upstream.URL, "/"),
+		RamjetURL:         "",
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "tester",
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(ctxKeyUser, user)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/gptchat/api", nil)
+	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	require.NotPanics(t, func() { sendAndParseChat(ctx) })
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "unknown")
+}
+
+func TestSaveLLMConservationNilReq(t *testing.T) {
+	require.NotPanics(t, func() { saveLLMConservation(nil, "response") })
+}
+
+func TestConvert2OpenaiRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:             "srv-token",
+		DefaultImageToken: "srv-image-token",
+		DefaultImageUrl:   "https://api.test/v1/images/generations",
+		API:               "https://api.test",
+		RamjetURL:         "",
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "tester",
+		APIBase:       "https://api.test",
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(ctxKeyUser, user)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/gptchat/api", nil)
+	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	frontendReq, upstreamReq, err := convert2OpenaiRequest(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, frontendReq)
+	require.Empty(t, frontendReq.Messages)
+	require.Equal(t, http.MethodGet, upstreamReq.Method)
+	require.Equal(t, "https://api.test/v1/chat/completions", upstreamReq.URL.String())
+
+	body, err := io.ReadAll(upstreamReq.Body)
+	require.NoError(t, err)
+	require.Len(t, body, 0)
+	require.NoError(t, upstreamReq.Body.Close())
 }
