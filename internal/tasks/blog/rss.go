@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -138,7 +139,7 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 		bucket,
 		objKey,
 		strings.NewReader(payload),
-		int64(len([]byte(payload))),
+		int64(len(payload)),
 		minio.PutObjectOptions{
 			ContentType: "application/xml",
 		},
@@ -146,6 +147,59 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 		return errors.Wrapf(err, "put object %v", objKey)
 	}
 
+	if err := keepLatestS3ObjectVersions(ctx, s3cli, bucket, objKey, 3); err != nil {
+		return errors.Wrap(err, "trim s3 rss history")
+	}
+
 	logger.Info("write rss to s3", zap.String("s3", endpoint))
+	return nil
+}
+
+// keepLatestS3ObjectVersions trims S3 version history to the most recent keep entries.
+func keepLatestS3ObjectVersions(ctx context.Context, cli *minio.Client, bucket, key string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       key,
+		Recursive:    false,
+		WithVersions: true,
+	}
+
+	versions := make([]minio.ObjectInfo, 0, keep+4)
+	for object := range cli.ListObjects(ctx, bucket, opts) {
+		if object.Err != nil {
+			return errors.Wrap(object.Err, "list object versions")
+		}
+		if object.Key != key {
+			continue
+		}
+		if object.VersionID == "" {
+			continue
+		}
+		if object.IsDeleteMarker {
+			continue
+		}
+		versions = append(versions, object)
+	}
+
+	if len(versions) <= keep {
+		return nil
+	}
+
+	sort.Slice(versions, func(i, j int) bool {
+		if versions[i].LastModified.Equal(versions[j].LastModified) {
+			return versions[i].VersionID > versions[j].VersionID
+		}
+		return versions[i].LastModified.After(versions[j].LastModified)
+	})
+
+	for _, version := range versions[keep:] {
+		if err := cli.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{VersionID: version.VersionID}); err != nil {
+			return errors.Wrapf(err, "remove object version %s", version.VersionID)
+		}
+	}
+
 	return nil
 }
