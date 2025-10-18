@@ -5,6 +5,12 @@ on:
     branches:
       - 'master'
       - 'test/ci'
+    paths-ignore:
+      - 'docs/**'
+      - 'doc/**'
+      - 'tests/**'
+      - 'test/**'
+      - 'ci/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
