@@ -52,7 +52,8 @@ const ChatModelClaude37SonnetThinking = 'claude-3.7-sonnet-thinking';
 const ChatModelClaude4Sonnet = 'claude-4-sonnet';
 // const ChatModelClaude35Sonnet8K = 'claude-3.5-sonnet-8k';
 // const ChatModelClaude3Haiku = 'claude-3-haiku';
-const ChatModelClaude35Haiku = 'claude-3.5-haiku';
+// const ChatModelClaude35Haiku = 'claude-3.5-haiku';
+const ChatModelClaude45Haiku = 'claude-haiku-4-5';
 // const ChatModelGPT4_0613 = "gpt-4-0613";
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
@@ -155,7 +156,8 @@ const ChatModels = [
     ChatModelClaude4Sonnet,
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
-    ChatModelClaude35Haiku,
+    // ChatModelClaude35Haiku,
+    ChatModelClaude45Haiku,
     // ChatModelGroqLlama2With70B4K,
     // ChatModelGroqMixtral8x7B32K,
     // ChatModelGroqGemma2With9B,
@@ -214,7 +216,8 @@ const VisionModels = [
     ChatModelClaude4Sonnet,
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
-    ChatModelClaude35Haiku,
+    // ChatModelClaude35Haiku,
+    ChatModelClaude45Haiku,
     // ChatModelGPTO1Preview,
     ChatModelGPTO1,
     ChatModelGPTO3,
@@ -319,7 +322,8 @@ const ModelCategories = {
         ChatModelGPTO4MiniDeepresearch
     ],
     Anthropic: [
-        ChatModelClaude35Haiku,
+        // ChatModelClaude35Haiku,
+        ChatModelClaude45Haiku,
         // ChatModelClaude3Opus,
         ChatModelClaude4Opus,
         ChatModelClaude41Opus,
