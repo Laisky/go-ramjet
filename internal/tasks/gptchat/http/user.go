@@ -26,12 +26,13 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/go-ramjet/library/log"
+	rlimiter "github.com/Laisky/go-ramjet/library/ratelimit"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var (
 	onceLimiter                                     sync.Once
-	freeModelRateLimiter, expensiveModelRateLimiter *gutils.RateLimiter
+	freeModelRateLimiter, expensiveModelRateLimiter rlimiter.Limiter
 )
 
 const (
@@ -332,21 +333,18 @@ func setupRateLimiter() {
 	// }
 
 	burst := int(math.Ceil(float64(config.Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio))
-	if expensiveModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     burst,
-			NPerSec: 1,
-		}); err != nil {
+	if expensiveModelRateLimiter, err = rlimiter.New(context.Background(),
+		"gptchat:expensive",
+		rlimiter.Args{Max: burst, NPerSec: 1}); err != nil {
 		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
 	}
 	logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
 
-	if freeModelRateLimiter, err = gutils.NewRateLimiter(context.Background(),
-		gutils.RateLimiterArgs{
-			Max:     int(math.Ceil(float64(freeModelRateLimitCost) * burstRatio)),
-			NPerSec: 1,
-		}); err != nil {
+	freeBurst := int(math.Ceil(float64(freeModelRateLimitCost) * burstRatio))
+	if freeModelRateLimiter, err = rlimiter.New(context.Background(),
+		"gptchat:free",
+		rlimiter.Args{Max: freeBurst, NPerSec: 1}); err != nil {
 		log.Logger.Panic("new freeModelRateLimiter", zap.Error(err))
 	}
-	logger.Info("set ratelimiter for free models", zap.Int("burst", burst))
+	logger.Info("set ratelimiter for free models", zap.Int("burst", freeBurst))
 }

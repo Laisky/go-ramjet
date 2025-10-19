@@ -18,6 +18,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/alert"
 	"github.com/Laisky/go-ramjet/library/log"
+	rlimiter "github.com/Laisky/go-ramjet/library/ratelimit"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -96,7 +97,7 @@ func setupLogger(ctx context.Context) {
 	opts := []zap.Option{}
 
 	if gconfig.Shared.GetString("logger.push_api") != "" {
-		ratelimiter, err := gutils.NewRateLimiter(ctx, gutils.RateLimiterArgs{
+		ratelimiter, err := rlimiter.New(ctx, "logger:alert", rlimiter.Args{
 			Max:     1,
 			NPerSec: 1,
 		})

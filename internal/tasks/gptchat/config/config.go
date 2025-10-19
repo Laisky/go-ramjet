@@ -43,6 +43,8 @@ func SetupConfig() (err error) {
 		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
 	Config.RateLimitFreeModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitFreeModelsIntervalSeconds, 1)
+	Config.RateLimiterBackend = strings.ToLower(strings.TrimSpace(
+		gutils.OptionalVal(&Config.RateLimiterBackend, "redis")))
 	Config.DefaultImageToken = gutils.OptionalVal(
 		&Config.DefaultImageToken, Config.Token)
 	// Config.DefaultImageTokenType = gutils.OptionalVal(
@@ -100,6 +102,8 @@ type OpenAI struct {
 	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
 	// RateLimitFreeModelsIntervalSeconds (optional) rate limit interval seconds for free models, default is 1
 	RateLimitFreeModelsIntervalSeconds int `json:"rate_limit_image_models_interval_secs" mapstructure:"rate_limit_image_models_interval_secs"`
+	// RateLimiterBackend (optional) backend for rate limiting (redis or legacy), default redis
+	RateLimiterBackend string `json:"rate_limiter_backend" mapstructure:"rate_limiter_backend"`
 	// Proxy (optional) proxy url to send request
 	Proxy string `json:"-" mapstructure:"proxy"`
 	// UserTokens (optional) paid user's tenant tokens

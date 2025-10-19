@@ -112,16 +112,21 @@ func Tiktoken() *tiktoken.Tiktoken {
 
 // PromptTokens count prompt tokens
 func (r *FrontendReq) PromptTokens() (n int) {
-	tik := Tiktoken()
 	for _, msg := range r.Messages {
-		if tik != nil {
-			n += len(tik.Encode(msg.Content, nil, nil))
-		} else {
-			n += len(msg.Content)
-		}
+		n += CountTextTokens(msg.Content)
 	}
 
 	return n
+}
+
+// CountTextTokens returns the approximate token count for a string using tiktoken when available.
+func CountTextTokens(text string) int {
+	tik := Tiktoken()
+	if tik != nil {
+		return len(tik.Encode(text, nil, nil))
+	}
+
+	return len(text)
 }
 
 // OpenaiChatReq request to openai chat api

@@ -16,22 +16,21 @@ import (
 	ihttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
 	istatic "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/static"
 	"github.com/Laisky/go-ramjet/library/log"
+	rlimiter "github.com/Laisky/go-ramjet/library/ratelimit"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var (
 	once              sync.Once
-	globalRatelimiter *gutils.RateLimiter
+	globalRatelimiter rlimiter.Limiter
 )
 
 func setupInit() {
 	once.Do(func() {
 		var err error
-		if globalRatelimiter, err = gutils.NewRateLimiter(context.Background(),
-			gutils.RateLimiterArgs{
-				Max:     100,
-				NPerSec: 10,
-			}); err != nil {
+		if globalRatelimiter, err = rlimiter.New(context.Background(),
+			"gptchat:global",
+			rlimiter.Args{Max: 100, NPerSec: 10}); err != nil {
 			log.Logger.Panic("new ratelimiter", zap.Error(err))
 		}
 	})

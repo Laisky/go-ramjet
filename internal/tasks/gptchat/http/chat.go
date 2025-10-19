@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +64,17 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 		return
 	}
 
+	reservation := getTokenReservation(ctx)
+	actualOutputTokens := 0
+	defer func() {
+		if reservation != nil {
+			if err := reservation.Finalize(gmw.Ctx(ctx), actualOutputTokens); err != nil {
+				logger.Warn("finalize token reservation", zap.Error(err))
+			}
+		}
+		clearTokenReservation(ctx)
+	}()
+
 	// read cache
 	if frontReq != nil && len(frontReq.Messages) > 0 {
 		if cacheKey, err := req2CacheKey(frontReq); err != nil {
@@ -88,6 +100,11 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 					logger.Warn("resp from cache", zap.Error(err))
 				} else {
 					logger.Debug("hit cache for llm response")
+					tokens := CountTextTokens(respContent)
+					if tokens == 0 && reservation != nil {
+						tokens = reservation.EstimatedOutputTokens()
+					}
+					actualOutputTokens = tokens
 					return
 				}
 			}
@@ -123,8 +140,20 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	if !isStream {
-		if _, err = io.Copy(ctx.Writer, resp.Body); web.AbortErr(ctx, err) {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if web.AbortErr(ctx, readErr) {
 			return
+		}
+
+		if _, writeErr := ctx.Writer.Write(bodyBytes); web.AbortErr(ctx, writeErr) {
+			actualOutputTokens = 0
+			return
+		}
+
+		if tokens, ok := tryExtractCompletionTokens(bodyBytes); ok {
+			actualOutputTokens = tokens
+		} else if reservation != nil {
+			actualOutputTokens = reservation.EstimatedOutputTokens()
 		}
 
 		return
@@ -198,6 +227,11 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 		if len(lastResp.Choices) > 0 {
 			if len(lastResp.Choices[0].Delta.ToolCalls) != 0 {
+				tokens := CountTextTokens(string(chunk))
+				if tokens == 0 && reservation != nil {
+					tokens = reservation.EstimatedOutputTokens()
+				}
+				actualOutputTokens = tokens
 				logger.Debug("got tool calls")
 				return lastResp.Choices[0].Delta.ToolCalls
 			}
@@ -228,6 +262,15 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 
 	if web.AbortErr(ctx, reader.Err()) {
 		return
+	}
+
+	if respContent != "" {
+		actualOutputTokens = CountTextTokens(respContent)
+		if actualOutputTokens == 0 && reservation != nil {
+			actualOutputTokens = reservation.EstimatedOutputTokens()
+		}
+	} else if reservation != nil {
+		actualOutputTokens = reservation.EstimatedOutputTokens()
 	}
 
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
@@ -411,6 +454,17 @@ var (
 
 func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiReq *http.Request, err error) {
 	logger := gmw.GetLogger(ctx)
+	var quotaReservation *TokenReservation
+	defer func() {
+		if err != nil {
+			if quotaReservation != nil {
+				if finalizeErr := quotaReservation.Finalize(gmw.Ctx(ctx), 0); finalizeErr != nil {
+					logger.Warn("rollback token reservation", zap.Error(finalizeErr))
+				}
+			}
+			clearTokenReservation(ctx)
+		}
+	}()
 	user, err := getUserByAuthHeader(ctx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "get user")
@@ -455,6 +509,32 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 
 		if err := IsModelAllowed(ctx, user, frontendReq); err != nil {
 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
+		}
+
+		if frontendReq != nil && len(frontendReq.Messages) > 0 {
+			reservation, reserveErr := ReserveTokens(ctx, user, frontendReq)
+			if reserveErr != nil {
+				var quotaErr *QuotaExceededError
+				if errors.As(reserveErr, &quotaErr) {
+					if quotaErr.RetryAfter > 0 {
+						secs := int(math.Ceil(quotaErr.RetryAfter.Seconds()))
+						if secs < 1 {
+							secs = 1
+						}
+						ctx.Header("Retry-After", strconv.Itoa(secs))
+					}
+					return nil, nil, errors.Errorf(
+						"Free-tier quota exceeded: you can use up to %d tokens every 10-minute window, you have used %d tokens. Please wait about %s before trying again, or upgrade to a paid membership at https://wiki.laisky.com/projects/gpt/pay/.",
+						quotaErr.Limit,
+						quotaErr.Used,
+						formatQuotaRetryAfter(quotaErr.RetryAfter),
+					)
+				}
+
+				return nil, nil, errors.Wrap(reserveErr, "reserve token quota")
+			}
+
+			quotaReservation = reservation
 		}
 
 		if strings.HasPrefix(frontendReq.Model, "o1") ||
@@ -1087,6 +1167,48 @@ func queryChunks(gctx *gin.Context, args queryChunksArgs) (result string, err er
 		zap.String("operator", respData.Operator),
 	)
 	return respData.Results, nil
+}
+
+func tryExtractCompletionTokens(body []byte) (int, bool) {
+	if len(body) == 0 {
+		return 0, false
+	}
+
+	var payload struct {
+		Usage struct {
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0, false
+	}
+
+	if payload.Usage.CompletionTokens < 0 {
+		return 0, false
+	}
+
+	return payload.Usage.CompletionTokens, true
+}
+
+func formatQuotaRetryAfter(d time.Duration) string {
+	if d <= 0 {
+		return "a few seconds"
+	}
+
+	if d < time.Minute {
+		secs := int(math.Ceil(d.Seconds()))
+		if secs <= 1 {
+			return "1 second"
+		}
+		return fmt.Sprintf("%d seconds", secs)
+	}
+
+	minutes := int(math.Ceil(d.Minutes()))
+	if minutes <= 1 {
+		return "1 minute"
+	}
+
+	return fmt.Sprintf("%d minutes", minutes)
 }
 
 // enableHeartBeatForStreamReq enable heartbeat for stream request
