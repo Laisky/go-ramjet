@@ -43,13 +43,14 @@ const ChatModelDeepSeekResoner = 'deepseek-reasoner';
 // const ChatModelClaude1 = 'claude-instant-1';
 // const ChatModelClaude2 = 'claude-2';
 // const ChatModelClaude3Opus = 'claude-3-opus';
-const ChatModelClaude4Opus = 'claude-4-opus';
+// const ChatModelClaude4Opus = 'claude-4-opus';
 const ChatModelClaude41Opus = 'claude-4.1-opus';
 // const ChatModelClaude3Sonnet = 'claude-3-sonnet';
-const ChatModelClaude35Sonnet = 'claude-3.5-sonnet';
-const ChatModelClaude37Sonnet = 'claude-3.7-sonnet';
-const ChatModelClaude37SonnetThinking = 'claude-3.7-sonnet-thinking';
-const ChatModelClaude4Sonnet = 'claude-4-sonnet';
+// const ChatModelClaude35Sonnet = 'claude-3.5-sonnet';
+// const ChatModelClaude37Sonnet = 'claude-3.7-sonnet';
+// const ChatModelClaude37SonnetThinking = 'claude-3.7-sonnet-thinking';
+// const ChatModelClaude4Sonnet = 'claude-4-sonnet';
+const ChatModelClaude45Sonnet = 'claude-4.5-sonnet';
 // const ChatModelClaude35Sonnet8K = 'claude-3.5-sonnet-8k';
 // const ChatModelClaude3Haiku = 'claude-3-haiku';
 // const ChatModelClaude35Haiku = 'claude-3.5-haiku';
@@ -148,12 +149,13 @@ const ChatModels = [
     // ChatModelClaude1,
     // ChatModelClaude2,
     // ChatModelClaude3Opus,
-    ChatModelClaude4Opus,
+    // ChatModelClaude4Opus,
     ChatModelClaude41Opus,
-    ChatModelClaude35Sonnet,
-    ChatModelClaude37Sonnet,
-    ChatModelClaude37SonnetThinking,
-    ChatModelClaude4Sonnet,
+    // ChatModelClaude35Sonnet,
+    // ChatModelClaude37Sonnet,
+    // ChatModelClaude37SonnetThinking,
+    // ChatModelClaude4Sonnet,
+    ChatModelClaude45Sonnet,
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
     // ChatModelClaude35Haiku,
@@ -208,12 +210,13 @@ const VisionModels = [
     // ChatModelGemini2FlahExpImage,
     ChatModelGemini25FlashImage,
     // ChatModelClaude3Opus,
-    ChatModelClaude4Opus,
+    // ChatModelClaude4Opus,
     ChatModelClaude41Opus,
-    ChatModelClaude35Sonnet,
-    ChatModelClaude37Sonnet,
-    ChatModelClaude37SonnetThinking,
-    ChatModelClaude4Sonnet,
+    // ChatModelClaude35Sonnet,
+    // ChatModelClaude37Sonnet,
+    // ChatModelClaude37SonnetThinking,
+    // ChatModelClaude4Sonnet,
+    ChatModelClaude45Sonnet,
     // ChatModelClaude35Sonnet8K,
     // ChatModelClaude3Haiku,
     // ChatModelClaude35Haiku,
@@ -325,12 +328,13 @@ const ModelCategories = {
         // ChatModelClaude35Haiku,
         ChatModelClaude45Haiku,
         // ChatModelClaude3Opus,
-        ChatModelClaude4Opus,
+        // ChatModelClaude4Opus,
         ChatModelClaude41Opus,
-        ChatModelClaude35Sonnet,
-        ChatModelClaude37Sonnet,
-        ChatModelClaude37SonnetThinking,
-        ChatModelClaude4Sonnet
+        // ChatModelClaude35Sonnet,
+        // ChatModelClaude37Sonnet,
+        // ChatModelClaude37SonnetThinking,
+        // ChatModelClaude4Sonnet
+        ChatModelClaude45Sonnet
     ],
     Google: [
         // ChatModelGemini2Pro,
