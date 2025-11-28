@@ -116,7 +116,4 @@ __debug_bin*
 examples/test.yml
 diff.txt
 
-internal/tasks/gptchat/templates/scss/chat.css
-internal/tasks/gptchat/templates/scss/chat.css.map
-internal/tasks/gptchat/templates/scss/base.css
-internal/tasks/gptchat/templates/scss/base.css.map
+.github/instructions/laisky.instructions.md
