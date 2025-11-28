@@ -154,7 +154,7 @@ const ChatModels = [
     // ChatModelClaude2,
     // ChatModelClaude3Opus,
     // ChatModelClaude4Opus,
-    ChatModelClaude41Opus,
+    // ChatModelClaude41Opus,
     ChatModelClaude45Opus,
     // ChatModelClaude35Sonnet,
     // ChatModelClaude37Sonnet,
