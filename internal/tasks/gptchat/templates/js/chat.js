@@ -45,7 +45,8 @@ const ChatModelDeepSeekResoner = 'deepseek-reasoner';
 // const ChatModelClaude2 = 'claude-2';
 // const ChatModelClaude3Opus = 'claude-3-opus';
 // const ChatModelClaude4Opus = 'claude-4-opus';
-const ChatModelClaude41Opus = 'claude-opus-4-1';
+// const ChatModelClaude41Opus = 'claude-opus-4-1';
+const ChatModelClaude45Opus = 'claude-opus-4-5';
 // const ChatModelClaude3Sonnet = 'claude-3-sonnet';
 // const ChatModelClaude35Sonnet = 'claude-3.5-sonnet';
 // const ChatModelClaude37Sonnet = 'claude-3.7-sonnet';
@@ -154,6 +155,7 @@ const ChatModels = [
     // ChatModelClaude3Opus,
     // ChatModelClaude4Opus,
     ChatModelClaude41Opus,
+    ChatModelClaude45Opus,
     // ChatModelClaude35Sonnet,
     // ChatModelClaude37Sonnet,
     // ChatModelClaude37SonnetThinking,
@@ -217,7 +219,8 @@ const VisionModels = [
     ChatModelGemini25FlashImage,
     // ChatModelClaude3Opus,
     // ChatModelClaude4Opus,
-    ChatModelClaude41Opus,
+    // ChatModelClaude41Opus,
+    ChatModelClaude45Opus,
     // ChatModelClaude35Sonnet,
     // ChatModelClaude37Sonnet,
     // ChatModelClaude37SonnetThinking,
@@ -336,7 +339,8 @@ const ModelCategories = {
         ChatModelClaude45Haiku,
         // ChatModelClaude3Opus,
         // ChatModelClaude4Opus,
-        ChatModelClaude41Opus,
+        // ChatModelClaude41Opus,
+        ChatModelClaude45Opus,
         // ChatModelClaude35Sonnet,
         // ChatModelClaude37Sonnet,
         // ChatModelClaude37SonnetThinking,
