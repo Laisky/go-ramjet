@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -17,6 +18,14 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/s3"
 )
+
+const rssVersionsToKeep = 3
+
+type objectVersionClient interface {
+	PutObject(ctx context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error)
+	ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
+	RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error
+}
 
 // RssWorker rss worker
 type RssWorker struct {
@@ -119,7 +128,10 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 	objKey string,
 ) error {
 	logger := w.logger.Named("s3")
-	logger.Info("run Write2File", zap.String("s3", endpoint))
+	logger.Info("run Write2S3",
+		zap.String("endpoint", endpoint),
+		zap.String("bucket", bucket),
+		zap.String("object", objKey))
 
 	s3cli, err := s3.GetCli(
 		endpoint,
@@ -135,29 +147,82 @@ func (w *RssWorker) Write2S3(ctx context.Context,
 		return errors.Wrap(err, "to rss")
 	}
 
-	if _, err = s3cli.PutObject(ctx,
-		bucket,
-		objKey,
-		strings.NewReader(payload),
-		int64(len(payload)),
-		minio.PutObjectOptions{
-			ContentType: "application/xml",
-		},
-	); err != nil {
-		return errors.Wrapf(err, "put object %v", objKey)
+	if err := w.persistRSSObjectToS3(ctx, logger, s3cli, bucket, objKey, payload, rssVersionsToKeep); err != nil {
+		return err
 	}
 
-	if err := keepLatestS3ObjectVersions(ctx, s3cli, bucket, objKey, 3); err != nil {
+	logger.Info("write rss to s3",
+		zap.String("endpoint", endpoint),
+		zap.String("bucket", bucket),
+		zap.String("object", objKey))
+	return nil
+}
+
+func (w *RssWorker) persistRSSObjectToS3(ctx context.Context, logger glog.Logger, cli objectVersionClient, bucket, key, payload string, keep int) error {
+	payloadSize := int64(len(payload))
+	if keep < 0 {
+		keep = 0
+	}
+	preTrimTarget := keep - 1
+	if preTrimTarget < 0 {
+		preTrimTarget = 0
+	}
+
+	if preTrimTarget > 0 {
+		logger.Debug("pre trimming rss versions before upload",
+			zap.String("bucket", bucket),
+			zap.String("object", key),
+			zap.Int("target_keep", preTrimTarget))
+	}
+	if err := keepLatestS3ObjectVersions(ctx, logger, cli, bucket, key, preTrimTarget); err != nil {
+		return errors.Wrap(err, "pre-trim s3 rss history")
+	}
+
+	upload := func() error {
+		logger.Debug("uploading rss payload",
+			zap.String("bucket", bucket),
+			zap.String("object", key),
+			zap.Int64("bytes", payloadSize))
+		_, err := cli.PutObject(ctx,
+			bucket,
+			key,
+			strings.NewReader(payload),
+			payloadSize,
+			minio.PutObjectOptions{ContentType: "application/xml"},
+		)
+		return err
+	}
+
+	if err := upload(); err != nil {
+		if isVersionLimitError(err) && keep > 0 {
+			logger.Debug("hit object version cap, trimming and retrying",
+				zap.String("bucket", bucket),
+				zap.String("object", key))
+			if trimErr := keepLatestS3ObjectVersions(ctx, logger, cli, bucket, key, preTrimTarget); trimErr != nil {
+				return errors.Wrap(trimErr, "trim s3 rss history after limit error")
+			}
+			if retryErr := upload(); retryErr != nil {
+				return errors.Wrapf(retryErr, "put object %v", key)
+			}
+		} else {
+			return errors.Wrapf(err, "put object %v", key)
+		}
+	}
+
+	if err := keepLatestS3ObjectVersions(ctx, logger, cli, bucket, key, keep); err != nil {
 		return errors.Wrap(err, "trim s3 rss history")
 	}
 
-	logger.Info("write rss to s3", zap.String("s3", endpoint))
 	return nil
 }
 
 // keepLatestS3ObjectVersions trims S3 version history to the most recent keep entries.
-func keepLatestS3ObjectVersions(ctx context.Context, cli *minio.Client, bucket, key string, keep int) error {
+func keepLatestS3ObjectVersions(ctx context.Context, logger glog.Logger, cli objectVersionClient, bucket, key string, keep int) error {
 	if keep <= 0 {
+		logger.Debug("skipping rss version trim",
+			zap.String("bucket", bucket),
+			zap.String("object", key),
+			zap.Int("keep", keep))
 		return nil
 	}
 
@@ -195,11 +260,31 @@ func keepLatestS3ObjectVersions(ctx context.Context, cli *minio.Client, bucket, 
 		return versions[i].LastModified.After(versions[j].LastModified)
 	})
 
+	logger.Debug("trimming excess rss versions",
+		zap.String("bucket", bucket),
+		zap.String("object", key),
+		zap.Int("existing_versions", len(versions)),
+		zap.Int("keep", keep))
 	for _, version := range versions[keep:] {
 		if err := cli.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{VersionID: version.VersionID}); err != nil {
 			return errors.Wrapf(err, "remove object version %s", version.VersionID)
 		}
+		logger.Debug("removed old rss version",
+			zap.String("bucket", bucket),
+			zap.String("object", key),
+			zap.String("version", version.VersionID))
 	}
 
 	return nil
+}
+
+func isVersionLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	resp := minio.ToErrorResponse(err)
+	if resp.Code == "MaxVersionsExceeded" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(resp.Message), "limit on the number of versions you can create")
 }
