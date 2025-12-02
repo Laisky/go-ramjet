@@ -585,6 +585,7 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"qwen-qwq-32b",
 			"qwen/qwen3-32b",
 			"moonshotai/kimi-k2-instruct",
+			"moonshotai/kimi-k2-instruct-0905",
 			"deepseek-chat",
 			"deepseek-reasoner",
 			"deepseek-coder",
@@ -629,9 +630,12 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"claude-3.7-sonnet",
 			"claude-3-haiku",
 			"claude-3.5-haiku",
+			"claude-haiku-4-5",
 			"claude-4-opus",
 			"claude-4.1-opus",
+			"claude-opus-4-5",
 			"claude-4-sonnet",
+			"claude-sonnet-4-5",
 			"o1",
 			"o1-preview",
 			"o3",
@@ -643,6 +647,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-5-codex",
 			"gpt-5-mini",
 			"gpt-5-nano",
+			"gpt-5.1",
+			"gpt-5.1-codex",
 			"gpt-4o",
 			"gpt-4o-search-preview",
 			"gpt-4o-mini",
@@ -655,7 +661,8 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gemini-2.5-flash",
 			"gemini-2.0-flash-thinking",
 			"gemini-2.0-flash-exp-image-generation",
-			"gemini-2.5-flash-image-preview":
+			"gemini-2.5-flash-image-preview",
+			"gemini-3-pro-preview":
 			if nImages == 0 { // no images, text only
 				req := new(OpenaiChatReq[string])
 				if err := copier.Copy(req, frontendReq); err != nil {
