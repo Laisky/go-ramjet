@@ -1778,6 +1778,77 @@ async function listenSessionSwitch (evt) {
     await changeSession(activeSid);
 }
 
+const CHAT_PAGE_SIZE = 50;
+let currentSessionHistory = [];
+let currentLoadedCount = 0;
+
+async function renderChatBatch (items) {
+    const container = document.createElement('div');
+    for (const item of items) {
+        const chatData = await getChatData(item.chatID, item.role);
+        await append2Chats(true, chatData, container);
+        if (item.role === RoleAI) {
+            await renderAfterAiResp(chatData, false, container);
+        }
+    }
+    return container;
+}
+
+async function loadMoreHistory () {
+    const chatsContainer = chatContainer.querySelector('.conservations .chats');
+    const loadMoreBtn = chatsContainer.querySelector('.load-more-history');
+    if (!loadMoreBtn) return;
+
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = 'Loading...';
+
+    const loadCount = CHAT_PAGE_SIZE;
+    let startIndex = currentSessionHistory.length - currentLoadedCount - loadCount;
+    if (startIndex < 0) startIndex = 0;
+
+    // Adjust startIndex to include Human if we landed on AI
+    while (startIndex > 0 && currentSessionHistory[startIndex].role === RoleAI) {
+        startIndex--;
+    }
+
+    const endIndex = currentSessionHistory.length - currentLoadedCount;
+    const items = currentSessionHistory.slice(startIndex, endIndex);
+
+    if (items.length === 0) {
+        loadMoreBtn.remove();
+        return;
+    }
+
+    const batchContainer = await renderChatBatch(items);
+
+    // Maintain scroll position
+    const oldScrollHeight = chatsContainer.scrollHeight;
+    const oldScrollTop = chatsContainer.scrollTop;
+
+    // Insert after the load more button
+    const firstChat = loadMoreBtn.nextSibling;
+    const fragment = document.createDocumentFragment();
+    while (batchContainer.firstChild) {
+        fragment.appendChild(batchContainer.firstChild);
+    }
+    chatsContainer.insertBefore(fragment, firstChat);
+
+    // Restore scroll position
+    const newScrollHeight = chatsContainer.scrollHeight;
+    chatsContainer.scrollTop = newScrollHeight - oldScrollHeight + oldScrollTop;
+
+    currentLoadedCount += items.length;
+
+    if (currentLoadedCount >= currentSessionHistory.length) {
+        loadMoreBtn.remove();
+    } else {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load More';
+    }
+
+    libs.EnableTooltipsEverywhere();
+}
+
 async function changeSession (activeSid) {
     if (globalAIRespSSE) { // auto stop previous sse when switch session
         console.warn('auto stop previous sse because of session switch');
@@ -1802,13 +1873,40 @@ async function changeSession (activeSid) {
         })
 
     // restore session history
-    chatContainer.querySelector('.conservations .chats').innerHTML = '';
-    for (const item of await sessionChatHistory(activeSid)) {
+    const chatsContainer = chatContainer.querySelector('.conservations .chats');
+    chatsContainer.innerHTML = '';
+
+    currentSessionHistory = await sessionChatHistory(activeSid);
+    currentLoadedCount = 0;
+
+    let startIndex = currentSessionHistory.length - CHAT_PAGE_SIZE;
+    if (startIndex < 0) startIndex = 0;
+
+    // Ensure we don't start with an orphan AI message
+    while (startIndex > 0 && currentSessionHistory[startIndex].role === RoleAI) {
+        startIndex--;
+    }
+
+    const initialItems = currentSessionHistory.slice(startIndex);
+
+    for (const item of initialItems) {
         const chatData = await getChatData(item.chatID, item.role);
         await append2Chats(true, chatData);
         if (item.role === RoleAI) {
             await renderAfterAiResp(chatData, false);
         }
+    }
+
+    scrollChatToDown();
+
+    currentLoadedCount = initialItems.length;
+
+    if (currentLoadedCount < currentSessionHistory.length) {
+        const loadMoreBtn = document.createElement('button');
+        loadMoreBtn.className = 'btn btn-outline-secondary w-100 mb-3 load-more-history';
+        loadMoreBtn.textContent = 'Load More';
+        loadMoreBtn.onclick = loadMoreHistory;
+        chatsContainer.prepend(loadMoreBtn);
     }
 
     await libs.KvSet(KvKeyPrefixSelectedSession, activeSid);
@@ -2355,15 +2453,7 @@ async function setupSessionManager () {
                     </div>`);
         }));
 
-        // restore conservation history
-        const chatHistory = await activeSessionChatHistory();
-        for (const chat of chatHistory) {
-            const chatData = await getChatData(chat.chatID, chat.role);
-            append2Chats(true, chatData);
-            if (chat.role === RoleAI) {
-                renderAfterAiResp(chatData, false);
-            }
-        }
+        await changeSession(selectedSessionID);
     }
 
     // add widget to scroll bottom
@@ -4302,9 +4392,15 @@ function renderError (err) {
  * @param {boolean} saveStorage - save to storage or not.
  *                                if it's restore chat, there is no need to save to storage.
  */
-async function renderAfterAiResp (chatData, saveStorage = false) {
-    const aiRespEle = chatContainer
-        .querySelector(`.chatManager .conservations .chats #${chatData.chatID} .ai-response`);
+async function renderAfterAiResp (chatData, saveStorage = false, rootElement = null) {
+    const root = rootElement || chatContainer;
+    let aiRespEle;
+    if (rootElement) {
+        aiRespEle = root.querySelector(`#${chatData.chatID} .ai-response`);
+    } else {
+        aiRespEle = root.querySelector(`.chatManager .conservations .chats #${chatData.chatID} .ai-response`);
+    }
+
     if (!aiRespEle) {
         console.warn(`can not find ai-response element for chatid=${chatData.chatID}`);
         return;
@@ -6041,7 +6137,7 @@ const deleteBtnHandler = (evt) => {
  *   @property {string} model - model name
  *   @property {string} requestid - request id
  */
-async function append2Chats (isHistory, chatData) {
+async function append2Chats (isHistory, chatData, container = null) {
     const chatID = chatData.chatID;
     const role = chatData.role;
     let content = chatData.content;
@@ -6132,18 +6228,29 @@ async function append2Chats (isHistory, chatData) {
         if (role === RoleAI) {
             // ai response is always after human, so we need to find the last human chat,
             // and append ai response after it
-            if (chatContainer.querySelector(`#${chatID}`)) {
-                chatContainer.querySelector(`#${chatID}`)
-                    .insertAdjacentHTML('beforeend', chatEleHtml);
+            let humanChat;
+            if (container) {
+                humanChat = container.querySelector(`#${chatID}`);
+            } else {
+                humanChat = chatContainer.querySelector(`#${chatID}`);
+            }
+
+            if (humanChat) {
+                humanChat.insertAdjacentHTML('beforeend', chatEleHtml);
             }
         } else {
-            chatContainer.querySelector('.chatManager .conservations .chats')
-                .insertAdjacentHTML('beforeend', chatEleHtml);
+            const target = container || chatContainer.querySelector('.chatManager .conservations .chats');
+            target.insertAdjacentHTML('beforeend', chatEleHtml);
         }
     }
 
-    const chatEle = chatContainer
-        .querySelector(`.chatManager .conservations .chats #${chatID}`);
+    let chatEle;
+    if (container) {
+        chatEle = container.querySelector(`#${chatID}`);
+    } else {
+        chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
+    }
+
     if (chatOp === 'replace') {
         // replace html element of ai
         chatEle.querySelector('.role-ai')
