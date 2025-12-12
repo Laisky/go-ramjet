@@ -428,6 +428,69 @@ const muRenderAfterAiRespForChatID = {};
 let audioStream;
 const httpsRegexp = /\bhttps:\/\/\S+/;
 
+// Shell-style prompt history for the main input box.
+let chatPromptHistory = [];
+let chatPromptHistoryCursor = -1;
+let chatPromptHistoryDraft = '';
+
+/**
+ * recordChatPromptHistory appends a prompt to the in-memory history.
+ *
+ * @param {string} prompt
+ */
+function recordChatPromptHistory (prompt) {
+    const val = libs.TrimSpace(prompt || '');
+    if (!val) return;
+
+    // Avoid consecutive duplicates.
+    if (chatPromptHistory.length > 0 && chatPromptHistory[chatPromptHistory.length - 1] === val) {
+        return;
+    }
+
+    chatPromptHistory.push(val);
+    // Keep bounded to avoid unbounded memory growth.
+    if (chatPromptHistory.length > 50) {
+        chatPromptHistory = chatPromptHistory.slice(chatPromptHistory.length - 50);
+    }
+    chatPromptHistoryCursor = -1;
+    chatPromptHistoryDraft = '';
+}
+
+/**
+ * navigateChatPromptHistory updates the textarea value based on ArrowUp/ArrowDown.
+ *
+ * @param {HTMLTextAreaElement} textarea
+ * @param {number} direction - -1 for up, +1 for down.
+ */
+function navigateChatPromptHistory (textarea, direction) {
+    if (!textarea) return;
+    if (chatPromptHistory.length === 0) return;
+
+    if (chatPromptHistoryCursor === -1) {
+        chatPromptHistoryDraft = textarea.value || '';
+        chatPromptHistoryCursor = chatPromptHistory.length;
+    }
+
+    chatPromptHistoryCursor += direction;
+    if (chatPromptHistoryCursor < 0) chatPromptHistoryCursor = 0;
+
+    if (chatPromptHistoryCursor >= chatPromptHistory.length) {
+        // Restore draft when browsing past the newest entry.
+        chatPromptHistoryCursor = -1;
+        textarea.value = chatPromptHistoryDraft;
+    } else {
+        textarea.value = chatPromptHistory[chatPromptHistoryCursor];
+    }
+
+    // Move caret to end.
+    try {
+        textarea.selectionStart = textarea.value.length;
+        textarea.selectionEnd = textarea.value.length;
+    } catch (_) {
+        // ignore
+    }
+}
+
 /**
  * setup confirm modal callback, shoule be an async function
  */
@@ -446,8 +509,6 @@ let globalAIRespSSE, globalAIRespEle, globalAIRespData, globalAIRespHeartBeatTim
 // Add these variables at the beginning of your file, near other globals
 let sseMessageBuffer = '';
 let sseMessageFragmented = false;
-let responseContainer = null;
-let reasoningContainer = null;
 // const safariSSEHeartbeatTimer = null;
 // const safariSSERetryCount = 0;
 // const MAX_SSE_RETRIES = 3;
@@ -462,6 +523,123 @@ let reasoningContainer = null;
 //
 // should invoke updateChatVisionSelectedFileStore after update this object
 let chatVisionSelectedFileStore = [];
+
+/**
+ * getLiveAiRespElement returns the current in-DOM ".ai-response" element for a chat.
+ * It avoids relying on cached globals (e.g., globalAIRespEle), which can become detached
+ * after re-rendering chat history or switching sessions.
+ *
+ * @param {string} chatID - The chat message DOM id.
+ * @returns {HTMLElement|null} The live ai-response element, or null if not found.
+ */
+function getLiveAiRespElement (chatID) {
+    if (!chatID) return null;
+
+    const chatEle = document.getElementById(chatID);
+    if (chatEle) {
+        const ai = chatEle.querySelector('.ai-response');
+        if (ai && document.body.contains(ai)) return ai;
+    }
+
+    const fallback = chatContainer
+        ?.querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    if (fallback && document.body.contains(fallback)) return fallback;
+    return null;
+}
+
+/**
+ * ensureLiveAiRespElement returns a usable ai-response element.
+ * It re-queries if the provided element is missing/detached.
+ *
+ * @param {string} chatID - The chat ID.
+ * @param {HTMLElement|null|undefined} maybeEle - A possibly-stale element.
+ * @returns {HTMLElement|null} A live ai-response element.
+ */
+function ensureLiveAiRespElement (chatID, maybeEle) {
+    if (maybeEle && document.body.contains(maybeEle)) {
+        return maybeEle;
+    }
+
+    return getLiveAiRespElement(chatID);
+}
+
+/**
+ * ensureStopGeneratingButton creates (if needed) and wires the "Stop" button.
+ * The button is shown only while an SSE request is active.
+ */
+function ensureStopGeneratingButton () {
+    ensureChatPromptElements();
+    if (!chatPromptInputBtn) return;
+
+    // Insert next to send button (idempotent)
+    const existed = chatContainer.querySelector('.user-input .btn.stop-generation');
+    if (existed) return;
+
+    chatPromptInputBtn.insertAdjacentHTML('beforebegin',
+        '<button class="btn btn-outline-danger stop-generation" type="button" aria-label="stop generation" title="Stop">' +
+        '<i class="bi bi-stop-circle"></i>' +
+        '</button>');
+
+    const btn = chatContainer.querySelector('.user-input .btn.stop-generation');
+    if (!btn) return;
+
+    btn.addEventListener('click', async (evt) => {
+        evt.stopPropagation();
+        await stopAIResp('[Stopped]');
+    });
+
+    // Default hidden
+    btn.classList.add('d-none');
+}
+
+/**
+ * setStopGeneratingButtonVisible toggles visibility for the stop button.
+ *
+ * @param {boolean} visible
+ */
+function setStopGeneratingButtonVisible (visible) {
+    const btn = chatContainer.querySelector('.user-input .btn.stop-generation');
+    if (!btn) return;
+    btn.classList.toggle('d-none', !visible);
+}
+
+/**
+ * stopAIResp stops the current streaming response without marking it as an error.
+ * It closes SSE, unlocks input, updates the current chat bubble, and persists the result.
+ *
+ * @param {string} reason - A short stop reason shown to the user.
+ */
+async function stopAIResp (reason = '[Stopped]') {
+    try {
+        if (globalAIRespSSE) {
+            try {
+                globalAIRespSSE.close();
+            } catch (_) {
+                // ignore
+            }
+            globalAIRespSSE = null;
+        }
+
+        unlockChatInput();
+        setStopGeneratingButtonVisible(false);
+
+        const chatID = globalAIRespData?.chatID;
+        const aiRespEle = ensureLiveAiRespElement(chatID, globalAIRespEle);
+        if (aiRespEle) {
+            aiRespEle.dataset.taskStatus = ChatTaskStatusDone;
+        }
+
+        if (globalAIRespData) {
+            // Preserve partial content and add a clear stop marker.
+            const stopMark = `<p><i>${libs.sanitizeHTML(reason)}</i></p>`;
+            globalAIRespData.rawContent = (globalAIRespData.rawContent || '') + stopMark;
+            await renderAfterAiResp(globalAIRespData, true);
+        }
+    } catch (err) {
+        // If graceful stop fails, fall back to abort path so UI won't hang.
+        await abortAIResp(`Failed to stop generation: ${renderError(err)}`);
+    }
+}
 
 /**
  * Ensure cached references to the chat prompt elements stay in sync with the live DOM.
@@ -3089,6 +3267,8 @@ async function getLastNChatMessages (N, ignoredChatID) {
  */
 function lockChatInput () {
     ensureChatPromptElements();
+    ensureStopGeneratingButton();
+    setStopGeneratingButtonVisible(true);
     if (chatPromptInputEle) {
         chatPromptInputEle.setAttribute('disabled', 'disabled');
         chatPromptInputEle.classList.add('disabled-input');
@@ -3105,6 +3285,8 @@ function lockChatInput () {
  */
 function unlockChatInput () {
     ensureChatPromptElements();
+    ensureStopGeneratingButton();
+    setStopGeneratingButtonVisible(false);
     if (chatPromptInputEle) {
         chatPromptInputEle.removeAttribute('disabled');
         chatPromptInputEle.classList.remove('disabled-input');
@@ -3278,6 +3460,7 @@ function getPinnedMaterials () {
 }
 
 async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+    currentAIRespEle = ensureLiveAiRespElement(chatID, currentAIRespEle);
     if (chatVisionSelectedFileStore.length === 0) {
         throw new Error('No images provided for image-to-image generation.');
     }
@@ -3358,9 +3541,11 @@ async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIR
             throw new Error('No image data received in the response.');
         }
 
-        currentAIRespEle.innerHTML = resultHTML;
-        currentAIRespEle.dataset.taskStatus = ChatTaskStatusDone; // Mark as done immediately for direct response
-        currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+        if (currentAIRespEle) {
+            currentAIRespEle.innerHTML = resultHTML;
+            currentAIRespEle.dataset.taskStatus = ChatTaskStatusDone; // Mark as done immediately for direct response
+            currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+        }
 
         // Save the result to storage
         const chatData = await getChatData(chatID, RoleAI) || {};
@@ -3392,6 +3577,7 @@ async function sendGptImage1EditPrompt2Server (chatID, selectedModel, currentAIR
  * @throws {Error} Throws an error if the selected model is unknown or if the response from the server is not ok.
  */
 async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+    currentAIRespEle = ensureLiveAiRespElement(chatID, currentAIRespEle);
     const url = '/images/generations';
     const sconfig = await getChatSessionConfig();
     const resp = await fetch(url, {
@@ -3411,8 +3597,10 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
     }
     const respData = await resp.json();
 
-    currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
-    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    if (currentAIRespEle) {
+        currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+        currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    }
     // currentAIRespEle.dataset.model = selectedModel;
     // currentAIRespEle.dataset.taskId = respData.task_id;
     // currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -3442,6 +3630,7 @@ async function sendTxt2ImagePrompt2Server (chatID, selectedModel, currentAIRespE
 }
 
 async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+    currentAIRespEle = ensureLiveAiRespElement(chatID, currentAIRespEle);
     let url;
     switch (selectedModel) {
     case ImageModelSdxlTurbo:
@@ -3482,8 +3671,10 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
     }
     const respData = await resp.json();
 
-    currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
-    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    if (currentAIRespEle) {
+        currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+        currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    }
     // currentAIRespEle.dataset.model = selectedModel;
     // currentAIRespEle.dataset.taskId = respData.task_id;
     // currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -3514,6 +3705,7 @@ async function sendSdxlturboPrompt2Server (chatID, selectedModel, currentAIRespE
 }
 
 async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle, prompt) {
+    currentAIRespEle = ensureLiveAiRespElement(chatID, currentAIRespEle);
     const nImage = parseInt(document.getElementById('selectDrawNImage').value);
     const url = `/images/generations/flux/${selectedModel}`;
     console.debug(`sendFluxProPrompt2Server, url=${url}`);
@@ -3566,8 +3758,10 @@ async function sendFluxProPrompt2Server (chatID, selectedModel, currentAIRespEle
     }
     const respData = await resp.json();
 
-    currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
-    currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    if (currentAIRespEle) {
+        currentAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+        currentAIRespEle.dataset.taskType = ChatTaskTypeImage;
+    }
     // currentAIRespEle.dataset.model = selectedModel;
     // currentAIRespEle.dataset.taskId = respData.task_id;
     // currentAIRespEle.dataset.imageUrls = JSON.stringify(respData.image_urls);
@@ -3868,6 +4062,8 @@ async function sendChat2Server (chatID, reqPrompt) {
             return chatID;
         }
 
+        recordChatPromptHistory(reqPrompt);
+
         append2Chats(false,
             {
                 chatID,
@@ -3894,6 +4090,17 @@ async function sendChat2Server (chatID, reqPrompt) {
 
     globalAIRespEle = chatContainer
         .querySelector(`.chatManager .conservations .chats #${chatID} .ai-response`);
+    globalAIRespEle = ensureLiveAiRespElement(chatID, globalAIRespEle);
+
+    if (globalAIRespEle) {
+        // Ensure initial state is always well-defined.
+        if (!globalAIRespEle.dataset.taskStatus) {
+            globalAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
+        }
+        if (!globalAIRespEle.dataset.taskType) {
+            globalAIRespEle.dataset.taskType = ChatTaskTypeChat;
+        }
+    }
     lockChatInput();
 
     // get chatmodel from url parameters
@@ -4250,17 +4457,22 @@ async function sendChat2Server (chatID, reqPrompt) {
         return chatID;
     }
 
-    globalAIRespHeartBeatTimer = Date.now();
-    globalAIRespSSE = new window.SSE('/api', {
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
-            'X-Laisky-Api-Base': sconfig.api_base
-        },
-        method: 'POST',
-        payload: reqBody
-    });
+    try {
+        globalAIRespHeartBeatTimer = Date.now();
+        globalAIRespSSE = new window.SSE('/api', {
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + sconfig.api_token,
+                'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                'X-Laisky-Api-Base': sconfig.api_base
+            },
+            method: 'POST',
+            payload: reqBody
+        });
+    } catch (err) {
+        await abortAIResp(`Failed to start streaming: ${renderError(err)}`);
+        return chatID;
+    }
 
     userManuallyScrolled = false;
     let isChatRespDone = false;
@@ -4269,6 +4481,12 @@ async function sendChat2Server (chatID, reqPrompt) {
     globalAIRespSSE.addEventListener('message', async (evt) => {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
+
+        // Always operate on the live node (session switch / re-render can detach cached refs).
+        const aiRespEle = ensureLiveAiRespElement(chatID, globalAIRespEle);
+        if (aiRespEle) {
+            globalAIRespEle = aiRespEle;
+        }
 
         // set request id to ai response element
         if (!globalAIRespData.requestid) {
@@ -4306,6 +4524,12 @@ async function sendChat2Server (chatID, reqPrompt) {
         // Handle message fragmentation
         let payload = null;
         try {
+            // If the server returns HTML/plaintext (e.g., 502 page), fail fast.
+            const trimmed = (data || '').trim();
+            if (trimmed.startsWith('<') || trimmed.toLowerCase().includes('<html')) {
+                throw new Error('invalid non-JSON response from server');
+            }
+
             // Try to parse as is first
             payload = JSON.parse(data);
             // If successful, reset buffer
@@ -4327,6 +4551,13 @@ async function sendChat2Server (chatID, reqPrompt) {
             } catch (bufferErr) {
                 // Buffer still doesn't contain valid JSON, wait for more fragments
                 console.debug('Buffer still incomplete, waiting for more fragments');
+
+                // Avoid unbounded growth when the upstream returns non-JSON content.
+                if (sseMessageBuffer.length > 64 * 1024) {
+                    sseMessageBuffer = '';
+                    sseMessageFragmented = false;
+                    await abortAIResp('Invalid server response (not JSON). Please retry.');
+                }
                 return chatID;
             }
         }
@@ -4364,11 +4595,13 @@ async function sendChat2Server (chatID, reqPrompt) {
 
                 // Handle rendering differently based on task status
                 if (reasoningChunk || respChunk) {
-                    switch (globalAIRespEle.dataset.taskStatus) {
-                    case 'waiting':
+                    const taskStatus = aiRespEle?.dataset?.taskStatus || ChatTaskStatusWaiting;
+                    switch (taskStatus) {
+                    case 'waiting': {
                         // First response - initialize the containers
-                        globalAIRespEle.dataset.taskStatus = 'writing';
-                        globalAIRespEle.innerHTML = '';
+                        if (!aiRespEle) break;
+                        aiRespEle.dataset.taskStatus = 'writing';
+                        aiRespEle.innerHTML = '';
 
                         // Create containers for reasoning and response once
                         if (globalAIRespData.reasoningContent) {
@@ -4385,8 +4618,8 @@ async function sendChat2Server (chatID, reqPrompt) {
                                         <div class="card card-body reasoning-content"></div>
                                     </div>
                                 </div>`;
-                            globalAIRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
-                            reasoningContainer = globalAIRespEle.querySelector('.reasoning-content');
+                            aiRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
+                            const reasoningContainer = aiRespEle.querySelector('.reasoning-content');
 
                             // Initialize reasoning container with current content
                             if (globalAIRespData.reasoningContent.trim()) {
@@ -4395,40 +4628,54 @@ async function sendChat2Server (chatID, reqPrompt) {
                         }
 
                         // Create response container
-                        globalAIRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
-                        responseContainer = globalAIRespEle.querySelector('.response-content');
+                        aiRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
+                        const responseContainerEle = aiRespEle.querySelector('.response-content');
 
                         // Add initial content
                         if (respChunk) {
-                            responseContainer.innerHTML = respChunk;
+                            responseContainerEle.innerHTML = respChunk;
                         }
                         break;
-                    case 'writing':
+                    }
+                    case 'writing': {
                         // Incremental updates - only render the new chunks
-                        if (reasoningChunk && reasoningContainer) {
+                        if (!aiRespEle) break;
+
+                        // Re-acquire containers each time (they can be detached by re-render).
+                        const reasoningContainerEle = aiRespEle.querySelector('.reasoning-content');
+                        let responseContainerEle = aiRespEle.querySelector('.response-content');
+                        if (!responseContainerEle) {
+                            aiRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
+                            responseContainerEle = aiRespEle.querySelector('.response-content');
+                        }
+
+                        if (reasoningChunk && reasoningContainerEle) {
                             // For small chunks, just append plaintext for performance
                             if (reasoningChunk.length < 50 && !reasoningChunk.includes('\n')) {
-                                reasoningContainer.insertAdjacentText('beforeend', reasoningChunk);
+                                reasoningContainerEle.insertAdjacentText('beforeend', reasoningChunk);
                             } else {
                                 // For larger or formatted chunks, re-render the full content
-                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                                reasoningContainerEle.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
                             }
                         }
 
-                        if (respChunk && responseContainer) {
+                        if (respChunk && responseContainerEle) {
                             // For response content, more care is needed since it might be partial markdown
                             // We'll render the full content but only when necessary
                             if (payload.choices[0].finish_reason || respChunk.includes('\n\n')) {
                                 // Complete section or paragraph - render the full content
-                                responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent);
+                                responseContainerEle.innerHTML = await renderHTML(globalAIRespData.rawContent);
                             } else {
                                 // Just append the plain text for efficiency
-                                responseContainer.insertAdjacentText('beforeend', respChunk);
+                                responseContainerEle.insertAdjacentText('beforeend', respChunk);
                             }
                         }
 
-                        scrollToChat(globalAIRespEle);
+                        if (aiRespEle) {
+                            scrollToChat(aiRespEle);
+                        }
                         break;
+                    }
                     }
                 }
             } catch (err) {
@@ -4465,8 +4712,11 @@ async function sendChat2Server (chatID, reqPrompt) {
             }
 
             // Final rendering of the complete content
-            if (responseContainer) {
-                responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent, true);
+            if (aiRespEle) {
+                const responseContainer = aiRespEle.querySelector('.response-content');
+                if (responseContainer) {
+                    responseContainer.innerHTML = await renderHTML(globalAIRespData.rawContent, true);
+                }
             }
 
             if (globalAIRespSSE) {
@@ -4620,6 +4870,12 @@ async function renderAfterAiResp (chatData, saveStorage = false, rootElement = n
 
             aiRespEle.innerHTML = renderedHTML;
             aiRespEle.innerHTML += attachHTML;
+        }
+
+        // Ensure task state is finalized (prevents stuck placeholder-glow).
+        aiRespEle.dataset.taskStatus = ChatTaskStatusDone;
+        if (chatData.taskType) {
+            aiRespEle.dataset.taskType = chatData.taskType;
         }
 
         // setup prism
@@ -5264,9 +5520,12 @@ async function abortAIResp (err) {
         unlockChatInput();
     }
 
-    if (!globalAIRespEle) {
-        console.warn('globalAIRespEle is not set for abortAIResp');
-        return;
+    setStopGeneratingButtonVisible(false);
+
+    const chatID = globalAIRespData?.chatID;
+    const aiRespEle = ensureLiveAiRespElement(chatID, globalAIRespEle);
+    if (aiRespEle) {
+        globalAIRespEle = aiRespEle;
     }
 
     // const chatID = globalAIRespEle.closest('.role-ai').dataset.chatid;
@@ -5295,10 +5554,15 @@ async function abortAIResp (err) {
         showalert('danger', 'API TOKEN invalid, please ask admin to get new token.\nAPI TOKEN 无效，请联系管理员获取新的 API TOKEN。');
     }
 
-    if (globalAIRespEle.dataset.taskStatus === 'waiting') {
+    const taskStatus = aiRespEle?.dataset?.taskStatus || ChatTaskStatusWaiting;
+    if (taskStatus === 'waiting') {
         globalAIRespData.rawContent = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
     } else {
         globalAIRespData.rawContent += `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${libs.RenderStr2HTML(errMsg)}</pre>`;
+    }
+
+    if (aiRespEle) {
+        aiRespEle.dataset.taskStatus = ChatTaskStatusDone;
     }
 
     await renderAfterAiResp(globalAIRespData, true);
@@ -5400,16 +5664,26 @@ function setupTextareaAutoResize (textarea) {
         }
     };
 
-    textarea.addEventListener('input', autoResize);
+    // Debounce with requestAnimationFrame to avoid heavy layout thrash while typing.
+    let rafId = 0;
+    const scheduleResize = function () {
+        if (rafId) return;
+        rafId = window.requestAnimationFrame(() => {
+            rafId = 0;
+            autoResize.call(textarea);
+        });
+    };
+
+    textarea.addEventListener('input', scheduleResize);
     textarea.addEventListener('paste', () => {
         // Delay to allow paste content to be processed
-        setTimeout(autoResize.bind(textarea), 10);
+        setTimeout(scheduleResize.bind(textarea), 10);
     });
 
     // Update maxHeight when window is resized
     window.addEventListener('resize', () => {
         maxHeight = calculateMaxHeight();
-        autoResize.call(textarea);
+        scheduleResize.call(textarea);
     });
 }
 
@@ -5463,6 +5737,32 @@ async function setupChatInput () {
         chatPromptInputEle
             .addEventListener('keydown', async (evt) => {
                 evt.stopPropagation();
+
+                // Shell-style prompt history
+                // ArrowUp: when caret is on the first line (or already browsing history)
+                // ArrowDown: only when browsing history
+                try {
+                    const textarea = chatPromptInputEle;
+                    const hasSelection = textarea.selectionStart !== textarea.selectionEnd;
+                    const caretPos = textarea.selectionStart;
+                    const isOnFirstLine = textarea.value.lastIndexOf('\n', Math.max(0, caretPos - 1)) === -1;
+
+                    if (!isComposition && !hasSelection && isAllowChatPrompInput()) {
+                        if (evt.key === 'ArrowUp' && (chatPromptHistoryCursor !== -1 || isOnFirstLine)) {
+                            evt.preventDefault();
+                            navigateChatPromptHistory(textarea, -1);
+                            return;
+                        }
+                        if (evt.key === 'ArrowDown' && chatPromptHistoryCursor !== -1) {
+                            evt.preventDefault();
+                            navigateChatPromptHistory(textarea, +1);
+                            return;
+                        }
+                    }
+                } catch (_) {
+                    // ignore
+                }
+
                 if (evt.key !== 'Enter' ||
                     isComposition ||
                     (evt.key === 'Enter' && !(evt.ctrlKey || evt.metaKey || evt.altKey)) ||
