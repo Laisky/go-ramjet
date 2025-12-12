@@ -644,11 +644,14 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 			"gpt-4.1-mini",
 			"gpt-4.1-nano",
 			"gpt-5",
+			"gpt-5-pro",
 			"gpt-5-codex",
 			"gpt-5-mini",
 			"gpt-5-nano",
 			"gpt-5.1",
 			"gpt-5.1-codex",
+			"gpt-5.2",
+			"gpt-5.2-pro",
 			"gpt-4o",
 			"gpt-4o-search-preview",
 			"gpt-4o-mini",
@@ -689,7 +692,13 @@ func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiRe
 				return nil, nil, errors.Wrap(err, "copy to completion req")
 			}
 		default:
-			return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
+			// return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
+			req := new(OpenaiChatReq[string])
+			if err := copier.Copy(req, frontendReq); err != nil {
+				return nil, nil, errors.Wrap(err, "copy to chat req")
+			}
+
+			openaiReq = req
 		}
 
 		if reqBody, err = json.Marshal(openaiReq); err != nil {
