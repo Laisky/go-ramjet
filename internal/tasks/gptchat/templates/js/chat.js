@@ -1720,6 +1720,169 @@ function showalert (type, msg) {
         .insertAdjacentHTML('afterbegin', alertEle);
 }
 
+const SupportedDocFileExts = new Set(['.txt', '.md', '.doc', '.docx', '.pdf', '.ppt', '.pptx']);
+const SupportedImageFileExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff']);
+
+/**
+ * getLowerFileExt extracts a lowercased file extension (including the dot).
+ *
+ * @param {string} fileName - File name.
+ * @returns {string} The lowercased extension (e.g., ".png") or empty string when unavailable.
+ */
+function getLowerFileExt (fileName) {
+    if (!fileName || typeof fileName !== 'string') {
+        return '';
+    }
+
+    const idx = fileName.lastIndexOf('.');
+    if (idx < 0 || idx === fileName.length - 1) {
+        return '';
+    }
+
+    return `.${fileName.slice(idx + 1).toLowerCase()}`;
+}
+
+/**
+ * isSupportedDocFileExt checks whether the file extension is supported as a document upload.
+ *
+ * @param {string} fileExt - File extension (including the dot).
+ * @returns {boolean} True if supported.
+ */
+function isSupportedDocFileExt (fileExt) {
+    return SupportedDocFileExts.has(fileExt);
+}
+
+/**
+ * isSupportedImageFile checks whether a File is an image supported by vision flow.
+ *
+ * @param {File} file - Browser File object.
+ * @returns {boolean} True if supported image.
+ */
+function isSupportedImageFile (file) {
+    if (file && typeof file.type === 'string' && file.type.toLowerCase().startsWith('image/')) {
+        return true;
+    }
+
+    const fileExt = getLowerFileExt(file?.name);
+    return SupportedImageFileExts.has(fileExt);
+}
+
+/**
+ * supportedFileHint returns a brief text describing supported file types.
+ *
+ * @returns {string} Supported type message.
+ */
+function supportedFileHint () {
+    return 'Supported: images, .txt, .md, .pdf, .doc(x), .ppt(x).';
+}
+
+/**
+ * notifyUnsupportedFile shows a warning to user for unsupported file.
+ *
+ * @param {File} file - Browser File object.
+ * @param {string} scenario - Where it happened (e.g., "drop", "paste").
+ */
+function notifyUnsupportedFile (file, scenario) {
+    const name = file?.name || file?.type || 'unknown';
+    const prefix = scenario ? `[${scenario}] ` : '';
+    showalert('warning', `${prefix}Unsupported file "${name}". ${supportedFileHint()}`);
+}
+
+/**
+ * handleUserProvidedFile routes a user-provided file to document-upload or vision flow.
+ *
+ * @param {File} file - Browser File object.
+ * @param {object} opts - Handler options.
+ * @param {string} opts.scenario - Source scenario (e.g., "drop", "select").
+ * @returns {Promise<void>} Resolves when processed.
+ */
+async function handleUserProvidedFile (file, opts = {}) {
+    if (!file) {
+        return;
+    }
+
+    const fileExt = getLowerFileExt(file.name);
+    if (isSupportedDocFileExt(fileExt)) {
+        try {
+            ShowSpinner();
+            await uploadFileAsInputUrls(file, fileExt);
+        } catch (err) {
+            console.error(`upload file failed: ${renderError(err)}`);
+        } finally {
+            HideSpinner();
+        }
+
+        return;
+    }
+
+    if (isSupportedImageFile(file)) {
+        readFileForVision(file);
+        return;
+    }
+
+    notifyUnsupportedFile(file, opts.scenario);
+}
+
+/**
+ * bindChatInputDragDrop binds global drag/drop handling for chat input.
+ *
+ * @param {HTMLElement} inputEle - Chat prompt input element.
+ */
+function bindChatInputDragDrop (inputEle) {
+    const dropfileModalEle = document.querySelector('#modal-dropfile.modal');
+    const dropfileModal = new window.bootstrap.Modal(dropfileModalEle);
+
+    const fileDragLeave = async (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        dropfileModal.hide();
+    };
+
+    const fileDragDropHandler = async (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        dropfileModal.hide();
+
+        if (!evt.dataTransfer) {
+            return;
+        }
+
+        if (evt.dataTransfer.items && evt.dataTransfer.items.length > 0) {
+            for (let i = 0; i < evt.dataTransfer.items.length; i++) {
+                const item = evt.dataTransfer.items[i];
+                if (item.kind !== 'file') {
+                    continue;
+                }
+
+                await handleUserProvidedFile(item.getAsFile(), { scenario: 'drop' });
+            }
+
+            return;
+        }
+
+        if (evt.dataTransfer.files && evt.dataTransfer.files.length > 0) {
+            for (let i = 0; i < evt.dataTransfer.files.length; i++) {
+                await handleUserProvidedFile(evt.dataTransfer.files[i], { scenario: 'drop' });
+            }
+        }
+    };
+
+    const fileDragOverHandler = async (evt) => {
+        evt.stopPropagation();
+        evt.preventDefault();
+        evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+        dropfileModal.show();
+    };
+
+    inputEle.addEventListener('paste', filePasteHandler);
+
+    document.body.addEventListener('dragover', fileDragOverHandler);
+    document.body.addEventListener('drop', fileDragDropHandler);
+
+    dropfileModalEle.addEventListener('drop', fileDragDropHandler);
+    dropfileModalEle.addEventListener('dragleave', fileDragLeave);
+}
+
 // check sessionID's type, secure convert to int, default is 1
 function kvSessionKey (sessionID) {
     sessionID = parseInt(sessionID) || 1
@@ -5162,7 +5325,7 @@ async function bindUserInputSelectFilesBtn () {
                 const evtTarget = libs.evtTarget(evt);
                 const files = evtTarget.files;
                 for (const file of files) {
-                    readFileForVision(file);
+                    await handleUserProvidedFile(file, { scenario: 'select' });
                 }
             });
 
@@ -5369,77 +5532,7 @@ async function setupChatInput () {
     await restorePinnedMaterials();
 
     // bind input element's drag-drop
-    {
-        const dropfileModalEle = document.querySelector('#modal-dropfile.modal');
-        const dropfileModal = new window.bootstrap.Modal(dropfileModalEle);
-
-        const fileDragLeave = async (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-            dropfileModal.hide();
-        };
-
-        const fileDragDropHandler = async (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-            dropfileModal.hide();
-
-            if (!evt.dataTransfer || !evt.dataTransfer.items) {
-                return;
-            }
-
-            for (let i = 0; i < evt.dataTransfer.items.length; i++) {
-                const item = evt.dataTransfer.items[i];
-                if (item.kind !== 'file') {
-                    continue;
-                }
-
-                const file = item.getAsFile();
-                if (!file) {
-                    continue;
-                }
-
-                const fileExtension = `.${file.name.split('.').pop().toLowerCase()}`;
-                switch (fileExtension) {
-                case '.txt':
-                case '.md':
-                case '.doc':
-                case '.docx':
-                case '.pdf':
-                case '.ppt':
-                case '.pptx':
-                    try {
-                        ShowSpinner();
-                        await uploadFileAsInputUrls(file, fileExtension);
-                    } catch (err) {
-                        console.error(`upload file failed: ${renderError(err)}`);
-                    } finally {
-                        HideSpinner();
-                    }
-
-                    break;
-                default:
-                    readFileForVision(file);
-                }
-            }
-        };
-
-        const fileDragOverHandler = async (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-            evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
-            dropfileModal.show();
-        };
-
-        chatPromptInputEle.addEventListener('paste', filePasteHandler);
-
-        document.body.addEventListener('dragover', fileDragOverHandler);
-        document.body.addEventListener('drop', fileDragDropHandler);
-        // document.body.addEventListener('paste', filePasteHandler);
-
-        dropfileModalEle.addEventListener('drop', fileDragDropHandler);
-        dropfileModalEle.addEventListener('dragleave', fileDragLeave);
-    }
+    bindChatInputDragDrop(chatPromptInputEle);
 }
 
 /**
@@ -5764,12 +5857,22 @@ async function filePasteHandler (evt) {
     // There may be various types of rich text formats,
     // but here we only handle the images required for vision.
     let file;
+    let warnedUnsupported = false;
     for (let i = 0; i < evt.clipboardData.items.length; i++) {
         const item = evt.clipboardData.items[i];
 
         if (item.kind === 'file') {
             file = item.getAsFile();
             if (!file) {
+                continue;
+            }
+
+            if (!isSupportedImageFile(file)) {
+                if (!warnedUnsupported) {
+                    warnedUnsupported = true;
+                    showalert('warning', `Unsupported clipboard file "${file.name || file.type || 'unknown'}". Only images are supported for paste.`);
+                }
+
                 continue;
             }
 
