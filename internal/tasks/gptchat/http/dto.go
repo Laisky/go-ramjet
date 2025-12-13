@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -61,6 +62,9 @@ type FrontendReq struct {
 	Temperature      float64              `json:"temperature"`
 	TopP             float64              `json:"top_p"`
 	N                int                  `json:"n"`
+	Tools            []OpenaiChatReqTool  `json:"tools,omitempty"`
+	ToolChoice       any                  `json:"tool_choice,omitempty"`
+	MCPServers       []MCPServerConfig    `json:"mcp_servers,omitempty"`
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
 	ReasoningEffort string `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
 
@@ -78,6 +82,23 @@ type FrontendReq struct {
 			EnableGoogleSearch bool `json:"enable_google_search"`
 		} `json:"chat_switch"`
 	} `json:"laisky_extra,omitempty"`
+}
+
+// MCPServerConfig carries the MCP server configuration from the web UI.
+// It is used by the backend to map tool names to servers and to execute MCP tool calls.
+type MCPServerConfig struct {
+	ID              string            `json:"id,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	URL             string            `json:"url"`
+	URLPrefix       string            `json:"url_prefix,omitempty"`
+	APIKey          string            `json:"api_key,omitempty"`
+	Enabled         bool              `json:"enabled"`
+	EnabledToolName []string          `json:"enabled_tool_names,omitempty"`
+	Tools           []json.RawMessage `json:"tools,omitempty"`
+
+	// Session fields are optional and may be provided by the UI.
+	MCPProtocolVersion string `json:"mcp_protocol_version,omitempty"`
+	MCPSessionID       string `json:"mcp_session_id,omitempty"`
 }
 
 // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#implementing-extended-thinking
@@ -143,6 +164,7 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
 	ReasoningEffort string              `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
 	Tools           []OpenaiChatReqTool `json:"tools,omitempty"`
+	ToolChoice      any                 `json:"tool_choice,omitempty"`
 
 	// -------------------------------------
 	// Anthropic
@@ -179,35 +201,16 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 //		}
 //	}
 type OpenaiChatReqTool struct {
-	Type       string                      `json:"type"`
-	Function   OpenaiChatReqToolFunction   `json:"function"`
-	Parameters OpenaiChatReqToolParameters `json:"parameters"`
+	Type     string              `json:"type"`
+	Function OpenaiChatReqToolFn `json:"function,omitempty"`
+	Strict   *bool               `json:"strict,omitempty"`
 }
 
-type OpenaiChatReqToolFunction struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-type OpenaiChatReqToolParameters struct {
-	Type       string                      `json:"type"`
-	Properties OpenaiChatReqToolProperties `json:"properties"`
-	Required   []string                    `json:"required"`
-}
-
-type OpenaiChatReqToolProperties struct {
-	Location OpenaiChatReqToolLocation `json:"location"`
-	Unit     OpenaiChatReqToolUnit     `json:"unit"`
-}
-
-type OpenaiChatReqToolLocation struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-}
-
-type OpenaiChatReqToolUnit struct {
-	Type string   `json:"type"`
-	Enum []string `json:"enum"`
+// OpenaiChatReqToolFn matches OpenAI chat-completions tool schema.
+type OpenaiChatReqToolFn struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
 }
 
 // OpenaiReqMessage request message to openai chat api
@@ -330,8 +333,10 @@ type OpenaiCompletionStreamRespChoice struct {
 type OpenaiCompletionStreamRespDelta struct {
 	Role OpenaiMessageRole `json:"role"`
 	// Content may be string or []StreamRespContent
-	Content   any                                  `json:"content"`
-	ToolCalls []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
+	Content          any                                  `json:"content"`
+	ReasoningContent string                               `json:"reasoning_content,omitempty"`
+	Reasoning        string                               `json:"reasoning,omitempty"`
+	ToolCalls        []OpenaiCompletionStreamRespToolCall `json:"tool_calls,omitempty"`
 }
 
 type StreamRespContent struct {

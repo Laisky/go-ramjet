@@ -47,14 +47,6 @@ var (
 	llmRespCache = gutils.NewExpCache[string](context.Background(), time.Second*3)
 )
 
-// ChatHandler handle api request
-func ChatHandler(ctx *gin.Context) {
-	// The frontend supports OpenAI tool-calls (including MCP). The backend should
-	// proxy the upstream stream as-is and must NOT abort when tool-calls appear,
-	// otherwise the frontend will never receive `finish_reason=tool_calls`.
-	_ = sendAndParseChat(ctx)
-}
-
 func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespToolCall) {
 	logger := gmw.GetLogger(ctx)
 	frontReq, openaiReq, err := convert2OpenaiRequest(ctx) //nolint:bodyclose

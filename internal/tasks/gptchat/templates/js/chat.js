@@ -7057,6 +7057,27 @@ function injectMCPToolsIntoPayload (payload, sconfig) {
 
     payload.tools = tools;
     payload.tool_choice = 'auto';
+
+    // Backend-side tool loop needs MCP server routing info.
+    // Only send enabled servers to avoid bloating the request.
+    if (Array.isArray(sconfig.mcp_servers)) {
+        payload.mcp_servers = sconfig.mcp_servers
+            .filter((srv) => srv && srv.enabled)
+            .map((srv) => {
+                return {
+                    id: srv.id,
+                    name: srv.name,
+                    url: srv.url,
+                    url_prefix: srv.url_prefix,
+                    api_key: srv.api_key,
+                    enabled: !!srv.enabled,
+                    enabled_tool_names: srv.enabled_tool_names,
+                    tools: srv.tools,
+                    mcp_protocol_version: srv.mcp_protocol_version,
+                    mcp_session_id: srv.mcp_session_id
+                };
+            });
+    }
 }
 
 /**
@@ -8422,7 +8443,18 @@ async function setupMCPManager () {
                 // Keep only tools that still exist.
                 server.enabled_tool_names = syncedNames.filter((n) => set.has(n));
                 await saveChatSessionConfig(sconfig);
-                await renderMCPList();
+
+                // Avoid re-rendering the whole list here; it collapses the tool panel
+                // and feels jarring. Update the enabled count label in-place.
+                const item = e.target.closest('.list-group-item');
+                if (item) {
+                    const toolCount = syncedNames.length;
+                    const enabledCount = (toolCount === 0) ? 0 : (server.enabled_tool_names.length === 0 ? toolCount : server.enabled_tool_names.length);
+                    const label = item.querySelector('.text-truncate > .small.text-muted');
+                    if (label) {
+                        label.textContent = `${enabledCount}/${toolCount} tools enabled`;
+                    }
+                }
             });
         });
     };

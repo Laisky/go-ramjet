@@ -15,11 +15,10 @@ func ToolsRequest() []OpenaiChatReqTool {
 	return []OpenaiChatReqTool{
 		{
 			Type: "function",
-			Function: OpenaiChatReqToolFunction{
+			Function: OpenaiChatReqToolFn{
 				Name:        "how-to-subscribe",
 				Description: "this function can answer how to subscribe",
 			},
-			// Parameters: ,
 		},
 	}
 }

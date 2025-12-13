@@ -41,6 +41,7 @@ func SetupConfig() (err error) {
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
+	Config.ToolLoopMaxRounds = gutils.OptionalVal(&Config.ToolLoopMaxRounds, 5)
 	Config.RateLimitFreeModelsIntervalSeconds = gutils.OptionalVal(
 		&Config.RateLimitFreeModelsIntervalSeconds, 1)
 	Config.RateLimiterBackend = strings.ToLower(strings.TrimSpace(
@@ -98,6 +99,9 @@ type OpenAI struct {
 	//
 	// default to https://{{API}}/v1/images/generations
 	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
+	// ToolLoopMaxRounds limits how many rounds the backend will execute tools for a single user request.
+	// Default is 5.
+	ToolLoopMaxRounds int `json:"tool_loop_max_rounds" mapstructure:"tool_loop_max_rounds"`
 	// RateLimitExpensiveModelsIntervalSeconds (optional) rate limit interval seconds for expensive models, default is 600
 	RateLimitExpensiveModelsIntervalSeconds int `json:"rate_limit_expensive_models_interval_secs" mapstructure:"rate_limit_expensive_models_interval_secs"`
 	// RateLimitFreeModelsIntervalSeconds (optional) rate limit interval seconds for free models, default is 1

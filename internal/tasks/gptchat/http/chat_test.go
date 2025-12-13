@@ -193,11 +193,12 @@ func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:             "srv-token",
-		DefaultImageToken: "srv-image-token",
-		DefaultImageUrl:   upstream.URL + "/v1/images/generations",
-		API:               strings.TrimRight(upstream.URL, "/"),
-		RamjetURL:         "",
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
 	}
 	t.Cleanup(func() { config.Config = originalConfig })
 
@@ -213,28 +214,30 @@ func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set(ctxKeyUser, user)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/gptchat/api", nil)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(`{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`))
+	ctx.Request.Header.Set("content-type", "application/json")
 	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
 
-	require.NotPanics(t, func() { sendAndParseChat(ctx) })
+	require.NotPanics(t, func() { _ = sendChatWithResponsesToolLoop(ctx) })
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "unknown")
+	require.Contains(t, recorder.Body.String(), "upstream")
 }
 
 func TestSaveLLMConservationNilReq(t *testing.T) {
 	require.NotPanics(t, func() { saveLLMConservation(nil, "response") })
 }
 
-func TestConvert2OpenaiRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
+func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:             "srv-token",
-		DefaultImageToken: "srv-image-token",
-		DefaultImageUrl:   "https://api.test/v1/images/generations",
-		API:               "https://api.test",
-		RamjetURL:         "",
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         "https://api.test/v1/images/generations",
+		API:                                     "https://api.test",
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
 	}
 	t.Cleanup(func() { config.Config = originalConfig })
 
@@ -253,15 +256,11 @@ func TestConvert2OpenaiRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/gptchat/api", nil)
 	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
 
-	frontendReq, upstreamReq, err := convert2OpenaiRequest(ctx)
+	frontendReq, gotUser, responsesReq, err := convert2UpstreamResponsesRequest(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, frontendReq)
 	require.Empty(t, frontendReq.Messages)
-	require.Equal(t, http.MethodGet, upstreamReq.Method)
-	require.Equal(t, "https://api.test/v1/chat/completions", upstreamReq.URL.String())
-
-	body, err := io.ReadAll(upstreamReq.Body)
-	require.NoError(t, err)
-	require.Len(t, body, 0)
-	require.NoError(t, upstreamReq.Body.Close())
+	require.NotNil(t, gotUser)
+	require.NotNil(t, responsesReq)
+	require.NotEmpty(t, responsesReq.Model)
 }
