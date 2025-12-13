@@ -7,6 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      events: 'events',
     },
+  },
+  define: {
+    global: 'window',
   },
 })

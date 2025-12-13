@@ -1,9 +1,9 @@
 import * as React from 'react'
 
-import { cn } from '@/lib/cn'
+import { cn } from '@/utils/cn'
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'default' | 'ghost'
+  variant?: 'default' | 'ghost' | 'outline' | 'destructive'
   size?: 'default' | 'sm'
 }
 
@@ -19,6 +19,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       default:
         'bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90',
       ghost: 'hover:bg-black/5 dark:hover:bg-white/10',
+      outline:
+        'border border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5',
+      destructive:
+        'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700',
     }
 
     const sizes: Record<NonNullable<ButtonProps['size']>, string> = {

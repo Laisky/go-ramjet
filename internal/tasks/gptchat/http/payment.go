@@ -10,24 +10,8 @@ import (
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/paymentintent"
 
-	ijs "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/js"
-	ipages "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/pages"
-	icss "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/scss"
 	"github.com/Laisky/go-ramjet/library/web"
 )
-
-func PaymentStaticHandler(c *gin.Context) {
-	switch c.Param("ext") {
-	case "index.html":
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(ipages.Payment))
-	case "css":
-		c.Data(http.StatusOK, "text/css; charset=utf-8", icss.Payment)
-	case "js":
-		c.Data(http.StatusOK, "application/javascript; charset=utf-8", ijs.Payment)
-	default:
-		web.AbortErr(c, errors.New("only support html/css/js"))
-	}
-}
 
 type paymentItem struct {
 	// id string
@@ -37,6 +21,7 @@ type paymentRequest struct {
 	Items []paymentItem `json:"items"`
 }
 
+// PaymentHandler creates a Stripe PaymentIntent.
 func PaymentHandler(c *gin.Context) {
 	logger := gmw.GetLogger(c)
 	if c.Request.Method != http.MethodPost {

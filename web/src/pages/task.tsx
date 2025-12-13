@@ -32,8 +32,9 @@ export function TaskPage() {
     switch (info.key) {
       case 'gptchat':
         return [
-          { label: 'Open legacy GPTChat UI', href: '/gptchat/' },
-          { label: 'GPTChat API proxy', href: '/gptchat/api' },
+          { label: 'Open GPTChat UI', href: '/gptchat' },
+          { label: 'Payment page', href: '/gptchat/payment' },
+          { label: 'GPTChat API', href: '/gptchat/api' },
           { label: 'Current user', href: '/gptchat/user/me' },
         ]
       case 'auditlog':

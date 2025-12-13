@@ -1,10 +1,8 @@
 # db . -t ppcelery/go-ramjet:latest
 FROM node:24-bookworm AS nodebuild
 
-RUN npm install -g sass
 WORKDIR /app
 ADD . .
-RUN sass ./internal/tasks/gptchat/templates/scss
 
 # Build the unified SPA UI
 RUN corepack enable || true
@@ -41,7 +39,6 @@ RUN go mod download
 
 # static build
 ADD . .
-COPY --from=nodebuild /app/internal/tasks/gptchat/templates/scss/*.css ./internal/tasks/gptchat/templates/scss/.
 COPY --from=nodebuild /app/web/dist ./web/dist
 ENV GOOS=linux
 ENV GOARCH=amd64

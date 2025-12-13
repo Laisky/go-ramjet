@@ -25,7 +25,7 @@ changelog:
 
 .PHONY: gen
 gen:
-	sass ./internal/tasks/gptchat/templates/scss
+	@echo "No legacy SCSS to generate - templates moved to SPA"
 
 .PHONY: frontend-install
 frontend-install:
