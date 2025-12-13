@@ -6,6 +6,24 @@
 
 Event-driven & Time-scheduler framwork.
 
+## Web UI
+
+The unified web UI is a React SPA located in [web/](web/). In production it is served by the Go server from `web/dist`.
+
+Build both backend and frontend:
+
+```sh
+make build
+```
+
+Frontend-only (dev + tests):
+
+```sh
+make frontend-install
+pnpm -C web dev
+pnpm -C web test
+```
+
 
 ## Dockerlize
 

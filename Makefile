@@ -26,3 +26,20 @@ changelog:
 .PHONY: gen
 gen:
 	sass ./internal/tasks/gptchat/templates/scss
+
+.PHONY: frontend-install
+frontend-install:
+	corepack enable || true
+	pnpm -C web install
+
+.PHONY: frontend-build
+frontend-build: frontend-install
+	pnpm -C web build
+
+.PHONY: frontend-test
+frontend-test: frontend-install
+	pnpm -C web test
+
+.PHONY: build
+build: frontend-build
+	go build

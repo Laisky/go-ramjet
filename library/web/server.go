@@ -54,6 +54,10 @@ func RunServer(addr string) {
 		ctx.String(http.StatusOK, "hello, world")
 	})
 
+	// Register SPA if built assets exist.
+	// This does not affect existing task routes, because the fallback only triggers on NoRoute.
+	_ = TryRegisterDefaultSPA(Server)
+
 	httpSrv := &http.Server{
 		Addr:         addr,
 		Handler:      Server,
