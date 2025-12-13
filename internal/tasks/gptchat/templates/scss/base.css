@@ -60,4 +60,7 @@ body {
         cursor: pointer;
         margin-left: 5px; }
 
+  body #hiddenChatConfigSideBar .mcp-manager .add-mcp-server {
+    cursor: pointer; }
+
 /*# sourceMappingURL=base.css.map */

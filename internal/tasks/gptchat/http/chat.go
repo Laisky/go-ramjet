@@ -49,12 +49,10 @@ var (
 
 // ChatHandler handle api request
 func ChatHandler(ctx *gin.Context) {
-	toolcalls := sendAndParseChat(ctx)
-	if toolcalls == nil {
-		return
-	}
-
-	web.AbortErr(ctx, errors.New("tool calls not implemented"))
+	// The frontend supports OpenAI tool-calls (including MCP). The backend should
+	// proxy the upstream stream as-is and must NOT abort when tool-calls appear,
+	// otherwise the frontend will never receive `finish_reason=tool_calls`.
+	_ = sendAndParseChat(ctx)
 }
 
 func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespToolCall) {
@@ -233,7 +231,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 				}
 				actualOutputTokens = tokens
 				logger.Debug("got tool calls")
-				return lastResp.Choices[0].Delta.ToolCalls
+				toolCalls = append(toolCalls, lastResp.Choices[0].Delta.ToolCalls...)
 			}
 
 			switch v := lastResp.Choices[0].Delta.Content.(type) {

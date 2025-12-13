@@ -659,8 +659,8 @@ function ensureChatPromptElements () {
 const UrlConfigBooleanFields = new Set([
     'all_in_one',
     'disable_https_crawler',
-    'enable_google_search',
-    'enable_talk'
+    'enable_talk',
+    'enable_mcp'
 ]);
 const UrlConfigIntegerFields = new Set([
     'max_tokens',
@@ -710,10 +710,10 @@ const UrlParamAliasMap = new Map([
     ['draw_images', 'chat_switch.draw_n_images'],
     ['drawimages', 'chat_switch.draw_n_images'],
     ['draw', 'chat_switch.draw_n_images'],
-    ['enable_google_search', 'chat_switch.enable_google_search'],
-    ['enablegooglesearch', 'chat_switch.enable_google_search'],
-    ['chat_switch.enable_google_search', 'chat_switch.enable_google_search'],
-    ['chat_switch.enablegooglesearch', 'chat_switch.enable_google_search'],
+    ['enable_mcp', 'chat_switch.enable_mcp'],
+    ['enablemcp', 'chat_switch.enable_mcp'],
+    ['chat_switch.enable_mcp', 'chat_switch.enable_mcp'],
+    ['chat_switch.enablemcp', 'chat_switch.enable_mcp'],
     ['disable_https_crawler', 'chat_switch.disable_https_crawler'],
     ['chat_switch.disable_https_crawler', 'chat_switch.disable_https_crawler'],
     ['disablehttpscrawler', 'chat_switch.disable_https_crawler'],
@@ -1461,9 +1461,9 @@ async function dataMigrate () {
             eachSconfig.chat_switch = {
                 all_in_one: false,
                 disable_https_crawler: true,
-                enable_google_search: false,
                 enable_talk: false,
-                draw_n_images: 1
+                draw_n_images: 1,
+                enable_mcp: true
             };
         }
         if (!eachSconfig.chat_switch.all_in_one) {
@@ -1471,6 +1471,20 @@ async function dataMigrate () {
         }
         if (!eachSconfig.chat_switch.draw_n_images) {
             eachSconfig.chat_switch.draw_n_images = 1;
+        }
+        if (typeof eachSconfig.chat_switch.enable_talk === 'undefined') {
+            eachSconfig.chat_switch.enable_talk = false;
+        }
+        if (typeof eachSconfig.chat_switch.enable_mcp === 'undefined') {
+            eachSconfig.chat_switch.enable_mcp = true;
+        }
+
+        if (!Array.isArray(eachSconfig.mcp_servers)) {
+            eachSconfig.mcp_servers = [];
+        }
+
+        if (typeof eachSconfig.mcp_bootstrapped === 'undefined') {
+            eachSconfig.mcp_bootstrapped = true;
         }
 
         // change model
@@ -1852,6 +1866,7 @@ async function setupHeader () {
 async function setupChatJs () {
     await setupSessionManager();
     await setupConfig();
+    await setupMCPManager();
     await setupChatInput();
     await setupChatSwitchs();
     await setupPromptManager();
@@ -3883,21 +3898,25 @@ async function detectPromptTaskType (model, prompt) {
                         'X-Laisky-Api-Base': sconfig.api_base
                     },
                     method: 'POST',
-                    body: JSON.stringify({
-                        model: DefaultModel,
-                        max_tokens: 50,
-                        stream: false,
-                        messages: [
-                            {
-                                role: RoleSystem,
-                                content: 'Please determine the user\'s intent based on the prompt. Return "image" if the user wants to generate an image, otherwise return "text". Do not provide any other irrelevant content except "image"/"text".'
-                            },
-                            {
-                                role: RoleHuman,
-                                content: prompt
-                            }
-                        ]
-                    })
+                    body: JSON.stringify((() => {
+                        const payload = {
+                            model: DefaultModel,
+                            max_tokens: 50,
+                            stream: false,
+                            messages: [
+                                {
+                                    role: RoleSystem,
+                                    content: 'Please determine the user\'s intent based on the prompt. Return "image" if the user wants to generate an image, otherwise return "text". Do not provide any other irrelevant content except "image"/"text".'
+                                },
+                                {
+                                    role: RoleHuman,
+                                    content: prompt
+                                }
+                            ]
+                        };
+                        injectMCPToolsIntoPayload(payload, sconfig);
+                        return payload;
+                    })())
                 });
 
                 const respData = await resp.json();
@@ -4131,6 +4150,7 @@ async function sendChat2Server (chatID, reqPrompt) {
     const sconfig = await getChatSessionConfig();
 
     let messages;
+    let baseChatMessagesForToolCalls = null;
     const nContexts = parseInt(sconfig.n_contexts);
     let url, project;
     const urlParams = new URLSearchParams(location.search);
@@ -4139,7 +4159,7 @@ async function sendChat2Server (chatID, reqPrompt) {
     console.debug(`detected prompt type ${promptType}`);
 
     switch (promptType) {
-    case 'chat':
+    case 'chat': {
         messages = await getLastNChatMessages(nContexts, chatID);
         if (reqPrompt !== '') {
             messages.push({
@@ -4207,7 +4227,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             updateChatVisionSelectedFileStore();
         }
 
-        reqBody = JSON.stringify({
+        const payload = {
             model: selectedModel,
             stream: true,
             max_tokens: parseInt(sconfig.max_tokens),
@@ -4219,8 +4239,15 @@ async function sendChat2Server (chatID, reqPrompt) {
             laisky_extra: {
                 chat_switch: sconfig.chat_switch
             }
-        });
+        };
+
+        injectMCPToolsIntoPayload(payload, sconfig);
+
+        baseChatMessagesForToolCalls = payload.messages;
+
+        reqBody = JSON.stringify(payload);
         break;
+    }
     case 'complete':
         reqBody = JSON.stringify({
             model: selectedModel,
@@ -4331,7 +4358,7 @@ async function sendChat2Server (chatID, reqPrompt) {
             }];
             const model = DefaultModel; // rewrite chat model
 
-            reqBody = JSON.stringify({
+            const payload = {
                 model,
                 stream: true,
                 max_tokens: parseInt(sconfig.max_tokens),
@@ -4340,7 +4367,9 @@ async function sendChat2Server (chatID, reqPrompt) {
                 frequency_penalty: parseFloat(sconfig.frequency_penalty),
                 messages,
                 stop: ['\n\n']
-            });
+            };
+            injectMCPToolsIntoPayload(payload, sconfig);
+            reqBody = JSON.stringify(payload);
         } catch (err) {
             await abortAIResp(`failed to fetch qa data: ${renderError(err)}`);
             return chatID;
@@ -4457,28 +4486,187 @@ async function sendChat2Server (chatID, reqPrompt) {
         return chatID;
     }
 
-    try {
-        globalAIRespHeartBeatTimer = Date.now();
-        globalAIRespSSE = new window.SSE('/api', {
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + sconfig.api_token,
-                'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
-                'X-Laisky-Api-Base': sconfig.api_base
-            },
-            method: 'POST',
-            payload: reqBody
-        });
-    } catch (err) {
-        await abortAIResp(`Failed to start streaming: ${renderError(err)}`);
-        return chatID;
-    }
+    // Tool-call state for automatic MCP execution.
+    // OpenAI-style streaming uses delta.tool_calls and finish_reason=tool_calls.
+    const pendingToolCalls = new Map(); // index -> { id, type, function: { name, arguments } }
+    let waitingForToolContinuation = false;
+    let continuationInFlight = false;
+
+    const upsertToolCallDelta = (delta) => {
+        if (!delta) {
+            return;
+        }
+
+        const idx = Number.isFinite(delta.index) ? delta.index : 0;
+        const existing = pendingToolCalls.get(idx) || {
+            id: delta.id || `toolcall_${idx}_${libs.RandomString(6)}`,
+            type: delta.type || 'function',
+            function: {
+                name: '',
+                arguments: ''
+            }
+        };
+
+        if (delta.id) {
+            existing.id = delta.id;
+        }
+        if (delta.type) {
+            existing.type = delta.type;
+        }
+
+        if (delta.function) {
+            if (typeof delta.function.name === 'string' && delta.function.name) {
+                existing.function.name = delta.function.name;
+            }
+            if (typeof delta.function.arguments === 'string') {
+                existing.function.arguments = (existing.function.arguments || '') + delta.function.arguments;
+            }
+        }
+
+        pendingToolCalls.set(idx, existing);
+    };
+
+    const renderToolProgress = async (text) => {
+        const aiRespEle = ensureLiveAiRespElement(chatID, globalAIRespEle);
+        if (!aiRespEle) {
+            return;
+        }
+        let responseContainer = aiRespEle.querySelector('.response-content');
+        if (!responseContainer) {
+            aiRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
+            responseContainer = aiRespEle.querySelector('.response-content');
+        }
+
+        responseContainer.insertAdjacentText('beforeend', `\n\n[${text}]\n`);
+    };
+
+    const startStream = async (payloadStr) => {
+        try {
+            globalAIRespHeartBeatTimer = Date.now();
+            globalAIRespSSE = new window.SSE('/api', {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + sconfig.api_token,
+                    'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
+                    'X-Laisky-Api-Base': sconfig.api_base
+                },
+                method: 'POST',
+                payload: payloadStr
+            });
+        } catch (err) {
+            await abortAIResp(`Failed to start streaming: ${renderError(err)}`);
+            return;
+        }
+
+        globalAIRespSSE.addEventListener('message', onSSEMessage);
+        globalAIRespSSE.addEventListener('error', onSSEError);
+        globalAIRespSSE.stream();
+    };
+
+    const handleToolCallsAndContinue = async () => {
+        if (continuationInFlight) {
+            return;
+        }
+        continuationInFlight = true;
+
+        try {
+            const toolCalls = Array.from(pendingToolCalls.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map((kv) => kv[1])
+                .filter((c) => c && c.function && c.function.name);
+
+            pendingToolCalls.clear();
+
+            if (toolCalls.length === 0) {
+                await abortAIResp('Model requested tool calls, but no tool calls were parsed.');
+                return;
+            }
+
+            await renderToolProgress('Calling MCP tools...');
+
+            const sconfigNow = await getChatSessionConfig();
+            if (!sconfigNow.chat_switch || !sconfigNow.chat_switch.enable_mcp) {
+                await abortAIResp('MCP tools are disabled for this session.');
+                return;
+            }
+
+            const toolResultMessages = [];
+            for (const call of toolCalls) {
+                const toolName = call.function.name;
+                const server = findMCPServerForToolName(sconfigNow, toolName);
+
+                if (!server) {
+                    toolResultMessages.push({
+                        role: 'tool',
+                        tool_call_id: call.id,
+                        content: `Tool not found in enabled MCP servers: ${toolName}`
+                    });
+                    continue;
+                }
+
+                try {
+                    const output = await callMCPTool(server, toolName, call.function.arguments);
+                    toolResultMessages.push({
+                        role: 'tool',
+                        tool_call_id: call.id,
+                        content: output
+                    });
+                } catch (err) {
+                    toolResultMessages.push({
+                        role: 'tool',
+                        tool_call_id: call.id,
+                        content: `Tool execution failed (${toolName}): ${renderError(err)}`
+                    });
+                }
+            }
+
+            const assistantToolCallsMessage = {
+                role: 'assistant',
+                content: '',
+                tool_calls: toolCalls
+            };
+
+            const followMessages = ([]).concat(
+                baseChatMessagesForToolCalls || [],
+                [assistantToolCallsMessage],
+                toolResultMessages
+            );
+
+            // Allow multiple rounds of tool calling.
+            baseChatMessagesForToolCalls = followMessages;
+
+            const followPayload = {
+                model: selectedModel,
+                stream: true,
+                max_tokens: parseInt(sconfigNow.max_tokens),
+                temperature: parseFloat(sconfigNow.temperature),
+                presence_penalty: parseFloat(sconfigNow.presence_penalty),
+                frequency_penalty: parseFloat(sconfigNow.frequency_penalty),
+                messages: followMessages,
+                stop: ['\n\n'],
+                laisky_extra: {
+                    chat_switch: sconfigNow.chat_switch
+                }
+            };
+            injectMCPToolsIntoPayload(followPayload, sconfigNow);
+
+            waitingForToolContinuation = false;
+            if (globalAIRespSSE) {
+                globalAIRespSSE.close();
+                globalAIRespSSE = null;
+            }
+
+            await startStream(JSON.stringify(followPayload));
+        } finally {
+            continuationInFlight = false;
+        }
+    };
 
     userManuallyScrolled = false;
     let isChatRespDone = false;
 
     // Modify the message event handler portion of sendChat2Server
-    globalAIRespSSE.addEventListener('message', async (evt) => {
+    const onSSEMessage = async (evt) => {
         evt.stopPropagation();
         globalAIRespHeartBeatTimer = Date.now();
 
@@ -4501,6 +4689,9 @@ async function sendChat2Server (chatID, reqPrompt) {
 
         // Special message handling
         if (data === '[DONE]') {
+            if (waitingForToolContinuation) {
+                return chatID;
+            }
             sseMessageBuffer = '';
             sseMessageFragmented = false;
             isChatRespDone = true;
@@ -4565,6 +4756,32 @@ async function sendChat2Server (chatID, reqPrompt) {
         // If we get here, we have a valid payload
         if (payload && !sseMessageFragmented) {
             try {
+                // Accumulate tool call deltas if present.
+                const toolCallDeltas = payload?.choices?.[0]?.delta?.tool_calls;
+                if (Array.isArray(toolCallDeltas)) {
+                    toolCallDeltas.forEach(upsertToolCallDelta);
+                }
+
+                // Some providers may send tool calls in message form.
+                const toolCallsMsg = payload?.choices?.[0]?.message?.tool_calls;
+                if (Array.isArray(toolCallsMsg)) {
+                    toolCallsMsg.forEach((c, idx) => {
+                        upsertToolCallDelta({
+                            index: idx,
+                            id: c.id,
+                            type: c.type,
+                            function: c.function
+                        });
+                    });
+                }
+
+                const finishReason = payload?.choices?.[0]?.finish_reason;
+                if (finishReason === 'tool_calls') {
+                    waitingForToolContinuation = true;
+                    await handleToolCallsAndContinue();
+                    return chatID;
+                }
+
                 const { respChunk, reasoningChunk, annotations } = parseChatResp(selectedModel, payload);
 
                 // Add to our global data store
@@ -4589,7 +4806,7 @@ async function sendChat2Server (chatID, reqPrompt) {
                     });
                 }
 
-                if (payload.choices[0].finish_reason) {
+                if (payload.choices[0].finish_reason && payload.choices[0].finish_reason !== 'tool_calls') {
                     isChatRespDone = true;
                 }
 
@@ -4728,24 +4945,14 @@ async function sendChat2Server (chatID, reqPrompt) {
             console.debug(`chat response done for chat ${chatID}`);
             await renderAfterAiResp(globalAIRespData, true);
         }
-    })
+    };
 
-    globalAIRespSSE.addEventListener('error', async (err) => {
+    const onSSEError = async (err) => {
         console.warn('SSE error:', err);
         await abortAIResp(`Failed to receive chat response: ${renderError(err)}`);
-    });
+    };
 
-    globalAIRespSSE.stream();
-
-    // Add this to the SSE class definition or modify it to track listeners:
-    if (!window.SSE.prototype.listeners) {
-        window.SSE.prototype.listeners = [];
-        const originalAddEventListener = window.SSE.prototype.addEventListener;
-        window.SSE.prototype.addEventListener = function (type, callback) {
-            this.listeners.push({ type, callback });
-            return originalAddEventListener.call(this, type, callback);
-        };
-    }
+    await startStream(reqBody);
 
     return chatID;
 }
@@ -5858,12 +6065,12 @@ async function setupChatSwitchs () {
             });
 
         chatContainer
-            .querySelector('#switchChatEnableGoogleSearch')
+            .querySelector('#switchChatEnableMCP')
             .addEventListener('change', async (evt) => {
                 evt.stopPropagation();
                 const switchEle = libs.evtTarget(evt);
                 const sconfig = await getChatSessionConfig();
-                sconfig.chat_switch.enable_google_search = switchEle.checked;
+                sconfig.chat_switch.enable_mcp = switchEle.checked;
                 await saveChatSessionConfig(sconfig);
             });
 
@@ -5947,7 +6154,7 @@ async function setupChatSwitchs () {
 
             const sconfig = newVal;
             chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
-            chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
+            chatContainer.querySelector('#switchChatEnableMCP').checked = !!sconfig.chat_switch.enable_mcp;
             chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
             await bindTalkSwitchHandler(sconfig.chat_switch.enable_talk);
 
@@ -6712,10 +6919,145 @@ async function getChatSessionConfig (sid) {
         console.info(`create new session config for session ${sid}`);
         sconfig = newSessionConfig();
         await saveChatSessionConfig(sconfig, sid);
+        return sconfig;
+    }
+
+    const changed = ensureSessionConfigDefaults(sconfig);
+    if (changed) {
+        await saveChatSessionConfig(sconfig, sid);
     }
 
     return sconfig;
 };
+
+/**
+ * ensureSessionConfigDefaults fills newly added fields with defaults for older stored configs.
+ *
+ * @param {Object} sconfig - Session config.
+ * @returns {boolean} True if config was changed.
+ */
+function ensureSessionConfigDefaults (sconfig) {
+    if (!sconfig || typeof sconfig !== 'object') {
+        return false;
+    }
+
+    let changed = false;
+
+    if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object') {
+        sconfig.chat_switch = {
+            all_in_one: false,
+            disable_https_crawler: true,
+            enable_talk: false,
+            draw_n_images: 1,
+            enable_mcp: true
+        };
+        changed = true;
+    }
+
+    if (typeof sconfig.chat_switch.all_in_one === 'undefined') {
+        sconfig.chat_switch.all_in_one = false;
+        changed = true;
+    }
+    if (typeof sconfig.chat_switch.disable_https_crawler === 'undefined') {
+        sconfig.chat_switch.disable_https_crawler = true;
+        changed = true;
+    }
+    if (typeof sconfig.chat_switch.enable_talk === 'undefined') {
+        sconfig.chat_switch.enable_talk = false;
+        changed = true;
+    }
+    if (typeof sconfig.chat_switch.enable_mcp === 'undefined') {
+        sconfig.chat_switch.enable_mcp = false;
+        changed = true;
+    }
+    if (typeof sconfig.chat_switch.draw_n_images === 'undefined' || !Number.isFinite(sconfig.chat_switch.draw_n_images)) {
+        sconfig.chat_switch.draw_n_images = 1;
+        changed = true;
+    }
+
+    if (!Array.isArray(sconfig.mcp_servers)) {
+        sconfig.mcp_servers = [];
+        changed = true;
+    }
+
+    if (typeof sconfig.mcp_bootstrapped === 'undefined') {
+        sconfig.mcp_bootstrapped = true;
+        changed = true;
+    }
+
+    if (sconfig.mcp_bootstrapped && sconfig.mcp_servers.length === 0) {
+        sconfig.mcp_servers = [
+            {
+                id: libs.RandomString(8),
+                name: 'Default MCP',
+                url: 'https://mcp.laisky.com',
+                api_key: '',
+                enabled: true,
+                tools: []
+            }
+        ];
+        changed = true;
+    }
+
+    return changed;
+}
+
+/**
+ * getEnabledMCPTools collects cached tools from enabled MCP servers.
+ *
+ * @param {Object} sconfig - Session config.
+ * @returns {Array} Tool definitions.
+ */
+function getEnabledMCPTools (sconfig) {
+    if (!sconfig || !Array.isArray(sconfig.mcp_servers)) {
+        return [];
+    }
+
+    let tools = [];
+    sconfig.mcp_servers.forEach((server) => {
+        if (!server || !server.enabled) {
+            return;
+        }
+        if (Array.isArray(server.tools) && server.tools.length > 0) {
+            // If user selected specific tools for this server, only include those.
+            const enabled = Array.isArray(server.enabled_tool_names) ? server.enabled_tool_names : [];
+            if (enabled.length === 0) {
+                tools = tools.concat(server.tools);
+                return;
+            }
+
+            const enabledSet = new Set(enabled);
+            const filtered = server.tools.filter((t) => enabledSet.has(extractToolNameFromDefinition(t)));
+            tools = tools.concat(filtered);
+        }
+    });
+
+    return normalizeToolsToOpenAIFormat(tools);
+}
+
+/**
+ * injectMCPToolsIntoPayload injects enabled MCP tool definitions into a chat payload.
+ *
+ * @param {Object} payload - Request payload.
+ * @param {Object} sconfig - Session config.
+ */
+function injectMCPToolsIntoPayload (payload, sconfig) {
+    if (!payload || typeof payload !== 'object') {
+        return;
+    }
+
+    if (!sconfig || !sconfig.chat_switch || !sconfig.chat_switch.enable_mcp) {
+        return;
+    }
+
+    const tools = getEnabledMCPTools(sconfig);
+    if (tools.length === 0) {
+        return;
+    }
+
+    payload.tools = tools;
+    payload.tool_choice = 'auto';
+}
 
 /**
  * save chat session config
@@ -6751,9 +7093,1425 @@ function newSessionConfig () {
         chat_switch: {
             all_in_one: false,
             disable_https_crawler: true,
-            enable_google_search: false
+            enable_talk: false,
+            draw_n_images: 1,
+            enable_mcp: false
+        },
+        mcp_bootstrapped: true,
+        mcp_servers: [
+            {
+                id: libs.RandomString(8),
+                name: 'Default MCP',
+                url: 'https://mcp.laisky.com',
+                api_key: '',
+                enabled: true,
+                tools: []
+            }
+        ]
+    }
+}
+
+/**
+ * guessMCPToolListURLs generates possible tool list endpoints based on a user-provided MCP URL.
+ *
+ * @param {string} rawURL - User provided MCP URL.
+ * @returns {string[]} Candidate URLs to try in order.
+ */
+function guessMCPToolListURLs (rawURL, urlPrefix = '') {
+    const url = libs.TrimSpace(rawURL || '');
+    if (!url) {
+        return [];
+    }
+
+    const normalized = url.replace(/\/+$/, '');
+    const candidates = [];
+
+    const suffixes = ['/v1/tools', '/tools/list', '/tools'];
+    const pushWithSuffixes = (base) => {
+        const cleanBase = (base || '').replace(/\/+$/, '');
+        if (!cleanBase) {
+            return;
+        }
+        // Only include the base URL if it already looks like a tool-list endpoint.
+        // GETing the origin root with `Accept: text/event-stream` can hang on some MCP deployments.
+        if (suffixes.some((s) => cleanBase.endsWith(s))) {
+            candidates.push(cleanBase);
+        }
+        suffixes.forEach((suffix) => {
+            if (!cleanBase.endsWith(suffix)) {
+                candidates.push(`${cleanBase}${suffix}`);
+            }
+        });
+    };
+
+    pushWithSuffixes(normalized);
+
+    // If server exposes a public base path (like "/mcp"), try it as well.
+    const prefix = libs.TrimSpace(urlPrefix || '');
+    if (prefix) {
+        const origin = getURLOrigin(normalized);
+        if (origin) {
+            pushWithSuffixes(joinURL(origin, prefix));
         }
     }
+
+    return Array.from(new Set(candidates));
+}
+
+/**
+ * normalizeMCPToolListResponse normalizes tool list responses.
+ *
+ * @param {any} data - Parsed JSON response.
+ * @returns {Array} Tools array.
+ */
+function normalizeMCPToolListResponse (data) {
+    if (Array.isArray(data)) {
+        return data;
+    }
+
+    // MCP JSON-RPC style: { jsonrpc: '2.0', id: ..., result: { tools: [...] } }
+    if (data && data.result && Array.isArray(data.result.tools)) {
+        return data.result.tools;
+    }
+
+    if (data && Array.isArray(data.tools)) {
+        return data.tools;
+    }
+
+    return null;
+}
+
+/**
+ * getURLOrigin extracts the origin from a URL string.
+ *
+ * @param {string} rawURL - URL string.
+ * @returns {string} URL origin (scheme://host[:port]) or empty string.
+ */
+function getURLOrigin (rawURL) {
+    const input = libs.TrimSpace(rawURL || '');
+    if (!input) {
+        return '';
+    }
+
+    try {
+        const u = new URL(input);
+        return u.origin;
+    } catch (err) {
+        return '';
+    }
+}
+
+/**
+ * joinURL joins an origin/base URL and a path prefix.
+ *
+ * @param {string} base - Base URL or origin.
+ * @param {string} path - Path beginning with or without '/'.
+ * @returns {string} Joined URL.
+ */
+function joinURL (base, path) {
+    const b = (libs.TrimSpace(base || '')).replace(/\/+$/, '');
+    const p = libs.TrimSpace(path || '');
+    if (!b) {
+        return '';
+    }
+    if (!p) {
+        return b;
+    }
+    if (p.startsWith('/')) {
+        return `${b}${p}`;
+    }
+    return `${b}/${p}`;
+}
+
+/**
+ * guessMCPRuntimeConfigURLs generates candidate runtime-config URLs.
+ *
+ * @param {string} rawURL - User provided MCP URL.
+ * @returns {string[]} Candidate runtime-config URLs.
+ */
+function guessMCPRuntimeConfigURLs (rawURL) {
+    const url = libs.TrimSpace(rawURL || '');
+    if (!url) {
+        return [];
+    }
+
+    const normalized = url.replace(/\/+$/, '');
+    const origin = getURLOrigin(normalized);
+    const candidates = [];
+
+    // Most deployments expose runtime-config at origin root.
+    if (origin) {
+        candidates.push(`${origin}/runtime-config.json`);
+    }
+
+    // Also try alongside the provided URL.
+    candidates.push(`${normalized}/runtime-config.json`);
+
+    return Array.from(new Set(candidates));
+}
+
+/**
+ * fetchJSONOrSSE tries to parse JSON from a response. Supports streamable HTTP (SSE) by
+ * extracting JSON objects from `data:` lines.
+ *
+ * @param {Response} resp - Fetch response.
+ * @returns {Promise<any>} Parsed JSON.
+ */
+async function fetchJSONOrSSE (resp) {
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json')) {
+        return resp.json();
+    }
+
+    // Streamable HTTP (SSE) responses may keep the connection open.
+    // Avoid `resp.text()` which waits for EOF; instead parse incrementally.
+    if (contentType.includes('text/event-stream')) {
+        const reader = resp.body?.getReader?.();
+        if (!reader) {
+            return null;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let totalBytes = 0;
+        const startedAt = Date.now();
+        const timeoutMs = 10_000;
+        const maxBytes = 512 * 1024;
+
+        const tryParseDataLines = (chunkStr) => {
+            buffer += chunkStr;
+
+            // Split by lines, keep remainder in buffer.
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = (line || '').trim();
+                if (!trimmed.startsWith('data:')) {
+                    continue;
+                }
+                const payload = trimmed.slice('data:'.length).trim();
+                if (!payload || payload === '[DONE]') {
+                    continue;
+                }
+                try {
+                    return JSON.parse(payload);
+                } catch (err) {
+                    continue;
+                }
+            }
+
+            return null;
+        };
+
+        try {
+            for (;;) {
+                if (Date.now()-startedAt > timeoutMs) {
+                    throw new Error('SSE timeout');
+                }
+                const { value, done } = await reader.read();
+                if (done) {
+                    break;
+                }
+                totalBytes += value?.byteLength || 0;
+                if (totalBytes > maxBytes) {
+                    throw new Error('SSE response too large');
+                }
+                const chunkStr = decoder.decode(value, { stream: true });
+                const parsed = tryParseDataLines(chunkStr);
+                if (parsed) {
+                    await reader.cancel().catch(() => undefined);
+                    return parsed;
+                }
+            }
+        } finally {
+            await reader.cancel().catch(() => undefined);
+        }
+
+        // Nothing parsed.
+        return null;
+    }
+
+    const text = await resp.text();
+    if (text && text.includes('data:')) {
+        // Non-standard SSE-like body; best-effort parse.
+        const lines = text.split(/\r?\n/);
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = (lines[i] || '').trim();
+            if (!line.startsWith('data:')) {
+                continue;
+            }
+            const payload = line.slice('data:'.length).trim();
+            if (!payload || payload === '[DONE]') {
+                continue;
+            }
+            try {
+                return JSON.parse(payload);
+            } catch (err) {
+                continue;
+            }
+        }
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        return null;
+    }
+}
+
+/**
+ * fetchWithTimeout wraps fetch with an AbortController timeout.
+ *
+ * @param {string} url - URL.
+ * @param {object} options - fetch options.
+ * @param {number} timeoutMs - timeout in milliseconds.
+ * @returns {Promise<Response>} Fetch response.
+ */
+async function fetchWithTimeout (url, options, timeoutMs) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, {
+            ...(options || {}),
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+/**
+ * fetchMCPRuntimeConfig loads runtime-config.json from a remote MCP server.
+ *
+ * @param {string} rawURL - User provided MCP URL.
+ * @returns {Promise<object|null>} Runtime config or null.
+ */
+async function fetchMCPRuntimeConfig (rawURL) {
+    let lastErr = null;
+    for (const u of guessMCPRuntimeConfigURLs(rawURL)) {
+        try {
+            const resp = await fetch(u, { method: 'GET', cache: 'no-store' });
+            if (!resp.ok) {
+                lastErr = new Error(`HTTP ${resp.status}`);
+                continue;
+            }
+            const data = await resp.json().catch(() => null);
+            if (!data || typeof data !== 'object') {
+                lastErr = new Error('Invalid runtime-config format');
+                continue;
+            }
+            return data;
+        } catch (err) {
+            lastErr = err;
+            continue;
+        }
+    }
+
+    console.warn('Failed to fetch MCP runtime-config:', lastErr);
+    return null;
+}
+
+/**
+ * normalizeToolsToOpenAIFormat converts tool definitions into OpenAI "tools" schema.
+ *
+ * Supports:
+ * - OpenAI: { type: 'function', function: { name, description, parameters } }
+ * - MCP: { name, description, inputSchema }
+ *
+ * @param {Array} tools - Tool definitions.
+ * @returns {Array} OpenAI tool definitions.
+ */
+function normalizeToolsToOpenAIFormat (tools) {
+    if (!Array.isArray(tools)) {
+        return [];
+    }
+
+    return tools.map((tool) => {
+        if (!tool || typeof tool !== 'object') {
+            return null;
+        }
+
+        if (tool.type === 'function' && tool.function && typeof tool.function.name === 'string') {
+            // Already OpenAI style.
+            return tool;
+        }
+
+        if (typeof tool.name === 'string') {
+            const parameters = tool.inputSchema || tool.parameters || {
+                type: 'object',
+                properties: {}
+            };
+
+            return {
+                type: 'function',
+                function: {
+                    name: tool.name,
+                    description: (typeof tool.description === 'string') ? tool.description : '',
+                    parameters
+                }
+            };
+        }
+
+        return null;
+    }).filter(Boolean);
+}
+
+/**
+ * extractToolNameFromDefinition extracts a tool name from a tool definition.
+ *
+ * Supports OpenAI-style: { type: 'function', function: { name: '...' } }
+ * and simple style: { name: '...' }.
+ *
+ * @param {object} toolDef - Tool definition.
+ * @returns {string} Tool name or empty string.
+ */
+function extractToolNameFromDefinition (toolDef) {
+    if (!toolDef || typeof toolDef !== 'object') {
+        return '';
+    }
+
+    if (toolDef.function && typeof toolDef.function.name === 'string') {
+        return toolDef.function.name;
+    }
+    if (typeof toolDef.name === 'string') {
+        return toolDef.name;
+    }
+
+    return '';
+}
+
+/**
+ * findMCPServerForToolName finds the enabled MCP server that provides the given tool.
+ *
+ * @param {object} sconfig - Session config.
+ * @param {string} toolName - Tool/function name.
+ * @returns {object|null} MCP server config.
+ */
+function findMCPServerForToolName (sconfig, toolName) {
+    if (!sconfig || !Array.isArray(sconfig.mcp_servers)) {
+        return null;
+    }
+
+    const name = libs.TrimSpace(toolName || '');
+    if (!name) {
+        return null;
+    }
+
+    for (const server of sconfig.mcp_servers) {
+        if (!server || !server.enabled) {
+            continue;
+        }
+        if (!Array.isArray(server.tools) || server.tools.length === 0) {
+            continue;
+        }
+        const hasTool = server.tools.some((t) => extractToolNameFromDefinition(t) === name);
+        if (hasTool) {
+            return server;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * guessMCPToolCallURLs generates possible tool-call endpoints based on a user-provided MCP URL.
+ *
+ * @param {string} rawURL - User provided MCP URL.
+ * @returns {string[]} Candidate URLs to try in order.
+ */
+function guessMCPToolCallURLs (rawURL, urlPrefix = '') {
+    const url = libs.TrimSpace(rawURL || '');
+    if (!url) {
+        return [];
+    }
+
+    const normalized = url.replace(/\/+$/, '');
+    const candidates = [];
+    const suffixes = ['/v1/tools/call', '/tools/call', '/v1/tool/call', '/tool/call', '/v1/tools/execute', '/tools/execute'];
+    const pushWithSuffixes = (base) => {
+        const cleanBase = (base || '').replace(/\/+$/, '');
+        if (!cleanBase) {
+            return;
+        }
+        suffixes.forEach((suffix) => {
+            if (!cleanBase.endsWith(suffix)) {
+                candidates.push(`${cleanBase}${suffix}`);
+            }
+        });
+        candidates.push(cleanBase);
+    };
+
+    pushWithSuffixes(normalized);
+
+    const prefix = libs.TrimSpace(urlPrefix || '');
+    if (prefix) {
+        const origin = getURLOrigin(normalized);
+        if (origin) {
+            pushWithSuffixes(joinURL(origin, prefix));
+        }
+    }
+
+    return Array.from(new Set(candidates));
+}
+
+/**
+ * stringifyMCPToolResult converts a tool execution result into a safe string.
+ *
+ * @param {any} data - Tool result.
+ * @returns {string} Stringified result.
+ */
+function stringifyMCPToolResult (data) {
+    if (data === null || typeof data === 'undefined') {
+        return '';
+    }
+    if (typeof data === 'string') {
+        return data;
+    }
+    if (typeof data === 'number' || typeof data === 'boolean') {
+        return String(data);
+    }
+
+    try {
+        return JSON.stringify(data);
+    } catch (err) {
+        return String(data);
+    }
+}
+
+/**
+ * callMCPTool executes a tool against a remote MCP server.
+ *
+ * @param {object} server - MCP server config.
+ * @param {string} toolName - Tool name.
+ * @param {any} args - Tool arguments (object or string).
+ * @returns {Promise<string>} Tool output.
+ */
+async function callMCPTool (server, toolName, args) {
+    const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream'
+    };
+
+    const authCandidates = getMCPAuthorizationHeaderCandidates(server?.api_key);
+    if (authCandidates.length > 0) {
+        headers.authorization = authCandidates[0];
+    }
+
+    // Normalize args: OpenAI tool_calls provides JSON string; keep both raw and parsed.
+    let parsedArgs = args;
+    if (typeof args === 'string') {
+        try {
+            parsedArgs = JSON.parse(args);
+        } catch (err) {
+            parsedArgs = { _raw: args };
+        }
+    }
+
+    const body = {
+        name: toolName,
+        arguments: parsedArgs
+    };
+
+    const guessJSONRPCEndpoints = (srv) => {
+        const candidates = [];
+        const baseURL = libs.TrimSpace(srv?.url || '').replace(/\/+$/, '');
+        if (baseURL) {
+            candidates.push(baseURL);
+        }
+
+        // Streamable HTTP JSON-RPC often lives at the origin root.
+        const origin = getURLOrigin(baseURL);
+        if (origin) {
+            candidates.push(`${origin}/`);
+        }
+
+        const prefix = libs.TrimSpace(srv?.url_prefix || '');
+        if (origin && prefix) {
+            candidates.push(joinURL(origin, prefix));
+        }
+
+        return Array.from(new Set(candidates.map((u) => (u || '').replace(/\s+/g, '')).filter(Boolean)));
+    };
+
+    const ensureMCPSession = async (srv, endpointURL) => {
+        const protocolVersion = libs.TrimSpace(srv?.mcp_protocol_version || srv?.protocol_version || '2025-06-18');
+        let sessionID = libs.TrimSpace(srv?.mcp_session_id || '');
+        if (!sessionID) {
+            sessionID = `mcp-session-${generateUUIDv4()}`;
+            srv.mcp_session_id = sessionID;
+        }
+        srv.mcp_protocol_version = protocolVersion;
+
+        // Try to initialize once per server/session.
+        if (srv.mcp_initialized) {
+            return;
+        }
+
+        const initHeaders = {
+            ...headers,
+            // Use MCP-required headers after initialize (server may ignore them during initialize).
+            'mcp-protocol-version': protocolVersion,
+            'mcp-session-id': sessionID
+        };
+
+        // Try auth in both raw and Bearer forms.
+        const tryAuths = authCandidates.length > 0 ? authCandidates : [''];
+        let lastErr = null;
+        for (const authVal of tryAuths) {
+            try {
+                const h = { ...initHeaders };
+                if (authVal) {
+                    h.authorization = authVal;
+                } else {
+                    delete h.authorization;
+                }
+
+                const initPayload = {
+                    jsonrpc: '2.0',
+                    id: 0,
+                    method: 'initialize',
+                    params: {
+                        protocolVersion,
+                        capabilities: {
+                            sampling: {},
+                            elicitation: {},
+                            roots: { listChanged: true }
+                        },
+                        clientInfo: {
+                            name: 'go-ramjet-gptchat',
+                            version: '0.0.0'
+                        }
+                    }
+                };
+
+                const initResp = await fetch(endpointURL, {
+                    method: 'POST',
+                    headers: h,
+                    body: JSON.stringify(initPayload)
+                });
+                if (!initResp.ok) {
+                    lastErr = new Error(`HTTP ${initResp.status}`);
+                    continue;
+                }
+
+                // Some servers return SSE here; ignore payload as long as no error.
+                const initData = await fetchJSONOrSSE(initResp);
+                if (initData && initData.error) {
+                    const msg = (typeof initData.error.message === 'string') ? initData.error.message : stringifyMCPToolResult(initData.error);
+                    lastErr = new Error(msg || 'MCP initialize error');
+                    continue;
+                }
+
+                // Fire notifications/initialized
+                const notifyPayload = {
+                    jsonrpc: '2.0',
+                    method: 'notifications/initialized'
+                };
+                const notifyResp = await fetch(endpointURL, {
+                    method: 'POST',
+                    headers: h,
+                    body: JSON.stringify(notifyPayload)
+                });
+                if (!notifyResp.ok) {
+                    lastErr = new Error(`HTTP ${notifyResp.status}`);
+                    continue;
+                }
+
+                srv.mcp_initialized = true;
+                return;
+            } catch (err) {
+                lastErr = err;
+                continue;
+            }
+        }
+
+        throw lastErr || new Error('Failed to initialize MCP session');
+    };
+
+    const callJSONRPC = async (endpointURL, method, params) => {
+        await ensureMCPSession(server, endpointURL);
+
+        const payload = {
+            jsonrpc: '2.0',
+            id: libs.RandomString(8),
+            method,
+            params
+        };
+
+        const protocolVersion = libs.TrimSpace(server?.mcp_protocol_version || '2025-06-18');
+        const sessionID = libs.TrimSpace(server?.mcp_session_id || '');
+
+        const sendWithAuth = async (authVal) => {
+            const h = {
+                ...headers,
+                'mcp-protocol-version': protocolVersion,
+                'mcp-session-id': sessionID
+            };
+            if (authVal) {
+                h.authorization = authVal;
+            } else {
+                delete h.authorization;
+            }
+
+            return fetch(endpointURL, {
+                method: 'POST',
+                headers: h,
+                body: JSON.stringify(payload)
+            });
+        };
+
+        const tryAuths = authCandidates.length > 0 ? authCandidates : [''];
+        let resp = null;
+        let lastErr = null;
+        for (const authVal of tryAuths) {
+            try {
+                resp = await sendWithAuth(authVal);
+                if (!resp.ok) {
+                    lastErr = new Error(`HTTP ${resp.status}`);
+                    continue;
+                }
+                lastErr = null;
+                break;
+            } catch (err) {
+                lastErr = err;
+                continue;
+            }
+        }
+
+        if (!resp) {
+            throw lastErr || new Error('No response from MCP');
+        }
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const data = await fetchJSONOrSSE(resp);
+        if (!data) {
+            throw new Error('Invalid JSON-RPC response');
+        }
+
+        if (data.error) {
+            const msg = (typeof data.error.message === 'string') ? data.error.message : stringifyMCPToolResult(data.error);
+            throw new Error(msg || 'MCP JSON-RPC error');
+        }
+
+        return data;
+    };
+
+    const stringifyMCPContent = (content) => {
+        if (!content) {
+            return '';
+        }
+
+        // MCP often returns: { content: [{ type: 'text', text: '...' }, ...] }
+        if (Array.isArray(content)) {
+            return content.map((c) => {
+                if (!c) {
+                    return '';
+                }
+                if (typeof c === 'string') {
+                    return c;
+                }
+                if (typeof c.text === 'string') {
+                    return c.text;
+                }
+                return stringifyMCPToolResult(c);
+            }).filter(Boolean).join('\n');
+        }
+
+        if (typeof content === 'string') {
+            return content;
+        }
+
+        if (typeof content.text === 'string') {
+            return content.text;
+        }
+
+        return stringifyMCPToolResult(content);
+    };
+
+    let lastErr = null;
+
+    // 1) Try REST-ish tool-call endpoints (common in browser-friendly adapters).
+    for (const url of guessMCPToolCallURLs(server.url, server.url_prefix)) {
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                lastErr = new Error(`HTTP ${resp.status}`);
+                continue;
+            }
+
+            const data = await resp.json().catch(() => null);
+            if (data === null) {
+                const text = await resp.text().catch(() => '');
+                return text;
+            }
+
+            // Common shapes: { result: ... } or { content: ... } or direct JSON.
+            if (data && typeof data === 'object') {
+                if (Object.prototype.hasOwnProperty.call(data, 'result')) {
+                    return stringifyMCPToolResult(data.result);
+                }
+                if (Object.prototype.hasOwnProperty.call(data, 'content')) {
+                    return stringifyMCPToolResult(data.content);
+                }
+            }
+
+            return stringifyMCPToolResult(data);
+        } catch (err) {
+            lastErr = err;
+            continue;
+        }
+    }
+
+    // 2) Fallback: MCP JSON-RPC over streamable HTTP.
+    const rpcMethods = ['tools/call', 'tools.call'];
+    for (const endpoint of guessJSONRPCEndpoints(server)) {
+        for (const method of rpcMethods) {
+            try {
+                const rpc = await callJSONRPC(endpoint, method, body);
+                if (rpc.result) {
+                    if (Object.prototype.hasOwnProperty.call(rpc.result, 'content')) {
+                        return stringifyMCPContent(rpc.result.content);
+                    }
+                    if (Object.prototype.hasOwnProperty.call(rpc.result, 'result')) {
+                        return stringifyMCPToolResult(rpc.result.result);
+                    }
+                    return stringifyMCPToolResult(rpc.result);
+                }
+                return stringifyMCPToolResult(rpc);
+            } catch (err) {
+                lastErr = err;
+                continue;
+            }
+        }
+    }
+
+    throw lastErr || new Error('Failed to call MCP tool');
+}
+
+/**
+ * generateUUIDv4 generates a UUID v4 string.
+ *
+ * @returns {string} UUID.
+ */
+function generateUUIDv4 () {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    // Fallback: not cryptographically strong, but good enough for session correlation.
+    const hex = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+    return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+}
+
+/**
+ * getMCPAuthorizationHeaderCandidates returns possible authorization header values.
+ *
+ * Some MCP deployments expect raw tokens (e.g. `sk-...`) instead of `Bearer sk-...`.
+ *
+ * @param {string} apiKey - User configured API key.
+ * @returns {string[]} Authorization header values to try in order.
+ */
+function getMCPAuthorizationHeaderCandidates (apiKey) {
+    const key = libs.TrimSpace(apiKey || '');
+    if (!key) {
+        return [];
+    }
+
+    // If user already provided a scheme, keep it.
+    if (/^bearer\s+/i.test(key)) {
+        return [key];
+    }
+
+    // Try raw token first (matches mcp.laisky.com), then Bearer.
+    return [key, `Bearer ${key}`];
+}
+
+/**
+ * syncMCPServerTools fetches tool definitions from the MCP server and caches them into session config.
+ *
+ * @param {string} serverId - MCP server id.
+ */
+async function syncMCPServerTools (serverId) {
+    const sconfig = await getChatSessionConfig();
+    if (!sconfig.mcp_servers || !Array.isArray(sconfig.mcp_servers)) {
+        sconfig.mcp_servers = [];
+    }
+
+    const server = sconfig.mcp_servers.find((s) => s && s.id === serverId);
+    if (!server) {
+        showalert('warning', 'MCP server not found.');
+        return;
+    }
+
+    try {
+        ShowSpinner();
+
+        const authCandidates = getMCPAuthorizationHeaderCandidates(server?.api_key);
+
+        // For REST-ish GET endpoints, do NOT include text/event-stream in Accept,
+        // otherwise some servers will keep the connection open.
+        const getHeaders = {
+            Accept: 'application/json'
+        };
+        if (authCandidates.length > 0) {
+            getHeaders.authorization = authCandidates[0];
+        }
+
+        // For JSON-RPC streamable HTTP, allow SSE.
+        const rpcHeaders = {
+            Accept: 'application/json, text/event-stream'
+        };
+        if (authCandidates.length > 0) {
+            rpcHeaders.authorization = authCandidates[0];
+        }
+
+        const fetchToolListFromURLs = async (urls) => {
+            let lastErr = null;
+            for (const fetchURL of urls) {
+                try {
+                    const resp = await fetchWithTimeout(fetchURL, { method: 'GET', headers: getHeaders }, 5000);
+                    if (!resp.ok) {
+                        lastErr = new Error(`HTTP ${resp.status}`);
+                        continue;
+                    }
+
+                    const ct = (resp.headers.get('content-type') || '').toLowerCase();
+                    if (ct.includes('text/html')) {
+                        lastErr = new Error('Got HTML instead of tool list');
+                        continue;
+                    }
+
+                    const data = await fetchJSONOrSSE(resp);
+                    const normalizedTools = normalizeMCPToolListResponse(data);
+                    if (!normalizedTools) {
+                        lastErr = new Error('Invalid tool list format received');
+                        continue;
+                    }
+
+                    return normalizedTools;
+                } catch (err) {
+                    lastErr = err;
+                    continue;
+                }
+            }
+
+            throw lastErr || new Error('Failed to fetch tools');
+        };
+
+        const fetchToolsViaJSONRPC = async (srv) => {
+            const baseURL = libs.TrimSpace(srv?.url || '').replace(/\/+$/, '');
+            const endpointURL = `${getURLOrigin(baseURL) || baseURL}/`;
+
+            const payloadBase = {
+                jsonrpc: '2.0',
+                id: libs.RandomString(8)
+            };
+
+            // Ensure session + protocol headers.
+            const protocolVersion = libs.TrimSpace(srv?.mcp_protocol_version || srv?.protocol_version || '2025-06-18');
+            let sessionID = libs.TrimSpace(srv?.mcp_session_id || '');
+            if (!sessionID) {
+                sessionID = `mcp-session-${generateUUIDv4()}`;
+                srv.mcp_session_id = sessionID;
+            }
+            srv.mcp_protocol_version = protocolVersion;
+
+            const baseHeaders = {
+                ...rpcHeaders,
+                'Content-Type': 'application/json',
+                'mcp-protocol-version': protocolVersion,
+                'mcp-session-id': sessionID
+            };
+
+            const tryAuths = authCandidates.length > 0 ? authCandidates : [''];
+
+            const postRPC = async (authVal, body) => {
+                const h = { ...baseHeaders };
+                if (authVal) {
+                    h.authorization = authVal;
+                } else {
+                    delete h.authorization;
+                }
+
+                return fetch(endpointURL, {
+                    method: 'POST',
+                    headers: h,
+                    body: JSON.stringify(body)
+                });
+            };
+
+            // initialize
+            if (!srv.mcp_initialized) {
+                let initLastErr = null;
+                for (const authVal of tryAuths) {
+                    try {
+                        const initBody = {
+                            ...payloadBase,
+                            id: 0,
+                            method: 'initialize',
+                            params: {
+                                protocolVersion,
+                                capabilities: {
+                                    sampling: {},
+                                    elicitation: {},
+                                    roots: { listChanged: true }
+                                },
+                                clientInfo: {
+                                    name: 'go-ramjet-gptchat',
+                                    version: '0.0.0'
+                                }
+                            }
+                        };
+
+                        const initResp = await postRPC(authVal, initBody);
+                        if (!initResp.ok) {
+                            initLastErr = new Error(`HTTP ${initResp.status}`);
+                            continue;
+                        }
+
+                        const initData = await fetchJSONOrSSE(initResp);
+                        if (initData && initData.error) {
+                            const msg = (typeof initData.error.message === 'string') ? initData.error.message : stringifyMCPToolResult(initData.error);
+                            initLastErr = new Error(msg || 'MCP initialize error');
+                            continue;
+                        }
+
+                        // notifications/initialized
+                        const notifyResp = await postRPC(authVal, {
+                            jsonrpc: '2.0',
+                            method: 'notifications/initialized'
+                        });
+                        if (!notifyResp.ok) {
+                            initLastErr = new Error(`HTTP ${notifyResp.status}`);
+                            continue;
+                        }
+
+                        srv.mcp_initialized = true;
+                        initLastErr = null;
+                        break;
+                    } catch (err) {
+                        initLastErr = err;
+                        continue;
+                    }
+                }
+
+                if (initLastErr) {
+                    throw initLastErr;
+                }
+            }
+
+            const methods = ['tools/list', 'tools.list'];
+            let lastErr = null;
+
+            for (const method of methods) {
+                for (const authVal of tryAuths) {
+                    try {
+                        const resp = await postRPC(authVal, {
+                            ...payloadBase,
+                            method,
+                            params: {
+                                _meta: { progressToken: 1 }
+                            }
+                        });
+
+                        if (!resp.ok) {
+                            lastErr = new Error(`HTTP ${resp.status}`);
+                            continue;
+                        }
+
+                        const data = await fetchJSONOrSSE(resp);
+                        if (!data) {
+                            lastErr = new Error('Invalid JSON-RPC response');
+                            continue;
+                        }
+                        if (data.error) {
+                            const msg = (typeof data.error.message === 'string') ? data.error.message : stringifyMCPToolResult(data.error);
+                            lastErr = new Error(msg || 'MCP JSON-RPC error');
+                            continue;
+                        }
+
+                        const normalizedTools = normalizeMCPToolListResponse(data);
+                        if (!normalizedTools) {
+                            lastErr = new Error('Invalid tool list format received');
+                            continue;
+                        }
+
+                        return normalizedTools;
+                    } catch (err) {
+                        lastErr = err;
+                        continue;
+                    }
+                }
+            }
+
+            throw lastErr || new Error('Failed to fetch tools via JSON-RPC');
+        };
+
+        const trimmedURL = libs.TrimSpace(server.url || '');
+        if (!trimmedURL) {
+            throw new Error('Empty MCP URL');
+        }
+
+        let tools = null;
+        let lastErr = null;
+
+        // 1) Try REST-ish tool list endpoints.
+        try {
+            tools = await fetchToolListFromURLs(guessMCPToolListURLs(server.url, server.url_prefix));
+        } catch (err) {
+            lastErr = err;
+        }
+
+        // 2) If that failed, try discovering urlPrefix from runtime-config.json and retry.
+        if (!tools) {
+            const runtimeConfig = await fetchMCPRuntimeConfig(server.url);
+            const urlPrefix = libs.TrimSpace(runtimeConfig?.urlPrefix || runtimeConfig?.url_prefix || '');
+            if (urlPrefix && urlPrefix !== server.url_prefix) {
+                server.url_prefix = urlPrefix;
+            }
+
+            try {
+                tools = await fetchToolListFromURLs(guessMCPToolListURLs(server.url, server.url_prefix));
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+
+        // 3) Final fallback: MCP JSON-RPC (streamable HTTP).
+        if (!tools) {
+            try {
+                tools = await fetchToolsViaJSONRPC(server);
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+
+        if (!tools) {
+            throw lastErr || new Error('Failed to fetch tools');
+        }
+
+        server.tools = normalizeToolsToOpenAIFormat(tools);
+
+        // Initialize per-tool enablement. Default to enabling all synced tools,
+        // while preserving any prior user selections.
+        const syncedToolNames = server.tools.map((t) => extractToolNameFromDefinition(t)).filter(Boolean);
+        const prevEnabled = Array.isArray(server.enabled_tool_names) ? server.enabled_tool_names : [];
+        const prevSet = new Set(prevEnabled);
+        const merged = [];
+        for (const name of syncedToolNames) {
+            // If user had a selection list before, keep it. Otherwise enable by default.
+            if (prevEnabled.length === 0 || prevSet.has(name)) {
+                merged.push(name);
+            }
+        }
+        server.enabled_tool_names = merged;
+
+        await saveChatSessionConfig(sconfig);
+        showalert('success', `Successfully fetched ${server.tools.length} tools for ${server.name}`);
+    } catch (err) {
+        console.error(err);
+        showalert('danger', `Failed to fetch tools from ${server.name}: ${err.message}`);
+    } finally {
+        HideSpinner();
+    }
+}
+
+/**
+ * setupMCPManager wires MCP server CRUD + syncing in the config sidebar.
+ */
+async function setupMCPManager () {
+    const container = document.querySelector('#hiddenChatConfigSideBar .mcp-manager');
+    if (!container) {
+        return;
+    }
+
+    const listContainer = container.querySelector('.mcp-server-list');
+    const modalEle = document.getElementById('modal-mcp-edit');
+    if (!listContainer || !modalEle) {
+        return;
+    }
+
+    const modal = new window.bootstrap.Modal(modalEle);
+
+    /**
+     * renderMCPList renders MCP servers from the active session config.
+     */
+    const renderMCPList = async () => {
+        const sconfig = await getChatSessionConfig();
+        const servers = (sconfig.mcp_servers && Array.isArray(sconfig.mcp_servers)) ? sconfig.mcp_servers : [];
+
+        listContainer.innerHTML = '';
+        if (servers.length === 0) {
+            listContainer.innerHTML = '<div class="text-muted small fst-italic">No servers configured.</div>';
+            return;
+        }
+
+        servers.forEach((server) => {
+            const toolCount = (server.tools && Array.isArray(server.tools)) ? server.tools.length : 0;
+            const enabledTools = Array.isArray(server.enabled_tool_names) ? server.enabled_tool_names : [];
+            const enabledCount = (toolCount === 0) ? 0 : (enabledTools.length === 0 ? toolCount : enabledTools.length);
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+
+            const toolPanelID = `mcp-tools-${libs.sanitizeHTML(server.id)}`;
+            const toolRows = (Array.isArray(server.tools) ? server.tools : []).map((t) => {
+                const name = extractToolNameFromDefinition(t);
+                if (!name) {
+                    return '';
+                }
+                const desc = (t?.function?.description || '').trim();
+                const checked = enabledTools.length === 0 ? true : enabledTools.includes(name);
+                return `
+                    <div class="d-flex align-items-start justify-content-between gap-2 py-2 border-top">
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="text-truncate"><strong>${libs.sanitizeHTML(name)}</strong></div>
+                            ${desc ? `<div class="small text-muted">${libs.sanitizeHTML(desc)}</div>` : ''}
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input mcp-tool-enable-switch" type="checkbox" ${checked ? 'checked' : ''}
+                                data-server-id="${libs.sanitizeHTML(server.id)}" data-tool-name="${libs.sanitizeHTML(name)}">
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center overflow-hidden">
+                        <div class="form-check form-switch me-2">
+                            <input class="form-check-input mcp-enable-switch" type="checkbox" ${server.enabled ? 'checked' : ''} data-id="${libs.sanitizeHTML(server.id)}">
+                        </div>
+                        <div class="text-truncate" title="${libs.sanitizeHTML(server.url || '')}">
+                            <strong>${libs.sanitizeHTML(server.name || '')}</strong>
+                            <div class="small text-muted">${enabledCount}/${toolCount} tools enabled</div>
+                        </div>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary btn-tools" ${toolCount === 0 ? 'disabled' : ''}
+                            title="Select Tools" data-bs-toggle="collapse" data-bs-target="#${toolPanelID}" aria-expanded="false">
+                            <i class="bi bi-plug"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sync" title="Sync Tools" data-id="${libs.sanitizeHTML(server.id)}"><i class="bi bi-arrow-repeat"></i></button>
+                        <button class="btn btn-outline-secondary btn-edit" title="Edit" data-id="${libs.sanitizeHTML(server.id)}"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-outline-danger btn-del" title="Delete" data-id="${libs.sanitizeHTML(server.id)}"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>
+                <div id="${toolPanelID}" class="collapse mt-2">
+                    <div class="small text-muted mb-2">Enabled tools will be sent to the model for calling.</div>
+                    <div class="border rounded px-2">${toolRows || '<div class="py-2 text-muted small fst-italic">No tools synced yet.</div>'}</div>
+                </div>
+            `;
+            listContainer.appendChild(item);
+        });
+
+        bindMCPListEvents();
+    };
+
+    /**
+     * openMCPModal opens the Add/Edit dialog.
+     *
+     * @param {object|null} server - Existing server or null.
+     */
+    const openMCPModal = (server = null) => {
+        const body = modalEle.querySelector('.modal-body');
+        if (!body) {
+            return;
+        }
+
+        body.querySelector('.mcp-id').value = server ? (server.id || '') : '';
+        body.querySelector('.mcp-name').value = server ? (server.name || '') : '';
+        body.querySelector('.mcp-url').value = server ? (server.url || '') : '';
+        body.querySelector('.mcp-key').value = server ? (server.api_key || '') : '';
+        modal.show();
+    };
+
+    /**
+     * bindMCPListEvents binds all list events (toggle/sync/edit/delete).
+     */
+    const bindMCPListEvents = () => {
+        listContainer.querySelectorAll('.mcp-enable-switch').forEach((el) => {
+            el.addEventListener('change', async (e) => {
+                const id = e.target.dataset.id;
+                const sconfig = await getChatSessionConfig();
+                if (!sconfig.mcp_servers || !Array.isArray(sconfig.mcp_servers)) {
+                    sconfig.mcp_servers = [];
+                }
+                const server = sconfig.mcp_servers.find((s) => s && s.id === id);
+                if (!server) {
+                    return;
+                }
+
+                server.enabled = !!e.target.checked;
+                await saveChatSessionConfig(sconfig);
+            });
+        });
+
+        listContainer.querySelectorAll('.btn-sync').forEach((el) => {
+            el.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                await syncMCPServerTools(id);
+                await renderMCPList();
+            });
+        });
+
+        listContainer.querySelectorAll('.btn-edit').forEach((el) => {
+            el.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                const sconfig = await getChatSessionConfig();
+                const server = (sconfig.mcp_servers || []).find((s) => s && s.id === id);
+                if (server) {
+                    openMCPModal(server);
+                }
+            });
+        });
+
+        listContainer.querySelectorAll('.btn-del').forEach((el) => {
+            el.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                ConfirmModal('Delete this MCP server?', async () => {
+                    const sconfig = await getChatSessionConfig();
+                    sconfig.mcp_servers = (sconfig.mcp_servers || []).filter((s) => s && s.id !== id);
+                    await saveChatSessionConfig(sconfig);
+                    await renderMCPList();
+                });
+            });
+        });
+
+        listContainer.querySelectorAll('.mcp-tool-enable-switch').forEach((el) => {
+            el.addEventListener('change', async (e) => {
+                const serverID = e.target.dataset.serverId;
+                const toolName = e.target.dataset.toolName;
+                if (!serverID || !toolName) {
+                    return;
+                }
+
+                const sconfig = await getChatSessionConfig();
+                if (!sconfig.mcp_servers || !Array.isArray(sconfig.mcp_servers)) {
+                    sconfig.mcp_servers = [];
+                }
+                const server = sconfig.mcp_servers.find((s) => s && s.id === serverID);
+                if (!server) {
+                    return;
+                }
+
+                const syncedNames = (Array.isArray(server.tools) ? server.tools : [])
+                    .map((t) => extractToolNameFromDefinition(t))
+                    .filter(Boolean);
+
+                let enabled = Array.isArray(server.enabled_tool_names) ? server.enabled_tool_names.slice() : [];
+                if (enabled.length === 0) {
+                    // First time toggling: treat as "all enabled" baseline.
+                    enabled = syncedNames.slice();
+                }
+
+                const set = new Set(enabled);
+                if (e.target.checked) {
+                    set.add(toolName);
+                } else {
+                    set.delete(toolName);
+                }
+
+                // Keep only tools that still exist.
+                server.enabled_tool_names = syncedNames.filter((n) => set.has(n));
+                await saveChatSessionConfig(sconfig);
+                await renderMCPList();
+            });
+        });
+    };
+
+    modalEle.querySelector('.btn-save-mcp').addEventListener('click', async () => {
+        const body = modalEle.querySelector('.modal-body');
+        const id = libs.TrimSpace(body.querySelector('.mcp-id').value || '');
+        const name = libs.TrimSpace(body.querySelector('.mcp-name').value || '');
+        const url = libs.TrimSpace(body.querySelector('.mcp-url').value || '');
+        const apiKey = libs.TrimSpace(body.querySelector('.mcp-key').value || '');
+
+        if (!name || !url) {
+            showalert('warning', 'Name and URL are required.');
+            return;
+        }
+
+        try {
+            ShowSpinner();
+            const sconfig = await getChatSessionConfig();
+            if (!sconfig.mcp_servers || !Array.isArray(sconfig.mcp_servers)) {
+                sconfig.mcp_servers = [];
+            }
+
+            let server;
+            if (id) {
+                server = sconfig.mcp_servers.find((s) => s && s.id === id);
+                if (!server) {
+                    showalert('warning', 'MCP server not found.');
+                    return;
+                }
+                server.name = name;
+                server.url = url;
+                server.api_key = apiKey;
+            } else {
+                server = {
+                    id: libs.RandomString(8),
+                    name,
+                    url,
+                    api_key: apiKey,
+                    enabled: true,
+                    tools: []
+                };
+                sconfig.mcp_servers.push(server);
+            }
+
+            await saveChatSessionConfig(sconfig);
+            modal.hide();
+            await syncMCPServerTools(server.id);
+            await renderMCPList();
+        } catch (err) {
+            console.error(err);
+            showalert('danger', `Error saving MCP server: ${err.message}`);
+        } finally {
+            HideSpinner();
+        }
+    });
+
+    container.querySelector('.add-mcp-server').addEventListener('click', () => {
+        openMCPModal();
+    });
+
+    await renderMCPList();
+
+    // Auto-sync tools on first run when enabled servers have no cached tools yet.
+    // This fulfills the "automatically fetch tool list" requirement.
+    try {
+        const sconfig = await getChatSessionConfig();
+        const servers = (sconfig.mcp_servers && Array.isArray(sconfig.mcp_servers)) ? sconfig.mcp_servers : [];
+        const needsSync = servers.find((server) => {
+            if (!server || !server.enabled) {
+                return false;
+            }
+            return !Array.isArray(server.tools) || server.tools.length === 0;
+        });
+
+        if (needsSync) {
+            // Fire-and-forget; UI will show spinner/alerts.
+            syncMCPServerTools(needsSync.id).then(renderMCPList).catch(() => null);
+        }
+    } catch (err) {
+        console.warn('failed to auto-sync MCP tools:', err);
+    }
+    libs.KvAddListener(
+        KvKeyPrefixSelectedSession,
+        async () => {
+            await renderMCPList();
+        },
+        'mcp_manager_session_change'
+    );
 }
 
 /**
@@ -6787,7 +8545,7 @@ async function updateConfigFromSessionConfig () {
 
     // update chat controller
     chatContainer.querySelector('#switchChatEnableHttpsCrawler').checked = !sconfig.chat_switch.disable_https_crawler;
-    chatContainer.querySelector('#switchChatEnableGoogleSearch').checked = sconfig.chat_switch.enable_google_search;
+    chatContainer.querySelector('#switchChatEnableMCP').checked = !!sconfig.chat_switch.enable_mcp;
     chatContainer.querySelector('#switchChatEnableAllInOne').checked = sconfig.chat_switch.all_in_one;
     // chatContainer.querySelector('#switchChatEnableAutoSync').checked = await libs.KvGet(KvKeyAutoSyncUserConfig);
     chatContainer.querySelector('#selectDrawNImage').value = sconfig.chat_switch.draw_n_images;
