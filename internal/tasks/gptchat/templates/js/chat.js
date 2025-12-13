@@ -8,6 +8,22 @@ const ReasoningStageThinking = 'thinking';
 const ReasoningStageTools = 'tools';
 
 /**
+ * ToolEventPrefixes contains known tool progress message prefixes.
+ *
+ * These are emitted by backend tool-loop bridging (Responses API + MCP).
+ *
+ * @type {string[]}
+ */
+const ToolEventPrefixes = [
+    'Upstream tool_call:',
+    'args:',
+    'exec MCP tool:',
+    'tool ok',
+    'tool error:',
+    'tool loop limit reached'
+];
+
+/**
  * splitReasoningStage strips internal tool markers from reasoning content and returns the detected stage.
  *
  * @param {string} chunk - Raw reasoning chunk.
@@ -22,6 +38,161 @@ function splitReasoningStage (chunk) {
 
     const cleaned = raw.replaceAll(`${marker} `, '').replaceAll(marker, '');
     return { chunk: cleaned, stage: ReasoningStageTools };
+}
+
+/**
+ * isToolEventLine checks whether a single line looks like a tool progress line.
+ *
+ * @param {string} line - Line to check.
+ * @returns {boolean} True if line looks like a tool event.
+ */
+function isToolEventLine (line) {
+    const s = String(line || '').trim();
+    if (!s) {
+        return false;
+    }
+
+    return ToolEventPrefixes.some((p) => s.startsWith(p));
+}
+
+/**
+ * splitToolEventsChunk normalizes a tool output chunk into individual event lines.
+ *
+ * The upstream may concatenate multiple tool events into a single line; this
+ * function inserts line breaks before known prefixes then splits.
+ *
+ * @param {string} chunk - Raw tool chunk (marker already removed).
+ * @returns {string[]} Tool event lines.
+ */
+function splitToolEventsChunk (chunk) {
+    let text = String(chunk || '');
+    if (!text.trim()) {
+        return [];
+    }
+
+    // Normalize newlines first.
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // If upstream concatenates messages without newlines, re-split them.
+    // Insert a newline before each known prefix when preceded by whitespace.
+    ToolEventPrefixes.forEach((prefix) => {
+        text = text.replaceAll(` ${prefix}`, `\n${prefix}`);
+        text = text.replaceAll(`\t${prefix}`, `\n${prefix}`);
+    });
+
+    const lines = text
+        .split('\n')
+        .map((l) => String(l || '').trim())
+        .filter(Boolean);
+
+    // If nothing matches known prefixes, keep the raw chunk as one line.
+    if (!lines.some(isToolEventLine)) {
+        return [text.trim()];
+    }
+
+    return lines;
+}
+
+/**
+ * renderToolEventsHTML renders tool events into safe HTML.
+ *
+ * @param {string[]} events - Tool event lines.
+ * @returns {string} HTML snippet.
+ */
+function renderToolEventsHTML (events) {
+    if (!Array.isArray(events) || events.length === 0) {
+        return '';
+    }
+
+    return events
+        .map((evt) => {
+            const s = String(evt || '').trim();
+            if (!s) {
+                return '';
+            }
+            return `<div class="mcp-tool-event fst-italic">🔧: ${libs.sanitizeHTML(s)}</div>`;
+        })
+        .filter(Boolean)
+        .join('');
+}
+
+/**
+ * appendToolEvents appends tool events into the tool pane without touching thinking text.
+ *
+ * @param {Element} toolsContainerEle - DOM container for tool events.
+ * @param {string[]} events - Tool event lines.
+ */
+function appendToolEvents (toolsContainerEle, events) {
+    if (!toolsContainerEle || !Array.isArray(events) || events.length === 0) {
+        return;
+    }
+
+    events.forEach((evt) => {
+        const s = String(evt || '').trim();
+        if (!s) {
+            return;
+        }
+
+        const div = document.createElement('div');
+        div.className = 'mcp-tool-event fst-italic';
+        div.textContent = `🔧: ${s}`;
+        toolsContainerEle.appendChild(div);
+    });
+}
+
+/**
+ * splitReasoningContentForUI splits stored reasoning content into thinking text and tool events.
+ *
+ * Older stored chats only have a single reasoningContent string.
+ *
+ * @param {string} reasoningContent - Stored reasoning content.
+ * @returns {{thinking: string, toolEvents: string[]}} Split result.
+ */
+function splitReasoningContentForUI (reasoningContent) {
+    const raw = String(reasoningContent || '');
+    if (!raw.trim()) {
+        return { thinking: '', toolEvents: [] };
+    }
+
+    const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const thinkingLines = [];
+    const toolEvents = [];
+
+    lines.forEach((line) => {
+        const s = String(line || '').trim();
+        if (!s) {
+            return;
+        }
+        if (isToolEventLine(s)) {
+            toolEvents.push(s);
+        } else {
+            thinkingLines.push(line);
+        }
+    });
+
+    return { thinking: thinkingLines.join('\n').trim(), toolEvents };
+}
+
+/**
+ * mergeReasoningForStorage merges thinking text and tool events into a single string for storage.
+ *
+ * @param {string} thinking - Thinking text.
+ * @param {string[]} toolEvents - Tool events.
+ * @returns {string} Combined reasoning content.
+ */
+function mergeReasoningForStorage (thinking, toolEvents) {
+    const t = String(thinking || '').trim();
+    const tools = Array.isArray(toolEvents) ? toolEvents.map((x) => String(x || '').trim()).filter(Boolean) : [];
+    if (!t && tools.length === 0) {
+        return '';
+    }
+    if (!t) {
+        return tools.join('\n');
+    }
+    if (tools.length === 0) {
+        return t;
+    }
+    return `${t}\n\n${tools.join('\n')}`;
 }
 
 // const ChatModelTurbo35 = 'gpt-3.5-turbo';
@@ -1483,7 +1654,7 @@ async function dataMigrate () {
                 disable_https_crawler: true,
                 enable_talk: false,
                 draw_n_images: 1,
-                enable_mcp: true
+                enable_mcp: false
             };
         }
         if (!eachSconfig.chat_switch.all_in_one) {
@@ -1496,7 +1667,7 @@ async function dataMigrate () {
             eachSconfig.chat_switch.enable_talk = false;
         }
         if (typeof eachSconfig.chat_switch.enable_mcp === 'undefined') {
-            eachSconfig.chat_switch.enable_mcp = true;
+            eachSconfig.chat_switch.enable_mcp = false;
         }
 
         if (!Array.isArray(eachSconfig.mcp_servers)) {
@@ -4159,6 +4330,8 @@ async function sendChat2Server (chatID, reqPrompt) {
         rawContent: '',
         isThinking: false,
         reasoningContent: '',
+        reasoningThinkingContent: '',
+        reasoningToolEvents: [],
         costUsd: '',
         model: selectedModel,
         requestid: '',
@@ -4805,15 +4978,27 @@ async function sendChat2Server (chatID, reqPrompt) {
                 const { respChunk, reasoningChunk, annotations } = parseChatResp(selectedModel, payload);
 
                 const { chunk: cleanedReasoningChunk, stage } = splitReasoningStage(reasoningChunk);
-                if (stage) {
-                    globalAIRespData.reasoningStage = stage;
-                } else if (cleanedReasoningChunk) {
-                    // Non-tool reasoning content -> Thinking stage.
-                    globalAIRespData.reasoningStage = ReasoningStageThinking;
+
+                let thinkingDelta = '';
+                let toolEventsDelta = [];
+
+                if (cleanedReasoningChunk) {
+                    // Tool stage chunks go into tool event list, not into thinking markdown.
+                    if (stage === ReasoningStageTools) {
+                        toolEventsDelta = splitToolEventsChunk(cleanedReasoningChunk);
+                        globalAIRespData.reasoningStage = ReasoningStageTools;
+                    } else {
+                        thinkingDelta = cleanedReasoningChunk;
+                        globalAIRespData.reasoningStage = ReasoningStageThinking;
+                    }
                 }
 
                 // Add to our global data store
-                globalAIRespData.reasoningContent += cleanedReasoningChunk;
+                globalAIRespData.reasoningThinkingContent += thinkingDelta;
+                if (!Array.isArray(globalAIRespData.reasoningToolEvents)) {
+                    globalAIRespData.reasoningToolEvents = [];
+                }
+                globalAIRespData.reasoningToolEvents = globalAIRespData.reasoningToolEvents.concat(toolEventsDelta);
                 globalAIRespData.rawContent += respChunk;
 
                 // Store annotations if they exist
@@ -4849,8 +5034,9 @@ async function sendChat2Server (chatID, reqPrompt) {
                         aiRespEle.innerHTML = '';
 
                         // Create containers for reasoning and response once
-                        if (globalAIRespData.reasoningContent) {
-                            const stageLabel = (globalAIRespData.reasoningStage === ReasoningStageTools) ? 'Tools...' : 'Thinking...';
+                        if ((globalAIRespData.reasoningThinkingContent && globalAIRespData.reasoningThinkingContent.trim() !== '') ||
+                            (Array.isArray(globalAIRespData.reasoningToolEvents) && globalAIRespData.reasoningToolEvents.length > 0)) {
+                            const stageLabel = 'Thinking...';
                             const reasoningHTML = `
                                 <div class="thinking-container">
                                     <p class="d-inline-flex gap-1">
@@ -4861,15 +5047,22 @@ async function sendChat2Server (chatID, reqPrompt) {
                                         </button>
                                     </p>
                                     <div class="collapse show" id="chatReasoning_${chatID}">
-                                        <div class="card card-body reasoning-content"></div>
+                                        <div class="card card-body reasoning-content">
+                                            <div class="reasoning-thinking"></div>
+                                            <div class="reasoning-tools"></div>
+                                        </div>
                                     </div>
                                 </div>`;
                             aiRespEle.insertAdjacentHTML('beforeend', reasoningHTML);
-                            const reasoningContainer = aiRespEle.querySelector('.reasoning-content');
+                            const thinkingContainer = aiRespEle.querySelector('.reasoning-content .reasoning-thinking');
+                            const toolsContainer = aiRespEle.querySelector('.reasoning-content .reasoning-tools');
 
-                            // Initialize reasoning container with current content
-                            if (globalAIRespData.reasoningContent.trim()) {
-                                reasoningContainer.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                            // Initialize thinking container with current content
+                            if (thinkingContainer && globalAIRespData.reasoningThinkingContent.trim()) {
+                                thinkingContainer.innerHTML = await renderHTML(globalAIRespData.reasoningThinkingContent, true);
+                            }
+                            if (toolsContainer && Array.isArray(globalAIRespData.reasoningToolEvents) && globalAIRespData.reasoningToolEvents.length > 0) {
+                                toolsContainer.innerHTML = renderToolEventsHTML(globalAIRespData.reasoningToolEvents);
                             }
                         }
 
@@ -4888,28 +5081,26 @@ async function sendChat2Server (chatID, reqPrompt) {
                         if (!aiRespEle) break;
 
                         // Re-acquire containers each time (they can be detached by re-render).
-                        const reasoningContainerEle = aiRespEle.querySelector('.reasoning-content');
+                        const thinkingContainerEle = aiRespEle.querySelector('.reasoning-content .reasoning-thinking');
+                        const toolsContainerEle = aiRespEle.querySelector('.reasoning-content .reasoning-tools');
                         let responseContainerEle = aiRespEle.querySelector('.response-content');
                         if (!responseContainerEle) {
                             aiRespEle.insertAdjacentHTML('beforeend', '<div class="response-content"></div>');
                             responseContainerEle = aiRespEle.querySelector('.response-content');
                         }
 
-                        if (cleanedReasoningChunk && reasoningContainerEle) {
-                            const btn = aiRespEle.querySelector('.thinking-container button');
-                            if (btn && globalAIRespData.reasoningStage === ReasoningStageTools) {
-                                btn.textContent = 'Tools...';
-                            } else if (btn && globalAIRespData.reasoningStage === ReasoningStageThinking) {
-                                btn.textContent = 'Thinking...';
-                            }
-
-                            // For small chunks, just append plaintext for performance
-                            if (cleanedReasoningChunk.length < 50 && !cleanedReasoningChunk.includes('\n')) {
-                                reasoningContainerEle.insertAdjacentText('beforeend', cleanedReasoningChunk);
+                        if (thinkingDelta && thinkingContainerEle) {
+                            // For small chunks, just append plaintext for performance.
+                            // Note: this is safe because thinkingContainerEle may already contain rendered HTML.
+                            if (thinkingDelta.length < 50 && !thinkingDelta.includes('\n') && thinkingContainerEle.childNodes.length === 0) {
+                                thinkingContainerEle.insertAdjacentText('beforeend', thinkingDelta);
                             } else {
-                                // For larger or formatted chunks, re-render the full content
-                                reasoningContainerEle.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
+                                thinkingContainerEle.innerHTML = await renderHTML(globalAIRespData.reasoningThinkingContent, true);
                             }
+                        }
+
+                        if (toolEventsDelta.length > 0 && toolsContainerEle) {
+                            appendToolEvents(toolsContainerEle, toolEventsDelta);
                         }
 
                         if (respChunk && responseContainerEle) {
@@ -4979,6 +5170,13 @@ async function sendChat2Server (chatID, reqPrompt) {
             }
 
             console.debug(`chat response done for chat ${chatID}`);
+
+            // Persist a combined reasoningContent for compatibility with existing storage,
+            // while keeping structured fields for improved UI rendering.
+            globalAIRespData.reasoningContent = mergeReasoningForStorage(
+                globalAIRespData.reasoningThinkingContent,
+                globalAIRespData.reasoningToolEvents
+            );
             await renderAfterAiResp(globalAIRespData, true);
         }
     };
@@ -5088,7 +5286,14 @@ async function renderAfterAiResp (chatData, saveStorage = false, rootElement = n
 
         if (rawContent && rawContent !== 'undefined') {
             let renderedHTML = '';
-            if (chatData.reasoningContent && chatData.reasoningContent.trim() !== '') {
+
+            const storedThinking = (typeof chatData.reasoningThinkingContent === 'string') ? chatData.reasoningThinkingContent : '';
+            const storedToolEvents = Array.isArray(chatData.reasoningToolEvents) ? chatData.reasoningToolEvents : null;
+            const fallback = splitReasoningContentForUI(chatData.reasoningContent || '');
+            const thinkingText = storedThinking || fallback.thinking;
+            const toolEvents = storedToolEvents || fallback.toolEvents;
+
+            if ((thinkingText && thinkingText.trim() !== '') || (Array.isArray(toolEvents) && toolEvents.length > 0)) {
                 const expanded = saveStorage ? 'true' : 'false';
                 const showed = saveStorage ? ' show' : '';
                 renderedHTML += `
@@ -5102,7 +5307,8 @@ async function renderAfterAiResp (chatData, saveStorage = false, rootElement = n
                         </p>
                         <div class="collapse${showed}" id="chatReasoning_${chatData.chatID}">
                             <div class="card card-body reasoning-content">
-                                ${await renderHTML(chatData.reasoningContent, true)}
+                                <div class="reasoning-thinking">${thinkingText ? await renderHTML(thinkingText, true) : ''}</div>
+                                <div class="reasoning-tools">${renderToolEventsHTML(toolEvents || [])}</div>
                             </div>
                         </div>
                     </div>`;
@@ -6985,7 +7191,7 @@ function ensureSessionConfigDefaults (sconfig) {
             disable_https_crawler: true,
             enable_talk: false,
             draw_n_images: 1,
-            enable_mcp: true
+            enable_mcp: false
         };
         changed = true;
     }
@@ -8009,7 +8215,7 @@ async function syncMCPServerTools (serverId, opts = {}) {
         if (!silent) {
             showalert('warning', 'MCP server not found.');
         }
-        return;
+        return { ok: false, toolCount: 0, error: 'MCP server not found' };
     }
 
     try {
@@ -8281,11 +8487,15 @@ async function syncMCPServerTools (serverId, opts = {}) {
         if (!silent) {
             showalert('success', `Successfully fetched ${server.tools.length} tools for ${server.name}`);
         }
+
+        return { ok: true, toolCount: server.tools.length, serverName: server.name };
     } catch (err) {
         console.error(err);
         if (!silent) {
             showalert('danger', `Failed to fetch tools from ${server.name}: ${err.message}`);
         }
+
+        return { ok: false, toolCount: 0, serverName: server.name, error: err.message };
     } finally {
         if (showSpinner) {
             HideSpinner();
@@ -8566,27 +8776,45 @@ async function setupMCPManager () {
 
     await renderMCPList();
 
-    // Auto-sync tools in background when enabled servers have no cached tools yet.
-    // This should NOT block the page or pop global spinners/alerts.
-    try {
-        const sconfig = await getChatSessionConfig();
-        const servers = (sconfig.mcp_servers && Array.isArray(sconfig.mcp_servers)) ? sconfig.mcp_servers : [];
-
-        const needsSyncServers = servers.filter((server) => {
-            if (!server || !server.enabled) {
-                return false;
+    // Auto-load tools on page start (background) and notify user.
+    // This should NOT block the page or pop global spinners.
+    (async () => {
+        try {
+            const sconfig = await getChatSessionConfig();
+            const servers = (sconfig.mcp_servers && Array.isArray(sconfig.mcp_servers)) ? sconfig.mcp_servers : [];
+            const enabledServers = servers.filter((server) => server && server.enabled);
+            if (enabledServers.length === 0) {
+                return;
             }
-            return !Array.isArray(server.tools) || server.tools.length === 0;
-        });
 
-        needsSyncServers.forEach((server) => {
-            syncMCPServerTools(server.id, { silent: true, showSpinner: false })
-                .then(renderMCPList)
-                .catch(() => null);
-        });
-    } catch (err) {
-        console.warn('failed to auto-sync MCP tools:', err);
-    }
+            // If tools are already cached, count them as loaded without re-fetch.
+            const toFetch = enabledServers.filter((server) => !Array.isArray(server.tools) || server.tools.length === 0);
+
+            const results = await Promise.all(
+                toFetch.map((server) => syncMCPServerTools(server.id, { silent: true, showSpinner: false }))
+            );
+
+            let failedServers = 0;
+            results.forEach((r) => {
+                if (!r || !r.ok) {
+                    failedServers += 1;
+                }
+            });
+
+            // Refresh list + compute counts from latest stored config.
+            await renderMCPList();
+            const fresh = await getChatSessionConfig();
+            const freshServers = (fresh.mcp_servers && Array.isArray(fresh.mcp_servers)) ? fresh.mcp_servers : [];
+            const freshEnabled = freshServers.filter((s) => s && s.enabled);
+            const okServers = freshEnabled.filter((s) => Array.isArray(s.tools) && s.tools.length > 0).length;
+            const loadedTools = freshEnabled.reduce((acc, s) => acc + ((Array.isArray(s.tools) ? s.tools.length : 0)), 0);
+
+            const alertType = failedServers > 0 ? 'warning' : 'info';
+            showalert(alertType, `MCP tools loaded: ${loadedTools} (servers ok: ${okServers}, failed: ${failedServers})`);
+        } catch (err) {
+            console.warn('failed to auto-load MCP tools:', err);
+        }
+    })();
     libs.KvAddListener(
         KvKeyPrefixSelectedSession,
         async () => {
