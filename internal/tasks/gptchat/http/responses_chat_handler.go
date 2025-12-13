@@ -22,6 +22,8 @@ import (
 
 const defaultToolLoopMaxRounds = 5
 
+const toolStepMarker = "[[TOOLS]] "
+
 // ChatHandler handles the web UI chat endpoint.
 //
 // It always talks to upstream using the OpenAI Responses API schema, injects enabled tools,
@@ -103,20 +105,20 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 
 		// Buffer tool-call steps (streaming starts after headers are set).
 		for _, fc := range calls {
-			thinkingSteps = append(thinkingSteps, "Upstream tool_call: "+fc.Name+"\n")
+			thinkingSteps = append(thinkingSteps, toolStepMarker+"Upstream tool_call: "+fc.Name+"\n")
 			if strings.TrimSpace(fc.Arguments) != "" {
-				thinkingSteps = append(thinkingSteps, "args: "+fc.Arguments+"\n")
+				thinkingSteps = append(thinkingSteps, toolStepMarker+"args: "+fc.Arguments+"\n")
 			}
 
-			toolOutput, execInfo, toolErr := executeToolCall(ctx, frontendReq, fc)
+			toolOutput, execInfo, toolErr := executeToolCall(ctx, user, frontendReq, fc)
 			if execInfo != "" {
-				thinkingSteps = append(thinkingSteps, execInfo+"\n")
+				thinkingSteps = append(thinkingSteps, toolStepMarker+execInfo+"\n")
 			}
 			if toolErr != nil {
-				thinkingSteps = append(thinkingSteps, "tool error: "+toolErr.Error()+"\n")
+				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool error: "+toolErr.Error()+"\n")
 				toolOutput = "Tool execution failed: " + toolErr.Error()
 			} else {
-				thinkingSteps = append(thinkingSteps, "tool ok\n")
+				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool ok\n")
 			}
 
 			// Feed back to upstream.
@@ -131,7 +133,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 
 	if finalText == "" {
 		if lastCalls > 0 {
-			thinkingSteps = append(thinkingSteps, "tool loop limit reached; returning partial result\n")
+			thinkingSteps = append(thinkingSteps, toolStepMarker+"tool loop limit reached; returning partial result\n")
 			finalText = "(tool loop limit reached)"
 		} else {
 			finalText = "(no output)"
@@ -159,7 +161,13 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	return writeFinalToUI(ctx, frontendReq, lastUpstreamHeader, finalText, thinkingSteps)
 }
 
-func writeFinalToUI(ctx *gin.Context, frontendReq *FrontendReq, upstreamHeader http.Header, finalText string, thinkingSteps []string) error {
+func writeFinalToUI(
+	ctx *gin.Context,
+	frontendReq *FrontendReq,
+	upstreamHeader http.Header,
+	finalText string,
+	thinkingSteps []string,
+) error {
 	if frontendReq == nil {
 		return errors.New("empty frontend request")
 	}
@@ -222,10 +230,23 @@ func writeFinalToUI(ctx *gin.Context, frontendReq *FrontendReq, upstreamHeader h
 	return err
 }
 
-func executeToolCall(ctx *gin.Context, frontendReq *FrontendReq, fc OpenAIResponsesFunctionCall) (string, string, error) {
+func executeToolCall(
+	ctx *gin.Context,
+	user *config.UserConfig,
+	frontendReq *FrontendReq,
+	fc OpenAIResponsesFunctionCall,
+) (string, string, error) {
 	// 1) Try local tools.
 	if out, err := Call(fc.Name, fc.Arguments); err == nil {
-		return out, "exec local tool: " + fc.Name, nil
+		capped, changed, capErr := capToolOutput(gmw.Ctx(ctx), user, frontendReq, fc.Name, fc.Arguments, out)
+		info := "exec local tool: " + fc.Name
+		if changed {
+			info += " (output capped)"
+		}
+		if capErr != nil {
+			info += " (cap warn: " + capErr.Error() + ")"
+		}
+		return capped, info, nil
 	}
 
 	// 2) Try MCP.
@@ -233,9 +254,36 @@ func executeToolCall(ctx *gin.Context, frontendReq *FrontendReq, fc OpenAIRespon
 	if server == nil {
 		return "", "", errors.Errorf("tool %q not found in enabled MCP servers", fc.Name)
 	}
+
+	// Rate limit MCP tools for freetier users.
+	// Only applies to users whose API key begins with "FREETIER-".
+	if strings.HasPrefix(getRawUserToken(ctx), "FREETIER-") {
+		if expensiveModelRateLimiter == nil {
+			onceLimiter.Do(setupRateLimiter)
+		}
+		ratelimitCost := config.Config.RateLimitExpensiveModelsIntervalSeconds
+		if ratelimitCost <= 0 {
+			ratelimitCost = 600
+		}
+		if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
+			return "", "", errors.New("MCP tools are rate limited for freetier users; please try again later")
+		}
+	}
+
 	info := "exec MCP tool: " + fc.Name + " @ " + strings.TrimSpace(server.URL)
 	out, err := callMCPTool(gmw.Ctx(ctx), server, fc.Name, fc.Arguments)
-	return out, info, err
+	if err != nil {
+		return out, info, err
+	}
+	// Cap MCP output before passing to upstream.
+	capped, changed, capErr := capToolOutput(gmw.Ctx(ctx), user, frontendReq, fc.Name, fc.Arguments, out)
+	if changed {
+		info += " (output capped)"
+	}
+	if capErr != nil {
+		info += " (cap warn: " + capErr.Error() + ")"
+	}
+	return capped, info, nil
 }
 
 func findMCPServerForToolName(servers []MCPServerConfig, toolName string) *MCPServerConfig {

@@ -4,6 +4,26 @@ const libs = window.libs;
 
 const robotIcon = '🤖️';
 
+const ReasoningStageThinking = 'thinking';
+const ReasoningStageTools = 'tools';
+
+/**
+ * splitReasoningStage strips internal tool markers from reasoning content and returns the detected stage.
+ *
+ * @param {string} chunk - Raw reasoning chunk.
+ * @returns {{chunk: string, stage: (string|null)}} Cleaned chunk and detected stage.
+ */
+function splitReasoningStage (chunk) {
+    const raw = String(chunk || '');
+    const marker = '[[TOOLS]]';
+    if (!raw.includes(marker)) {
+        return { chunk: raw, stage: null };
+    }
+
+    const cleaned = raw.replaceAll(`${marker} `, '').replaceAll(marker, '');
+    return { chunk: cleaned, stage: ReasoningStageTools };
+}
+
 // const ChatModelTurbo35 = 'gpt-3.5-turbo';
 // const ChatModelTurbo35V1106 = 'gpt-3.5-turbo-1106';
 // const ChatModelTurbo35V0125 = 'gpt-3.5-turbo-0125';
@@ -4784,8 +4804,16 @@ async function sendChat2Server (chatID, reqPrompt) {
 
                 const { respChunk, reasoningChunk, annotations } = parseChatResp(selectedModel, payload);
 
+                const { chunk: cleanedReasoningChunk, stage } = splitReasoningStage(reasoningChunk);
+                if (stage) {
+                    globalAIRespData.reasoningStage = stage;
+                } else if (cleanedReasoningChunk) {
+                    // Non-tool reasoning content -> Thinking stage.
+                    globalAIRespData.reasoningStage = ReasoningStageThinking;
+                }
+
                 // Add to our global data store
-                globalAIRespData.reasoningContent += reasoningChunk;
+                globalAIRespData.reasoningContent += cleanedReasoningChunk;
                 globalAIRespData.rawContent += respChunk;
 
                 // Store annotations if they exist
@@ -4822,13 +4850,14 @@ async function sendChat2Server (chatID, reqPrompt) {
 
                         // Create containers for reasoning and response once
                         if (globalAIRespData.reasoningContent) {
+                            const stageLabel = (globalAIRespData.reasoningStage === ReasoningStageTools) ? 'Tools...' : 'Thinking...';
                             const reasoningHTML = `
                                 <div class="thinking-container">
                                     <p class="d-inline-flex gap-1">
                                         <button class="btn btn-secondary" type="button" data-bs-toggle="collapse"
                                             data-bs-target="#chatReasoning_${chatID}" aria-expanded="true"
                                             aria-controls="chatReasoning_${chatID}">
-                                            Thinking...
+                                            ${stageLabel}
                                         </button>
                                     </p>
                                     <div class="collapse show" id="chatReasoning_${chatID}">
@@ -4866,10 +4895,17 @@ async function sendChat2Server (chatID, reqPrompt) {
                             responseContainerEle = aiRespEle.querySelector('.response-content');
                         }
 
-                        if (reasoningChunk && reasoningContainerEle) {
+                        if (cleanedReasoningChunk && reasoningContainerEle) {
+                            const btn = aiRespEle.querySelector('.thinking-container button');
+                            if (btn && globalAIRespData.reasoningStage === ReasoningStageTools) {
+                                btn.textContent = 'Tools...';
+                            } else if (btn && globalAIRespData.reasoningStage === ReasoningStageThinking) {
+                                btn.textContent = 'Thinking...';
+                            }
+
                             // For small chunks, just append plaintext for performance
-                            if (reasoningChunk.length < 50 && !reasoningChunk.includes('\n')) {
-                                reasoningContainerEle.insertAdjacentText('beforeend', reasoningChunk);
+                            if (cleanedReasoningChunk.length < 50 && !cleanedReasoningChunk.includes('\n')) {
+                                reasoningContainerEle.insertAdjacentText('beforeend', cleanedReasoningChunk);
                             } else {
                                 // For larger or formatted chunks, re-render the full content
                                 reasoningContainerEle.innerHTML = await renderHTML(globalAIRespData.reasoningContent, true);
@@ -7327,7 +7363,7 @@ async function fetchJSONOrSSE (resp) {
 
         try {
             for (;;) {
-                if (Date.now()-startedAt > timeoutMs) {
+                if (Date.now() - startedAt > timeoutMs) {
                     throw new Error('SSE timeout');
                 }
                 const { value, done } = await reader.read();
@@ -7960,7 +7996,9 @@ function getMCPAuthorizationHeaderCandidates (apiKey) {
  *
  * @param {string} serverId - MCP server id.
  */
-async function syncMCPServerTools (serverId) {
+async function syncMCPServerTools (serverId, opts = {}) {
+    const silent = !!opts.silent;
+    const showSpinner = opts.showSpinner !== false;
     const sconfig = await getChatSessionConfig();
     if (!sconfig.mcp_servers || !Array.isArray(sconfig.mcp_servers)) {
         sconfig.mcp_servers = [];
@@ -7968,12 +8006,16 @@ async function syncMCPServerTools (serverId) {
 
     const server = sconfig.mcp_servers.find((s) => s && s.id === serverId);
     if (!server) {
-        showalert('warning', 'MCP server not found.');
+        if (!silent) {
+            showalert('warning', 'MCP server not found.');
+        }
         return;
     }
 
     try {
-        ShowSpinner();
+        if (showSpinner) {
+            ShowSpinner();
+        }
 
         const authCandidates = getMCPAuthorizationHeaderCandidates(server?.api_key);
 
@@ -8236,12 +8278,18 @@ async function syncMCPServerTools (serverId) {
         server.enabled_tool_names = merged;
 
         await saveChatSessionConfig(sconfig);
-        showalert('success', `Successfully fetched ${server.tools.length} tools for ${server.name}`);
+        if (!silent) {
+            showalert('success', `Successfully fetched ${server.tools.length} tools for ${server.name}`);
+        }
     } catch (err) {
         console.error(err);
-        showalert('danger', `Failed to fetch tools from ${server.name}: ${err.message}`);
+        if (!silent) {
+            showalert('danger', `Failed to fetch tools from ${server.name}: ${err.message}`);
+        }
     } finally {
-        HideSpinner();
+        if (showSpinner) {
+            HideSpinner();
+        }
     }
 }
 
@@ -8518,22 +8566,24 @@ async function setupMCPManager () {
 
     await renderMCPList();
 
-    // Auto-sync tools on first run when enabled servers have no cached tools yet.
-    // This fulfills the "automatically fetch tool list" requirement.
+    // Auto-sync tools in background when enabled servers have no cached tools yet.
+    // This should NOT block the page or pop global spinners/alerts.
     try {
         const sconfig = await getChatSessionConfig();
         const servers = (sconfig.mcp_servers && Array.isArray(sconfig.mcp_servers)) ? sconfig.mcp_servers : [];
-        const needsSync = servers.find((server) => {
+
+        const needsSyncServers = servers.filter((server) => {
             if (!server || !server.enabled) {
                 return false;
             }
             return !Array.isArray(server.tools) || server.tools.length === 0;
         });
 
-        if (needsSync) {
-            // Fire-and-forget; UI will show spinner/alerts.
-            syncMCPServerTools(needsSync.id).then(renderMCPList).catch(() => null);
-        }
+        needsSyncServers.forEach((server) => {
+            syncMCPServerTools(server.id, { silent: true, showSpinner: false })
+                .then(renderMCPList)
+                .catch(() => null);
+        });
     } catch (err) {
         console.warn('failed to auto-sync MCP tools:', err);
     }

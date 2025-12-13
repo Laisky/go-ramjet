@@ -268,7 +268,11 @@ func buildResponsesHTTPRequest(ctx *gin.Context, user *config.UserConfig, reqBod
 }
 
 // callUpstreamResponses executes a Responses API request and returns the parsed response.
-func callUpstreamResponses(ctx *gin.Context, user *config.UserConfig, req *OpenAIResponsesReq) (*OpenAIResponsesResp, http.Header, error) {
+func callUpstreamResponses(
+	ctx *gin.Context,
+	user *config.UserConfig,
+	req *OpenAIResponsesReq,
+) (*OpenAIResponsesResp, http.Header, error) {
 	logger := gmw.GetLogger(ctx)
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -293,7 +297,11 @@ func callUpstreamResponses(ctx *gin.Context, user *config.UserConfig, req *OpenA
 
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
-		return nil, resp.Header, errors.Errorf("upstream responses returned [%d] %s", resp.StatusCode, truncateBytesForLog(data, 2048))
+		return nil, resp.Header, errors.Errorf(
+			"upstream responses returned [%d] %s",
+			resp.StatusCode,
+			truncateBytesForLog(data, 2048),
+		)
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -303,7 +311,11 @@ func callUpstreamResponses(ctx *gin.Context, user *config.UserConfig, req *OpenA
 
 	out := new(OpenAIResponsesResp)
 	if err := json.Unmarshal(data, out); err != nil {
-		return nil, resp.Header, errors.Wrapf(err, "unmarshal upstream responses: %s", truncateBytesForLog(data, 2048))
+		return nil, resp.Header, errors.Wrapf(
+			err,
+			"unmarshal upstream responses: %s",
+			truncateBytesForLog(data, 2048),
+		)
 	}
 
 	// Safe debug log: only shapes/lengths, no raw content.
@@ -334,14 +346,14 @@ func callUpstreamResponses(ctx *gin.Context, user *config.UserConfig, req *OpenA
 
 // truncateBytesForLog truncates raw bytes into a safe string for error messages.
 // It avoids huge logs and reduces risk of accidental sensitive data exposure.
-func truncateBytesForLog(b []byte, max int) string {
-	if max <= 0 {
-		max = 1024
+func truncateBytesForLog(b []byte, maxBytes int) string {
+	if maxBytes <= 0 {
+		maxBytes = 1024
 	}
-	if len(b) <= max {
+	if len(b) <= maxBytes {
 		return string(b)
 	}
-	return string(b[:max]) + "..."
+	return string(b[:maxBytes]) + "..."
 }
 
 func extractFunctionCallsFromResponses(resp *OpenAIResponsesResp) ([]OpenAIResponsesFunctionCall, error) {
@@ -350,7 +362,9 @@ func extractFunctionCallsFromResponses(resp *OpenAIResponsesResp) ([]OpenAIRespo
 	}
 
 	// Prefer required_action.submit_tool_outputs.tool_calls if present.
-	if resp.RequiredAction != nil && resp.RequiredAction.Type == "submit_tool_outputs" && resp.RequiredAction.SubmitToolOutputs != nil {
+	if resp.RequiredAction != nil &&
+		resp.RequiredAction.Type == "submit_tool_outputs" &&
+		resp.RequiredAction.SubmitToolOutputs != nil {
 		calls := make([]OpenAIResponsesFunctionCall, 0, len(resp.RequiredAction.SubmitToolOutputs.ToolCalls))
 		for _, tc := range resp.RequiredAction.SubmitToolOutputs.ToolCalls {
 			name := strings.TrimSpace(tc.Function.Name)

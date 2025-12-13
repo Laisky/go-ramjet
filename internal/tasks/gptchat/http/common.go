@@ -20,8 +20,24 @@ import (
 )
 
 const (
-	ctxKeyUser string = "ctx_user"
+	ctxKeyUser     string = "ctx_user"
+	ctxKeyUserAuth string = "ctx_user_auth"
 )
+
+// getRawUserToken returns the original user token from Authorization header.
+//
+// It is cached into gin context by getUserByAuthHeader.
+func getRawUserToken(gctx *gin.Context) string {
+	if gctx == nil {
+		return ""
+	}
+	if v, ok := gctx.Get(ctxKeyUserAuth); ok {
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return strings.TrimSpace(strings.TrimPrefix(gctx.Request.Header.Get("authorization"), "Bearer "))
+}
 
 func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error) {
 	if useri, ok := gctx.Get(ctxKeyUser); ok {
@@ -33,6 +49,7 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 		log.Logger.Debug("user token not found in header, use freetier token instead")
 		userToken = config.FreetierUserToken
 	}
+	gctx.Set(ctxKeyUserAuth, strings.TrimSpace(userToken))
 
 	user, err = getUserByToken(gctx, userToken)
 	if err != nil {
