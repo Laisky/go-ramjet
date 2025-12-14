@@ -10,6 +10,7 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/utils/cn'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ModelSelector } from './model-selector'
 import type { SessionConfig, PromptShortcut } from '../types'
 
@@ -230,23 +231,37 @@ export function ConfigSidebar({
 
           {/* Actions */}
           <div className="flex gap-2 border-t border-black/10 pt-4 dark:border-white/10">
-            <Button
+            <ConfirmDialog
+              title="Clear Chat History"
+              description="Are you sure you want to clear all chat history in this session? This action cannot be undone."
               variant="destructive"
-              size="sm"
-              onClick={onClearChats}
-              className="flex items-center gap-1"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear Chats
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReset}
-              className="flex items-center gap-1"
-            >
-              Reset All
-            </Button>
+              onConfirm={onClearChats}
+              trigger={
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Clear Chats
+                </Button>
+              }
+            />
+
+            <ConfirmDialog
+              title="Reset Settings"
+              description="Are you sure you want to reset all settings to defaults? This will not delete your chat history."
+              onConfirm={onReset}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  Reset All
+                </Button>
+              }
+            />
           </div>
         </div>
       </div>

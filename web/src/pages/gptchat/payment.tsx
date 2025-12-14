@@ -1,19 +1,119 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { loadStripe } from '@stripe/stripe-js'
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js'
+import type { StripeElementsOptions } from '@stripe/stripe-js'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
+// Initialize Stripe outside of component to avoid recreating it on renders
+// Replace with your actual publishable key
+const stripePromise = loadStripe('pk_test_7IZFlTmtk79XqebnMocipBb8')
 
 type PaymentIntentResponse = {
   clientSecret?: string
 }
 
+function CheckoutForm({ clientSecret }: { clientSecret: string }) {
+  const stripe = useStripe()
+  const elements = useElements()
+
+  const [message, setMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!stripe || !clientSecret) {
+      return
+    }
+
+    stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+      switch (paymentIntent?.status) {
+        case 'succeeded':
+          setMessage('Payment succeeded!')
+          break
+        case 'processing':
+          setMessage('Your payment is processing.')
+          break
+        case 'requires_payment_method':
+          // Redirected back or just loaded
+          // setMessage('Please enter your payment details.')
+          break
+        default:
+          // setMessage('Something went wrong.')
+          break
+      }
+    })
+  }, [stripe, clientSecret])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!stripe || !elements) {
+      return
+    }
+
+    setIsLoading(true)
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        // Redirect to same page for demo purposes, or a dedicated success page
+        return_url: window.location.href,
+      },
+    })
+
+    if (error.type === 'card_error' || error.type === 'validation_error') {
+      setMessage(error.message || 'An unexpected error occurred.')
+    } else {
+      setMessage('An unexpected error occurred.')
+    }
+
+    setIsLoading(false)
+  }
+
+  return (
+    <form id="payment-form" onSubmit={handleSubmit} className="space-y-6">
+      <PaymentElement id="payment-element" />
+
+      <Button
+        type="submit"
+        disabled={isLoading || !stripe || !elements}
+        className="w-full"
+      >
+        {isLoading ? 'Processing...' : 'Pay now'}
+      </Button>
+
+      {message && (
+        <div id="payment-message" className="text-sm text-red-500 dark:text-red-400">
+          {message}
+        </div>
+      )}
+    </form>
+  )
+}
+
 /**
- * GPTChatPaymentPage provides a minimal payment intent creator backed by /gptchat/create-payment-intent.
+ * GPTChatPaymentPage provides a payment intent creator and Stripe Checkout form.
  */
 export function GPTChatPaymentPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Check for client secret in URL (redirect from Stripe)
+  useEffect(() => {
+    const secret = new URLSearchParams(window.location.search).get(
+      'payment_intent_client_secret'
+    )
+    if (secret) {
+      setClientSecret(secret)
+    }
+  }, [])
 
   async function createIntent() {
     setIsLoading(true)
@@ -27,7 +127,7 @@ export function GPTChatPaymentPage() {
           'content-type': 'application/json',
           accept: 'application/json',
         },
-        body: JSON.stringify({ items: [{}] }),
+        body: JSON.stringify({ items: [{ id: "xl-tshirt" }] }), // Matching legacy payload
       })
 
       if (!resp.ok) {
@@ -49,38 +149,58 @@ export function GPTChatPaymentPage() {
     }
   }
 
+  const options: StripeElementsOptions = {
+    clientSecret: clientSecret || '',
+    appearance: {
+      theme: 'stripe',
+    },
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="mx-auto max-w-lg space-y-6 py-10">
+      <div className="space-y-1 text-center">
         <h1 className="text-2xl font-semibold">GPT Chat Payment</h1>
         <p className="text-sm text-black/70 dark:text-white/70">
-          Creates a Stripe PaymentIntent via backend endpoint: /gptchat/create-payment-intent
+          Secure payment integration via Stripe
         </p>
       </div>
 
-      <Card>
-        <CardTitle>Create intent</CardTitle>
-        <CardDescription className="mt-1">Current backend pricing: each item = 1000 CNY.</CardDescription>
-        <div className="mt-3 flex items-center justify-end">
-          <Button onClick={createIntent} disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Create PaymentIntent'}
-          </Button>
-        </div>
-      </Card>
-
-      {clientSecret ? (
+      {!clientSecret ? (
         <Card>
-          <CardTitle>clientSecret</CardTitle>
-          <pre className="mt-2 whitespace-pre-wrap break-all text-sm">{clientSecret}</pre>
+          <CardHeader>
+            <CardTitle>Start Payment</CardTitle>
+            <CardDescription>
+              Create a new payment intent to proceed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-muted-foreground">
+                Current pricing: 1000 CNY per item.
+              </p>
+              <Button onClick={createIntent} disabled={isLoading} className="w-full">
+                {isLoading ? 'Initializing...' : 'Start Payment'}
+              </Button>
+            </div>
+            {error && (
+              <p className="mt-4 text-sm text-red-500">{error}</p>
+            )}
+          </CardContent>
         </Card>
-      ) : null}
-
-      {error ? (
+      ) : (
         <Card>
-          <CardTitle>Error</CardTitle>
-          <CardDescription className="mt-1 break-words">{error}</CardDescription>
+          <CardHeader>
+            <CardTitle>Checkout</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {clientSecret && (
+              <Elements options={options} stripe={stripePromise}>
+                <CheckoutForm clientSecret={clientSecret} />
+              </Elements>
+            )}
+          </CardContent>
         </Card>
-      ) : null}
+      )}
     </div>
   )
 }

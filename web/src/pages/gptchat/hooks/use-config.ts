@@ -41,19 +41,38 @@ export function useConfig() {
         const key = getSessionConfigKey(activeSessionId)
         const savedConfig = await kvGet<SessionConfig>(key)
 
-        if (savedConfig) {
-          // Merge with defaults to handle new fields
-          setConfigState({
-            ...DefaultSessionConfig,
-            ...savedConfig,
-            chat_switch: {
-              ...DefaultSessionConfig.chat_switch,
-              ...savedConfig.chat_switch,
-            },
-          })
+        let finalConfig = {
+          ...DefaultSessionConfig,
         }
 
-        // Apply URL parameter overrides
+        if (savedConfig) {
+          finalConfig = {
+            ...finalConfig,
+            ...savedConfig,
+            chat_switch: {
+              ...finalConfig.chat_switch,
+              ...savedConfig.chat_switch,
+            },
+          }
+        }
+
+        // Auto-generate FREETIER token if missing
+        if (!finalConfig.api_token || finalConfig.api_token === 'DEFAULT_PROXY_TOKEN') {
+          const randomStr = Math.random().toString(36).substring(2, 18) + Math.random().toString(36).substring(2, 18)
+          finalConfig.api_token = `FREETIER-${randomStr}`
+          console.debug('Generated new FREETIER token:', finalConfig.api_token)
+          // Save immediately so it persists
+          await kvSet(key, finalConfig)
+        }
+
+        // Ensure api_base is set
+        if (!finalConfig.api_base) {
+            finalConfig.api_base = 'https://api.openai.com'
+        }
+
+        setConfigState(finalConfig)
+
+        // Apply URL parameter overrides (these might overwrite the token if provided in URL)
         applyUrlOverrides()
       } catch (error) {
         console.error('Failed to load config:', error)

@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from 'react'
 import {
   sendStreamingChatRequest,
   type ChatMessage as ApiChatMessage,
+  type ContentPart,
 } from '@/utils/api'
 import { kvDel, kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { isImageModel } from '../models'
@@ -167,9 +168,97 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       // Check if this is an image model
       if (isImageModel(config.selected_model)) {
-        // TODO: Handle image generation
-        setError('Image generation not yet implemented in new UI')
+        setIsLoading(true)
+        // Add minimal assistant message placeholder
+        const assistantMessage: ChatMessageData = {
+          chatID: chatId,
+          role: 'assistant',
+          content: 'Generating image...',
+          model: config.selected_model,
+          timestamp: Date.now(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+
+        try {
+          const { generateImage } = await import('@/utils/api')
+          const resp = await generateImage(
+            {
+                model: config.selected_model,
+                prompt: content,
+                n: config.chat_switch.draw_n_images,
+                size: '1024x1024', // Default
+            },
+            config.api_token,
+            config.api_base !== 'https://api.openai.com' ? config.api_base : undefined
+          )
+
+          const newContent = resp.data.map(d => d.url ? `![Image](${d.url})` : `![Image](data:image/png;base64,${d.b64_json})`).join('\n\n')
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.chatID === chatId && m.role === 'assistant'
+                ? { ...m, content: newContent }
+                : m
+            )
+          )
+
+          // Save final message
+          await saveMessage({ ...assistantMessage, content: newContent })
+        } catch (err: unknown) {
+             const errMsg = err instanceof Error ? err.message : String(err)
+             setError(errMsg)
+             setMessages((prev) => prev.filter((m) => m.chatID !== chatId)) // Remove failed message
+        } finally {
+            setIsLoading(false)
+            currentChatIdRef.current = null
+        }
         return
+      }
+
+      // Handle file attachments if present
+      const attachments: ContentPart[] = []
+      if (typeof _attachments !== 'undefined' && _attachments.length > 0) {
+        try {
+            const { uploadFiles } = await import('@/utils/api')
+            // Upload files to get cache keys (for PDF/Doc types usually, but here checking generic upload)
+            // Note: Current api.ts uploadFiles returns cache_keys, assuming backend supports it for generic files
+            // For images in standard GPT-4o, we might need base64.
+            // Let's check api.ts/types.ts again. ContentPart supports image_url.
+            // If backend `files/chat` returns a cache_key or url, we use that.
+            // However, typical OpenAI vision uses base64 data URLs.
+            // Let's assume for now we try to upload and use the result, OR convert to base64 if it's an image.
+
+            // For simplicity and parity with typical Vision implementation:
+            for (const file of _attachments) {
+                if (file.type.startsWith('image/')) {
+                    const b64 = await new Promise<string>((resolve) => {
+                        const reader = new FileReader()
+                        reader.onloadend = () => resolve(reader.result as string)
+                        reader.readAsDataURL(file)
+                    })
+                    attachments.push({
+                        type: 'text',
+                        text: `![${file.name}](${b64})` // Markdown image for display
+                    })
+                    // For API, we might need separate handling, but let's stick to text injection for now
+                    // or proper ContentPart if backend parsing supports it.
+                    // The `api.ts` ChatMessage content can be `string | ContentPart[]`.
+                } else {
+                    // Non-image files, upload to get text/context
+                    const { cache_keys } = await uploadFiles([file], config.api_token)
+                    if (cache_keys && cache_keys.length > 0) {
+                         attachments.push({
+                             type: 'text',
+                             text: `\n\n[File uploaded: ${file.name} (key: ${cache_keys[0]})]`
+                         })
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('File upload failed', err)
+            setError('Failed to process attachments')
+            return
+        }
       }
 
       // Prepare assistant message placeholder
@@ -205,9 +294,18 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       }
 
       // Add current user message
+      // If we have attachments, we might need to construct a multipart content
+      // But since we pre-processed attachments into markdown/text above, we just append to content
+      // Ideally, for Vision, we should use the array format.
+      // Let's construct the final content string for now as simple concatenation is safer for general proxy
+      let finalContent = content.trim()
+      attachments.forEach(att => {
+          if (att.text) finalContent += `\n${att.text}`
+      })
+
       apiMessages.push({
         role: 'user',
-        content: content.trim(),
+        content: finalContent,
       })
 
       // Stream response

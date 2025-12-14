@@ -9,12 +9,48 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Markdown } from '@/components/markdown'
 import { cn } from '@/utils/cn'
+import { splitReasoningContent } from '@/utils/chat-parser'
 import type { ChatMessageData } from '../types'
 
 export interface ChatMessageProps {
   message: ChatMessageData
   onDelete?: (chatId: string) => void
   isStreaming?: boolean
+}
+
+function ReasoningBlock({ content }: { content: string }) {
+  const { thinking, toolEvents } = splitReasoningContent(content)
+
+  return (
+    <Card className="mb-2 border-dashed bg-black/5 p-3 dark:bg-white/5">
+      <details className="text-xs text-black/60 dark:text-white/60" open={!!toolEvents.length}>
+        <summary className="cursor-pointer font-medium hover:text-black dark:hover:text-white transition-colors">
+          💭 Reasoning & Tools
+        </summary>
+
+        <div className="mt-2 space-y-3">
+          {/* Tool Events */}
+          {toolEvents.length > 0 && (
+            <div className="space-y-1 rounded bg-black/5 p-2 font-mono text-[10px] dark:bg-white/5">
+              {toolEvents.map((evt, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="shrink-0 opacity-50">🔧</span>
+                  <span>{evt}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Thinking Content */}
+          {thinking && (
+            <pre className="whitespace-pre-wrap break-words font-sans text-black/70 dark:text-white/70">
+              {thinking}
+            </pre>
+          )}
+        </div>
+      </details>
+    </Card>
+  )
 }
 
 /**
@@ -75,16 +111,7 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
 
         {/* Reasoning content (for models like o1, deepseek-reasoner) */}
         {isAssistant && message.reasoningContent && (
-          <Card className="mb-2 border-dashed bg-black/5 p-3 dark:bg-white/5">
-            <details className="text-xs text-black/60 dark:text-white/60">
-              <summary className="cursor-pointer font-medium">
-                💭 Reasoning
-              </summary>
-              <pre className="mt-2 whitespace-pre-wrap break-words">
-                {message.reasoningContent}
-              </pre>
-            </details>
-          </Card>
+          <ReasoningBlock content={message.reasoningContent} />
         )}
 
         {/* Main content */}

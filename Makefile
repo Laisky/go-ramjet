@@ -42,4 +42,4 @@ frontend-test: frontend-install
 
 .PHONY: build
 build: frontend-build
-	go build
+# 	go build

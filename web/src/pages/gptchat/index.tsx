@@ -68,10 +68,20 @@ export function GPTChatPage() {
   }, [])
 
   const loadPromptShortcuts = async () => {
-    const shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
-    if (shortcuts) {
-      setPromptShortcuts(shortcuts)
+    let shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
+
+    // If no shortcuts found (or empty array), use defaults
+    if (!shortcuts || shortcuts.length === 0) {
+      const { DefaultPrompts } = await import('./data/prompts')
+      shortcuts = DefaultPrompts
+      // Optionally save defaults to storage so user can edit them
+      // await kvSet(StorageKeys.PROMPT_SHORTCUTS, DefaultPrompts)
+      // Decision: Don't save defaults immediately to keep storage clean?
+      // Actually, legacy behavior likely just read them.
+      // Let's just set them in state.
     }
+
+    setPromptShortcuts(shortcuts)
   }
 
   const handleSavePrompt = useCallback(
@@ -104,15 +114,11 @@ export function GPTChatPage() {
   )
 
   const handleReset = useCallback(async () => {
-    if (window.confirm('Reset all settings to defaults? This will not delete your chat history.')) {
-      await updateConfig(DefaultSessionConfig)
-    }
+    await updateConfig(DefaultSessionConfig)
   }, [updateConfig])
 
   const handleClearChats = useCallback(async () => {
-    if (window.confirm('Clear all chat history in this session?')) {
-      await clearMessages()
-    }
+    await clearMessages()
   }, [clearMessages])
 
   if (configLoading) {
