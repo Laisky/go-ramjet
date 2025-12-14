@@ -17,7 +17,14 @@ import { DefaultSessionConfig } from './types'
  * GPTChatPage provides a full-featured chat interface.
  */
 export function GPTChatPage() {
-  const { config, sessionId, isLoading: configLoading, updateConfig } = useConfig()
+  const {
+    config,
+    sessionId,
+    isLoading: configLoading,
+    updateConfig,
+    exportAllData,
+    importAllData
+  } = useConfig()
   const {
     messages,
     isLoading: chatLoading,
@@ -88,6 +95,15 @@ export function GPTChatPage() {
     async (name: string, prompt: string) => {
       const newShortcut: PromptShortcut = { name, prompt }
       const updated = [...promptShortcuts, newShortcut]
+      setPromptShortcuts(updated)
+      await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
+    },
+    [promptShortcuts]
+  )
+
+  const handleDeletePrompt = useCallback(
+    async (name: string) => {
+      const updated = promptShortcuts.filter((s) => s.name !== name)
       setPromptShortcuts(updated)
       await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
     },
@@ -234,6 +250,9 @@ export function GPTChatPage() {
         onReset={handleReset}
         promptShortcuts={promptShortcuts}
         onSavePrompt={handleSavePrompt}
+        onDeletePrompt={handleDeletePrompt}
+        onExportData={exportAllData}
+        onImportData={importAllData}
       />
     </div>
   )

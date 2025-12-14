@@ -35,9 +35,11 @@ export function useConfig() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const activeSessionId = await getActiveSessionId()
-        setSessionId(activeSessionId)
+        // Run migration first
+        const { migrateLegacyData } = await import('@/pages/gptchat/utils/migration')
+        await migrateLegacyData()
 
+        const activeSessionId = await getActiveSessionId()
         const key = getSessionConfigKey(activeSessionId)
         const savedConfig = await kvGet<SessionConfig>(key)
 
@@ -56,21 +58,34 @@ export function useConfig() {
           }
         }
 
+        let configChanged = false
+
+        // Generate sync_key if missing
+        if (!finalConfig.sync_key) {
+          finalConfig.sync_key = 'sync-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+          configChanged = true
+        }
+
         // Auto-generate FREETIER token if missing
         if (!finalConfig.api_token || finalConfig.api_token === 'DEFAULT_PROXY_TOKEN') {
           const randomStr = Math.random().toString(36).substring(2, 18) + Math.random().toString(36).substring(2, 18)
           finalConfig.api_token = `FREETIER-${randomStr}`
           console.debug('Generated new FREETIER token:', finalConfig.api_token)
-          // Save immediately so it persists
-          await kvSet(key, finalConfig)
+          configChanged = true
         }
 
         // Ensure api_base is set
         if (!finalConfig.api_base) {
             finalConfig.api_base = 'https://api.openai.com'
+            configChanged = true
+        }
+
+        if (configChanged || !savedConfig) {
+           await kvSet(key, finalConfig)
         }
 
         setConfigState(finalConfig)
+        setSessionId(activeSessionId)
 
         // Apply URL parameter overrides (these might overwrite the token if provided in URL)
         applyUrlOverrides()
@@ -257,6 +272,46 @@ export function useConfig() {
     [sessionId, switchSession]
   )
 
+  /**
+   * Export all data (sessions, configs, shortcuts) for sync
+   */
+  const exportAllData = useCallback(async () => {
+    const { kvList, kvGet } = await import('@/utils/storage')
+    const keys = await kvList()
+    const data: Record<string, any> = {}
+
+    // keys to exclude
+    const excludeKeys = ['MIGRATE_V1_COMPLETED']
+
+    for (const key of keys) {
+        if (excludeKeys.includes(key)) continue
+        data[key] = await kvGet(key)
+    }
+
+    return data
+  }, [])
+
+  /**
+   * Import data (overwrite existing)
+   */
+  const importAllData = useCallback(async (data: Record<string, any>) => {
+    const { kvSet } = await import('@/utils/storage')
+
+    // Clear existing data to ensure clean state (optional, but safer for full sync)
+    // await kvClear() // Maybe too aggressive? Let's just overwrite.
+
+    for (const [key, val] of Object.entries(data)) {
+        await kvSet(key, val)
+    }
+
+    // Force reload config if current session was updated
+    const currentKey = getSessionConfigKey(sessionId)
+    if (data[currentKey]) {
+        // Simple way: trigger reload by toggling a dummy state or just re-running load
+        window.location.reload() // Easiest way to ensure all states (history, config) are updated
+    }
+  }, [sessionId])
+
   return {
     config,
     sessionId,
@@ -265,5 +320,7 @@ export function useConfig() {
     switchSession,
     createSession,
     deleteSession,
+    exportAllData,
+    importAllData,
   }
 }

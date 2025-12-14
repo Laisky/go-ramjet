@@ -1,7 +1,7 @@
 /**
  * Configuration sidebar for chat settings.
  */
-import { Settings, Save, Trash2, X } from 'lucide-react'
+import { Settings, Save, Trash2, X, Eye, EyeOff, CloudUpload, CloudDownload, User, Loader2 } from 'lucide-react'
 import { useState, useCallback } from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,8 @@ import { cn } from '@/utils/cn'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ModelSelector } from './model-selector'
 import type { SessionConfig, PromptShortcut } from '../types'
+import { useUser } from '../hooks/use-user'
+import { api } from '../utils/api'
 
 export interface ConfigSidebarProps {
   isOpen: boolean
@@ -23,6 +25,9 @@ export interface ConfigSidebarProps {
   onReset: () => void
   promptShortcuts?: PromptShortcut[]
   onSavePrompt?: (name: string, prompt: string) => void
+  onDeletePrompt?: (name: string) => void
+  onExportData: () => Promise<any>
+  onImportData: (data: any) => Promise<void>
 }
 
 /**
@@ -37,9 +42,16 @@ export function ConfigSidebar({
   onReset,
   promptShortcuts = [],
   onSavePrompt,
+  onDeletePrompt,
+  onExportData,
+  onImportData,
 }: ConfigSidebarProps) {
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [newPromptName, setNewPromptName] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const { user } = useUser(config.api_token)
 
   const handleSavePrompt = useCallback(() => {
     if (onSavePrompt && newPromptName.trim() && config.system_prompt) {
@@ -55,6 +67,48 @@ export function ConfigSidebar({
     },
     [onConfigChange]
   )
+
+  const handleUpload = async () => {
+    if (!config.sync_key) {
+      alert('Please enter a Sync Key to sync.')
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const data = await onExportData()
+      await api.uploadUserData(config.sync_key, data)
+      alert('Upload successful!')
+    } catch (err) {
+      console.error(err)
+      alert('Upload failed. See console for details.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    if (!config.sync_key) {
+      alert('Please enter a Sync Key to sync.')
+      return
+    }
+
+    if (!confirm('This will overwrite your local data. Continue?')) {
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const data = await api.downloadUserData(config.sync_key)
+      await onImportData(data)
+      alert('Download and restore successful!')
+    } catch (err) {
+      console.error(err)
+      alert('Download failed. See console for details.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -79,16 +133,50 @@ export function ConfigSidebar({
           </Button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* User Profile */}
+          {user && (
+            <div className="flex items-center gap-3 rounded-lg border p-3 border-black/10 dark:border-white/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+                {user.image_url && !user.image_url.includes('openai.com') ? (
+                  <img src={user.image_url} alt={user.user_name} className="h-10 w-10 rounded-full" />
+                ) : (
+                  <User className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+                )}
+              </div>
+              <div className="overflow-hidden">
+                <div className="truncate font-medium">{user.user_name}</div>
+                <div className="truncate text-xs text-gray-500">
+                  {user.is_free ? 'Free Tier' : 'Pro User'}
+                  {user.no_limit_expensive_models && ' • Unlimited'}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* API Token */}
           <div>
             <label className="mb-1 block text-sm font-medium">API Key</label>
-            <Input
-              type="password"
-              value={config.api_token}
-              onChange={(e) => onConfigChange({ api_token: e.target.value })}
-              placeholder="sk-..."
-            />
+            <div className="relative">
+              <Input
+                type={showApiKey ? 'text' : 'password'}
+                value={config.api_token}
+                onChange={(e) => onConfigChange({ api_token: e.target.value })}
+                placeholder="sk-..."
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-0 top-0 flex h-full items-center px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                {showApiKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Model Selection */}
@@ -204,6 +292,7 @@ export function ConfigSidebar({
             </Card>
           )}
 
+
           {/* Prompt Shortcuts */}
           {promptShortcuts.length > 0 && (
             <div>
@@ -216,18 +305,77 @@ export function ConfigSidebar({
                     key={index}
                     variant="secondary"
                     className={cn(
-                      'cursor-pointer transition-colors hover:bg-blue-500 hover:text-white',
+                      'cursor-pointer transition-colors hover:bg-blue-500 hover:text-white pr-1',
                       config.system_prompt === shortcut.prompt &&
                       'bg-blue-500 text-white'
                     )}
                     onClick={() => handleSelectPrompt(shortcut.prompt)}
                   >
                     {shortcut.name}
+                    {onDeletePrompt && (
+                      <button
+                        className="ml-1 rounded-full p-0.5 hover:bg-black/20 dark:hover:bg-white/20"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeletePrompt(shortcut.name)
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </Badge>
                 ))}
               </div>
             </div>
           )}
+
+          <div className="h-px bg-border" />
+
+          {/* Data Sync */}
+          <div>
+            <label className="mb-2 block text-sm font-medium">Data Sync</label>
+
+            <div className="mb-2">
+              <label className="mb-1 block text-xs text-gray-500">Sync Key</label>
+              <div className="relative">
+                <Input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={config.sync_key || ''}
+                  onChange={(e) => onConfigChange({ sync_key: e.target.value })}
+                  placeholder="sync-..."
+                  className="pr-10 text-xs"
+                />
+                {/* Reuse showApiKey toggle for simplicity or add showSyncKey state */}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+                onClick={handleUpload}
+                disabled={isSyncing}
+              >
+                {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                Upload
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+                onClick={handleDownload}
+                disabled={isSyncing}
+              >
+                {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                Download
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Sync your settings and chat history using this key. Keep it safe!
+            </p>
+          </div>
+
 
           {/* Actions */}
           <div className="flex gap-2 border-t border-black/10 pt-4 dark:border-white/10">

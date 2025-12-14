@@ -33,9 +33,9 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 	}
 
 	indexPath := filepath.Join(distDir, "index.html")
-	indexBytes, err := os.ReadFile(indexPath)
-	if err != nil {
-		return errors.Wrapf(err, "read spa index %q", indexPath)
+	// Verify index.html exists but don't cache it
+	if _, err := os.Stat(indexPath); err != nil {
+		return errors.Wrapf(err, "stat spa index %q", indexPath)
 	}
 
 	assetsDir := filepath.Join(distDir, "assets")
@@ -45,6 +45,12 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 
 	indexHandler := func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
+		indexBytes, err := os.ReadFile(indexPath)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, errors.Wrap(err, "read index.html"))
+			return
+		}
+
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexBytes)
 	}
 
@@ -56,6 +62,23 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
+		// Try to serve static file from distDir
+		// Clean path to prevent directory traversal
+		cleanPath := filepath.Clean(c.Request.URL.Path)
+		// Prevent serving root as it is handled by indexHandler
+		if cleanPath == "/" || cleanPath == "." {
+			indexHandler(c)
+			return
+		}
+
+		fpath := filepath.Join(distDir, cleanPath)
+		info, err := os.Stat(fpath)
+		if err == nil && !info.IsDir() {
+			c.File(fpath)
+			return
+		}
+
+		// If not found or is directory, fall back to index.html for SPA routes
 		accept := c.GetHeader("Accept")
 		if !strings.Contains(accept, "text/html") {
 			c.Status(http.StatusNotFound)

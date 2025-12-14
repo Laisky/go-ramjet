@@ -43,6 +43,7 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "swr": "^2.3.7",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {

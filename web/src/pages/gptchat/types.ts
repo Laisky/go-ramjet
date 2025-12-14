@@ -33,6 +33,7 @@ export interface SessionConfig {
   frequency_penalty: number
   chat_switch: ChatSwitch
   mcp_servers?: McpServerConfig[]
+  sync_key?: string
 }
 
 export interface ChatSwitch {
@@ -84,6 +85,7 @@ export const DefaultSessionConfig: SessionConfig = {
     draw_n_images: 1,
   },
   mcp_servers: [],
+  sync_key: '',
 }
 
 // Roles
@@ -100,3 +102,16 @@ export const ChatTaskTypeDeepResearch = 'deepresearch' as const
 export const ChatTaskStatusWaiting = 'waiting' as const
 export const ChatTaskStatusProcessing = 'processing' as const
 export const ChatTaskStatusDone = 'done' as const
+
+export interface UserConfig {
+  user_name: string
+  token: string
+  openai_token: string
+  image_token: string
+  is_free: boolean
+  is_admin: boolean
+  allowed_models: string[]
+  no_limit_expensive_models: boolean
+  api_base: string
+  image_url: string
+}
