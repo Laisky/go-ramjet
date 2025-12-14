@@ -34,6 +34,7 @@ export interface SessionConfig {
   chat_switch: ChatSwitch
   mcp_servers?: McpServerConfig[]
   sync_key?: string
+  session_name?: string
 }
 
 export interface ChatSwitch {
@@ -50,6 +51,8 @@ export interface McpServerConfig {
   url: string
   api_key?: string
   enabled: boolean
+  tools?: any[]
+  enabled_tool_names?: string[]
 }
 
 export interface SessionHistoryItem {
@@ -84,8 +87,17 @@ export const DefaultSessionConfig: SessionConfig = {
     enable_mcp: false,
     draw_n_images: 1,
   },
-  mcp_servers: [],
+  mcp_servers: [
+    {
+      id: 'default-mcp',
+      name: 'Default MCP',
+      url: 'https://mcp.laisky.com',
+      enabled: true,
+      tools: [],
+    },
+  ],
   sync_key: '',
+  session_name: 'Chat Session 1',
 }
 
 // Roles

@@ -12,6 +12,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/utils/cn'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ModelSelector } from './model-selector'
+import { McpServerManager } from './mcp-server-manager'
+import { Switch } from '@/components/ui/switch'
+import { SessionManager } from './session-manager'
+
 import type { SessionConfig, PromptShortcut } from '../types'
 import { useUser } from '../hooks/use-user'
 import { api } from '../utils/api'
@@ -28,7 +32,16 @@ export interface ConfigSidebarProps {
   onDeletePrompt?: (name: string) => void
   onExportData: () => Promise<any>
   onImportData: (data: any) => Promise<void>
+
+  // Session Management
+  sessions?: { id: number; name: string }[]
+  activeSessionId?: number
+  onSwitchSession?: (id: number) => void
+  onCreateSession?: (name: string) => void
+  onDeleteSession?: (id: number) => void
+  onRenameSession?: (id: number, name: string) => void
 }
+
 
 /**
  * ConfigSidebar provides settings controls for chat configuration.
@@ -45,7 +58,14 @@ export function ConfigSidebar({
   onDeletePrompt,
   onExportData,
   onImportData,
+  sessions = [],
+  activeSessionId = 1,
+  onSwitchSession,
+  onCreateSession,
+  onDeleteSession,
+  onRenameSession,
 }: ConfigSidebarProps) {
+
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [newPromptName, setNewPromptName] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -133,7 +153,22 @@ export function ConfigSidebar({
           </Button>
         </div>
 
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+
+          {/* Session Manager */}
+          {onSwitchSession && onCreateSession && onDeleteSession && onRenameSession && (
+            <section className="space-y-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+              <SessionManager
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSwitchSession={onSwitchSession}
+                onCreateSession={onCreateSession}
+                onDeleteSession={onDeleteSession}
+                onRenameSession={onRenameSession}
+              />
+            </section>
+          )}
+
           {/* User Profile */}
           {user && (
             <div className="flex items-center gap-3 rounded-lg border p-3 border-black/10 dark:border-white/10">
@@ -251,6 +286,48 @@ export function ConfigSidebar({
             />
           </div>
 
+          {/* Presence Penalty */}
+          <div>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+              <span>Presence Penalty</span>
+              <span className="text-black/50 dark:text-white/50">
+                {config.presence_penalty.toFixed(1)}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={-2}
+              max={2}
+              step={0.1}
+              value={config.presence_penalty}
+              onChange={(e) =>
+                onConfigChange({ presence_penalty: parseFloat(e.target.value) })
+              }
+              className="w-full"
+            />
+          </div>
+
+          {/* Frequency Penalty */}
+          <div>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+              <span>Frequency Penalty</span>
+              <span className="text-black/50 dark:text-white/50">
+                {config.frequency_penalty.toFixed(1)}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={-2}
+              max={2}
+              step={0.1}
+              value={config.frequency_penalty}
+              onChange={(e) =>
+                onConfigChange({ frequency_penalty: parseFloat(e.target.value) })
+              }
+              className="w-full"
+            />
+          </div>
+
           {/* System Prompt */}
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
@@ -328,6 +405,33 @@ export function ConfigSidebar({
               </div>
             </div>
           )}
+
+          <div className="h-px bg-border" />
+
+          {/* MCP Servers */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Enable MCP Support</label>
+              <Switch
+                checked={config.chat_switch.enable_mcp}
+                onCheckedChange={(checked) =>
+                  onConfigChange({
+                    chat_switch: {
+                      ...config.chat_switch,
+                      enable_mcp: checked,
+                    },
+                  })
+                }
+              />
+            </div>
+
+            {config.chat_switch.enable_mcp && (
+              <McpServerManager
+                servers={config.mcp_servers || []}
+                onChange={(servers) => onConfigChange({ mcp_servers: servers })}
+              />
+            )}
+          </div>
 
           <div className="h-px bg-border" />
 
@@ -413,6 +517,6 @@ export function ConfigSidebar({
           </div>
         </div>
       </div>
-    </div>
+    </div >
   )
 }

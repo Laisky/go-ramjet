@@ -29,6 +29,7 @@ function getSessionConfigKey(sessionId: number): string {
 export function useConfig() {
   const [config, setConfigState] = useState<SessionConfig>(DefaultSessionConfig)
   const [sessionId, setSessionId] = useState<number>(DEFAULT_SESSION_ID)
+  const [sessions, setSessions] = useState<{ id: number; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   // Load configuration on mount
@@ -80,12 +81,21 @@ export function useConfig() {
             configChanged = true
         }
 
+        // Ensure session_name is set
+        if (!finalConfig.session_name) {
+            finalConfig.session_name = `Chat Session ${activeSessionId}`
+            configChanged = true
+        }
+
         if (configChanged || !savedConfig) {
            await kvSet(key, finalConfig)
         }
 
         setConfigState(finalConfig)
         setSessionId(activeSessionId)
+
+        // Load all sessions
+        await loadSessions()
 
         // Apply URL parameter overrides (these might overwrite the token if provided in URL)
         applyUrlOverrides()
@@ -97,6 +107,46 @@ export function useConfig() {
     }
 
     loadConfig()
+  }, [])
+
+  /**
+   * Load all available sessions
+   */
+  const loadSessions = useCallback(async () => {
+    const { kvList, kvGet } = await import('@/utils/storage')
+    const keys = await kvList()
+    const configKeys = keys.filter(k => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
+
+    // Sort keys by ID to keep order stable
+    configKeys.sort((a, b) => {
+        const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+        const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+        return idA - idB
+    })
+
+    const loadedSessions: { id: number; name: string }[] = []
+
+    for (const key of configKeys) {
+        try {
+            const id = parseInt(key.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+            if (isNaN(id)) continue
+
+            const conf = await kvGet<SessionConfig>(key)
+            loadedSessions.push({
+                id,
+                name: conf?.session_name || `Chat Session ${id}`
+            })
+        } catch (e) {
+            console.error('Failed to load session config for key', key, e)
+        }
+    }
+
+    // If no sessions found, at least include current default (should exist after load logic)
+    if (loadedSessions.length === 0) {
+        // We defer to what loadConfig created
+    }
+
+    setSessions(loadedSessions)
   }, [])
 
   /**
@@ -198,7 +248,7 @@ export function useConfig() {
         console.error('Failed to save config:', error)
       }
     },
-    [config, sessionId]
+    [config, sessionId, loadSessions]
   )
 
   /**
@@ -217,23 +267,33 @@ export function useConfig() {
         setConfigState({
           ...DefaultSessionConfig,
           ...savedConfig,
+        //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
           chat_switch: {
             ...DefaultSessionConfig.chat_switch,
             ...savedConfig.chat_switch,
           },
         })
       } else {
-        setConfigState(DefaultSessionConfig)
+        const newConf = {
+            ...DefaultSessionConfig,
+            session_name: `Chat Session ${newSessionId}`
+        }
+        setConfigState(newConf)
+        // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
+        await kvSet(key, newConf)
       }
+
+      // Refresh list to ensure names are up to date if we defaulted above
+      await loadSessions()
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [loadSessions])
 
   /**
    * Create a new session
    */
-  const createSession = useCallback(async (): Promise<number> => {
+  const createSession = useCallback(async (name?: string): Promise<number> => {
     // Find the next available session ID
     const keys = await import('@/utils/storage').then((m) => m.kvList())
     const sessionIds = keys
@@ -246,10 +306,16 @@ export function useConfig() {
 
     // Initialize new session with defaults
     const key = getSessionConfigKey(newId)
-    await kvSet(key, DefaultSessionConfig)
+    const newConfig = {
+        ...DefaultSessionConfig,
+        session_name: name || `Chat Session ${newId}`
+    }
+    await kvSet(key, newConfig)
+
+    await loadSessions()
 
     return newId
-  }, [])
+  }, [loadSessions])
 
   /**
    * Delete a session
@@ -265,12 +331,45 @@ export function useConfig() {
       await kvDel(`${StorageKeys.SESSION_HISTORY_PREFIX}${targetSessionId}`)
 
       // If deleting current session, switch to session 1
+      // If deleting current session, switch to session 1 or first available
       if (targetSessionId === sessionId) {
+        // If we have other sessions, switch to first one. Else, re-create session 1.
+        // We need the updated list. Filtering `sessions` state might be stale if inside callback?
+        // We can fetch list. But let's just default to 1 for simplicity,
+        // createSession will handle if 1 is deleted by recreating it.
+        // Actually if 1 is deleted, we might want to find another existing one.
+        // Let's rely on switchSession(1) which creates it if missing.
         await switchSession(DEFAULT_SESSION_ID)
       }
+
+      await loadSessions()
     },
-    [sessionId, switchSession]
+    [sessionId, switchSession, loadSessions]
   )
+
+  /**
+   * Rename a session
+   */
+  const renameSession = useCallback(async (targetId: number, newName: string) => {
+      const key = getSessionConfigKey(targetId)
+      // We must read it first to preserve other fields
+      let conf = await kvGet<SessionConfig>(key)
+      if (!conf) {
+          conf = { ...DefaultSessionConfig }
+      }
+
+      conf.session_name = newName
+      await kvSet(key, conf)
+
+      // If it's the current session, update state too
+      if (targetId === sessionId) {
+          setConfigState(conf)
+      }
+
+      await loadSessions()
+  }, [sessionId, loadSessions])
+
+
 
   /**
    * Export all data (sessions, configs, shortcuts) for sync
@@ -315,11 +414,13 @@ export function useConfig() {
   return {
     config,
     sessionId,
+    sessions,
     isLoading,
     updateConfig,
     switchSession,
     createSession,
     deleteSession,
+    renameSession,
     exportAllData,
     importAllData,
   }

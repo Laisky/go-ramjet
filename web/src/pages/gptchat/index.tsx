@@ -7,11 +7,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
-import { ChatMessage, ChatInput, ConfigSidebar, ModelSelector } from './components'
+import { ChatMessage, ChatInput, ConfigSidebar, ModelSelector, SessionDock } from './components'
 import { useChat } from './hooks/use-chat'
 import { useConfig } from './hooks/use-config'
 import type { PromptShortcut, SessionConfig } from './types'
 import { DefaultSessionConfig } from './types'
+import { syncMCPServerTools } from './utils/mcp'
+
 
 /**
  * GPTChatPage provides a full-featured chat interface.
@@ -20,8 +22,13 @@ export function GPTChatPage() {
   const {
     config,
     sessionId,
+    sessions,
     isLoading: configLoading,
     updateConfig,
+    createSession,
+    deleteSession,
+    switchSession,
+    renameSession,
     exportAllData,
     importAllData
   } = useConfig()
@@ -49,6 +56,54 @@ export function GPTChatPage() {
       loadPromptShortcuts()
     }
   }, [configLoading, loadMessages])
+
+  // Auto-sync MCP tools in background
+  useEffect(() => {
+    if (configLoading || !config.mcp_servers) return
+
+    const syncMetrics = async () => {
+      let hasUpdates = false
+      const updatedServers = [...(config.mcp_servers || [])]
+
+      for (let i = 0; i < updatedServers.length; i++) {
+        const srv = updatedServers[i]
+        // If enabled and no tools, try to sync
+        if (srv.enabled && (!srv.tools || srv.tools.length === 0)) {
+          try {
+            // We clone logic from McpServerManager somewhat,
+            // but we want to do it silently in background.
+            const { updatedServer } = await syncMCPServerTools(srv)
+            updatedServers[i] = updatedServer
+            hasUpdates = true
+            console.log(`[MCP] Auto-synced tools for ${srv.name}`)
+          } catch (e) {
+            console.warn(`[MCP] Failed to auto-sync ${srv.name}:`, e)
+            // Should we disable it to avoid retry loops? Maybe not.
+          }
+        }
+      }
+
+      if (hasUpdates) {
+        updateConfig({ mcp_servers: updatedServers })
+      }
+    }
+
+    // Debounce/Check only once per mount/session?
+    // We can use a simple check: if we blindly run this, and it updates config,
+    // it triggers effect again. config.mcp_servers changes.
+    // But if (srv.tools.length === 0) checks prevents loop if sync succeeds.
+    // If sync fails, it might loop.
+    // We should probably safeguard this.
+    // Let's rely on "if tools.length === 0".
+    // If sync fails, it remains 0. It will retry. That's bad.
+    // We should maybe mark it as "attempted"?
+    // Or just run it once on mount/config load?
+    // Let's run it once whenever `configLoading` flips to false.
+    syncMetrics()
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configLoading]) // Only run when loading finishes
+
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -149,96 +204,109 @@ export function GPTChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-100px)] flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">Chat</h1>
-          <ModelSelector
-            selectedModel={config.selected_model}
-            onModelChange={(model) => handleConfigChange({ selected_model: model })}
-          />
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setConfigOpen(true)}
-          className="flex items-center gap-1"
-        >
-          <Settings className="h-4 w-4" />
-          <span className="hidden sm:inline">Settings</span>
-        </Button>
-      </div>
+    <div className="flex h-[calc(100vh-100px)] flex-row bg-white dark:bg-black overflow-hidden relative">
+      {/* Session Dock (Left Sidebar) */}
+      <SessionDock
+        sessions={sessions}
+        activeSessionId={sessionId}
+        onSwitchSession={switchSession}
+        onCreateSession={() => createSession()}
+        onDeleteSession={deleteSession}
+      />
 
-      {/* Error display */}
-      {error && (
-        <div className="mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
-          {error}
-        </div>
-      )}
-
-      {/* Messages */}
-      <div
-        ref={messagesContainerRef}
-        className="relative flex-1 overflow-y-auto py-4"
-      >
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-4 text-4xl">💬</div>
-            <h2 className="text-lg font-medium">Start a conversation</h2>
-            <p className="mt-1 max-w-sm text-sm text-black/50 dark:text-white/50">
-              Type a message below to begin chatting with the AI. You can change
-              the model and settings using the button above.
-            </p>
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">Chat</h1>
+            <ModelSelector
+              selectedModel={config.selected_model}
+              onModelChange={(model) => handleConfigChange({ selected_model: model })}
+            />
           </div>
-        ) : (
-          <div className="space-y-6 pb-4">
-            {messages.map((msg, idx) => (
-              <ChatMessage
-                key={`${msg.chatID}-${msg.role}`}
-                message={msg}
-                onDelete={deleteMessage}
-                isStreaming={
-                  chatLoading &&
-                  msg.role === 'assistant' &&
-                  idx === messages.length - 1
-                }
-              />
-            ))}
-            <div ref={messagesEndRef} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setConfigOpen(true)}
+            className="flex items-center gap-1"
+          >
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">Settings</span>
+          </Button>
+        </div>
+
+        {/* Error display */}
+        {error && (
+          <div className="mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            {error}
           </div>
         )}
 
-        {/* Scroll to bottom button */}
-        <button
-          onClick={scrollToBottom}
-          className={cn(
-            'fixed bottom-32 right-8 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-white shadow-lg transition-all dark:bg-white/80 dark:text-black',
-            showScrollButton
-              ? 'translate-y-0 opacity-100'
-              : 'translate-y-4 opacity-0 pointer-events-none'
-          )}
+        {/* Messages */}
+        <div
+          ref={messagesContainerRef}
+          className="relative flex-1 overflow-y-auto py-4"
         >
-          <ArrowDown className="h-5 w-5" />
-        </button>
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="mb-4 text-4xl">💬</div>
+              <h2 className="text-lg font-medium">Start a conversation</h2>
+              <p className="mt-1 max-w-sm text-sm text-black/50 dark:text-white/50">
+                Type a message below to begin chatting with the AI. You can change
+                the model and settings using the button above.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6 pb-4">
+              {messages.map((msg, idx) => (
+                <ChatMessage
+                  key={`${msg.chatID}-${msg.role}`}
+                  message={msg}
+                  onDelete={deleteMessage}
+                  isStreaming={
+                    chatLoading &&
+                    msg.role === 'assistant' &&
+                    idx === messages.length - 1
+                  }
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+
+          {/* Scroll to bottom button */}
+          <button
+            onClick={scrollToBottom}
+            className={cn(
+              'fixed bottom-32 right-8 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-white shadow-lg transition-all dark:bg-white/80 dark:text-black',
+              showScrollButton
+                ? 'translate-y-0 opacity-100'
+                : 'translate-y-4 opacity-0 pointer-events-none'
+            )}
+          >
+            <ArrowDown className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-black/10 pt-3 dark:border-white/10">
+          <ChatInput
+            onSend={sendMessage}
+            onStop={stopGeneration}
+            isLoading={chatLoading}
+            disabled={!config.api_token}
+            config={config}
+            onConfigChange={handleChatSwitchChange}
+            placeholder={
+              config.api_token
+                ? 'Type a message...'
+                : 'Enter your API key in Settings to start chatting'
+            }
+          />
+        </div>
+
       </div>
 
-      {/* Input */}
-      <div className="border-t border-black/10 pt-3 dark:border-white/10">
-        <ChatInput
-          onSend={sendMessage}
-          onStop={stopGeneration}
-          isLoading={chatLoading}
-          disabled={!config.api_token}
-          config={config}
-          onConfigChange={handleChatSwitchChange}
-          placeholder={
-            config.api_token
-              ? 'Type a message...'
-              : 'Enter your API key in Settings to start chatting'
-          }
-        />
-      </div>
 
       {/* Config Sidebar */}
       <ConfigSidebar
@@ -253,7 +321,13 @@ export function GPTChatPage() {
         onDeletePrompt={handleDeletePrompt}
         onExportData={exportAllData}
         onImportData={importAllData}
+        sessions={sessions}
+        activeSessionId={sessionId}
+        onCreateSession={createSession}
+        onDeleteSession={deleteSession}
+        onSwitchSession={switchSession}
+        onRenameSession={renameSession}
       />
-    </div>
+    </div >
   )
 }
