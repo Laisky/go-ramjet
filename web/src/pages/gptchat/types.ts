@@ -10,6 +10,8 @@ export interface ChatMessageData {
   reasoningContent?: string
   timestamp?: number
   attachments?: ChatAttachment[]
+  annotations?: Annotation[]
+  references?: ChatReference[]
 }
 
 export interface ChatAttachment {
@@ -18,6 +20,21 @@ export interface ChatAttachment {
   cacheKey?: string
   url?: string
   type: 'image' | 'file'
+}
+
+export interface Annotation {
+  type: string
+  url_citation?: {
+    url: string
+    title?: string
+  }
+  [key: string]: unknown
+}
+
+export interface ChatReference {
+  index: number
+  url: string
+  title?: string
 }
 
 export interface SessionConfig {
@@ -45,13 +62,19 @@ export interface ChatSwitch {
   draw_n_images: number
 }
 
+export interface McpTool {
+  name: string
+  description?: string
+  input_schema?: Record<string, unknown>
+}
+
 export interface McpServerConfig {
   id: string
   name: string
   url: string
   api_key?: string
   enabled: boolean
-  tools?: any[]
+  tools?: McpTool[]
   enabled_tool_names?: string[]
 }
 
@@ -74,7 +97,8 @@ export const DefaultSessionConfig: SessionConfig = {
   token_type: 'proxy',
   api_base: 'https://api.openai.com',
   selected_model: 'gpt-4o-mini',
-  system_prompt: 'The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it\'s mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user\'s last question, and if possible, reference the context as much as you can.',
+  system_prompt:
+    "The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.",
   n_contexts: 6,
   max_tokens: 4000,
   temperature: 1,

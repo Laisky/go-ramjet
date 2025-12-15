@@ -1,11 +1,33 @@
+import type { Annotation } from '@/pages/gptchat/types'
+
 /**
  * API client for GPTChat backend endpoints.
  * Handles both regular requests and streaming SSE responses.
  */
 
+export interface ToolCallFunction {
+  name: string
+  arguments: string
+}
+
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: ToolCallFunction
+}
+
+export interface ToolCallDelta {
+  id?: string
+  type?: string
+  function?: Partial<ToolCallFunction>
+}
+
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | ContentPart[]
+  name?: string
+  tool_call_id?: string
+  tool_calls?: ToolCall[]
 }
 
 export interface ContentPart {
@@ -35,7 +57,14 @@ export interface McpServer {
 export interface ChatCompletionChoice {
   index: number
   message?: { role: string; content: string }
-  delta?: { role?: string; content?: string; reasoning_content?: string }
+  delta?: {
+    role?: string
+    content?: string | ContentPart[]
+    reasoning_content?: string
+    reasoning?: string
+    annotations?: Annotation[]
+    tool_calls?: ToolCallDelta[]
+  }
   finish_reason?: string | null
 }
 
@@ -97,7 +126,7 @@ export async function getSHA1(str: string): Promise<string> {
  */
 export async function buildHeaders(
   apiToken: string,
-  apiBase?: string
+  apiBase?: string,
 ): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -122,7 +151,7 @@ export async function buildHeaders(
 export async function sendChatRequest(
   request: ChatRequest,
   apiToken: string,
-  apiBase?: string
+  apiBase?: string,
 ): Promise<ChatCompletionResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
@@ -146,6 +175,9 @@ export async function sendChatRequest(
 export interface StreamCallbacks {
   onContent?: (content: string) => void
   onReasoning?: (content: string) => void
+  onAnnotations?: (annotations: Annotation[]) => void
+  onToolCallDelta?: (toolCalls: ToolCallDelta[]) => void
+  onFinish?: (finishReason?: string | null) => void
   onDone?: () => void
   onError?: (error: Error) => void
 }
@@ -158,9 +190,11 @@ export function sendStreamingChatRequest(
   request: ChatRequest,
   apiToken: string,
   callbacks: StreamCallbacks,
-  apiBase?: string
+  apiBase?: string,
 ): AbortController {
   const abortController = new AbortController()
+  let isThinking = false
+  let collectedAnnotations: Annotation[] = []
 
   const run = async () => {
     try {
@@ -191,7 +225,7 @@ export function sendStreamingChatRequest(
         const { done, value } = await reader.read()
 
         if (done) {
-          callbacks.onDone?.()
+          await callbacks.onDone?.()
           break
         }
 
@@ -202,29 +236,98 @@ export function sendStreamingChatRequest(
         buffer = lines.pop() || '' // Keep incomplete line in buffer
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim()
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
 
-            if (data === '[DONE]') {
-              callbacks.onDone?.()
-              return
+          if (data === '[DONE]') {
+            await callbacks.onDone?.()
+            return
+          }
+
+          try {
+            const parsed = JSON.parse(data) as ChatCompletionResponse
+            const delta = parsed.choices?.[0]?.delta
+            if (!delta) {
+              continue
             }
 
-            try {
-              const parsed = JSON.parse(data) as ChatCompletionResponse
-              const delta = parsed.choices?.[0]?.delta
-
-              if (delta?.content) {
-                callbacks.onContent?.(delta.content)
-              }
-
-              if (delta?.reasoning_content) {
-                callbacks.onReasoning?.(delta.reasoning_content)
-              }
-            } catch {
-              // Ignore parse errors for non-JSON data
-              console.debug('Non-JSON SSE data:', data)
+            if (delta.annotations && delta.annotations.length > 0) {
+              collectedAnnotations = collectedAnnotations.concat(
+                delta.annotations,
+              )
+              callbacks.onAnnotations?.(collectedAnnotations)
             }
+
+            if (delta.tool_calls && delta.tool_calls.length > 0) {
+              callbacks.onToolCallDelta?.(delta.tool_calls)
+            }
+
+            if (delta.reasoning_content) {
+              callbacks.onReasoning?.(delta.reasoning_content)
+            }
+            if (delta.reasoning) {
+              callbacks.onReasoning?.(delta.reasoning)
+            }
+
+            const chunk = delta.content
+            if (!chunk) {
+              continue
+            }
+
+            const contentChunks: string[] = []
+            const reasoningChunks: string[] = []
+            const pushContent = (val?: string) => {
+              if (val) {
+                contentChunks.push(val)
+              }
+            }
+            const pushReasoning = (val?: string) => {
+              if (val) {
+                reasoningChunks.push(val)
+              }
+            }
+
+            if (typeof chunk === 'string') {
+              if (chunk === '<think>') {
+                isThinking = true
+                continue
+              }
+              if (chunk === '</think>') {
+                isThinking = false
+                continue
+              }
+              if (isThinking) {
+                pushReasoning(chunk)
+              } else {
+                pushContent(chunk)
+              }
+            } else if (Array.isArray(chunk)) {
+              for (const part of chunk) {
+                if (!part) continue
+                if (part.type === 'text') {
+                  if (isThinking) {
+                    pushReasoning(part.text)
+                  } else {
+                    pushContent(part.text)
+                  }
+                } else if (part.type === 'image_url' && part.image_url?.url) {
+                  pushContent(`\n![Image](${part.image_url.url})\n`)
+                }
+              }
+            }
+
+            if (contentChunks.length > 0) {
+              callbacks.onContent?.(contentChunks.join(''))
+            }
+            if (reasoningChunks.length > 0) {
+              callbacks.onReasoning?.(reasoningChunks.join(''))
+            }
+
+            if (parsed.choices?.[0]?.finish_reason) {
+              callbacks.onFinish?.(parsed.choices[0].finish_reason)
+            }
+          } catch {
+            console.debug('Non-JSON SSE data:', data)
           }
         }
       }
@@ -233,7 +336,9 @@ export function sendStreamingChatRequest(
         // Request was cancelled
         return
       }
-      callbacks.onError?.(error instanceof Error ? error : new Error(String(error)))
+      callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error)),
+      )
     }
   }
 
@@ -247,7 +352,7 @@ export function sendStreamingChatRequest(
 export async function generateImage(
   request: ImageGenerationRequest,
   apiToken: string,
-  apiBase?: string
+  apiBase?: string,
 ): Promise<ImageGenerationResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
@@ -270,7 +375,7 @@ export async function generateImage(
  */
 export async function uploadFiles(
   files: File[],
-  apiToken: string
+  apiToken: string,
 ): Promise<{ cache_keys: string[] }> {
   const formData = new FormData()
   for (const file of files) {
@@ -294,11 +399,47 @@ export async function uploadFiles(
   return response.json()
 }
 
+export async function transcribeAudio(
+  file: File,
+  apiToken: string,
+): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('model', 'whisper-1')
+
+  const response = await fetch('/oneapi/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`[${response.status}]: ${text}`)
+  }
+
+  const data = await response.json().catch(() => ({}))
+  if (typeof data?.text === 'string') {
+    return data.text
+  }
+  if (Array.isArray(data?.segments)) {
+    return data.segments
+      .map((seg: { text?: string }) => seg.text)
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+  }
+  return ''
+}
+
 /**
  * Get current user info
  */
 export async function getCurrentUser(
-  apiToken: string
+  apiToken: string,
 ): Promise<{ username: string; is_member: boolean }> {
   const response = await fetch('/gptchat/user/me', {
     headers: {
@@ -318,7 +459,7 @@ export async function getCurrentUser(
  * Create a payment intent
  */
 export async function createPaymentIntent(
-  items: object[]
+  items: object[],
 ): Promise<{ clientSecret: string }> {
   const response = await fetch('/gptchat/create-payment-intent', {
     method: 'POST',

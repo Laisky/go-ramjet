@@ -2,18 +2,34 @@
  * GPTChat page - main chat interface.
  */
 import { Settings, ArrowDown } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
-import { ChatMessage, ChatInput, ConfigSidebar, ModelSelector, SessionDock } from './components'
+import {
+  ChatMessage,
+  ChatInput,
+  ConfigSidebar,
+  ModelSelector,
+  SessionDock,
+} from './components'
 import { useChat } from './hooks/use-chat'
 import { useConfig } from './hooks/use-config'
-import type { PromptShortcut, SessionConfig } from './types'
+import type { ChatMessageData, PromptShortcut, SessionConfig } from './types'
 import { DefaultSessionConfig } from './types'
 import { syncMCPServerTools } from './utils/mcp'
 
+const MESSAGE_PAGE_SIZE = 40
+type VersionSetting = { Key: string; Value: string }
+type VersionResponse = { Settings?: VersionSetting[] }
+
+function createDraftId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
 
 /**
  * GPTChatPage provides a full-featured chat interface.
@@ -29,8 +45,10 @@ export function GPTChatPage() {
     deleteSession,
     switchSession,
     renameSession,
+    duplicateSession,
+    purgeAllSessions,
     exportAllData,
-    importAllData
+    importAllData,
   } = useConfig()
   const {
     messages,
@@ -41,6 +59,7 @@ export function GPTChatPage() {
     clearMessages,
     deleteMessage,
     loadMessages,
+    regenerateMessage,
   } = useChat({ sessionId, config })
 
   const [configOpen, setConfigOpen] = useState(false)
@@ -48,6 +67,15 @@ export function GPTChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(MESSAGE_PAGE_SIZE)
+  const [upgradeInfo, setUpgradeInfo] = useState<{
+    from: string
+    to: string
+  } | null>(null)
+  const [prefillDraft, setPrefillDraft] = useState<{
+    id: string
+    text: string
+  } | null>(null)
 
   // Load messages and shortcuts on mount
   useEffect(() => {
@@ -56,6 +84,35 @@ export function GPTChatPage() {
       loadPromptShortcuts()
     }
   }, [configLoading, loadMessages])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const checkUpgrade = async () => {
+      try {
+        const resp = await fetch('/version', { cache: 'no-cache' })
+        if (!resp.ok) return
+        const data = (await resp.json()) as VersionResponse
+        const serverVer = data.Settings?.find(
+          (item) => item.Key === 'vcs.time',
+        )?.Value
+        if (!serverVer) return
+        const localVer = await kvGet<string>(StorageKeys.VERSION_DATE)
+        if (cancelled) return
+        await kvSet(StorageKeys.VERSION_DATE, serverVer)
+        if (localVer && localVer !== serverVer) {
+          setUpgradeInfo({ from: localVer, to: serverVer })
+        }
+      } catch (err) {
+        console.warn('Failed to check version:', err)
+      }
+    }
+
+    checkUpgrade()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Auto-sync MCP tools in background
   useEffect(() => {
@@ -104,11 +161,24 @@ export function GPTChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configLoading]) // Only run when loading finishes
 
-
   // Auto-scroll on new messages
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, scrollToBottom])
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setVisibleCount(MESSAGE_PAGE_SIZE)
+      return
+    }
+
+    setVisibleCount((prev) => {
+      if (prev > messages.length) {
+        return messages.length
+      }
+      return prev
+    })
+  }, [messages.length])
 
   // Track scroll position for scroll-to-bottom button
   useEffect(() => {
@@ -128,6 +198,31 @@ export function GPTChatPage() {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
+
+  const handleLoadOlder = useCallback(() => {
+    setVisibleCount((prev) =>
+      Math.min(prev + MESSAGE_PAGE_SIZE, messages.length),
+    )
+  }, [messages.length])
+
+  const userMessageByChatId = useMemo(() => {
+    const map = new Map<string, ChatMessageData>()
+    messages.forEach((msg) => {
+      if (msg.role === 'user') {
+        map.set(msg.chatID, msg)
+      }
+    })
+    return map
+  }, [messages])
+
+  const displayedMessages = useMemo(() => {
+    if (messages.length <= visibleCount) {
+      return messages
+    }
+    return messages.slice(-visibleCount)
+  }, [messages, visibleCount])
+
+  const lastMessage = messages[messages.length - 1]
 
   const loadPromptShortcuts = async () => {
     let shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
@@ -153,7 +248,7 @@ export function GPTChatPage() {
       setPromptShortcuts(updated)
       await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
     },
-    [promptShortcuts]
+    [promptShortcuts],
   )
 
   const handleDeletePrompt = useCallback(
@@ -162,14 +257,14 @@ export function GPTChatPage() {
       setPromptShortcuts(updated)
       await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
     },
-    [promptShortcuts]
+    [promptShortcuts],
   )
 
   const handleConfigChange = useCallback(
     (updates: Partial<SessionConfig>) => {
       updateConfig(updates)
     },
-    [updateConfig]
+    [updateConfig],
   )
 
   const handleChatSwitchChange = useCallback(
@@ -181,7 +276,7 @@ export function GPTChatPage() {
         },
       })
     },
-    [config.chat_switch, updateConfig]
+    [config.chat_switch, updateConfig],
   )
 
   const handleReset = useCallback(async () => {
@@ -191,6 +286,11 @@ export function GPTChatPage() {
   const handleClearChats = useCallback(async () => {
     await clearMessages()
   }, [clearMessages])
+
+  const handlePurgeAllSessions = useCallback(async () => {
+    await purgeAllSessions()
+    await clearMessages()
+  }, [purgeAllSessions, clearMessages])
 
   if (configLoading) {
     return (
@@ -221,7 +321,9 @@ export function GPTChatPage() {
             <h1 className="text-xl font-semibold">Chat</h1>
             <ModelSelector
               selectedModel={config.selected_model}
-              onModelChange={(model) => handleConfigChange({ selected_model: model })}
+              onModelChange={(model) =>
+                handleConfigChange({ selected_model: model })
+              }
             />
           </div>
           <Button
@@ -252,13 +354,20 @@ export function GPTChatPage() {
               <div className="mb-4 text-4xl">💬</div>
               <h2 className="text-lg font-medium">Start a conversation</h2>
               <p className="mt-1 max-w-sm text-sm text-black/50 dark:text-white/50">
-                Type a message below to begin chatting with the AI. You can change
-                the model and settings using the button above.
+                Type a message below to begin chatting with the AI. You can
+                change the model and settings using the button above.
               </p>
             </div>
           ) : (
             <div className="space-y-6 pb-4">
-              {messages.map((msg, idx) => (
+              {messages.length > displayedMessages.length && (
+                <div className="flex justify-center">
+                  <Button variant="ghost" size="sm" onClick={handleLoadOlder}>
+                    Load older messages
+                  </Button>
+                </div>
+              )}
+              {displayedMessages.map((msg) => (
                 <ChatMessage
                   key={`${msg.chatID}-${msg.role}`}
                   message={msg}
@@ -266,7 +375,9 @@ export function GPTChatPage() {
                   isStreaming={
                     chatLoading &&
                     msg.role === 'assistant' &&
-                    idx === messages.length - 1
+                    lastMessage &&
+                    msg.chatID === lastMessage.chatID &&
+                    msg.role === lastMessage.role
                   }
                 />
               ))}
@@ -281,7 +392,7 @@ export function GPTChatPage() {
               'fixed bottom-32 right-8 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-white shadow-lg transition-all dark:bg-white/80 dark:text-black',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
-                : 'translate-y-4 opacity-0 pointer-events-none'
+                : 'translate-y-4 opacity-0 pointer-events-none',
             )}
           >
             <ArrowDown className="h-5 w-5" />
@@ -304,9 +415,7 @@ export function GPTChatPage() {
             }
           />
         </div>
-
       </div>
-
 
       {/* Config Sidebar */}
       <ConfigSidebar
@@ -327,7 +436,30 @@ export function GPTChatPage() {
         onDeleteSession={deleteSession}
         onSwitchSession={switchSession}
         onRenameSession={renameSession}
+        onDuplicateSession={duplicateSession}
+        onPurgeAllSessions={handlePurgeAllSessions}
       />
-    </div >
+
+      {upgradeInfo && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-black/10 bg-white p-4 shadow-lg dark:border-white/10 dark:bg-black">
+          <p className="text-sm font-medium">New version available</p>
+          <p className="text-xs text-black/60 dark:text-white/60">
+            {upgradeInfo.from} → {upgradeInfo.to}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" onClick={() => window.location.reload()}>
+              Reload now
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setUpgradeInfo(null)}
+            >
+              Later
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

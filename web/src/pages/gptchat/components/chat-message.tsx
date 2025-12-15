@@ -1,21 +1,45 @@
 /**
  * Chat message component for displaying user and assistant messages.
  */
-import { Trash2, User, Bot, Copy, Check } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Bot,
+  Check,
+  Copy,
+  Edit2,
+  RotateCcw,
+  Trash2,
+  User,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { Markdown } from '@/components/markdown'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Markdown } from '@/components/markdown'
-import { cn } from '@/utils/cn'
 import { splitReasoningContent } from '@/utils/chat-parser'
+import { cn } from '@/utils/cn'
 import type { ChatMessageData } from '../types'
+
+function stripMarkdownText(input: string): string {
+  return input
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[>*_~`#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 export interface ChatMessageProps {
   message: ChatMessageData
   onDelete?: (chatId: string) => void
   isStreaming?: boolean
+  onRegenerate?: (chatId: string) => void
+  onEditResend?: (payload: { chatId: string; content: string }) => void
+  pairedUserMessage?: ChatMessageData
 }
 
 function ReasoningBlock({ content }: { content: string }) {
@@ -23,7 +47,10 @@ function ReasoningBlock({ content }: { content: string }) {
 
   return (
     <Card className="mb-2 border-dashed bg-black/5 p-3 dark:bg-white/5">
-      <details className="text-xs text-black/60 dark:text-white/60" open={!!toolEvents.length}>
+      <details
+        className="text-xs text-black/60 dark:text-white/60"
+        open={!!toolEvents.length}
+      >
         <summary className="cursor-pointer font-medium hover:text-black dark:hover:text-white transition-colors">
           💭 Reasoning & Tools
         </summary>
@@ -56,10 +83,44 @@ function ReasoningBlock({ content }: { content: string }) {
 /**
  * ChatMessage renders a single chat message with markdown support.
  */
-export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  onDelete,
+  isStreaming,
+  onRegenerate,
+  onEditResend,
+  pairedUserMessage,
+}: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
+  const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
+  const supportsSpeech = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window &&
+      'SpeechSynthesisUtterance' in window,
+    [],
+  )
+  const pairedUserContent = isUser
+    ? message.content
+    : pairedUserMessage?.content || ''
+  const canEditMessage = Boolean(onEditResend && pairedUserContent)
+
+  const stopSpeaking = useCallback(() => {
+    if (!supportsSpeech || !isSpeaking) return
+    window.speechSynthesis.cancel()
+    speechRef.current = null
+    setIsSpeaking(false)
+  }, [isSpeaking, supportsSpeech])
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking()
+    }
+  }, [stopSpeaking])
 
   const handleCopy = async () => {
     try {
@@ -77,11 +138,65 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
     }
   }
 
+  const handleCopyReference = async (url: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedCitation(index)
+      setTimeout(() => setCopiedCitation(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy reference:', err)
+    }
+  }
+
+  const showSpeechButton = Boolean(
+    supportsSpeech && isAssistant && message.content,
+  )
+  const actionDisabled = Boolean(isStreaming && isAssistant)
+
+  const handleToggleSpeech = useCallback(() => {
+    if (!supportsSpeech || !message.content) {
+      return
+    }
+    if (isSpeaking) {
+      stopSpeaking()
+      return
+    }
+    if (
+      typeof window === 'undefined' ||
+      typeof window.SpeechSynthesisUtterance === 'undefined'
+    ) {
+      return
+    }
+    const plain = stripMarkdownText(message.content)
+    if (!plain) {
+      return
+    }
+    stopSpeaking()
+    const utterance = new window.SpeechSynthesisUtterance(plain)
+    utterance.onend = () => setIsSpeaking(false)
+    utterance.onerror = () => setIsSpeaking(false)
+    speechRef.current = utterance
+    window.speechSynthesis.speak(utterance)
+    setIsSpeaking(true)
+  }, [isSpeaking, message.content, stopSpeaking, supportsSpeech])
+
+  const handleRegenerate = useCallback(() => {
+    if (onRegenerate) {
+      onRegenerate(message.chatID)
+    }
+  }, [message.chatID, onRegenerate])
+
+  const handleEditClick = useCallback(() => {
+    if (canEditMessage && onEditResend) {
+      onEditResend({ chatId: message.chatID, content: pairedUserContent })
+    }
+  }, [canEditMessage, message.chatID, onEditResend, pairedUserContent])
+
   return (
     <div
       className={cn(
         'group flex gap-3',
-        isUser ? 'flex-row-reverse' : 'flex-row'
+        isUser ? 'flex-row-reverse' : 'flex-row',
       )}
     >
       {/* Avatar */}
@@ -90,18 +205,16 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
           isUser
             ? 'bg-blue-500 text-white'
-            : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
+            : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
         )}
       >
-        {isUser ? (
-          <User className="h-4 w-4" />
-        ) : (
-          <Bot className="h-4 w-4" />
-        )}
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
 
       {/* Message content */}
-      <div className={cn('flex max-w-[80%] flex-col gap-1', isUser && 'items-end')}>
+      <div
+        className={cn('flex max-w-[80%] flex-col gap-1', isUser && 'items-end')}
+      >
         {/* Model badge for assistant */}
         {isAssistant && message.model && (
           <Badge variant="secondary" className="w-fit text-xs">
@@ -118,10 +231,8 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
         <Card
           className={cn(
             'relative p-3',
-            isUser
-              ? 'bg-blue-500 text-white'
-              : 'bg-white dark:bg-black/50',
-            isStreaming && 'animate-pulse'
+            isUser ? 'bg-blue-500 text-white' : 'bg-white dark:bg-black/50',
+            isStreaming && 'animate-pulse',
           )}
         >
           {isUser ? (
@@ -150,9 +261,47 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
           <div
             className={cn(
               'absolute -bottom-8 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100',
-              isUser ? 'right-0' : 'left-0'
+              isUser ? 'right-0' : 'left-0',
             )}
           >
+            {canEditMessage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleEditClick}
+                className="h-6 px-2"
+                title="Edit & resend"
+              >
+                <Edit2 className="h-3 w-3" />
+              </Button>
+            )}
+            {isAssistant && onRegenerate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRegenerate}
+                className="h-6 px-2"
+                disabled={actionDisabled}
+                title="Regenerate response"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+            )}
+            {showSpeechButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleSpeech}
+                className="h-6 px-2"
+                title={isSpeaking ? 'Stop narration' : 'Play narration'}
+              >
+                {isSpeaking ? (
+                  <VolumeX className="h-3 w-3" />
+                ) : (
+                  <Volume2 className="h-3 w-3" />
+                )}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -177,6 +326,42 @@ export function ChatMessage({ message, onDelete, isStreaming }: ChatMessageProps
             )}
           </div>
         </Card>
+
+        {isAssistant && message.references && message.references.length > 0 && (
+          <Card className="mt-2 bg-black/5 p-3 text-xs dark:bg-white/5">
+            <p className="font-semibold text-black/60 dark:text-white/60">
+              References
+            </p>
+            <ol className="mt-2 space-y-1">
+              {message.references.map((ref) => (
+                <li key={ref.index} className="flex items-start gap-2">
+                  <span className="text-black/50 dark:text-white/50">
+                    [{ref.index}]
+                  </span>
+                  <a
+                    href={ref.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 truncate text-blue-600 hover:underline dark:text-blue-300"
+                  >
+                    {ref.title || ref.url}
+                  </a>
+                  <button
+                    className="text-black/40 transition hover:text-black dark:text-white/40 dark:hover:text-white"
+                    onClick={() => handleCopyReference(ref.url, ref.index)}
+                    title="Copy reference URL"
+                  >
+                    {copiedCitation === ref.index ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </Card>
+        )}
 
         {/* Timestamp */}
         {message.timestamp && (

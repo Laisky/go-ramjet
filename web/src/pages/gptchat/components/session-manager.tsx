@@ -1,10 +1,17 @@
-
-import { useState } from 'react'
-import { Plus, Trash2, Edit2, Check, X, MessageSquare } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import {
+  Check,
+  Copy,
+  Edit2,
+  MessageSquare,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { useState } from 'react'
 
 interface SessionManagerProps {
   sessions: { id: number; name: string }[]
@@ -13,6 +20,7 @@ interface SessionManagerProps {
   onCreateSession: (name: string) => void
   onDeleteSession: (id: number) => void
   onRenameSession: (id: number, name: string) => void
+  onDuplicateSession?: (id: number) => void
 }
 
 export function SessionManager({
@@ -22,6 +30,7 @@ export function SessionManager({
   onCreateSession,
   onDeleteSession,
   onRenameSession,
+  onDuplicateSession,
 }: SessionManagerProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -78,17 +87,35 @@ export function SessionManager({
               autoFocus
               placeholder="Session Name"
               onKeyDown={(e) => {
-                if (e.key === 'Enter') isCreating ? handleCreate() : handleRename()
+                if (e.key === 'Enter') {
+                  if (isCreating) {
+                    handleCreate()
+                  } else {
+                    handleRename()
+                  }
+                }
                 if (e.key === 'Escape') {
                   setIsCreating(false)
                   setEditingId(null)
                 }
               }}
             />
-            <Button size="sm" className="h-8 w-8 p-0" onClick={isCreating ? handleCreate : handleRename}>
+            <Button
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={isCreating ? handleCreate : handleRename}
+            >
               <Check className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setIsCreating(false); setEditingId(null) }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => {
+                setIsCreating(false)
+                setEditingId(null)
+              }}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -99,17 +126,22 @@ export function SessionManager({
         {sessions.map((session) => (
           <div
             key={session.id}
-            className={`group flex items-center justify-between gap-2 rounded-md border p-2 text-sm transition-colors ${session.id === activeSessionId
+            className={`group flex items-center justify-between gap-2 rounded-md border p-2 text-sm transition-colors ${
+              session.id === activeSessionId
                 ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
                 : 'hover:bg-gray-100 dark:hover:bg-gray-800 border-transparent'
-              }`}
+            }`}
           >
             <button
               className="flex flex-1 items-center gap-2 truncate text-left"
               onClick={() => onSwitchSession(session.id)}
             >
-              <MessageSquare className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-blue-500' : 'text-gray-400'}`} />
-              <span className={`truncate ${session.id === activeSessionId ? 'font-medium' : ''}`}>
+              <MessageSquare
+                className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-blue-500' : 'text-gray-400'}`}
+              />
+              <span
+                className={`truncate ${session.id === activeSessionId ? 'font-medium' : ''}`}
+              >
                 {session.name}
               </span>
             </button>
@@ -123,6 +155,17 @@ export function SessionManager({
               >
                 <Edit2 className="h-3 w-3" />
               </Button>
+
+              {onDuplicateSession && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-500"
+                  onClick={() => onDuplicateSession(session.id)}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              )}
 
               {sessions.length > 1 && (
                 <ConfirmDialog

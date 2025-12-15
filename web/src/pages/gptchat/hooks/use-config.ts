@@ -3,10 +3,269 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 
-import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
-import { DefaultSessionConfig, type SessionConfig } from '../types'
+import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
+import { AllModels } from '../models'
+import {
+  DefaultSessionConfig,
+  type ChatMessageData,
+  type SessionConfig,
+  type SessionHistoryItem,
+} from '../types'
+import {
+  generateChatId,
+  getChatDataKey,
+  getSessionHistoryKey,
+} from '../utils/chat-storage'
 
 const DEFAULT_SESSION_ID = 1
+
+const UrlConfigBooleanFields = new Set([
+  'all_in_one',
+  'disable_https_crawler',
+  'enable_talk',
+  'enable_mcp',
+])
+const UrlConfigIntegerFields = new Set([
+  'max_tokens',
+  'n_contexts',
+  'draw_n_images',
+])
+const UrlConfigFloatFields = new Set([
+  'temperature',
+  'presence_penalty',
+  'frequency_penalty',
+])
+const UrlParamAliasMap = new Map<string, string>([
+  ['api_key', 'api_token'],
+  ['apikey', 'api_token'],
+  ['token', 'api_token'],
+  ['api_token', 'api_token'],
+  ['api_token_type', 'token_type'],
+  ['token_type', 'token_type'],
+  ['tokentype', 'token_type'],
+  ['api_base', 'api_base'],
+  ['base', 'api_base'],
+  ['apibase', 'api_base'],
+  ['model', 'selected_model'],
+  ['chat_model', 'selected_model'],
+  ['chatmodel', 'selected_model'],
+  ['selected_model', 'selected_model'],
+  ['selectedmodel', 'selected_model'],
+  ['system_prompt', 'system_prompt'],
+  ['prompt', 'system_prompt'],
+  ['systemprompt', 'system_prompt'],
+  ['max_token', 'max_tokens'],
+  ['max_tokens', 'max_tokens'],
+  ['maxtoken', 'max_tokens'],
+  ['maxtokens', 'max_tokens'],
+  ['temperature', 'temperature'],
+  ['presence_penalty', 'presence_penalty'],
+  ['presencepenalty', 'presence_penalty'],
+  ['frequency_penalty', 'frequency_penalty'],
+  ['frequencypenalty', 'frequency_penalty'],
+  ['context', 'n_contexts'],
+  ['contexts', 'n_contexts'],
+  ['n_contexts', 'n_contexts'],
+  ['context_len', 'n_contexts'],
+  ['contextlength', 'n_contexts'],
+  ['contextlen', 'n_contexts'],
+  ['draw_n_images', 'chat_switch.draw_n_images'],
+  ['draw_images', 'chat_switch.draw_n_images'],
+  ['drawimages', 'chat_switch.draw_n_images'],
+  ['draw', 'chat_switch.draw_n_images'],
+  ['enable_mcp', 'chat_switch.enable_mcp'],
+  ['enablemcp', 'chat_switch.enable_mcp'],
+  ['chat_switch.enable_mcp', 'chat_switch.enable_mcp'],
+  ['chat_switch.enablemcp', 'chat_switch.enable_mcp'],
+  ['disable_https_crawler', 'chat_switch.disable_https_crawler'],
+  ['chat_switch.disable_https_crawler', 'chat_switch.disable_https_crawler'],
+  ['disablehttpscrawler', 'chat_switch.disable_https_crawler'],
+  ['chat_switch.disablehttpscrawler', 'chat_switch.disable_https_crawler'],
+  ['https_crawler', 'chat_switch.disable_https_crawler'],
+  ['all_in_one', 'chat_switch.all_in_one'],
+  ['allinone', 'chat_switch.all_in_one'],
+  ['chat_switch.all_in_one', 'chat_switch.all_in_one'],
+  ['enable_talk', 'chat_switch.enable_talk'],
+  ['enabletalk', 'chat_switch.enable_talk'],
+  ['chat_switch.enable_talk', 'chat_switch.enable_talk'],
+  ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
+])
+
+function normalizeUrlParamKey(key: string): string {
+  return key
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+}
+
+function parseBooleanParamValue(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
+  return null
+}
+
+function parseIntegerParamValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value)) return value
+  const str = String(value ?? '').trim()
+  if (!/^-?\d+$/.test(str)) return null
+  const parsed = parseInt(str, 10)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function parseFloatParamValue(value: unknown): number | null {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value
+  const str = String(value ?? '').trim()
+  if (!/^-?\d+(\.\d+)?$/.test(str)) return null
+  const parsed = parseFloat(str)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function getNestedConfigValue(
+  config: Record<string, unknown>,
+  pathSegments: string[],
+) {
+  return pathSegments.reduce<unknown>((acc, segment) => {
+    if (typeof acc !== 'object' || acc === null) {
+      return undefined
+    }
+    return (acc as Record<string, unknown>)[segment]
+  }, config)
+}
+
+function setNestedConfigValue(
+  config: Record<string, unknown>,
+  pathSegments: string[],
+  value: unknown,
+) {
+  let cursor: Record<string, unknown> = config
+  for (let i = 0; i < pathSegments.length - 1; i++) {
+    const segment = pathSegments[i]
+    const next = cursor[segment]
+    if (typeof next !== 'object' || next === null) {
+      cursor[segment] = {}
+    }
+    cursor = cursor[segment] as Record<string, unknown>
+  }
+  cursor[pathSegments[pathSegments.length - 1]] = value
+}
+
+function coerceConfigValue(
+  field: string,
+  rawValue: unknown,
+  currentValue: unknown,
+) {
+  if (UrlConfigBooleanFields.has(field)) {
+    const parsed = parseBooleanParamValue(rawValue)
+    return parsed === null ? currentValue : parsed
+  }
+  if (UrlConfigIntegerFields.has(field)) {
+    const parsed = parseIntegerParamValue(rawValue)
+    return parsed === null ? currentValue : parsed
+  }
+  if (UrlConfigFloatFields.has(field)) {
+    const parsed = parseFloatParamValue(rawValue)
+    return parsed === null ? currentValue : parsed
+  }
+  if (rawValue === undefined || rawValue === null) {
+    return currentValue
+  }
+  return rawValue
+}
+
+function deepCloneConfig(config: SessionConfig): SessionConfig {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(config)
+  }
+  return JSON.parse(JSON.stringify(config)) as SessionConfig
+}
+
+function applyUrlOverridesToConfig(config: SessionConfig): {
+  config: SessionConfig
+  mutated: boolean
+} {
+  const url = new URL(window.location.href)
+  const searchParams = url.searchParams
+  const entries = Array.from(searchParams.entries())
+  let mutated = false
+
+  if (entries.length === 0) {
+    return { config, mutated }
+  }
+
+  const updatedConfig = deepCloneConfig(config)
+
+  entries.forEach(([rawKey, rawValue]) => {
+    const normalizedKey = normalizeUrlParamKey(rawKey)
+    const targetPath = UrlParamAliasMap.get(normalizedKey) || normalizedKey
+    if (!targetPath) {
+      return
+    }
+
+    const pathSegments = targetPath.split('.')
+    const rootKey = pathSegments[0]
+    if (rootKey !== 'chat_switch' && !(rootKey in updatedConfig)) {
+      return
+    }
+
+    if (rootKey === 'chat_switch') {
+      if (
+        !updatedConfig.chat_switch ||
+        typeof updatedConfig.chat_switch !== 'object'
+      ) {
+        updatedConfig.chat_switch = { ...DefaultSessionConfig.chat_switch }
+      }
+    }
+
+    const currentValue = getNestedConfigValue(
+      updatedConfig as Record<string, unknown>,
+      pathSegments,
+    )
+    const coercedValue = coerceConfigValue(
+      pathSegments[pathSegments.length - 1],
+      rawValue,
+      currentValue,
+    )
+    if (coercedValue === currentValue) {
+      searchParams.delete(rawKey)
+      return
+    }
+
+    setNestedConfigValue(
+      updatedConfig as Record<string, unknown>,
+      pathSegments,
+      coercedValue,
+    )
+    if (
+      targetPath === 'selected_model' &&
+      typeof coercedValue === 'string' &&
+      coercedValue &&
+      !AllModels.includes(coercedValue)
+    ) {
+      AllModels.push(coercedValue)
+    }
+
+    mutated = true
+    searchParams.delete(rawKey)
+  })
+
+  if (mutated) {
+    const newSearch = searchParams.toString()
+    window.history.replaceState(
+      {},
+      document.title,
+      `${url.pathname}${newSearch ? `?${newSearch}` : ''}${url.hash}`,
+    )
+  }
+
+  return {
+    config: mutated ? updatedConfig : config,
+    mutated,
+  }
+}
 
 /**
  * Get the active session ID
@@ -37,7 +296,8 @@ export function useConfig() {
     const loadConfig = async () => {
       try {
         // Run migration first
-        const { migrateLegacyData } = await import('@/pages/gptchat/utils/migration')
+        const { migrateLegacyData } =
+          await import('@/pages/gptchat/utils/migration')
         await migrateLegacyData()
 
         const activeSessionId = await getActiveSessionId()
@@ -63,13 +323,21 @@ export function useConfig() {
 
         // Generate sync_key if missing
         if (!finalConfig.sync_key) {
-          finalConfig.sync_key = 'sync-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+          finalConfig.sync_key =
+            'sync-' +
+            Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15)
           configChanged = true
         }
 
         // Auto-generate FREETIER token if missing
-        if (!finalConfig.api_token || finalConfig.api_token === 'DEFAULT_PROXY_TOKEN') {
-          const randomStr = Math.random().toString(36).substring(2, 18) + Math.random().toString(36).substring(2, 18)
+        if (
+          !finalConfig.api_token ||
+          finalConfig.api_token === 'DEFAULT_PROXY_TOKEN'
+        ) {
+          const randomStr =
+            Math.random().toString(36).substring(2, 18) +
+            Math.random().toString(36).substring(2, 18)
           finalConfig.api_token = `FREETIER-${randomStr}`
           console.debug('Generated new FREETIER token:', finalConfig.api_token)
           configChanged = true
@@ -77,18 +345,24 @@ export function useConfig() {
 
         // Ensure api_base is set
         if (!finalConfig.api_base) {
-            finalConfig.api_base = 'https://api.openai.com'
-            configChanged = true
+          finalConfig.api_base = 'https://api.openai.com'
+          configChanged = true
         }
 
         // Ensure session_name is set
         if (!finalConfig.session_name) {
-            finalConfig.session_name = `Chat Session ${activeSessionId}`
-            configChanged = true
+          finalConfig.session_name = `Chat Session ${activeSessionId}`
+          configChanged = true
         }
 
-        if (configChanged || !savedConfig) {
-           await kvSet(key, finalConfig)
+        const overrideResult = applyUrlOverridesToConfig(finalConfig)
+        if (overrideResult.mutated) {
+          finalConfig = overrideResult.config
+          configChanged = true
+        }
+
+        if (configChanged || !savedConfig || overrideResult.mutated) {
+          await kvSet(key, finalConfig)
         }
 
         setConfigState(finalConfig)
@@ -96,9 +370,6 @@ export function useConfig() {
 
         // Load all sessions
         await loadSessions()
-
-        // Apply URL parameter overrides (these might overwrite the token if provided in URL)
-        applyUrlOverrides()
       } catch (error) {
         console.error('Failed to load config:', error)
       } finally {
@@ -107,43 +378,47 @@ export function useConfig() {
     }
 
     loadConfig()
-  }, [])
+  }, [loadSessions])
 
   /**
    * Load all available sessions
    */
   const loadSessions = useCallback(async () => {
-    const { kvList, kvGet } = await import('@/utils/storage')
     const keys = await kvList()
-    const configKeys = keys.filter(k => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
+    const configKeys = keys.filter((k) =>
+      k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
+    )
 
     // Sort keys by ID to keep order stable
     configKeys.sort((a, b) => {
-        const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
-        const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
-        return idA - idB
+      const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+      const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+      return idA - idB
     })
 
     const loadedSessions: { id: number; name: string }[] = []
 
     for (const key of configKeys) {
-        try {
-            const id = parseInt(key.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
-            if (isNaN(id)) continue
+      try {
+        const id = parseInt(
+          key.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''),
+          10,
+        )
+        if (isNaN(id)) continue
 
-            const conf = await kvGet<SessionConfig>(key)
-            loadedSessions.push({
-                id,
-                name: conf?.session_name || `Chat Session ${id}`
-            })
-        } catch (e) {
-            console.error('Failed to load session config for key', key, e)
-        }
+        const conf = await kvGet<SessionConfig>(key)
+        loadedSessions.push({
+          id,
+          name: conf?.session_name || `Chat Session ${id}`,
+        })
+      } catch (e) {
+        console.error('Failed to load session config for key', key, e)
+      }
     }
 
     // If no sessions found, at least include current default (should exist after load logic)
     if (loadedSessions.length === 0) {
-        // We defer to what loadConfig created
+      // We defer to what loadConfig created
     }
 
     setSessions(loadedSessions)
@@ -152,78 +427,6 @@ export function useConfig() {
   /**
    * Apply URL parameter overrides to the current config
    */
-  const applyUrlOverrides = useCallback(() => {
-    const url = new URL(window.location.href)
-    const params = url.searchParams
-
-    setConfigState((prev: SessionConfig) => {
-      const updates: Partial<SessionConfig> = {}
-      let mutated = false
-
-      // Model
-      const model = params.get('model') || params.get('chat_model')
-      if (model) {
-        updates.selected_model = model
-        mutated = true
-      }
-
-      // API token
-      const apiKey = params.get('api_key') || params.get('token')
-      if (apiKey) {
-        updates.api_token = apiKey
-        mutated = true
-      }
-
-      // System prompt
-      const systemPrompt = params.get('system_prompt') || params.get('prompt')
-      if (systemPrompt) {
-        updates.system_prompt = systemPrompt
-        mutated = true
-      }
-
-      // Temperature
-      const temperature = params.get('temperature')
-      if (temperature) {
-        const val = parseFloat(temperature)
-        if (!isNaN(val)) {
-          updates.temperature = val
-          mutated = true
-        }
-      }
-
-      // Max tokens
-      const maxTokens = params.get('max_tokens')
-      if (maxTokens) {
-        const val = parseInt(maxTokens, 10)
-        if (!isNaN(val)) {
-          updates.max_tokens = val
-          mutated = true
-        }
-      }
-
-      // Clear used parameters from URL
-      if (mutated) {
-        const paramsToRemove = [
-          'model',
-          'chat_model',
-          'api_key',
-          'token',
-          'system_prompt',
-          'prompt',
-          'temperature',
-          'max_tokens',
-        ]
-        paramsToRemove.forEach((p) => params.delete(p))
-
-        const newUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`
-        window.history.replaceState({}, document.title, newUrl)
-
-        return { ...prev, ...updates }
-      }
-
-      return prev
-    })
-  }, [])
 
   /**
    * Update and persist configuration
@@ -248,87 +451,105 @@ export function useConfig() {
         console.error('Failed to save config:', error)
       }
     },
-    [config, sessionId, loadSessions]
+    [config, sessionId, loadSessions],
   )
 
   /**
    * Switch to a different session
    */
-  const switchSession = useCallback(async (newSessionId: number) => {
-    setIsLoading(true)
-    try {
-      await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
-      setSessionId(newSessionId)
+  const switchSession = useCallback(
+    async (newSessionId: number) => {
+      setIsLoading(true)
+      try {
+        await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
+        setSessionId(newSessionId)
 
-      const key = getSessionConfigKey(newSessionId)
-      const savedConfig = await kvGet<SessionConfig>(key)
+        const key = getSessionConfigKey(newSessionId)
+        const savedConfig = await kvGet<SessionConfig>(key)
 
-      if (savedConfig) {
-        setConfigState({
-          ...DefaultSessionConfig,
-          ...savedConfig,
-        //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
-          chat_switch: {
-            ...DefaultSessionConfig.chat_switch,
-            ...savedConfig.chat_switch,
-          },
-        })
-      } else {
-        const newConf = {
+        if (savedConfig) {
+          setConfigState({
             ...DefaultSessionConfig,
-            session_name: `Chat Session ${newSessionId}`
+            ...savedConfig,
+            //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
+            chat_switch: {
+              ...DefaultSessionConfig.chat_switch,
+              ...savedConfig.chat_switch,
+            },
+          })
+        } else {
+          const newConf = {
+            ...DefaultSessionConfig,
+            session_name: `Chat Session ${newSessionId}`,
+          }
+          setConfigState(newConf)
+          // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
+          await kvSet(key, newConf)
         }
-        setConfigState(newConf)
-        // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
-        await kvSet(key, newConf)
-      }
 
-      // Refresh list to ensure names are up to date if we defaulted above
-      await loadSessions()
-    } finally {
-      setIsLoading(false)
-    }
-  }, [loadSessions])
+        // Refresh list to ensure names are up to date if we defaulted above
+        await loadSessions()
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [loadSessions],
+  )
 
   /**
    * Create a new session
    */
-  const createSession = useCallback(async (name?: string): Promise<number> => {
-    // Find the next available session ID
-    const keys = await import('@/utils/storage').then((m) => m.kvList())
-    const sessionIds = keys
-      .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
-      .map((k) => parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10))
-      .filter((id) => !isNaN(id))
+  const createSession = useCallback(
+    async (name?: string): Promise<number> => {
+      // Find the next available session ID
+      const keys = await kvList()
+      const sessionIds = keys
+        .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
+        .map((k) =>
+          parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10),
+        )
+        .filter((id) => !isNaN(id))
 
-    const maxId = sessionIds.length > 0 ? Math.max(...sessionIds) : 0
-    const newId = maxId + 1
+      const maxId = sessionIds.length > 0 ? Math.max(...sessionIds) : 0
+      const newId = maxId + 1
 
-    // Initialize new session with defaults
-    const key = getSessionConfigKey(newId)
-    const newConfig = {
+      // Initialize new session with defaults
+      const key = getSessionConfigKey(newId)
+      const newConfig = {
         ...DefaultSessionConfig,
-        session_name: name || `Chat Session ${newId}`
-    }
-    await kvSet(key, newConfig)
+        session_name: name || `Chat Session ${newId}`,
+      }
+      await kvSet(key, newConfig)
 
-    await loadSessions()
+      await loadSessions()
 
-    return newId
-  }, [loadSessions])
+      return newId
+    },
+    [loadSessions],
+  )
 
   /**
    * Delete a session
    */
   const deleteSession = useCallback(
     async (targetSessionId: number) => {
-      const { kvDel } = await import('@/utils/storage')
-
       // Delete session config
       await kvDel(getSessionConfigKey(targetSessionId))
 
+      const historyKey = getSessionHistoryKey(targetSessionId)
+      const history = await kvGet<SessionHistoryItem[]>(historyKey)
+      if (history) {
+        const uniqueChatIds = Array.from(
+          new Set(history.map((item) => item.chatID).filter(Boolean)),
+        )
+        for (const chatId of uniqueChatIds) {
+          await kvDel(getChatDataKey(chatId!, 'user'))
+          await kvDel(getChatDataKey(chatId!, 'assistant'))
+        }
+      }
+
       // Delete session history
-      await kvDel(`${StorageKeys.SESSION_HISTORY_PREFIX}${targetSessionId}`)
+      await kvDel(historyKey)
 
       // If deleting current session, switch to session 1
       // If deleting current session, switch to session 1 or first available
@@ -344,18 +565,117 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [sessionId, switchSession, loadSessions]
+    [sessionId, switchSession, loadSessions],
   )
+
+  const duplicateSession = useCallback(
+    async (sourceSessionId: number) => {
+      const sessionKeys = await kvList()
+      const sessionIds = sessionKeys
+        .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
+        .map((k) =>
+          parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10),
+        )
+        .filter((id) => !Number.isNaN(id))
+
+      const newSessionId =
+        sessionIds.length > 0 ? Math.max(...sessionIds) + 1 : DEFAULT_SESSION_ID
+
+      const sourceConfigKey = getSessionConfigKey(sourceSessionId)
+      const sourceConfig =
+        (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
+      const duplicatedConfig: SessionConfig = {
+        ...sourceConfig,
+        session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Copy`,
+      }
+
+      await kvSet(getSessionConfigKey(newSessionId), duplicatedConfig)
+
+      const sourceHistory =
+        (await kvGet<SessionHistoryItem[]>(
+          getSessionHistoryKey(sourceSessionId),
+        )) || []
+      const historyKey = getSessionHistoryKey(newSessionId)
+      const idMap = new Map<string, string>()
+      const duplicatedHistory: SessionHistoryItem[] = []
+
+      for (const item of sourceHistory) {
+        if (!item.chatID) {
+          continue
+        }
+
+        let nextChatId = idMap.get(item.chatID)
+        if (!nextChatId) {
+          nextChatId = generateChatId()
+          idMap.set(item.chatID, nextChatId)
+        }
+
+        duplicatedHistory.push({ ...item, chatID: nextChatId })
+
+        const chatData = await kvGet<ChatMessageData>(
+          getChatDataKey(item.chatID, item.role),
+        )
+        if (chatData) {
+          await kvSet(getChatDataKey(nextChatId, item.role), {
+            ...chatData,
+            chatID: nextChatId,
+          })
+        }
+      }
+
+      await kvSet(historyKey, duplicatedHistory)
+      await loadSessions()
+      return newSessionId
+    },
+    [loadSessions],
+  )
+
+  const purgeAllSessions = useCallback(async () => {
+    const keys = await kvList()
+    for (const key of keys) {
+      if (
+        key.startsWith(StorageKeys.SESSION_CONFIG_PREFIX) ||
+        key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX) ||
+        key.startsWith(StorageKeys.CHAT_DATA_PREFIX)
+      ) {
+        await kvDel(key)
+      }
+    }
+
+    const preservedToken = config.api_token
+    const preservedBase = config.api_base
+    const newConfig: SessionConfig = {
+      ...DefaultSessionConfig,
+      api_token: preservedToken,
+      api_base: preservedBase,
+      session_name: DefaultSessionConfig.session_name,
+    }
+
+    await kvSet(getSessionConfigKey(DEFAULT_SESSION_ID), newConfig)
+    await kvSet(getSessionHistoryKey(DEFAULT_SESSION_ID), [])
+    await kvSet(StorageKeys.SELECTED_SESSION, DEFAULT_SESSION_ID)
+
+    setSessionId(DEFAULT_SESSION_ID)
+    setConfigState(newConfig)
+    setSessions([
+      {
+        id: DEFAULT_SESSION_ID,
+        name: newConfig.session_name || `Chat Session ${DEFAULT_SESSION_ID}`,
+      },
+    ])
+    await loadSessions()
+  }, [config.api_base, config.api_token, loadSessions])
 
   /**
    * Rename a session
    */
-  const renameSession = useCallback(async (targetId: number, newName: string) => {
+  const renameSession = useCallback(
+    async (targetId: number, newName: string) => {
       const key = getSessionConfigKey(targetId)
       // We must read it first to preserve other fields
       let conf = await kvGet<SessionConfig>(key)
       if (!conf) {
-          conf = { ...DefaultSessionConfig }
+        conf = { ...DefaultSessionConfig }
       }
 
       conf.session_name = newName
@@ -363,13 +683,13 @@ export function useConfig() {
 
       // If it's the current session, update state too
       if (targetId === sessionId) {
-          setConfigState(conf)
+        setConfigState(conf)
       }
 
       await loadSessions()
-  }, [sessionId, loadSessions])
-
-
+    },
+    [sessionId, loadSessions],
+  )
 
   /**
    * Export all data (sessions, configs, shortcuts) for sync
@@ -377,14 +697,14 @@ export function useConfig() {
   const exportAllData = useCallback(async () => {
     const { kvList, kvGet } = await import('@/utils/storage')
     const keys = await kvList()
-    const data: Record<string, any> = {}
+    const data: Record<string, unknown> = {}
 
     // keys to exclude
     const excludeKeys = ['MIGRATE_V1_COMPLETED']
 
     for (const key of keys) {
-        if (excludeKeys.includes(key)) continue
-        data[key] = await kvGet(key)
+      if (excludeKeys.includes(key)) continue
+      data[key] = await kvGet(key)
     }
 
     return data
@@ -393,23 +713,26 @@ export function useConfig() {
   /**
    * Import data (overwrite existing)
    */
-  const importAllData = useCallback(async (data: Record<string, any>) => {
-    const { kvSet } = await import('@/utils/storage')
+  const importAllData = useCallback(
+    async (data: Record<string, unknown>) => {
+      const { kvSet } = await import('@/utils/storage')
 
-    // Clear existing data to ensure clean state (optional, but safer for full sync)
-    // await kvClear() // Maybe too aggressive? Let's just overwrite.
+      // Clear existing data to ensure clean state (optional, but safer for full sync)
+      // await kvClear() // Maybe too aggressive? Let's just overwrite.
 
-    for (const [key, val] of Object.entries(data)) {
+      for (const [key, val] of Object.entries(data)) {
         await kvSet(key, val)
-    }
+      }
 
-    // Force reload config if current session was updated
-    const currentKey = getSessionConfigKey(sessionId)
-    if (data[currentKey]) {
+      // Force reload config if current session was updated
+      const currentKey = getSessionConfigKey(sessionId)
+      if (data[currentKey]) {
         // Simple way: trigger reload by toggling a dummy state or just re-running load
         window.location.reload() // Easiest way to ensure all states (history, config) are updated
-    }
-  }, [sessionId])
+      }
+    },
+    [sessionId],
+  )
 
   return {
     config,
@@ -421,6 +744,8 @@ export function useConfig() {
     createSession,
     deleteSession,
     renameSession,
+    duplicateSession,
+    purgeAllSessions,
     exportAllData,
     importAllData,
   }

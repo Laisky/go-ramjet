@@ -1,3 +1,5 @@
+import type { Annotation, ChatReference } from '@/pages/gptchat/types'
+
 export const ToolEventPrefixes = [
   'Upstream tool_call:',
   'args:',
@@ -84,4 +86,37 @@ export function splitReasoningContent(reasoningContent: string): {
     thinking: thinkingLines.join('\n').trim(),
     toolEvents,
   }
+}
+
+export function extractReferencesFromAnnotations(
+  annotations?: Annotation[],
+): ChatReference[] {
+  if (!annotations || annotations.length === 0) {
+    return []
+  }
+
+  const refs = new Map<string, { index: number; title?: string }>()
+  let counter = 1
+
+  for (const annotation of annotations) {
+    if (annotation?.type !== 'url_citation') {
+      continue
+    }
+    const citation = annotation.url_citation
+    if (!citation?.url) {
+      continue
+    }
+    if (!refs.has(citation.url)) {
+      refs.set(citation.url, {
+        index: counter++,
+        title: citation.title || citation.url,
+      })
+    }
+  }
+
+  return Array.from(refs.entries()).map(([url, meta]) => ({
+    url,
+    title: meta.title,
+    index: meta.index,
+  }))
 }
