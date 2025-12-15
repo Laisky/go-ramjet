@@ -4,27 +4,28 @@
 import { useCallback, useRef, useState } from 'react'
 
 import {
+  createDeepResearchTask,
+  editImageWithMask,
+  fetchDeepResearchStatus,
   sendStreamingChatRequest,
   type ChatMessage as ApiChatMessage,
   type ContentPart,
   type ToolCallDelta,
-  editImageWithMask,
-  createDeepResearchTask,
-  fetchDeepResearchStatus,
 } from '@/utils/api'
 import { extractReferencesFromAnnotations } from '@/utils/chat-parser'
 import { kvDel, kvGet, kvSet } from '@/utils/storage'
 import {
-  isImageModel,
   ChatModelDeepResearch,
   ChatModelGPTO3Deepresearch,
   ChatModelGPTO4MiniDeepresearch,
+  isImageModel,
 } from '../models'
-import type {
-  Annotation,
-  ChatMessageData,
-  SessionConfig,
-  SessionHistoryItem,
+import {
+  DefaultSessionConfig,
+  type Annotation,
+  type ChatMessageData,
+  type SessionConfig,
+  type SessionHistoryItem,
 } from '../types'
 import {
   generateChatId,
@@ -48,6 +49,29 @@ export interface UseChatReturn {
   deleteMessage: (chatId: string) => Promise<void>
   loadMessages: () => Promise<void>
   regenerateMessage: (chatId: string) => Promise<void>
+}
+
+/**
+ * normalizePositiveInteger coerces unknown values into a finite positive integer.
+ */
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed
+    }
+    return fallback
+  }
+  if (value !== null && value !== undefined) {
+    const parsed = Number.parseInt(String(value), 10)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  return fallback
 }
 
 /**
@@ -113,28 +137,25 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     })
   }, [])
 
-  const findMaskPair = useCallback(
-    (files?: File[]) => {
-      if (!files || files.length === 0) return null
-      const normalizeName = (name: string) => name.replace(/\.[^.]+$/, '')
+  const findMaskPair = useCallback((files?: File[]) => {
+    if (!files || files.length === 0) return null
+    const normalizeName = (name: string) => name.replace(/\.[^.]+$/, '')
 
-      for (const file of files) {
-        const lower = file.name.toLowerCase()
-        if (!lower.includes('-mask')) continue
-        const base = normalizeName(lower.split('-mask')[0])
-        const image = files.find((f) => {
-          if (f === file) return false
-          const fname = normalizeName(f.name.toLowerCase())
-          return fname === base || fname.startsWith(base)
-        })
-        if (image) {
-          return { image, mask: file }
-        }
+    for (const file of files) {
+      const lower = file.name.toLowerCase()
+      if (!lower.includes('-mask')) continue
+      const base = normalizeName(lower.split('-mask')[0])
+      const image = files.find((f) => {
+        if (f === file) return false
+        const fname = normalizeName(f.name.toLowerCase())
+        return fname === base || fname.startsWith(base)
+      })
+      if (image) {
+        return { image, mask: file }
       }
-      return null
-    },
-    [],
-  )
+    }
+    return null
+  }, [])
 
   const isDeepResearchModel = useCallback(() => {
     const model = config.selected_model
@@ -307,9 +328,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
           setMessages((prev) =>
             prev.map((m) =>
-              m.chatID === chatId && m.role === 'assistant'
-                ? finalAssist
-                : m,
+              m.chatID === chatId && m.role === 'assistant' ? finalAssist : m,
             ),
           )
 
@@ -374,9 +393,13 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
             const statusText = (status.status || '').toLowerCase()
 
             if (
-              ['succeeded', 'success', 'completed', 'done', 'finished'].includes(
-                statusText,
-              )
+              [
+                'succeeded',
+                'success',
+                'completed',
+                'done',
+                'finished',
+              ].includes(statusText)
             ) {
               finalText =
                 status.result ||
@@ -388,9 +411,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
             }
 
             if (
-              ['failed', 'error', 'canceled', 'cancelled'].includes(
-                statusText,
-              )
+              ['failed', 'error', 'canceled', 'cancelled'].includes(statusText)
             ) {
               throw new Error(`Deep research failed: ${status.status}`)
             }
@@ -685,12 +706,17 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         finishReasonRef.current = null
         toolCallAccumulator.clear()
 
+        const safeMaxTokens = normalizePositiveInteger(
+          config.max_tokens,
+          DefaultSessionConfig.max_tokens,
+        )
+
         await new Promise<void>((resolve, reject) => {
           abortControllerRef.current = sendStreamingChatRequest(
             {
               model: config.selected_model,
               messages: payload,
-              max_tokens: config.max_tokens,
+              max_tokens: safeMaxTokens,
               temperature: config.temperature,
               presence_penalty: config.presence_penalty,
               frequency_penalty: config.frequency_penalty,

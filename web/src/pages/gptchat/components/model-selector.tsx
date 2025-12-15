@@ -19,6 +19,10 @@ export interface ModelSelectorProps {
   selectedModel: string
   onModelChange: (model: string) => void
   disabled?: boolean
+  label?: string
+  categories?: string[]
+  active?: boolean
+  className?: string
 }
 
 /**
@@ -28,8 +32,21 @@ export function ModelSelector({
   selectedModel,
   onModelChange,
   disabled,
+  label,
+  categories,
+  active,
+  className,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
+
+  const filteredCategories = categories?.length
+    ? Object.entries(ModelCategories).filter(([category]) =>
+        categories.includes(category),
+      )
+    : Object.entries(ModelCategories)
+
+  const displayModel =
+    selectedModel || filteredCategories[0]?.[1]?.[0] || 'Select a model'
 
   const handleSelect = (model: string) => {
     onModelChange(model)
@@ -40,31 +57,43 @@ export function ModelSelector({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
+          size="sm"
           variant="outline"
-          className="w-full justify-between text-sm"
+          className={cn(
+            'w-full justify-between gap-2 text-sm border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+            active && 'ring-2 ring-blue-500/40',
+            className,
+          )}
           disabled={disabled}
         >
-          <span className="flex items-center gap-2">
-            <span className="truncate">{selectedModel}</span>
-            {isFreeModel(selectedModel) && (
-              <Badge variant="success" className="text-[10px]">
-                Free
-              </Badge>
+          <span className="flex min-w-0 flex-col text-left">
+            {label && (
+              <span className="text-[10px] uppercase tracking-tight text-black/60 dark:text-white/60">
+                {label}
+              </span>
             )}
-            {isImageModel(selectedModel) && (
-              <Badge variant="secondary" className="text-[10px]">
-                🎨
-              </Badge>
-            )}
+            <span className="flex items-center gap-2 truncate">
+              <span className="truncate">{displayModel}</span>
+              {isFreeModel(displayModel) && (
+                <Badge variant="success" className="text-[10px]">
+                  Free
+                </Badge>
+              )}
+              {isImageModel(displayModel) && (
+                <Badge variant="secondary" className="text-[10px]">
+                  🎨
+                </Badge>
+              )}
+            </span>
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="max-h-[400px] w-[300px] overflow-y-auto"
+        className="max-h-[420px] w-[320px] overflow-y-auto"
       >
-        {Object.entries(ModelCategories).map(([category, models]) => (
+        {filteredCategories.map(([category, models]) => (
           <div key={category}>
             <div className="px-2 py-1.5 text-xs font-semibold text-black/50 dark:text-white/50">
               {category}
@@ -75,7 +104,7 @@ export function ModelSelector({
                 onClick={() => handleSelect(model)}
                 className={cn(
                   'flex cursor-pointer items-center justify-between',
-                  selectedModel === model && 'bg-black/5 dark:bg-white/5'
+                  selectedModel === model && 'bg-black/5 dark:bg-white/5',
                 )}
               >
                 <span className="truncate">{model}</span>

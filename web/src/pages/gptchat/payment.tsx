@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
 import {
   Elements,
   PaymentElement,
-  useStripe,
   useElements,
+  useStripe,
 } from '@stripe/react-stripe-js'
 import type { StripeElementsOptions } from '@stripe/stripe-js'
+import { loadStripe } from '@stripe/stripe-js'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 
 // Initialize Stripe outside of component to avoid recreating it on renders
 // Replace with your actual publishable key
@@ -89,7 +95,10 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
       </Button>
 
       {message && (
-        <div id="payment-message" className="text-sm text-red-500 dark:text-red-400">
+        <div
+          id="payment-message"
+          className="text-sm text-red-500 dark:text-red-400"
+        >
           {message}
         </div>
       )}
@@ -108,7 +117,7 @@ export function GPTChatPaymentPage() {
   // Check for client secret in URL (redirect from Stripe)
   useEffect(() => {
     const secret = new URLSearchParams(window.location.search).get(
-      'payment_intent_client_secret'
+      'payment_intent_client_secret',
     )
     if (secret) {
       setClientSecret(secret)
@@ -127,7 +136,7 @@ export function GPTChatPaymentPage() {
           'content-type': 'application/json',
           accept: 'application/json',
         },
-        body: JSON.stringify({ items: [{ id: "xl-tshirt" }] }), // Matching legacy payload
+        body: JSON.stringify({ items: [{ id: 'xl-tshirt' }] }), // Matching legacy payload
       })
 
       if (!resp.ok) {
@@ -178,13 +187,15 @@ export function GPTChatPaymentPage() {
               <p className="text-sm text-muted-foreground">
                 Current pricing: 1000 CNY per item.
               </p>
-              <Button onClick={createIntent} disabled={isLoading} className="w-full">
+              <Button
+                onClick={createIntent}
+                disabled={isLoading}
+                className="w-full"
+              >
                 {isLoading ? 'Initializing...' : 'Start Payment'}
               </Button>
             </div>
-            {error && (
-              <p className="mt-4 text-sm text-red-500">{error}</p>
-            )}
+            {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
           </CardContent>
         </Card>
       ) : (

@@ -11,7 +11,8 @@ export const Tasks: TaskDefinition[] = [
   {
     key: 'gptchat',
     title: 'GPT Chat',
-    description: 'Chat UI and related endpoints (existing UI remains at /gptchat).',
+    description:
+      'Chat UI and related endpoints (existing UI remains at /gptchat).',
   },
   {
     key: 'auditlog',

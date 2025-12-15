@@ -230,8 +230,10 @@ export function ChatMessage({
         {/* Main content */}
         <Card
           className={cn(
-            'relative p-3',
-            isUser ? 'bg-blue-500 text-white' : 'bg-white dark:bg-black/50',
+            'relative p-3 shadow-sm border',
+            isUser
+              ? 'bg-blue-600 text-white border-blue-500'
+              : 'bg-white/95 text-slate-900 border-slate-200 dark:border-slate-700 dark:bg-slate-900/80',
             isStreaming && 'animate-pulse',
           )}
         >

@@ -4,7 +4,12 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
-import { AllModels } from '../models'
+import {
+  AllModels,
+  DefaultModel,
+  ImageModelFluxDev,
+  isImageModel,
+} from '../models'
 import {
   DefaultSessionConfig,
   type ChatMessageData,
@@ -89,6 +94,10 @@ const UrlParamAliasMap = new Map<string, string>([
   ['enabletalk', 'chat_switch.enable_talk'],
   ['chat_switch.enable_talk', 'chat_switch.enable_talk'],
   ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
+  ['draw_model', 'selected_draw_model'],
+  ['imagemodel', 'selected_draw_model'],
+  ['selected_draw_model', 'selected_draw_model'],
+  ['selected_chat_model', 'selected_chat_model'],
 ])
 
 function normalizeUrlParamKey(key: string): string {
@@ -181,6 +190,48 @@ function deepCloneConfig(config: SessionConfig): SessionConfig {
     return structuredClone(config)
   }
   return JSON.parse(JSON.stringify(config)) as SessionConfig
+}
+
+/**
+ * Normalize numeric fields in config to ensure they are numbers, not strings
+ */
+function normalizeConfigNumericFields(config: SessionConfig): SessionConfig {
+  return {
+    ...config,
+    max_tokens:
+      typeof config.max_tokens === 'number'
+        ? config.max_tokens
+        : parseInt(String(config.max_tokens), 10) ||
+          DefaultSessionConfig.max_tokens,
+    n_contexts:
+      typeof config.n_contexts === 'number'
+        ? config.n_contexts
+        : parseInt(String(config.n_contexts), 10) ||
+          DefaultSessionConfig.n_contexts,
+    temperature:
+      typeof config.temperature === 'number'
+        ? config.temperature
+        : parseFloat(String(config.temperature)) ||
+          DefaultSessionConfig.temperature,
+    presence_penalty:
+      typeof config.presence_penalty === 'number'
+        ? config.presence_penalty
+        : parseFloat(String(config.presence_penalty)) ||
+          DefaultSessionConfig.presence_penalty,
+    frequency_penalty:
+      typeof config.frequency_penalty === 'number'
+        ? config.frequency_penalty
+        : parseFloat(String(config.frequency_penalty)) ||
+          DefaultSessionConfig.frequency_penalty,
+    chat_switch: {
+      ...config.chat_switch,
+      draw_n_images:
+        typeof config.chat_switch?.draw_n_images === 'number'
+          ? config.chat_switch.draw_n_images
+          : parseInt(String(config.chat_switch?.draw_n_images), 10) ||
+            DefaultSessionConfig.chat_switch.draw_n_images,
+    },
+  }
 }
 
 function applyUrlOverridesToConfig(config: SessionConfig): {
@@ -353,17 +404,41 @@ export function useConfig() {
         }
 
         if (savedConfig) {
-          finalConfig = {
+          finalConfig = normalizeConfigNumericFields({
             ...finalConfig,
             ...savedConfig,
             chat_switch: {
               ...finalConfig.chat_switch,
               ...savedConfig.chat_switch,
             },
-          }
+          })
         }
 
         let configChanged = false
+
+        // Seed split chat/draw model selectors while keeping backwards compatibility
+        if (!finalConfig.selected_chat_model) {
+          finalConfig.selected_chat_model = isImageModel(
+            finalConfig.selected_model,
+          )
+            ? DefaultModel
+            : finalConfig.selected_model || DefaultModel
+          configChanged = true
+        }
+
+        if (!finalConfig.selected_draw_model) {
+          finalConfig.selected_draw_model = isImageModel(
+            finalConfig.selected_model,
+          )
+            ? finalConfig.selected_model
+            : ImageModelFluxDev
+          configChanged = true
+        }
+
+        if (!finalConfig.selected_model) {
+          finalConfig.selected_model = finalConfig.selected_chat_model
+          configChanged = true
+        }
 
         // Generate sync_key if missing
         if (!finalConfig.sync_key) {
@@ -468,15 +543,17 @@ export function useConfig() {
         const savedConfig = await kvGet<SessionConfig>(key)
 
         if (savedConfig) {
-          setConfigState({
-            ...DefaultSessionConfig,
-            ...savedConfig,
-            //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
-            chat_switch: {
-              ...DefaultSessionConfig.chat_switch,
-              ...savedConfig.chat_switch,
-            },
-          })
+          setConfigState(
+            normalizeConfigNumericFields({
+              ...DefaultSessionConfig,
+              ...savedConfig,
+              //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
+              chat_switch: {
+                ...DefaultSessionConfig.chat_switch,
+                ...savedConfig.chat_switch,
+              },
+            }),
+          )
         } else {
           const newConf = {
             ...DefaultSessionConfig,

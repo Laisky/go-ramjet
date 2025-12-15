@@ -4,6 +4,7 @@
 import { ArrowDown, Settings } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
@@ -16,6 +17,7 @@ import {
 } from './components'
 import { useChat } from './hooks/use-chat'
 import { useConfig } from './hooks/use-config'
+import { ImageModelFluxDev, isImageModel } from './models'
 import type { ChatMessageData, PromptShortcut, SessionConfig } from './types'
 import { DefaultSessionConfig } from './types'
 import { syncMCPServerTools } from './utils/mcp'
@@ -72,6 +74,14 @@ export function GPTChatPage() {
       }
     | undefined
   >(undefined)
+  const [sessionDrafts, setSessionDrafts] = useState<Record<number, string>>({})
+
+  const chatModel = config.selected_chat_model || config.selected_model
+  const drawModel = config.selected_draw_model || ImageModelFluxDev
+  const isDrawActive = isImageModel(config.selected_model)
+
+  const SESSION_DOCK_WIDTH = 56
+  const HEADER_HEIGHT = 64
 
   // Load messages and shortcuts on mount
   useEffect(() => {
@@ -112,6 +122,13 @@ export function GPTChatPage() {
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    const container = messagesContainerRef.current
+    if (container) {
+      container.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }, [])
 
   // Auto-sync MCP tools in background
@@ -196,9 +213,22 @@ export function GPTChatPage() {
   }, [])
 
   const handleLoadOlder = useCallback(() => {
+    const container = messagesContainerRef.current
+    const prevScrollHeight = container?.scrollHeight ?? 0
+    const prevScrollTop = container?.scrollTop ?? 0
+
     setVisibleCount((prev) =>
       Math.min(prev + MESSAGE_PAGE_SIZE, messages.length),
     )
+
+    // Keep the viewport anchored after older messages are prepended.
+    requestAnimationFrame(() => {
+      const nextContainer = messagesContainerRef.current
+      if (!nextContainer) return
+      const nextScrollHeight = nextContainer.scrollHeight
+      const delta = nextScrollHeight - prevScrollHeight
+      nextContainer.scrollTop = prevScrollTop + Math.max(delta, 0)
+    })
   }, [messages.length])
 
   const userMessageByChatId = useMemo(() => {
@@ -219,6 +249,7 @@ export function GPTChatPage() {
   }, [messages, visibleCount])
 
   const lastMessage = messages[messages.length - 1]
+  const currentDraftMessage = sessionDrafts[sessionId] ?? ''
 
   const loadPromptShortcuts = async () => {
     let shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
@@ -275,6 +306,26 @@ export function GPTChatPage() {
     [config.chat_switch, updateConfig],
   )
 
+  const handleChatModelChange = useCallback(
+    (model: string) => {
+      handleConfigChange({
+        selected_model: model,
+        selected_chat_model: model,
+      })
+    },
+    [handleConfigChange],
+  )
+
+  const handleDrawModelChange = useCallback(
+    (model: string) => {
+      handleConfigChange({
+        selected_model: model,
+        selected_draw_model: model,
+      })
+    },
+    [handleConfigChange],
+  )
+
   const handleReset = useCallback(async () => {
     await updateConfig(DefaultSessionConfig)
   }, [updateConfig])
@@ -305,9 +356,30 @@ export function GPTChatPage() {
     [importAllData],
   )
 
+  const handleDraftChange = useCallback(
+    (value: string) => {
+      setSessionDrafts((prev) => {
+        const existing = prev[sessionId] ?? ''
+        if (existing === value) {
+          return prev
+        }
+        if (!value) {
+          if (!(sessionId in prev)) {
+            return prev
+          }
+          const updated = { ...prev }
+          delete updated[sessionId]
+          return updated
+        }
+        return { ...prev, [sessionId]: value }
+      })
+    },
+    [sessionId],
+  )
+
   if (configLoading) {
     return (
-      <div className="flex h-[calc(100vh-100px)] items-center justify-center">
+      <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <div className="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-black/20 border-t-black dark:border-white/20 dark:border-t-white" />
           <p className="text-sm text-black/50 dark:text-white/50">Loading...</p>
@@ -317,50 +389,96 @@ export function GPTChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-100px)] flex-row bg-white dark:bg-black overflow-hidden relative">
-      {/* Session Dock (Left Sidebar) */}
-      <SessionDock
-        sessions={sessions}
-        activeSessionId={sessionId}
-        onSwitchSession={switchSession}
-        onCreateSession={() => createSession()}
-        onDeleteSession={deleteSession}
-      />
+    <div className="relative h-screen w-full overflow-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      {/* Session Dock (Fixed Left Sidebar) */}
+      <div
+        className="fixed left-0 top-0 z-30 h-full"
+        style={{ width: SESSION_DOCK_WIDTH, paddingTop: HEADER_HEIGHT }}
+      >
+        <SessionDock
+          sessions={sessions}
+          activeSessionId={sessionId}
+          onSwitchSession={switchSession}
+          onCreateSession={() => createSession()}
+          onDeleteSession={deleteSession}
+        />
+      </div>
 
-      <div className="flex-1 flex flex-col min-w-0 h-full relative">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold">Chat</h1>
-            <ModelSelector
-              selectedModel={config.selected_model}
-              onModelChange={(model) =>
-                handleConfigChange({ selected_model: model })
-              }
-            />
+      {/* Header */}
+      <div
+        className="fixed left-0 right-0 top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-slate-900/90"
+        style={{ paddingLeft: SESSION_DOCK_WIDTH, height: HEADER_HEIGHT }}
+        onClick={(e) => {
+          const target = e.target as HTMLElement | null
+          if (!target) return
+          if (
+            target.closest(
+              'button, a, input, select, textarea, [role="button"]',
+            )
+          ) {
+            return
+          }
+          scrollToTop()
+        }}
+      >
+        <div className="flex h-full items-center justify-between px-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">Chat</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <ModelSelector
+                label="Chat"
+                categories={[
+                  'OpenAI',
+                  'Anthropic',
+                  'Google',
+                  'Deepseek',
+                  'Others',
+                ]}
+                selectedModel={chatModel}
+                active={!isDrawActive}
+                onModelChange={handleChatModelChange}
+                className="w-[230px]"
+              />
+              <ModelSelector
+                label="Draw"
+                categories={['Image']}
+                selectedModel={drawModel}
+                active={isDrawActive}
+                onModelChange={handleDrawModelChange}
+                className="w-[200px]"
+              />
+            </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfigOpen(true)}
-            className="flex items-center gap-1"
-          >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfigOpen(true)}
+              className="flex items-center gap-1"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+          </div>
         </div>
+      </div>
 
+      {/* Scrollable chat area */}
+      <div
+        className="absolute inset-x-0 bottom-0 top-0 overflow-hidden"
+        style={{ paddingLeft: SESSION_DOCK_WIDTH, paddingTop: HEADER_HEIGHT }}
+      >
         {/* Error display */}
         {error && (
-          <div className="mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          <div className="mx-4 mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
             {error}
           </div>
         )}
 
-        {/* Messages */}
         <div
           ref={messagesContainerRef}
-          className="relative flex-1 overflow-y-auto py-4"
+          className="relative h-full overflow-y-auto px-4 pb-[240px] pt-4"
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -405,34 +523,40 @@ export function GPTChatPage() {
           <button
             onClick={scrollToBottom}
             className={cn(
-              'fixed bottom-32 right-8 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-white shadow-lg transition-all dark:bg-white/80 dark:text-black',
+              'fixed bottom-32 right-6 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur transition-all hover:bg-black/85 dark:bg-white/70 dark:text-black dark:hover:bg-white/85',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
-                : 'translate-y-4 opacity-0 pointer-events-none',
+                : 'translate-y-0 opacity-50',
             )}
+            aria-label="Scroll to bottom"
           >
-            <ArrowDown className="h-5 w-5" />
+            <ArrowDown className="h-4 w-4" />
           </button>
         </div>
+      </div>
 
-        {/* Input */}
-        <div className="border-t border-black/10 pt-3 dark:border-white/10">
-          <ChatInput
-            onSend={sendMessage}
-            onStop={stopGeneration}
-            isLoading={chatLoading}
-            disabled={!config.api_token}
-            config={config}
-            onConfigChange={handleChatSwitchChange}
-            prefillDraft={prefillDraft}
-            onPrefillUsed={() => setPrefillDraft(undefined)}
-            placeholder={
-              config.api_token
-                ? 'Type a message...'
-                : 'Enter your API key in Settings to start chatting'
-            }
-          />
-        </div>
+      {/* Input (fixed bottom) */}
+      <div
+        className="fixed left-0 right-0 bottom-0 z-30 border-t border-black/10 bg-white/95 px-4 py-3 shadow-md dark:border-white/10 dark:bg-slate-900/95"
+        style={{ paddingLeft: SESSION_DOCK_WIDTH }}
+      >
+        <ChatInput
+          onSend={sendMessage}
+          onStop={stopGeneration}
+          isLoading={chatLoading}
+          disabled={!config.api_token}
+          config={config}
+          onConfigChange={handleChatSwitchChange}
+          prefillDraft={prefillDraft}
+          onPrefillUsed={() => setPrefillDraft(undefined)}
+          draftMessage={currentDraftMessage}
+          onDraftChange={handleDraftChange}
+          placeholder={
+            config.api_token
+              ? 'Type a message...'
+              : 'Enter your API key in Settings to start chatting'
+          }
+        />
       </div>
 
       {/* Config Sidebar */}

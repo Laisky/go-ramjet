@@ -26,7 +26,7 @@ export interface ChatbotList {
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, options)
 

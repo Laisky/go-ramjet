@@ -52,7 +52,9 @@ export function TaskPage() {
       case 'crawler':
         return [{ label: 'Search (q=...)', href: '/crawler/search?q=example' }]
       case 'gitlab':
-        return [{ label: 'Get file (file=...)', href: '/gitlab/file?file=README.md' }]
+        return [
+          { label: 'Get file (file=...)', href: '/gitlab/file?file=README.md' },
+        ]
       case 'heartbeat':
         return [{ label: 'Heartbeat', href: '/heartbeat' }]
       case 'elasticsearch':
@@ -69,7 +71,9 @@ export function TaskPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{info.title}</h2>
-        <p className="text-sm text-black/70 dark:text-white/70">{info.description}</p>
+        <p className="text-sm text-black/70 dark:text-white/70">
+          {info.description}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -77,7 +81,9 @@ export function TaskPage() {
           <a key={l.href} href={l.href} className="block">
             <Card className="h-full transition-colors hover:bg-black/5 dark:hover:bg-white/5">
               <CardTitle>{l.label}</CardTitle>
-              <CardDescription className="mt-1 break-all">{l.href}</CardDescription>
+              <CardDescription className="mt-1 break-all">
+                {l.href}
+              </CardDescription>
             </Card>
           </a>
         ))}

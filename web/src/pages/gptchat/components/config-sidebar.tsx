@@ -550,14 +550,47 @@ export function ConfigSidebar({
           </div>
 
           {/* Model Selection */}
-          <div>
-            <label className="mb-1 block text-sm font-medium">Model</label>
-            <ModelSelector
-              selectedModel={config.selected_model}
-              onModelChange={(model) =>
-                onConfigChange({ selected_model: model })
-              }
-            />
+          <div className="space-y-2">
+            <label className="mb-1 block text-sm font-medium">Models</label>
+            <div className="flex flex-col gap-2">
+              <ModelSelector
+                label="Chat"
+                categories={[
+                  'OpenAI',
+                  'Anthropic',
+                  'Google',
+                  'Deepseek',
+                  'Others',
+                ]}
+                selectedModel={
+                  config.selected_chat_model || config.selected_model
+                }
+                active={
+                  !config.selected_model ||
+                  config.selected_model === config.selected_chat_model
+                }
+                onModelChange={(model) =>
+                  onConfigChange({
+                    selected_model: model,
+                    selected_chat_model: model,
+                  })
+                }
+              />
+              <ModelSelector
+                label="Draw"
+                categories={['Image']}
+                selectedModel={
+                  config.selected_draw_model || config.selected_model
+                }
+                active={config.selected_model === config.selected_draw_model}
+                onModelChange={(model) =>
+                  onConfigChange({
+                    selected_model: model,
+                    selected_draw_model: model,
+                  })
+                }
+              />
+            </div>
           </div>
 
           {/* Context Count */}

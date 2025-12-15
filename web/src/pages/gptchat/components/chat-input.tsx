@@ -48,6 +48,8 @@ export interface ChatInputProps {
   placeholder?: string
   prefillDraft?: { id: string; text: string }
   onPrefillUsed?: (id: string) => void
+  draftMessage?: string
+  onDraftChange?: (value: string) => void
 }
 
 /**
@@ -63,8 +65,10 @@ export function ChatInput({
   placeholder = 'Type a message...',
   prefillDraft,
   onPrefillUsed,
+  draftMessage,
+  onDraftChange,
 }: ChatInputProps) {
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() => draftMessage ?? '')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [promptHistory, setPromptHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
@@ -77,6 +81,7 @@ export function ChatInput({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const lastPrefillIdRef = useRef<string | null>(null)
+  const lastDraftMessageRef = useRef<string | undefined>(draftMessage)
 
   const appendFiles = useCallback((files: File[]) => {
     if (!files.length) return
@@ -108,6 +113,29 @@ export function ChatInput({
     },
     [closeEditor, editorIndex],
   )
+
+  // Sync from external draftMessage changes (e.g., switching sessions)
+  useEffect(() => {
+    if (draftMessage === undefined) {
+      return
+    }
+    // Only update if draftMessage actually changed from outside
+    if (lastDraftMessageRef.current === draftMessage) {
+      return
+    }
+    lastDraftMessageRef.current = draftMessage
+    setMessage(draftMessage)
+    setHistoryIndex(null)
+  }, [draftMessage])
+
+  // Sync local message changes back to parent
+  useEffect(() => {
+    if (onDraftChange) {
+      // Update the ref so the other effect doesn't react
+      lastDraftMessageRef.current = message
+      onDraftChange(message)
+    }
+  }, [message, onDraftChange])
 
   useEffect(() => {
     const textarea = textareaRef.current
