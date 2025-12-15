@@ -11,7 +11,7 @@ export async function migrateLegacyData() {
       console.groupCollapsed('Migrating Legacy Data...')
 
       // List of prefixes/keys to migrate
-      const keysToMigrate = [
+      const keysToMigrate: string[] = [
         StorageKeys.PINNED_MATERIALS,
         StorageKeys.ALLOWED_MODELS,
         StorageKeys.CUSTOM_DATASET_PASSWORD,

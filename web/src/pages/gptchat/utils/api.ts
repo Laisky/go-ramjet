@@ -1,3 +1,4 @@
+import { getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
 
 const API_BASE = '/gptchat'
@@ -10,6 +11,17 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = status
   }
+}
+
+export interface DatasetInfo {
+  name: string
+  taskStatus?: string
+  progress?: number
+}
+
+export interface ChatbotList {
+  chatbots: string[]
+  current?: string
 }
 
 async function request<T>(
@@ -70,5 +82,140 @@ export const api = {
       },
     })
     return data
+  },
+
+  async uploadDataset(
+    file: File,
+    datasetName: string,
+    dataKey: string,
+    apiToken: string,
+    apiBase?: string,
+  ): Promise<void> {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('file_key', datasetName)
+    form.append('data_key', dataKey)
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+    }
+    if (apiBase) {
+      headers['X-Laisky-Api-Base'] = apiBase
+    }
+
+    const resp = await fetch('/ramjet/gptchat/files', {
+      method: 'POST',
+      headers,
+      body: form,
+    })
+
+    if (!resp.ok) {
+      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+    }
+  },
+
+  async listDatasets(
+    dataKey: string,
+    apiToken: string,
+    apiBase?: string,
+  ): Promise<{ datasets: DatasetInfo[]; selected?: string[] }> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+      'Cache-Control': 'no-cache',
+      'X-PDFCHAT-PASSWORD': dataKey,
+    }
+    if (apiBase) {
+      headers['X-Laisky-Api-Base'] = apiBase
+    }
+
+    const resp = await fetch('/ramjet/gptchat/files', {
+      method: 'GET',
+      headers,
+      cache: 'no-cache',
+    })
+    if (!resp.ok) {
+      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+    }
+    return resp.json()
+  },
+
+  async deleteDataset(
+    datasetName: string,
+    dataKey: string,
+    apiToken: string,
+    apiBase?: string,
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'application/json',
+      'X-PDFCHAT-PASSWORD': dataKey,
+    }
+    if (apiBase) {
+      headers['X-Laisky-Api-Base'] = apiBase
+    }
+
+    const resp = await fetch('/ramjet/gptchat/files', {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ datasets: [datasetName] }),
+    })
+    if (!resp.ok) {
+      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+    }
+  },
+
+  async listChatbots(
+    dataKey: string,
+    apiToken: string,
+    apiBase?: string,
+  ): Promise<ChatbotList> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+      'Cache-Control': 'no-cache',
+      'X-PDFCHAT-PASSWORD': dataKey,
+    }
+    if (apiBase) {
+      headers['X-Laisky-Api-Base'] = apiBase
+    }
+
+    const resp = await fetch('/ramjet/gptchat/ctx/list', {
+      method: 'GET',
+      headers,
+      cache: 'no-cache',
+    })
+    if (!resp.ok) {
+      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+    }
+    return resp.json()
+  },
+
+  async setActiveChatbot(
+    dataKey: string,
+    chatbotName: string,
+    apiToken: string,
+    apiBase?: string,
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+      'Content-Type': 'application/json',
+    }
+    if (apiBase) {
+      headers['X-Laisky-Api-Base'] = apiBase
+    }
+
+    const resp = await fetch('/ramjet/gptchat/ctx/active', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ data_key: dataKey, chatbot_name: chatbotName }),
+    })
+    if (!resp.ok) {
+      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+    }
   },
 }

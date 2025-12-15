@@ -107,8 +107,14 @@ async function ensureMCPSession(
 ) {
   if (server.mcp_initialized) return
 
-  const protocolVersion = trimSpace(server.mcp_protocol_version || '2025-06-18')
-  let sessionID = trimSpace(server.mcp_session_id)
+  const protocolVersion = trimSpace(
+    String(server.mcp_protocol_version || '2025-06-18'),
+  )
+  let sessionID = trimSpace(
+    typeof server.mcp_session_id === 'string'
+      ? server.mcp_session_id
+      : String(server.mcp_session_id || ''),
+  )
   if (!sessionID) {
     sessionID = `mcp-session-${generateUUIDv4()}`
     // We modify the server object in place (in memory), caller should handle persistence if needed
@@ -155,7 +161,7 @@ async function ensureMCPSession(
     throw new Error(`HTTP ${resp.status} during MCP init`)
   }
 
-  const initData = await fetchJSONOrSSE(resp)
+  const initData: any = await fetchJSONOrSSE(resp)
   if (initData?.error) {
     throw new Error(initData.error.message || 'MCP initialize error')
   }
@@ -208,8 +214,10 @@ export async function syncMCPServerTools(
     params: {},
   }
 
-  const protocolVersion = sessionServer.mcp_protocol_version || '2025-06-18'
-  const sessionID = sessionServer.mcp_session_id
+  const protocolVersion = String(
+    sessionServer.mcp_protocol_version || '2025-06-18',
+  )
+  const sessionID = String(sessionServer.mcp_session_id || '')
 
   const rpcHeaders = {
     ...headers,
@@ -227,7 +235,7 @@ export async function syncMCPServerTools(
     throw new Error(`HTTP ${resp.status} fetching tools`)
   }
 
-  const data = await fetchJSONOrSSE(resp)
+  const data: any = await fetchJSONOrSSE(resp)
   if (!data) throw new Error('Invalid JSON-RPC response')
   if (data.error) throw new Error(data.error.message || 'MCP error')
 

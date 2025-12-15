@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
-import rehypeHighlight from 'rehype-highlight'
+import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
+import rehypePrism from 'rehype-prism-plus'
+import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 
 import 'katex/dist/katex.min.css'
-import 'highlight.js/styles/github-dark.min.css'
+import 'prismjs/themes/prism-tomorrow.css'
 
 /**
  * MermaidDiagram renders a Mermaid diagram from the provided code.
@@ -22,13 +23,18 @@ function MermaidDiagram({ code }: { code: string }) {
       const mermaid = (await import('mermaid')).default
       mermaid.initialize({
         startOnLoad: false,
-        theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+        theme: document.documentElement.classList.contains('dark')
+          ? 'dark'
+          : 'default',
       })
 
       if (cancelled || !containerRef.current) return
 
       try {
-        const { svg } = await mermaid.render(`mermaid-${Math.random().toString(36).slice(2)}`, code)
+        const { svg } = await mermaid.render(
+          `mermaid-${Math.random().toString(36).slice(2)}`,
+          code,
+        )
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg
         }
@@ -102,7 +108,11 @@ export function Markdown({ children, className }: MarkdownProps) {
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+        rehypePlugins={[
+          rehypeRaw,
+          rehypeKatex,
+          [rehypePrism, { ignoreMissing: true }],
+        ]}
         components={components}
       >
         {children}

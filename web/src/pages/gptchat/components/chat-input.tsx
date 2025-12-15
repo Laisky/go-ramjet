@@ -475,7 +475,7 @@ export function ChatInput({
                 type="button"
                 onClick={handleToggleRecording}
                 disabled={disabled || isLoading || isTranscribing}
-                variant={isRecording ? 'destructive' : 'secondary'}
+                variant={isRecording ? 'destructive' : 'outline'}
                 className="h-auto px-3"
               >
                 {isRecording ? (

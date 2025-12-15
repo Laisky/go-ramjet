@@ -1,15 +1,15 @@
 /**
  * GPTChat page - main chat interface.
  */
-import { Settings, ArrowDown } from 'lucide-react'
+import { ArrowDown, Settings } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import {
-  ChatMessage,
   ChatInput,
+  ChatMessage,
   ConfigSidebar,
   ModelSelector,
   SessionDock,
@@ -23,13 +23,6 @@ import { syncMCPServerTools } from './utils/mcp'
 const MESSAGE_PAGE_SIZE = 40
 type VersionSetting = { Key: string; Value: string }
 type VersionResponse = { Settings?: VersionSetting[] }
-
-function createDraftId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
 
 /**
  * GPTChatPage provides a full-featured chat interface.
@@ -72,10 +65,13 @@ export function GPTChatPage() {
     from: string
     to: string
   } | null>(null)
-  const [prefillDraft, setPrefillDraft] = useState<{
-    id: string
-    text: string
-  } | null>(null)
+  const [prefillDraft, setPrefillDraft] = useState<
+    | {
+        id: string
+        text: string
+      }
+    | undefined
+  >(undefined)
 
   // Load messages and shortcuts on mount
   useEffect(() => {
@@ -90,7 +86,7 @@ export function GPTChatPage() {
 
     const checkUpgrade = async () => {
       try {
-        const resp = await fetch('/version', { cache: 'no-cache' })
+        const resp = await fetch('/gptchat/version', { cache: 'no-cache' })
         if (!resp.ok) return
         const data = (await resp.json()) as VersionResponse
         const serverVer = data.Settings?.find(
@@ -112,6 +108,10 @@ export function GPTChatPage() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
   // Auto-sync MCP tools in background
@@ -193,10 +193,6 @@ export function GPTChatPage() {
 
     container.addEventListener('scroll', handleScroll)
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
   const handleLoadOlder = useCallback(() => {
@@ -283,6 +279,15 @@ export function GPTChatPage() {
     await updateConfig(DefaultSessionConfig)
   }, [updateConfig])
 
+  const handleEditResend = useCallback(
+    (payload: { chatId: string; content: string }) => {
+      setPrefillDraft({ id: payload.chatId, text: payload.content })
+      // Scroll to bottom so the input is visible for edit
+      requestAnimationFrame(scrollToBottom)
+    },
+    [scrollToBottom],
+  )
+
   const handleClearChats = useCallback(async () => {
     await clearMessages()
   }, [clearMessages])
@@ -291,6 +296,14 @@ export function GPTChatPage() {
     await purgeAllSessions()
     await clearMessages()
   }, [purgeAllSessions, clearMessages])
+
+  const handleImportData = useCallback(
+    async (data: unknown) => {
+      // Accept any shape but ensure we pass an object map to storage importer
+      await importAllData((data as Record<string, unknown>) || {})
+    },
+    [importAllData],
+  )
 
   if (configLoading) {
     return (
@@ -372,6 +385,9 @@ export function GPTChatPage() {
                   key={`${msg.chatID}-${msg.role}`}
                   message={msg}
                   onDelete={deleteMessage}
+                  onRegenerate={regenerateMessage}
+                  onEditResend={handleEditResend}
+                  pairedUserMessage={userMessageByChatId.get(msg.chatID)}
                   isStreaming={
                     chatLoading &&
                     msg.role === 'assistant' &&
@@ -408,6 +424,8 @@ export function GPTChatPage() {
             disabled={!config.api_token}
             config={config}
             onConfigChange={handleChatSwitchChange}
+            prefillDraft={prefillDraft}
+            onPrefillUsed={() => setPrefillDraft(undefined)}
             placeholder={
               config.api_token
                 ? 'Type a message...'
@@ -429,7 +447,7 @@ export function GPTChatPage() {
         onSavePrompt={handleSavePrompt}
         onDeletePrompt={handleDeletePrompt}
         onExportData={exportAllData}
-        onImportData={importAllData}
+        onImportData={handleImportData}
         sessions={sessions}
         activeSessionId={sessionId}
         onCreateSession={createSession}

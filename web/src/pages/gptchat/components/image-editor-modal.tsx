@@ -224,7 +224,12 @@ export function ImageEditorModal({
             <Dialog.Title className="text-lg font-semibold">
               Image Editor
             </Dialog.Title>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onClose}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>

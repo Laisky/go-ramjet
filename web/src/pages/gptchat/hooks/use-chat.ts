@@ -8,10 +8,18 @@ import {
   type ChatMessage as ApiChatMessage,
   type ContentPart,
   type ToolCallDelta,
+  editImageWithMask,
+  createDeepResearchTask,
+  fetchDeepResearchStatus,
 } from '@/utils/api'
 import { extractReferencesFromAnnotations } from '@/utils/chat-parser'
 import { kvDel, kvGet, kvSet } from '@/utils/storage'
-import { isImageModel } from '../models'
+import {
+  isImageModel,
+  ChatModelDeepResearch,
+  ChatModelGPTO3Deepresearch,
+  ChatModelGPTO4MiniDeepresearch,
+} from '../models'
 import type {
   Annotation,
   ChatMessageData,
@@ -52,6 +60,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const currentChatIdRef = useRef<string | null>(null)
+  const deepResearchAbortRef = useRef(false)
 
   /**
    * Load messages from storage
@@ -94,6 +103,47 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       setError('Failed to load messages')
     }
   }, [sessionId])
+
+  const fileToDataUrl = useCallback(async (file: File): Promise<string> => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
+  const findMaskPair = useCallback(
+    (files?: File[]) => {
+      if (!files || files.length === 0) return null
+      const normalizeName = (name: string) => name.replace(/\.[^.]+$/, '')
+
+      for (const file of files) {
+        const lower = file.name.toLowerCase()
+        if (!lower.includes('-mask')) continue
+        const base = normalizeName(lower.split('-mask')[0])
+        const image = files.find((f) => {
+          if (f === file) return false
+          const fname = normalizeName(f.name.toLowerCase())
+          return fname === base || fname.startsWith(base)
+        })
+        if (image) {
+          return { image, mask: file }
+        }
+      }
+      return null
+    },
+    [],
+  )
+
+  const isDeepResearchModel = useCallback(() => {
+    const model = config.selected_model
+    return (
+      model === ChatModelDeepResearch ||
+      model === ChatModelGPTO3Deepresearch ||
+      model === ChatModelGPTO4MiniDeepresearch
+    )
+  }, [config.selected_model])
 
   /**
    * Save a message to storage
@@ -146,11 +196,65 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       currentChatIdRef.current = chatId
       setError(null)
 
+      // Build attachment markdown + content parts for API
+      const contentParts: ContentPart[] = []
+      const attachmentMarkdown: string[] = []
+
+      let finalContent = content.trim()
+
+      const pushTextPart = (text: string) => {
+        if (!text) return
+        contentParts.push({ type: 'text', text })
+      }
+
+      pushTextPart(finalContent)
+
+      // Handle file attachments if present
+      if (typeof _attachments !== 'undefined' && _attachments.length > 0) {
+        try {
+          const { uploadFiles } = await import('@/utils/api')
+
+          for (const file of _attachments) {
+            if (file.type.startsWith('image/')) {
+              const b64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader()
+                reader.onloadend = () => resolve(reader.result as string)
+                reader.readAsDataURL(file)
+              })
+              // Append markdown for local render and push image part for API
+              attachmentMarkdown.push(`![${file.name}](${b64})`)
+              contentParts.push({
+                type: 'image_url',
+                image_url: { url: b64 },
+              })
+            } else {
+              // Non-image files, upload to get cache key reference
+              const { cache_keys } = await uploadFiles([file], config.api_token)
+              const note = cache_keys?.[0]
+                ? `[File uploaded: ${file.name} (key: ${cache_keys[0]})]`
+                : `[File uploaded: ${file.name}]`
+              attachmentMarkdown.push(note)
+              pushTextPart(`\n\n${note}`)
+            }
+          }
+        } catch (err) {
+          console.error('File upload failed', err)
+          setError('Failed to process attachments')
+          return
+        }
+      }
+
+      // Build user-visible content that mirrors legacy markdown rendering
+      if (attachmentMarkdown.length > 0) {
+        finalContent =
+          `${finalContent}\n\n${attachmentMarkdown.join('\n\n')}`.trim()
+      }
+
       // Create user message
       const userMessage: ChatMessageData = {
         chatID: chatId,
         role: 'user',
-        content: content.trim(),
+        content: finalContent,
         timestamp: Date.now(),
       }
 
@@ -159,6 +263,170 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       // Save user message
       await saveMessage(userMessage)
+
+      // If mask & image are provided, run inpainting flow
+      const maskPair = findMaskPair(_attachments)
+      if (maskPair) {
+        setIsLoading(true)
+        const assistantMessage: ChatMessageData = {
+          chatID: chatId,
+          role: 'assistant',
+          content: 'Editing image...',
+          model: config.selected_model,
+          timestamp: Date.now(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+
+        try {
+          const [imageDataUrl, maskDataUrl] = await Promise.all([
+            fileToDataUrl(maskPair.image),
+            fileToDataUrl(maskPair.mask),
+          ])
+
+          const resp = await editImageWithMask(
+            'flux-fill-pro',
+            {
+              prompt: content.trim(),
+              image: imageDataUrl,
+              mask: maskDataUrl,
+            },
+            config.api_token,
+            config.api_base !== 'https://api.openai.com'
+              ? config.api_base
+              : undefined,
+          )
+
+          const imgContent = resp.image_urls
+            .map((url) => `![Image](${url})`)
+            .join('\n\n')
+
+          const finalAssist: ChatMessageData = {
+            ...assistantMessage,
+            content: imgContent,
+          }
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.chatID === chatId && m.role === 'assistant'
+                ? finalAssist
+                : m,
+            ),
+          )
+
+          await saveMessage(finalAssist)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setError(msg)
+          setMessages((prev) => prev.filter((m) => m.chatID !== chatId))
+        } finally {
+          setIsLoading(false)
+          currentChatIdRef.current = null
+        }
+        return
+      }
+
+      // Deep research task flow
+      if (isDeepResearchModel()) {
+        setIsLoading(true)
+        deepResearchAbortRef.current = false
+
+        const assistantMessage: ChatMessageData = {
+          chatID: chatId,
+          role: 'assistant',
+          content: 'Researching... ⏳',
+          model: config.selected_model,
+          timestamp: Date.now(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+
+        const apiBase =
+          config.api_base !== 'https://api.openai.com'
+            ? config.api_base
+            : undefined
+
+        const updateAssistant = (text: string) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.chatID === chatId && m.role === 'assistant'
+                ? { ...m, content: text }
+                : m,
+            ),
+          )
+        }
+
+        try {
+          const { task_id } = await createDeepResearchTask(
+            content.trim(),
+            config.api_token,
+            apiBase,
+          )
+
+          let finalText = ''
+          for (let i = 0; i < 60; i += 1) {
+            if (deepResearchAbortRef.current) {
+              throw new Error('Deep research aborted')
+            }
+            const status = await fetchDeepResearchStatus(
+              task_id,
+              config.api_token,
+              apiBase,
+            )
+            const statusText = (status.status || '').toLowerCase()
+
+            if (
+              ['succeeded', 'success', 'completed', 'done', 'finished'].includes(
+                statusText,
+              )
+            ) {
+              finalText =
+                status.result ||
+                status.output ||
+                status.content ||
+                status.summary ||
+                JSON.stringify(status)
+              break
+            }
+
+            if (
+              ['failed', 'error', 'canceled', 'cancelled'].includes(
+                statusText,
+              )
+            ) {
+              throw new Error(`Deep research failed: ${status.status}`)
+            }
+
+            updateAssistant(`Researching... (${status.status || 'pending'})`)
+            await new Promise((resolve) => setTimeout(resolve, 3000))
+          }
+
+          const finalAssistant: ChatMessageData = {
+            ...assistantMessage,
+            content:
+              finalText ||
+              'Research completed but no content was returned by the service.',
+            timestamp: Date.now(),
+          }
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.chatID === chatId && m.role === 'assistant'
+                ? finalAssistant
+                : m,
+            ),
+          )
+
+          await saveMessage(finalAssistant)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setError(msg)
+          setMessages((prev) => prev.filter((m) => m.chatID !== chatId))
+        } finally {
+          setIsLoading(false)
+          currentChatIdRef.current = null
+          deepResearchAbortRef.current = false
+        }
+        return
+      }
 
       // Check if this is an image model
       if (isImageModel(config.selected_model)) {
@@ -217,52 +485,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         return
       }
 
-      // Handle file attachments if present
-      const attachments: ContentPart[] = []
-      if (typeof _attachments !== 'undefined' && _attachments.length > 0) {
-        try {
-          const { uploadFiles } = await import('@/utils/api')
-          // Upload files to get cache keys (for PDF/Doc types usually, but here checking generic upload)
-          // Note: Current api.ts uploadFiles returns cache_keys, assuming backend supports it for generic files
-          // For images in standard GPT-4o, we might need base64.
-          // Let's check api.ts/types.ts again. ContentPart supports image_url.
-          // If backend `files/chat` returns a cache_key or url, we use that.
-          // However, typical OpenAI vision uses base64 data URLs.
-          // Let's assume for now we try to upload and use the result, OR convert to base64 if it's an image.
-
-          // For simplicity and parity with typical Vision implementation:
-          for (const file of _attachments) {
-            if (file.type.startsWith('image/')) {
-              const b64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader()
-                reader.onloadend = () => resolve(reader.result as string)
-                reader.readAsDataURL(file)
-              })
-              attachments.push({
-                type: 'text',
-                text: `![${file.name}](${b64})`, // Markdown image for display
-              })
-              // For API, we might need separate handling, but let's stick to text injection for now
-              // or proper ContentPart if backend parsing supports it.
-              // The `api.ts` ChatMessage content can be `string | ContentPart[]`.
-            } else {
-              // Non-image files, upload to get text/context
-              const { cache_keys } = await uploadFiles([file], config.api_token)
-              if (cache_keys && cache_keys.length > 0) {
-                attachments.push({
-                  type: 'text',
-                  text: `\n\n[File uploaded: ${file.name} (key: ${cache_keys[0]})]`,
-                })
-              }
-            }
-          }
-        } catch (err) {
-          console.error('File upload failed', err)
-          setError('Failed to process attachments')
-          return
-        }
-      }
-
       // Prepare assistant message placeholder
       const assistantMessage: ChatMessageData = {
         chatID: chatId,
@@ -295,27 +517,42 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         })
       }
 
-      // Add current user message
-      // If we have attachments, we might need to construct a multipart content
-      // But since we pre-processed attachments into markdown/text above, we just append to content
-      // Ideally, for Vision, we should use the array format.
-      // Let's construct the final content string for now as simple concatenation is safer for general proxy
-      let finalContent = content.trim()
-      attachments.forEach((att) => {
-        if (att.text) finalContent += `\n${att.text}`
-      })
-
+      // Add current user message (array content when attachments exist)
       apiMessages.push({
         role: 'user',
-        content: finalContent,
+        content: contentParts.length > 1 ? contentParts : finalContent,
       })
 
       // Stream response
       let fullContent = ''
       let fullReasoning = ''
+      const toolEventLog: string[] = []
       let fullAnnotations: Annotation[] = []
       const toolCallAccumulator = new Map<string, ToolCallDelta>()
       const finishReasonRef = { current: null as string | null }
+
+      const updateReasoning = (thinkingChunk?: string) => {
+        const combined = [
+          ...toolEventLog,
+          thinkingChunk ? thinkingChunk : fullReasoning,
+        ]
+          .filter(Boolean)
+          .join('\n')
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.chatID === chatId && m.role === 'assistant'
+              ? { ...m, reasoningContent: combined }
+              : m,
+          ),
+        )
+      }
+
+      const appendToolEvent = (line: string) => {
+        if (!line) return
+        toolEventLog.push(line)
+        updateReasoning()
+      }
 
       const accumulateToolCalls = (deltas: ToolCallDelta[]) => {
         deltas.forEach((delta) => {
@@ -340,6 +577,13 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
           existing.type = delta.type || existing.type
           toolCallAccumulator.set(id, existing)
+
+          if (existing.function?.name) {
+            appendToolEvent(`Upstream tool_call: ${existing.function.name}`)
+          }
+          if (delta.function?.arguments) {
+            appendToolEvent(`args: ${delta.function.arguments}`)
+          }
         })
       }
 
@@ -408,6 +652,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
               toolName,
               call.function.arguments,
             )
+            appendToolEvent(`tool ok: ${toolName}`)
             toolMessages.push({
               role: 'tool',
               content: output,
@@ -416,6 +661,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
             })
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
+            appendToolEvent(`tool error: ${toolName}: ${message}`)
             toolMessages.push({
               role: 'tool',
               content: `Tool ${toolName} failed: ${message}`,
@@ -457,6 +703,13 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
                   url: s.url,
                   api_key: s.api_key,
                 })),
+              laisky_extra: {
+                chat_switch: {
+                  disable_https_crawler:
+                    config.chat_switch.disable_https_crawler,
+                  all_in_one: config.chat_switch.all_in_one,
+                },
+              },
             },
             config.api_token,
             {
@@ -472,13 +725,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
               },
               onReasoning: (chunk) => {
                 fullReasoning += chunk
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.chatID === chatId && m.role === 'assistant'
-                      ? { ...m, reasoningContent: fullReasoning }
-                      : m,
-                  ),
-                )
+                updateReasoning(fullReasoning)
               },
               onAnnotations: (annotations) => {
                 fullAnnotations = annotations
@@ -537,7 +784,9 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
           role: 'assistant',
           content: fullContent,
           model: config.selected_model,
-          reasoningContent: fullReasoning || undefined,
+          reasoningContent:
+            [...toolEventLog, fullReasoning].filter(Boolean).join('\n') ||
+            undefined,
           annotations: fullAnnotations,
           references: extractReferencesFromAnnotations(fullAnnotations),
           timestamp: Date.now(),
@@ -567,6 +816,9 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
       setIsLoading(false)
+    }
+    if (!deepResearchAbortRef.current) {
+      deepResearchAbortRef.current = true
     }
   }, [])
 

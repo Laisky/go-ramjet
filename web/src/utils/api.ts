@@ -46,6 +46,23 @@ export interface ChatRequest {
   stream?: boolean
   enable_mcp?: boolean
   mcp_servers?: McpServer[]
+  laisky_extra?: {
+    chat_switch?: {
+      disable_https_crawler?: boolean
+      enable_google_search?: boolean
+      all_in_one?: boolean
+    }
+  }
+}
+
+// Deep research
+export interface DeepResearchTask {
+  task_id: string
+  status: string
+  result?: string
+  output?: string
+  content?: string
+  summary?: string
 }
 
 export interface McpServer {
@@ -103,6 +120,11 @@ export interface ImageGenerationResponse {
     b64_json?: string
     revised_prompt?: string
   }>
+}
+
+export interface ImageEditResponse {
+  task_id: string
+  image_urls: string[]
 }
 
 /**
@@ -360,6 +382,98 @@ export async function generateImage(
     method: 'POST',
     headers,
     body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`[${response.status}]: ${text}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Edit an image with mask using Flux fill endpoint.
+ */
+export async function editImageWithMask(
+  model: string,
+  payload: {
+    prompt: string
+    image: string
+    mask: string
+    steps?: number
+    guidance?: number
+    safety_tolerance?: number
+    prompt_upsampling?: boolean
+  },
+  apiToken: string,
+  apiBase?: string,
+): Promise<ImageEditResponse> {
+  const headers = await buildHeaders(apiToken, apiBase)
+  const body = {
+    input: {
+      prompt: payload.prompt,
+      image: payload.image,
+      mask: payload.mask,
+      seed: Date.now(),
+      steps: payload.steps ?? 30,
+      guidance: payload.guidance ?? 3,
+      safety_tolerance: payload.safety_tolerance ?? 5,
+      prompt_upsampling: payload.prompt_upsampling ?? false,
+    },
+  }
+
+  const response = await fetch(`/gptchat/images/edit/flux/${model}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`[${response.status}]: ${text}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Create a deep-research task.
+ */
+export async function createDeepResearchTask(
+  prompt: string,
+  apiToken: string,
+  apiBase?: string,
+): Promise<{ task_id: string }> {
+  const headers = await buildHeaders(apiToken, apiBase)
+
+  const response = await fetch('/gptchat/deepresearch', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ prompt }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`[${response.status}]: ${text}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Fetch deep-research task status.
+ */
+export async function fetchDeepResearchStatus(
+  taskId: string,
+  apiToken: string,
+  apiBase?: string,
+): Promise<DeepResearchTask> {
+  const headers = await buildHeaders(apiToken, apiBase)
+
+  const response = await fetch(`/gptchat/deepresearch/${taskId}`, {
+    method: 'GET',
+    headers,
   })
 
   if (!response.ok) {

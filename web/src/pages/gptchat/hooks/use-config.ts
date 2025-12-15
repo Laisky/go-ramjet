@@ -221,7 +221,7 @@ function applyUrlOverridesToConfig(config: SessionConfig): {
     }
 
     const currentValue = getNestedConfigValue(
-      updatedConfig as Record<string, unknown>,
+      updatedConfig as unknown as Record<string, unknown>,
       pathSegments,
     )
     const coercedValue = coerceConfigValue(
@@ -235,7 +235,7 @@ function applyUrlOverridesToConfig(config: SessionConfig): {
     }
 
     setNestedConfigValue(
-      updatedConfig as Record<string, unknown>,
+      updatedConfig as unknown as Record<string, unknown>,
       pathSegments,
       coercedValue,
     )
@@ -290,6 +290,50 @@ export function useConfig() {
   const [sessionId, setSessionId] = useState<number>(DEFAULT_SESSION_ID)
   const [sessions, setSessions] = useState<{ id: number; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  /**
+   * Load all available sessions
+   */
+  const loadSessions = useCallback(async () => {
+    const keys = await kvList()
+    const configKeys = keys.filter((k) =>
+      k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
+    )
+
+    // Sort keys by ID to keep order stable
+    configKeys.sort((a, b) => {
+      const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+      const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+      return idA - idB
+    })
+
+    const loadedSessions: { id: number; name: string }[] = []
+
+    for (const key of configKeys) {
+      try {
+        const id = parseInt(
+          key.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''),
+          10,
+        )
+        if (isNaN(id)) continue
+
+        const conf = await kvGet<SessionConfig>(key)
+        loadedSessions.push({
+          id,
+          name: conf?.session_name || `Chat Session ${id}`,
+        })
+      } catch (e) {
+        console.error('Failed to load session config for key', key, e)
+      }
+    }
+
+    // If no sessions found, at least include current default (should exist after load logic)
+    if (loadedSessions.length === 0) {
+      // We defer to what loadConfig created
+    }
+
+    setSessions(loadedSessions)
+  }, [])
 
   // Load configuration on mount
   useEffect(() => {
@@ -379,50 +423,6 @@ export function useConfig() {
 
     loadConfig()
   }, [loadSessions])
-
-  /**
-   * Load all available sessions
-   */
-  const loadSessions = useCallback(async () => {
-    const keys = await kvList()
-    const configKeys = keys.filter((k) =>
-      k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
-    )
-
-    // Sort keys by ID to keep order stable
-    configKeys.sort((a, b) => {
-      const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
-      const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
-      return idA - idB
-    })
-
-    const loadedSessions: { id: number; name: string }[] = []
-
-    for (const key of configKeys) {
-      try {
-        const id = parseInt(
-          key.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''),
-          10,
-        )
-        if (isNaN(id)) continue
-
-        const conf = await kvGet<SessionConfig>(key)
-        loadedSessions.push({
-          id,
-          name: conf?.session_name || `Chat Session ${id}`,
-        })
-      } catch (e) {
-        console.error('Failed to load session config for key', key, e)
-      }
-    }
-
-    // If no sessions found, at least include current default (should exist after load logic)
-    if (loadedSessions.length === 0) {
-      // We defer to what loadConfig created
-    }
-
-    setSessions(loadedSessions)
-  }, [])
 
   /**
    * Apply URL parameter overrides to the current config
