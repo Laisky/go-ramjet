@@ -84,6 +84,12 @@ export function GPTChatPage() {
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
   const isDrawActive = isImageModel(config.selected_model)
+  const activeModelForPlaceholder = isDrawActive ? drawModel : chatModel
+  const messagePlaceholder = config.api_token
+    ? activeModelForPlaceholder
+      ? `[${activeModelForPlaceholder}] Type a message...`
+      : 'Type a message...'
+    : 'Enter your API key in Settings to start chatting'
 
   const SESSION_DOCK_WIDTH = 56
   const HEADER_HEIGHT = 64
@@ -462,10 +468,10 @@ export function GPTChatPage() {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="relative h-screen w-full overflow-hidden theme-bg">
       {/* Session Dock (Fixed Left Sidebar) */}
       <div
-        className="fixed left-0 top-0 z-30 h-full"
+        className="fixed left-0 top-0 z-30 hidden h-full md:block"
         style={{ width: SESSION_DOCK_WIDTH, paddingTop: HEADER_HEIGHT }}
       >
         <SessionDock
@@ -479,51 +485,48 @@ export function GPTChatPage() {
 
       {/* Header */}
       <div
-        className="fixed left-0 right-0 top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-slate-900/90"
-        style={{ paddingLeft: SESSION_DOCK_WIDTH, height: HEADER_HEIGHT }}
+        className="fixed left-0 right-0 top-0 z-20 h-16 border-b theme-border theme-glass md:pl-14"
         onClick={(e) => {
-          const target = e.target as HTMLElement | null
-          if (!target) return
-          if (
-            target.closest(
-              'button, a, input, select, textarea, [role="button"]',
-            )
-          ) {
-            return
-          }
+          if (e.target !== e.currentTarget) return
           scrollToTop()
         }}
       >
-        <div className="flex h-full items-center justify-between px-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-semibold tracking-tight">Chat</h1>
-            <div className="flex flex-wrap items-center gap-2">
-              <ModelSelector
-                label="Chat"
-                categories={[
-                  'OpenAI',
-                  'Anthropic',
-                  'Google',
-                  'Deepseek',
-                  'Others',
-                ]}
-                selectedModel={chatModel}
-                active={!isDrawActive}
-                onModelChange={handleChatModelChange}
-                className="w-[230px]"
-              />
-              <ModelSelector
-                label="Draw"
-                categories={['Image']}
-                selectedModel={drawModel}
-                active={isDrawActive}
-                onModelChange={handleDrawModelChange}
-                className="w-[200px]"
-              />
-            </div>
+        <div className="flex h-full w-full items-center justify-between px-3 sm:px-4">
+          <div className="flex items-center gap-2 overflow-x-auto sm:gap-3">
+            <h1 className="shrink-0 text-xl font-semibold tracking-tight">
+              Chat
+            </h1>
+            <ModelSelector
+              label="Chat"
+              categories={[
+                'OpenAI',
+                'Anthropic',
+                'Google',
+                'Deepseek',
+                'Others',
+              ]}
+              selectedModel={chatModel}
+              active={!isDrawActive}
+              onModelChange={handleChatModelChange}
+              className="shrink-0 w-auto min-w-[96px]"
+              compact
+              tone="ghost"
+            />
+            <ModelSelector
+              label="Draw"
+              categories={['Image']}
+              selectedModel={drawModel}
+              active={isDrawActive}
+              onModelChange={handleDrawModelChange}
+              className="shrink-0 w-auto min-w-[96px]"
+              compact
+              tone="ghost"
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -538,10 +541,7 @@ export function GPTChatPage() {
       </div>
 
       {/* Scrollable chat area */}
-      <div
-        className="absolute inset-x-0 bottom-0 top-0 overflow-hidden"
-        style={{ paddingLeft: SESSION_DOCK_WIDTH, paddingTop: HEADER_HEIGHT }}
-      >
+      <div className="absolute inset-x-0 bottom-0 top-0 overflow-hidden pt-16 md:pl-14">
         {/* Error display */}
         {error && (
           <div className="mx-4 mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -551,7 +551,7 @@ export function GPTChatPage() {
 
         <div
           ref={messagesContainerRef}
-          className="relative h-full overflow-y-auto px-4 pb-[240px] pt-4"
+          className="relative h-full overflow-y-auto px-3 pb-[180px] pt-3 sm:px-4 sm:pb-[220px] sm:pt-4"
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -596,7 +596,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'fixed bottom-32 right-6 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur transition-all hover:bg-black/85 dark:bg-white/70 dark:text-black dark:hover:bg-white/85',
+              'fixed bottom-32 right-6 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--accent-contrast)] shadow-lg backdrop-blur transition-all hover:bg-[color:var(--accent-strong)]',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',
@@ -609,10 +609,7 @@ export function GPTChatPage() {
       </div>
 
       {/* Input (fixed bottom) */}
-      <div
-        className="fixed left-0 right-0 bottom-0 z-30 border-t border-black/10 bg-white/95 px-4 py-3 shadow-md dark:border-white/10 dark:bg-slate-900/95"
-        style={{ paddingLeft: SESSION_DOCK_WIDTH }}
-      >
+      <div className="fixed left-0 right-0 bottom-0 z-30 border-t theme-border theme-glass px-3 py-2 shadow-md sm:px-4 sm:py-3 md:pl-14">
         <ChatInput
           onSend={handleSend}
           onStop={stopGeneration}
@@ -624,11 +621,7 @@ export function GPTChatPage() {
           onPrefillUsed={() => setPrefillDraft(undefined)}
           draftMessage={currentDraftMessage}
           onDraftChange={handleDraftChange}
-          placeholder={
-            config.api_token
-              ? 'Type a message...'
-              : 'Enter your API key in Settings to start chatting'
-          }
+          placeholder={messagePlaceholder}
         />
       </div>
 
@@ -656,9 +649,9 @@ export function GPTChatPage() {
       />
 
       {upgradeInfo && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-black/10 bg-white p-4 shadow-lg dark:border-white/10 dark:bg-black">
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border theme-border theme-elevated p-4 shadow-lg">
           <p className="text-sm font-medium">New version available</p>
-          <p className="text-xs text-black/60 dark:text-white/60">
+          <p className="theme-text-muted text-xs">
             {upgradeInfo.from} → {upgradeInfo.to}
           </p>
           <div className="mt-3 flex gap-2">
@@ -732,7 +725,7 @@ function EditMessageModal({
       onClick={onClose}
     >
       <div
-        className="mx-4 w-full max-w-2xl rounded-lg bg-white p-6 shadow-2xl dark:bg-slate-900"
+        className="mx-4 w-full max-w-2xl rounded-lg border theme-border theme-elevated p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-4 text-lg font-semibold">Edit Message</h3>
@@ -752,7 +745,7 @@ function EditMessageModal({
             Retry with Edited Message
           </Button>
         </div>
-        <p className="mt-2 text-xs text-black/50 dark:text-white/50">
+        <p className="mt-2 text-xs theme-text-muted">
           Ctrl+Enter to submit • Esc to cancel
         </p>
       </div>

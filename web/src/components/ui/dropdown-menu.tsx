@@ -17,7 +17,7 @@ export function DropdownMenuContent(
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-[10rem] overflow-hidden rounded-md border border-black/10 bg-white p-1 text-sm shadow-md dark:border-white/10 dark:bg-black',
+          'z-50 min-w-[10rem] overflow-hidden rounded-md border p-1 text-sm shadow-md theme-border theme-elevated',
           className,
         )}
         {...rest}
@@ -29,12 +29,14 @@ export function DropdownMenuContent(
 /**
  * DropdownMenuItem renders a styled clickable item.
  */
-export function DropdownMenuItem(props: DropdownMenuPrimitive.DropdownMenuItemProps) {
+export function DropdownMenuItem(
+  props: DropdownMenuPrimitive.DropdownMenuItemProps,
+) {
   const { className, ...rest } = props
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'flex cursor-default select-none items-center rounded px-2 py-1.5 outline-none focus:bg-black/5 dark:focus:bg-white/10',
+        'flex cursor-default select-none items-center rounded px-2 py-1.5 outline-none transition-colors focus:bg-[color:var(--bg-muted)]',
         className,
       )}
       {...rest}

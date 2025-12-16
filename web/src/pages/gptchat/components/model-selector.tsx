@@ -15,6 +15,9 @@ import {
 import { cn } from '@/utils/cn'
 import { ModelCategories, isFreeModel, isImageModel } from '../models'
 
+/**
+ * ModelSelectorProps describes the configuration for rendering a model picker dropdown.
+ */
 export interface ModelSelectorProps {
   selectedModel: string
   onModelChange: (model: string) => void
@@ -23,6 +26,8 @@ export interface ModelSelectorProps {
   categories?: string[]
   active?: boolean
   className?: string
+  compact?: boolean
+  tone?: 'default' | 'ghost'
 }
 
 /**
@@ -36,6 +41,8 @@ export function ModelSelector({
   categories,
   active,
   className,
+  compact,
+  tone = 'default',
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
 
@@ -47,6 +54,8 @@ export function ModelSelector({
 
   const displayModel =
     selectedModel || filteredCategories[0]?.[1]?.[0] || 'Select a model'
+
+  const triggerLabel = label || 'Model'
 
   const handleSelect = (model: string) => {
     onModelChange(model)
@@ -60,32 +69,41 @@ export function ModelSelector({
           size="sm"
           variant="outline"
           className={cn(
-            'w-full justify-between gap-2 text-sm border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+            tone === 'ghost'
+              ? 'border-transparent bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/10'
+              : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+            compact
+              ? 'w-auto min-w-[96px] justify-center gap-2 px-3 text-sm'
+              : 'w-full justify-between gap-2 text-sm',
             active && 'ring-2 ring-blue-500/40',
             className,
           )}
           disabled={disabled}
         >
-          <span className="flex min-w-0 flex-col text-left">
-            {label && (
-              <span className="text-[10px] uppercase tracking-tight text-black/60 dark:text-white/60">
-                {label}
+          {compact ? (
+            <span className="text-sm font-semibold">{triggerLabel}</span>
+          ) : (
+            <span className="flex min-w-0 flex-col text-left">
+              {label && (
+                <span className="text-[10px] uppercase tracking-tight text-black/60 dark:text-white/60">
+                  {label}
+                </span>
+              )}
+              <span className="flex items-center gap-2 truncate">
+                <span className="truncate">{displayModel}</span>
+                {isFreeModel(displayModel) && (
+                  <Badge variant="success" className="text-[10px]">
+                    Free
+                  </Badge>
+                )}
+                {isImageModel(displayModel) && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    🎨
+                  </Badge>
+                )}
               </span>
-            )}
-            <span className="flex items-center gap-2 truncate">
-              <span className="truncate">{displayModel}</span>
-              {isFreeModel(displayModel) && (
-                <Badge variant="success" className="text-[10px]">
-                  Free
-                </Badge>
-              )}
-              {isImageModel(displayModel) && (
-                <Badge variant="secondary" className="text-[10px]">
-                  🎨
-                </Badge>
-              )}
             </span>
-          </span>
+          )}
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </DropdownMenuTrigger>

@@ -195,14 +195,14 @@ export function ChatMessage({
   return (
     <div
       className={cn(
-        'group flex gap-3',
+        'group flex w-full gap-2 sm:gap-3',
         isUser ? 'flex-row-reverse' : 'flex-row',
       )}
     >
       {/* Avatar */}
       <div
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
           isUser
             ? 'bg-blue-500 text-white'
             : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
@@ -213,11 +213,14 @@ export function ChatMessage({
 
       {/* Message content */}
       <div
-        className={cn('flex max-w-[80%] flex-col gap-1', isUser && 'items-end')}
+        className={cn(
+          'flex w-full max-w-full flex-col gap-1 md:max-w-[80%]',
+          isUser && 'items-end',
+        )}
       >
         {/* Model badge for assistant */}
         {isAssistant && message.model && (
-          <Badge variant="secondary" className="w-fit text-xs">
+          <Badge variant="secondary" className="w-fit text-[11px] sm:text-xs">
             {message.model}
           </Badge>
         )}
@@ -230,19 +233,19 @@ export function ChatMessage({
         {/* Main content */}
         <Card
           className={cn(
-            'relative p-3 shadow-sm border',
+            'relative w-full border-0 bg-transparent p-0 shadow-none sm:rounded-2xl sm:border sm:p-4 sm:shadow-sm',
             isUser
-              ? 'bg-blue-600 text-white border-blue-500'
-              : 'bg-white/95 text-slate-900 border-slate-200 dark:border-slate-700 dark:bg-slate-900/80',
+              ? 'sm:bg-blue-600 sm:text-white sm:border-blue-500'
+              : 'sm:bg-white/95 sm:text-slate-900 sm:border-slate-200 dark:sm:border-slate-700 dark:sm:bg-slate-900/85',
             isStreaming && 'animate-pulse',
           )}
         >
           {isUser ? (
-            <pre className="whitespace-pre-wrap break-words text-sm">
+            <pre className="whitespace-pre-wrap break-words text-base leading-relaxed sm:text-sm">
               {message.content}
             </pre>
           ) : message.content ? (
-            <Markdown className="prose prose-sm max-w-none dark:prose-invert">
+            <Markdown className="prose prose-base max-w-none leading-relaxed dark:prose-invert sm:prose-sm md:prose-base">
               {message.content}
             </Markdown>
           ) : (
@@ -262,8 +265,8 @@ export function ChatMessage({
           {/* Action buttons */}
           <div
             className={cn(
-              'absolute -bottom-8 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100',
-              isUser ? 'right-0' : 'left-0',
+              'mt-3 flex flex-wrap gap-2 text-xs md:absolute md:-bottom-8 md:mt-0 md:gap-1 md:opacity-0 md:transition-opacity md:group-hover:opacity-100',
+              isUser ? 'justify-end md:right-0' : 'justify-start md:left-0',
             )}
           >
             {canEditMessage && (
@@ -271,7 +274,7 @@ export function ChatMessage({
                 variant="ghost"
                 size="sm"
                 onClick={handleEditClick}
-                className="h-6 px-2"
+                className="h-7 px-2 sm:h-6"
                 title="Edit & resend"
               >
                 <Edit2 className="h-3 w-3" />
@@ -282,7 +285,7 @@ export function ChatMessage({
                 variant="ghost"
                 size="sm"
                 onClick={handleRegenerate}
-                className="h-6 px-2"
+                className="h-7 px-2 sm:h-6"
                 disabled={actionDisabled}
                 title="Regenerate response"
               >
@@ -294,7 +297,7 @@ export function ChatMessage({
                 variant="ghost"
                 size="sm"
                 onClick={handleToggleSpeech}
-                className="h-6 px-2"
+                className="h-7 px-2 sm:h-6"
                 title={isSpeaking ? 'Stop narration' : 'Play narration'}
               >
                 {isSpeaking ? (
@@ -308,7 +311,7 @@ export function ChatMessage({
               variant="ghost"
               size="sm"
               onClick={handleCopy}
-              className="h-6 px-2"
+              className="h-7 px-2 sm:h-6"
             >
               {copied ? (
                 <Check className="h-3 w-3 text-green-500" />
@@ -321,7 +324,7 @@ export function ChatMessage({
                 variant="ghost"
                 size="sm"
                 onClick={handleDelete}
-                className="h-6 px-2 text-red-500 hover:text-red-600"
+                className="h-7 px-2 text-red-500 hover:text-red-600 sm:h-6"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -330,7 +333,7 @@ export function ChatMessage({
         </Card>
 
         {isAssistant && message.references && message.references.length > 0 && (
-          <Card className="mt-2 bg-black/5 p-3 text-xs dark:bg-white/5">
+          <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-black/5 sm:p-3 dark:sm:bg-white/5">
             <p className="font-semibold text-black/60 dark:text-white/60">
               References
             </p>

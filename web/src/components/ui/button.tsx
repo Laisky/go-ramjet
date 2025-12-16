@@ -13,16 +13,16 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
     const base =
-      'inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50'
+      'inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 theme-focus-ring'
 
     const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
       default:
-        'bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90',
-      ghost: 'hover:bg-black/5 dark:hover:bg-white/10',
+        'bg-[color:var(--accent)] text-[color:var(--accent-contrast)] hover:bg-[color:var(--accent-strong)]',
+      ghost:
+        'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-muted)]',
       outline:
-        'border border-black/10 bg-transparent hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5',
-      destructive:
-        'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700',
+        'border theme-border bg-[color:var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[color:var(--bg-muted)]',
+      destructive: 'bg-[#ef4444] text-white hover:bg-[#dc2626]',
     }
 
     const sizes: Record<NonNullable<ButtonProps['size']>, string> = {
