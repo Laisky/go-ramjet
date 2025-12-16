@@ -463,7 +463,7 @@ export function ChatInput({
         )}
 
         {/* Main input area */}
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
           <div className="relative flex-1">
             <Textarea
               ref={textareaRef}
@@ -473,7 +473,7 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={placeholder}
               disabled={disabled || isLoading || isTranscribing}
-              className="min-h-[60px] resize-none pr-10"
+              className="min-h-[56px] w-full resize-none rounded-2xl border border-black/10 bg-white/90 pr-12 shadow-sm ring-1 ring-black/5 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900/80 dark:ring-white/10"
               rows={2}
             />
 
@@ -491,20 +491,20 @@ export function ChatInput({
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled || isLoading}
-              className="absolute bottom-2 right-2 h-6 w-6 p-0"
+              className="absolute bottom-2 right-2 h-8 w-8 rounded-xl p-0 text-slate-600 shadow-sm hover:text-slate-900 dark:text-white"
             >
               <Paperclip className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex shrink-0 flex-col gap-2">
             {config.chat_switch.enable_talk && (
               <Button
                 type="button"
                 onClick={handleToggleRecording}
                 disabled={disabled || isLoading || isTranscribing}
                 variant={isRecording ? 'destructive' : 'outline'}
-                className="h-auto px-3"
+                className="h-[44px] rounded-xl px-3 text-sm font-medium shadow-sm"
               >
                 {isRecording ? (
                   <Square className="h-4 w-4" />
@@ -520,7 +520,7 @@ export function ChatInput({
               <Button
                 onClick={onStop}
                 variant="destructive"
-                className="h-auto px-4"
+                className="h-[56px] rounded-xl px-4 text-sm font-semibold shadow-sm"
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -528,7 +528,7 @@ export function ChatInput({
               <Button
                 onClick={handleSend}
                 disabled={!message.trim() || disabled || isTranscribing}
-                className="h-auto px-4"
+                className="h-[56px] rounded-xl px-5 text-sm font-semibold shadow-sm"
               >
                 <Send className="h-4 w-4" />
               </Button>

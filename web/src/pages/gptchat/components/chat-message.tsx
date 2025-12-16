@@ -195,7 +195,7 @@ export function ChatMessage({
   return (
     <div
       className={cn(
-        'group flex w-full gap-2 sm:gap-3',
+        'group flex w-full gap-3 sm:gap-4',
         isUser ? 'flex-row-reverse' : 'flex-row',
       )}
     >
@@ -214,7 +214,7 @@ export function ChatMessage({
       {/* Message content */}
       <div
         className={cn(
-          'flex w-full max-w-full flex-col gap-1 md:max-w-[80%]',
+          'flex w-full max-w-full flex-col gap-1 md:max-w-[820px]',
           isUser && 'items-end',
         )}
       >
@@ -233,19 +233,19 @@ export function ChatMessage({
         {/* Main content */}
         <Card
           className={cn(
-            'relative w-full border-0 bg-transparent p-0 shadow-none sm:rounded-2xl sm:border sm:p-4 sm:shadow-sm',
+            'relative w-full overflow-hidden rounded-2xl border p-3 shadow-sm transition-all sm:p-4',
             isUser
-              ? 'sm:bg-blue-600 sm:text-white sm:border-blue-500'
-              : 'sm:bg-white/95 sm:text-slate-900 sm:border-slate-200 dark:sm:border-slate-700 dark:sm:bg-slate-900/85',
+              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-blue-500/20'
+              : 'bg-white/95 text-slate-900 shadow-black/5 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white',
             isStreaming && 'animate-pulse',
           )}
         >
           {isUser ? (
-            <pre className="whitespace-pre-wrap break-words text-base leading-relaxed sm:text-sm">
+            <pre className="whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base">
               {message.content}
             </pre>
           ) : message.content ? (
-            <Markdown className="prose prose-base max-w-none leading-relaxed dark:prose-invert sm:prose-sm md:prose-base">
+            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
               {message.content}
             </Markdown>
           ) : (
