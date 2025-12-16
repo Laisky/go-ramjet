@@ -49,6 +49,7 @@ export interface UseChatReturn {
   deleteMessage: (chatId: string) => Promise<void>
   loadMessages: () => Promise<void>
   regenerateMessage: (chatId: string) => Promise<void>
+  editAndRetry: (chatId: string, newContent: string) => Promise<void>
 }
 
 /**
@@ -896,17 +897,718 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
   const regenerateMessage = useCallback(
     async (chatId: string) => {
-      const targetUser = messages.find(
+      const userIndex = messages.findIndex(
         (m) => m.chatID === chatId && m.role === 'user',
       )
-      if (!targetUser) {
+      if (userIndex === -1) {
         return
       }
 
-      await deleteMessage(chatId)
-      await sendMessage(targetUser.content)
+      const assistantIndex = messages.findIndex(
+        (m) => m.chatID === chatId && m.role === 'assistant',
+      )
+
+      const userMsg = messages[userIndex]
+      const userContent = userMsg.content
+
+      // Remove old assistant from storage; we will stream a fresh one in place.
+      await kvDel(getChatDataKey(chatId, 'assistant'))
+
+      // Update UI state: keep history, but reset/insert assistant slot.
+      setMessages((prev) => {
+        const next = [...prev]
+        if (assistantIndex >= 0) {
+          next[assistantIndex] = {
+            chatID: chatId,
+            role: 'assistant',
+            content: '',
+            model: config.selected_model,
+            timestamp: Date.now(),
+          }
+        } else {
+          next.splice(userIndex + 1, 0, {
+            chatID: chatId,
+            role: 'assistant',
+            content: '',
+            model: config.selected_model,
+            timestamp: Date.now(),
+          })
+        }
+        return next
+      })
+
+      // Build context up to this turn (respect n_contexts window)
+      const priorMessages = messages.slice(0, userIndex)
+      const contextMessages = priorMessages.slice(-config.n_contexts * 2)
+
+      const apiMessages: ApiChatMessage[] = []
+      if (config.system_prompt) {
+        apiMessages.push({ role: 'system', content: config.system_prompt })
+      }
+      for (const msg of contextMessages) {
+        apiMessages.push({ role: msg.role, content: msg.content })
+      }
+      apiMessages.push({ role: 'user', content: userContent })
+
+      // Stream assistant reply into existing slot
+      setIsLoading(true)
+      currentChatIdRef.current = chatId
+
+      let fullContent = ''
+      let fullReasoning = ''
+      const toolEventLog: string[] = []
+      let fullAnnotations: Annotation[] = []
+      const toolCallAccumulator = new Map<string, ToolCallDelta>()
+      const finishReasonRef = { current: null as string | null }
+
+      const updateReasoning = (thinkingChunk?: string) => {
+        const combined = [
+          ...toolEventLog,
+          thinkingChunk ? thinkingChunk : fullReasoning,
+        ]
+          .filter(Boolean)
+          .join('\n')
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.chatID === chatId && m.role === 'assistant'
+              ? { ...m, reasoningContent: combined }
+              : m,
+          ),
+        )
+      }
+
+      const appendToolEvent = (line: string) => {
+        if (!line) return
+        toolEventLog.push(line)
+        updateReasoning()
+      }
+
+      const accumulateToolCalls = (deltas: ToolCallDelta[]) => {
+        deltas.forEach((delta) => {
+          const id = delta.id || `tool_${toolCallAccumulator.size + 1}`
+          const existing = toolCallAccumulator.get(id) || {
+            id,
+            type: delta.type || 'function',
+            function: { name: '', arguments: '' },
+          }
+
+          if (!existing.function) {
+            existing.function = { name: '', arguments: '' }
+          }
+
+          if (delta.function?.name) {
+            existing.function.name = delta.function.name
+          }
+          if (delta.function?.arguments) {
+            existing.function.arguments =
+              (existing.function.arguments || '') + delta.function.arguments
+          }
+
+          existing.type = delta.type || existing.type
+          toolCallAccumulator.set(id, existing)
+
+          if (existing.function?.name) {
+            appendToolEvent(`Upstream tool_call: ${existing.function.name}`)
+          }
+          if (delta.function?.arguments) {
+            appendToolEvent(`args: ${delta.function.arguments}`)
+          }
+        })
+      }
+
+      const resolveServerForTool = (toolName: string) => {
+        if (!toolName) return null
+        const servers = config.mcp_servers || []
+        return (
+          servers.find((server) => {
+            if (!server.enabled) return false
+            if (
+              server.enabled_tool_names &&
+              server.enabled_tool_names.length > 0
+            ) {
+              if (!server.enabled_tool_names.includes(toolName)) {
+                return false
+              }
+            }
+            if (!server.tools || server.tools.length === 0) {
+              return true
+            }
+            return server.tools.some((tool: any) => tool?.name === toolName)
+          }) || null
+        )
+      }
+
+      const buildToolContinuationMessages = async (
+        baseMessages: ApiChatMessage[],
+        toolCalls: ToolCallDelta[],
+      ): Promise<ApiChatMessage[]> => {
+        const assistantToolCalls = toolCalls.map((call) => ({
+          id: call.id || crypto.randomUUID(),
+          type: 'function' as const,
+          function: {
+            name: call.function?.name || '',
+            arguments: call.function?.arguments || '',
+          },
+        }))
+
+        const toolMessages: ApiChatMessage[] = []
+
+        for (const call of assistantToolCalls) {
+          const toolName = call.function.name
+          if (!toolName) {
+            toolMessages.push({
+              role: 'tool',
+              content: 'Tool name missing in call.',
+              tool_call_id: call.id,
+            })
+            continue
+          }
+
+          const server = resolveServerForTool(toolName)
+          if (!server) {
+            toolMessages.push({
+              role: 'tool',
+              content: `Tool ${toolName} is not enabled in this session.`,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+            continue
+          }
+
+          try {
+            const output = await callMCPTool(
+              server,
+              toolName,
+              call.function.arguments,
+            )
+            appendToolEvent(`tool ok: ${toolName}`)
+            toolMessages.push({
+              role: 'tool',
+              content: output,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            appendToolEvent(`tool error: ${toolName}: ${message}`)
+            toolMessages.push({
+              role: 'tool',
+              content: `Tool ${toolName} failed: ${message}`,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+          }
+        }
+
+        return baseMessages.concat(
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: assistantToolCalls,
+          },
+          ...toolMessages,
+        )
+      }
+
+      const runStream = async (payload: ApiChatMessage[]) => {
+        finishReasonRef.current = null
+        toolCallAccumulator.clear()
+
+        const safeMaxTokens = normalizePositiveInteger(
+          config.max_tokens,
+          DefaultSessionConfig.max_tokens,
+        )
+
+        await new Promise<void>((resolve, reject) => {
+          abortControllerRef.current = sendStreamingChatRequest(
+            {
+              model: config.selected_model,
+              messages: payload,
+              max_tokens: safeMaxTokens,
+              temperature: config.temperature,
+              presence_penalty: config.presence_penalty,
+              frequency_penalty: config.frequency_penalty,
+              stream: true,
+              enable_mcp: config.chat_switch.enable_mcp,
+              mcp_servers: config.mcp_servers
+                ?.filter((s: { enabled: boolean }) => s.enabled)
+                .map((s: { name: string; url: string; api_key?: string }) => ({
+                  name: s.name,
+                  url: s.url,
+                  api_key: s.api_key,
+                })),
+              laisky_extra: {
+                chat_switch: {
+                  disable_https_crawler:
+                    config.chat_switch.disable_https_crawler,
+                  all_in_one: config.chat_switch.all_in_one,
+                },
+              },
+            },
+            config.api_token,
+            {
+              onContent: (chunk) => {
+                fullContent += chunk
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? { ...m, content: fullContent }
+                      : m,
+                  ),
+                )
+              },
+              onReasoning: (chunk) => {
+                fullReasoning += chunk
+                updateReasoning(fullReasoning)
+              },
+              onAnnotations: (annotations) => {
+                fullAnnotations = annotations
+                const references = extractReferencesFromAnnotations(annotations)
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? { ...m, annotations, references }
+                      : m,
+                  ),
+                )
+              },
+              onToolCallDelta: accumulateToolCalls,
+              onFinish: (reason) => {
+                finishReasonRef.current = reason ?? null
+              },
+              onDone: resolve,
+              onError: (err) => {
+                reject(err)
+              },
+            },
+            config.api_base !== 'https://api.openai.com'
+              ? config.api_base
+              : undefined,
+          )
+          currentChatIdRef.current = chatId
+        })
+
+        return finishReasonRef.current
+      }
+
+      try {
+        let payload = apiMessages
+        while (true) {
+          const finishReason = await runStream(payload)
+          if (finishReason === 'tool_calls') {
+            if (!config.chat_switch.enable_mcp) {
+              throw new Error(
+                'Model requested MCP tools but they are disabled for this session.',
+              )
+            }
+            if (toolCallAccumulator.size === 0) {
+              throw new Error(
+                'Model requested tool calls but none were parsed.',
+              )
+            }
+            const toolCalls = Array.from(toolCallAccumulator.values())
+            payload = await buildToolContinuationMessages(payload, toolCalls)
+            continue
+          }
+          break
+        }
+
+        const finalMessage: ChatMessageData = {
+          chatID: chatId,
+          role: 'assistant',
+          content: fullContent,
+          model: config.selected_model,
+          reasoningContent:
+            [...toolEventLog, fullReasoning].filter(Boolean).join('\n') ||
+            undefined,
+          annotations: fullAnnotations,
+          references: extractReferencesFromAnnotations(fullAnnotations),
+          timestamp: Date.now(),
+        }
+        await saveMessage(finalMessage)
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // User aborted generation; no error UI.
+        } else {
+          const message = error instanceof Error ? error.message : String(error)
+          setError(message)
+        }
+      } finally {
+        setIsLoading(false)
+        abortControllerRef.current = null
+        currentChatIdRef.current = null
+      }
     },
-    [deleteMessage, messages, sendMessage],
+    [config, messages, saveMessage],
+  )
+
+  /**
+   * Edit a message and retry in place without dropping later turns.
+   * 1) Update the target user message content.
+   * 2) Remove only the paired assistant response.
+   * 3) Stream a new assistant reply at the same position.
+   * Later messages remain visible so the conversation is not cleared.
+   */
+  const editAndRetry = useCallback(
+    async (chatId: string, newContent: string) => {
+      const trimmed = newContent.trim()
+      if (!trimmed) {
+        return
+      }
+
+      const userIndex = messages.findIndex(
+        (m) => m.chatID === chatId && m.role === 'user',
+      )
+      if (userIndex === -1) {
+        return
+      }
+
+      const assistantIndex = messages.findIndex(
+        (m) => m.chatID === chatId && m.role === 'assistant',
+      )
+
+      const updatedUser: ChatMessageData = {
+        ...messages[userIndex],
+        content: trimmed,
+        timestamp: Date.now(),
+      }
+
+      // Persist updated user message
+      await saveMessage(updatedUser)
+
+      // Remove old assistant from storage (will be replaced by streaming one)
+      await kvDel(getChatDataKey(chatId, 'assistant'))
+
+      // Prepare state updates: keep all messages, update user, reset/insert assistant
+      setMessages((prev) => {
+        const next = [...prev]
+        next[userIndex] = updatedUser
+
+        if (assistantIndex >= 0) {
+          next[assistantIndex] = {
+            chatID: chatId,
+            role: 'assistant',
+            content: '',
+            model: config.selected_model,
+            timestamp: Date.now(),
+          }
+        } else {
+          next.splice(userIndex + 1, 0, {
+            chatID: chatId,
+            role: 'assistant',
+            content: '',
+            model: config.selected_model,
+            timestamp: Date.now(),
+          })
+        }
+
+        return next
+      })
+
+      // Build payload using context before the edited turn (respect n_contexts window)
+      const priorMessages = messages.slice(0, userIndex)
+      const contextMessages = priorMessages.slice(-config.n_contexts * 2)
+
+      const apiMessages: ApiChatMessage[] = []
+      if (config.system_prompt) {
+        apiMessages.push({ role: 'system', content: config.system_prompt })
+      }
+      for (const msg of contextMessages) {
+        apiMessages.push({ role: msg.role, content: msg.content })
+      }
+      apiMessages.push({ role: 'user', content: trimmed })
+
+      // Stream the assistant reply into the existing assistant slot
+      setIsLoading(true)
+
+      let fullContent = ''
+      let fullReasoning = ''
+      const toolEventLog: string[] = []
+      let fullAnnotations: Annotation[] = []
+      const toolCallAccumulator = new Map<string, ToolCallDelta>()
+      const finishReasonRef = { current: null as string | null }
+
+      const updateReasoning = (thinkingChunk?: string) => {
+        const combined = [
+          ...toolEventLog,
+          thinkingChunk ? thinkingChunk : fullReasoning,
+        ]
+          .filter(Boolean)
+          .join('\n')
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.chatID === chatId && m.role === 'assistant'
+              ? { ...m, reasoningContent: combined }
+              : m,
+          ),
+        )
+      }
+
+      const appendToolEvent = (line: string) => {
+        if (!line) return
+        toolEventLog.push(line)
+        updateReasoning()
+      }
+
+      const accumulateToolCalls = (deltas: ToolCallDelta[]) => {
+        deltas.forEach((delta) => {
+          const id = delta.id || `tool_${toolCallAccumulator.size + 1}`
+          const existing = toolCallAccumulator.get(id) || {
+            id,
+            type: delta.type || 'function',
+            function: { name: '', arguments: '' },
+          }
+
+          if (!existing.function) {
+            existing.function = { name: '', arguments: '' }
+          }
+
+          if (delta.function?.name) {
+            existing.function.name = delta.function.name
+          }
+          if (delta.function?.arguments) {
+            existing.function.arguments =
+              (existing.function.arguments || '') + delta.function.arguments
+          }
+
+          existing.type = delta.type || existing.type
+          toolCallAccumulator.set(id, existing)
+
+          if (existing.function?.name) {
+            appendToolEvent(`Upstream tool_call: ${existing.function.name}`)
+          }
+          if (delta.function?.arguments) {
+            appendToolEvent(`args: ${delta.function.arguments}`)
+          }
+        })
+      }
+
+      const resolveServerForTool = (toolName: string) => {
+        if (!toolName) return null
+        const servers = config.mcp_servers || []
+        return (
+          servers.find((server) => {
+            if (!server.enabled) return false
+            if (
+              server.enabled_tool_names &&
+              server.enabled_tool_names.length > 0
+            ) {
+              if (!server.enabled_tool_names.includes(toolName)) {
+                return false
+              }
+            }
+            if (!server.tools || server.tools.length === 0) {
+              return true
+            }
+            return server.tools.some((tool: any) => tool?.name === toolName)
+          }) || null
+        )
+      }
+
+      const buildToolContinuationMessages = async (
+        baseMessages: ApiChatMessage[],
+        toolCalls: ToolCallDelta[],
+      ): Promise<ApiChatMessage[]> => {
+        const assistantToolCalls = toolCalls.map((call) => ({
+          id: call.id || crypto.randomUUID(),
+          type: 'function' as const,
+          function: {
+            name: call.function?.name || '',
+            arguments: call.function?.arguments || '',
+          },
+        }))
+
+        const toolMessages: ApiChatMessage[] = []
+
+        for (const call of assistantToolCalls) {
+          const toolName = call.function.name
+          if (!toolName) {
+            toolMessages.push({
+              role: 'tool',
+              content: 'Tool name missing in call.',
+              tool_call_id: call.id,
+            })
+            continue
+          }
+
+          const server = resolveServerForTool(toolName)
+          if (!server) {
+            toolMessages.push({
+              role: 'tool',
+              content: `Tool ${toolName} is not enabled in this session.`,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+            continue
+          }
+
+          try {
+            const output = await callMCPTool(
+              server,
+              toolName,
+              call.function.arguments,
+            )
+            appendToolEvent(`tool ok: ${toolName}`)
+            toolMessages.push({
+              role: 'tool',
+              content: output,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            appendToolEvent(`tool error: ${toolName}: ${message}`)
+            toolMessages.push({
+              role: 'tool',
+              content: `Tool ${toolName} failed: ${message}`,
+              tool_call_id: call.id,
+              name: toolName,
+            })
+          }
+        }
+
+        return baseMessages.concat(
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: assistantToolCalls,
+          },
+          ...toolMessages,
+        )
+      }
+
+      const runStream = async (payload: ApiChatMessage[]) => {
+        finishReasonRef.current = null
+        toolCallAccumulator.clear()
+
+        const safeMaxTokens = normalizePositiveInteger(
+          config.max_tokens,
+          DefaultSessionConfig.max_tokens,
+        )
+
+        await new Promise<void>((resolve, reject) => {
+          abortControllerRef.current = sendStreamingChatRequest(
+            {
+              model: config.selected_model,
+              messages: payload,
+              max_tokens: safeMaxTokens,
+              temperature: config.temperature,
+              presence_penalty: config.presence_penalty,
+              frequency_penalty: config.frequency_penalty,
+              stream: true,
+              enable_mcp: config.chat_switch.enable_mcp,
+              mcp_servers: config.mcp_servers
+                ?.filter((s: { enabled: boolean }) => s.enabled)
+                .map((s: { name: string; url: string; api_key?: string }) => ({
+                  name: s.name,
+                  url: s.url,
+                  api_key: s.api_key,
+                })),
+              laisky_extra: {
+                chat_switch: {
+                  disable_https_crawler:
+                    config.chat_switch.disable_https_crawler,
+                  all_in_one: config.chat_switch.all_in_one,
+                },
+              },
+            },
+            config.api_token,
+            {
+              onContent: (chunk) => {
+                fullContent += chunk
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? { ...m, content: fullContent }
+                      : m,
+                  ),
+                )
+              },
+              onReasoning: (chunk) => {
+                fullReasoning += chunk
+                updateReasoning(fullReasoning)
+              },
+              onAnnotations: (annotations) => {
+                fullAnnotations = annotations
+                const references = extractReferencesFromAnnotations(annotations)
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? { ...m, annotations, references }
+                      : m,
+                  ),
+                )
+              },
+              onToolCallDelta: accumulateToolCalls,
+              onFinish: (reason) => {
+                finishReasonRef.current = reason ?? null
+              },
+              onDone: resolve,
+              onError: (err) => {
+                reject(err)
+              },
+            },
+            config.api_base !== 'https://api.openai.com'
+              ? config.api_base
+              : undefined,
+          )
+          currentChatIdRef.current = chatId
+        })
+
+        return finishReasonRef.current
+      }
+
+      try {
+        let payload = apiMessages
+        while (true) {
+          const finishReason = await runStream(payload)
+          if (finishReason === 'tool_calls') {
+            if (!config.chat_switch.enable_mcp) {
+              throw new Error(
+                'Model requested MCP tools but they are disabled for this session.',
+              )
+            }
+            if (toolCallAccumulator.size === 0) {
+              throw new Error(
+                'Model requested tool calls but none were parsed.',
+              )
+            }
+            const toolCalls = Array.from(toolCallAccumulator.values())
+            payload = await buildToolContinuationMessages(payload, toolCalls)
+            continue
+          }
+          break
+        }
+
+        const finalMessage: ChatMessageData = {
+          chatID: chatId,
+          role: 'assistant',
+          content: fullContent,
+          model: config.selected_model,
+          reasoningContent:
+            [...toolEventLog, fullReasoning].filter(Boolean).join('\n') ||
+            undefined,
+          annotations: fullAnnotations,
+          references: extractReferencesFromAnnotations(fullAnnotations),
+          timestamp: Date.now(),
+        }
+        await saveMessage(finalMessage)
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // User aborted generation; no error UI.
+        } else {
+          const message = error instanceof Error ? error.message : String(error)
+          setError(message)
+        }
+      } finally {
+        setIsLoading(false)
+        abortControllerRef.current = null
+        currentChatIdRef.current = null
+      }
+    },
+    [config, messages, saveMessage],
   )
 
   return {
@@ -919,5 +1621,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     deleteMessage,
     loadMessages,
     regenerateMessage,
+    editAndRetry,
   }
 }

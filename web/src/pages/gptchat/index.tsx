@@ -2,7 +2,7 @@
  * GPTChat page - main chat interface.
  */
 import { ArrowDown, Settings } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,7 @@ export function GPTChatPage() {
     deleteMessage,
     loadMessages,
     regenerateMessage,
+    editAndRetry,
   } = useChat({ sessionId, config })
 
   const [configOpen, setConfigOpen] = useState(false)
@@ -75,6 +76,10 @@ export function GPTChatPage() {
     | undefined
   >(undefined)
   const [sessionDrafts, setSessionDrafts] = useState<Record<number, string>>({})
+  const [editingMessage, setEditingMessage] = useState<{
+    chatId: string
+    content: string
+  } | null>(null)
 
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
@@ -120,9 +125,27 @@ export function GPTChatPage() {
     }
   }, [])
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const isNearBottom = useCallback((container?: HTMLElement | null) => {
+    const el = container ?? messagesContainerRef.current
+    if (!el) return true
+    const { scrollTop, scrollHeight, clientHeight } = el
+    return scrollHeight - scrollTop - clientHeight < 120
   }, [])
+
+  // Track whether we should keep auto-following the bottom during streaming
+  const autoScrollRef = useRef(true)
+  const suppressAutoScrollOnceRef = useRef(false)
+
+  const scrollToBottom = useCallback(
+    (options?: { force?: boolean }) => {
+      const container = messagesContainerRef.current
+      if (!options?.force && !isNearBottom(container)) {
+        return
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    },
+    [isNearBottom],
+  )
 
   const scrollToTop = useCallback(() => {
     const container = messagesContainerRef.current
@@ -178,10 +201,16 @@ export function GPTChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configLoading]) // Only run when loading finishes
 
-  // Auto-scroll on new messages
+  // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
+    if (suppressAutoScrollOnceRef.current) {
+      suppressAutoScrollOnceRef.current = false
+      return
+    }
+    if (autoScrollRef.current || isNearBottom()) {
+      scrollToBottom({ force: true })
+    }
+  }, [messages, scrollToBottom, isNearBottom])
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -203,9 +232,14 @@ export function GPTChatPage() {
     if (!container) return
 
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
-      setShowScrollButton(!isNearBottom)
+      const near = isNearBottom(container)
+      setShowScrollButton(!near)
+      // Disable auto-follow as soon as user scrolls away
+      if (!near) {
+        autoScrollRef.current = false
+      } else {
+        autoScrollRef.current = true
+      }
     }
 
     container.addEventListener('scroll', handleScroll)
@@ -330,13 +364,44 @@ export function GPTChatPage() {
     await updateConfig(DefaultSessionConfig)
   }, [updateConfig])
 
+  const handleSend = useCallback(
+    async (content: string, files?: File[]) => {
+      autoScrollRef.current = true
+      await sendMessage(content, files)
+      requestAnimationFrame(() => scrollToBottom({ force: true }))
+    },
+    [scrollToBottom, sendMessage],
+  )
+
+  const handleRegenerate = useCallback(
+    async (chatId: string) => {
+      // Do not auto-scroll on regenerate; keep viewport stable.
+      autoScrollRef.current = false
+      suppressAutoScrollOnceRef.current = true
+      await regenerateMessage(chatId)
+    },
+    [regenerateMessage],
+  )
+
   const handleEditResend = useCallback(
     (payload: { chatId: string; content: string }) => {
-      setPrefillDraft({ id: payload.chatId, text: payload.content })
-      // Scroll to bottom so the input is visible for edit
-      requestAnimationFrame(scrollToBottom)
+      setEditingMessage({
+        chatId: payload.chatId,
+        content: payload.content,
+      })
     },
-    [scrollToBottom],
+    [],
+  )
+
+  const handleConfirmEdit = useCallback(
+    async (newContent: string) => {
+      if (!editingMessage) return
+      setEditingMessage(null)
+      autoScrollRef.current = true
+      await editAndRetry(editingMessage.chatId, newContent)
+      requestAnimationFrame(() => scrollToBottom({ force: true }))
+    },
+    [editAndRetry, editingMessage, scrollToBottom],
   )
 
   const handleClearChats = useCallback(async () => {
@@ -503,7 +568,7 @@ export function GPTChatPage() {
                   key={`${msg.chatID}-${msg.role}`}
                   message={msg}
                   onDelete={deleteMessage}
-                  onRegenerate={regenerateMessage}
+                  onRegenerate={handleRegenerate}
                   onEditResend={handleEditResend}
                   pairedUserMessage={userMessageByChatId.get(msg.chatID)}
                   isStreaming={
@@ -521,7 +586,7 @@ export function GPTChatPage() {
 
           {/* Scroll to bottom button */}
           <button
-            onClick={scrollToBottom}
+            onClick={() => scrollToBottom({ force: true })}
             className={cn(
               'fixed bottom-32 right-6 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur transition-all hover:bg-black/85 dark:bg-white/70 dark:text-black dark:hover:bg-white/85',
               showScrollButton
@@ -541,7 +606,7 @@ export function GPTChatPage() {
         style={{ paddingLeft: SESSION_DOCK_WIDTH }}
       >
         <ChatInput
-          onSend={sendMessage}
+          onSend={handleSend}
           onStop={stopGeneration}
           isLoading={chatLoading}
           disabled={!config.api_token}
@@ -602,6 +667,87 @@ export function GPTChatPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Message Modal */}
+      {editingMessage && (
+        <EditMessageModal
+          content={editingMessage.content}
+          onClose={() => setEditingMessage(null)}
+          onConfirm={handleConfirmEdit}
+        />
+      )}
+    </div>
+  )
+}
+
+interface EditMessageModalProps {
+  content: string
+  onClose: () => void
+  onConfirm: (newContent: string) => void
+}
+
+function EditMessageModal({
+  content,
+  onClose,
+  onConfirm,
+}: EditMessageModalProps) {
+  const [editedContent, setEditedContent] = useState(content)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    textareaRef.current?.focus()
+    textareaRef.current?.select()
+  }, [])
+
+  const handleSubmit = useCallback(() => {
+    if (editedContent.trim()) {
+      onConfirm(editedContent)
+    }
+  }, [editedContent, onConfirm])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        handleSubmit()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    },
+    [handleSubmit, onClose],
+  )
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="mx-4 w-full max-w-2xl rounded-lg bg-white p-6 shadow-2xl dark:bg-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 text-lg font-semibold">Edit Message</h3>
+        <textarea
+          ref={textareaRef}
+          value={editedContent}
+          onChange={(e) => setEditedContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-full rounded border border-black/10 bg-white p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-800"
+          rows={10}
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!editedContent.trim()}>
+            Retry with Edited Message
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-black/50 dark:text-white/50">
+          Ctrl+Enter to submit • Esc to cancel
+        </p>
+      </div>
     </div>
   )
 }
