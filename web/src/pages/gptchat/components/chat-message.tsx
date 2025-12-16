@@ -195,186 +195,193 @@ export function ChatMessage({
   return (
     <div
       className={cn(
-        'group flex w-full gap-3 sm:gap-4',
-        isUser ? 'flex-row-reverse' : 'flex-row',
+        'w-full',
+        isUser ? 'flex justify-end' : 'flex justify-start',
       )}
     >
-      {/* Avatar */}
-      <div
+      <Card
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
+          'group w-full max-w-full border p-2.5 shadow-sm transition-all md:max-w-[860px] sm:p-3',
           isUser
-            ? 'bg-blue-500 text-white'
-            : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
+            ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-slate-900 shadow-blue-200/50'
+            : 'bg-white text-slate-900 shadow-black/5 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white',
+          isStreaming && 'animate-pulse',
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-      </div>
-
-      {/* Message content */}
-      <div
-        className={cn(
-          'flex w-full max-w-full flex-col gap-1 md:max-w-[820px]',
-          isUser && 'items-end',
-        )}
-      >
-        {/* Model badge for assistant */}
-        {isAssistant && message.model && (
-          <Badge variant="secondary" className="w-fit text-[11px] sm:text-xs">
-            {message.model}
-          </Badge>
-        )}
-
-        {/* Reasoning content (for models like o1, deepseek-reasoner) */}
-        {isAssistant && message.reasoningContent && (
-          <ReasoningBlock content={message.reasoningContent} />
-        )}
-
-        {/* Main content */}
-        <Card
-          className={cn(
-            'relative w-full overflow-hidden rounded-2xl border p-3 shadow-sm transition-all sm:p-4',
-            isUser
-              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-blue-500/20'
-              : 'bg-white/95 text-slate-900 shadow-black/5 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white',
-            isStreaming && 'animate-pulse',
-          )}
-        >
-          {isUser ? (
-            <pre className="whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base">
-              {message.content}
-            </pre>
-          ) : message.content ? (
-            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
-              {message.content}
-            </Markdown>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
-              <div
-                className="h-2 w-2 animate-bounce rounded-full bg-current"
-                style={{ animationDelay: '0.1s' }}
-              />
-              <div
-                className="h-2 w-2 animate-bounce rounded-full bg-current"
-                style={{ animationDelay: '0.2s' }}
-              />
-            </div>
-          )}
-
-          {/* Action buttons */}
+        <div className="flex items-center gap-2">
           <div
             className={cn(
-              'mt-3 flex flex-wrap gap-2 text-xs md:absolute md:-bottom-8 md:mt-0 md:gap-1 md:opacity-0 md:transition-opacity md:group-hover:opacity-100',
-              isUser ? 'justify-end md:right-0' : 'justify-start md:left-0',
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs sm:h-7 sm:w-7',
+              isUser
+                ? 'bg-blue-500 text-white'
+                : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
             )}
           >
-            {canEditMessage && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleEditClick}
-                className="h-7 px-2 sm:h-6"
-                title="Edit & resend"
-              >
-                <Edit2 className="h-3 w-3" />
-              </Button>
-            )}
-            {isAssistant && onRegenerate && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRegenerate}
-                className="h-7 px-2 sm:h-6"
-                disabled={actionDisabled}
-                title="Regenerate response"
-              >
-                <RotateCcw className="h-3 w-3" />
-              </Button>
-            )}
-            {showSpeechButton && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleSpeech}
-                className="h-7 px-2 sm:h-6"
-                title={isSpeaking ? 'Stop narration' : 'Play narration'}
-              >
-                {isSpeaking ? (
-                  <VolumeX className="h-3 w-3" />
-                ) : (
-                  <Volume2 className="h-3 w-3" />
-                )}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopy}
-              className="h-7 px-2 sm:h-6"
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-green-500" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-            </Button>
-            {onDelete && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDelete}
-                className="h-7 px-2 text-red-500 hover:text-red-600 sm:h-6"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+            {isUser ? (
+              <User className="h-4 w-4" />
+            ) : (
+              <Bot className="h-4 w-4" />
             )}
           </div>
-        </Card>
 
-        {isAssistant && message.references && message.references.length > 0 && (
-          <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-black/5 sm:p-3 dark:sm:bg-white/5">
-            <p className="font-semibold text-black/60 dark:text-white/60">
-              References
-            </p>
-            <ol className="mt-2 space-y-1">
-              {message.references.map((ref) => (
-                <li key={ref.index} className="flex items-start gap-2">
-                  <span className="text-black/50 dark:text-white/50">
-                    [{ref.index}]
-                  </span>
-                  <a
-                    href={ref.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 truncate text-blue-600 hover:underline dark:text-blue-300"
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span
+                className={cn(
+                  'font-semibold',
+                  isUser ? 'text-white' : 'text-black/80 dark:text-white',
+                )}
+              >
+                {isUser ? 'You' : 'Assistant'}
+              </span>
+              {isAssistant && message.model && (
+                <Badge
+                  variant="secondary"
+                  className="h-6 rounded-full px-2 text-[11px]"
+                >
+                  {message.model}
+                </Badge>
+              )}
+              {message.timestamp && (
+                <span className="text-[11px] text-black/50 dark:text-white/50">
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </span>
+              )}
+
+              <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px]">
+                {canEditMessage && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditClick}
+                    className="h-7 w-7 rounded-md p-0"
+                    title="Edit & resend"
                   >
-                    {ref.title || ref.url}
-                  </a>
-                  <button
-                    className="text-black/40 transition hover:text-black dark:text-white/40 dark:hover:text-white"
-                    onClick={() => handleCopyReference(ref.url, ref.index)}
-                    title="Copy reference URL"
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {isAssistant && onRegenerate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    className="h-7 w-7 rounded-md p-0"
+                    disabled={actionDisabled}
+                    title="Regenerate response"
                   >
-                    {copiedCitation === ref.index ? (
-                      <Check className="h-3 w-3 text-green-500" />
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {showSpeechButton && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleToggleSpeech}
+                    className="h-7 w-7 rounded-md p-0"
+                    title={isSpeaking ? 'Stop narration' : 'Play narration'}
+                  >
+                    {isSpeaking ? (
+                      <VolumeX className="h-3.5 w-3.5" />
                     ) : (
-                      <Copy className="h-3 w-3" />
+                      <Volume2 className="h-3.5 w-3.5" />
                     )}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        )}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 w-7 rounded-md p-0"
+                  title="Copy message"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    className="h-7 w-7 rounded-md p-0 text-red-500 hover:text-red-600"
+                    title="Delete message"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
 
-        {/* Timestamp */}
-        {message.timestamp && (
-          <span className="text-xs text-black/40 dark:text-white/40">
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </span>
-        )}
-      </div>
+            {isAssistant && message.reasoningContent && (
+              <ReasoningBlock content={message.reasoningContent} />
+            )}
+
+            {isUser ? (
+              <pre className="whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base">
+                {message.content}
+              </pre>
+            ) : message.content ? (
+              <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
+                {message.content}
+              </Markdown>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
+                <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+                <div
+                  className="h-2 w-2 animate-bounce rounded-full bg-current"
+                  style={{ animationDelay: '0.1s' }}
+                />
+                <div
+                  className="h-2 w-2 animate-bounce rounded-full bg-current"
+                  style={{ animationDelay: '0.2s' }}
+                />
+              </div>
+            )}
+
+            {isAssistant &&
+              message.references &&
+              message.references.length > 0 && (
+                <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-black/5 sm:p-3 dark:sm:bg-white/5">
+                  <p className="font-semibold text-black/60 dark:text-white/60">
+                    References
+                  </p>
+                  <ol className="mt-2 space-y-1">
+                    {message.references.map((ref) => (
+                      <li key={ref.index} className="flex items-start gap-2">
+                        <span className="text-black/50 dark:text-white/50">
+                          [{ref.index}]
+                        </span>
+                        <a
+                          href={ref.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 truncate text-blue-600 hover:underline dark:text-blue-300"
+                        >
+                          {ref.title || ref.url}
+                        </a>
+                        <button
+                          className="text-black/40 transition hover:text-black dark:text-white/40 dark:hover:text-white"
+                          onClick={() =>
+                            handleCopyReference(ref.url, ref.index)
+                          }
+                          title="Copy reference URL"
+                        >
+                          {copiedCitation === ref.index ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </Card>
+              )}
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }

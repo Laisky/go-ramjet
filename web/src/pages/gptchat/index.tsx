@@ -551,7 +551,7 @@ export function GPTChatPage() {
 
         <div
           ref={messagesContainerRef}
-          className="relative h-full overflow-y-auto overflow-x-hidden px-2 pb-[180px] pt-3 sm:px-4 sm:pb-[220px] sm:pt-4 md:px-6"
+          className="relative h-full overflow-y-auto overflow-x-hidden px-1 pb-[160px] pt-3 sm:px-3 sm:pb-[200px] sm:pt-4 md:px-6"
         >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -563,7 +563,7 @@ export function GPTChatPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6 pb-4">
+            <div className="space-y-4 pb-3 sm:space-y-5 sm:pb-4">
               {messages.length > displayedMessages.length && (
                 <div className="flex justify-center">
                   <Button variant="ghost" size="sm" onClick={handleLoadOlder}>
@@ -609,7 +609,7 @@ export function GPTChatPage() {
       </div>
 
       {/* Input (fixed bottom) */}
-      <div className="fixed left-0 right-0 bottom-0 z-30 border-t theme-border theme-glass px-2 py-2 shadow-md sm:px-4 sm:py-3 md:pl-14">
+      <div className="fixed left-0 right-0 bottom-0 z-30 border-t theme-border bg-white px-2 py-2 shadow-md dark:bg-slate-950 sm:px-4 sm:py-3 md:pl-14">
         <ChatInput
           onSend={handleSend}
           onStop={stopGeneration}

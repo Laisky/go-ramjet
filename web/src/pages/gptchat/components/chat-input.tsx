@@ -473,9 +473,13 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={placeholder}
               disabled={disabled || isLoading || isTranscribing}
-              className="min-h-[56px] w-full resize-none rounded-2xl border border-black/10 bg-white/90 pr-12 shadow-sm ring-1 ring-black/5 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900/80 dark:ring-white/10"
+              className="min-h-[52px] w-full resize-none rounded-xl border border-black/10 bg-white pr-24 shadow-sm ring-1 ring-black/5 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:ring-white/10"
               rows={2}
             />
+
+            <span className="pointer-events-none absolute bottom-2 right-12 text-[11px] text-black/40 dark:text-white/40">
+              Ctrl+Enter
+            </span>
 
             {/* File attachment button */}
             <input
@@ -491,7 +495,7 @@ export function ChatInput({
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled || isLoading}
-              className="absolute bottom-2 right-2 h-8 w-8 rounded-xl p-0 text-slate-600 shadow-sm hover:text-slate-900 dark:text-white"
+              className="absolute bottom-2 right-2 h-9 w-9 rounded-lg p-0 text-slate-600 shadow-sm hover:text-slate-900 dark:text-white"
             >
               <Paperclip className="h-4 w-4" />
             </Button>
@@ -520,7 +524,7 @@ export function ChatInput({
               <Button
                 onClick={onStop}
                 variant="destructive"
-                className="h-[56px] rounded-xl px-4 text-sm font-semibold shadow-sm"
+                className="h-12 rounded-lg px-4 text-sm font-semibold shadow-sm"
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -528,7 +532,7 @@ export function ChatInput({
               <Button
                 onClick={handleSend}
                 disabled={!message.trim() || disabled || isTranscribing}
-                className="h-[56px] rounded-xl px-5 text-sm font-semibold shadow-sm"
+                className="h-12 rounded-lg px-4 text-sm font-semibold shadow-sm"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -570,13 +574,12 @@ export function ChatInput({
             title="Enable voice mode"
           />
 
-          <div className="ml-auto flex gap-3 text-black/40 dark:text-white/40">
+          <div className="ml-auto flex items-center gap-2 text-[11px] text-black/50 dark:text-white/50">
             {isTranscribing && !isRecording && (
               <span className="text-blue-500 dark:text-blue-300">
                 Transcribing audio…
               </span>
             )}
-            <span>Ctrl+Enter to send</span>
           </div>
         </div>
       </div>
