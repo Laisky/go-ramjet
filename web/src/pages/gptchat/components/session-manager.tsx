@@ -78,7 +78,7 @@ export function SessionManager({
       </div>
 
       {(isCreating || editingId !== null) && (
-        <Card className="p-2 bg-gray-50 dark:bg-gray-900 border-dashed mb-2">
+        <Card className="p-2 bg-slate-50 dark:bg-slate-900 border-dashed mb-2 dark:border-slate-700">
           <div className="flex gap-2">
             <Input
               value={newName}
@@ -129,7 +129,7 @@ export function SessionManager({
             className={`group flex items-center justify-between gap-2 rounded-md border p-2 text-sm transition-colors ${
               session.id === activeSessionId
                 ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800 border-transparent'
+                : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-transparent dark:border-transparent'
             }`}
           >
             <button
@@ -137,7 +137,7 @@ export function SessionManager({
               onClick={() => onSwitchSession(session.id)}
             >
               <MessageSquare
-                className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-blue-500' : 'text-gray-400'}`}
+                className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}`}
               />
               <span
                 className={`truncate ${session.id === activeSessionId ? 'font-medium' : ''}`}
@@ -150,7 +150,7 @@ export function SessionManager({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-gray-400 hover:text-blue-500"
+                className="h-6 w-6 p-0 text-slate-400 hover:text-blue-500 dark:text-slate-500 dark:hover:text-blue-400"
                 onClick={() => startEdit(session.id, session.name)}
               >
                 <Edit2 className="h-3 w-3" />
@@ -160,7 +160,7 @@ export function SessionManager({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-500"
+                  className="h-6 w-6 p-0 text-slate-400 hover:text-emerald-500 dark:text-slate-500 dark:hover:text-emerald-400"
                   onClick={() => onDuplicateSession(session.id)}
                 >
                   <Copy className="h-3 w-3" />
@@ -176,7 +176,7 @@ export function SessionManager({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                      className="h-6 w-6 p-0 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>

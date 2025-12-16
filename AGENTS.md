@@ -61,6 +61,8 @@ The purpose of this project is to implement a CRON job server that supports vari
 
 Each task also can handle web requests, so the project also includes a web server component.
 
+You must make sure this project buildable and runnable after any changes, with `make build` and `go vet ./...`.
+
 ### Codes
 
 All code must be written in English. Avoid using any other languages in code, comments, or documentation.

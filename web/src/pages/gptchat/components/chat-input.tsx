@@ -418,22 +418,21 @@ export function ChatInput({
   return (
     <>
       <div
-        className="space-y-2"
+        className="theme-surface theme-border rounded-2xl border p-2 shadow-sm"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {/* Attached files preview */}
         {attachedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="mb-2 flex flex-wrap gap-2">
             {attachedFiles.map((file, index) => {
               const isImage = file.type.startsWith('image/')
               return (
                 <div
                   key={`${file.name}-${index}`}
-                  className="flex items-center gap-2 rounded border border-black/10 bg-black/5 px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
+                  className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/5 px-2 py-1 text-xs shadow-sm dark:border-white/10 dark:bg-white/5"
                 >
                   <Paperclip className="h-3 w-3" />
-                  <div className="max-w-[140px] truncate">
+                  <div className="max-w-[180px] truncate">
                     <div className="truncate font-medium">{file.name}</div>
                     <div className="text-[10px] text-black/60 dark:text-white/60">
                       {formatFileSize(file.size)}
@@ -443,7 +442,7 @@ export function ChatInput({
                     <button
                       type="button"
                       onClick={() => openEditorForIndex(index)}
-                      className="flex items-center gap-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-black shadow dark:bg-black/60 dark:text-white"
+                      className="flex items-center gap-1 rounded-lg bg-white/90 px-1.5 py-0.5 text-[10px] text-black shadow-sm dark:bg-black/70 dark:text-white"
                     >
                       <Edit2 className="h-3 w-3" />
                       Edit
@@ -452,7 +451,7 @@ export function ChatInput({
                   <button
                     type="button"
                     onClick={() => removeFile(index)}
-                    className="text-red-500 hover:text-red-600"
+                    className="text-red-500 transition hover:text-red-600"
                   >
                     ×
                   </button>
@@ -462,8 +461,7 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main input area */}
-        <div className="flex items-end gap-2">
+        <div className="flex items-start gap-3">
           <div className="relative flex-1">
             <Textarea
               ref={textareaRef}
@@ -473,42 +471,22 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={placeholder}
               disabled={disabled || isLoading || isTranscribing}
-              className="min-h-[52px] w-full resize-none rounded-xl border border-black/10 bg-white pr-24 shadow-sm ring-1 ring-black/5 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:ring-white/10"
-              rows={2}
+              className="min-h-[44px] w-full resize-none rounded-2xl border-0 bg-transparent px-0 pr-16 pb-3 text-base shadow-none ring-0 focus:ring-0 dark:bg-transparent"
+              rows={1}
             />
-
-            <span className="pointer-events-none absolute bottom-2 right-12 text-[11px] text-black/40 dark:text-white/40">
-              Ctrl+Enter
+            <span className="pointer-events-none absolute bottom-1 left-0 text-[11px] text-black/40 dark:text-white/40">
+              Ctrl+Enter to send
             </span>
-
-            {/* File attachment button */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.txt,.md"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || isLoading}
-              className="absolute bottom-2 right-2 h-9 w-9 rounded-lg p-0 text-slate-600 shadow-sm hover:text-slate-900 dark:text-white"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
           </div>
 
-          <div className="flex shrink-0 flex-col gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {config.chat_switch.enable_talk && (
               <Button
                 type="button"
                 onClick={handleToggleRecording}
                 disabled={disabled || isLoading || isTranscribing}
                 variant={isRecording ? 'destructive' : 'outline'}
-                className="h-[44px] rounded-xl px-3 text-sm font-medium shadow-sm"
+                className="h-10 w-10 rounded-full p-0 shadow-sm"
               >
                 {isRecording ? (
                   <Square className="h-4 w-4" />
@@ -524,7 +502,7 @@ export function ChatInput({
               <Button
                 onClick={onStop}
                 variant="destructive"
-                className="h-12 rounded-lg px-4 text-sm font-semibold shadow-sm"
+                className="h-10 w-10 rounded-full p-0 shadow-sm"
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -532,7 +510,7 @@ export function ChatInput({
               <Button
                 onClick={handleSend}
                 disabled={!message.trim() || disabled || isTranscribing}
-                className="h-12 rounded-lg px-4 text-sm font-semibold shadow-sm"
+                className="h-10 rounded-full bg-indigo-600 px-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-200"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -540,8 +518,7 @@ export function ChatInput({
           </div>
         </div>
 
-        {/* Feature toggles */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-black/60 dark:text-white/60">
           <ToggleButton
             active={!config.chat_switch.disable_https_crawler}
             onClick={() => toggleSwitch('disable_https_crawler')}
@@ -575,9 +552,27 @@ export function ChatInput({
           />
 
           <div className="ml-auto flex items-center gap-2 text-[11px] text-black/50 dark:text-white/50">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.txt,.md"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || isLoading}
+              className="h-8 w-8 rounded-full p-0 text-slate-700 hover:bg-black/5 dark:text-white dark:hover:bg-white/10"
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             {isTranscribing && !isRecording && (
-              <span className="text-blue-500 dark:text-blue-300">
-                Transcribing audio…
+              <span className="text-indigo-600 dark:text-indigo-300">
+                Transcribing…
               </span>
             )}
           </div>
@@ -613,14 +608,14 @@ function ToggleButton({
       onClick={onClick}
       title={title}
       className={cn(
-        'flex items-center gap-1 rounded-full px-2 py-1 transition-colors',
+        'flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] transition-colors',
         active
-          ? 'bg-blue-500 text-white'
+          ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-100 dark:ring-indigo-400/30'
           : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10',
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </button>
   )
 }

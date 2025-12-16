@@ -126,7 +126,7 @@ export function ConfigSidebar({
           </div>
           <div className="space-y-2">
             <div>
-              <label className="mb-1 block text-xs text-gray-500">
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
                 Dataset Key (keeps uploads private)
               </label>
               <Input
@@ -195,7 +195,7 @@ export function ConfigSidebar({
 
           {datasets.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Datasets
               </div>
               <div className="space-y-2">
@@ -207,7 +207,7 @@ export function ConfigSidebar({
                     <div>
                       <div className="font-medium">{ds.name}</div>
                       {ds.taskStatus && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
                           {ds.taskStatus}
                           {typeof ds.progress === 'number' &&
                             ` • ${Math.round(ds.progress)}%`}
@@ -230,7 +230,7 @@ export function ConfigSidebar({
 
           {chatbots.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Chatbots
               </div>
               <div className="space-y-1">
@@ -252,7 +252,7 @@ export function ConfigSidebar({
             </div>
           )}
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Upload PDFs/office docs to build a private dataset, then pick a
             chatbot to talk with it. Processing may take a few minutes.
           </p>
@@ -466,10 +466,10 @@ export function ConfigSidebar({
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Sidebar */}
-      <div className="relative ml-auto w-full max-w-md overflow-y-auto bg-white p-4 shadow-lg dark:bg-black">
+      <div className="theme-surface relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -487,7 +487,7 @@ export function ConfigSidebar({
             onCreateSession &&
             onDeleteSession &&
             onRenameSession && (
-              <section className="space-y-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+              <section className="space-y-3 pb-4 border-b border-slate-100 dark:border-slate-800">
                 <SessionManager
                   sessions={sessions}
                   activeSessionId={activeSessionId}
@@ -516,7 +516,7 @@ export function ConfigSidebar({
               </div>
               <div className="overflow-hidden">
                 <div className="truncate font-medium">{user.user_name}</div>
-                <div className="truncate text-xs text-gray-500">
+                <div className="truncate text-xs text-slate-500 dark:text-slate-400">
                   {user.is_free ? 'Free Tier' : 'Pro User'}
                   {user.no_limit_expensive_models && ' • Unlimited'}
                 </div>
@@ -538,7 +538,7 @@ export function ConfigSidebar({
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-0 top-0 flex h-full items-center px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="absolute right-0 top-0 flex h-full items-center px-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               >
                 {showApiKey ? (
                   <EyeOff className="h-4 w-4" />
@@ -811,7 +811,7 @@ export function ConfigSidebar({
             <label className="mb-2 block text-sm font-medium">Data Sync</label>
 
             <div className="mb-2">
-              <label className="mb-1 block text-xs text-gray-500">
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
                 Sync Key
               </label>
               <div className="relative">
@@ -856,7 +856,7 @@ export function ConfigSidebar({
                 Download
               </Button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Sync your settings and chat history using this key. Keep it safe!
             </p>
           </div>

@@ -97,6 +97,10 @@ export function ChatMessage({
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
+  const userHasCode = useMemo(
+    () => /```/.test(message.content) || /`[^`]/.test(message.content),
+    [message.content],
+  )
   const supportsSpeech = useMemo(
     () =>
       typeof window !== 'undefined' &&
@@ -201,20 +205,20 @@ export function ChatMessage({
     >
       <Card
         className={cn(
-          'group w-full max-w-full border p-2.5 shadow-sm transition-all md:max-w-[860px] sm:p-3',
+          'group/message relative w-full max-w-full rounded-2xl border px-2.5 py-2 shadow-sm transition-all sm:w-fit sm:max-w-[92%] sm:px-3 sm:py-2.5 md:max-w-[880px]',
           isUser
-            ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-slate-900 shadow-blue-200/50'
-            : 'bg-white text-slate-900 shadow-black/5 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white',
+            ? 'ml-auto rounded-br-lg border-indigo-200 bg-gradient-to-r from-indigo-100 to-indigo-200 text-slate-900 dark:border-indigo-800 dark:from-indigo-900/70 dark:to-indigo-800/70 dark:text-white'
+            : 'theme-surface theme-border mr-auto rounded-bl-lg',
           isStreaming && 'animate-pulse',
         )}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2">
           <div
             className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs sm:h-7 sm:w-7',
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs',
               isUser
-                ? 'bg-blue-500 text-white'
-                : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white',
+                ? 'bg-indigo-400 text-white dark:bg-indigo-600'
+                : 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-white',
             )}
           >
             {isUser ? (
@@ -224,12 +228,14 @@ export function ChatMessage({
             )}
           </div>
 
-          <div className="flex-1 min-w-0 space-y-1">
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span
                 className={cn(
                   'font-semibold',
-                  isUser ? 'text-white' : 'text-black/80 dark:text-white',
+                  isUser
+                    ? 'text-slate-900 dark:text-white'
+                    : 'text-slate-800 dark:text-white',
                 )}
               >
                 {isUser ? 'You' : 'Assistant'}
@@ -237,7 +243,7 @@ export function ChatMessage({
               {isAssistant && message.model && (
                 <Badge
                   variant="secondary"
-                  className="h-6 rounded-full px-2 text-[11px]"
+                  className="h-6 rounded-full bg-black/5 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/70"
                 >
                   {message.model}
                 </Badge>
@@ -248,7 +254,7 @@ export function ChatMessage({
                 </span>
               )}
 
-              <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px]">
+              <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px] opacity-100 transition-opacity md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
                 {canEditMessage && (
                   <Button
                     variant="ghost"
@@ -319,7 +325,12 @@ export function ChatMessage({
             )}
 
             {isUser ? (
-              <pre className="whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base">
+              <pre
+                className={cn(
+                  'whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base',
+                  userHasCode ? 'font-mono' : 'font-sans',
+                )}
+              >
                 {message.content}
               </pre>
             ) : message.content ? (

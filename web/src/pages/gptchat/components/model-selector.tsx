@@ -70,8 +70,8 @@ export function ModelSelector({
           variant="outline"
           className={cn(
             tone === 'ghost'
-              ? 'border-transparent bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/10'
-              : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+              ? 'border-transparent bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/5'
+              : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700',
             compact
               ? 'w-auto min-w-[96px] justify-center gap-2 px-3 text-sm'
               : 'w-full justify-between gap-2 text-sm',

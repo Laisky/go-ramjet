@@ -156,9 +156,9 @@ export function McpServerManager({
       </div>
 
       {(isAdding || editingId) && (
-        <Card className="p-3 bg-gray-50 dark:bg-gray-900 border-dashed">
+        <Card className="p-3 bg-slate-50 dark:bg-slate-900 border-dashed dark:border-slate-700">
           <div className="space-y-3">
-            <h4 className="text-xs font-medium uppercase text-gray-500">
+            <h4 className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
               {editingId ? 'Edit Server' : 'Add Server'}
             </h4>
             <div className="space-y-2">
@@ -211,7 +211,7 @@ export function McpServerManager({
       )}
 
       {servers.length === 0 && !isAdding && (
-        <div className="rounded-lg border border-dashed p-4 text-center text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed p-4 text-center text-sm text-slate-500 dark:text-slate-400 dark:border-slate-700">
           No MCP servers configured.
         </div>
       )}
@@ -220,7 +220,7 @@ export function McpServerManager({
         {servers.map((server) => (
           <div
             key={server.id}
-            className="group flex flex-col gap-2 rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-900/50"
+            className="group flex flex-col gap-2 rounded-lg border p-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 dark:border-slate-700"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -232,7 +232,7 @@ export function McpServerManager({
                 />
                 <div className="flex flex-col">
                   <span className="font-medium text-sm">{server.name}</span>
-                  <span className="text-xs text-gray-500 truncate max-w-[150px]">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
                     {server.url}
                   </span>
                 </div>
@@ -241,7 +241,7 @@ export function McpServerManager({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-gray-500 hover:text-blue-600"
+                  className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400"
                   onClick={() => handleSync(server)}
                   disabled={syncingId === server.id}
                   title="Sync Tools"
@@ -270,7 +270,7 @@ export function McpServerManager({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-gray-500 hover:text-blue-600"
+                    className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400"
                     onClick={() => startEdit(server)}
                   >
                     <Edit2 className="h-3.5 w-3.5" />
@@ -278,7 +278,7 @@ export function McpServerManager({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-gray-500 hover:text-red-600"
+                    className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
                     onClick={() => handleDelete(server.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -289,12 +289,12 @@ export function McpServerManager({
 
             {/* Tools List */}
             {expandedId === server.id && (
-              <div className="ml-10 border-l pl-3 mt-2 space-y-2">
-                <div className="text-xs font-semibold text-gray-500 mb-2">
+              <div className="ml-10 border-l pl-3 mt-2 space-y-2 dark:border-slate-700">
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
                   Tools ({server.tools?.length || 0})
                 </div>
                 {(!server.tools || server.tools.length === 0) && (
-                  <div className="text-xs text-gray-400 italic">
+                  <div className="text-xs text-slate-400 dark:text-slate-500 italic">
                     No tools synced yet. Click sync button.
                   </div>
                 )}
@@ -322,7 +322,7 @@ export function McpServerManager({
                       <div>
                         <div className="font-medium">{tool.name}</div>
                         <div
-                          className="text-gray-500 dark:text-gray-400 line-clamp-1"
+                          className="text-slate-500 dark:text-slate-400 line-clamp-1"
                           title={tool.description}
                         >
                           {tool.description}
@@ -337,7 +337,7 @@ export function McpServerManager({
         ))}
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
         Remote MCP servers provide tools/functions for the AI.
       </p>
     </div>

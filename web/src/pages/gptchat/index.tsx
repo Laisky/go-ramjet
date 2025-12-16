@@ -84,15 +84,10 @@ export function GPTChatPage() {
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
   const isDrawActive = isImageModel(config.selected_model)
-  const activeModelForPlaceholder = isDrawActive ? drawModel : chatModel
+  const activeModelName = isDrawActive ? drawModel : chatModel
   const messagePlaceholder = config.api_token
-    ? activeModelForPlaceholder
-      ? `[${activeModelForPlaceholder}] Type a message...`
-      : 'Type a message...'
+    ? activeModelName || 'Message...'
     : 'Enter your API key in Settings to start chatting'
-
-  const SESSION_DOCK_WIDTH = 56
-  const HEADER_HEIGHT = 64
 
   // Load messages and shortcuts on mount
   useEffect(() => {
@@ -468,12 +463,14 @@ export function GPTChatPage() {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden theme-bg">
-      {/* Session Dock (Fixed Left Sidebar) */}
-      <div
-        className="fixed left-0 top-0 z-30 hidden h-full md:block"
-        style={{ width: SESSION_DOCK_WIDTH, paddingTop: HEADER_HEIGHT }}
-      >
+    <div className="theme-bg flex h-screen w-full overflow-hidden">
+      {/* Session Dock (Integrated Left Sidebar) */}
+      <aside className="theme-surface theme-border flex h-full w-14 shrink-0 flex-col border-r">
+        {/* Dock header area */}
+        <div className="flex h-12 shrink-0 items-center justify-center border-b border-slate-200 dark:border-slate-700">
+          <span className="text-base">💬</span>
+        </div>
+        {/* Session buttons */}
         <SessionDock
           sessions={sessions}
           activeSessionId={sessionId}
@@ -481,49 +478,67 @@ export function GPTChatPage() {
           onCreateSession={() => createSession()}
           onDeleteSession={deleteSession}
         />
-      </div>
+      </aside>
 
-      {/* Header */}
-      <div
-        className="fixed left-0 right-0 top-0 z-20 h-16 border-b theme-border theme-glass md:pl-14"
-        onClick={(e) => {
-          if (e.target !== e.currentTarget) return
-          scrollToTop()
-        }}
-      >
-        <div className="flex h-full w-full items-center justify-between px-3 sm:px-4">
-          <div className="flex items-center gap-2 overflow-x-auto sm:gap-3">
-            <h1 className="shrink-0 text-xl font-semibold tracking-tight">
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <header
+          className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-2 sm:px-3"
+          onClick={(e) => {
+            const target = e.target as HTMLElement
+            if (
+              target.closest(
+                'button, [role="button"], input, select, textarea, a',
+              )
+            ) {
+              return
+            }
+            scrollToTop()
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold tracking-tight text-black/80 dark:text-white/80">
               Chat
-            </h1>
-            <ModelSelector
-              label="Chat"
-              categories={[
-                'OpenAI',
-                'Anthropic',
-                'Google',
-                'Deepseek',
-                'Others',
-              ]}
-              selectedModel={chatModel}
-              active={!isDrawActive}
-              onModelChange={handleChatModelChange}
-              className="shrink-0 w-auto min-w-[96px]"
-              compact
-              tone="ghost"
-            />
-            <ModelSelector
-              label="Draw"
-              categories={['Image']}
-              selectedModel={drawModel}
-              active={isDrawActive}
-              onModelChange={handleDrawModelChange}
-              className="shrink-0 w-auto min-w-[96px]"
-              compact
-              tone="ghost"
-            />
+            </span>
+            <div
+              className="theme-surface theme-border flex items-center gap-1 rounded-full border px-2 py-1 shadow-sm"
+              title={
+                activeModelName
+                  ? `Active model: ${activeModelName}`
+                  : 'Select a model'
+              }
+            >
+              <ModelSelector
+                label="Chat"
+                categories={[
+                  'OpenAI',
+                  'Anthropic',
+                  'Google',
+                  'Deepseek',
+                  'Others',
+                ]}
+                selectedModel={chatModel}
+                active={!isDrawActive}
+                onModelChange={handleChatModelChange}
+                className="shrink-0 min-w-[80px] rounded-full"
+                compact
+                tone="ghost"
+              />
+              <ModelSelector
+                label="Draw"
+                categories={['Image']}
+                selectedModel={drawModel}
+                active={isDrawActive}
+                onModelChange={handleDrawModelChange}
+                className="shrink-0 min-w-[80px] rounded-full"
+                compact
+                tone="ghost"
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>
@@ -531,17 +546,16 @@ export function GPTChatPage() {
               variant="ghost"
               size="sm"
               onClick={() => setConfigOpen(true)}
-              className="flex items-center gap-1"
+              className="h-9 w-9 rounded-full px-0"
+              title="Settings"
             >
               <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Settings</span>
             </Button>
           </div>
-        </div>
-      </div>
+        </header>
 
-      {/* Scrollable chat area */}
-      <div className="absolute inset-x-0 bottom-0 top-0 overflow-hidden pt-16 md:pl-14">
+        {/* Scrollable chat area */}
+        <main className="relative flex-1 overflow-hidden">
         {/* Error display */}
         {error && (
           <div className="mx-4 mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -549,10 +563,10 @@ export function GPTChatPage() {
           </div>
         )}
 
-        <div
-          ref={messagesContainerRef}
-          className="relative h-full overflow-y-auto overflow-x-hidden px-1 pb-[160px] pt-3 sm:px-3 sm:pb-[200px] sm:pt-4 md:px-6"
-        >
+          <div
+            ref={messagesContainerRef}
+            className="h-full overflow-y-auto overflow-x-hidden px-1.5 pb-[110px] pt-2 sm:px-3 sm:pb-[120px] sm:pt-3 md:px-6"
+          >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="mb-4 text-4xl">💬</div>
@@ -563,7 +577,7 @@ export function GPTChatPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4 pb-3 sm:space-y-5 sm:pb-4">
+            <div className="space-y-2.5 pb-2 sm:space-y-4 sm:pb-3">
               {messages.length > displayedMessages.length && (
                 <div className="flex justify-center">
                   <Button variant="ghost" size="sm" onClick={handleLoadOlder}>
@@ -591,12 +605,13 @@ export function GPTChatPage() {
               <div ref={messagesEndRef} />
             </div>
           )}
+          </div>
 
           {/* Scroll to bottom button */}
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'fixed bottom-32 right-6 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--accent-contrast)] shadow-lg backdrop-blur transition-all hover:bg-[color:var(--accent-strong)]',
+              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg ring-1 ring-black/10 backdrop-blur transition-all hover:bg-indigo-600',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',
@@ -605,11 +620,10 @@ export function GPTChatPage() {
           >
             <ArrowDown className="h-4 w-4" />
           </button>
-        </div>
-      </div>
+        </main>
 
-      {/* Input (fixed bottom) */}
-      <div className="fixed left-0 right-0 bottom-0 z-30 border-t theme-border bg-white px-2 py-2 shadow-md dark:bg-slate-950 sm:px-4 sm:py-3 md:pl-14">
+        {/* Input (fixed to bottom of main area) */}
+        <footer className="theme-surface theme-border shrink-0 border-t px-1.5 py-1.5 sm:px-2.5 sm:py-2">
         <ChatInput
           onSend={handleSend}
           onStop={stopGeneration}
@@ -623,6 +637,7 @@ export function GPTChatPage() {
           onDraftChange={handleDraftChange}
           placeholder={messagePlaceholder}
         />
+        </footer>
       </div>
 
       {/* Config Sidebar */}
@@ -734,7 +749,7 @@ function EditMessageModal({
           value={editedContent}
           onChange={(e) => setEditedContent(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full rounded border border-black/10 bg-white p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-800"
+          className="theme-input theme-focus-ring w-full rounded border p-3 font-mono text-sm focus:outline-none focus:ring-2"
           rows={10}
         />
         <div className="mt-4 flex justify-end gap-2">
