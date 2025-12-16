@@ -213,15 +213,21 @@ export function GPTChatPage() {
   }, [messages, scrollToBottom, isNearBottom])
 
   useEffect(() => {
-    if (messages.length === 0) {
-      setVisibleCount(MESSAGE_PAGE_SIZE)
-      return
-    }
-
     setVisibleCount((prev) => {
+      if (messages.length === 0) {
+        return MESSAGE_PAGE_SIZE
+      }
+
+      const desired = Math.min(MESSAGE_PAGE_SIZE, messages.length)
+
+      if (prev < desired) {
+        return desired
+      }
+
       if (prev > messages.length) {
         return messages.length
       }
+
       return prev
     })
   }, [messages.length])
@@ -385,6 +391,8 @@ export function GPTChatPage() {
 
   const handleEditResend = useCallback(
     (payload: { chatId: string; content: string }) => {
+      autoScrollRef.current = false
+      suppressAutoScrollOnceRef.current = true
       setEditingMessage({
         chatId: payload.chatId,
         content: payload.content,
@@ -397,11 +405,11 @@ export function GPTChatPage() {
     async (newContent: string) => {
       if (!editingMessage) return
       setEditingMessage(null)
-      autoScrollRef.current = true
+      autoScrollRef.current = false
+      suppressAutoScrollOnceRef.current = true
       await editAndRetry(editingMessage.chatId, newContent)
-      requestAnimationFrame(() => scrollToBottom({ force: true }))
     },
-    [editAndRetry, editingMessage, scrollToBottom],
+    [editAndRetry, editingMessage],
   )
 
   const handleClearChats = useCallback(async () => {
