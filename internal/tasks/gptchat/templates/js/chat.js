@@ -8810,7 +8810,8 @@ async function setupMCPManager () {
             const loadedTools = freshEnabled.reduce((acc, s) => acc + ((Array.isArray(s.tools) ? s.tools.length : 0)), 0);
 
             const alertType = failedServers > 0 ? 'warning' : 'info';
-            showalert(alertType, `MCP tools loaded: ${loadedTools} (servers ok: ${okServers}, failed: ${failedServers})`);
+            // showalert(alertType, `MCP tools loaded: ${loadedTools} (servers ok: ${okServers}, failed: ${failedServers})`);
+            console.log(`[${alertType}] MCP tools loaded: ${loadedTools} (servers ok: ${okServers}, failed: ${failedServers})`);
         } catch (err) {
             console.warn('failed to auto-load MCP tools:', err);
         }
