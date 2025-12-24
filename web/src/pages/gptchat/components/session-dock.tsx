@@ -38,10 +38,10 @@ export function SessionDock({
                 <button
                   onClick={() => onSwitchSession(session.id)}
                   className={cn(
-                    'flex h-9 w-full items-center justify-center border-b border-slate-200 text-[11px] font-bold transition-colors dark:border-slate-700',
+                    'flex h-9 w-full items-center justify-center border-b border-border text-[11px] font-bold transition-colors',
                     session.id === activeSessionId
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-transparent text-foreground hover:bg-muted',
                   )}
                 >
                   {getAbbr(session.name)}
@@ -59,7 +59,7 @@ export function SessionDock({
             <TooltipTrigger asChild>
               <button
                 onClick={onCreateSession}
-                className="flex h-9 w-full items-center justify-center border-b border-dashed border-slate-300 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="flex h-9 w-full items-center justify-center border-b border-dashed border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -71,14 +71,14 @@ export function SessionDock({
         </TooltipProvider>
       </div>
 
-      <div className="flex w-full flex-col border-t border-slate-200 dark:border-slate-700">
+      <div className="flex w-full flex-col border-t border-border">
         <ConfirmDialog
           title="Delete Current Session"
           description="Are you sure you want to delete the current active session? This action cannot be undone."
           onConfirm={() => onDeleteSession(activeSessionId)}
           trigger={
             <button
-              className="flex h-9 w-full items-center justify-center bg-yellow-500 text-white transition-colors hover:bg-yellow-600"
+              className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
               title="Delete Current Session"
             >
               <Trash2 className="h-4 w-4" />

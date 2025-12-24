@@ -1,5 +1,45 @@
 @import "tailwindcss";
 
+@theme {
+  /* Base Colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Component Colors */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Brand Colors */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Feedback Colors */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  /* UI Elements */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Border Radius */
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+}
+
 /* Base styling */
 html,
 body {
@@ -12,27 +52,64 @@ body {
     'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-base);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 :root {
   color-scheme: light;
-  --bg-base: #f6f8fb;
-  --bg-surface: #ffffff;
-  --bg-elevated: #f8fafc;
-  --bg-muted: #eef2f6;
+
+  /* Core Palette - Light */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #f8fafc;
+
+  --success: #22c55e;
+  --success-foreground: #ffffff;
+
+  --warning: #f59e0b;
+  --warning-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #6366f1;
+
+  /* Legacy & Utility Variables */
+  --bg-base: var(--background);
+  --bg-surface: var(--card);
+  --bg-elevated: var(--card);
+  --bg-muted: var(--muted);
   --bg-translucent: rgba(255, 255, 255, 0.85);
-  --text-primary: #0f172a;
-  --text-muted: #334155;
-  --border-subtle: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --accent: #6366f1;
+  --text-primary: var(--foreground);
+  --text-muted: var(--muted-foreground);
+  --border-subtle: var(--border);
+  --border-strong: var(--input);
   --accent-strong: #4f46e5;
   --accent-contrast: #eef2ff;
-  --ring: rgba(99, 102, 241, 0.5);
   --shadow-soft: rgba(15, 23, 42, 0.07);
   --shadow-strong: rgba(15, 23, 42, 0.1);
+
+  /* Code tokens - Light */
   --code-surface: #f8fafc;
   --code-surface-muted: #e2e8f0;
   --code-border: #d9e3f0;
@@ -51,21 +128,58 @@ body {
 
 .dark {
   color-scheme: dark;
-  --bg-base: #050a12;
-  --bg-surface: #0b1220;
+
+  /* Core Palette - Dark */
+  --background: #020617;
+  --foreground: #f8fafc;
+
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+
+  --popover: #020617;
+  --popover-foreground: #f8fafc;
+
+  --primary: #a5b4fc;
+  --primary-foreground: #020617;
+
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f8fafc;
+
+  --success: #14532d;
+  --success-foreground: #f8fafc;
+
+  --warning: #78350f;
+  --warning-foreground: #f8fafc;
+
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #a5b4fc;
+
+  /* Legacy & Utility Variables */
+  --bg-base: var(--background);
+  --bg-surface: var(--card);
   --bg-elevated: #0f172a;
-  --bg-muted: #111827;
+  --bg-muted: var(--muted);
   --bg-translucent: rgba(11, 18, 32, 0.92);
-  --text-primary: #e2e8f0;
-  --text-muted: #cbd5e1;
-  --border-subtle: #1f2937;
+  --text-primary: var(--foreground);
+  --text-muted: var(--muted-foreground);
+  --border-subtle: var(--border);
   --border-strong: #334155;
-  --accent: #a5b4fc;
   --accent-strong: #818cf8;
   --accent-contrast: #0b1220;
-  --ring: rgba(129, 140, 248, 0.55);
   --shadow-soft: rgba(0, 0, 0, 0.35);
   --shadow-strong: rgba(0, 0, 0, 0.5);
+
+  /* Code tokens - Dark */
   --code-surface: #040813;
   --code-surface-muted: #0b1220;
   --code-border: #1f2937;
@@ -83,41 +197,41 @@ body {
 }
 
 .dark body {
-  background-color: var(--bg-base);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 .theme-bg {
-  background-color: var(--bg-base);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 .theme-surface {
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
+  background-color: var(--card);
+  color: var(--card-foreground);
 }
 
 .theme-elevated {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
+  background-color: var(--card);
+  color: var(--card-foreground);
   box-shadow: 0 12px 40px var(--shadow-soft);
 }
 
 .theme-muted-surface {
-  background-color: var(--bg-muted);
-  color: var(--text-primary);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .theme-border {
-  border-color: var(--border-subtle);
+  border-color: var(--border);
 }
 
 .theme-border-strong {
-  border-color: var(--border-strong);
+  border-color: var(--input);
 }
 
 .theme-text-muted {
-  color: var(--text-muted);
+  color: var(--muted-foreground);
 }
 
 .theme-glass {
@@ -128,22 +242,22 @@ body {
 
 .theme-focus-ring {
   --tw-ring-color: var(--ring);
-  --tw-ring-offset-color: var(--bg-surface);
+  --tw-ring-offset-color: var(--background);
 }
 
 .theme-input {
-  background-color: var(--bg-surface);
-  border-color: var(--border-strong);
-  color: var(--text-primary);
+  background-color: var(--background);
+  border-color: var(--input);
+  color: var(--foreground);
 }
 
 .theme-input::placeholder {
-  color: var(--text-muted);
+  color: var(--muted-foreground);
 }
 
 .theme-input:disabled {
-  background-color: var(--bg-muted);
-  color: var(--text-muted);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 /* Custom scrollbar */

@@ -18,7 +18,7 @@ export function TaskPage() {
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Unknown task</h2>
-        <p className="text-sm text-black/70 dark:text-white/70">
+        <p className="text-sm text-muted-foreground">
           The route does not match a known task.
         </p>
         <Link className="text-sm underline" to="/">
@@ -71,7 +71,7 @@ export function TaskPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{info.title}</h2>
-        <p className="text-sm text-black/70 dark:text-white/70">
+        <p className="text-sm text-muted-foreground">
           {info.description}
         </p>
       </div>
@@ -79,7 +79,7 @@ export function TaskPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {links.map((l) => (
           <a key={l.href} href={l.href} className="block">
-            <Card className="h-full transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+            <Card className="h-full transition-colors hover:bg-muted">
               <CardTitle>{l.label}</CardTitle>
               <CardDescription className="mt-1 break-all">
                 {l.href}

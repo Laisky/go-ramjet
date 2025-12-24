@@ -135,7 +135,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
           aria-label="Copy code block"
         >
           {copied ? (
-            <span className="inline-flex items-center gap-1 text-emerald-400">
+            <span className="inline-flex items-center gap-1 text-success">
               <Check className="h-3 w-3" /> Copied
             </span>
           ) : (
@@ -286,7 +286,7 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
             onClick={handleCopy}
           >
             {copied ? (
-              <span className="inline-flex items-center gap-1 text-emerald-400">
+              <span className="inline-flex items-center gap-1 text-success">
                 <Check className="h-3 w-3" /> Copied
               </span>
             ) : (
@@ -341,7 +341,7 @@ const renderCode = ({
   return (
     <code
       className={cn(
-        'rounded bg-black/10 px-1 py-0.5 text-[0.9em] font-mono dark:bg-white/10',
+        'rounded bg-muted px-1 py-0.5 text-[0.9em] font-mono text-foreground',
         className,
       )}
       {...props}

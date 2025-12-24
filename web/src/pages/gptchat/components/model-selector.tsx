@@ -70,15 +70,15 @@ export function ModelSelector({
           variant={tone === 'ghost' ? 'ghost' : 'outline'}
           className={cn(
             tone === 'ghost'
-              ? 'bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/5'
-              : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700',
+              ? 'bg-transparent text-current hover:bg-muted'
+              : 'border-input bg-background text-foreground hover:bg-muted',
             compact
               ? 'w-auto min-w-[72px] justify-center gap-1.5 px-2 text-sm'
               : 'w-full justify-between gap-2 text-sm',
             active &&
               (tone === 'ghost'
-                ? 'bg-black/5 font-bold dark:bg-white/10'
-                : 'ring-2 ring-blue-500/40'),
+                ? 'bg-muted font-bold'
+                : 'ring-2 ring-ring'),
             className,
           )}
           disabled={disabled}
@@ -88,7 +88,7 @@ export function ModelSelector({
           ) : (
             <span className="flex min-w-0 flex-col text-left">
               {label && (
-                <span className="text-[10px] uppercase tracking-tight text-black/60 dark:text-white/60">
+                <span className="text-[10px] uppercase tracking-tight text-muted-foreground">
                   {label}
                 </span>
               )}
@@ -116,7 +116,7 @@ export function ModelSelector({
       >
         {filteredCategories.map(([category, models]) => (
           <div key={category}>
-            <div className="px-2 py-1.5 text-xs font-semibold text-black/50 dark:text-white/50">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               {category}
             </div>
             {models.map((model) => (
@@ -125,7 +125,7 @@ export function ModelSelector({
                 onClick={() => handleSelect(model)}
                 className={cn(
                   'flex cursor-pointer items-center justify-between',
-                  selectedModel === model && 'bg-black/5 dark:bg-white/5',
+                  selectedModel === model && 'bg-muted',
                 )}
               >
                 <span className="truncate">{model}</span>

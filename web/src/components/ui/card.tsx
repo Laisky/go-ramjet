@@ -12,7 +12,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'theme-elevated rounded-md border theme-border p-4',
+        'rounded-lg border bg-card text-card-foreground shadow-sm',
         className,
       )}
       {...props}
@@ -40,7 +40,7 @@ export function CardDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('theme-text-muted text-sm', className)} {...props} />
+  return <p className={cn('text-muted-foreground text-sm', className)} {...props} />
 }
 
 export function CardContent({

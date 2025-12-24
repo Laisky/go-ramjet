@@ -455,8 +455,8 @@ export function GPTChatPage() {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <div className="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-black/20 border-t-black dark:border-white/20 dark:border-t-white" />
-          <p className="text-sm text-black/50 dark:text-white/50">Loading...</p>
+          <div className="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     )
@@ -467,7 +467,7 @@ export function GPTChatPage() {
       {/* Session Dock (Integrated Left Sidebar) */}
       <aside className="theme-surface theme-border flex h-full w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
-        <div className="flex h-12 shrink-0 items-center justify-center border-b border-slate-200 dark:border-slate-700">
+        <div className="flex h-12 shrink-0 items-center justify-center border-b border-border">
           <span className="text-base">💬</span>
         </div>
         {/* Session buttons */}
@@ -555,7 +555,7 @@ export function GPTChatPage() {
         <main className="relative flex-1 overflow-hidden">
         {/* Error display */}
         {error && (
-          <div className="mx-4 mt-2 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          <div className="mx-4 mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         )}
@@ -568,7 +568,7 @@ export function GPTChatPage() {
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="mb-4 text-4xl">💬</div>
               <h2 className="text-lg font-medium">Start a conversation</h2>
-              <p className="mt-1 max-w-sm text-sm text-black/50 dark:text-white/50">
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                 Type a message below to begin chatting with the AI. You can
                 change the model and settings using the button above.
               </p>
@@ -608,7 +608,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-indigo-500 text-white shadow-lg ring-1 ring-black/10 backdrop-blur transition-all hover:bg-indigo-600',
+              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-primary/90',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',
@@ -733,7 +733,7 @@ function EditMessageModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <div

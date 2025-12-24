@@ -90,7 +90,7 @@ export function HomePage() {
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           go-ramjet
         </h1>
-        <p className="mx-auto max-w-2xl text-black/70 dark:text-white/70">
+        <p className="mx-auto max-w-2xl text-muted-foreground">
           A CRON-style task server with a unified web interface. Each task
           exposes APIs for specific functionality, and this SPA provides a
           modern navigation layer.
@@ -101,17 +101,17 @@ export function HomePage() {
       {featuredTask && (
         <section>
           <Link to={`/gptchat`} className="block">
-            <Card className="group relative overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white transition-all hover:shadow-xl hover:shadow-blue-500/20">
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
-              <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-white/10" />
+            <Card className="group relative overflow-hidden bg-primary p-6 text-primary-foreground transition-all hover:shadow-xl hover:shadow-primary/20">
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary-foreground/10" />
+              <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-primary-foreground/10" />
               <div className="relative">
-                <div className="mb-4 inline-flex rounded-lg bg-white/20 p-3">
+                <div className="mb-4 inline-flex rounded-lg bg-primary-foreground/20 p-3">
                   {featuredTask.icon}
                 </div>
-                <CardTitle className="mb-2 text-2xl text-white">
+                <CardTitle className="mb-2 text-2xl text-primary-foreground">
                   {featuredTask.title}
                 </CardTitle>
-                <CardDescription className="text-white/80">
+                <CardDescription className="text-primary-foreground/80">
                   {featuredTask.description}
                 </CardDescription>
                 <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium">
@@ -129,9 +129,9 @@ export function HomePage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {otherTasks.map((task) => (
             <Link key={task.key} to={`/tasks/${task.key}`} className="block">
-              <Card className="group h-full transition-all hover:border-black/20 hover:shadow-md dark:hover:border-white/20">
+              <Card className="group h-full transition-all hover:border-primary/50 hover:shadow-md">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-black/5 p-2 text-black/60 transition-colors group-hover:bg-black/10 group-hover:text-black dark:bg-white/5 dark:text-white/60 dark:group-hover:bg-white/10 dark:group-hover:text-white">
+                  <div className="rounded-lg bg-muted p-2 text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
                     {task.icon}
                   </div>
                   <div className="flex-1">
@@ -148,14 +148,14 @@ export function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-black/10 pt-6 text-center text-sm text-black/50 dark:border-white/10 dark:text-white/50">
+      <footer className="border-t border-border pt-6 text-center text-sm text-muted-foreground">
         <p>
           Built with React, Vite, and TailwindCSS.{' '}
           <a
             href="https://github.com/Laisky/go-ramjet"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline hover:text-black dark:hover:text-white"
+            className="underline hover:text-foreground"
           >
             View on GitHub →
           </a>

@@ -218,8 +218,8 @@ export function ImageEditorModal({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 flex w-[90vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg bg-white p-4 shadow-2xl dark:bg-black">
+        <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 flex w-[90vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg bg-background p-4 shadow-2xl border border-border">
           <div className="flex items-center justify-between">
             <Dialog.Title className="text-lg font-semibold">
               Image Editor
@@ -235,14 +235,14 @@ export function ImageEditorModal({
           </div>
 
           {!canEdit && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Select an image to begin editing.
             </p>
           )}
 
           {canEdit && (
             <div className="flex flex-col gap-4">
-              <div className="relative mx-auto max-h-[70vh] max-w-full overflow-auto rounded-lg border bg-black/5 p-2 dark:bg-white/5">
+              <div className="relative mx-auto max-h-[70vh] max-w-full overflow-auto rounded-lg border border-border bg-muted p-2">
                 <div className="relative inline-block">
                   <canvas ref={baseCanvasRef} className="block" />
                   <canvas
@@ -296,7 +296,7 @@ export function ImageEditorModal({
                 </Button>
 
                 {hasMask && (
-                  <span className="text-xs text-green-600">Mask ready</span>
+                  <span className="text-xs text-success">Mask ready</span>
                 )}
               </div>
             </div>

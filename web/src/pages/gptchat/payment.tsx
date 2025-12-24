@@ -7,6 +7,7 @@ import {
 import type { StripeElementsOptions } from '@stripe/stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -97,7 +98,7 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
       {message && (
         <div
           id="payment-message"
-          className="text-sm text-red-500 dark:text-red-400"
+          className="text-sm text-destructive"
         >
           {message}
         </div>
@@ -158,10 +159,11 @@ export function GPTChatPaymentPage() {
     }
   }
 
+  const { resolvedTheme } = useTheme()
   const options: StripeElementsOptions = {
     clientSecret: clientSecret || '',
     appearance: {
-      theme: 'stripe',
+      theme: resolvedTheme === 'dark' ? 'night' : 'stripe',
     },
   }
 
@@ -169,7 +171,7 @@ export function GPTChatPaymentPage() {
     <div className="mx-auto max-w-lg space-y-6 py-10">
       <div className="space-y-1 text-center">
         <h1 className="text-2xl font-semibold">GPT Chat Payment</h1>
-        <p className="text-sm text-black/70 dark:text-white/70">
+        <p className="text-sm text-muted-foreground">
           Secure payment integration via Stripe
         </p>
       </div>
@@ -195,7 +197,7 @@ export function GPTChatPaymentPage() {
                 {isLoading ? 'Initializing...' : 'Start Payment'}
               </Button>
             </div>
-            {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
           </CardContent>
         </Card>
       ) : (

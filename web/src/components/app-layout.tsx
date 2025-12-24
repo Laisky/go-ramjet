@@ -11,9 +11,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const containerClass = isChatPage ? 'w-full px-0' : 'mx-auto max-w-5xl px-4'
 
   return (
-    <div className="flex min-h-screen flex-col theme-bg">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       {!isChatPage && (
-        <header className="sticky top-0 z-40 border-b theme-border theme-glass">
+        <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
           <div
             className={`${containerClass} flex items-center justify-between py-3`}
           >

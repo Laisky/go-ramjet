@@ -16,13 +16,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 theme-focus-ring'
 
     const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
-      default:
-        'bg-[color:var(--accent)] text-[color:var(--accent-contrast)] hover:bg-[color:var(--accent-strong)]',
-      ghost:
-        'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-muted)]',
+      default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+      ghost: 'text-foreground hover:bg-muted',
       outline:
-        'border theme-border bg-[color:var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[color:var(--bg-muted)]',
-      destructive: 'bg-[#ef4444] text-white hover:bg-[#dc2626]',
+        'border border-input bg-background text-foreground hover:bg-muted',
+      destructive:
+        'bg-destructive text-destructive-foreground hover:bg-destructive/90',
     }
 
     const sizes: Record<NonNullable<ButtonProps['size']>, string> = {

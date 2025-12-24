@@ -117,7 +117,7 @@ export function ConfigSidebar({
         {
           /* Private Dataset / RAG */
         }
-        ;<div className="space-y-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
+        <div className="space-y-3 rounded-lg border border-border p-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
               Private Dataset (PDF Chat)
@@ -126,7 +126,7 @@ export function ConfigSidebar({
           </div>
           <div className="space-y-2">
             <div>
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+              <label className="mb-1 block text-xs text-muted-foreground">
                 Dataset Key (keeps uploads private)
               </label>
               <Input
@@ -189,25 +189,25 @@ export function ConfigSidebar({
               </Button>
             </div>
             {datasetError && (
-              <p className="text-xs text-red-500">{datasetError}</p>
+              <p className="text-xs text-destructive">{datasetError}</p>
             )}
           </div>
 
           {datasets.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              <div className="text-xs font-semibold text-foreground">
                 Datasets
               </div>
               <div className="space-y-2">
                 {datasets.map((ds) => (
                   <div
                     key={ds.name}
-                    className="flex items-center justify-between rounded border border-black/10 p-2 text-sm dark:border-white/10"
+                    className="flex items-center justify-between rounded border border-border p-2 text-sm"
                   >
                     <div>
                       <div className="font-medium">{ds.name}</div>
                       {ds.taskStatus && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                        <div className="text-xs text-muted-foreground">
                           {ds.taskStatus}
                           {typeof ds.progress === 'number' &&
                             ` • ${Math.round(ds.progress)}%`}
@@ -230,14 +230,14 @@ export function ConfigSidebar({
 
           {chatbots.length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              <div className="text-xs font-semibold text-foreground">
                 Chatbots
               </div>
               <div className="space-y-1">
                 {chatbots.map((bot) => (
                   <label
                     key={bot}
-                    className="flex items-center justify-between rounded border border-black/10 p-2 text-sm dark:border-white/10"
+                    className="flex items-center justify-between rounded border border-border p-2 text-sm"
                   >
                     <span>{bot}</span>
                     <input
@@ -252,7 +252,7 @@ export function ConfigSidebar({
             </div>
           )}
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Upload PDFs/office docs to build a private dataset, then pick a
             chatbot to talk with it. Processing may take a few minutes.
           </p>
@@ -466,10 +466,10 @@ export function ConfigSidebar({
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Sidebar */}
-      <div className="theme-surface relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg">
+      <div className="bg-card text-card-foreground relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -487,7 +487,7 @@ export function ConfigSidebar({
             onCreateSession &&
             onDeleteSession &&
             onRenameSession && (
-              <section className="space-y-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <section className="space-y-3 pb-4 border-b border-border">
                 <SessionManager
                   sessions={sessions}
                   activeSessionId={activeSessionId}
@@ -502,8 +502,8 @@ export function ConfigSidebar({
 
           {/* User Profile */}
           {user && (
-            <div className="flex items-center gap-3 rounded-lg border p-3 border-black/10 dark:border-white/10">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
+            <div className="flex items-center gap-3 rounded-lg border p-3 border-border">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                 {user.image_url && !user.image_url.includes('openai.com') ? (
                   <img
                     src={user.image_url}
@@ -511,12 +511,12 @@ export function ConfigSidebar({
                     className="h-10 w-10 rounded-full"
                   />
                 ) : (
-                  <User className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+                  <User className="h-6 w-6 text-primary" />
                 )}
               </div>
               <div className="overflow-hidden">
                 <div className="truncate font-medium">{user.user_name}</div>
-                <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                <div className="truncate text-xs text-muted-foreground">
                   {user.is_free ? 'Free Tier' : 'Pro User'}
                   {user.no_limit_expensive_models && ' • Unlimited'}
                 </div>
@@ -538,7 +538,7 @@ export function ConfigSidebar({
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-0 top-0 flex h-full items-center px-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
               >
                 {showApiKey ? (
                   <EyeOff className="h-4 w-4" />
@@ -597,7 +597,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Contexts</span>
-              <span className="text-black/50 dark:text-white/50">
+              <span className="text-muted-foreground">
                 {config.n_contexts}
               </span>
             </label>
@@ -618,7 +618,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Max Tokens</span>
-              <span className="text-black/50 dark:text-white/50">
+              <span className="text-muted-foreground">
                 {config.max_tokens}
               </span>
             </label>
@@ -639,7 +639,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Temperature</span>
-              <span className="text-black/50 dark:text-white/50">
+              <span className="text-muted-foreground">
                 {config.temperature.toFixed(1)}
               </span>
             </label>
@@ -660,7 +660,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Presence Penalty</span>
-              <span className="text-black/50 dark:text-white/50">
+              <span className="text-muted-foreground">
                 {config.presence_penalty.toFixed(1)}
               </span>
             </label>
@@ -681,7 +681,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Frequency Penalty</span>
-              <span className="text-black/50 dark:text-white/50">
+              <span className="text-muted-foreground">
                 {config.frequency_penalty.toFixed(1)}
               </span>
             </label>
@@ -753,16 +753,16 @@ export function ConfigSidebar({
                     key={index}
                     variant="secondary"
                     className={cn(
-                      'cursor-pointer transition-colors hover:bg-blue-500 hover:text-white pr-1',
+                      'cursor-pointer transition-colors hover:bg-primary hover:text-primary-foreground pr-1',
                       config.system_prompt === shortcut.prompt &&
-                        'bg-blue-500 text-white',
+                        'bg-primary text-primary-foreground',
                     )}
                     onClick={() => handleSelectPrompt(shortcut.prompt)}
                   >
                     {shortcut.name}
                     {onDeletePrompt && (
                       <button
-                        className="ml-1 rounded-full p-0.5 hover:bg-black/20 dark:hover:bg-white/20"
+                        className="ml-1 rounded-full p-0.5 hover:bg-muted"
                         onClick={(e) => {
                           e.stopPropagation()
                           onDeletePrompt(shortcut.name)
@@ -811,7 +811,7 @@ export function ConfigSidebar({
             <label className="mb-2 block text-sm font-medium">Data Sync</label>
 
             <div className="mb-2">
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+              <label className="mb-1 block text-xs text-muted-foreground">
                 Sync Key
               </label>
               <div className="relative">
@@ -856,13 +856,13 @@ export function ConfigSidebar({
                 Download
               </Button>
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               Sync your settings and chat history using this key. Keep it safe!
             </p>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 border-t border-black/10 pt-4 dark:border-white/10">
+          <div className="flex gap-2 border-t border-border pt-4">
             <ConfirmDialog
               title="Clear Chat History"
               description="Are you sure you want to clear all chat history in this session? This action cannot be undone."
@@ -905,7 +905,7 @@ export function ConfigSidebar({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex items-center gap-1 text-red-600 border-red-400 hover:bg-red-50"
+                    className="flex items-center gap-1 text-destructive border-destructive/50 hover:bg-destructive/10"
                   >
                     Purge All
                   </Button>

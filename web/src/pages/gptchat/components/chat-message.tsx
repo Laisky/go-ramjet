@@ -46,19 +46,19 @@ function ReasoningBlock({ content }: { content: string }) {
   const { thinking, toolEvents } = splitReasoningContent(content)
 
   return (
-    <Card className="mb-2 border-dashed bg-black/5 p-3 dark:bg-white/5">
+    <Card className="mb-2 border-dashed bg-muted p-3">
       <details
-        className="text-xs text-black/60 dark:text-white/60"
+        className="text-xs text-muted-foreground"
         open={!!toolEvents.length}
       >
-        <summary className="cursor-pointer font-medium hover:text-black dark:hover:text-white transition-colors">
+        <summary className="cursor-pointer font-medium hover:text-foreground transition-colors">
           💭 Reasoning & Tools
         </summary>
 
         <div className="mt-2 space-y-3">
           {/* Tool Events */}
           {toolEvents.length > 0 && (
-            <div className="space-y-1 rounded bg-black/5 p-2 font-mono text-[10px] dark:bg-white/5">
+            <div className="space-y-1 rounded bg-muted p-2 font-mono text-[10px]">
               {toolEvents.map((evt, i) => (
                 <div key={i} className="flex gap-2">
                   <span className="shrink-0 opacity-50">🔧</span>
@@ -70,7 +70,7 @@ function ReasoningBlock({ content }: { content: string }) {
 
           {/* Thinking Content */}
           {thinking && (
-            <pre className="whitespace-pre-wrap break-words font-sans text-black/70 dark:text-white/70">
+            <pre className="whitespace-pre-wrap break-words font-sans text-muted-foreground">
               {thinking}
             </pre>
           )}
@@ -207,8 +207,8 @@ export function ChatMessage({
         className={cn(
           'group/message relative w-full max-w-full rounded-md border px-2 py-1.5 transition-all sm:w-fit sm:max-w-[92%] sm:px-2.5 sm:py-2 md:max-w-[880px]',
           isUser
-            ? 'ml-auto rounded-br-sm border-indigo-200 bg-indigo-100 text-slate-900 dark:border-indigo-800 dark:bg-indigo-900/70 dark:text-white'
-            : 'theme-surface theme-border mr-auto rounded-bl-sm',
+            ? 'ml-auto rounded-br-sm border-primary/20 bg-primary/10 text-foreground'
+            : 'bg-card text-card-foreground border-border mr-auto rounded-bl-sm',
           isStreaming && 'animate-pulse',
         )}
       >
@@ -217,8 +217,8 @@ export function ChatMessage({
             className={cn(
               'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs',
               isUser
-                ? 'bg-indigo-400 text-white dark:bg-indigo-600'
-                : 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-white',
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground',
             )}
           >
             {isUser ? (
@@ -233,9 +233,7 @@ export function ChatMessage({
               <span
                 className={cn(
                   'font-semibold',
-                  isUser
-                    ? 'text-slate-900 dark:text-white'
-                    : 'text-slate-800 dark:text-white',
+                  'text-foreground',
                 )}
               >
                 {isUser ? 'You' : 'Assistant'}
@@ -243,13 +241,13 @@ export function ChatMessage({
               {isAssistant && message.model && (
                 <Badge
                   variant="secondary"
-                  className="h-6 rounded-md bg-black/5 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/70"
+                  className="h-6 rounded-md bg-muted px-2 text-[11px] text-muted-foreground"
                 >
                   {message.model}
                 </Badge>
               )}
               {message.timestamp && (
-                <span className="text-[11px] text-black/50 dark:text-white/50">
+                <span className="text-[11px] text-muted-foreground">
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </span>
               )}
@@ -301,7 +299,7 @@ export function ChatMessage({
                   title="Copy message"
                 >
                   {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <Check className="h-3.5 w-3.5 text-success" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
@@ -311,7 +309,7 @@ export function ChatMessage({
                     variant="ghost"
                     size="sm"
                     onClick={handleDelete}
-                    className="h-7 w-7 rounded-md p-0 text-red-500 hover:text-red-600"
+                    className="h-7 w-7 rounded-md p-0 text-destructive"
                     title="Delete message"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -338,7 +336,7 @@ export function ChatMessage({
                 {message.content}
               </Markdown>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
                 <div
                   className="h-2 w-2 animate-bounce rounded-full bg-current"
@@ -354,33 +352,33 @@ export function ChatMessage({
             {isAssistant &&
               message.references &&
               message.references.length > 0 && (
-                <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-black/5 sm:p-3 dark:sm:bg-white/5">
-                  <p className="font-semibold text-black/60 dark:text-white/60">
+                <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-muted sm:p-3">
+                  <p className="font-semibold text-muted-foreground">
                     References
                   </p>
                   <ol className="mt-2 space-y-1">
                     {message.references.map((ref) => (
                       <li key={ref.index} className="flex items-start gap-2">
-                        <span className="text-black/50 dark:text-white/50">
+                        <span className="text-muted-foreground">
                           [{ref.index}]
                         </span>
                         <a
                           href={ref.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex-1 truncate text-blue-600 hover:underline dark:text-blue-300"
+                          className="flex-1 truncate text-primary hover:underline"
                         >
                           {ref.title || ref.url}
                         </a>
                         <button
-                          className="text-black/40 transition hover:text-black dark:text-white/40 dark:hover:text-white"
+                          className="text-muted-foreground/50 transition hover:text-foreground"
                           onClick={() =>
                             handleCopyReference(ref.url, ref.index)
                           }
                           title="Copy reference URL"
                         >
                           {copiedCitation === ref.index ? (
-                            <Check className="h-3 w-3 text-green-500" />
+                            <Check className="h-3 w-3 text-success" />
                           ) : (
                             <Copy className="h-3 w-3" />
                           )}
