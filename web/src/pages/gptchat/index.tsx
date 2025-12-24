@@ -465,7 +465,7 @@ export function GPTChatPage() {
   return (
     <div className="theme-bg flex h-screen w-full overflow-hidden">
       {/* Session Dock (Integrated Left Sidebar) */}
-      <aside className="theme-surface theme-border flex h-full w-14 shrink-0 flex-col border-r">
+      <aside className="theme-surface theme-border flex h-full w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
         <div className="flex h-12 shrink-0 items-center justify-center border-b border-slate-200 dark:border-slate-700">
           <span className="text-base">💬</span>
@@ -484,7 +484,7 @@ export function GPTChatPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <header
-          className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-2 sm:px-3"
+          className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
           onClick={(e) => {
             const target = e.target as HTMLElement
             if (
@@ -498,11 +498,8 @@ export function GPTChatPage() {
           }}
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight text-black/80 dark:text-white/80">
-              Chat
-            </span>
             <div
-              className="theme-surface theme-border flex items-center gap-1 rounded-full border px-2 py-1 shadow-sm"
+              className="flex items-center gap-0.5"
               title={
                 activeModelName
                   ? `Active model: ${activeModelName}`
@@ -521,7 +518,7 @@ export function GPTChatPage() {
                 selectedModel={chatModel}
                 active={!isDrawActive}
                 onModelChange={handleChatModelChange}
-                className="shrink-0 min-w-[80px] rounded-full"
+                className="shrink-0 min-w-[70px] rounded-md"
                 compact
                 tone="ghost"
               />
@@ -531,7 +528,7 @@ export function GPTChatPage() {
                 selectedModel={drawModel}
                 active={isDrawActive}
                 onModelChange={handleDrawModelChange}
-                className="shrink-0 min-w-[80px] rounded-full"
+                className="shrink-0 min-w-[70px] rounded-md"
                 compact
                 tone="ghost"
               />
@@ -546,7 +543,7 @@ export function GPTChatPage() {
               variant="ghost"
               size="sm"
               onClick={() => setConfigOpen(true)}
-              className="h-9 w-9 rounded-full px-0"
+              className="h-9 w-9 rounded-md px-0"
               title="Settings"
             >
               <Settings className="h-4 w-4" />
@@ -565,7 +562,7 @@ export function GPTChatPage() {
 
           <div
             ref={messagesContainerRef}
-            className="h-full overflow-y-auto overflow-x-hidden px-1.5 pb-[110px] pt-2 sm:px-3 sm:pb-[120px] sm:pt-3 md:px-6"
+            className="h-full overflow-y-auto overflow-x-hidden px-1 pb-[80px] pt-1 sm:px-2 sm:pb-[90px] sm:pt-1.5 md:px-4"
           >
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -611,7 +608,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-white shadow-lg ring-1 ring-black/10 backdrop-blur transition-all hover:bg-indigo-600',
+              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-indigo-500 text-white shadow-lg ring-1 ring-black/10 backdrop-blur transition-all hover:bg-indigo-600',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',
@@ -623,7 +620,7 @@ export function GPTChatPage() {
         </main>
 
         {/* Input (fixed to bottom of main area) */}
-        <footer className="theme-surface theme-border shrink-0 border-t px-1.5 py-1.5 sm:px-2.5 sm:py-2">
+        <footer className="theme-surface theme-border shrink-0 border-t p-0">
         <ChatInput
           onSend={handleSend}
           onStop={stopGeneration}

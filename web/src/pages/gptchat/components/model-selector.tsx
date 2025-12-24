@@ -67,15 +67,18 @@ export function ModelSelector({
       <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
           size="sm"
-          variant="outline"
+          variant={tone === 'ghost' ? 'ghost' : 'outline'}
           className={cn(
             tone === 'ghost'
-              ? 'border-transparent bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/5'
+              ? 'bg-transparent text-current hover:bg-black/5 dark:hover:bg-white/5'
               : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700',
             compact
-              ? 'w-auto min-w-[96px] justify-center gap-2 px-3 text-sm'
+              ? 'w-auto min-w-[72px] justify-center gap-1.5 px-2 text-sm'
               : 'w-full justify-between gap-2 text-sm',
-            active && 'ring-2 ring-blue-500/40',
+            active &&
+              (tone === 'ghost'
+                ? 'bg-black/5 font-bold dark:bg-white/10'
+                : 'ring-2 ring-blue-500/40'),
             className,
           )}
           disabled={disabled}

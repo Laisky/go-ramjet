@@ -205,17 +205,17 @@ export function ChatMessage({
     >
       <Card
         className={cn(
-          'group/message relative w-full max-w-full rounded-2xl border px-2.5 py-2 shadow-sm transition-all sm:w-fit sm:max-w-[92%] sm:px-3 sm:py-2.5 md:max-w-[880px]',
+          'group/message relative w-full max-w-full rounded-md border px-2 py-1.5 transition-all sm:w-fit sm:max-w-[92%] sm:px-2.5 sm:py-2 md:max-w-[880px]',
           isUser
-            ? 'ml-auto rounded-br-lg border-indigo-200 bg-gradient-to-r from-indigo-100 to-indigo-200 text-slate-900 dark:border-indigo-800 dark:from-indigo-900/70 dark:to-indigo-800/70 dark:text-white'
-            : 'theme-surface theme-border mr-auto rounded-bl-lg',
+            ? 'ml-auto rounded-br-sm border-indigo-200 bg-indigo-100 text-slate-900 dark:border-indigo-800 dark:bg-indigo-900/70 dark:text-white'
+            : 'theme-surface theme-border mr-auto rounded-bl-sm',
           isStreaming && 'animate-pulse',
         )}
       >
         <div className="flex items-start gap-2">
           <div
             className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs',
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs',
               isUser
                 ? 'bg-indigo-400 text-white dark:bg-indigo-600'
                 : 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-white',
@@ -243,7 +243,7 @@ export function ChatMessage({
               {isAssistant && message.model && (
                 <Badge
                   variant="secondary"
-                  className="h-6 rounded-full bg-black/5 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/70"
+                  className="h-6 rounded-md bg-black/5 px-2 text-[11px] text-black/70 dark:bg-white/10 dark:text-white/70"
                 >
                   {message.model}
                 </Badge>
