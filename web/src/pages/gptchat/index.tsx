@@ -488,7 +488,7 @@ export function GPTChatPage() {
   }, [])
 
   return (
-    <div className="theme-bg flex h-screen w-full overflow-hidden">
+    <div className="theme-bg flex h-dvh w-full overflow-hidden">
       {/* Session Dock (Integrated Left Sidebar) */}
       <aside className="theme-surface theme-border flex h-full w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
@@ -511,12 +511,7 @@ export function GPTChatPage() {
         <header
           className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
           onClick={(e) => {
-            const target = e.target as HTMLElement
-            if (
-              target.closest(
-                'button, [role="button"], input, select, textarea, a',
-              )
-            ) {
+            if (e.target !== e.currentTarget) {
               return
             }
             scrollToTop()
@@ -594,7 +589,7 @@ export function GPTChatPage() {
 
           <div
             ref={messagesContainerRef}
-            className="h-full overflow-y-auto overflow-x-hidden px-1 pb-[80px] pt-1 sm:px-2 sm:pb-[90px] sm:pt-1.5 md:px-4"
+            className="h-full overflow-y-auto overflow-x-hidden px-1 pb-4 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
           >
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center">

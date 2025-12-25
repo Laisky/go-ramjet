@@ -403,6 +403,13 @@ export function useChatStreaming({
         } else {
           const message = error instanceof Error ? error.message : String(error)
           setError(message)
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.chatID === chatId && m.role === 'assistant'
+                ? { ...m, error: message }
+                : m,
+            ),
+          )
         }
       } finally {
         setIsLoading(false)

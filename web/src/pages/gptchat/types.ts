@@ -15,6 +15,7 @@ export interface ChatMessageData {
   references?: ChatReference[]
   requestid?: string
   costUsd?: number
+  error?: string
 }
 
 export interface ChatAttachment {

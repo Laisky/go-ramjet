@@ -102,7 +102,13 @@ export async function runMaskInpainting({
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     setError(msg)
-    setMessages((prev) => prev.filter((m) => m.chatID !== chatId))
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.chatID === chatId && m.role === 'assistant'
+          ? { ...m, error: msg }
+          : m,
+      ),
+    )
   } finally {
     setIsLoading(false)
     currentChatIdRef.current = null
@@ -172,7 +178,13 @@ export async function runImageModelFlow({
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err)
     setError(errMsg)
-    setMessages((prev) => prev.filter((m) => m.chatID !== chatId))
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.chatID === chatId && m.role === 'assistant'
+          ? { ...m, error: errMsg }
+          : m,
+      ),
+    )
   } finally {
     setIsLoading(false)
     currentChatIdRef.current = null

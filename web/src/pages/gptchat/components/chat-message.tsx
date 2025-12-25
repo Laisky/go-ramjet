@@ -320,11 +320,29 @@ export function ChatMessage({
               >
                 {message.content}
               </pre>
+            ) : message.error ? (
+              <div className="space-y-3">
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                  <p className="font-semibold mb-1">Error</p>
+                  {message.error}
+                </div>
+                {onRegenerate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    className="flex items-center gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Retry
+                  </Button>
+                )}
+              </div>
             ) : message.content ? (
               <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
                 {message.content}
               </Markdown>
-            ) : (
+            ) : isStreaming ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
                 <div
@@ -336,7 +354,7 @@ export function ChatMessage({
                   style={{ animationDelay: '0.2s' }}
                 />
               </div>
-            )}
+            ) : null}
 
             {isAssistant &&
               message.references &&
