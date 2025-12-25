@@ -89,6 +89,7 @@ func OneapiProxyHandler(ctx *gin.Context) {
 
 		ctx.Header(k, v[0])
 	}
+	ctx.Header("Access-Control-Expose-Headers", "x-oneapi-request-id, x-request-id")
 	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
 }
 
@@ -133,6 +134,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 		ctx.Header(k, v[0])
 	}
+	ctx.Header("Access-Control-Expose-Headers", "x-oneapi-request-id, x-request-id")
 	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
 }
 

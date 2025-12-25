@@ -14,7 +14,6 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	ihttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
-	istatic "github.com/Laisky/go-ramjet/internal/tasks/gptchat/templates/static"
 	"github.com/Laisky/go-ramjet/library/log"
 	rlimiter "github.com/Laisky/go-ramjet/library/ratelimit"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -53,13 +52,8 @@ func bindHTTP() {
 
 	grp := web.Server.Group("/gptchat")
 
-	ihttp.RegisterStatic(grp.Group("/static"))
-	grp.GET("/favicon.ico", func(ctx *gin.Context) {
-		ctx.Header("Cache-Control", "max-age=86400")
-		ctx.Data(http.StatusOK, "image/png", istatic.Favicon)
-	})
-
-	grp.GET("/", ihttp.Chat)
+	// NOTE: Legacy HTML UI has been migrated into the unified SPA served from web/dist.
+	// Static assets (JS/CSS) are no longer served from Go; the SPA handles all UI.
 	apiWithRatelimiter := grp.Group("", globalRatelimitMw)
 	apiWithRatelimiter.POST("/audit/conservation", ihttp.SaveLlmConservationHandler)
 	apiWithRatelimiter.Any("/api", ihttp.ChatHandler)
@@ -86,5 +80,4 @@ func bindHTTP() {
 	// payment
 	stripe.Key = config.Config.PaymentStripeKey
 	grp.POST("/create-payment-intent", ihttp.PaymentHandler)
-	grp.GET("/payment/:ext", ihttp.PaymentStaticHandler)
 }

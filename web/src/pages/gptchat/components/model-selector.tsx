@@ -1,0 +1,149 @@
+/**
+ * Model selector dropdown component.
+ */
+import { ChevronDown } from 'lucide-react'
+import { useState } from 'react'
+
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/utils/cn'
+import { ModelCategories, isFreeModel, isImageModel } from '../models'
+
+/**
+ * ModelSelectorProps describes the configuration for rendering a model picker dropdown.
+ */
+export interface ModelSelectorProps {
+  selectedModel: string
+  onModelChange: (model: string) => void
+  disabled?: boolean
+  label?: string
+  categories?: string[]
+  active?: boolean
+  className?: string
+  compact?: boolean
+  tone?: 'default' | 'ghost'
+}
+
+/**
+ * ModelSelector provides a categorized model selection dropdown.
+ */
+export function ModelSelector({
+  selectedModel,
+  onModelChange,
+  disabled,
+  label,
+  categories,
+  active,
+  className,
+  compact,
+  tone = 'default',
+}: ModelSelectorProps) {
+  const [open, setOpen] = useState(false)
+
+  const filteredCategories = categories?.length
+    ? Object.entries(ModelCategories).filter(([category]) =>
+        categories.includes(category),
+      )
+    : Object.entries(ModelCategories)
+
+  const displayModel =
+    selectedModel || filteredCategories[0]?.[1]?.[0] || 'Select a model'
+
+  const triggerLabel = label || 'Model'
+
+  const handleSelect = (model: string) => {
+    onModelChange(model)
+    setOpen(false)
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        <Button
+          size="sm"
+          variant={tone === 'ghost' ? 'ghost' : 'outline'}
+          className={cn(
+            tone === 'ghost'
+              ? 'bg-transparent text-current hover:bg-muted'
+              : 'border-input bg-background text-foreground hover:bg-muted',
+            compact
+              ? 'w-auto min-w-[72px] justify-center gap-1.5 px-2 text-sm'
+              : 'w-full justify-between gap-2 text-sm',
+            active &&
+              (tone === 'ghost' ? 'bg-muted font-bold' : 'ring-2 ring-ring'),
+            className,
+          )}
+          disabled={disabled}
+        >
+          {compact ? (
+            <span className="text-sm font-semibold">{triggerLabel}</span>
+          ) : (
+            <span className="flex min-w-0 flex-col text-left">
+              {label && (
+                <span className="text-[10px] uppercase tracking-tight text-muted-foreground">
+                  {label}
+                </span>
+              )}
+              <span className="flex items-center gap-2 truncate">
+                <span className="truncate">{displayModel}</span>
+                {isFreeModel(displayModel) && (
+                  <Badge variant="success" className="text-[10px]">
+                    Free
+                  </Badge>
+                )}
+                {isImageModel(displayModel) && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    🎨
+                  </Badge>
+                )}
+              </span>
+            </span>
+          )}
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[420px] w-[320px] overflow-y-auto"
+      >
+        {filteredCategories.map(([category, models]) => (
+          <div key={category}>
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+              {category}
+            </div>
+            {models.map((model) => (
+              <DropdownMenuItem
+                key={model}
+                onClick={() => handleSelect(model)}
+                className={cn(
+                  'flex cursor-pointer items-center justify-between',
+                  selectedModel === model && 'bg-muted',
+                )}
+              >
+                <span className="truncate">{model}</span>
+                <span className="flex gap-1">
+                  {isFreeModel(model) && (
+                    <Badge variant="success" className="text-[10px]">
+                      Free
+                    </Badge>
+                  )}
+                  {isImageModel(model) && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      🎨
+                    </Badge>
+                  )}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

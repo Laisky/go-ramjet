@@ -61,6 +61,8 @@ The purpose of this project is to implement a CRON job server that supports vari
 
 Each task also can handle web requests, so the project also includes a web server component.
 
+You must make sure this project buildable and runnable after any changes, with `make build` and `go vet ./...`.
+
 ### Codes
 
 All code must be written in English. Avoid using any other languages in code, comments, or documentation.
@@ -78,6 +80,8 @@ When debugging, add targeted DEBUG logs that include essential details to help d
 Multiple agents might be modifying the code at the same time. If you come across changes that aren't yours, preserve them and avoid interfering with other agents' work. Only halt the task and inform me when you encounter an irreconcilable conflict.
 
 Should use TODOs tool to track tasks and progress.
+
+After making any code changes, always verify that the code is correct: the syntax must be valid, the project should still build successfully(via `go vet ./...` or `make build`), and all unit tests must pass. If any test fails, investigate whether the problem lies in the implementation or the test itself, and, respecting the user's specifications, fix the issue carefully.
 
 ### TimeZone
 

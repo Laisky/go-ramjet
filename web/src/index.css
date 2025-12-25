@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100%;
+}
+
+.code-toolbar {
+  position: relative;
+}
+
+.code-toolbar>.toolbar {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  opacity: 0.98;
+  display: flex;
+  gap: 6px;
+}
+
+.code-toolbar>.toolbar .toolbar-item {
+  margin: 0;
+}
+
+.code-toolbar>.toolbar .toolbar-item button,
+.code-toolbar>.toolbar .toolbar-item span {
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.code-toolbar>.toolbar .toolbar-item button:hover,
+.code-toolbar>.toolbar .toolbar-item span:hover {
+  background: rgba(17, 24, 39, 0.95);
+}
+
+pre.line-numbers {
+  padding-left: 3.25rem;
+}
+
+pre.line-numbers code {
+  color: #e5e7eb;
+}
+
+/* Ensure code blocks stay readable even inside Tailwind Typography (.prose). */
+.prose pre.code-toolbar {
+  background: #0b0f1a;
+  color: #e5e7eb;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.prose pre.code-toolbar code {
+  background: transparent;
+  color: inherit;
+}
+
+.prose pre.code-toolbar .line-numbers-rows {
+  border-right-color: rgba(148, 163, 184, 0.25);
+}

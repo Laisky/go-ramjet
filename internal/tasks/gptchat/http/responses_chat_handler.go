@@ -171,14 +171,24 @@ func writeFinalToUI(
 	if frontendReq == nil {
 		return errors.New("empty frontend request")
 	}
+
+	requestID := ""
+	if upstreamHeader != nil {
+		requestID = upstreamHeader.Get("x-oneapi-request-id")
+		if requestID == "" {
+			requestID = upstreamHeader.Get("x-request-id")
+		}
+	}
+
 	if frontendReq.Stream {
 		setStreamHeaders(ctx, upstreamHeader)
 		enableHeartBeatForStreamReq(ctx)
 		for _, s := range thinkingSteps {
-			emitThinkingDelta(ctx, true, s)
+			emitThinkingDelta(ctx, true, requestID, s)
 		}
 		for _, chunk := range chunkString(finalText, 512) {
 			_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
+				ID: requestID,
 				Choices: []OpenaiCompletionStreamRespChoice{{
 					Delta: OpenaiCompletionStreamRespDelta{
 						Role:    OpenaiMessageRoleAI,
@@ -190,6 +200,7 @@ func writeFinalToUI(
 			})
 		}
 		_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
+			ID: requestID,
 			Choices: []OpenaiCompletionStreamRespChoice{{
 				Delta:        OpenaiCompletionStreamRespDelta{Role: OpenaiMessageRoleAI},
 				Index:        0,
@@ -201,7 +212,7 @@ func writeFinalToUI(
 	}
 
 	out := &OpenaiCompletionResp{
-		ID:     "",
+		ID:     requestID,
 		Object: "chat.completion",
 		Model:  frontendReq.Model,
 		Choices: []struct {
@@ -349,6 +360,7 @@ func setStreamHeaders(ctx *gin.Context, upstreamHeader http.Header) {
 	ctx.Header("content-type", "text/event-stream")
 	ctx.Header("cache-control", "no-cache")
 	ctx.Header("connection", "keep-alive")
+	ctx.Header("Access-Control-Expose-Headers", "x-oneapi-request-id, x-request-id")
 
 	// Preserve request id for cost display. Must be set before the first write.
 	if upstreamHeader != nil {
@@ -361,11 +373,12 @@ func setStreamHeaders(ctx *gin.Context, upstreamHeader http.Header) {
 	}
 }
 
-func emitThinkingDelta(ctx *gin.Context, isStream bool, text string) {
+func emitThinkingDelta(ctx *gin.Context, isStream bool, requestID, text string) {
 	if !isStream {
 		return
 	}
 	_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
+		ID: requestID,
 		Choices: []OpenaiCompletionStreamRespChoice{{
 			Delta: OpenaiCompletionStreamRespDelta{
 				Role:             OpenaiMessageRoleAI,

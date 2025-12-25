@@ -1,10 +1,13 @@
 # db . -t ppcelery/go-ramjet:latest
 FROM node:24-bookworm AS nodebuild
 
-RUN npm install -g sass
 WORKDIR /app
 ADD . .
-RUN sass ./internal/tasks/gptchat/templates/scss
+
+# Build the unified SPA UI
+RUN corepack enable || true
+RUN pnpm -C web install --frozen-lockfile
+RUN pnpm -C web build
 
 # =====================================
 
@@ -36,7 +39,7 @@ RUN go mod download
 
 # static build
 ADD . .
-COPY --from=nodebuild /app/internal/tasks/gptchat/templates/scss/*.css ./internal/tasks/gptchat/templates/scss/.
+COPY --from=nodebuild /app/web/dist ./web/dist
 ENV GOOS=linux
 ENV GOARCH=amd64
 RUN go build
@@ -90,5 +93,6 @@ WORKDIR /app
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.6 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.6
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
+COPY --from=gobuild /goapp/web/dist /app/web/dist
 
 ENTRYPOINT ["/app/go-ramjet"]
