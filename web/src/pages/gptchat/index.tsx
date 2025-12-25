@@ -346,7 +346,26 @@ export function GPTChatPage() {
   const handleSavePrompt = useCallback(
     async (name: string, prompt: string) => {
       const newShortcut: PromptShortcut = { name, prompt }
-      const updated = [...promptShortcuts, newShortcut]
+      // Check if already exists, if so update it, else append
+      const index = promptShortcuts.findIndex((s) => s.name === name)
+      let updated: PromptShortcut[]
+      if (index >= 0) {
+        updated = [...promptShortcuts]
+        updated[index] = newShortcut
+      } else {
+        updated = [...promptShortcuts, newShortcut]
+      }
+      setPromptShortcuts(updated)
+      await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
+    },
+    [promptShortcuts],
+  )
+
+  const handleEditPrompt = useCallback(
+    async (oldName: string, newName: string, newPrompt: string) => {
+      const updated = promptShortcuts.map((s) =>
+        s.name === oldName ? { name: newName, prompt: newPrompt } : s,
+      )
       setPromptShortcuts(updated)
       await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
     },
@@ -482,7 +501,7 @@ export function GPTChatPage() {
           activeSessionId={sessionId}
           onSwitchSession={switchSession}
           onCreateSession={() => createSession()}
-          onDeleteSession={deleteSession}
+          onClearChats={handleClearChats}
         />
       </aside>
 
@@ -660,6 +679,7 @@ export function GPTChatPage() {
         onReset={handleReset}
         promptShortcuts={promptShortcuts}
         onSavePrompt={handleSavePrompt}
+        onEditPrompt={handleEditPrompt}
         onDeletePrompt={handleDeletePrompt}
         onExportData={exportAllData}
         onImportData={handleImportData}

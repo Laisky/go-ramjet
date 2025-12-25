@@ -13,7 +13,7 @@ interface SessionDockProps {
   activeSessionId: number
   onSwitchSession: (id: number) => void
   onCreateSession: () => void
-  onDeleteSession: (id: number) => void
+  onClearChats: () => void
 }
 
 export function SessionDock({
@@ -21,7 +21,7 @@ export function SessionDock({
   activeSessionId,
   onSwitchSession,
   onCreateSession,
-  onDeleteSession,
+  onClearChats,
 }: SessionDockProps) {
   // Get first character of name for the badge
   const getAbbr = (name: string) => {
@@ -73,13 +73,13 @@ export function SessionDock({
 
       <div className="flex w-full flex-col border-t border-border">
         <ConfirmDialog
-          title="Delete Current Session"
-          description="Are you sure you want to delete the current active session? This action cannot be undone."
-          onConfirm={() => onDeleteSession(activeSessionId)}
+          title="Clear Chat History"
+          description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
+          onConfirm={onClearChats}
           trigger={
             <button
               className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
-              title="Delete Current Session"
+              title="Clear Chat History"
             >
               <Trash2 className="h-4 w-4" />
             </button>

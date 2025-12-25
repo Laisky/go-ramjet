@@ -7,8 +7,10 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Pencil,
   Save,
   Settings,
+  ShoppingBag,
   Trash2,
   User,
   X,
@@ -26,6 +28,7 @@ import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { McpServerManager } from './mcp-server-manager'
 import { ModelSelector } from './model-selector'
+import { PromptMarket } from './prompt-market'
 import { SessionManager } from './session-manager'
 
 import { useUser } from '../hooks/use-user'
@@ -41,6 +44,7 @@ export interface ConfigSidebarProps {
   onReset: () => void
   promptShortcuts?: PromptShortcut[]
   onSavePrompt?: (name: string, prompt: string) => void
+  onEditPrompt?: (oldName: string, newName: string, newPrompt: string) => void
   onDeletePrompt?: (name: string) => void
   onExportData: () => Promise<unknown>
   onImportData: (data: unknown) => Promise<void>
@@ -68,6 +72,7 @@ export function ConfigSidebar({
   onReset,
   promptShortcuts = [],
   onSavePrompt,
+  onEditPrompt,
   onDeletePrompt,
   onExportData,
   onImportData,
@@ -81,6 +86,12 @@ export function ConfigSidebar({
   onPurgeAllSessions,
 }: ConfigSidebarProps) {
   const [showSavePrompt, setShowSavePrompt] = useState(false)
+  const [showPromptMarket, setShowPromptMarket] = useState(false)
+  const [editingPrompt, setEditingPrompt] = useState<{
+    oldName: string
+    name: string
+    prompt: string
+  } | null>(null)
   const [newPromptName, setNewPromptName] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -414,6 +425,26 @@ export function ConfigSidebar({
     }
   }, [onSavePrompt, newPromptName, config.system_prompt])
 
+  const handleUpdatePrompt = useCallback(() => {
+    if (editingPrompt && onEditPrompt) {
+      onEditPrompt(
+        editingPrompt.oldName,
+        editingPrompt.name,
+        editingPrompt.prompt,
+      )
+      setEditingPrompt(null)
+    }
+  }, [editingPrompt, onEditPrompt])
+
+  const handleMarketAdd = useCallback(
+    (name: string, prompt: string) => {
+      if (onSavePrompt) {
+        onSavePrompt(name, prompt)
+      }
+    },
+    [onSavePrompt],
+  )
+
   const handleSelectPrompt = useCallback(
     (prompt: string) => {
       onConfigChange({ system_prompt: prompt })
@@ -705,14 +736,26 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>System Prompt</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2"
-                onClick={() => setShowSavePrompt(!showSavePrompt)}
-              >
-                <Save className="h-3 w-3" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => setShowPromptMarket(!showPromptMarket)}
+                  title="Prompt Marketplace"
+                >
+                  <ShoppingBag className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => setShowSavePrompt(!showSavePrompt)}
+                  title="Save as Shortcut"
+                >
+                  <Save className="h-3 w-3" />
+                </Button>
+              </div>
             </label>
             <Textarea
               value={config.system_prompt}
@@ -723,6 +766,23 @@ export function ConfigSidebar({
               rows={4}
             />
           </div>
+
+          {/* Prompt Marketplace */}
+          {showPromptMarket && (
+            <Card className="p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <CardTitle className="text-sm">Prompt Marketplace</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPromptMarket(false)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <PromptMarket onAddPrompt={handleMarketAdd} />
+            </Card>
+          )}
 
           {/* Save prompt dialog */}
           {showSavePrompt && (
@@ -761,21 +821,81 @@ export function ConfigSidebar({
                     onClick={() => handleSelectPrompt(shortcut.prompt)}
                   >
                     {shortcut.name}
-                    {onDeletePrompt && (
+                    <div className="ml-1 flex items-center gap-0.5">
                       <button
-                        className="ml-1 rounded-full p-0.5 hover:bg-muted"
+                        className="rounded-full p-0.5 hover:bg-muted"
                         onClick={(e) => {
                           e.stopPropagation()
-                          onDeletePrompt(shortcut.name)
+                          setEditingPrompt({
+                            oldName: shortcut.name,
+                            name: shortcut.name,
+                            prompt: shortcut.prompt,
+                          })
                         }}
                       >
-                        <X className="h-3 w-3" />
+                        <Pencil className="h-3 w-3" />
                       </button>
-                    )}
+                      {onDeletePrompt && (
+                        <button
+                          className="rounded-full p-0.5 hover:bg-muted"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDeletePrompt(shortcut.name)
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   </Badge>
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Edit prompt dialog */}
+          {editingPrompt && (
+            <Card className="p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Edit Shortcut</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingPrompt(null)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={editingPrompt.name}
+                  onChange={(e) =>
+                    setEditingPrompt({ ...editingPrompt, name: e.target.value })
+                  }
+                  placeholder="Shortcut name"
+                  className="text-sm"
+                />
+                <Textarea
+                  value={editingPrompt.prompt}
+                  onChange={(e) =>
+                    setEditingPrompt({
+                      ...editingPrompt,
+                      prompt: e.target.value,
+                    })
+                  }
+                  placeholder="Prompt content"
+                  className="text-sm"
+                  rows={3}
+                />
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={handleUpdatePrompt}
+                >
+                  Update Shortcut
+                </Button>
+              </div>
+            </Card>
           )}
 
           <div className="h-px bg-border" />
