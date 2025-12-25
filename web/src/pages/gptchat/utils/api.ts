@@ -1,7 +1,9 @@
 import { getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
 
-const API_BASE = '/gptchat'
+const API_BASE = window.location.pathname.startsWith('/gptchat')
+  ? '/gptchat'
+  : ''
 
 export class ApiError extends Error {
   status: number
@@ -104,7 +106,7 @@ export const api = {
       headers['X-Laisky-Api-Base'] = apiBase
     }
 
-    const resp = await fetch('/ramjet/gptchat/files', {
+    const resp = await fetch(`${API_BASE}/ramjet/gptchat/files`, {
       method: 'POST',
       headers,
       body: form,
@@ -130,7 +132,7 @@ export const api = {
       headers['X-Laisky-Api-Base'] = apiBase
     }
 
-    const resp = await fetch('/ramjet/gptchat/files', {
+    const resp = await fetch(`${API_BASE}/ramjet/gptchat/files`, {
       method: 'GET',
       headers,
       cache: 'no-cache',
@@ -158,7 +160,7 @@ export const api = {
       headers['X-Laisky-Api-Base'] = apiBase
     }
 
-    const resp = await fetch('/ramjet/gptchat/files', {
+    const resp = await fetch(`${API_BASE}/ramjet/gptchat/files`, {
       method: 'DELETE',
       headers,
       body: JSON.stringify({ datasets: [datasetName] }),
@@ -183,7 +185,7 @@ export const api = {
       headers['X-Laisky-Api-Base'] = apiBase
     }
 
-    const resp = await fetch('/ramjet/gptchat/ctx/list', {
+    const resp = await fetch(`${API_BASE}/ramjet/gptchat/ctx/list`, {
       method: 'GET',
       headers,
       cache: 'no-cache',
@@ -209,7 +211,7 @@ export const api = {
       headers['X-Laisky-Api-Base'] = apiBase
     }
 
-    const resp = await fetch('/ramjet/gptchat/ctx/active', {
+    const resp = await fetch(`${API_BASE}/ramjet/gptchat/ctx/active`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ data_key: dataKey, chatbot_name: chatbotName }),

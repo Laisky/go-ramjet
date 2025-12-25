@@ -78,6 +78,33 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
+		// If not found, try stripping the prefix
+		// This supports proxying a subpath to the SPA root.
+		//
+		// Nginx's proxy_pass might merge the prefix with the next component
+		// if trailing slashes are mismatched.
+		// e.g., /gptchat/assets/foo.js -> /assets/foo.js
+		// e.g., /gptchatassets/foo.js -> /assets/foo.js
+		newPath := cleanPath
+		if strings.HasPrefix(cleanPath, "/gptchat") {
+			newPath = strings.TrimPrefix(cleanPath, "/gptchat")
+		} else {
+			parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+			if len(parts) > 1 {
+				newPath = strings.Join(parts[1:], "/")
+			}
+		}
+
+		if newPath != cleanPath {
+			fpath = filepath.Join(distDir, strings.TrimPrefix(newPath, "/"))
+			log.Logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath), zap.String("fpath", fpath))
+			info, err = os.Stat(fpath)
+			if err == nil && !info.IsDir() {
+				c.File(fpath)
+				return
+			}
+		}
+
 		// If not found or is directory, fall back to index.html for SPA routes
 		accept := c.GetHeader("Accept")
 		if !strings.Contains(accept, "text/html") {

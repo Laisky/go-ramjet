@@ -5,6 +5,10 @@ import type { Annotation } from '@/pages/gptchat/types'
  * Handles both regular requests and streaming SSE responses.
  */
 
+export const API_BASE = window.location.pathname.startsWith('/gptchat')
+  ? '/gptchat'
+  : ''
+
 export interface ToolCallFunction {
   name: string
   arguments: string
@@ -177,7 +181,7 @@ export async function sendChatRequest(
 ): Promise<ChatCompletionResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch('/gptchat/api', {
+  const response = await fetch(`${API_BASE}/api`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ...request, stream: false }),
@@ -224,7 +228,7 @@ export function sendStreamingChatRequest(
       const headers = await buildHeaders(apiToken, apiBase)
       headers['Accept'] = 'text/event-stream'
 
-      const response = await fetch('/gptchat/api', {
+      const response = await fetch(`${API_BASE}/api`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ ...request, stream: true }),
@@ -392,7 +396,7 @@ export async function generateImage(
 ): Promise<ImageGenerationResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch('/gptchat/images/generations', {
+  const response = await fetch(`${API_BASE}/images/generations`, {
     method: 'POST',
     headers,
     body: JSON.stringify(request),
@@ -437,7 +441,7 @@ export async function editImageWithMask(
     },
   }
 
-  const response = await fetch(`/gptchat/images/edit/flux/${model}`, {
+  const response = await fetch(`${API_BASE}/images/edit/flux/${model}`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -461,7 +465,7 @@ export async function createDeepResearchTask(
 ): Promise<{ task_id: string }> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch('/gptchat/deepresearch', {
+  const response = await fetch(`${API_BASE}/deepresearch`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ prompt }),
@@ -485,7 +489,7 @@ export async function fetchDeepResearchStatus(
 ): Promise<DeepResearchTask> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`/gptchat/deepresearch/${taskId}`, {
+  const response = await fetch(`${API_BASE}/deepresearch/${taskId}`, {
     method: 'GET',
     headers,
   })
@@ -510,7 +514,7 @@ export async function uploadFiles(
     formData.append('files', file)
   }
 
-  const response = await fetch('/gptchat/files/chat', {
+  const response = await fetch(`${API_BASE}/files/chat`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiToken}`,
@@ -535,7 +539,7 @@ export async function transcribeAudio(
   formData.append('file', file)
   formData.append('model', 'whisper-1')
 
-  const response = await fetch('/oneapi/v1/audio/transcriptions', {
+  const response = await fetch(`${API_BASE}/oneapi/v1/audio/transcriptions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiToken}`,
@@ -569,7 +573,7 @@ export async function transcribeAudio(
 export async function getCurrentUser(
   apiToken: string,
 ): Promise<{ username: string; is_member: boolean }> {
-  const response = await fetch('/gptchat/user/me', {
+  const response = await fetch(`${API_BASE}/user/me`, {
     headers: {
       Authorization: `Bearer ${apiToken}`,
     },
@@ -589,7 +593,7 @@ export async function getCurrentUser(
 export async function createPaymentIntent(
   items: object[],
 ): Promise<{ clientSecret: string }> {
-  const response = await fetch('/gptchat/create-payment-intent', {
+  const response = await fetch(`${API_BASE}/create-payment-intent`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -11,6 +11,7 @@ import {
 import { Link } from 'react-router-dom'
 
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
+import { GPTChatPage } from './gptchat'
 
 interface TaskDefinition {
   key: string
@@ -80,6 +81,11 @@ const Tasks: TaskDefinition[] = [
  * HomePage renders the unified landing page with task cards.
  */
 export function HomePage() {
+  const hostname = window.location.hostname
+  if (hostname === 'chat.laisky.com' || hostname === 'chat2.laisky.com') {
+    return <GPTChatPage />
+  }
+
   const featuredTask = Tasks.find((t) => t.featured)
   const otherTasks = Tasks.filter((t) => !t.featured)
 

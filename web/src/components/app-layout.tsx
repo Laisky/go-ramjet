@@ -7,7 +7,10 @@ import { ThemeToggle } from '@/components/theme-toggle'
  */
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
-  const isChatPage = location.pathname.startsWith('/gptchat')
+  const isChatPage =
+    location.pathname.startsWith('/gptchat') ||
+    window.location.hostname === 'chat.laisky.com' ||
+    window.location.hostname === 'chat2.laisky.com'
   const containerClass = isChatPage ? 'w-full px-0' : 'mx-auto max-w-5xl px-4'
 
   return (

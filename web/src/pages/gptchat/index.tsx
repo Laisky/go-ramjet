@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
+import { API_BASE } from '@/utils/api'
 import {
   ChatInput,
   ChatMessage,
@@ -135,7 +136,7 @@ export function GPTChatPage() {
 
     const checkUpgrade = async () => {
       try {
-        const resp = await fetch('/gptchat/version', { cache: 'no-cache' })
+        const resp = await fetch(`${API_BASE}/version`, { cache: 'no-cache' })
         if (!resp.ok) return
         const data = (await resp.json()) as VersionResponse
         const serverVer = data.Settings?.find(

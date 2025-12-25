@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 
 import { Button } from '@/components/ui/button'
+import { API_BASE } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -128,7 +129,7 @@ export function GPTChatPaymentPage() {
     setClientSecret(null)
 
     try {
-      const resp = await fetch('/gptchat/create-payment-intent', {
+      const resp = await fetch(`${API_BASE}/create-payment-intent`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
