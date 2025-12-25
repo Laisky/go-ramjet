@@ -477,8 +477,8 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={placeholder}
               disabled={disabled || isLoading || isTranscribing}
-              className="min-h-[36px] w-full resize-none rounded-md border-0 bg-transparent px-0 pr-16 pb-1.5 text-base shadow-none ring-0 focus:ring-0 dark:bg-transparent"
-              rows={1}
+              className="min-h-[80px] w-full resize-none rounded-md border-0 bg-transparent px-0 pr-16 pb-1.5 text-base shadow-none ring-0 focus:ring-0 dark:bg-transparent"
+              rows={3}
             />
             <span className="pointer-events-none absolute bottom-0 left-0 text-[9px] text-muted-foreground/50">
               Ctrl+Enter to send
