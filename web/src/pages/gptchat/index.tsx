@@ -75,7 +75,36 @@ export function GPTChatPage() {
       }
     | undefined
   >(undefined)
-  const [sessionDrafts, setSessionDrafts] = useState<Record<number, string>>({})
+  const [globalDraft, setGlobalDraft] = useState<string>('')
+
+  // Load global draft on mount
+  useEffect(() => {
+    const loadDraft = async () => {
+      const draft = await kvGet<unknown>(StorageKeys.SESSION_DRAFTS)
+      if (draft) {
+        if (typeof draft === 'string') {
+          setGlobalDraft(draft)
+        } else if (typeof draft === 'object' && draft !== null) {
+          // Migrate from old Record<number, string> format
+          const values = Object.values(draft as Record<string, unknown>)
+          const firstVal = values.find((v) => typeof v === 'string')
+          if (firstVal) {
+            setGlobalDraft(firstVal as string)
+          }
+        }
+      }
+    }
+    loadDraft()
+  }, [])
+
+  // Persist global draft when it changes (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      kvSet(StorageKeys.SESSION_DRAFTS, globalDraft)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [globalDraft])
+
   const [editingMessage, setEditingMessage] = useState<{
     chatId: string
     content: string
@@ -89,13 +118,17 @@ export function GPTChatPage() {
     ? activeModelName || 'Message...'
     : 'Enter your API key in Settings to start chatting'
 
-  // Load messages and shortcuts on mount
+  // Load messages when session changes
+  useEffect(() => {
+    loadMessages()
+  }, [sessionId, loadMessages])
+
+  // Load shortcuts on mount or when config finishes loading
   useEffect(() => {
     if (!configLoading) {
-      loadMessages()
       loadPromptShortcuts()
     }
-  }, [configLoading, loadMessages])
+  }, [configLoading])
 
   useEffect(() => {
     let cancelled = false
@@ -290,7 +323,7 @@ export function GPTChatPage() {
   }, [messages, visibleCount])
 
   const lastMessage = messages[messages.length - 1]
-  const currentDraftMessage = sessionDrafts[sessionId] ?? ''
+  const currentDraftMessage = globalDraft
 
   const loadPromptShortcuts = async () => {
     let shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
@@ -432,35 +465,10 @@ export function GPTChatPage() {
 
   const handleDraftChange = useCallback(
     (value: string) => {
-      setSessionDrafts((prev) => {
-        const existing = prev[sessionId] ?? ''
-        if (existing === value) {
-          return prev
-        }
-        if (!value) {
-          if (!(sessionId in prev)) {
-            return prev
-          }
-          const updated = { ...prev }
-          delete updated[sessionId]
-          return updated
-        }
-        return { ...prev, [sessionId]: value }
-      })
+      setGlobalDraft(value)
     },
-    [sessionId],
+    [],
   )
-
-  if (configLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="theme-bg flex h-screen w-full overflow-hidden">
@@ -553,12 +561,19 @@ export function GPTChatPage() {
 
         {/* Scrollable chat area */}
         <main className="relative flex-1 overflow-hidden">
-        {/* Error display */}
-        {error && (
-          <div className="mx-4 mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+          {/* Loading overlay for session switching */}
+          {configLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+            </div>
+          )}
+
+          {/* Error display */}
+          {error && (
+            <div className="mx-4 mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
           <div
             ref={messagesContainerRef}
@@ -713,8 +728,9 @@ function EditMessageModal({
   }, [])
 
   const handleSubmit = useCallback(() => {
-    if (editedContent.trim()) {
-      onConfirm(editedContent)
+    const trimmed = String(editedContent || '').trim()
+    if (trimmed) {
+      onConfirm(trimmed)
     }
   }, [editedContent, onConfirm])
 
@@ -753,7 +769,7 @@ function EditMessageModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!editedContent.trim()}>
+          <Button onClick={handleSubmit} disabled={!String(editedContent || '').trim()}>
             Retry with Edited Message
           </Button>
         </div>

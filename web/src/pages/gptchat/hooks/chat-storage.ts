@@ -52,11 +52,21 @@ export function useChatStorage({
         const userData = await kvGet<ChatMessageData>(userKey)
         const assistantData = await kvGet<ChatMessageData>(assistantKey)
 
-        if (userData) {
-          loadedMessages.push(userData)
+        if (userData && typeof userData === 'object' && userData.content) {
+          loadedMessages.push({
+            ...userData,
+            content: String(userData.content),
+          })
         }
-        if (assistantData) {
-          loadedMessages.push(assistantData)
+        if (
+          assistantData &&
+          typeof assistantData === 'object' &&
+          assistantData.content
+        ) {
+          loadedMessages.push({
+            ...assistantData,
+            content: String(assistantData.content),
+          })
         }
       }
 

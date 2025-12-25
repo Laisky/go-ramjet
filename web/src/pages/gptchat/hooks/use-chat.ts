@@ -147,7 +147,8 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
    */
   const sendMessage = useCallback(
     async (content: string, attachments?: File[]) => {
-      if (!content.trim()) return
+      const safeContent = String(content || '').trim()
+      if (!safeContent) return
 
       const chatId = generateChatId()
       currentChatIdRef.current = chatId
@@ -156,7 +157,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       const contentParts: ContentPart[] = []
       const attachmentMarkdown: string[] = []
 
-      let finalContent = content.trim()
+      let finalContent = safeContent
 
       const pushTextPart = (text: string) => {
         if (!text) return
@@ -359,7 +360,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
    */
   const editAndRetry = useCallback(
     async (chatId: string, newContent: string) => {
-      const trimmed = newContent.trim()
+      const trimmed = String(newContent || '').trim()
       if (!trimmed) {
         return
       }

@@ -23,6 +23,9 @@ import { cn } from '@/utils/cn'
 import type { ChatMessageData } from '../types'
 
 function stripMarkdownText(input: string): string {
+  if (typeof input !== 'string') {
+    return ''
+  }
   return input
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`]*`/g, ' ')

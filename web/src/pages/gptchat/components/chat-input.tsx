@@ -81,7 +81,6 @@ export function ChatInput({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const lastPrefillIdRef = useRef<string | null>(null)
-  const lastDraftMessageRef = useRef<string | undefined>(draftMessage)
 
   const appendFiles = useCallback((files: File[]) => {
     if (!files.length) return
@@ -114,28 +113,26 @@ export function ChatInput({
     [closeEditor, editorIndex],
   )
 
+  // Helper to update message and sync to parent
+  const updateMessage = useCallback(
+    (newValue: string | ((prev: string) => string)) => {
+      setMessage((prev) => {
+        const next = typeof newValue === 'function' ? newValue(prev) : newValue
+        if (onDraftChange && next !== prev) {
+          onDraftChange(next)
+        }
+        return next
+      })
+    },
+    [onDraftChange],
+  )
+
   // Sync from external draftMessage changes (e.g., switching sessions)
   useEffect(() => {
-    if (draftMessage === undefined) {
-      return
+    if (draftMessage !== undefined && draftMessage !== message) {
+      setMessage(draftMessage)
     }
-    // Only update if draftMessage actually changed from outside
-    if (lastDraftMessageRef.current === draftMessage) {
-      return
-    }
-    lastDraftMessageRef.current = draftMessage
-    setMessage(draftMessage)
-    setHistoryIndex(null)
   }, [draftMessage])
-
-  // Sync local message changes back to parent
-  useEffect(() => {
-    if (onDraftChange) {
-      // Update the ref so the other effect doesn't react
-      lastDraftMessageRef.current = message
-      onDraftChange(message)
-    }
-  }, [message, onDraftChange])
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -150,7 +147,7 @@ export function ChatInput({
       return
     }
     lastPrefillIdRef.current = prefillDraft.id
-    setMessage(prefillDraft.text)
+    updateMessage(prefillDraft.text)
     setHistoryIndex(null)
     requestAnimationFrame(() => {
       textareaRef.current?.focus()
@@ -158,7 +155,7 @@ export function ChatInput({
     if (onPrefillUsed) {
       onPrefillUsed(prefillDraft.id)
     }
-  }, [prefillDraft, onPrefillUsed])
+  }, [prefillDraft, onPrefillUsed, updateMessage])
 
   useEffect(() => {
     return () => {
@@ -179,17 +176,18 @@ export function ChatInput({
   }, [attachedFiles.length, editorIndex])
 
   const handleSend = useCallback(() => {
-    if (!message.trim() || disabled || isLoading || isTranscribing) return
-    const payload = message.trim()
+    const trimmed = String(message || '').trim()
+    if (!trimmed || disabled || isLoading || isTranscribing) return
+    const payload = trimmed
     onSend(payload, attachedFiles.length > 0 ? attachedFiles : undefined)
     setPromptHistory((prev) => [
       ...prev.slice(-(PROMPT_HISTORY_LIMIT - 1)),
       payload,
     ])
     setHistoryIndex(null)
-    setMessage('')
+    updateMessage('')
     setAttachedFiles([])
-  }, [message, attachedFiles, disabled, isLoading, isTranscribing, onSend])
+  }, [message, attachedFiles, disabled, isLoading, isTranscribing, onSend, updateMessage])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -221,7 +219,7 @@ export function ChatInput({
               : Math.max(historyIndex - 1, 0)
           setHistoryIndex(nextIndex)
           const nextValue = promptHistory[nextIndex] ?? ''
-          setMessage(nextValue)
+          updateMessage(nextValue)
           requestAnimationFrame(() => {
             textarea.selectionStart = textarea.selectionEnd = 0
           })
@@ -244,18 +242,18 @@ export function ChatInput({
         ) {
           e.preventDefault()
           if (historyIndex === null) {
-            setMessage('')
+            updateMessage('')
             return
           }
 
           const nextIndex = historyIndex + 1
           if (nextIndex >= promptHistory.length) {
             setHistoryIndex(null)
-            setMessage('')
+            updateMessage('')
           } else {
             setHistoryIndex(nextIndex)
             const nextValue = promptHistory[nextIndex] ?? ''
-            setMessage(nextValue)
+            updateMessage(nextValue)
             requestAnimationFrame(() => {
               textarea.selectionStart = textarea.selectionEnd = nextValue.length
             })
@@ -263,7 +261,7 @@ export function ChatInput({
         }
       }
     },
-    [handleSend, historyIndex, message.length, promptHistory],
+    [handleSend, historyIndex, message.length, promptHistory, updateMessage],
   )
 
   const handleFileSelect = useCallback(
@@ -352,7 +350,7 @@ export function ChatInput({
           type: blob.type || 'audio/webm',
         })
         const text = await transcribeAudio(file, config.api_token)
-        setMessage((prev) => (prev ? `${prev}\n${text}` : text))
+        updateMessage((prev) => (prev ? `${prev}\n${text}` : text))
       } catch (err) {
         console.error('Failed to transcribe audio:', err)
         alert(
@@ -466,7 +464,7 @@ export function ChatInput({
             <Textarea
               ref={textareaRef}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => updateMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               placeholder={placeholder}
@@ -509,7 +507,7 @@ export function ChatInput({
             ) : (
               <Button
                 onClick={handleSend}
-                disabled={!message.trim() || disabled || isTranscribing}
+                disabled={!String(message || '').trim() || disabled || isTranscribing}
                 className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
               >
                 <Send className="h-4 w-4" />

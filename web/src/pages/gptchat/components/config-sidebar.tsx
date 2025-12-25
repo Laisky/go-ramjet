@@ -324,7 +324,8 @@ export function ConfigSidebar({
   }, [config.api_base, config.api_token, datasetKey])
 
   const handleUploadDataset = useCallback(async () => {
-    if (!datasetFile || !datasetName.trim()) {
+    const trimmedName = String(datasetName || '').trim()
+    if (!datasetFile || !trimmedName) {
       alert('Choose a file and dataset name first.')
       return
     }
@@ -333,7 +334,7 @@ export function ConfigSidebar({
     try {
       await api.uploadDataset(
         datasetFile,
-        datasetName.trim(),
+        trimmedName,
         datasetKey,
         config.api_token,
         config.api_base,
@@ -405,8 +406,9 @@ export function ConfigSidebar({
   const acceptFileTypes = useMemo(() => '.pdf,.md,.ppt,.pptx,.doc,.docx', [])
 
   const handleSavePrompt = useCallback(() => {
-    if (onSavePrompt && newPromptName.trim() && config.system_prompt) {
-      onSavePrompt(newPromptName.trim(), config.system_prompt)
+    const trimmedName = String(newPromptName || '').trim()
+    if (onSavePrompt && trimmedName && config.system_prompt) {
+      onSavePrompt(trimmedName, config.system_prompt)
       setNewPromptName('')
       setShowSavePrompt(false)
     }

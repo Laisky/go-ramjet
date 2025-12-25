@@ -37,16 +37,18 @@ export function SessionManager({
   const [newName, setNewName] = useState('')
 
   const handleCreate = () => {
-    if (newName.trim()) {
-      onCreateSession(newName.trim())
+    const trimmed = String(newName || '').trim()
+    if (trimmed) {
+      onCreateSession(trimmed)
       setNewName('')
       setIsCreating(false)
     }
   }
 
   const handleRename = () => {
-    if (editingId && newName.trim()) {
-      onRenameSession(editingId, newName.trim())
+    const trimmed = String(newName || '').trim()
+    if (editingId && trimmed) {
+      onRenameSession(editingId, trimmed)
       setEditingId(null)
       setNewName('')
     }
