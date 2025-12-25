@@ -168,6 +168,8 @@ export function useChatStreaming({
       let fullContent = ''
       let fullReasoning = ''
       let fullAnnotations: Annotation[] = []
+      let lastRequestId = ''
+      let lastModel = ''
       const toolEventLog: string[] = []
       const toolCallAccumulator = new Map<string, ToolCallDelta>()
       const finishReasonRef = { current: null as string | null }
@@ -291,6 +293,21 @@ export function useChatStreaming({
                 )
               },
               onToolCallDelta: accumulateToolCalls,
+              onResponseInfo: (info) => {
+                if (info.id) lastRequestId = info.id
+                if (info.model) lastModel = info.model
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? {
+                          ...m,
+                          requestid: info.id || m.requestid,
+                          model: info.model || m.model,
+                        }
+                      : m,
+                  ),
+                )
+              },
               onFinish: (reason) => {
                 finishReasonRef.current = reason ?? null
               },
@@ -340,14 +357,44 @@ export function useChatStreaming({
           chatID: chatId,
           role: 'assistant',
           content: fullContent,
-          model: config.selected_model,
+          model: lastModel || config.selected_model,
           reasoningContent:
             [...toolEventLog, fullReasoning].filter(Boolean).join('\n') ||
             undefined,
           annotations: fullAnnotations,
           references: extractReferencesFromAnnotations(fullAnnotations),
           timestamp: Date.now(),
+          requestid: lastRequestId,
         }
+
+        if (lastRequestId) {
+          try {
+            const resp = await fetch(
+              `/gptchat/oneapi/api/cost/request/${lastRequestId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${config.api_token}`,
+                },
+              },
+            )
+            if (resp.ok) {
+              const data = await resp.json()
+              if (data.cost_usd) {
+                finalMessage.costUsd = data.cost_usd
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.chatID === chatId && m.role === 'assistant'
+                      ? { ...m, costUsd: data.cost_usd }
+                      : m,
+                  ),
+                )
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch cost:', err)
+          }
+        }
+
         await saveMessage(finalMessage)
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {

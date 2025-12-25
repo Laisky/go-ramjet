@@ -15,7 +15,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Markdown } from '@/components/markdown'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { splitReasoningContent } from '@/utils/chat-parser'
@@ -233,22 +232,9 @@ export function ChatMessage({
 
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span
-                className={cn(
-                  'font-semibold',
-                  'text-foreground',
-                )}
-              >
+              <span className={cn('font-semibold', 'text-foreground')}>
                 {isUser ? 'You' : 'Assistant'}
               </span>
-              {isAssistant && message.model && (
-                <Badge
-                  variant="secondary"
-                  className="h-6 rounded-md bg-muted px-2 text-[11px] text-muted-foreground"
-                >
-                  {message.model}
-                </Badge>
-              )}
               {message.timestamp && (
                 <span className="text-[11px] text-muted-foreground">
                   {new Date(message.timestamp).toLocaleTimeString()}
@@ -391,6 +377,15 @@ export function ChatMessage({
                   </ol>
                 </Card>
               )}
+
+            {isAssistant && (
+              <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-muted-foreground/60">
+                {message.model && <span>{message.model}</span>}
+                {message.costUsd !== undefined && (
+                  <span>${message.costUsd.toFixed(4)}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </Card>

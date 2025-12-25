@@ -13,6 +13,8 @@ export interface ChatMessageData {
   attachments?: ChatAttachment[]
   annotations?: Annotation[]
   references?: ChatReference[]
+  requestid?: string
+  costUsd?: number
 }
 
 export interface ChatAttachment {

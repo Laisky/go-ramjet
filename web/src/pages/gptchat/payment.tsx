@@ -96,10 +96,7 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
       </Button>
 
       {message && (
-        <div
-          id="payment-message"
-          className="text-sm text-destructive"
-        >
+        <div id="payment-message" className="text-sm text-destructive">
           {message}
         </div>
       )}

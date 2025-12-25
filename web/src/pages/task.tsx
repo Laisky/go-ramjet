@@ -71,9 +71,7 @@ export function TaskPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">{info.title}</h2>
-        <p className="text-sm text-muted-foreground">
-          {info.description}
-        </p>
+        <p className="text-sm text-muted-foreground">{info.description}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

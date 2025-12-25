@@ -202,6 +202,7 @@ export interface StreamCallbacks {
   onFinish?: (finishReason?: string | null) => void
   onDone?: () => void
   onError?: (error: Error) => void
+  onResponseInfo?: (info: { id: string; model: string }) => void
 }
 
 /**
@@ -234,6 +235,10 @@ export function sendStreamingChatRequest(
         const text = await response.text()
         throw new Error(`[${response.status}]: ${text}`)
       }
+
+      const requestId =
+        response.headers.get('x-oneapi-request-id') ||
+        response.headers.get('x-request-id')
 
       const reader = response.body?.getReader()
       if (!reader) {
@@ -268,6 +273,15 @@ export function sendStreamingChatRequest(
 
           try {
             const parsed = JSON.parse(data) as ChatCompletionResponse
+            const id = requestId || parsed.id
+            const model = parsed.model
+            if (id || model) {
+              callbacks.onResponseInfo?.({
+                id: id || '',
+                model: model || '',
+              })
+            }
+
             const delta = parsed.choices?.[0]?.delta
             if (!delta) {
               continue

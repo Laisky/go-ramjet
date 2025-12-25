@@ -76,9 +76,7 @@ export function ModelSelector({
               ? 'w-auto min-w-[72px] justify-center gap-1.5 px-2 text-sm'
               : 'w-full justify-between gap-2 text-sm',
             active &&
-              (tone === 'ghost'
-                ? 'bg-muted font-bold'
-                : 'ring-2 ring-ring'),
+              (tone === 'ghost' ? 'bg-muted font-bold' : 'ring-2 ring-ring'),
             className,
           )}
           disabled={disabled}

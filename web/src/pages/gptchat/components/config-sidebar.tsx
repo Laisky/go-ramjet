@@ -117,7 +117,7 @@ export function ConfigSidebar({
         {
           /* Private Dataset / RAG */
         }
-        <div className="space-y-3 rounded-lg border border-border p-3">
+        ;<div className="space-y-3 rounded-lg border border-border p-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
               Private Dataset (PDF Chat)
@@ -468,7 +468,10 @@ export function ConfigSidebar({
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
       {/* Sidebar */}
       <div className="bg-card text-card-foreground relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg">
@@ -599,9 +602,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Contexts</span>
-              <span className="text-muted-foreground">
-                {config.n_contexts}
-              </span>
+              <span className="text-muted-foreground">{config.n_contexts}</span>
             </label>
             <input
               type="range"
@@ -620,9 +621,7 @@ export function ConfigSidebar({
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">
               <span>Max Tokens</span>
-              <span className="text-muted-foreground">
-                {config.max_tokens}
-              </span>
+              <span className="text-muted-foreground">{config.max_tokens}</span>
             </label>
             <input
               type="range"

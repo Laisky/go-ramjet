@@ -22,7 +22,12 @@ export const StorageKeys = {
 
 export type KvOperation = 'set' | 'del'
 
-type KvListener = (key: string, op: KvOperation, oldVal: unknown, newVal: unknown) => void
+type KvListener = (
+  key: string,
+  op: KvOperation,
+  oldVal: unknown,
+  newVal: unknown,
+) => void
 
 interface KvListenerEntry {
   name?: string
@@ -49,7 +54,7 @@ function sleep(ms: number): Promise<void> {
  */
 async function executeWithRetry<T>(
   operation: () => Promise<T>,
-  maxRetries = 3
+  maxRetries = 3,
 ): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -106,7 +111,7 @@ async function initDb(): Promise<PouchDB.Database> {
 export async function kvAddListener(
   keyPrefix: string,
   callback: KvListener,
-  callbackName?: string
+  callbackName?: string,
 ): Promise<void> {
   await initDb()
 
@@ -119,7 +124,7 @@ export async function kvAddListener(
   if (callbackName) {
     // Check if a listener with this name already exists
     const existingIndex = prefixListeners.findIndex(
-      (l) => l.name === callbackName
+      (l) => l.name === callbackName,
     )
     if (existingIndex >= 0) {
       prefixListeners[existingIndex].callback = callback
@@ -138,7 +143,10 @@ export async function kvAddListener(
 /**
  * Remove a listener by callback name
  */
-export function kvRemoveListener(keyPrefix: string, callbackName: string): void {
+export function kvRemoveListener(
+  keyPrefix: string,
+  callbackName: string,
+): void {
   const prefixListeners = listeners.get(keyPrefix)
   if (!prefixListeners) return
 
@@ -155,7 +163,7 @@ function notifyListeners(
   key: string,
   op: KvOperation,
   oldVal: unknown,
-  newVal: unknown
+  newVal: unknown,
 ): void {
   listeners.forEach((prefixListeners, keyPrefix) => {
     if (key.startsWith(keyPrefix)) {

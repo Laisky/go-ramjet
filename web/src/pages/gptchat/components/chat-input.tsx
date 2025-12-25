@@ -187,7 +187,15 @@ export function ChatInput({
     setHistoryIndex(null)
     updateMessage('')
     setAttachedFiles([])
-  }, [message, attachedFiles, disabled, isLoading, isTranscribing, onSend, updateMessage])
+  }, [
+    message,
+    attachedFiles,
+    disabled,
+    isLoading,
+    isTranscribing,
+    onSend,
+    updateMessage,
+  ])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -507,7 +515,9 @@ export function ChatInput({
             ) : (
               <Button
                 onClick={handleSend}
-                disabled={!String(message || '').trim() || disabled || isTranscribing}
+                disabled={
+                  !String(message || '').trim() || disabled || isTranscribing
+                }
                 className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
               >
                 <Send className="h-4 w-4" />
@@ -569,9 +579,7 @@ export function ChatInput({
               <Paperclip className="h-3.5 w-3.5" />
             </Button>
             {isTranscribing && !isRecording && (
-              <span className="text-primary">
-                Transcribing…
-              </span>
+              <span className="text-primary">Transcribing…</span>
             )}
           </div>
         </div>

@@ -122,6 +122,7 @@ func sendAndParseChat(ctx *gin.Context) (toolCalls []OpenaiCompletionStreamRespT
 	}
 
 	CopyHeader(ctx.Writer.Header(), resp.Header)
+	ctx.Header("Access-Control-Expose-Headers", "x-oneapi-request-id, x-request-id")
 	isStream := strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
 
 	// heartbeat should be enabled after header is set

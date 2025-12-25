@@ -463,12 +463,9 @@ export function GPTChatPage() {
     [importAllData],
   )
 
-  const handleDraftChange = useCallback(
-    (value: string) => {
-      setGlobalDraft(value)
-    },
-    [],
-  )
+  const handleDraftChange = useCallback((value: string) => {
+    setGlobalDraft(value)
+  }, [])
 
   return (
     <div className="theme-bg flex h-screen w-full overflow-hidden">
@@ -579,44 +576,44 @@ export function GPTChatPage() {
             ref={messagesContainerRef}
             className="h-full overflow-y-auto overflow-x-hidden px-1 pb-[80px] pt-1 sm:px-2 sm:pb-[90px] sm:pt-1.5 md:px-4"
           >
-          {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="mb-4 text-4xl">💬</div>
-              <h2 className="text-lg font-medium">Start a conversation</h2>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Type a message below to begin chatting with the AI. You can
-                change the model and settings using the button above.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2.5 pb-2 sm:space-y-4 sm:pb-3">
-              {messages.length > displayedMessages.length && (
-                <div className="flex justify-center">
-                  <Button variant="ghost" size="sm" onClick={handleLoadOlder}>
-                    Load older messages
-                  </Button>
-                </div>
-              )}
-              {displayedMessages.map((msg) => (
-                <ChatMessage
-                  key={`${msg.chatID}-${msg.role}`}
-                  message={msg}
-                  onDelete={deleteMessage}
-                  onRegenerate={handleRegenerate}
-                  onEditResend={handleEditResend}
-                  pairedUserMessage={userMessageByChatId.get(msg.chatID)}
-                  isStreaming={
-                    chatLoading &&
-                    msg.role === 'assistant' &&
-                    lastMessage &&
-                    msg.chatID === lastMessage.chatID &&
-                    msg.role === lastMessage.role
-                  }
-                />
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+            {messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="mb-4 text-4xl">💬</div>
+                <h2 className="text-lg font-medium">Start a conversation</h2>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Type a message below to begin chatting with the AI. You can
+                  change the model and settings using the button above.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 pb-2 sm:space-y-4 sm:pb-3">
+                {messages.length > displayedMessages.length && (
+                  <div className="flex justify-center">
+                    <Button variant="ghost" size="sm" onClick={handleLoadOlder}>
+                      Load older messages
+                    </Button>
+                  </div>
+                )}
+                {displayedMessages.map((msg) => (
+                  <ChatMessage
+                    key={`${msg.chatID}-${msg.role}`}
+                    message={msg}
+                    onDelete={deleteMessage}
+                    onRegenerate={handleRegenerate}
+                    onEditResend={handleEditResend}
+                    pairedUserMessage={userMessageByChatId.get(msg.chatID)}
+                    isStreaming={
+                      chatLoading &&
+                      msg.role === 'assistant' &&
+                      lastMessage &&
+                      msg.chatID === lastMessage.chatID &&
+                      msg.role === lastMessage.role
+                    }
+                  />
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </div>
 
           {/* Scroll to bottom button */}
@@ -636,19 +633,19 @@ export function GPTChatPage() {
 
         {/* Input (fixed to bottom of main area) */}
         <footer className="theme-surface theme-border shrink-0 border-t p-0">
-        <ChatInput
-          onSend={handleSend}
-          onStop={stopGeneration}
-          isLoading={chatLoading}
-          disabled={!config.api_token}
-          config={config}
-          onConfigChange={handleChatSwitchChange}
-          prefillDraft={prefillDraft}
-          onPrefillUsed={() => setPrefillDraft(undefined)}
-          draftMessage={currentDraftMessage}
-          onDraftChange={handleDraftChange}
-          placeholder={messagePlaceholder}
-        />
+          <ChatInput
+            onSend={handleSend}
+            onStop={stopGeneration}
+            isLoading={chatLoading}
+            disabled={!config.api_token}
+            config={config}
+            onConfigChange={handleChatSwitchChange}
+            prefillDraft={prefillDraft}
+            onPrefillUsed={() => setPrefillDraft(undefined)}
+            draftMessage={currentDraftMessage}
+            onDraftChange={handleDraftChange}
+            placeholder={messagePlaceholder}
+          />
         </footer>
       </div>
 
@@ -769,7 +766,10 @@ function EditMessageModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!String(editedContent || '').trim()}>
+          <Button
+            onClick={handleSubmit}
+            disabled={!String(editedContent || '').trim()}
+          >
             Retry with Edited Message
           </Button>
         </div>
