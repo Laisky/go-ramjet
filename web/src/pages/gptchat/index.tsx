@@ -40,6 +40,7 @@ export function GPTChatPage() {
     createSession,
     deleteSession,
     switchSession,
+    reorderSessions,
     renameSession,
     duplicateSession,
     purgeAllSessions,
@@ -685,6 +686,7 @@ export function GPTChatPage() {
         onSwitchSession={switchSession}
         onRenameSession={renameSession}
         onDuplicateSession={duplicateSession}
+        onReorderSessions={reorderSessions}
         onPurgeAllSessions={handlePurgeAllSessions}
       />
 

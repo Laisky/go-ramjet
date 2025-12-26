@@ -13,6 +13,7 @@ export const StorageKeys = {
   SESSION_HISTORY_PREFIX: 'chat_user_session_',
   SESSION_CONFIG_PREFIX: 'chat_user_config_',
   SELECTED_SESSION: 'config_selected_session',
+  SESSION_ORDER: 'config_session_order',
   SYNC_KEY: 'config_sync_key',
   VERSION_DATE: 'config_version_date',
   USER_INFO: 'config_user_info',

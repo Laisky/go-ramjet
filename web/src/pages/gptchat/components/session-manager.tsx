@@ -3,9 +3,27 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   Check,
   Copy,
   Edit2,
+  GripVertical,
   MessageSquare,
   Plus,
   Trash2,
@@ -21,6 +39,7 @@ interface SessionManagerProps {
   onDeleteSession: (id: number) => void
   onRenameSession: (id: number, name: string) => void
   onDuplicateSession?: (id: number) => void
+  onReorderSessions?: (ids: number[]) => void
 }
 
 export function SessionManager({
@@ -31,10 +50,22 @@ export function SessionManager({
   onDeleteSession,
   onRenameSession,
   onDuplicateSession,
+  onReorderSessions,
 }: SessionManagerProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   const handleCreate = () => {
     const trimmed = String(newName || '').trim()
@@ -58,6 +89,20 @@ export function SessionManager({
     setEditingId(id)
     setNewName(currentName)
     setIsCreating(false)
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = sessions.findIndex((s) => s.id === active.id)
+      const newIndex = sessions.findIndex((s) => s.id === over.id)
+
+      if (onReorderSessions) {
+        const newSessions = arrayMove(sessions, oldIndex, newIndex)
+        onReorderSessions(newSessions.map((s) => s.id))
+      }
+    }
   }
 
   return (
@@ -125,69 +170,139 @@ export function SessionManager({
       )}
 
       <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className={`group flex items-center justify-between gap-2 rounded-md border p-2 text-sm transition-colors ${
-              session.id === activeSessionId
-                ? 'bg-primary/10 border-primary/20'
-                : 'hover:bg-muted border-transparent'
-            }`}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={sessions.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <button
-              className="flex flex-1 items-center gap-2 truncate text-left"
-              onClick={() => onSwitchSession(session.id)}
-            >
-              <MessageSquare
-                className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-primary' : 'text-muted-foreground'}`}
+            {sessions.map((session) => (
+              <SortableSessionItem
+                key={session.id}
+                session={session}
+                activeSessionId={activeSessionId}
+                onSwitchSession={onSwitchSession}
+                onStartEdit={startEdit}
+                onDuplicateSession={onDuplicateSession}
+                onDeleteSession={onDeleteSession}
+                canDelete={sessions.length > 1}
               />
-              <span
-                className={`truncate ${session.id === activeSessionId ? 'font-medium' : ''}`}
-              >
-                {session.name}
-              </span>
-            </button>
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </div>
+  )
+}
 
-            <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+interface SortableSessionItemProps {
+  session: { id: number; name: string }
+  activeSessionId: number
+  onSwitchSession: (id: number) => void
+  onStartEdit: (id: number, name: string) => void
+  onDuplicateSession?: (id: number) => void
+  onDeleteSession: (id: number) => void
+  canDelete: boolean
+}
+
+function SortableSessionItem({
+  session,
+  activeSessionId,
+  onSwitchSession,
+  onStartEdit,
+  onDuplicateSession,
+  onDeleteSession,
+  canDelete,
+}: SortableSessionItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: session.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+    position: 'relative' as const,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center justify-between gap-2 rounded-md border p-2 text-sm transition-colors ${
+        session.id === activeSessionId
+          ? 'bg-primary/10 border-primary/20'
+          : 'hover:bg-muted border-transparent'
+      } ${isDragging ? 'opacity-50' : ''}`}
+    >
+      <div className="flex flex-1 items-center gap-2 truncate">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </div>
+        <button
+          className="flex flex-1 items-center gap-2 truncate text-left"
+          onClick={() => onSwitchSession(session.id)}
+        >
+          <MessageSquare
+            className={`h-3.5 w-3.5 ${session.id === activeSessionId ? 'text-primary' : 'text-muted-foreground'}`}
+          />
+          <span
+            className={`truncate ${session.id === activeSessionId ? 'font-medium' : ''}`}
+          >
+            {session.name}
+          </span>
+        </button>
+      </div>
+
+      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+          onClick={() => onStartEdit(session.id, session.name)}
+        >
+          <Edit2 className="h-3 w-3" />
+        </Button>
+
+        {onDuplicateSession && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-success"
+            onClick={() => onDuplicateSession(session.id)}
+          >
+            <Copy className="h-3 w-3" />
+          </Button>
+        )}
+
+        {canDelete && (
+          <ConfirmDialog
+            title="Delete Session"
+            description={`Are you sure you want to delete "${session.name}"? This will delete all chat history and settings for this session.`}
+            onConfirm={() => onDeleteSession(session.id)}
+            trigger={
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
-                onClick={() => startEdit(session.id, session.name)}
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
               >
-                <Edit2 className="h-3 w-3" />
+                <Trash2 className="h-3 w-3" />
               </Button>
-
-              {onDuplicateSession && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-success"
-                  onClick={() => onDuplicateSession(session.id)}
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
-              )}
-
-              {sessions.length > 1 && (
-                <ConfirmDialog
-                  title="Delete Session"
-                  description={`Are you sure you want to delete "${session.name}"? This will delete all chat history and settings for this session.`}
-                  onConfirm={() => onDeleteSession(session.id)}
-                  trigger={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  }
-                />
-              )}
-            </div>
-          </div>
-        ))}
+            }
+          />
+        )}
       </div>
     </div>
   )

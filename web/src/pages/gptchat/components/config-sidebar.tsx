@@ -40,6 +40,7 @@ export interface ConfigSidebarProps {
   onDeleteSession?: (id: number) => void
   onRenameSession?: (id: number, name: string) => void
   onDuplicateSession?: (id: number) => void
+  onReorderSessions?: (ids: number[]) => void
   onPurgeAllSessions?: () => void
 }
 
@@ -66,6 +67,7 @@ export function ConfigSidebar({
   onDeleteSession,
   onRenameSession,
   onDuplicateSession,
+  onReorderSessions,
   onPurgeAllSessions,
 }: ConfigSidebarProps) {
   const [showApiKey, setShowApiKey] = useState(false)
@@ -110,6 +112,7 @@ export function ConfigSidebar({
                   onDeleteSession={onDeleteSession}
                   onRenameSession={onRenameSession}
                   onDuplicateSession={onDuplicateSession}
+                  onReorderSessions={onReorderSessions}
                 />
               </section>
             )}

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
 import {
-  AllModels,
   DefaultModel,
   ImageModelFluxDev,
   isImageModel,
@@ -21,317 +20,17 @@ import {
   getChatDataKey,
   getSessionHistoryKey,
 } from '../utils/chat-storage'
-
-const DEFAULT_SESSION_ID = 1
-
-const UrlConfigBooleanFields = new Set([
-  'all_in_one',
-  'disable_https_crawler',
-  'enable_talk',
-  'enable_mcp',
-])
-const UrlConfigIntegerFields = new Set([
-  'max_tokens',
-  'n_contexts',
-  'draw_n_images',
-])
-const UrlConfigFloatFields = new Set([
-  'temperature',
-  'presence_penalty',
-  'frequency_penalty',
-])
-const UrlParamAliasMap = new Map<string, string>([
-  ['api_key', 'api_token'],
-  ['apikey', 'api_token'],
-  ['token', 'api_token'],
-  ['api_token', 'api_token'],
-  ['api_token_type', 'token_type'],
-  ['token_type', 'token_type'],
-  ['tokentype', 'token_type'],
-  ['api_base', 'api_base'],
-  ['base', 'api_base'],
-  ['apibase', 'api_base'],
-  ['model', 'selected_model'],
-  ['chat_model', 'selected_model'],
-  ['chatmodel', 'selected_model'],
-  ['selected_model', 'selected_model'],
-  ['selectedmodel', 'selected_model'],
-  ['system_prompt', 'system_prompt'],
-  ['prompt', 'system_prompt'],
-  ['systemprompt', 'system_prompt'],
-  ['max_token', 'max_tokens'],
-  ['max_tokens', 'max_tokens'],
-  ['maxtoken', 'max_tokens'],
-  ['maxtokens', 'max_tokens'],
-  ['temperature', 'temperature'],
-  ['presence_penalty', 'presence_penalty'],
-  ['presencepenalty', 'presence_penalty'],
-  ['frequency_penalty', 'frequency_penalty'],
-  ['frequencypenalty', 'frequency_penalty'],
-  ['context', 'n_contexts'],
-  ['contexts', 'n_contexts'],
-  ['n_contexts', 'n_contexts'],
-  ['context_len', 'n_contexts'],
-  ['contextlength', 'n_contexts'],
-  ['contextlen', 'n_contexts'],
-  ['draw_n_images', 'chat_switch.draw_n_images'],
-  ['draw_images', 'chat_switch.draw_n_images'],
-  ['drawimages', 'chat_switch.draw_n_images'],
-  ['draw', 'chat_switch.draw_n_images'],
-  ['enable_mcp', 'chat_switch.enable_mcp'],
-  ['enablemcp', 'chat_switch.enable_mcp'],
-  ['chat_switch.enable_mcp', 'chat_switch.enable_mcp'],
-  ['chat_switch.enablemcp', 'chat_switch.enable_mcp'],
-  ['disable_https_crawler', 'chat_switch.disable_https_crawler'],
-  ['chat_switch.disable_https_crawler', 'chat_switch.disable_https_crawler'],
-  ['disablehttpscrawler', 'chat_switch.disable_https_crawler'],
-  ['chat_switch.disablehttpscrawler', 'chat_switch.disable_https_crawler'],
-  ['https_crawler', 'chat_switch.disable_https_crawler'],
-  ['all_in_one', 'chat_switch.all_in_one'],
-  ['allinone', 'chat_switch.all_in_one'],
-  ['chat_switch.all_in_one', 'chat_switch.all_in_one'],
-  ['enable_talk', 'chat_switch.enable_talk'],
-  ['enabletalk', 'chat_switch.enable_talk'],
-  ['chat_switch.enable_talk', 'chat_switch.enable_talk'],
-  ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
-  ['draw_model', 'selected_draw_model'],
-  ['imagemodel', 'selected_draw_model'],
-  ['selected_draw_model', 'selected_draw_model'],
-  ['selected_chat_model', 'selected_chat_model'],
-])
-
-function normalizeUrlParamKey(key: string): string {
-  return key
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_')
-}
-
-function parseBooleanParamValue(value: unknown): boolean | null {
-  if (typeof value === 'boolean') return value
-  const normalized = String(value ?? '')
-    .trim()
-    .toLowerCase()
-  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true
-  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false
-  return null
-}
-
-function parseIntegerParamValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isInteger(value)) return value
-  const str = String(value ?? '').trim()
-  if (!/^-?\d+$/.test(str)) return null
-  const parsed = parseInt(str, 10)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-function parseFloatParamValue(value: unknown): number | null {
-  if (typeof value === 'number' && !Number.isNaN(value)) return value
-  const str = String(value ?? '').trim()
-  if (!/^-?\d+(\.\d+)?$/.test(str)) return null
-  const parsed = parseFloat(str)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-function getNestedConfigValue(
-  config: Record<string, unknown>,
-  pathSegments: string[],
-) {
-  return pathSegments.reduce<unknown>((acc, segment) => {
-    if (typeof acc !== 'object' || acc === null) {
-      return undefined
-    }
-    return (acc as Record<string, unknown>)[segment]
-  }, config)
-}
-
-function setNestedConfigValue(
-  config: Record<string, unknown>,
-  pathSegments: string[],
-  value: unknown,
-) {
-  let cursor: Record<string, unknown> = config
-  for (let i = 0; i < pathSegments.length - 1; i++) {
-    const segment = pathSegments[i]
-    const next = cursor[segment]
-    if (typeof next !== 'object' || next === null) {
-      cursor[segment] = {}
-    }
-    cursor = cursor[segment] as Record<string, unknown>
-  }
-  cursor[pathSegments[pathSegments.length - 1]] = value
-}
-
-function coerceConfigValue(
-  field: string,
-  rawValue: unknown,
-  currentValue: unknown,
-) {
-  if (UrlConfigBooleanFields.has(field)) {
-    const parsed = parseBooleanParamValue(rawValue)
-    return parsed === null ? currentValue : parsed
-  }
-  if (UrlConfigIntegerFields.has(field)) {
-    const parsed = parseIntegerParamValue(rawValue)
-    return parsed === null ? currentValue : parsed
-  }
-  if (UrlConfigFloatFields.has(field)) {
-    const parsed = parseFloatParamValue(rawValue)
-    return parsed === null ? currentValue : parsed
-  }
-  if (rawValue === undefined || rawValue === null) {
-    return currentValue
-  }
-  return rawValue
-}
-
-function deepCloneConfig(config: SessionConfig): SessionConfig {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(config)
-  }
-  return JSON.parse(JSON.stringify(config)) as SessionConfig
-}
-
-/**
- * Normalize numeric fields in config to ensure they are numbers, not strings
- */
-function normalizeConfigNumericFields(config: SessionConfig): SessionConfig {
-  return {
-    ...config,
-    max_tokens:
-      typeof config.max_tokens === 'number'
-        ? config.max_tokens
-        : parseInt(String(config.max_tokens), 10) ||
-          DefaultSessionConfig.max_tokens,
-    n_contexts:
-      typeof config.n_contexts === 'number'
-        ? config.n_contexts
-        : parseInt(String(config.n_contexts), 10) ||
-          DefaultSessionConfig.n_contexts,
-    temperature:
-      typeof config.temperature === 'number'
-        ? config.temperature
-        : parseFloat(String(config.temperature)) ||
-          DefaultSessionConfig.temperature,
-    presence_penalty:
-      typeof config.presence_penalty === 'number'
-        ? config.presence_penalty
-        : parseFloat(String(config.presence_penalty)) ||
-          DefaultSessionConfig.presence_penalty,
-    frequency_penalty:
-      typeof config.frequency_penalty === 'number'
-        ? config.frequency_penalty
-        : parseFloat(String(config.frequency_penalty)) ||
-          DefaultSessionConfig.frequency_penalty,
-    chat_switch: {
-      ...config.chat_switch,
-      draw_n_images:
-        typeof config.chat_switch?.draw_n_images === 'number'
-          ? config.chat_switch.draw_n_images
-          : parseInt(String(config.chat_switch?.draw_n_images), 10) ||
-            DefaultSessionConfig.chat_switch.draw_n_images,
-    },
-  }
-}
-
-function applyUrlOverridesToConfig(config: SessionConfig): {
-  config: SessionConfig
-  mutated: boolean
-} {
-  const url = new URL(window.location.href)
-  const searchParams = url.searchParams
-  const entries = Array.from(searchParams.entries())
-  let mutated = false
-
-  if (entries.length === 0) {
-    return { config, mutated }
-  }
-
-  const updatedConfig = deepCloneConfig(config)
-
-  entries.forEach(([rawKey, rawValue]) => {
-    const normalizedKey = normalizeUrlParamKey(rawKey)
-    const targetPath = UrlParamAliasMap.get(normalizedKey) || normalizedKey
-    if (!targetPath) {
-      return
-    }
-
-    const pathSegments = targetPath.split('.')
-    const rootKey = pathSegments[0]
-    if (rootKey !== 'chat_switch' && !(rootKey in updatedConfig)) {
-      return
-    }
-
-    if (rootKey === 'chat_switch') {
-      if (
-        !updatedConfig.chat_switch ||
-        typeof updatedConfig.chat_switch !== 'object'
-      ) {
-        updatedConfig.chat_switch = { ...DefaultSessionConfig.chat_switch }
-      }
-    }
-
-    const currentValue = getNestedConfigValue(
-      updatedConfig as unknown as Record<string, unknown>,
-      pathSegments,
-    )
-    const coercedValue = coerceConfigValue(
-      pathSegments[pathSegments.length - 1],
-      rawValue,
-      currentValue,
-    )
-    if (coercedValue === currentValue) {
-      searchParams.delete(rawKey)
-      return
-    }
-
-    setNestedConfigValue(
-      updatedConfig as unknown as Record<string, unknown>,
-      pathSegments,
-      coercedValue,
-    )
-    if (
-      targetPath === 'selected_model' &&
-      typeof coercedValue === 'string' &&
-      coercedValue &&
-      !AllModels.includes(coercedValue)
-    ) {
-      AllModels.push(coercedValue)
-    }
-
-    mutated = true
-    searchParams.delete(rawKey)
-  })
-
-  if (mutated) {
-    const newSearch = searchParams.toString()
-    window.history.replaceState(
-      {},
-      document.title,
-      `${url.pathname}${newSearch ? `?${newSearch}` : ''}${url.hash}`,
-    )
-  }
-
-  return {
-    config: mutated ? updatedConfig : config,
-    mutated,
-  }
-}
-
-/**
- * Get the active session ID
- */
-async function getActiveSessionId(): Promise<number> {
-  const selectedSession = await kvGet<number>(StorageKeys.SELECTED_SESSION)
-  return selectedSession ?? DEFAULT_SESSION_ID
-}
-
-/**
- * Get session config key for a session ID
- */
-function getSessionConfigKey(sessionId: number): string {
-  return `${StorageKeys.SESSION_CONFIG_PREFIX}${sessionId}`
-}
+import {
+  DEFAULT_SESSION_ID,
+  getActiveSessionId,
+  getSessionConfigKey,
+  normalizeConfigNumericFields,
+  applyUrlOverridesToConfig,
+} from '../utils/config-helpers'
+import {
+  exportAllData as exportData,
+  importAllData as importData,
+} from '../utils/data-sync'
 
 /**
  * Hook for managing session configuration
@@ -351,10 +50,23 @@ export function useConfig() {
       k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
     )
 
+    const sessionOrder =
+      (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+
     // Sort keys by ID to keep order stable
     configKeys.sort((a, b) => {
       const idA = parseInt(a.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
       const idB = parseInt(b.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10)
+
+      const indexA = sessionOrder.indexOf(idA)
+      const indexB = sessionOrder.indexOf(idB)
+
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB
+      }
+      if (indexA !== -1) return -1
+      if (indexB !== -1) return 1
+
       return idA - idB
     })
 
@@ -555,6 +267,17 @@ export function useConfig() {
   )
 
   /**
+   * Reorder sessions
+   */
+  const reorderSessions = useCallback(
+    async (newOrder: number[]) => {
+      await kvSet(StorageKeys.SESSION_ORDER, newOrder)
+      await loadSessions()
+    },
+    [loadSessions],
+  )
+
+  /**
    * Switch to a different session
    */
   const switchSession = useCallback(
@@ -623,6 +346,14 @@ export function useConfig() {
       }
       await kvSet(key, newConfig)
 
+      // Update session order
+      const sessionOrder =
+        (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+      if (!sessionOrder.includes(newId)) {
+        sessionOrder.push(newId)
+        await kvSet(StorageKeys.SESSION_ORDER, sessionOrder)
+      }
+
       await loadSessions()
 
       return newId
@@ -652,6 +383,13 @@ export function useConfig() {
 
       // Delete session history
       await kvDel(historyKey)
+
+      // Update session order
+      const sessionOrder = await kvGet<number[]>(StorageKeys.SESSION_ORDER)
+      if (sessionOrder) {
+        const newOrder = sessionOrder.filter((id) => id !== targetSessionId)
+        await kvSet(StorageKeys.SESSION_ORDER, newOrder)
+      }
 
       // If deleting current session, switch to session 1
       // If deleting current session, switch to session 1 or first available
@@ -726,6 +464,15 @@ export function useConfig() {
       }
 
       await kvSet(historyKey, duplicatedHistory)
+
+      // Update session order
+      const sessionOrder =
+        (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+      if (!sessionOrder.includes(newSessionId)) {
+        sessionOrder.push(newSessionId)
+        await kvSet(StorageKeys.SESSION_ORDER, sessionOrder)
+      }
+
       await loadSessions()
       return newSessionId
     },
@@ -738,7 +485,8 @@ export function useConfig() {
       if (
         key.startsWith(StorageKeys.SESSION_CONFIG_PREFIX) ||
         key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX) ||
-        key.startsWith(StorageKeys.CHAT_DATA_PREFIX)
+        key.startsWith(StorageKeys.CHAT_DATA_PREFIX) ||
+        key === StorageKeys.SESSION_ORDER
       ) {
         await kvDel(key)
       }
@@ -756,6 +504,7 @@ export function useConfig() {
     await kvSet(getSessionConfigKey(DEFAULT_SESSION_ID), newConfig)
     await kvSet(getSessionHistoryKey(DEFAULT_SESSION_ID), [])
     await kvSet(StorageKeys.SELECTED_SESSION, DEFAULT_SESSION_ID)
+    await kvSet(StorageKeys.SESSION_ORDER, [DEFAULT_SESSION_ID])
 
     setSessionId(DEFAULT_SESSION_ID)
     setConfigState(newConfig)
@@ -797,19 +546,7 @@ export function useConfig() {
    * Export all data (sessions, configs, shortcuts) for sync
    */
   const exportAllData = useCallback(async () => {
-    const { kvList, kvGet } = await import('@/utils/storage')
-    const keys = await kvList()
-    const data: Record<string, unknown> = {}
-
-    // keys to exclude
-    const excludeKeys = ['MIGRATE_V1_COMPLETED']
-
-    for (const key of keys) {
-      if (excludeKeys.includes(key)) continue
-      data[key] = await kvGet(key)
-    }
-
-    return data
+    return exportData()
   }, [])
 
   /**
@@ -817,21 +554,7 @@ export function useConfig() {
    */
   const importAllData = useCallback(
     async (data: Record<string, unknown>) => {
-      const { kvSet } = await import('@/utils/storage')
-
-      // Clear existing data to ensure clean state (optional, but safer for full sync)
-      // await kvClear() // Maybe too aggressive? Let's just overwrite.
-
-      for (const [key, val] of Object.entries(data)) {
-        await kvSet(key, val)
-      }
-
-      // Force reload config if current session was updated
-      const currentKey = getSessionConfigKey(sessionId)
-      if (data[currentKey]) {
-        // Simple way: trigger reload by toggling a dummy state or just re-running load
-        window.location.reload() // Easiest way to ensure all states (history, config) are updated
-      }
+      return importData(data, sessionId)
     },
     [sessionId],
   )
@@ -843,6 +566,7 @@ export function useConfig() {
     isLoading,
     updateConfig,
     switchSession,
+    reorderSessions,
     createSession,
     deleteSession,
     renameSession,
