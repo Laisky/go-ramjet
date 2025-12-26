@@ -111,6 +111,7 @@ export function GPTChatPage() {
     chatId: string
     content: string
   } | null>(null)
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(-1)
 
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
@@ -268,6 +269,11 @@ export function GPTChatPage() {
     })
   }, [messages.length])
 
+  // Reset selection when messages change (e.g. new message sent) or session changes
+  useEffect(() => {
+    setSelectedMessageIndex(-1)
+  }, [messages.length, sessionId])
+
   // Track scroll position for scroll-to-bottom button
   useEffect(() => {
     const container = messagesContainerRef.current
@@ -323,6 +329,70 @@ export function GPTChatPage() {
     }
     return messages.slice(-visibleCount)
   }, [messages, visibleCount])
+
+  // Keyboard shortcuts for message navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+
+      if (e.key === 'ArrowUp') {
+        // If in input, only navigate if cursor is at the top or Alt is pressed
+        if (isInput && !e.altKey) {
+          if (e.target instanceof HTMLTextAreaElement) {
+            if (e.target.selectionStart !== 0) return
+          } else {
+            return
+          }
+        }
+
+        e.preventDefault()
+        setSelectedMessageIndex((prev) => {
+          if (prev === -1) return displayedMessages.length - 1
+          return Math.max(0, prev - 1)
+        })
+      } else if (e.key === 'ArrowDown') {
+        // If in input, only navigate if cursor is at the bottom or Alt is pressed
+        if (isInput && !e.altKey) {
+          if (e.target instanceof HTMLTextAreaElement) {
+            if (e.target.selectionStart !== e.target.value.length) return
+          } else {
+            return
+          }
+        }
+
+        if (selectedMessageIndex === -1) return
+
+        e.preventDefault()
+        setSelectedMessageIndex((prev) => {
+          if (prev === displayedMessages.length - 1) return -1
+          return prev + 1
+        })
+      } else if (e.key === 'Escape') {
+        setSelectedMessageIndex(-1)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [displayedMessages, selectedMessageIndex])
+
+  // Scroll selected message into view
+  useEffect(() => {
+    if (
+      selectedMessageIndex >= 0 &&
+      selectedMessageIndex < displayedMessages.length
+    ) {
+      const msg = displayedMessages[selectedMessageIndex]
+      const el = document.getElementById(
+        `chat-message-${msg.chatID}-${msg.role}`,
+      )
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  }, [selectedMessageIndex, displayedMessages])
 
   const lastMessage = messages[messages.length - 1]
   const currentDraftMessage = globalDraft
@@ -610,7 +680,7 @@ export function GPTChatPage() {
                     </Button>
                   </div>
                 )}
-                {displayedMessages.map((msg) => (
+                {displayedMessages.map((msg, idx) => (
                   <ChatMessage
                     key={`${msg.chatID}-${msg.role}`}
                     message={msg}
@@ -618,6 +688,7 @@ export function GPTChatPage() {
                     onRegenerate={handleRegenerate}
                     onEditResend={handleEditResend}
                     pairedUserMessage={userMessageByChatId.get(msg.chatID)}
+                    isSelected={idx === selectedMessageIndex}
                     isStreaming={
                       chatLoading &&
                       msg.role === 'assistant' &&

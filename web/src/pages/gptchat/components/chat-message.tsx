@@ -42,6 +42,7 @@ export interface ChatMessageProps {
   onRegenerate?: (chatId: string) => void
   onEditResend?: (payload: { chatId: string; content: string }) => void
   pairedUserMessage?: ChatMessageData
+  isSelected?: boolean
 }
 
 function ReasoningBlock({ content }: { content: string }) {
@@ -92,6 +93,7 @@ export function ChatMessage({
   onRegenerate,
   onEditResend,
   pairedUserMessage,
+  isSelected,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
@@ -200,6 +202,7 @@ export function ChatMessage({
 
   return (
     <div
+      id={`chat-message-${message.chatID}-${message.role}`}
       className={cn(
         'w-full',
         isUser ? 'flex justify-end' : 'flex justify-start',
@@ -212,6 +215,8 @@ export function ChatMessage({
             ? 'ml-auto rounded-br-sm border-primary/20 bg-primary/10 text-foreground'
             : 'bg-card text-card-foreground border-border mr-auto rounded-bl-sm',
           isStreaming && 'animate-pulse',
+          isSelected &&
+            'ring-2 ring-primary ring-offset-2 dark:ring-offset-background',
         )}
       >
         <div className="flex items-start gap-2">
