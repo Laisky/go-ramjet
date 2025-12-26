@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 
 import { ThemeToggle } from '@/components/theme-toggle'
+import { cn } from '@/utils/cn'
 
 /**
  * AppLayout provides the global shell with header.
@@ -14,7 +15,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const containerClass = isChatPage ? 'w-full px-0' : 'mx-auto max-w-5xl px-4'
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div
+      className={cn(
+        'flex flex-col bg-background text-foreground',
+        isChatPage ? 'h-dvh overflow-hidden' : 'min-h-screen',
+      )}
+    >
       {!isChatPage && (
         <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
           <div
@@ -28,7 +34,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
       )}
       <main
-        className={`${containerClass} flex-1 ${isChatPage ? 'py-0' : 'py-6'}`}
+        className={cn(
+          containerClass,
+          'flex-1 min-h-0',
+          isChatPage ? 'flex flex-col overflow-hidden py-0' : 'py-6',
+        )}
       >
         {children}
       </main>

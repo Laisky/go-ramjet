@@ -488,7 +488,7 @@ export function GPTChatPage() {
   }, [])
 
   return (
-    <div className="theme-bg flex h-dvh w-full overflow-hidden">
+    <div className="theme-bg flex h-full w-full overflow-hidden">
       {/* Session Dock (Integrated Left Sidebar) */}
       <aside className="theme-surface theme-border flex h-full w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
@@ -506,7 +506,7 @@ export function GPTChatPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
         {/* Header */}
         <header
           className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
@@ -572,7 +572,7 @@ export function GPTChatPage() {
         </header>
 
         {/* Scrollable chat area */}
-        <main className="relative flex-1 overflow-hidden">
+        <main className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* Loading overlay for session switching */}
           {configLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
@@ -582,14 +582,14 @@ export function GPTChatPage() {
 
           {/* Error display */}
           {error && (
-            <div className="mx-4 mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="mx-4 mt-2 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
           <div
             ref={messagesContainerRef}
-            className="h-full overflow-y-auto overflow-x-hidden px-1 pb-4 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-1 pb-4 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
           >
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
