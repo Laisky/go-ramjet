@@ -635,7 +635,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-primary/90',
+              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',

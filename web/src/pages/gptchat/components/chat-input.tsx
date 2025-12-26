@@ -26,8 +26,6 @@ import { cn } from '@/utils/cn'
 import type { SessionConfig } from '../types'
 import { ImageEditorModal, type ImageEditorResult } from './image-editor-modal'
 
-const PROMPT_HISTORY_LIMIT = 50
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`
@@ -70,8 +68,6 @@ export function ChatInput({
 }: ChatInputProps) {
   const [message, setMessage] = useState(() => draftMessage ?? '')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
-  const [promptHistory, setPromptHistory] = useState<string[]>([])
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [editorIndex, setEditorIndex] = useState<number | null>(null)
@@ -148,7 +144,6 @@ export function ChatInput({
     }
     lastPrefillIdRef.current = prefillDraft.id
     updateMessage(prefillDraft.text)
-    setHistoryIndex(null)
     requestAnimationFrame(() => {
       textareaRef.current?.focus()
     })
@@ -180,11 +175,6 @@ export function ChatInput({
     if (!trimmed || disabled || isLoading || isTranscribing) return
     const payload = trimmed
     onSend(payload, attachedFiles.length > 0 ? attachedFiles : undefined)
-    setPromptHistory((prev) => [
-      ...prev.slice(-(PROMPT_HISTORY_LIMIT - 1)),
-      payload,
-    ])
-    setHistoryIndex(null)
     updateMessage('')
     setAttachedFiles([])
   }, [
@@ -205,71 +195,8 @@ export function ChatInput({
         handleSend()
         return
       }
-
-      if (
-        e.key === 'ArrowUp' &&
-        !e.shiftKey &&
-        !e.altKey &&
-        !e.ctrlKey &&
-        !e.metaKey
-      ) {
-        const textarea = textareaRef.current
-        if (
-          textarea &&
-          textarea.selectionStart === 0 &&
-          textarea.selectionEnd === 0
-        ) {
-          e.preventDefault()
-          if (promptHistory.length === 0) return
-          const nextIndex =
-            historyIndex === null
-              ? promptHistory.length - 1
-              : Math.max(historyIndex - 1, 0)
-          setHistoryIndex(nextIndex)
-          const nextValue = promptHistory[nextIndex] ?? ''
-          updateMessage(nextValue)
-          requestAnimationFrame(() => {
-            textarea.selectionStart = textarea.selectionEnd = 0
-          })
-        }
-        return
-      }
-
-      if (
-        e.key === 'ArrowDown' &&
-        !e.shiftKey &&
-        !e.altKey &&
-        !e.ctrlKey &&
-        !e.metaKey
-      ) {
-        const textarea = textareaRef.current
-        if (
-          textarea &&
-          textarea.selectionStart === message.length &&
-          textarea.selectionEnd === message.length
-        ) {
-          e.preventDefault()
-          if (historyIndex === null) {
-            updateMessage('')
-            return
-          }
-
-          const nextIndex = historyIndex + 1
-          if (nextIndex >= promptHistory.length) {
-            setHistoryIndex(null)
-            updateMessage('')
-          } else {
-            setHistoryIndex(nextIndex)
-            const nextValue = promptHistory[nextIndex] ?? ''
-            updateMessage(nextValue)
-            requestAnimationFrame(() => {
-              textarea.selectionStart = textarea.selectionEnd = nextValue.length
-            })
-          }
-        }
-      }
     },
-    [handleSend, historyIndex, message.length, promptHistory, updateMessage],
+    [handleSend],
   )
 
   const handleFileSelect = useCallback(
