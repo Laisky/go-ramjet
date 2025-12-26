@@ -398,6 +398,11 @@ export function useConfig() {
         const activeSessionId = await getActiveSessionId()
         const key = getSessionConfigKey(activeSessionId)
         const savedConfig = await kvGet<SessionConfig>(key)
+        console.debug(`[useConfig] load session ${activeSessionId} config`, {
+          hasSavedConfig: !!savedConfig,
+          // @ts-ignore
+          legacySelectedModel: savedConfig?.selected_model,
+        })
 
         let finalConfig = {
           ...DefaultSessionConfig,
@@ -417,7 +422,18 @@ export function useConfig() {
         let configChanged = false
 
         // Seed split chat/draw model selectors while keeping backwards compatibility
-        if (!finalConfig.selected_chat_model) {
+        // If savedConfig exists but doesn't have the new split model fields,
+        // we must derive them from the legacy selected_model.
+        const hasSelectedChatModel =
+          savedConfig &&
+          Object.prototype.hasOwnProperty.call(
+            savedConfig,
+            'selected_chat_model',
+          )
+        if (!hasSelectedChatModel) {
+          console.debug(
+            `[useConfig] migrating legacy selected_model to selected_chat_model: ${finalConfig.selected_model}`,
+          )
           finalConfig.selected_chat_model = isImageModel(
             finalConfig.selected_model,
           )
@@ -426,7 +442,16 @@ export function useConfig() {
           configChanged = true
         }
 
-        if (!finalConfig.selected_draw_model) {
+        const hasSelectedDrawModel =
+          savedConfig &&
+          Object.prototype.hasOwnProperty.call(
+            savedConfig,
+            'selected_draw_model',
+          )
+        if (!hasSelectedDrawModel) {
+          console.debug(
+            `[useConfig] migrating legacy selected_model to selected_draw_model: ${finalConfig.selected_model}`,
+          )
           finalConfig.selected_draw_model = isImageModel(
             finalConfig.selected_model,
           )
