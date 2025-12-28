@@ -269,198 +269,193 @@ export function ChatMessage({
           onSelect && 'cursor-pointer',
         )}
       >
-        <div className="flex items-start gap-2">
-          <div
-            className={cn(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs',
-              isUser
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground',
-            )}
-          >
-            {isUser ? (
-              <User className="h-4 w-4" />
-            ) : (
-              <Bot className="h-4 w-4" />
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className={cn('font-semibold', 'text-foreground')}>
-                {isUser ? 'You' : 'Assistant'}
-              </span>
-              {message.timestamp && (
-                <span className="text-[11px] text-muted-foreground">
-                  {new Date(message.timestamp).toLocaleTimeString()}
-                </span>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+                isUser
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground',
               )}
+            >
+              {isUser ? (
+                <User className="h-3 w-3" />
+              ) : (
+                <Bot className="h-3 w-3" />
+              )}
+            </div>
+            <span className={cn('font-semibold', 'text-foreground')}>
+              {isUser ? 'You' : 'Assistant'}
+            </span>
+            {message.timestamp && (
+              <span className="text-[11px] text-muted-foreground">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </span>
+            )}
 
-              <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px] opacity-100 transition-opacity md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-                {canEditMessage && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleEditClick}
-                    className="h-7 w-7 rounded-md p-0"
-                    title="Edit & resend"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {isAssistant && onRegenerate && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRegenerate}
-                    className="h-7 w-7 rounded-md p-0"
-                    disabled={actionDisabled}
-                    title="Regenerate response"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {showSpeechButton && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleToggleSpeech}
-                    className="h-7 w-7 rounded-md p-0"
-                    title={isSpeaking ? 'Stop narration' : 'Play narration'}
-                  >
-                    {isSpeaking ? (
-                      <VolumeX className="h-3.5 w-3.5" />
-                    ) : (
-                      <Volume2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                )}
+            <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px] opacity-100 transition-opacity md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+              {canEditMessage && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleCopy}
+                  onClick={handleEditClick}
                   className="h-7 w-7 rounded-md p-0"
-                  title="Copy message"
+                  title="Edit & resend"
                 >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-success" />
+                  <Edit2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {isAssistant && onRegenerate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRegenerate}
+                  className="h-7 w-7 rounded-md p-0"
+                  disabled={actionDisabled}
+                  title="Regenerate response"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {showSpeechButton && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleToggleSpeech}
+                  className="h-7 w-7 rounded-md p-0"
+                  title={isSpeaking ? 'Stop narration' : 'Play narration'}
+                >
+                  {isSpeaking ? (
+                    <VolumeX className="h-3.5 w-3.5" />
                   ) : (
-                    <Copy className="h-3.5 w-3.5" />
+                    <Volume2 className="h-3.5 w-3.5" />
                   )}
                 </Button>
-                {onDelete && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDelete}
-                    className="h-7 w-7 rounded-md p-0 text-destructive"
-                    title="Delete message"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {isAssistant && message.reasoningContent && (
-              <ReasoningBlock content={message.reasoningContent} />
-            )}
-
-            {isUser ? (
-              <pre
-                className={cn(
-                  'whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base',
-                  userHasCode ? 'font-mono' : 'font-sans',
-                )}
-              >
-                {message.content}
-              </pre>
-            ) : message.error ? (
-              <div className="space-y-3">
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
-                  <p className="font-semibold mb-1">Error</p>
-                  {message.error}
-                </div>
-                {onRegenerate && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRegenerate}
-                    className="flex items-center gap-2"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Retry
-                  </Button>
-                )}
-              </div>
-            ) : message.content ? (
-              <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
-                {message.content}
-              </Markdown>
-            ) : isStreaming ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
-                <div
-                  className="h-2 w-2 animate-bounce rounded-full bg-current"
-                  style={{ animationDelay: '0.1s' }}
-                />
-                <div
-                  className="h-2 w-2 animate-bounce rounded-full bg-current"
-                  style={{ animationDelay: '0.2s' }}
-                />
-              </div>
-            ) : null}
-
-            {isAssistant &&
-              message.references &&
-              message.references.length > 0 && (
-                <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-muted sm:p-3">
-                  <p className="font-semibold text-muted-foreground">
-                    References
-                  </p>
-                  <ol className="mt-2 space-y-1">
-                    {message.references.map((ref) => (
-                      <li key={ref.index} className="flex items-start gap-2">
-                        <span className="text-muted-foreground">
-                          [{ref.index}]
-                        </span>
-                        <a
-                          href={ref.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 truncate text-primary hover:underline"
-                        >
-                          {ref.title || ref.url}
-                        </a>
-                        <button
-                          className="text-muted-foreground/50 transition hover:text-foreground"
-                          onClick={() =>
-                            handleCopyReference(ref.url, ref.index)
-                          }
-                          title="Copy reference URL"
-                        >
-                          {copiedCitation === ref.index ? (
-                            <Check className="h-3 w-3 text-success" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                </Card>
               )}
-
-            {isAssistant && (
-              <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-muted-foreground/60">
-                {message.model && <span>{message.model}</span>}
-                {(() => {
-                  const formattedCost = formatCostUsd(message.costUsd)
-                  return formattedCost ? <span>${formattedCost}</span> : null
-                })()}
-              </div>
-            )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopy}
+                className="h-7 w-7 rounded-md p-0"
+                title="Copy message"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-success" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="h-7 w-7 rounded-md p-0 text-destructive"
+                  title="Delete message"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
+
+          {isAssistant && message.reasoningContent && (
+            <ReasoningBlock content={message.reasoningContent} />
+          )}
+
+          {isUser ? (
+            <pre
+              className={cn(
+                'whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base',
+                userHasCode ? 'font-mono' : 'font-sans',
+              )}
+            >
+              {message.content}
+            </pre>
+          ) : message.error ? (
+            <div className="space-y-3">
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                <p className="font-semibold mb-1">Error</p>
+                {message.error}
+              </div>
+              {onRegenerate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerate}
+                  className="flex items-center gap-2"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Retry
+                </Button>
+              )}
+            </div>
+          ) : message.content ? (
+            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
+              {message.content}
+            </Markdown>
+          ) : isStreaming ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+              <div
+                className="h-2 w-2 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: '0.1s' }}
+              />
+              <div
+                className="h-2 w-2 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: '0.2s' }}
+              />
+            </div>
+          ) : null}
+
+          {isAssistant &&
+            message.references &&
+            message.references.length > 0 && (
+              <Card className="mt-2 border-0 bg-transparent p-0 text-xs sm:rounded-xl sm:border sm:bg-muted sm:p-3">
+                <p className="font-semibold text-muted-foreground">
+                  References
+                </p>
+                <ol className="mt-2 space-y-1">
+                  {message.references.map((ref) => (
+                    <li key={ref.index} className="flex items-start gap-2">
+                      <span className="text-muted-foreground">
+                        [{ref.index}]
+                      </span>
+                      <a
+                        href={ref.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 truncate text-primary hover:underline"
+                      >
+                        {ref.title || ref.url}
+                      </a>
+                      <button
+                        className="text-muted-foreground/50 transition hover:text-foreground"
+                        onClick={() => handleCopyReference(ref.url, ref.index)}
+                        title="Copy reference URL"
+                      >
+                        {copiedCitation === ref.index ? (
+                          <Check className="h-3 w-3 text-success" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            )}
+
+          {isAssistant && (
+            <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-muted-foreground/60">
+              {message.model && <span>{message.model}</span>}
+              {(() => {
+                const formattedCost = formatCostUsd(message.costUsd)
+                return formattedCost ? <span>${formattedCost}</span> : null
+              })()}
+            </div>
+          )}
         </div>
       </Card>
     </div>
