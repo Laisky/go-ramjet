@@ -5,6 +5,49 @@ import { kvDel, kvGet, kvSet } from '@/utils/storage'
 import type { ChatMessageData, SessionHistoryItem } from '../types'
 import { getChatDataKey, getSessionHistoryKey } from '../utils/chat-storage'
 
+/**
+ * Sanitizes a ChatMessageData object to ensure correct types.
+ * This handles backward compatibility for stored data that may have
+ * incorrect types (e.g., costUsd stored as string instead of number).
+ *
+ * @param data - The raw message data from storage
+ * @returns Sanitized ChatMessageData with correct types
+ */
+export function sanitizeChatMessageData(
+  data: ChatMessageData,
+): ChatMessageData {
+  const sanitized = { ...data }
+
+  // Ensure content is a string
+  if (typeof sanitized.content !== 'string') {
+    sanitized.content = String(sanitized.content ?? '')
+  }
+
+  // Ensure costUsd is a number or undefined (null becomes undefined)
+  if (sanitized.costUsd === null) {
+    sanitized.costUsd = undefined
+  } else if (sanitized.costUsd !== undefined) {
+    const numValue =
+      typeof sanitized.costUsd === 'number'
+        ? sanitized.costUsd
+        : Number(sanitized.costUsd)
+    sanitized.costUsd = Number.isNaN(numValue) ? undefined : numValue
+  }
+
+  // Ensure timestamp is a number or undefined (null becomes undefined)
+  if (sanitized.timestamp === null) {
+    sanitized.timestamp = undefined
+  } else if (sanitized.timestamp !== undefined) {
+    const numValue =
+      typeof sanitized.timestamp === 'number'
+        ? sanitized.timestamp
+        : Number(sanitized.timestamp)
+    sanitized.timestamp = Number.isNaN(numValue) ? undefined : numValue
+  }
+
+  return sanitized
+}
+
 export interface ChatStorageOptions {
   sessionId: number
   setMessages: React.Dispatch<React.SetStateAction<ChatMessageData[]>>
@@ -53,20 +96,14 @@ export function useChatStorage({
         const assistantData = await kvGet<ChatMessageData>(assistantKey)
 
         if (userData && typeof userData === 'object' && userData.content) {
-          loadedMessages.push({
-            ...userData,
-            content: String(userData.content),
-          })
+          loadedMessages.push(sanitizeChatMessageData(userData))
         }
         if (
           assistantData &&
           typeof assistantData === 'object' &&
           assistantData.content
         ) {
-          loadedMessages.push({
-            ...assistantData,
-            content: String(assistantData.content),
-          })
+          loadedMessages.push(sanitizeChatMessageData(assistantData))
         }
       }
 

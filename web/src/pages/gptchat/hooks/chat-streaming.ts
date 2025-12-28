@@ -380,15 +380,19 @@ export function useChatStreaming({
             )
             if (resp.ok) {
               const data = await resp.json()
-              if (data.cost_usd) {
-                finalMessage.costUsd = data.cost_usd
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.chatID === chatId && m.role === 'assistant'
-                      ? { ...m, costUsd: data.cost_usd }
-                      : m,
-                  ),
-                )
+              if (data.cost_usd !== undefined && data.cost_usd !== null) {
+                // Ensure costUsd is stored as a number for type safety
+                const costValue = Number(data.cost_usd)
+                if (!Number.isNaN(costValue)) {
+                  finalMessage.costUsd = costValue
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.chatID === chatId && m.role === 'assistant'
+                        ? { ...m, costUsd: costValue }
+                        : m,
+                    ),
+                  )
+                }
               }
             }
           } catch (err) {
