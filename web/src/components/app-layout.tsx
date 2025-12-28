@@ -18,7 +18,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div
       className={cn(
         'flex flex-col bg-background text-foreground',
-        isChatPage ? 'h-dvh overflow-hidden' : 'min-h-screen',
+        isChatPage ? 'min-h-dvh' : 'min-h-screen',
       )}
     >
       {!isChatPage && (
@@ -37,7 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className={cn(
           containerClass,
           'flex-1 min-h-0',
-          isChatPage ? 'flex flex-col overflow-hidden py-0' : 'py-6',
+          isChatPage ? 'flex flex-col py-0' : 'py-6',
         )}
       >
         {children}

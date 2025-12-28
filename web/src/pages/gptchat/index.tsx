@@ -162,10 +162,8 @@ export function GPTChatPage() {
     }
   }, [])
 
-  const isNearBottom = useCallback((container?: HTMLElement | null) => {
-    const el = container ?? messagesContainerRef.current
-    if (!el) return true
-    const { scrollTop, scrollHeight, clientHeight } = el
+  const isNearBottom = useCallback(() => {
+    const { scrollTop, scrollHeight, clientHeight } = document.documentElement
     return scrollHeight - scrollTop - clientHeight < 120
   }, [])
 
@@ -175,8 +173,7 @@ export function GPTChatPage() {
 
   const scrollToBottom = useCallback(
     (options?: { force?: boolean }) => {
-      const container = messagesContainerRef.current
-      if (!options?.force && !isNearBottom(container)) {
+      if (!options?.force && !isNearBottom()) {
         return
       }
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -185,10 +182,7 @@ export function GPTChatPage() {
   )
 
   const scrollToTop = useCallback(() => {
-    const container = messagesContainerRef.current
-    if (container) {
-      container.scrollTo({ top: 0, behavior: 'smooth' })
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
   // Auto-sync MCP tools in background
@@ -274,13 +268,10 @@ export function GPTChatPage() {
     setSelectedMessageIndex(-1)
   }, [messages.length, sessionId])
 
-  // Track scroll position for scroll-to-bottom button
+  // Track scroll position for scroll-to-bottom button (using window scroll)
   useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
-
     const handleScroll = () => {
-      const near = isNearBottom(container)
+      const near = isNearBottom()
       setShowScrollButton(!near)
       // Disable auto-follow as soon as user scrolls away
       if (!near) {
@@ -290,14 +281,13 @@ export function GPTChatPage() {
       }
     }
 
-    container.addEventListener('scroll', handleScroll)
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [isNearBottom])
 
   const handleLoadOlder = useCallback(() => {
-    const container = messagesContainerRef.current
-    const prevScrollHeight = container?.scrollHeight ?? 0
-    const prevScrollTop = container?.scrollTop ?? 0
+    const prevScrollHeight = document.documentElement.scrollHeight
+    const prevScrollTop = window.scrollY
 
     setVisibleCount((prev) =>
       Math.min(prev + MESSAGE_PAGE_SIZE, messages.length),
@@ -305,11 +295,9 @@ export function GPTChatPage() {
 
     // Keep the viewport anchored after older messages are prepended.
     requestAnimationFrame(() => {
-      const nextContainer = messagesContainerRef.current
-      if (!nextContainer) return
-      const nextScrollHeight = nextContainer.scrollHeight
+      const nextScrollHeight = document.documentElement.scrollHeight
       const delta = nextScrollHeight - prevScrollHeight
-      nextContainer.scrollTop = prevScrollTop + Math.max(delta, 0)
+      window.scrollTo({ top: prevScrollTop + Math.max(delta, 0) })
     })
   }, [messages.length])
 
@@ -559,9 +547,9 @@ export function GPTChatPage() {
   }, [])
 
   return (
-    <div className="theme-bg flex h-full w-full overflow-hidden">
-      {/* Session Dock (Integrated Left Sidebar) */}
-      <aside className="theme-surface theme-border flex h-full w-10 shrink-0 flex-col border-r">
+    <div className="theme-bg flex min-h-dvh w-full">
+      {/* Session Dock (Integrated Left Sidebar) - sticky on the left */}
+      <aside className="theme-surface theme-border sticky top-0 flex h-dvh w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
         <div className="flex h-12 shrink-0 items-center justify-center border-b border-border">
           <span className="text-base">💬</span>
@@ -577,10 +565,10 @@ export function GPTChatPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
-        {/* Header */}
+      <div className="flex flex-1 flex-col min-h-0">
+        {/* Header - sticky at top */}
         <header
-          className="theme-surface theme-border flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
+          className="theme-surface theme-border sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
           onClick={(e) => {
             if (e.target !== e.currentTarget) {
               return
@@ -642,11 +630,11 @@ export function GPTChatPage() {
           </div>
         </header>
 
-        {/* Scrollable chat area */}
-        <main className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Scrollable chat area - now uses window scroll */}
+        <main className="relative flex-1 min-h-0 flex flex-col">
           {/* Loading overlay for session switching */}
           {configLoading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
+            <div className="fixed inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
             </div>
           )}
@@ -660,10 +648,10 @@ export function GPTChatPage() {
 
           <div
             ref={messagesContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-1 pb-4 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
+            className="flex-1 min-h-0 overflow-x-hidden px-1 pb-32 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
           >
             {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="flex min-h-[calc(100dvh-10rem)] flex-col items-center justify-center text-center">
                 <div className="mb-4 text-4xl">💬</div>
                 <h2 className="text-lg font-medium">Start a conversation</h2>
                 <p className="mt-1 max-w-sm text-sm text-muted-foreground">
@@ -707,7 +695,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'absolute bottom-8 right-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
+              'fixed bottom-36 right-2 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-0 opacity-50',
@@ -718,8 +706,8 @@ export function GPTChatPage() {
           </button>
         </main>
 
-        {/* Input (fixed to bottom of main area) */}
-        <footer className="theme-surface theme-border shrink-0 border-t p-0">
+        {/* Input (fixed to bottom of viewport) */}
+        <footer className="theme-surface theme-border sticky bottom-0 z-30 shrink-0 border-t p-0">
           <ChatInput
             onSend={handleSend}
             onStop={stopGeneration}
