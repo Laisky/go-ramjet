@@ -593,9 +593,9 @@ export function GPTChatPage() {
   }, [])
 
   return (
-    <div className="theme-bg flex min-h-dvh w-full">
-      {/* Session Dock (Integrated Left Sidebar) - sticky on the left */}
-      <aside className="theme-surface theme-border sticky top-0 flex h-dvh w-10 shrink-0 flex-col border-r">
+    <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
+      {/* Session Dock (Fixed Left Sidebar) */}
+      <aside className="theme-surface theme-border fixed left-0 top-0 z-40 flex h-dvh w-10 shrink-0 flex-col border-r">
         {/* Dock header area */}
         <div className="flex h-12 shrink-0 items-center justify-center border-b border-border">
           <span className="text-base">💬</span>
@@ -610,11 +610,11 @@ export function GPTChatPage() {
         />
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-h-0">
-        {/* Header - sticky at top */}
+      {/* Main Content Area - offset by sidebar width */}
+      <div className="ml-10 flex min-h-dvh min-w-0 flex-1 flex-col">
+        {/* Header - fixed at top */}
         <header
-          className="theme-surface theme-border sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
+          className="theme-surface theme-border fixed left-10 right-0 top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
           onClick={(e) => {
             if (e.target !== e.currentTarget) {
               return
@@ -676,8 +676,8 @@ export function GPTChatPage() {
           </div>
         </header>
 
-        {/* Scrollable chat area - now uses window scroll */}
-        <main className="relative flex-1 min-h-0 flex flex-col">
+        {/* Scrollable chat area - uses window scroll with padding for fixed header/footer */}
+        <main className="relative flex-1 pt-12 pb-28">
           {/* Loading overlay for session switching */}
           {configLoading && (
             <div className="fixed inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
@@ -694,7 +694,7 @@ export function GPTChatPage() {
 
           <div
             ref={messagesContainerRef}
-            className="flex-1 min-h-0 overflow-x-hidden px-1 pb-32 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
+            className="min-h-0 overflow-x-hidden px-1 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
           >
             {messages.length === 0 ? (
               <div className="flex min-h-[calc(100dvh-10rem)] flex-col items-center justify-center text-center">
@@ -755,7 +755,7 @@ export function GPTChatPage() {
         </main>
 
         {/* Input (fixed to bottom of viewport) */}
-        <footer className="theme-surface theme-border sticky bottom-0 z-30 shrink-0 border-t p-0">
+        <footer className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0">
           <ChatInput
             onSend={handleSend}
             onStop={stopGeneration}
