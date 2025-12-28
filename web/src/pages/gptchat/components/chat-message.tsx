@@ -43,6 +43,10 @@ export interface ChatMessageProps {
   onEditResend?: (payload: { chatId: string; content: string }) => void
   pairedUserMessage?: ChatMessageData
   isSelected?: boolean
+  /** Called when user clicks the message to toggle selection */
+  onSelect?: (index: number) => void
+  /** The index of this message in the list (used for selection) */
+  messageIndex?: number
 }
 
 function ReasoningBlock({ content }: { content: string }) {
@@ -94,6 +98,8 @@ export function ChatMessage({
   onEditResend,
   pairedUserMessage,
   isSelected,
+  onSelect,
+  messageIndex,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
@@ -200,6 +206,26 @@ export function ChatMessage({
     }
   }, [canEditMessage, message.chatID, onEditResend, pairedUserContent])
 
+  const handleCardClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Don't toggle selection if clicking on interactive elements
+      // Note: We allow clicks on <pre> (user message content) and inline <code>
+      // Only block clicks on code blocks that might have copy buttons, etc.
+      const target = e.target as HTMLElement
+      if (
+        target.closest('button') ||
+        target.closest('a') ||
+        target.closest('details')
+      ) {
+        return
+      }
+      if (onSelect !== undefined && messageIndex !== undefined) {
+        onSelect(messageIndex)
+      }
+    },
+    [onSelect, messageIndex],
+  )
+
   return (
     <div
       id={`chat-message-${message.chatID}-${message.role}`}
@@ -209,6 +235,7 @@ export function ChatMessage({
       )}
     >
       <Card
+        onClick={handleCardClick}
         className={cn(
           'group/message relative w-full max-w-full rounded-md border px-2 py-1.5 transition-all sm:w-fit sm:max-w-[92%] sm:px-2.5 sm:py-2 md:max-w-[880px]',
           isUser
@@ -217,6 +244,7 @@ export function ChatMessage({
           isStreaming && 'animate-pulse',
           isSelected &&
             'ring-2 ring-primary ring-offset-2 dark:ring-offset-background',
+          onSelect && 'cursor-pointer',
         )}
       >
         <div className="flex items-start gap-2">

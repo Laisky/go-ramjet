@@ -318,6 +318,45 @@ export function GPTChatPage() {
     return messages.slice(-visibleCount)
   }, [messages, visibleCount])
 
+  /**
+   * findFirstVisibleMessageIndex finds the index of the first message
+   * that is currently visible in the viewport.
+   *
+   * @returns The index of the first visible message, or -1 if none found.
+   */
+  const findFirstVisibleMessageIndex = useCallback((): number => {
+    if (displayedMessages.length === 0) return -1
+
+    // Use the viewport bounds since this page uses window scroll
+    const viewportTop = 0
+    const viewportBottom = window.innerHeight
+
+    for (let i = 0; i < displayedMessages.length; i++) {
+      const msg = displayedMessages[i]
+      const el = document.getElementById(
+        `chat-message-${msg.chatID}-${msg.role}`,
+      )
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        // Check if element is at least partially visible in viewport
+        if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+          return i
+        }
+      }
+    }
+    return 0 // Default to first message if none found
+  }, [displayedMessages])
+
+  /**
+   * handleMessageSelect toggles selection for a message at the given index.
+   * If the message is already selected, it deselects it.
+   *
+   * @param index - The index of the message to toggle selection for.
+   */
+  const handleMessageSelect = useCallback((index: number) => {
+    setSelectedMessageIndex((prev) => (prev === index ? -1 : index))
+  }, [])
+
   // Keyboard shortcuts for message navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -337,7 +376,11 @@ export function GPTChatPage() {
 
         e.preventDefault()
         setSelectedMessageIndex((prev) => {
-          if (prev === -1) return displayedMessages.length - 1
+          if (prev === -1) {
+            // Start from first visible message
+            const visibleIdx = findFirstVisibleMessageIndex()
+            return visibleIdx >= 0 ? visibleIdx : displayedMessages.length - 1
+          }
           return Math.max(0, prev - 1)
         })
       } else if (e.key === 'ArrowDown') {
@@ -350,10 +393,13 @@ export function GPTChatPage() {
           }
         }
 
-        if (selectedMessageIndex === -1) return
-
         e.preventDefault()
         setSelectedMessageIndex((prev) => {
+          if (prev === -1) {
+            // Start from first visible message
+            const visibleIdx = findFirstVisibleMessageIndex()
+            return visibleIdx >= 0 ? visibleIdx : 0
+          }
           if (prev === displayedMessages.length - 1) return -1
           return prev + 1
         })
@@ -364,7 +410,7 @@ export function GPTChatPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [displayedMessages, selectedMessageIndex])
+  }, [displayedMessages, selectedMessageIndex, findFirstVisibleMessageIndex])
 
   // Scroll selected message into view
   useEffect(() => {
@@ -677,6 +723,8 @@ export function GPTChatPage() {
                     onEditResend={handleEditResend}
                     pairedUserMessage={userMessageByChatId.get(msg.chatID)}
                     isSelected={idx === selectedMessageIndex}
+                    onSelect={handleMessageSelect}
+                    messageIndex={idx}
                     isStreaming={
                       chatLoading &&
                       msg.role === 'assistant' &&
