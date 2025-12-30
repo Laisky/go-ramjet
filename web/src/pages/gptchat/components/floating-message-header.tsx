@@ -101,7 +101,7 @@ export function FloatingMessageHeader({
     } catch (err) {
       console.error('Failed to copy:', err)
     }
-  }, [message?.content])
+  }, [message])
 
   const handleDelete = useCallback(() => {
     if (onDelete && message) {
@@ -124,7 +124,7 @@ export function FloatingMessageHeader({
     }
     // Request new TTS audio
     requestTTS(message.content)
-  }, [apiToken, message?.content, ttsAudioUrl, stopTTS, requestTTS])
+  }, [apiToken, message, ttsAudioUrl, stopTTS, requestTTS])
 
   const handleRegenerate = useCallback(() => {
     if (onRegenerate && message) {
@@ -147,7 +147,7 @@ export function FloatingMessageHeader({
       className={cn(
         'fixed left-10 right-0 top-12 z-50 flex items-center gap-2 border-b px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm transition-all duration-200',
         visible
-          ? 'translate-y-0 opacity-100'
+          ? 'translate-y-0 opacity-50 hover:opacity-100'
           : '-translate-y-full opacity-0 pointer-events-none',
         isUser ? 'bg-primary/10 border-primary/20' : 'bg-card/95 border-border',
       )}
