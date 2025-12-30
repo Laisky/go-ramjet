@@ -1,12 +1,24 @@
 import type { Annotation, ChatReference } from '@/pages/gptchat/types'
 
+// The backend may prefix tool events with [[TOOLS]] marker
+const TOOL_STEP_MARKER = '[[TOOLS]] '
+
 export const ToolEventPrefixes = [
   'Upstream tool_call:',
   'args:',
   'exec MCP tool:',
+  'exec local tool:',
   'tool ok',
   'tool error:',
   'tool loop limit reached',
+  // Also match with the [[TOOLS]] marker
+  `${TOOL_STEP_MARKER}Upstream tool_call:`,
+  `${TOOL_STEP_MARKER}args:`,
+  `${TOOL_STEP_MARKER}exec MCP tool:`,
+  `${TOOL_STEP_MARKER}exec local tool:`,
+  `${TOOL_STEP_MARKER}tool ok`,
+  `${TOOL_STEP_MARKER}tool error:`,
+  `${TOOL_STEP_MARKER}tool loop limit reached`,
 ]
 
 export const ReasoningStageThinking = 'thinking'
@@ -72,10 +84,14 @@ export function splitReasoningContent(reasoningContent: string): {
   const toolEvents: string[] = []
 
   lines.forEach((line) => {
-    const s = String(line || '').trim()
+    let s = String(line || '').trim()
     if (!s) return
 
     if (isToolEventLine(s)) {
+      // Strip the [[TOOLS]] marker for cleaner display
+      if (s.startsWith(TOOL_STEP_MARKER)) {
+        s = s.slice(TOOL_STEP_MARKER.length)
+      }
       toolEvents.push(s)
     } else {
       thinkingLines.push(line)

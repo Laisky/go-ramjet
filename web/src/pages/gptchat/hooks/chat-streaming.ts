@@ -6,9 +6,10 @@ import {
 } from 'react'
 
 import {
-  sendStreamingChatRequest,
   API_BASE,
+  sendStreamingChatRequest,
   type ChatMessage as ApiChatMessage,
+  type ChatTool,
   type ToolCallDelta,
 } from '@/utils/api'
 import { extractReferencesFromAnnotations } from '@/utils/chat-parser'
@@ -17,6 +18,7 @@ import {
   DefaultSessionConfig,
   type Annotation,
   type ChatMessageData,
+  type McpServerConfig,
   type SessionConfig,
 } from '../types'
 import { callMCPTool } from '../utils/mcp'
@@ -54,6 +56,44 @@ function normalizePositiveInteger(value: unknown, fallback: number): number {
     }
   }
   return fallback
+}
+
+/**
+ * extractToolsFromMCPServers extracts tools from enabled MCP servers
+ * and converts them to OpenAI-compatible ChatTool format.
+ */
+function extractToolsFromMCPServers(servers?: McpServerConfig[]): ChatTool[] {
+  if (!servers || servers.length === 0) {
+    return []
+  }
+
+  const tools: ChatTool[] = []
+  for (const server of servers) {
+    if (!server.enabled) continue
+    if (!server.tools || server.tools.length === 0) continue
+
+    const enabledSet = new Set(server.enabled_tool_names || [])
+
+    for (const tool of server.tools) {
+      if (!tool.name) continue
+
+      // Filter by enabled_tool_names if specified
+      if (enabledSet.size > 0 && !enabledSet.has(tool.name)) {
+        continue
+      }
+
+      tools.push({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.input_schema || {},
+        },
+      })
+    }
+  }
+
+  return tools
 }
 
 const resolveServerForTool = (config: SessionConfig, toolName: string) => {
@@ -240,6 +280,24 @@ export function useChatStreaming({
           DefaultSessionConfig.max_tokens,
         )
 
+        // Extract tools from enabled MCP servers when MCP is enabled
+        const mcpTools = config.chat_switch.enable_mcp
+          ? extractToolsFromMCPServers(config.mcp_servers)
+          : []
+
+        // Build enabled servers with full tool definitions for backend routing
+        const enabledServers = config.mcp_servers
+          ?.filter((s) => s.enabled)
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            url: s.url,
+            api_key: s.api_key,
+            enabled: s.enabled,
+            tools: s.tools,
+            enabled_tool_names: s.enabled_tool_names,
+          }))
+
         await new Promise<void>((resolve, reject) => {
           abortControllerRef.current = sendStreamingChatRequest(
             {
@@ -251,13 +309,9 @@ export function useChatStreaming({
               frequency_penalty: config.frequency_penalty,
               stream: true,
               enable_mcp: config.chat_switch.enable_mcp,
-              mcp_servers: config.mcp_servers
-                ?.filter((s: { enabled: boolean }) => s.enabled)
-                .map((s: { name: string; url: string; api_key?: string }) => ({
-                  name: s.name,
-                  url: s.url,
-                  api_key: s.api_key,
-                })),
+              tools: mcpTools.length > 0 ? mcpTools : undefined,
+              tool_choice: mcpTools.length > 0 ? 'auto' : undefined,
+              mcp_servers: enabledServers,
               laisky_extra: {
                 chat_switch: {
                   disable_https_crawler:

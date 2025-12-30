@@ -49,6 +49,8 @@ export interface ChatRequest {
   frequency_penalty?: number
   stream?: boolean
   enable_mcp?: boolean
+  tools?: ChatTool[]
+  tool_choice?: string | object
   mcp_servers?: McpServer[]
   laisky_extra?: {
     chat_switch?: {
@@ -57,6 +59,17 @@ export interface ChatRequest {
       all_in_one?: boolean
     }
   }
+}
+
+// OpenAI-compatible tool definition
+export interface ChatTool {
+  type: 'function'
+  function: {
+    name: string
+    description?: string
+    parameters?: Record<string, unknown>
+  }
+  strict?: boolean
 }
 
 // Deep research
@@ -70,9 +83,21 @@ export interface DeepResearchTask {
 }
 
 export interface McpServer {
+  id?: string
   name: string
   url: string
   api_key?: string
+  enabled?: boolean
+  tools?: McpTool[]
+  enabled_tool_names?: string[]
+}
+
+// MCP tool definition (may use input_schema instead of parameters)
+export interface McpTool {
+  name: string
+  description?: string
+  parameters?: Record<string, unknown>
+  input_schema?: Record<string, unknown>
 }
 
 export interface ChatCompletionChoice {

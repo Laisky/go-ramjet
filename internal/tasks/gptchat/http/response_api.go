@@ -211,6 +211,12 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		})
 	}
 
+	// Extract tools from MCP servers if no explicit tools were provided.
+	// This allows the frontend to just send mcp_servers with cached tools.
+	if len(tools) == 0 && len(frontendReq.MCPServers) > 0 {
+		tools = append(tools, extractToolsFromMCPServers(frontendReq.MCPServers)...)
+	}
+
 	// Always include built-in local tools if any are defined.
 	tools = append(tools, convertLocalToolsToResponsesTools(ToolsRequest())...)
 	if len(tools) > 0 {
@@ -242,6 +248,86 @@ func convertLocalToolsToResponsesTools(chatTools []OpenaiChatReqTool) []OpenAIRe
 		})
 	}
 	return out
+}
+
+// extractToolsFromMCPServers extracts tools from enabled MCP servers.
+// Each MCP server may have cached tool definitions in its `tools` field.
+// Only enabled servers and tools with enabled_tool_names (or all if empty) are included.
+func extractToolsFromMCPServers(servers []MCPServerConfig) []OpenAIResponsesTool {
+	var tools []OpenAIResponsesTool
+	for _, srv := range servers {
+		if !srv.Enabled {
+			continue
+		}
+		if len(srv.Tools) == 0 {
+			continue
+		}
+
+		enabledSet := make(map[string]struct{}, len(srv.EnabledToolName))
+		for _, name := range srv.EnabledToolName {
+			enabledSet[strings.TrimSpace(name)] = struct{}{}
+		}
+
+		for _, rawTool := range srv.Tools {
+			if len(rawTool) == 0 {
+				continue
+			}
+
+			// Parse the raw tool definition.
+			var toolDef struct {
+				Name        string             `json:"name"`
+				Description string             `json:"description"`
+				Parameters  stdjson.RawMessage `json:"parameters"`
+				InputSchema stdjson.RawMessage `json:"input_schema"`
+				Function    *struct {
+					Name        string             `json:"name"`
+					Description string             `json:"description"`
+					Parameters  stdjson.RawMessage `json:"parameters"`
+				} `json:"function"`
+			}
+			if err := stdjson.Unmarshal(rawTool, &toolDef); err != nil {
+				continue
+			}
+
+			// Extract tool name from nested function or top-level.
+			name := strings.TrimSpace(toolDef.Name)
+			description := strings.TrimSpace(toolDef.Description)
+			params := toolDef.Parameters
+			if len(params) == 0 {
+				params = toolDef.InputSchema
+			}
+			if toolDef.Function != nil {
+				if name == "" {
+					name = strings.TrimSpace(toolDef.Function.Name)
+				}
+				if description == "" {
+					description = strings.TrimSpace(toolDef.Function.Description)
+				}
+				if len(params) == 0 {
+					params = toolDef.Function.Parameters
+				}
+			}
+
+			if name == "" {
+				continue
+			}
+
+			// Filter by enabled_tool_names if specified.
+			if len(enabledSet) > 0 {
+				if _, ok := enabledSet[name]; !ok {
+					continue
+				}
+			}
+
+			tools = append(tools, OpenAIResponsesTool{
+				Type:        "function",
+				Name:        name,
+				Description: description,
+				Parameters:  params,
+			})
+		}
+	}
+	return tools
 }
 
 func base64Encode(b []byte) string {
