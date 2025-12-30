@@ -6,9 +6,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { API_BASE } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
-import { API_BASE } from '@/utils/api'
 import {
   ChatInput,
   ChatMessage,
@@ -697,6 +697,7 @@ export function GPTChatPage() {
               ? userMessageByChatId.get(floatingHeaderState.message.chatID)
               : undefined
           }
+          apiToken={config.api_token}
           isStreaming={
             chatLoading &&
             floatingHeaderState.message?.role === 'assistant' &&
@@ -754,6 +755,7 @@ export function GPTChatPage() {
                     isSelected={idx === selectedMessageIndex}
                     onSelect={handleMessageSelect}
                     messageIndex={idx}
+                    apiToken={config.api_token}
                     isStreaming={
                       chatLoading &&
                       msg.role === 'assistant' &&

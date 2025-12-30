@@ -6,56 +6,24 @@ import {
   Check,
   Copy,
   Edit2,
+  Loader2,
   RotateCcw,
   Trash2,
   User,
   Volume2,
   VolumeX,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Markdown } from '@/components/markdown'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { splitReasoningContent } from '@/utils/chat-parser'
 import { cn } from '@/utils/cn'
+import { useTTS } from '../hooks/use-tts'
 import type { ChatMessageData } from '../types'
-
-function stripMarkdownText(input: string): string {
-  if (typeof input !== 'string') {
-    return ''
-  }
-  return input
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`[^`]*`/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[>*_~`#]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-/**
- * Safely formats costUsd to a fixed decimal string.
- * Handles both number and string types for backward compatibility with stored data.
- *
- * @param costUsd - The cost value which may be a number or string
- * @returns Formatted cost string or null if the value is invalid
- */
-export function formatCostUsd(costUsd: unknown): string | null {
-  if (costUsd === undefined || costUsd === null || costUsd === '') {
-    return null
-  }
-
-  const numValue = typeof costUsd === 'number' ? costUsd : Number(costUsd)
-
-  if (Number.isNaN(numValue)) {
-    console.debug('[formatCostUsd] Invalid costUsd value:', costUsd)
-    return null
-  }
-
-  return numValue.toFixed(4)
-}
+import { formatCostUsd } from '../utils/format'
+import { TTSAudioPlayer } from './tts-audio-player'
 
 export interface ChatMessageProps {
   message: ChatMessageData
@@ -69,6 +37,8 @@ export interface ChatMessageProps {
   onSelect?: (index: number) => void
   /** The index of this message in the list (used for selection) */
   messageIndex?: number
+  /** API token for TTS functionality */
+  apiToken?: string
 }
 
 function ReasoningBlock({ content }: { content: string }) {
@@ -122,41 +92,39 @@ export function ChatMessage({
   isSelected,
   onSelect,
   messageIndex,
+  apiToken,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
   const userHasCode = useMemo(
     () => /```/.test(message.content) || /`[^`]/.test(message.content),
     [message.content],
   )
-  const supportsSpeech = useMemo(
-    () =>
-      typeof window !== 'undefined' &&
-      'speechSynthesis' in window &&
-      'SpeechSynthesisUtterance' in window,
-    [],
-  )
+
+  // TTS hook - uses server-side Azure TTS
+  const {
+    isLoading: ttsLoading,
+    audioUrl: ttsAudioUrl,
+    error: ttsError,
+    requestTTS,
+    stopTTS,
+  } = useTTS({
+    apiToken: apiToken || '',
+  })
+
+  // Cleanup TTS when message changes
+  useEffect(() => {
+    return () => {
+      stopTTS()
+    }
+  }, [message.chatID]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const pairedUserContent = isUser
     ? message.content
     : pairedUserMessage?.content || ''
   const canEditMessage = Boolean(onEditResend && pairedUserContent)
-
-  const stopSpeaking = useCallback(() => {
-    if (!supportsSpeech || !isSpeaking) return
-    window.speechSynthesis.cancel()
-    speechRef.current = null
-    setIsSpeaking(false)
-  }, [isSpeaking, supportsSpeech])
-
-  useEffect(() => {
-    return () => {
-      stopSpeaking()
-    }
-  }, [stopSpeaking])
 
   const handleCopy = async () => {
     try {
@@ -184,37 +152,26 @@ export function ChatMessage({
     }
   }
 
-  const showSpeechButton = Boolean(
-    supportsSpeech && isAssistant && message.content,
-  )
+  // Show TTS button for assistant messages when API token is available
+  const showSpeechButton = Boolean(apiToken && isAssistant && message.content)
   const actionDisabled = Boolean(isStreaming && isAssistant)
 
   const handleToggleSpeech = useCallback(() => {
-    if (!supportsSpeech || !message.content) {
+    if (!apiToken || !message.content) {
+      console.debug('[ChatMessage] TTS not available:', {
+        hasApiToken: !!apiToken,
+        hasContent: !!message.content,
+      })
       return
     }
-    if (isSpeaking) {
-      stopSpeaking()
+    if (ttsAudioUrl) {
+      // Audio already loaded - stop it
+      stopTTS()
       return
     }
-    if (
-      typeof window === 'undefined' ||
-      typeof window.SpeechSynthesisUtterance === 'undefined'
-    ) {
-      return
-    }
-    const plain = stripMarkdownText(message.content)
-    if (!plain) {
-      return
-    }
-    stopSpeaking()
-    const utterance = new window.SpeechSynthesisUtterance(plain)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    speechRef.current = utterance
-    window.speechSynthesis.speak(utterance)
-    setIsSpeaking(true)
-  }, [isSpeaking, message.content, stopSpeaking, supportsSpeech])
+    // Request new TTS audio
+    requestTTS(message.content)
+  }, [apiToken, message.content, ttsAudioUrl, stopTTS, requestTTS])
 
   const handleRegenerate = useCallback(() => {
     if (onRegenerate) {
@@ -324,9 +281,18 @@ export function ChatMessage({
                   size="sm"
                   onClick={handleToggleSpeech}
                   className="h-7 w-7 rounded-md p-0"
-                  title={isSpeaking ? 'Stop narration' : 'Play narration'}
+                  disabled={ttsLoading}
+                  title={
+                    ttsLoading
+                      ? 'Loading audio...'
+                      : ttsAudioUrl
+                        ? 'Stop narration'
+                        : 'Play narration'
+                  }
                 >
-                  {isSpeaking ? (
+                  {ttsLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : ttsAudioUrl ? (
                     <VolumeX className="h-3.5 w-3.5" />
                   ) : (
                     <Volume2 className="h-3.5 w-3.5" />
@@ -446,6 +412,18 @@ export function ChatMessage({
                 </ol>
               </Card>
             )}
+
+          {/* TTS Audio Player - shown when audio is loaded */}
+          {isAssistant && ttsAudioUrl && (
+            <TTSAudioPlayer audioUrl={ttsAudioUrl} onClose={stopTTS} />
+          )}
+
+          {/* TTS Error Message */}
+          {isAssistant && ttsError && (
+            <div className="mt-1 text-xs text-destructive">
+              TTS Error: {ttsError}
+            </div>
+          )}
 
           {isAssistant && (
             <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-muted-foreground/60">

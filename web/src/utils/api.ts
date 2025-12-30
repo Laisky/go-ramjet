@@ -609,3 +609,48 @@ export async function createPaymentIntent(
 
   return response.json()
 }
+
+/**
+ * Fetch TTS audio from the server (Azure TTS).
+ * Returns an object URL for the audio blob that can be used with an <audio> element.
+ *
+ * @param text - The text to convert to speech
+ * @param apiToken - The API token for authentication
+ * @returns Promise resolving to an object URL for the audio blob
+ */
+export async function fetchTTS(
+  text: string,
+  apiToken: string,
+): Promise<string> {
+  const url = `${API_BASE}/audio/tts?apikey=${encodeURIComponent(apiToken)}&text=${encodeURIComponent(text)}`
+
+  console.debug('[fetchTTS] Requesting TTS audio:', {
+    textLength: text.length,
+    url: url.replace(apiToken, '***'),
+  })
+
+  const response = await fetch(url, {
+    method: 'GET',
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.debug('[fetchTTS] Server error:', {
+      status: response.status,
+      error: errorText,
+    })
+    throw new Error(`TTS request failed [${response.status}]: ${errorText}`)
+  }
+
+  const blob = await response.blob()
+  console.debug('[fetchTTS] Received audio blob:', {
+    size: blob.size,
+    type: blob.type,
+  })
+
+  // Create a WAV blob and object URL
+  const wavBlob = new Blob([blob], { type: 'audio/wav' })
+  const objectUrl = URL.createObjectURL(wavBlob)
+
+  return objectUrl
+}

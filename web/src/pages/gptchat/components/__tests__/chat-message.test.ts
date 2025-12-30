@@ -1,8 +1,8 @@
 /**
  * Tests for chat-message.tsx utility functions
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { formatCostUsd } from '../chat-message'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { formatCostUsd } from '../../utils/format'
 
 describe('formatCostUsd', () => {
   beforeEach(() => {

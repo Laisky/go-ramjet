@@ -7,37 +7,19 @@ import {
   Check,
   Copy,
   Edit2,
+  Loader2,
   RotateCcw,
   Trash2,
   User,
   Volume2,
   VolumeX,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
+import { useTTS } from '../hooks/use-tts'
 import type { ChatMessageData } from '../types'
-
-/**
- * Strips markdown formatting from text for speech synthesis.
- *
- * @param input - Markdown text to strip
- * @returns Plain text without markdown formatting
- */
-function stripMarkdownText(input: string): string {
-  if (typeof input !== 'string') {
-    return ''
-  }
-  return input
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`[^`]*`/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[>*_~`#]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 export interface FloatingMessageHeaderProps {
   /** The message to display header for */
@@ -56,6 +38,8 @@ export interface FloatingMessageHeaderProps {
   isStreaming?: boolean
   /** Scroll container ref for positioning */
   containerRef?: React.RefObject<HTMLElement>
+  /** API token for TTS functionality */
+  apiToken?: string
 }
 
 /**
@@ -71,49 +55,42 @@ export function FloatingMessageHeader({
   onEditResend,
   pairedUserMessage,
   isStreaming,
+  apiToken,
 }: FloatingMessageHeaderProps) {
   const [copied, setCopied] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null)
 
   const isUser = message?.role === 'user'
   const isAssistant = message?.role === 'assistant'
 
-  const supportsSpeech = useMemo(
-    () =>
-      typeof window !== 'undefined' &&
-      'speechSynthesis' in window &&
-      'SpeechSynthesisUtterance' in window,
-    [],
-  )
+  // TTS hook - uses server-side Azure TTS
+  const {
+    isLoading: ttsLoading,
+    audioUrl: ttsAudioUrl,
+    requestTTS,
+    stopTTS,
+  } = useTTS({
+    apiToken: apiToken || '',
+  })
+
+  // Cleanup TTS when message changes
+  useEffect(() => {
+    stopTTS()
+  }, [message?.chatID]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopTTS()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pairedUserContent = isUser
     ? message?.content || ''
     : pairedUserMessage?.content || ''
   const canEditMessage = Boolean(onEditResend && pairedUserContent)
-  const showSpeechButton = Boolean(
-    supportsSpeech && isAssistant && message?.content,
-  )
+  // Show TTS button for assistant messages when API token is available
+  const showSpeechButton = Boolean(apiToken && isAssistant && message?.content)
   const actionDisabled = Boolean(isStreaming && isAssistant)
-
-  const stopSpeaking = useCallback(() => {
-    if (!supportsSpeech || !isSpeaking) return
-    window.speechSynthesis.cancel()
-    speechRef.current = null
-    setIsSpeaking(false)
-  }, [isSpeaking, supportsSpeech])
-
-  // Cleanup speech on unmount or message change
-  useEffect(() => {
-    return () => {
-      stopSpeaking()
-    }
-  }, [stopSpeaking])
-
-  // Stop speech when message changes
-  useEffect(() => {
-    stopSpeaking()
-  }, [message?.chatID, stopSpeaking])
 
   const handleCopy = useCallback(async () => {
     if (!message?.content) return
@@ -133,31 +110,21 @@ export function FloatingMessageHeader({
   }, [message, onDelete])
 
   const handleToggleSpeech = useCallback(() => {
-    if (!supportsSpeech || !message?.content) {
+    if (!apiToken || !message?.content) {
+      console.debug('[FloatingMessageHeader] TTS not available:', {
+        hasApiToken: !!apiToken,
+        hasContent: !!message?.content,
+      })
       return
     }
-    if (isSpeaking) {
-      stopSpeaking()
+    if (ttsAudioUrl) {
+      // Audio already loaded - stop it
+      stopTTS()
       return
     }
-    if (
-      typeof window === 'undefined' ||
-      typeof window.SpeechSynthesisUtterance === 'undefined'
-    ) {
-      return
-    }
-    const plain = stripMarkdownText(message.content)
-    if (!plain) {
-      return
-    }
-    stopSpeaking()
-    const utterance = new window.SpeechSynthesisUtterance(plain)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    speechRef.current = utterance
-    window.speechSynthesis.speak(utterance)
-    setIsSpeaking(true)
-  }, [isSpeaking, message?.content, stopSpeaking, supportsSpeech])
+    // Request new TTS audio
+    requestTTS(message.content)
+  }, [apiToken, message?.content, ttsAudioUrl, stopTTS, requestTTS])
 
   const handleRegenerate = useCallback(() => {
     if (onRegenerate && message) {
@@ -240,9 +207,18 @@ export function FloatingMessageHeader({
             size="sm"
             onClick={handleToggleSpeech}
             className="h-7 w-7 rounded-md p-0"
-            title={isSpeaking ? 'Stop narration' : 'Play narration'}
+            disabled={ttsLoading}
+            title={
+              ttsLoading
+                ? 'Loading audio...'
+                : ttsAudioUrl
+                  ? 'Stop narration'
+                  : 'Play narration'
+            }
           >
-            {isSpeaking ? (
+            {ttsLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : ttsAudioUrl ? (
               <VolumeX className="h-3.5 w-3.5" />
             ) : (
               <Volume2 className="h-3.5 w-3.5" />
