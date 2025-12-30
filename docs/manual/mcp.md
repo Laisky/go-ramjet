@@ -15,6 +15,7 @@ This manual provides comprehensive guidance for using MCP (Model Context Protoco
   - [For Administrators](#for-administrators)
     - [Configuration Overview](#configuration-overview)
     - [Adding MCP Servers](#adding-mcp-servers)
+      - [Using mcp.laisky.com (Default Server)](#using-mcplaiskycom-default-server)
     - [Syncing Tools](#syncing-tools)
     - [Managing Tool Access](#managing-tool-access)
     - [Backend Configuration](#backend-configuration)
@@ -26,6 +27,7 @@ This manual provides comprehensive guidance for using MCP (Model Context Protoco
     - [Getting Help](#getting-help)
   - [Appendix: MCP Protocol Details](#appendix-mcp-protocol-details)
     - [Protocol Flow](#protocol-flow)
+    - [Request/Response Flow (Detailed)](#requestresponse-flow-detailed)
     - [Tool Definition Schema](#tool-definition-schema)
     - [Supported MCP Endpoints](#supported-mcp-endpoints)
 
@@ -114,10 +116,34 @@ The configuration includes:
 3. Click **Add Server**
 4. Fill in the server details:
     - **Name**: A friendly name for the server (e.g., "Web Tools")
-    - **URL**: The MCP server endpoint (e.g., `https://mcp.example.com`)
-    - **API Key**: Optional authentication key
+    - **URL**: The MCP server endpoint (e.g., `https://mcp.laisky.com`)
+    - **API Key**: Authentication key (required for most servers)
 5. Click **Save**
 6. The application will automatically sync available tools
+
+#### Using mcp.laisky.com (Default Server)
+
+The default MCP server at `https://mcp.laisky.com` provides the following tools:
+
+| Tool               | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `web_search`       | Search the web using Google Programmable Search          |
+| `web_fetch`        | Fetch and render dynamic web page content                |
+| `ask_user`         | Ask the authenticated human for input and wait for reply |
+| `get_user_request` | Get the latest directive queued by the user              |
+| `extract_key_info` | Extract key information from materials using RAG         |
+| `mcp_pipe`         | Execute a pipeline composing multiple MCP tools          |
+
+**Configuration for mcp.laisky.com:**
+
+-   **URL**: `https://mcp.laisky.com`
+-   **API Key**: Your Laisky API key (same as the chat API key, e.g., `sk-xxx...`)
+
+**Important Notes:**
+
+-   The `web_search` tool incurs a cost per query (billed through your API key)
+-   The `ask_user` tool requires you to have the [Ask User Console](https://mcp.laisky.com/mcp/tools/ask_user) open to respond
+-   The `get_user_request` tool uses the [User Requests Console](https://mcp.laisky.com/mcp/tools/get_user_requests)
 
 ### Syncing Tools
 

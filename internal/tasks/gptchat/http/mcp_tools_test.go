@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -229,4 +230,140 @@ func TestFindMCPServerForToolName_DisabledServer(t *testing.T) {
 
 	server := findMCPServerForToolName(servers, "web_search")
 	require.Nil(t, server)
+}
+
+// TestGuessJSONRPCEndpoints tests endpoint URL generation.
+func TestGuessJSONRPCEndpoints(t *testing.T) {
+	tests := []struct {
+		name     string
+		server   *MCPServerConfig
+		expected []string
+	}{
+		{
+			name: "basic URL like mcp.laisky.com",
+			server: &MCPServerConfig{
+				URL: "https://mcp.laisky.com",
+			},
+			// Order matters: exact URL first, then root /, then /mcp paths
+			expected: []string{
+				"https://mcp.laisky.com",
+				"https://mcp.laisky.com/",
+				"https://mcp.laisky.com/mcp",
+				"https://mcp.laisky.com/mcp/tools",
+			},
+		},
+		{
+			name: "URL with trailing slash",
+			server: &MCPServerConfig{
+				URL: "https://mcp.laisky.com/",
+			},
+			expected: []string{
+				"https://mcp.laisky.com",
+				"https://mcp.laisky.com/",
+				"https://mcp.laisky.com/mcp",
+				"https://mcp.laisky.com/mcp/tools",
+			},
+		},
+		{
+			name: "URL with path",
+			server: &MCPServerConfig{
+				URL: "https://api.example.com/v1/mcp",
+			},
+			expected: []string{
+				"https://api.example.com/v1/mcp",
+				"https://api.example.com/",
+				"https://api.example.com/mcp",
+				"https://api.example.com/mcp/tools",
+			},
+		},
+		{
+			name: "URL with URLPrefix",
+			server: &MCPServerConfig{
+				URL:       "https://mcp.example.com",
+				URLPrefix: "/api/v2",
+			},
+			expected: []string{
+				"https://mcp.example.com",
+				"https://mcp.example.com/",
+				"https://mcp.example.com/mcp",
+				"https://mcp.example.com/mcp/tools",
+				"https://mcp.example.com/api/v2",
+			},
+		},
+		{
+			name:     "empty URL",
+			server:   &MCPServerConfig{},
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := guessJSONRPCEndpoints(tt.server)
+			// Check that all expected endpoints are present
+			for _, exp := range tt.expected {
+				found := false
+				for _, r := range result {
+					if r == exp {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected endpoint %q not found in %v", exp, result)
+			}
+		})
+	}
+}
+
+// TestMCPSessionHeaders tests header generation.
+func TestMCPSessionHeaders(t *testing.T) {
+	t.Run("without session ID", func(t *testing.T) {
+		server := &MCPServerConfig{
+			URL: "https://mcp.example.com",
+		}
+		base := http.Header{}
+		base.Set("content-type", "application/json")
+
+		h := mcpSessionHeaders(server, base)
+
+		require.Equal(t, "application/json", h.Get("content-type"))
+		require.Equal(t, "2025-06-18", h.Get("mcp-protocol-version"))
+		require.Empty(t, h.Get("mcp-session-id"), "session ID should not be set before initialization")
+	})
+
+	t.Run("with session ID", func(t *testing.T) {
+		server := &MCPServerConfig{
+			URL:                "https://mcp.example.com",
+			MCPSessionID:       "mcp-session-abc123",
+			MCPProtocolVersion: "2025-06-18",
+		}
+		base := http.Header{}
+
+		h := mcpSessionHeaders(server, base)
+
+		require.Equal(t, "2025-06-18", h.Get("mcp-protocol-version"))
+		require.Equal(t, "mcp-session-abc123", h.Get("mcp-session-id"))
+	})
+}
+
+// TestMCPAuthCandidates tests authentication header generation.
+func TestMCPAuthCandidates(t *testing.T) {
+	t.Run("with API key", func(t *testing.T) {
+		auths := mcpAuthCandidates("sk-test-key-123")
+		require.NotEmpty(t, auths)
+		// Should include Bearer format
+		found := false
+		for _, a := range auths {
+			if a == "Bearer sk-test-key-123" {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "Bearer format not found in %v", auths)
+	})
+
+	t.Run("empty API key", func(t *testing.T) {
+		auths := mcpAuthCandidates("")
+		require.Empty(t, auths)
+	})
 }

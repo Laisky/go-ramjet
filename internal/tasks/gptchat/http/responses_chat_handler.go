@@ -282,7 +282,12 @@ func executeToolCall(
 	}
 
 	info := "exec MCP tool: " + fc.Name + " @ " + strings.TrimSpace(server.URL)
-	out, err := callMCPTool(gmw.Ctx(ctx), server, fc.Name, fc.Arguments)
+
+	// Use session API key as fallback when MCP server has no configured key
+	mcpOpts := &MCPCallOption{
+		FallbackAPIKey: getRawUserToken(ctx),
+	}
+	out, err := callMCPTool(gmw.Ctx(ctx), server, fc.Name, fc.Arguments, mcpOpts)
 	if err != nil {
 		return out, info, err
 	}

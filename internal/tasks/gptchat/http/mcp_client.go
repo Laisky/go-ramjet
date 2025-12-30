@@ -10,12 +10,91 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	"github.com/Laisky/go-utils/v5/json"
+	"github.com/Laisky/zap"
 )
+
+const (
+	// maxLogValueLen is the maximum length for logged string values.
+	// Values longer than this are truncated to prevent log bloat (e.g., base64 images).
+	maxLogValueLen = 256
+)
+
+// truncateForLog truncates a string for logging, appending "..." if truncated.
+func truncateForLog(s string, maxLen int) string {
+	if maxLen <= 0 {
+		maxLen = maxLogValueLen
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// truncateMapForLog recursively truncates string values in a map for logging.
+// It returns a new map without modifying the original.
+func truncateMapForLog(v any, maxLen int) any {
+	if maxLen <= 0 {
+		maxLen = maxLogValueLen
+	}
+	return truncateValue(v, maxLen)
+}
+
+func truncateValue(v any, maxLen int) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case string:
+		return truncateForLog(val, maxLen)
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, vv := range val {
+			result[k] = truncateValue(vv, maxLen)
+		}
+		return result
+	case []any:
+		result := make([]any, len(val))
+		for i, item := range val {
+			result[i] = truncateValue(item, maxLen)
+		}
+		return result
+	case []byte:
+		// Handle raw JSON bytes (e.g., json.RawMessage)
+		var parsed any
+		if err := json.Unmarshal(val, &parsed); err == nil {
+			return truncateValue(parsed, maxLen)
+		}
+		s := string(val)
+		return truncateForLog(s, maxLen)
+	default:
+		// For other types, try reflection for nested structures
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Map {
+			result := make(map[string]any)
+			iter := rv.MapRange()
+			for iter.Next() {
+				key := fmt.Sprintf("%v", iter.Key().Interface())
+				result[key] = truncateValue(iter.Value().Interface(), maxLen)
+			}
+			return result
+		}
+		if rv.Kind() == reflect.Slice {
+			result := make([]any, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				result[i] = truncateValue(rv.Index(i).Interface(), maxLen)
+			}
+			return result
+		}
+		return v
+	}
+}
 
 // mcpAuthCandidates returns possible Authorization header values.
 func mcpAuthCandidates(apiKey string) []string {
@@ -203,8 +282,18 @@ func fetchJSONOrSSE(resp *http.Response) (map[string]any, error) {
 	return map[string]any{"text": string(data)}, nil
 }
 
+// MCPCallOption contains optional parameters for callMCPTool.
+type MCPCallOption struct {
+	// FallbackAPIKey is used when server.APIKey is empty.
+	// Typically this is the session's API key (user's token).
+	FallbackAPIKey string
+}
+
 // callMCPTool executes a tool against a remote MCP server.
-func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, args string) (string, error) {
+// When server.APIKey is empty, it falls back to opts.FallbackAPIKey if provided.
+func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, args string, opts *MCPCallOption) (string, error) {
+	logger := gmw.GetLogger(ctx)
+
 	if server == nil {
 		return "", errors.New("nil mcp server")
 	}
@@ -213,7 +302,24 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 		return "", errors.New("empty tool name")
 	}
 
-	auths := mcpAuthCandidates(server.APIKey)
+	// Determine API key: server's own key takes precedence, then fallback to session key.
+	effectiveAPIKey := strings.TrimSpace(server.APIKey)
+	if effectiveAPIKey == "" && opts != nil {
+		effectiveAPIKey = strings.TrimSpace(opts.FallbackAPIKey)
+	}
+
+	if effectiveAPIKey == "" {
+		logger.Debug("mcp tool call with no api key",
+			zap.String("tool", name),
+			zap.String("server_url", server.URL))
+	} else {
+		logger.Debug("mcp tool call with api key",
+			zap.String("tool", name),
+			zap.String("server_url", server.URL),
+			zap.String("api_key_prefix", truncateForLog(effectiveAPIKey, 8)))
+	}
+
+	auths := mcpAuthCandidates(effectiveAPIKey)
 	headers := http.Header{}
 	headers.Set("content-type", "application/json")
 	headers.Set("accept", "application/json, text/event-stream")
@@ -234,22 +340,95 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 		return "", errors.Wrap(err, "marshal tool call body")
 	}
 
+	// Log request body (truncated for safety)
+	logger.Debug("mcp tool call request",
+		zap.String("tool", name),
+		zap.Any("args_truncated", truncateMapForLog(parsedArgs, maxLogValueLen)))
+
+	var lastRestErr error
+
 	// 1) Try REST-ish endpoints.
 	for _, endpoint := range guessMCPToolCallURLs(server.URL, server.URLPrefix) {
+		logger.Debug("mcp rest call attempt",
+			zap.String("endpoint", endpoint))
+
 		resp, callErr := doMCPPost(ctx, endpoint, headers, auths, bodyBytes)
 		if callErr != nil {
+			logger.Debug("mcp rest call failed",
+				zap.String("endpoint", endpoint),
+				zap.Error(callErr))
+			lastRestErr = callErr
 			continue
 		}
 		defer resp.Body.Close()
 		obj, parseErr := fetchJSONOrSSE(resp)
 		if parseErr != nil {
-			return "", errors.Wrap(parseErr, "parse mcp response")
+			return "", errors.Wrapf(parseErr, "parse mcp response from %s", endpoint)
 		}
-		return stringifyMCPResult(obj), nil
+
+		// Log response (truncated)
+		logger.Debug("mcp rest call response",
+			zap.String("endpoint", endpoint),
+			zap.Any("response_truncated", truncateMapForLog(obj, maxLogValueLen)))
+
+		// Check for isError in response
+		result, mcpErr := processMCPResponse(obj)
+		if mcpErr != nil {
+			logger.Debug("mcp tool returned error",
+				zap.String("endpoint", endpoint),
+				zap.Error(mcpErr))
+			return "", mcpErr
+		}
+		return result, nil
 	}
 
 	// 2) Fallback to JSON-RPC.
-	return callMCPToolJSONRPC(ctx, server, headers, auths, body)
+	result, rpcErr := callMCPToolJSONRPC(ctx, server, headers, auths, body)
+	if rpcErr != nil {
+		// Include both errors for better debugging
+		if lastRestErr != nil {
+			return "", errors.Wrapf(rpcErr, "json-rpc failed (rest also failed: %v)", lastRestErr)
+		}
+		return "", errors.Wrap(rpcErr, "json-rpc failed")
+	}
+	return result, nil
+}
+
+// processMCPResponse extracts the result from an MCP response and checks for errors.
+// It returns an error if the response contains isError:true or an error field.
+// It also handles JSON-RPC responses where isError might be nested inside result.
+func processMCPResponse(obj map[string]any) (string, error) {
+	if obj == nil {
+		return "", nil // Return empty for nil input
+	}
+
+	// Check for isError field at top level (MCP error response format)
+	if isErr, ok := obj["isError"]; ok {
+		if b, isBool := isErr.(bool); isBool && b {
+			// Extract error message from content
+			errContent := stringifyMCPResult(obj)
+			return "", errors.Errorf("mcp tool error: %s", errContent)
+		}
+	}
+
+	// Check for JSON-RPC error field
+	if errField, ok := obj["error"]; ok && errField != nil {
+		return "", errors.Errorf("mcp error: %v", errField)
+	}
+
+	// Check for nested isError inside result (JSON-RPC format with MCP error inside)
+	if res, ok := obj["result"]; ok {
+		if resMap, isMap := res.(map[string]any); isMap {
+			if isErr, ok := resMap["isError"]; ok {
+				if b, isBool := isErr.(bool); isBool && b {
+					errContent := stringifyMCPResult(resMap)
+					return "", errors.Errorf("mcp tool error: %s", errContent)
+				}
+			}
+		}
+	}
+
+	return stringifyMCPResult(obj), nil
 }
 
 func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, auths []string, body []byte) (*http.Response, error) {
@@ -290,14 +469,20 @@ func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, au
 }
 
 func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeaders http.Header, auths []string, params map[string]any) (string, error) {
+	logger := gmw.GetLogger(ctx)
 	endpointCandidates := guessJSONRPCEndpoints(server)
 	if len(endpointCandidates) == 0 {
 		return "", errors.New("no json-rpc endpoints")
 	}
 
+	var lastErr error
 	methods := []string{"tools/call", "tools.call"}
 	for _, endpoint := range endpointCandidates {
 		if err := ensureMCPSession(ctx, server, endpoint, baseHeaders, auths); err != nil {
+			logger.Debug("mcp session init failed",
+				zap.String("endpoint", endpoint),
+				zap.Error(err))
+			lastErr = err
 			continue
 		}
 
@@ -312,8 +497,19 @@ func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeader
 			if err != nil {
 				return "", errors.Wrap(err, "marshal rpc payload")
 			}
+
+			logger.Debug("mcp json-rpc call",
+				zap.String("endpoint", endpoint),
+				zap.String("method", method),
+				zap.Any("params_name", params["name"]))
+
 			resp, err := doMCPPost(ctx, endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
 			if err != nil {
+				logger.Debug("mcp json-rpc post failed",
+					zap.String("endpoint", endpoint),
+					zap.String("method", method),
+					zap.Error(err))
+				lastErr = err
 				continue
 			}
 			defer resp.Body.Close()
@@ -321,32 +517,78 @@ func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeader
 			if err != nil {
 				return "", errors.Wrap(err, "parse rpc response")
 			}
+
+			// Log response (truncated)
+			logger.Debug("mcp json-rpc response",
+				zap.String("endpoint", endpoint),
+				zap.String("method", method),
+				zap.Any("response_truncated", truncateMapForLog(obj, maxLogValueLen)))
+
 			if e, ok := obj["error"]; ok && e != nil {
-				return "", errors.Errorf("mcp rpc error: %v", e)
+				logger.Debug("mcp json-rpc returned error",
+					zap.String("endpoint", endpoint),
+					zap.Any("error", e))
+				lastErr = errors.Errorf("mcp rpc error: %v", e)
+				continue
 			}
+
+			// Extract result field if present
+			resultObj := obj
 			if res, ok := obj["result"]; ok {
-				return stringifyMCPResult(res), nil
+				if resMap, isMap := res.(map[string]any); isMap {
+					resultObj = resMap
+				} else {
+					// Non-map result, stringify directly
+					return stringifyMCPResult(res), nil
+				}
 			}
-			return stringifyMCPResult(obj), nil
+
+			// Check for isError in result
+			result, mcpErr := processMCPResponse(resultObj)
+			if mcpErr != nil {
+				logger.Debug("mcp json-rpc tool returned error",
+					zap.String("endpoint", endpoint),
+					zap.Error(mcpErr))
+				return "", mcpErr
+			}
+			return result, nil
 		}
 	}
 
+	if lastErr != nil {
+		return "", errors.Wrap(lastErr, "failed to call mcp tool via json-rpc")
+	}
 	return "", errors.New("failed to call mcp tool via json-rpc")
 }
 
 func guessJSONRPCEndpoints(server *MCPServerConfig) []string {
 	base := strings.TrimRight(strings.TrimSpace(server.URL), "/")
 	candidates := []string{}
+
+	// Try the exact URL first (highest priority)
 	if base != "" {
 		candidates = append(candidates, base)
 	}
+
 	origin := urlOrigin(base)
+
+	// Try root endpoint second (for servers like mcp.laisky.com that use /)
 	if origin != "" {
 		candidates = append(candidates, origin+"/")
 	}
+
+	// Then try common MCP endpoint paths as fallbacks
+	if origin != "" {
+		candidates = append(candidates,
+			joinURL(origin, "/mcp"),       // Standard MCP endpoint
+			joinURL(origin, "/mcp/tools"), // Alternative
+		)
+	}
+
 	if origin != "" && server.URLPrefix != "" {
 		candidates = append(candidates, joinURL(origin, server.URLPrefix))
 	}
+
 	return uniqStrings(candidates)
 }
 
@@ -357,29 +599,38 @@ func mcpSessionHeaders(server *MCPServerConfig, base http.Header) http.Header {
 		pv = "2025-06-18"
 		server.MCPProtocolVersion = pv
 	}
-	sid := strings.TrimSpace(server.MCPSessionID)
-	if sid == "" {
-		sid = "mcp-session-" + randomID("", 8)
-		server.MCPSessionID = sid
-	}
 	h.Set("mcp-protocol-version", pv)
-	h.Set("mcp-session-id", sid)
+
+	// Only set session ID if already initialized (retrieved from server response)
+	sid := strings.TrimSpace(server.MCPSessionID)
+	if sid != "" {
+		h.Set("mcp-session-id", sid)
+	}
 	return h
 }
 
 func ensureMCPSession(ctx context.Context, server *MCPServerConfig, endpoint string, baseHeaders http.Header, auths []string) error {
+	// If session ID already exists, we're already initialized
 	if strings.TrimSpace(server.MCPSessionID) != "" {
-		// Best-effort: treat presence of session ID as already initialized.
 		return nil
 	}
 
-	h := mcpSessionHeaders(server, baseHeaders)
+	pv := strings.TrimSpace(server.MCPProtocolVersion)
+	if pv == "" {
+		pv = "2025-06-18"
+		server.MCPProtocolVersion = pv
+	}
+
+	// Build headers for initialize request (no session ID yet)
+	h := baseHeaders.Clone()
+	h.Set("mcp-protocol-version", pv)
+
 	initPayload := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      0,
 		"method":  "initialize",
 		"params": map[string]any{
-			"protocolVersion": server.MCPProtocolVersion,
+			"protocolVersion": pv,
 			"capabilities": map[string]any{
 				"sampling":    map[string]any{},
 				"elicitation": map[string]any{},
@@ -397,7 +648,18 @@ func ensureMCPSession(ctx context.Context, server *MCPServerConfig, endpoint str
 	if err != nil {
 		return errors.Wrap(err, "initialize")
 	}
+
+	// Capture session ID from response header
+	serverSessionID := resp.Header.Get("mcp-session-id")
+	if serverSessionID != "" {
+		server.MCPSessionID = serverSessionID
+	}
 	_ = resp.Body.Close()
+
+	// Send notifications/initialized with the session ID
+	if server.MCPSessionID != "" {
+		h.Set("mcp-session-id", server.MCPSessionID)
+	}
 
 	notify := map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}
 	b2, err := json.Marshal(notify)
