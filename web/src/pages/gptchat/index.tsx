@@ -793,6 +793,8 @@ export function GPTChatPage() {
             isLoading={chatLoading}
             disabled={!config.api_token}
             config={config}
+            sessionId={sessionId}
+            isSidebarOpen={configOpen}
             onConfigChange={handleChatSwitchChange}
             prefillDraft={prefillDraft}
             onPrefillUsed={() => setPrefillDraft(undefined)}

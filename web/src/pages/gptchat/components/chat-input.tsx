@@ -42,6 +42,8 @@ export interface ChatInputProps {
   isLoading?: boolean
   disabled?: boolean
   config: SessionConfig
+  sessionId?: string | number
+  isSidebarOpen?: boolean
   onConfigChange?: (updates: Partial<SessionConfig['chat_switch']>) => void
   placeholder?: string
   prefillDraft?: { id: string; text: string }
@@ -59,6 +61,8 @@ export function ChatInput({
   isLoading,
   disabled,
   config,
+  sessionId,
+  isSidebarOpen,
   onConfigChange,
   placeholder = 'Type a message...',
   prefillDraft,
@@ -169,6 +173,26 @@ export function ChatInput({
       setIsEditorOpen(false)
     }
   }, [attachedFiles.length, editorIndex])
+
+  // Auto-focus when input becomes enabled or session/model/config changes
+  useEffect(() => {
+    if (!disabled && !isLoading && !isTranscribing && !isSidebarOpen) {
+      // Use setTimeout to ensure focus is applied after any other focus
+      // management (like Radix UI dropdown focus restoration)
+      const timer = setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [
+    disabled,
+    isLoading,
+    isTranscribing,
+    isSidebarOpen,
+    sessionId,
+    config,
+    draftMessage,
+  ])
 
   const handleSend = useCallback(() => {
     const trimmed = String(message || '').trim()
