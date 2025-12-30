@@ -13,11 +13,13 @@ import {
   ChatInput,
   ChatMessage,
   ConfigSidebar,
+  FloatingMessageHeader,
   ModelSelector,
   SessionDock,
 } from './components'
 import { useChat } from './hooks/use-chat'
 import { useConfig } from './hooks/use-config'
+import { useFloatingHeader } from './hooks/use-floating-header'
 import { ImageModelFluxDev, isImageModel } from './models'
 import type { ChatMessageData, PromptShortcut, SessionConfig } from './types'
 import { DefaultSessionConfig } from './types'
@@ -317,6 +319,13 @@ export function GPTChatPage() {
     }
     return messages.slice(-visibleCount)
   }, [messages, visibleCount])
+
+  // Track which message's header should appear in the floating header
+  const floatingHeaderState = useFloatingHeader({
+    messages: displayedMessages,
+    containerRef: messagesContainerRef,
+    topOffset: 48, // Height of the fixed header (top-12 = 48px)
+  })
 
   /**
    * findFirstVisibleMessageIndex finds the index of the first message
@@ -675,6 +684,26 @@ export function GPTChatPage() {
             </Button>
           </div>
         </header>
+
+        {/* Floating message header - appears when a message's inline header scrolls out of view */}
+        <FloatingMessageHeader
+          message={floatingHeaderState.message}
+          visible={floatingHeaderState.visible}
+          onDelete={deleteMessage}
+          onRegenerate={handleRegenerate}
+          onEditResend={handleEditResend}
+          pairedUserMessage={
+            floatingHeaderState.message
+              ? userMessageByChatId.get(floatingHeaderState.message.chatID)
+              : undefined
+          }
+          isStreaming={
+            chatLoading &&
+            floatingHeaderState.message?.role === 'assistant' &&
+            lastMessage &&
+            floatingHeaderState.message?.chatID === lastMessage.chatID
+          }
+        />
 
         {/* Scrollable chat area - uses window scroll with padding for fixed header/footer */}
         <main className="relative flex-1 pt-12 pb-28">

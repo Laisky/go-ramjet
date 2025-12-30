@@ -1,6 +1,7 @@
 export { ChatInput } from './chat-input'
 export { ChatMessage } from './chat-message'
 export { ConfigSidebar } from './config-sidebar'
+export { FloatingMessageHeader } from './floating-message-header'
 export { McpServerManager } from './mcp-server-manager'
 export { ModelSelector } from './model-selector'
 export { PromptMarket } from './prompt-market'
