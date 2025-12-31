@@ -16,10 +16,13 @@ import {
   FloatingMessageHeader,
   ModelSelector,
   SessionDock,
+  SelectionToolbar,
+  TTSAudioPlayer,
 } from './components'
 import { useChat } from './hooks/use-chat'
 import { useConfig } from './hooks/use-config'
 import { useFloatingHeader } from './hooks/use-floating-header'
+import { useTTS } from './hooks/use-tts'
 import { ImageModelFluxDev, isImageModel } from './models'
 import type { ChatMessageData, PromptShortcut, SessionConfig } from './types'
 import { DefaultSessionConfig } from './types'
@@ -114,6 +117,18 @@ export function GPTChatPage() {
     content: string
   } | null>(null)
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(-1)
+  const [selectionData, setSelectionData] = useState<{
+    text: string
+    position: { top: number; left: number }
+  } | null>(null)
+
+  const {
+    requestTTS,
+    stopTTS,
+    audioUrl: ttsAudioUrl,
+  } = useTTS({
+    apiToken: config.api_token || '',
+  })
 
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
@@ -134,6 +149,37 @@ export function GPTChatPage() {
       loadPromptShortcuts()
     }
   }, [configLoading])
+
+  // Global selection listener
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      // Small delay to allow selection to be finalized
+      setTimeout(() => {
+        const selection = window.getSelection()
+        if (selection && selection.toString().trim().length > 0) {
+          const range = selection.getRangeAt(0)
+          const rect = range.getBoundingClientRect()
+
+          // Check if selection is within the messages container
+          const container = messagesContainerRef.current
+          if (container && container.contains(selection.anchorNode)) {
+            setSelectionData({
+              text: selection.toString(),
+              position: {
+                top: rect.top,
+                left: rect.left + rect.width / 2,
+              },
+            })
+          }
+        } else {
+          setSelectionData(null)
+        }
+      }, 10)
+    }
+
+    document.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => document.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -601,6 +647,27 @@ export function GPTChatPage() {
     setGlobalDraft(value)
   }, [])
 
+  const handleQuote = useCallback((text: string) => {
+    setPrefillDraft({ id: Date.now().toString(), text })
+    setSelectionData(null)
+  }, [])
+
+  const handleSelectionCopy = useCallback(async () => {
+    if (selectionData) {
+      try {
+        await navigator.clipboard.writeText(selectionData.text)
+      } catch (err) {
+        console.error('Failed to copy selection:', err)
+      }
+    }
+  }, [selectionData])
+
+  const handleSelectionTTS = useCallback(() => {
+    if (selectionData) {
+      requestTTS(selectionData.text)
+    }
+  }, [selectionData, requestTTS])
+
   return (
     <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
       {/* Session Dock (Fixed Left Sidebar) */}
@@ -858,6 +925,25 @@ export function GPTChatPage() {
           onClose={() => setEditingMessage(null)}
           onConfirm={handleConfirmEdit}
         />
+      )}
+
+      {/* Selection Toolbar */}
+      {selectionData && (
+        <SelectionToolbar
+          text={selectionData.text}
+          position={selectionData.position}
+          onCopy={handleSelectionCopy}
+          onTTS={handleSelectionTTS}
+          onQuote={handleQuote}
+          onClose={() => setSelectionData(null)}
+        />
+      )}
+
+      {/* Selection TTS Player */}
+      {ttsAudioUrl && (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2">
+          <TTSAudioPlayer audioUrl={ttsAudioUrl} onClose={stopTTS} />
+        </div>
       )}
     </div>
   )

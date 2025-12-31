@@ -198,6 +198,13 @@ export function ChatMessage({
       ) {
         return
       }
+
+      // If there's a selection, don't toggle message selection
+      const selection = window.getSelection()
+      if (selection && selection.toString().trim().length > 0) {
+        return
+      }
+
       if (onSelect !== undefined && messageIndex !== undefined) {
         onSelect(messageIndex)
       }
