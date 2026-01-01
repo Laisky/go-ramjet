@@ -109,21 +109,21 @@ body {
   --shadow-soft: rgba(15, 23, 42, 0.07);
   --shadow-strong: rgba(15, 23, 42, 0.1);
 
-  /* Code tokens - Light */
-  --code-surface: #f8fafc;
-  --code-surface-muted: #e2e8f0;
-  --code-border: #d9e3f0;
-  --code-foreground: #0f172a;
-  --code-gutter-bg: #e9eefb;
-  --code-gutter-fg: #475569;
-  --code-token-comment: #64748b;
-  --code-token-punctuation: #475569;
-  --code-token-string: #166534;
-  --code-token-number: #b45309;
-  --code-token-keyword: #7c3aed;
-  --code-token-function: #0f766e;
-  --code-token-title: #2563eb;
-  --code-token-link: #0ea5e9;
+  /* Code tokens - Always Dark (Refined) */
+  --code-surface: #0f172a;
+  --code-surface-muted: #1e293b;
+  --code-border: #334155;
+  --code-foreground: #f1f5f9;
+  --code-gutter-bg: #0f172a;
+  --code-gutter-fg: #64748b;
+  --code-token-comment: #94a3b8;
+  --code-token-punctuation: #cbd5e1;
+  --code-token-string: #38bdf8;
+  --code-token-number: #fbbf24;
+  --code-token-keyword: #c084fc;
+  --code-token-function: #2dd4bf;
+  --code-token-title: #60a5fa;
+  --code-token-link: #818cf8;
 }
 
 .dark {
@@ -178,22 +178,6 @@ body {
   --accent-contrast: #0b1220;
   --shadow-soft: rgba(0, 0, 0, 0.35);
   --shadow-strong: rgba(0, 0, 0, 0.5);
-
-  /* Code tokens - Dark */
-  --code-surface: #040813;
-  --code-surface-muted: #0b1220;
-  --code-border: #1f2937;
-  --code-foreground: #e2e8f0;
-  --code-gutter-bg: rgba(15, 23, 42, 0.6);
-  --code-gutter-fg: #94a3b8;
-  --code-token-comment: #94a3b8;
-  --code-token-punctuation: #cbd5f5;
-  --code-token-string: #34d399;
-  --code-token-number: #fbbf24;
-  --code-token-keyword: #c084fc;
-  --code-token-function: #5eead4;
-  --code-token-title: #93c5fd;
-  --code-token-link: #a5b4fc;
 }
 
 .dark body {

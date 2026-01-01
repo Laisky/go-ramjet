@@ -87,7 +87,8 @@ function highlightCode(source: string, language?: string): string {
   if (lang && hljs.getLanguage(lang)) {
     return hljs.highlight(trimmed, { language: lang }).value
   }
-  return hljs.highlightAuto(trimmed).value
+  // If no language or unrecognized language, use plaintext to avoid auto-highlighting
+  return hljs.highlight(trimmed, { language: 'plaintext' }).value
 }
 
 /**
