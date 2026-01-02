@@ -4,11 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
-import {
-  DefaultModel,
-  ImageModelFluxDev,
-  isImageModel,
-} from '../models'
+import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
 import {
   DefaultSessionConfig,
   type ChatMessageData,
@@ -38,7 +34,9 @@ import {
 export function useConfig() {
   const [config, setConfigState] = useState<SessionConfig>(DefaultSessionConfig)
   const [sessionId, setSessionId] = useState<number>(DEFAULT_SESSION_ID)
-  const [sessions, setSessions] = useState<{ id: number; name: string }[]>([])
+  const [sessions, setSessions] = useState<
+    { id: number; name: string; visible: boolean }[]
+  >([])
   const [isLoading, setIsLoading] = useState(true)
 
   /**
@@ -70,7 +68,7 @@ export function useConfig() {
       return idA - idB
     })
 
-    const loadedSessions: { id: number; name: string }[] = []
+    const loadedSessions: { id: number; name: string; visible: boolean }[] = []
 
     for (const key of configKeys) {
       try {
@@ -84,6 +82,7 @@ export function useConfig() {
         loadedSessions.push({
           id,
           name: conf?.session_name || `Chat Session ${id}`,
+          visible: conf?.session_visible ?? true,
         })
       } catch (e) {
         console.error('Failed to load session config for key', key, e)
@@ -512,6 +511,7 @@ export function useConfig() {
       {
         id: DEFAULT_SESSION_ID,
         name: newConfig.session_name || `Chat Session ${DEFAULT_SESSION_ID}`,
+        visible: true,
       },
     ])
     await loadSessions()
@@ -530,6 +530,30 @@ export function useConfig() {
       }
 
       conf.session_name = newName
+      await kvSet(key, conf)
+
+      // If it's the current session, update state too
+      if (targetId === sessionId) {
+        setConfigState(conf)
+      }
+
+      await loadSessions()
+    },
+    [sessionId, loadSessions],
+  )
+
+  /**
+   * Update session visibility
+   */
+  const updateSessionVisibility = useCallback(
+    async (targetId: number, visible: boolean) => {
+      const key = getSessionConfigKey(targetId)
+      let conf = await kvGet<SessionConfig>(key)
+      if (!conf) {
+        conf = { ...DefaultSessionConfig }
+      }
+
+      conf.session_visible = visible
       await kvSet(key, conf)
 
       // If it's the current session, update state too
@@ -570,6 +594,7 @@ export function useConfig() {
     createSession,
     deleteSession,
     renameSession,
+    updateSessionVisibility,
     duplicateSession,
     purgeAllSessions,
     exportAllData,

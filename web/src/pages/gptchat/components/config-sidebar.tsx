@@ -33,12 +33,13 @@ export interface ConfigSidebarProps {
   onImportData: (data: unknown) => Promise<void>
 
   // Session Management
-  sessions?: { id: number; name: string }[]
+  sessions?: { id: number; name: string; visible: boolean }[]
   activeSessionId?: number
   onSwitchSession?: (id: number) => void
   onCreateSession?: (name: string) => void
   onDeleteSession?: (id: number) => void
   onRenameSession?: (id: number, name: string) => void
+  onUpdateSessionVisibility?: (id: number, visible: boolean) => void
   onDuplicateSession?: (id: number) => void
   onReorderSessions?: (ids: number[]) => void
   onPurgeAllSessions?: () => void
@@ -66,6 +67,7 @@ export function ConfigSidebar({
   onCreateSession,
   onDeleteSession,
   onRenameSession,
+  onUpdateSessionVisibility,
   onDuplicateSession,
   onReorderSessions,
   onPurgeAllSessions,
@@ -111,6 +113,7 @@ export function ConfigSidebar({
                   onCreateSession={onCreateSession}
                   onDeleteSession={onDeleteSession}
                   onRenameSession={onRenameSession}
+                  onUpdateSessionVisibility={onUpdateSessionVisibility}
                   onDuplicateSession={onDuplicateSession}
                   onReorderSessions={onReorderSessions}
                 />

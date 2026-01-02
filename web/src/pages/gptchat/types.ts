@@ -58,6 +58,7 @@ export interface SessionConfig {
   mcp_servers?: McpServerConfig[]
   sync_key?: string
   session_name?: string
+  session_visible?: boolean
 }
 
 export interface ChatSwitch {
@@ -130,6 +131,7 @@ export const DefaultSessionConfig: SessionConfig = {
   ],
   sync_key: '',
   session_name: 'Chat Session 1',
+  session_visible: true,
 }
 
 // Roles

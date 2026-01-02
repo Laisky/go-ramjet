@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
-  DndContext,
   closestCenter,
+  DndContext,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -15,14 +15,16 @@ import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
   useSortable,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
   Check,
   Copy,
   Edit2,
+  Eye,
+  EyeOff,
   GripVertical,
   MessageSquare,
   Plus,
@@ -32,12 +34,13 @@ import {
 import { useState } from 'react'
 
 interface SessionManagerProps {
-  sessions: { id: number; name: string }[]
+  sessions: { id: number; name: string; visible: boolean }[]
   activeSessionId: number
   onSwitchSession: (id: number) => void
   onCreateSession: (name: string) => void
   onDeleteSession: (id: number) => void
   onRenameSession: (id: number, name: string) => void
+  onUpdateSessionVisibility?: (id: number, visible: boolean) => void
   onDuplicateSession?: (id: number) => void
   onReorderSessions?: (ids: number[]) => void
 }
@@ -49,6 +52,7 @@ export function SessionManager({
   onCreateSession,
   onDeleteSession,
   onRenameSession,
+  onUpdateSessionVisibility,
   onDuplicateSession,
   onReorderSessions,
 }: SessionManagerProps) {
@@ -186,6 +190,7 @@ export function SessionManager({
                 activeSessionId={activeSessionId}
                 onSwitchSession={onSwitchSession}
                 onStartEdit={startEdit}
+                onUpdateSessionVisibility={onUpdateSessionVisibility}
                 onDuplicateSession={onDuplicateSession}
                 onDeleteSession={onDeleteSession}
                 canDelete={sessions.length > 1}
@@ -199,10 +204,11 @@ export function SessionManager({
 }
 
 interface SortableSessionItemProps {
-  session: { id: number; name: string }
+  session: { id: number; name: string; visible: boolean }
   activeSessionId: number
   onSwitchSession: (id: number) => void
   onStartEdit: (id: number, name: string) => void
+  onUpdateSessionVisibility?: (id: number, visible: boolean) => void
   onDuplicateSession?: (id: number) => void
   onDeleteSession: (id: number) => void
   canDelete: boolean
@@ -213,6 +219,7 @@ function SortableSessionItem({
   activeSessionId,
   onSwitchSession,
   onStartEdit,
+  onUpdateSessionVisibility,
   onDuplicateSession,
   onDeleteSession,
   canDelete,
@@ -241,7 +248,7 @@ function SortableSessionItem({
         session.id === activeSessionId
           ? 'bg-primary/10 border-primary/20'
           : 'hover:bg-muted border-transparent'
-      } ${isDragging ? 'opacity-50' : ''}`}
+      } ${isDragging ? 'opacity-50' : ''} ${!session.visible ? 'opacity-60' : ''}`}
     >
       <div className="flex flex-1 items-center gap-2 truncate">
         <div
@@ -266,7 +273,29 @@ function SortableSessionItem({
         </button>
       </div>
 
-      <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div
+        className={`flex gap-1 transition-opacity ${
+          !session.visible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+      >
+        {onUpdateSessionVisibility && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-6 w-6 p-0 ${session.visible ? 'text-muted-foreground' : 'text-warning'} hover:text-primary`}
+            onClick={() =>
+              onUpdateSessionVisibility(session.id, !session.visible)
+            }
+            title={session.visible ? 'Hide from sidebar' : 'Show in sidebar'}
+          >
+            {session.visible ? (
+              <Eye className="h-3 w-3" />
+            ) : (
+              <EyeOff className="h-3 w-3" />
+            )}
+          </Button>
+        )}
+
         <Button
           variant="ghost"
           size="sm"

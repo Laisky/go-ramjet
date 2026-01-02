@@ -9,7 +9,7 @@ import { cn } from '@/utils/cn'
 import { Plus, Trash2 } from 'lucide-react'
 
 interface SessionDockProps {
-  sessions: { id: number; name: string }[]
+  sessions: { id: number; name: string; visible: boolean }[]
   activeSessionId: number
   onSwitchSession: (id: number) => void
   onCreateSession: () => void
@@ -28,10 +28,14 @@ export function SessionDock({
     return name.slice(0, 1).toUpperCase() || '#'
   }
 
+  const visibleSessions = sessions.filter(
+    (s) => s.visible || s.id === activeSessionId,
+  )
+
   return (
     <div className="flex flex-1 flex-col py-1">
       <div className="flex w-full flex-1 flex-col overflow-y-auto no-scrollbar">
-        {sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <TooltipProvider key={session.id}>
             <Tooltip>
               <TooltipTrigger asChild>
