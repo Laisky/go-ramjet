@@ -51,10 +51,10 @@ export function stripMarkdownForTTS(input: string): string {
   }
   return (
     input
-      // Remove code blocks
-      .replace(/```[\s\S]*?```/g, ' ')
-      // Remove inline code
-      .replace(/`[^`]*`/g, ' ')
+      // Remove code block delimiters but keep content
+      .replace(/```(?:\w+\s*\n)?([\s\S]*?)```/g, '$1')
+      // Remove inline code delimiters but keep content
+      .replace(/`([^`]*)`/g, '$1')
       // Remove images
       .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
       // Convert links to just their text

@@ -19,14 +19,14 @@ describe('stripMarkdownForTTS', () => {
     expect(stripMarkdownForTTS(123 as unknown as string)).toBe('')
   })
 
-  it('should remove code blocks', () => {
+  it('should keep code blocks content', () => {
     const text = 'Hello ```const x = 1;``` world'
-    expect(stripMarkdownForTTS(text)).toBe('Hello world')
+    expect(stripMarkdownForTTS(text)).toBe('Hello const x = 1; world')
   })
 
-  it('should remove inline code', () => {
+  it('should keep inline code content', () => {
     const text = 'Use `console.log()` for debugging'
-    expect(stripMarkdownForTTS(text)).toBe('Use for debugging')
+    expect(stripMarkdownForTTS(text)).toBe('Use console.log() for debugging')
   })
 
   it('should remove images but keep alt text', () => {
@@ -63,7 +63,7 @@ More text here.
     `
     const result = stripMarkdownForTTS(text)
     expect(result).toBe(
-      'Hello World This is a test with and links. More text here.',
+      'Hello World This is a test with code and links. const x = 1; More text here.',
     )
   })
 })
@@ -104,7 +104,7 @@ describe('useTTS', () => {
     const { result } = renderHook(() => useTTS({ apiToken: 'test-token' }))
 
     await act(async () => {
-      await result.current.requestTTS('```code only```')
+      await result.current.requestTTS('![image](http://example.com)')
     })
 
     expect(result.current.error).toBe('No text content to speak')
@@ -254,6 +254,6 @@ describe('useTTS', () => {
     })
 
     // Should be called with stripped text
-    expect(fetchTTS).toHaveBeenCalledWith('Bold and', 'test-token')
+    expect(fetchTTS).toHaveBeenCalledWith('Bold and code', 'test-token')
   })
 })
