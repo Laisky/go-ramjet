@@ -8,9 +8,11 @@ import {
   MessageSquare,
   Search,
 } from 'lucide-react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
+import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import { GPTChatPage } from './gptchat'
 
 interface TaskDefinition {
@@ -82,7 +84,17 @@ const Tasks: TaskDefinition[] = [
  */
 export function HomePage() {
   const hostname = window.location.hostname
-  if (hostname === 'chat.laisky.com' || hostname === 'chat2.laisky.com') {
+  const isChatDomain =
+    hostname === 'chat.laisky.com' || hostname === 'chat2.laisky.com'
+
+  useEffect(() => {
+    if (!isChatDomain) {
+      setPageTitle('Laisky')
+      setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
+    }
+  }, [isChatDomain])
+
+  if (isChatDomain) {
     return <GPTChatPage />
   }
 

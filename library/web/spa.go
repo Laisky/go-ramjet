@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/zap"
@@ -12,6 +14,75 @@ import (
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
+
+var (
+	reTitle   = regexp.MustCompile(`(?i)<title>.*?</title>`)
+	reFavicon = regexp.MustCompile(`(?i)<link[^>]*?rel="icon"[^>]*?>`)
+	reHref    = regexp.MustCompile(`(?i)href="[^"]*"`)
+)
+
+// SiteMetadata represents metadata for a specific site.
+type SiteMetadata struct {
+	Title   string
+	Favicon string
+}
+
+var (
+	siteMetadataMu     sync.RWMutex
+	siteMetadataByHost = make(map[string]SiteMetadata)
+	siteMetadataByPath = make(map[string]SiteMetadata)
+)
+
+// RegisterSiteMetadata registers metadata for a specific host or path prefix.
+// If hostOrPath starts with "/", it is treated as a path prefix.
+// Otherwise, it is treated as a host.
+func RegisterSiteMetadata(hostsOrPaths []string, metadata SiteMetadata) {
+	siteMetadataMu.Lock()
+	defer siteMetadataMu.Unlock()
+
+	for _, hop := range hostsOrPaths {
+		if strings.HasPrefix(hop, "/") {
+			siteMetadataByPath[hop] = metadata
+		} else {
+			siteMetadataByHost[hop] = metadata
+		}
+	}
+}
+
+func getSiteMetadata(host, path string) SiteMetadata {
+	siteMetadataMu.RLock()
+	defer siteMetadataMu.RUnlock()
+
+	log.Logger.Debug("get site metadata", zap.String("host", host), zap.String("path", path))
+
+	// Try host match first
+	if meta, ok := siteMetadataByHost[host]; ok {
+		log.Logger.Debug("host match", zap.String("host", host), zap.String("title", meta.Title))
+		return meta
+	}
+
+	// Try path prefix match (longest match first)
+	var bestMatch string
+	var bestMeta SiteMetadata
+	for p, meta := range siteMetadataByPath {
+		if strings.HasPrefix(path, p) && len(p) > len(bestMatch) {
+			bestMatch = p
+			bestMeta = meta
+		}
+	}
+
+	if bestMatch != "" {
+		log.Logger.Debug("path match", zap.String("path", path), zap.String("bestMatch", bestMatch), zap.String("title", bestMeta.Title))
+		return bestMeta
+	}
+
+	// Default
+	log.Logger.Debug("use default metadata", zap.String("host", host), zap.String("path", path))
+	return SiteMetadata{
+		Title:   "Laisky",
+		Favicon: "https://s3.laisky.com/uploads/2025/12/favicon.ico",
+	}
+}
 
 // RegisterSPA registers handlers that serve a built SPA (Vite output) from distDir.
 //
@@ -51,7 +122,18 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
-		c.Data(http.StatusOK, "text/html; charset=utf-8", indexBytes)
+		meta := getSiteMetadata(c.Request.Host, c.Request.URL.Path)
+		content := string(indexBytes)
+		if meta.Title != "" {
+			content = reTitle.ReplaceAllString(content, "<title>"+meta.Title+"</title>")
+		}
+		if meta.Favicon != "" {
+			content = reFavicon.ReplaceAllStringFunc(content, func(s string) string {
+				return reHref.ReplaceAllString(s, `href="`+meta.Favicon+`"`)
+			})
+		}
+
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(content))
 	}
 
 	r.GET("/", indexHandler)

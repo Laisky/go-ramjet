@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { API_BASE } from '@/utils/api'
 import { cn } from '@/utils/cn'
+import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import {
   ChatInput,
@@ -65,6 +66,12 @@ export function GPTChatPage() {
     regenerateMessage,
     editAndRetry,
   } = useChat({ sessionId, config })
+
+  // Update page title and favicon
+  useEffect(() => {
+    setPageTitle('Chat')
+    setPageFavicon('/gptchat/favicon.ico')
+  }, [])
 
   const [configOpen, setConfigOpen] = useState(false)
   const [promptShortcuts, setPromptShortcuts] = useState<PromptShortcut[]>([])

@@ -50,7 +50,17 @@ func bindHTTP() {
 		log.Logger.Panic("setup http client", zap.Error(err))
 	}
 
+	web.RegisterSiteMetadata([]string{
+		"chat.laisky.com",
+		"chat2.laisky.com",
+		"/gptchat",
+	}, web.SiteMetadata{
+		Title:   "Chat",
+		Favicon: "/gptchat/favicon.ico",
+	})
+
 	grp := web.Server.Group("/gptchat")
+	grp.StaticFile("/favicon.ico", "internal/tasks/gptchat/templates/static/favicon.ico")
 
 	// NOTE: Legacy HTML UI has been migrated into the unified SPA served from web/dist.
 	// Static assets (JS/CSS) are no longer served from Go; the SPA handles all UI.
