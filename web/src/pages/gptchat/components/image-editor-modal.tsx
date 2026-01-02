@@ -53,6 +53,7 @@ export function ImageEditorModal({
   const baseCanvasRef = useRef<HTMLCanvasElement>(null)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null)
   const [brushSize, setBrushSize] = useState(32)
   const [isErasing, setIsErasing] = useState(false)
   const [hasMask, setHasMask] = useState(false)
@@ -73,38 +74,45 @@ export function ImageEditorModal({
   }, [file])
 
   useEffect(() => {
-    if (!imageUrl || !baseCanvasRef.current || !maskCanvasRef.current) {
+    if (!open || !imageUrl) {
+      setLoadedImage(null)
       return
     }
 
     const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(
-        MAX_CANVAS_EDGE / img.width,
-        MAX_CANVAS_EDGE / img.height,
-        1,
-      )
-      const width = Math.max(Math.round(img.width * scale), 1)
-      const height = Math.max(Math.round(img.height * scale), 1)
-
-      const baseCanvas = baseCanvasRef.current!
-      const maskCanvas = maskCanvasRef.current!
-
-      baseCanvas.width = width
-      baseCanvas.height = height
-      maskCanvas.width = width
-      maskCanvas.height = height
-
-      const ctx = baseCanvas.getContext('2d')
-      ctx?.clearRect(0, 0, width, height)
-      ctx?.drawImage(img, 0, 0, width, height)
-
-      const maskCtx = maskCanvas.getContext('2d')
-      maskCtx?.clearRect(0, 0, width, height)
-      setHasMask(false)
-    }
+    img.onload = () => setLoadedImage(img)
     img.src = imageUrl
-  }, [imageUrl])
+  }, [imageUrl, open])
+
+  useEffect(() => {
+    const baseCanvas = baseCanvasRef.current
+    const maskCanvas = maskCanvasRef.current
+    if (!open || !loadedImage || !baseCanvas || !maskCanvas) {
+      return
+    }
+
+    const img = loadedImage
+    const scale = Math.min(
+      MAX_CANVAS_EDGE / img.width,
+      MAX_CANVAS_EDGE / img.height,
+      1,
+    )
+    const width = Math.max(Math.round(img.width * scale), 1)
+    const height = Math.max(Math.round(img.height * scale), 1)
+
+    baseCanvas.width = width
+    baseCanvas.height = height
+    maskCanvas.width = width
+    maskCanvas.height = height
+
+    const ctx = baseCanvas.getContext('2d')
+    ctx?.clearRect(0, 0, width, height)
+    ctx?.drawImage(img, 0, 0, width, height)
+
+    const maskCtx = maskCanvas.getContext('2d')
+    maskCtx?.clearRect(0, 0, width, height)
+    setHasMask(false)
+  }, [open, loadedImage])
 
   const pointerToCanvas = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -218,8 +226,8 @@ export function ImageEditorModal({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 flex w-[90vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg bg-background p-4 shadow-2xl border border-border">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex w-[90vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg bg-background p-4 shadow-2xl border border-border">
           <div className="flex items-center justify-between">
             <Dialog.Title className="text-lg font-semibold">
               Image Editor
