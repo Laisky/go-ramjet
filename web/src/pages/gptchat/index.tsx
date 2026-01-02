@@ -1,7 +1,7 @@
 /**
  * GPTChat page - main chat interface.
  */
-import { ArrowDown, Settings } from 'lucide-react'
+import { ArrowDown, Paperclip, Settings, X } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -25,7 +25,12 @@ import { useConfig } from './hooks/use-config'
 import { useFloatingHeader } from './hooks/use-floating-header'
 import { useTTS } from './hooks/use-tts'
 import { ImageModelFluxDev, isImageModel } from './models'
-import type { ChatMessageData, PromptShortcut, SessionConfig } from './types'
+import type {
+  ChatAttachment,
+  ChatMessageData,
+  PromptShortcut,
+  SessionConfig,
+} from './types'
 import { DefaultSessionConfig } from './types'
 import { syncMCPServerTools } from './utils/mcp'
 
@@ -123,6 +128,7 @@ export function GPTChatPage() {
   const [editingMessage, setEditingMessage] = useState<{
     chatId: string
     content: string
+    attachments?: ChatAttachment[]
   } | null>(null)
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(-1)
   const [selectionData, setSelectionData] = useState<{
@@ -615,24 +621,29 @@ export function GPTChatPage() {
   )
 
   const handleEditResend = useCallback(
-    (payload: { chatId: string; content: string }) => {
+    (payload: {
+      chatId: string
+      content: string
+      attachments?: ChatAttachment[]
+    }) => {
       autoScrollRef.current = false
       suppressAutoScrollOnceRef.current = true
       setEditingMessage({
         chatId: payload.chatId,
         content: payload.content,
+        attachments: payload.attachments,
       })
     },
     [],
   )
 
   const handleConfirmEdit = useCallback(
-    async (newContent: string) => {
+    async (newContent: string, attachments?: ChatAttachment[]) => {
       if (!editingMessage) return
       setEditingMessage(null)
       autoScrollRef.current = false
       suppressAutoScrollOnceRef.current = true
-      await editAndRetry(editingMessage.chatId, newContent)
+      await editAndRetry(editingMessage.chatId, newContent, attachments)
     },
     [editAndRetry, editingMessage],
   )
@@ -934,6 +945,7 @@ export function GPTChatPage() {
       {editingMessage && (
         <EditMessageModal
           content={editingMessage.content}
+          attachments={editingMessage.attachments}
           onClose={() => setEditingMessage(null)}
           onConfirm={handleConfirmEdit}
         />
@@ -963,16 +975,19 @@ export function GPTChatPage() {
 
 interface EditMessageModalProps {
   content: string
+  attachments?: ChatAttachment[]
   onClose: () => void
-  onConfirm: (newContent: string) => void
+  onConfirm: (newContent: string, attachments?: ChatAttachment[]) => void
 }
 
 function EditMessageModal({
   content,
+  attachments,
   onClose,
   onConfirm,
 }: EditMessageModalProps) {
   const [editedContent, setEditedContent] = useState(content)
+  const [editedAttachments, setEditedAttachments] = useState(attachments || [])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -983,9 +998,13 @@ function EditMessageModal({
   const handleSubmit = useCallback(() => {
     const trimmed = String(editedContent || '').trim()
     if (trimmed) {
-      onConfirm(trimmed)
+      onConfirm(trimmed, editedAttachments)
     }
-  }, [editedContent, onConfirm])
+  }, [editedContent, editedAttachments, onConfirm])
+
+  const handleRemoveAttachment = useCallback((index: number) => {
+    setEditedAttachments((prev) => prev.filter((_, i) => i !== index))
+  }, [])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1010,6 +1029,40 @@ function EditMessageModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-4 text-lg font-semibold">Edit Message</h3>
+
+        {editedAttachments.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {editedAttachments.map((att, i) => (
+              <div
+                key={i}
+                className="relative group flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs shadow-sm"
+              >
+                {att.type === 'image' && att.contentB64 ? (
+                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded border border-border bg-background">
+                    <img
+                      src={att.contentB64}
+                      alt={att.filename}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <span className="max-w-[120px] truncate font-medium">
+                  {att.filename}
+                </span>
+                <button
+                  onClick={() => handleRemoveAttachment(i)}
+                  className="ml-1 rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title="Remove attachment"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           value={editedContent}

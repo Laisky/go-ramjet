@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/utils/cn'
 import { useTTS } from '../hooks/use-tts'
-import type { ChatMessageData } from '../types'
+import type { ChatAttachment, ChatMessageData } from '../types'
 
 export interface FloatingMessageHeaderProps {
   /** The message to display header for */
@@ -31,7 +31,11 @@ export interface FloatingMessageHeaderProps {
   /** Callback to regenerate the message */
   onRegenerate?: (chatId: string) => void
   /** Callback for edit and resend */
-  onEditResend?: (payload: { chatId: string; content: string }) => void
+  onEditResend?: (payload: {
+    chatId: string
+    content: string
+    attachments?: ChatAttachment[]
+  }) => void
   /** The paired user message (for edit/resend) */
   pairedUserMessage?: ChatMessageData
   /** Whether the message is streaming */
@@ -134,9 +138,22 @@ export function FloatingMessageHeader({
 
   const handleEditClick = useCallback(() => {
     if (canEditMessage && onEditResend && message) {
-      onEditResend({ chatId: message.chatID, content: pairedUserContent })
+      onEditResend({
+        chatId: message.chatID,
+        content: pairedUserContent,
+        attachments: isUser
+          ? message.attachments
+          : pairedUserMessage?.attachments,
+      })
     }
-  }, [canEditMessage, message, onEditResend, pairedUserContent])
+  }, [
+    canEditMessage,
+    message,
+    onEditResend,
+    pairedUserContent,
+    isUser,
+    pairedUserMessage?.attachments,
+  ])
 
   if (!message || !visible) {
     return null

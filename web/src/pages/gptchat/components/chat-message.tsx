@@ -21,7 +21,7 @@ import { Card } from '@/components/ui/card'
 import { splitReasoningContent } from '@/utils/chat-parser'
 import { cn } from '@/utils/cn'
 import { useTTS } from '../hooks/use-tts'
-import type { ChatMessageData } from '../types'
+import type { ChatAttachment, ChatMessageData } from '../types'
 import { formatCostUsd } from '../utils/format'
 import { TTSAudioPlayer } from './tts-audio-player'
 
@@ -30,7 +30,11 @@ export interface ChatMessageProps {
   onDelete?: (chatId: string) => void
   isStreaming?: boolean
   onRegenerate?: (chatId: string) => void
-  onEditResend?: (payload: { chatId: string; content: string }) => void
+  onEditResend?: (payload: {
+    chatId: string
+    content: string
+    attachments?: ChatAttachment[]
+  }) => void
   pairedUserMessage?: ChatMessageData
   isSelected?: boolean
   /** Called when user clicks the message to toggle selection */
@@ -177,9 +181,23 @@ export function ChatMessage({
 
   const handleEditClick = useCallback(() => {
     if (canEditMessage && onEditResend) {
-      onEditResend({ chatId: message.chatID, content: pairedUserContent })
+      onEditResend({
+        chatId: message.chatID,
+        content: pairedUserContent,
+        attachments: isUser
+          ? message.attachments
+          : pairedUserMessage?.attachments,
+      })
     }
-  }, [canEditMessage, message.chatID, onEditResend, pairedUserContent])
+  }, [
+    canEditMessage,
+    message.chatID,
+    message.attachments,
+    onEditResend,
+    pairedUserContent,
+    isUser,
+    pairedUserMessage?.attachments,
+  ])
 
   const handleCardClick = useCallback(
     (e: React.MouseEvent) => {

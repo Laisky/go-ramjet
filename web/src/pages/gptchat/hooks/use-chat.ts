@@ -12,7 +12,11 @@ import {
   ChatModelGPTO4MiniDeepresearch,
   isImageModel,
 } from '../models'
-import { type ChatMessageData, type SessionConfig } from '../types'
+import {
+  type ChatAttachment,
+  type ChatMessageData,
+  type SessionConfig,
+} from '../types'
 import { generateChatId, getChatDataKey } from '../utils/chat-storage'
 import { runDeepResearch } from './chat-deep-research'
 import { runImageModelFlow, runMaskInpainting } from './chat-media'
@@ -42,7 +46,11 @@ export interface UseChatReturn {
   deleteMessage: (chatId: string) => Promise<void>
   loadMessages: () => Promise<void>
   regenerateMessage: (chatId: string) => Promise<void>
-  editAndRetry: (chatId: string, newContent: string) => Promise<void>
+  editAndRetry: (
+    chatId: string,
+    newContent: string,
+    attachments?: ChatAttachment[],
+  ) => Promise<void>
 }
 
 /**
@@ -61,7 +69,22 @@ function buildApiMessages(
   }
 
   for (const msg of context) {
-    apiMessages.push({ role: msg.role, content: msg.content })
+    let content: string | ContentPart[] = msg.content
+    if (msg.attachments && msg.attachments.length > 0) {
+      const parts: ContentPart[] = [{ type: 'text', text: msg.content }]
+      for (const att of msg.attachments) {
+        if (att.type === 'image' && att.contentB64) {
+          parts.push({
+            type: 'image_url',
+            image_url: { url: att.contentB64 },
+          })
+        }
+      }
+      if (parts.length > 1) {
+        content = parts
+      }
+    }
+    apiMessages.push({ role: msg.role, content })
   }
 
   apiMessages.push({ role: 'user', content: userContent })
@@ -382,7 +405,11 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
    * editAndRetry updates a user message then streams a replacement assistant response.
    */
   const editAndRetry = useCallback(
-    async (chatId: string, newContent: string) => {
+    async (
+      chatId: string,
+      newContent: string,
+      attachments?: ChatAttachment[],
+    ) => {
       const trimmed = String(newContent || '').trim()
       if (!trimmed) {
         return
@@ -402,6 +429,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       const updatedUser: ChatMessageData = {
         ...messages[userIndex],
         content: trimmed,
+        attachments: attachments || messages[userIndex].attachments,
         timestamp: Date.now(),
       }
 
@@ -435,7 +463,25 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const priorMessages = messages.slice(0, userIndex)
       const contextMessages = priorMessages.slice(-config.n_contexts * 2)
-      const apiMessages = buildApiMessages(config, contextMessages, trimmed)
+
+      // Reconstruct content parts if there are attachments
+      let userContent: string | ContentPart[] = trimmed
+      if (updatedUser.attachments && updatedUser.attachments.length > 0) {
+        const parts: ContentPart[] = [{ type: 'text', text: trimmed }]
+        for (const att of updatedUser.attachments) {
+          if (att.type === 'image' && att.contentB64) {
+            parts.push({
+              type: 'image_url',
+              image_url: { url: att.contentB64 },
+            })
+          }
+        }
+        if (parts.length > 1) {
+          userContent = parts
+        }
+      }
+
+      const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
