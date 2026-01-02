@@ -1,7 +1,7 @@
+import { Button } from '@/components/ui/button'
+import { Check, Copy, Quote, Volume2, X } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Copy, Volume2, Quote, X, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 interface SelectionToolbarProps {
   text: string
@@ -49,12 +49,16 @@ export function SelectionToolbar({
       }
 
       // Adjust vertically (show above selection if possible, else below)
-      // 'top' passed in is the top of the selection rect
+      // 'top' passed in is the top of the selection rect or mouse Y
+      const viewportHeight = window.innerHeight
       if (top - rect.height < 10) {
         // Not enough space above, show below the selection
-        // We'd need the bottom of the selection rect for this to be perfect,
-        // but for now let's just offset it.
         top = top + 25
+
+        // If also not enough space below, clamp to viewport
+        if (top + rect.height > viewportHeight - 10) {
+          top = viewportHeight - rect.height - 10
+        }
       } else {
         top = top - rect.height - 10
       }

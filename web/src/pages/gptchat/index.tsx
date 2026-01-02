@@ -155,7 +155,8 @@ export function GPTChatPage() {
 
   // Global selection listener
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      const { clientX, clientY } = e
       // Small delay to allow selection to be finalized
       setTimeout(() => {
         const selection = window.getSelection()
@@ -169,8 +170,8 @@ export function GPTChatPage() {
             setSelectionData({
               text: selection.toString(),
               position: {
-                top: rect.top,
-                left: rect.left + rect.width / 2,
+                top: clientY || rect.top,
+                left: clientX || rect.left + rect.width / 2,
               },
             })
           }
