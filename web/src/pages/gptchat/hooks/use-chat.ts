@@ -192,8 +192,15 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       }
 
       if (attachmentMarkdown.length > 0) {
-        finalContent =
-          `${finalContent}\n\n${attachmentMarkdown.join('\n\n')}`.trim()
+        // Only append non-image attachments to finalContent for display.
+        // Images are handled via the attachments field in ChatMessageData.
+        const nonImageMarkdown = attachmentMarkdown.filter(
+          (m) => !m.startsWith('!['),
+        )
+        if (nonImageMarkdown.length > 0) {
+          finalContent =
+            `${finalContent}\n\n${nonImageMarkdown.join('\n\n')}`.trim()
+        }
       }
 
       const userMessage: ChatMessageData = {
@@ -201,6 +208,22 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         role: 'user',
         content: finalContent,
         timestamp: Date.now(),
+        attachments: attachments?.map((file) => ({
+          filename: file.name,
+          type: file.type.startsWith('image/') ? 'image' : 'file',
+          url: file.type.startsWith('image/') ? undefined : undefined, // will be handled by upload if needed
+        })),
+      }
+
+      // For images, we want to store the base64 in the attachment so it can be rendered
+      if (attachments && userMessage.attachments) {
+        for (let i = 0; i < attachments.length; i++) {
+          if (attachments[i].type.startsWith('image/')) {
+            userMessage.attachments[i].contentB64 = await fileToDataUrl(
+              attachments[i],
+            )
+          }
+        }
       }
 
       setMessages((prev) => [...prev, userMessage])

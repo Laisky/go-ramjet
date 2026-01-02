@@ -13,7 +13,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { Markdown } from '@/components/markdown'
 import { Button } from '@/components/ui/button'
@@ -98,10 +98,6 @@ export function ChatMessage({
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
-  const userHasCode = useMemo(
-    () => /```/.test(message.content) || /`[^`]/.test(message.content),
-    [message.content],
-  )
 
   // TTS hook - uses server-side Azure TTS
   const {
@@ -338,14 +334,35 @@ export function ChatMessage({
           )}
 
           {isUser ? (
-            <pre
-              className={cn(
-                'whitespace-pre-wrap break-words text-[15px] leading-relaxed sm:text-base',
-                userHasCode ? 'font-mono' : 'font-sans',
+            <div className="space-y-2">
+              {message.content && (
+                <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
+                  {message.content}
+                </Markdown>
               )}
-            >
-              {message.content}
-            </pre>
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {message.attachments.map((att, i) =>
+                    att.type === 'image' && att.contentB64 ? (
+                      <div
+                        key={i}
+                        className="relative group/img max-w-[300px] rounded-lg overflow-hidden border border-border bg-muted"
+                      >
+                        <img
+                          src={att.contentB64}
+                          alt={att.filename || 'image'}
+                          className="w-full h-auto object-contain max-h-[300px]"
+                          onError={(e) => {
+                            console.error('Image failed to load', att.filename)
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    ) : null,
+                  )}
+                </div>
+              )}
+            </div>
           ) : message.error ? (
             <div className="space-y-3">
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">

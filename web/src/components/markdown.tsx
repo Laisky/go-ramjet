@@ -352,8 +352,20 @@ const renderCode = ({
   )
 }
 
+const renderImage = ({ src, alt }: { src?: string; alt?: string }) => {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="max-w-full h-auto rounded-lg my-2 border border-border"
+      loading="lazy"
+    />
+  )
+}
+
 const components: Components = {
   code: renderCode,
+  img: renderImage,
 }
 
 export type MarkdownProps = {

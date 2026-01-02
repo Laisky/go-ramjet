@@ -113,7 +113,7 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	var lastUserPrompt *string
+	var lastUserPrompt *FrontendReqMessageContent
 	for i := len(r.Messages) - 1; i >= 0; i-- {
 		if r.Messages[i].Role != OpenaiMessageRoleUser {
 			continue
@@ -129,7 +129,7 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 
 	functionCalling, err := OneshotChat(gmw.Ctx(gctx),
 		user, defaultChatModel, "",
-		webSearchQueryPrompt+"\n\n"+*lastUserPrompt)
+		webSearchQueryPrompt+"\n\n"+lastUserPrompt.String())
 	if err != nil {
 		logger.Error("google search query", zap.Error(err))
 		return
@@ -210,8 +210,8 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 	}
 
 	if len(additionalText) != 0 {
-		*lastUserPrompt += "\n\nfollowing are auxiliary content just for your reference:\n\n" +
-			strings.Join(additionalText, "\n")
+		lastUserPrompt.Append("\n\nfollowing are auxiliary content just for your reference:\n\n" +
+			strings.Join(additionalText, "\n"))
 	}
 }
 
@@ -222,7 +222,7 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 		return
 	}
 
-	var lastUserPrompt *string
+	var lastUserPrompt *FrontendReqMessageContent
 	for i := len(r.Messages) - 1; i >= 0; i-- {
 		if r.Messages[i].Role != OpenaiMessageRoleUser {
 			continue
@@ -236,7 +236,7 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 		return
 	}
 
-	urls := urlRegexp.FindAllString(*lastUserPrompt, -1)
+	urls := urlRegexp.FindAllString(lastUserPrompt.String(), -1)
 	if len(urls) == 0 { // user do not mention any url
 		return
 	}
@@ -266,7 +266,7 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 
 			auxiliary, err := queryChunks(gctx, queryChunksArgs{
 				user:    user,
-				query:   *lastUserPrompt,
+				query:   lastUserPrompt.String(),
 				ext:     ext,
 				model:   r.Model,
 				content: content,
@@ -285,15 +285,15 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 
 	if err := pool.Wait(); err != nil {
 		log.Logger.Error("query mentioned urls", zap.Error(err))
-		*lastUserPrompt += "\n\n(some url content is not available)"
+		lastUserPrompt.Append("\n\n(some url content is not available)")
 	}
 
 	if len(auxiliaries) == 0 {
 		return
 	}
 
-	*lastUserPrompt += "\n\nfollowing are auxiliary content just for your reference:\n\n" +
-		strings.Join(auxiliaries, "\n")
+	lastUserPrompt.Append("\n\nfollowing are auxiliary content just for your reference:\n\n" +
+		strings.Join(auxiliaries, "\n"))
 }
 
 type queryChunksResponse struct {

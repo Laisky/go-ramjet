@@ -63,7 +63,7 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 	for _, msg := range req.Messages {
 		docu.Prompt = append(docu.Prompt, db.OpenaiMessage{
 			Role:    msg.Role.String(),
-			Content: msg.Content,
+			Content: msg.Content.String(),
 		})
 	}
 

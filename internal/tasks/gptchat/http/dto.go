@@ -109,10 +109,58 @@ type Thinking struct {
 
 // FrontendReqMessage request message from frontend
 type FrontendReqMessage struct {
-	Role    OpenaiMessageRole `json:"role"`
-	Content string            `json:"content"`
+	Role    OpenaiMessageRole         `json:"role"`
+	Content FrontendReqMessageContent `json:"content"`
 	// Files send files with message
 	Files []frontendReqMessageFiles `json:"files"`
+}
+
+// FrontendReqMessageContent is a custom type that can unmarshal from either a string or an array of OpenaiVisionMessageContent.
+type FrontendReqMessageContent struct {
+	StringContent string
+	ArrayContent  []OpenaiVisionMessageContent
+}
+
+// UnmarshalJSON unmarshal from either a string or an array of OpenaiVisionMessageContent.
+func (c *FrontendReqMessageContent) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '[' {
+		return json.Unmarshal(data, &c.ArrayContent)
+	}
+	return json.Unmarshal(data, &c.StringContent)
+}
+
+// MarshalJSON marshal to either a string or an array of OpenaiVisionMessageContent.
+func (c FrontendReqMessageContent) MarshalJSON() ([]byte, error) {
+	if len(c.ArrayContent) > 0 {
+		return json.Marshal(c.ArrayContent)
+	}
+	return json.Marshal(c.StringContent)
+}
+
+// String return string content
+func (c FrontendReqMessageContent) String() string {
+	if len(c.ArrayContent) > 0 {
+		var s string
+		for _, part := range c.ArrayContent {
+			if part.Type == OpenaiVisionMessageContentTypeText {
+				s += part.Text
+			}
+		}
+		return s
+	}
+	return c.StringContent
+}
+
+// Append append string to content
+func (c *FrontendReqMessageContent) Append(s string) {
+	if len(c.ArrayContent) > 0 {
+		c.ArrayContent = append(c.ArrayContent, OpenaiVisionMessageContent{
+			Type: OpenaiVisionMessageContentTypeText,
+			Text: s,
+		})
+	} else {
+		c.StringContent += s
+	}
 }
 
 type frontendReqMessageFiles struct {
@@ -134,7 +182,7 @@ func Tiktoken() *tiktoken.Tiktoken {
 // PromptTokens count prompt tokens
 func (r *FrontendReq) PromptTokens() (n int) {
 	for _, msg := range r.Messages {
-		n += CountTextTokens(msg.Content)
+		n += CountTextTokens(msg.Content.String())
 	}
 
 	return n

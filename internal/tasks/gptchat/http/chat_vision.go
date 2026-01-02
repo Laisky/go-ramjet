@@ -101,10 +101,12 @@ func processVisionRequest(user *config.UserConfig, frontendReq *FrontendReq) (*O
 		}
 
 		// Add text content if present
-		if msg.Content != "" {
+		if len(msg.Content.ArrayContent) > 0 {
+			visionMsg.Content = append(visionMsg.Content, msg.Content.ArrayContent...)
+		} else if msg.Content.StringContent != "" {
 			visionMsg.Content = append(visionMsg.Content, OpenaiVisionMessageContent{
 				Type: OpenaiVisionMessageContentTypeText,
-				Text: msg.Content,
+				Text: msg.Content.StringContent,
 			})
 		}
 
@@ -115,7 +117,7 @@ func processVisionRequest(user *config.UserConfig, frontendReq *FrontendReq) (*O
 			resolution := VisionImageResolutionLow
 			// if user has permission and image size is large than 1MB,
 			// use high resolution
-			if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(msg.Content) {
+			if (user.BYOK || user.NoLimitExpensiveModels) && hdResolutionMarker.MatchString(msg.Content.String()) {
 				resolution = VisionImageResolutionHigh
 			}
 

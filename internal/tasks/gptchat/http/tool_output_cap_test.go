@@ -25,7 +25,7 @@ func TestCapToolOutput_Summarize(t *testing.T) {
 
 	ctx := gmw.SetLogger(context.Background(), log.Logger)
 	user := &config.UserConfig{UserName: "u"}
-	frontendReq := &FrontendReq{Messages: []FrontendReqMessage{{Role: OpenaiMessageRoleUser, Content: "hello"}}}
+	frontendReq := &FrontendReq{Messages: []FrontendReqMessage{{Role: OpenaiMessageRoleUser, Content: FrontendReqMessageContent{StringContent: "hello"}}}}
 	big := strings.Repeat("a", maxToolOutputBytes+123)
 
 	out, changed, err := capToolOutput(ctx, user, frontendReq, "mcp.tool", "{}", big)
@@ -45,7 +45,7 @@ func TestCapToolOutput_FallbackTruncate(t *testing.T) {
 
 	ctx := gmw.SetLogger(context.Background(), log.Logger)
 	user := &config.UserConfig{UserName: "u"}
-	frontendReq := &FrontendReq{Messages: []FrontendReqMessage{{Role: OpenaiMessageRoleUser, Content: "hello"}}}
+	frontendReq := &FrontendReq{Messages: []FrontendReqMessage{{Role: OpenaiMessageRoleUser, Content: FrontendReqMessageContent{StringContent: "hello"}}}}
 	big := strings.Repeat("b", maxToolOutputBytes+999)
 
 	out, changed, err := capToolOutput(ctx, user, frontendReq, "mcp.tool", "{}", big)

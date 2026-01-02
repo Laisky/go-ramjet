@@ -30,7 +30,7 @@ func TestAPIHandler(t *testing.T) {
 		Messages: []FrontendReqMessage{
 			{
 				Role:    OpenaiMessageRoleUser,
-				Content: "write a SSE client in golang",
+				Content: FrontendReqMessageContent{StringContent: "write a SSE client in golang"},
 			},
 		},
 	}

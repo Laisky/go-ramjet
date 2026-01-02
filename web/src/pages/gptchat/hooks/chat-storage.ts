@@ -23,6 +23,14 @@ export function sanitizeChatMessageData(
     sanitized.content = String(sanitized.content ?? '')
   }
 
+  // Clean up old image markdown from user messages to avoid double rendering
+  // and broken image icons in the markdown view.
+  if (sanitized.role === 'user' && sanitized.content) {
+    sanitized.content = sanitized.content
+      .replace(/!\[.*?\]\(data:image\/.*?;base64,.*?\)/g, '')
+      .trim()
+  }
+
   // Ensure costUsd is a number or undefined (null becomes undefined)
   if (sanitized.costUsd === null) {
     sanitized.costUsd = undefined

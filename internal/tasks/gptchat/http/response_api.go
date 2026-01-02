@@ -160,28 +160,42 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 			role = "user"
 		}
 
-		// Support images by using the same multi-modal shape the UI already uses.
-		// Responses API accepts message objects in `input`; content may be string or an array of items.
-		if len(m.Files) == 0 {
-			msgs = append(msgs, OpenAIResponsesInputMessage{Role: role, Content: m.Content})
-			continue
+		var content []any
+		if len(m.Content.ArrayContent) > 0 {
+			for _, part := range m.Content.ArrayContent {
+				mappedPart := map[string]any{}
+				// OpenAI Responses API (Realtime/Responses) uses input_text and input_image
+				// instead of text and image_url.
+				switch strings.ToLower(string(part.Type)) {
+				case "text", "input_text":
+					mappedPart["type"] = "input_text"
+					mappedPart["text"] = part.Text
+				case "image_url", "input_image":
+					mappedPart["type"] = "input_image"
+					if part.ImageUrl != nil {
+						mappedPart["image_url"] = part.ImageUrl.URL
+					}
+				default:
+					mappedPart["type"] = part.Type
+				}
+				content = append(content, mappedPart)
+			}
+		} else if m.Content.StringContent != "" {
+			content = append(content, map[string]any{"type": "input_text", "text": m.Content.StringContent})
 		}
 
-		content := make([]any, 0, 1+len(m.Files))
-		if m.Content != "" {
-			content = append(content, map[string]any{"type": "text", "text": m.Content})
-		}
 		for _, f := range m.Files {
 			if len(f.Content) == 0 {
 				continue
 			}
-			// The frontend encodes base64 already; backend uses raw bytes in HTTP binding.
-			// Here we assume FrontendReqMessage.Files is populated with raw bytes.
-			dataURL := fmt.Sprintf("data:%s;base64,%s", imageType(f.Content), base64Encode(f.Content))
 			content = append(content, map[string]any{
-				"type":      "image_url",
-				"image_url": map[string]any{"url": dataURL, "detail": string(VisionImageResolutionLow)},
+				"type":      "input_image",
+				"image_url": fmt.Sprintf("data:%s;base64,%s", imageType(f.Content), base64Encode(f.Content)),
 			})
+		}
+
+		if len(content) == 0 {
+			continue
 		}
 
 		msgs = append(msgs, OpenAIResponsesInputMessage{Role: role, Content: content})
@@ -365,15 +379,15 @@ func callUpstreamResponses(
 		return nil, nil, errors.Wrap(err, "marshal responses req")
 	}
 
+	logger.Debug("send responses request to upstream",
+		zap.String("model", req.Model),
+		zap.Int("payload_bytes", len(body)),
+	)
+
 	upReq, err := buildResponsesHTTPRequest(ctx, user, body)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "build responses http request")
 	}
-
-	logger.Debug("send responses request to upstream",
-		zap.String("url", upReq.URL.String()),
-		zap.Int("payload_bytes", len(body)),
-	)
 
 	resp, err := httpcli.Do(upReq) //nolint:bodyclose
 	if err != nil {

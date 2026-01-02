@@ -94,7 +94,7 @@ func buildToolOutputSummaryQuestion(frontendReq *FrontendReq, toolName, toolArgs
 
 	userPrompt := ""
 	if frontendReq != nil && len(frontendReq.Messages) > 0 {
-		userPrompt = strings.TrimSpace(frontendReq.Messages[len(frontendReq.Messages)-1].Content)
+		userPrompt = strings.TrimSpace(frontendReq.Messages[len(frontendReq.Messages)-1].Content.String())
 		userPrompt = truncateForSummarization(userPrompt, maxToolOutputLastUserPromptByte)
 	}
 
