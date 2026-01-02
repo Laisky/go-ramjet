@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 
 import { kvDel, kvGet, kvSet } from '@/utils/storage'
 
@@ -70,10 +70,18 @@ export function useChatStorage({
   setMessages,
   setError,
 }: ChatStorageOptions): ChatStorageApi {
+  const sessionIdRef = useRef(sessionId)
+  sessionIdRef.current = sessionId
+
   const loadMessages = useCallback(async () => {
+    const loadingSessionId = sessionId
     try {
       const key = getSessionHistoryKey(sessionId)
       const history = await kvGet<SessionHistoryItem[]>(key)
+
+      if (loadingSessionId !== sessionIdRef.current) {
+        return
+      }
 
       if (!history || history.length === 0) {
         setMessages([])

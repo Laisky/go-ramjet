@@ -178,7 +178,9 @@ function deepCloneConfig(config: SessionConfig): SessionConfig {
 /**
  * Normalize numeric fields in config to ensure they are numbers, not strings
  */
-export function normalizeConfigNumericFields(config: SessionConfig): SessionConfig {
+export function normalizeConfigNumericFields(
+  config: SessionConfig,
+): SessionConfig {
   return {
     ...config,
     max_tokens:
@@ -305,8 +307,20 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
  * Get the active session ID
  */
 export async function getActiveSessionId(): Promise<number> {
-  const selectedSession = await kvGet<number>(StorageKeys.SELECTED_SESSION)
-  return selectedSession ?? DEFAULT_SESSION_ID
+  const selectedSession = await kvGet<number | string>(
+    StorageKeys.SELECTED_SESSION,
+  )
+
+  if (selectedSession === null || selectedSession === undefined) {
+    return DEFAULT_SESSION_ID
+  }
+
+  const parsed =
+    typeof selectedSession === 'number'
+      ? selectedSession
+      : parseInt(selectedSession, 10)
+
+  return isNaN(parsed) ? DEFAULT_SESSION_ID : parsed
 }
 
 /**

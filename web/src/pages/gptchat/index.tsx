@@ -15,8 +15,8 @@ import {
   ConfigSidebar,
   FloatingMessageHeader,
   ModelSelector,
-  SessionDock,
   SelectionToolbar,
+  SessionDock,
   TTSAudioPlayer,
 } from './components'
 import { useChat } from './hooks/use-chat'
@@ -141,8 +141,10 @@ export function GPTChatPage() {
 
   // Load messages when session changes
   useEffect(() => {
-    loadMessages()
-  }, [sessionId, loadMessages])
+    if (!configLoading) {
+      loadMessages()
+    }
+  }, [sessionId, loadMessages, configLoading])
 
   // Load shortcuts on mount or when config finishes loading
   useEffect(() => {
