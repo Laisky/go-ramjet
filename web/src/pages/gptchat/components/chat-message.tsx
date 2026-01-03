@@ -248,7 +248,11 @@ export function ChatMessage({
         )}
       >
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div
+            className={cn(
+              'sticky top-12 z-10 -mx-2 -mt-1.5 mb-1 flex flex-wrap items-center gap-2 rounded-t-md bg-inherit px-2 py-1.5 text-xs backdrop-blur-sm transition-all',
+            )}
+          >
             <div
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',

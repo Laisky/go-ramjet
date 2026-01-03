@@ -66,7 +66,9 @@ export function useFloatingHeader({
     }
 
     // Floating header threshold (where the floating header appears)
-    const floatingHeaderThreshold = topOffset + 40 // Top offset + floating header height
+    // The floating header should appear when the message's inline header
+    // starts to be covered by the main header.
+    const floatingHeaderThreshold = topOffset
 
     let targetMessage: ChatMessageData | null = null
 
@@ -86,10 +88,10 @@ export function useFloatingHeader({
       const msg = messages.find((m) => m.chatID === chatId && m.role === role)
       if (!msg) continue
 
-      // The message header (first ~36px of the card) has scrolled above the threshold
-      // but the bottom of the message is still below the threshold
-      const headerScrolledOut = rect.top < floatingHeaderThreshold
-      const bodyStillVisible = rect.bottom > floatingHeaderThreshold + 50 // At least 50px of body visible
+      // The message header has scrolled above the threshold
+      // We use a small buffer to ensure it's actually being covered by the main header
+      const headerScrolledOut = rect.top < floatingHeaderThreshold - 10
+      const bodyStillVisible = rect.bottom > floatingHeaderThreshold + 60 // At least 60px of body visible
 
       if (headerScrolledOut && bodyStillVisible) {
         targetMessage = msg
