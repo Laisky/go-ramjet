@@ -44,6 +44,18 @@ func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		!strings.HasPrefix(r.URL.Path, "/gptchat/") {
 		r.URL.Path = "/gptchat/" + strings.TrimPrefix(r.URL.Path, "/gptchat")
 	}
+
+	// Nginx's proxy_pass might also duplicate the location prefix.
+	// e.g., /gptchat/favicon.ico -> /gptchat/gptchat/favicon.ico
+	// Normalize /{task}/{task}/... -> /{task}/...
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	if len(parts) >= 2 && parts[0] != "" && parts[0] == parts[1] {
+		if len(parts) == 2 {
+			r.URL.Path = "/" + parts[0] + "/"
+		} else {
+			r.URL.Path = "/" + parts[0] + "/" + strings.Join(parts[2:], "/")
+		}
+	}
 	h.handler.ServeHTTP(w, r)
 }
 
