@@ -1,0 +1,111 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ChatMessageData } from '../types'
+
+interface UseChatScrollOptions {
+  messages: ChatMessageData[]
+  pageSize: number
+}
+
+/**
+ * useChatScroll manages scrolling behavior for the chat interface.
+ */
+export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(pageSize)
+  const autoScrollRef = useRef(true)
+  const suppressAutoScrollOnceRef = useRef(false)
+
+  const isNearBottom = useCallback(() => {
+    const { scrollTop, scrollHeight, clientHeight } = document.documentElement
+    return scrollHeight - scrollTop - clientHeight < 120
+  }, [])
+
+  const scrollToBottom = useCallback(
+    (options?: { force?: boolean }) => {
+      if (!options?.force && !isNearBottom()) {
+        return
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    },
+    [isNearBottom],
+  )
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom
+  useEffect(() => {
+    if (suppressAutoScrollOnceRef.current) {
+      suppressAutoScrollOnceRef.current = false
+      return
+    }
+    if (autoScrollRef.current || isNearBottom()) {
+      scrollToBottom({ force: true })
+    }
+  }, [messages, scrollToBottom, isNearBottom])
+
+  useEffect(() => {
+    setVisibleCount((prev) => {
+      if (messages.length === 0) {
+        return pageSize
+      }
+
+      const desired = Math.min(pageSize, messages.length)
+
+      if (prev < desired) {
+        return desired
+      }
+
+      if (prev > messages.length) {
+        return messages.length
+      }
+
+      return prev
+    })
+  }, [messages.length, pageSize])
+
+  // Track scroll position for scroll-to-bottom button (using window scroll)
+  useEffect(() => {
+    const handleScroll = () => {
+      const near = isNearBottom()
+      setShowScrollButton(!near)
+      // Disable auto-follow as soon as user scrolls away
+      if (!near) {
+        autoScrollRef.current = false
+      } else {
+        autoScrollRef.current = true
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [isNearBottom])
+
+  const handleLoadOlder = useCallback(() => {
+    const prevScrollHeight = document.documentElement.scrollHeight
+    const prevScrollTop = window.scrollY
+
+    setVisibleCount((prev) => Math.min(prev + pageSize, messages.length))
+
+    // Keep the viewport anchored after older messages are prepended.
+    requestAnimationFrame(() => {
+      const nextScrollHeight = document.documentElement.scrollHeight
+      const delta = nextScrollHeight - prevScrollHeight
+      window.scrollTo({ top: prevScrollTop + Math.max(delta, 0) })
+    })
+  }, [messages.length, pageSize])
+
+  return {
+    messagesEndRef,
+    showScrollButton,
+    visibleCount,
+    autoScrollRef,
+    suppressAutoScrollOnceRef,
+    scrollToBottom,
+    scrollToTop,
+    handleLoadOlder,
+    isNearBottom,
+  }
+}

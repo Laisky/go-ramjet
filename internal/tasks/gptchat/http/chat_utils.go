@@ -22,10 +22,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 
+	gconfig "github.com/Laisky/go-config/v2"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
-	gconfig "github.com/Laisky/go-config/v2"
 )
 
 func convert2OpenaiRequest(ctx *gin.Context) (frontendReq *FrontendReq, openaiReq *http.Request, err error) {

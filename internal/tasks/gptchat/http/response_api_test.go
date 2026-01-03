@@ -77,7 +77,7 @@ func TestConvertFrontendToResponsesRequest_Files(t *testing.T) {
 		Model: "gpt-4o-mini",
 		Messages: []FrontendReqMessage{
 			{
-				Role: OpenaiMessageRoleUser,
+				Role:    OpenaiMessageRoleUser,
 				Content: FrontendReqMessageContent{StringContent: "hello"},
 				Files: []frontendReqMessageFiles{
 					{Type: "image", Content: []byte("fake-image")},
