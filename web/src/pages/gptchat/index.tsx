@@ -1,7 +1,7 @@
 /**
  * GPTChat page - main chat interface.
  */
-import { ArrowDown, Paperclip, Settings, X } from 'lucide-react'
+import { ArrowDown, Settings } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -11,10 +11,12 @@ import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import {
+  AttachmentTag,
   ChatInput,
   ChatMessage,
   ConfigSidebar,
   FloatingMessageHeader,
+  ImageEditorModal,
   ModelSelector,
   SelectionToolbar,
   SessionDock,
@@ -988,6 +990,9 @@ function EditMessageModal({
 }: EditMessageModalProps) {
   const [editedContent, setEditedContent] = useState(content)
   const [editedAttachments, setEditedAttachments] = useState(attachments || [])
+  const [editorIndex, setEditorIndex] = useState<number | null>(null)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [editorFile, setEditorFile] = useState<File | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -1005,6 +1010,60 @@ function EditMessageModal({
   const handleRemoveAttachment = useCallback((index: number) => {
     setEditedAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
+
+  const handleEditAttachment = useCallback(
+    async (index: number) => {
+      const att = editedAttachments[index]
+      if (att.type !== 'image') return
+
+      try {
+        let file: File | null = null
+        if (att.contentB64) {
+          const res = await fetch(att.contentB64)
+          const blob = await res.blob()
+          file = new File([blob], att.filename, { type: 'image/png' })
+        } else if (att.url) {
+          const res = await fetch(att.url)
+          const blob = await res.blob()
+          file = new File([blob], att.filename, { type: 'image/png' })
+        }
+
+        if (file) {
+          setEditorFile(file)
+          setEditorIndex(index)
+          setIsEditorOpen(true)
+        }
+      } catch (err) {
+        console.error('Failed to prepare image for editing:', err)
+      }
+    },
+    [editedAttachments],
+  )
+
+  const handleEditorSave = useCallback(
+    async (result: { imageFile: File }) => {
+      if (editorIndex === null) return
+
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        setEditedAttachments((prev) => {
+          const next = [...prev]
+          next[editorIndex] = {
+            ...next[editorIndex],
+            contentB64: base64,
+            url: undefined, // Clear URL if we have new B64 content
+          }
+          return next
+        })
+        setIsEditorOpen(false)
+        setEditorIndex(null)
+        setEditorFile(null)
+      }
+      reader.readAsDataURL(result.imageFile)
+    },
+    [editorIndex],
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1033,32 +1092,19 @@ function EditMessageModal({
         {editedAttachments.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {editedAttachments.map((att, i) => (
-              <div
+              <AttachmentTag
                 key={i}
-                className="relative group flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs shadow-sm"
-              >
-                {att.type === 'image' && att.contentB64 ? (
-                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded border border-border bg-background">
-                    <img
-                      src={att.contentB64}
-                      alt={att.filename}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                )}
-                <span className="max-w-[120px] truncate font-medium">
-                  {att.filename}
-                </span>
-                <button
-                  onClick={() => handleRemoveAttachment(i)}
-                  className="ml-1 rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  title="Remove attachment"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
+                filename={att.filename}
+                type={att.type}
+                contentB64={att.contentB64}
+                url={att.url}
+                onRemove={() => handleRemoveAttachment(i)}
+                onEdit={
+                  att.type === 'image'
+                    ? () => handleEditAttachment(i)
+                    : undefined
+                }
+              />
             ))}
           </div>
         )}
@@ -1086,6 +1132,17 @@ function EditMessageModal({
           Ctrl+Enter to submit • Esc to cancel
         </p>
       </div>
+
+      <ImageEditorModal
+        open={isEditorOpen}
+        file={editorFile}
+        onClose={() => {
+          setIsEditorOpen(false)
+          setEditorIndex(null)
+          setEditorFile(null)
+        }}
+        onSave={handleEditorSave}
+      />
     </div>
   )
 }

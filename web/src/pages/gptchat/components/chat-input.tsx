@@ -2,7 +2,6 @@
  * Chat input component with file attachments and feature toggles.
  */
 import {
-  Edit2,
   Image,
   Link,
   Loader2,
@@ -24,76 +23,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { transcribeAudio } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import type { SessionConfig } from '../types'
+import { AttachmentTag } from './attachment-tag'
 import { ImageEditorModal, type ImageEditorResult } from './image-editor-modal'
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-interface FileItemProps {
-  file: File
-  index: number
-  onRemove: (index: number) => void
-  onEdit?: (index: number) => void
-}
-
-function FileItem({ file, index, onRemove, onEdit }: FileItemProps) {
-  const [url, setUrl] = useState<string | null>(null)
-  const isImage = file.type.startsWith('image/')
-
-  useEffect(() => {
-    if (isImage) {
-      const objectUrl = URL.createObjectURL(file)
-      setUrl(objectUrl)
-      return () => URL.revokeObjectURL(objectUrl)
-    }
-  }, [file, isImage])
-
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs shadow-sm">
-      {isImage && url ? (
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded border border-border bg-background">
-          <img
-            src={url}
-            alt={file.name}
-            className="h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <Paperclip className="h-3 w-3" />
-      )}
-      <div className="max-w-[180px] truncate">
-        <div className="truncate font-medium">{file.name}</div>
-        <div className="text-[10px] text-muted-foreground">
-          {formatFileSize(file.size)}
-        </div>
-      </div>
-      {isImage && onEdit && (
-        <button
-          type="button"
-          onClick={() => onEdit(index)}
-          className="flex items-center gap-1 rounded-md bg-popover px-1.5 py-0.5 text-[10px] text-popover-foreground shadow-sm"
-        >
-          <Edit2 className="h-3 w-3" />
-          Edit
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={() => onRemove(index)}
-        className="text-destructive transition hover:text-destructive/80"
-      >
-        ×
-      </button>
-    </div>
-  )
-}
 
 export interface ChatInputProps {
   onSend: (message: string, files?: File[]) => void
@@ -441,12 +372,14 @@ export function ChatInput({
         {attachedFiles.length > 0 && (
           <div className="mb-1 flex flex-wrap gap-1">
             {attachedFiles.map((file, index) => (
-              <FileItem
+              <AttachmentTag
                 key={`${file.name}-${index}`}
+                filename={file.name}
+                type={file.type.startsWith('image/') ? 'image' : 'file'}
+                size={file.size}
                 file={file}
-                index={index}
-                onRemove={removeFile}
-                onEdit={openEditorForIndex}
+                onRemove={() => removeFile(index)}
+                onEdit={() => openEditorForIndex(index)}
               />
             ))}
           </div>
