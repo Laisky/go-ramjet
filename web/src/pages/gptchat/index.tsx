@@ -477,24 +477,23 @@ export function GPTChatPage() {
               </div>
             )}
           </div>
+        </main>
 
+        {/* Input (fixed to bottom of viewport) */}
+        <footer className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0">
           {/* Scroll to bottom button */}
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'fixed bottom-36 right-2 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
+              'absolute bottom-full right-2 mb-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
-                : 'translate-y-0 opacity-50',
+                : 'translate-y-4 opacity-0 pointer-events-none',
             )}
             aria-label="Scroll to bottom"
           >
             <ArrowDown className="h-4 w-4" />
           </button>
-        </main>
-
-        {/* Input (fixed to bottom of viewport) */}
-        <footer className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0">
           <ChatInput
             onSend={handleSend}
             onStop={stopGeneration}
