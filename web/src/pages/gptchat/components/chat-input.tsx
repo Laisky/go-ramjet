@@ -1,15 +1,7 @@
 /**
  * Chat input component with file attachments and feature toggles.
  */
-import {
-  Image,
-  Link,
-  Loader2,
-  Mic,
-  Paperclip,
-  Send,
-  Square,
-} from 'lucide-react'
+import { Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -403,42 +395,62 @@ export function ChatInput({
             </span>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 self-stretch items-stretch gap-1">
+            <div className="flex flex-col gap-1">
+              {isLoading ? (
+                <Button
+                  onClick={onStop}
+                  variant="destructive"
+                  className="flex-1 w-12 rounded-md p-0 shadow-sm"
+                >
+                  <Square className="h-5 w-5" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSend}
+                  disabled={
+                    !String(message || '').trim() || disabled || isTranscribing
+                  }
+                  className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
+                >
+                  <Send className="h-5 w-5" />
+                </Button>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.txt,.md"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || isLoading}
+                className="flex-1 w-12 rounded-md p-0 shadow-sm"
+                title="Attach file"
+              >
+                <Image className="h-5 w-5" />
+              </Button>
+            </div>
+
             {config.chat_switch.enable_talk && (
               <Button
                 type="button"
                 onClick={handleToggleRecording}
                 disabled={disabled || isLoading || isTranscribing}
                 variant={isRecording ? 'destructive' : 'outline'}
-                className="h-9 w-9 rounded-md p-0 shadow-sm"
+                className="w-10 rounded-md p-0 shadow-sm"
               >
                 {isRecording ? (
-                  <Square className="h-4 w-4" />
+                  <Square className="h-5 w-5" />
                 ) : isTranscribing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  <Mic className="h-4 w-4" />
+                  <Mic className="h-5 w-5" />
                 )}
-              </Button>
-            )}
-
-            {isLoading ? (
-              <Button
-                onClick={onStop}
-                variant="destructive"
-                className="h-9 w-9 rounded-md p-0 shadow-sm"
-              >
-                <Square className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSend}
-                disabled={
-                  !String(message || '').trim() || disabled || isTranscribing
-                }
-                className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
-              >
-                <Send className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -478,24 +490,6 @@ export function ChatInput({
           />
 
           <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.txt,.md"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || isLoading}
-              className="h-7 w-7 rounded-md p-0 text-foreground hover:bg-muted"
-              title="Attach file"
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-            </Button>
             {isTranscribing && !isRecording && (
               <span className="text-primary">Transcribing…</span>
             )}
