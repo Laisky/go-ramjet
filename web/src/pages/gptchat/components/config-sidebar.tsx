@@ -363,7 +363,6 @@ export function ConfigSidebar({
             onConfigChange={onConfigChange}
             onExportData={onExportData}
             onImportData={onImportData}
-            showApiKey={showApiKey}
           />
 
           {/* Actions */}
