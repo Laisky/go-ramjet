@@ -57,7 +57,7 @@ export interface UseChatReturn {
  * buildApiMessages constructs the chat API payload by applying the system prompt and recent
  * context messages to the current user content.
  */
-function buildApiMessages(
+export function buildApiMessages(
   config: SessionConfig,
   context: ChatMessageData[],
   userContent: string | ContentPart[],
@@ -68,26 +68,80 @@ function buildApiMessages(
     apiMessages.push({ role: 'system', content: config.system_prompt })
   }
 
-  for (const msg of context) {
-    let content: string | ContentPart[] = msg.content
-    if (msg.attachments && msg.attachments.length > 0) {
-      const parts: ContentPart[] = [{ type: 'text', text: msg.content }]
-      for (const att of msg.attachments) {
-        if (att.type === 'image' && att.contentB64) {
-          parts.push({
-            type: 'image_url',
-            image_url: { url: att.contentB64 },
-          })
+  // Find the latest image in the entire sequence (context + userContent)
+  let latestImage: {
+    type: 'context' | 'user'
+    msgIdx?: number
+    attIdx?: number
+    partIdx?: number
+  } | null = null
+
+  // Check userContent (it's the latest)
+  if (Array.isArray(userContent)) {
+    for (let i = userContent.length - 1; i >= 0; i--) {
+      if (userContent[i].type === 'image_url') {
+        latestImage = { type: 'user', partIdx: i }
+        break
+      }
+    }
+  }
+
+  // If not in userContent, check context from latest to oldest
+  if (!latestImage) {
+    for (let i = context.length - 1; i >= 0; i--) {
+      const msg = context[i]
+      if (msg.attachments) {
+        for (let j = msg.attachments.length - 1; j >= 0; j--) {
+          const att = msg.attachments[j]
+          if (att.type === 'image' && att.contentB64) {
+            latestImage = { type: 'context', msgIdx: i, attIdx: j }
+            break
+          }
         }
       }
-      if (parts.length > 1) {
-        content = parts
-      }
+      if (latestImage) break
+    }
+  }
+
+  for (let i = 0; i < context.length; i++) {
+    const msg = context[i]
+    let content: string | ContentPart[] = msg.content
+    if (latestImage?.type === 'context' && latestImage.msgIdx === i) {
+      const parts: ContentPart[] = [{ type: 'text', text: msg.content }]
+      const att = msg.attachments![latestImage.attIdx!]
+      parts.push({
+        type: 'image_url',
+        image_url: { url: att.contentB64! },
+      })
+      content = parts
     }
     apiMessages.push({ role: msg.role, content })
   }
 
-  apiMessages.push({ role: 'user', content: userContent })
+  let finalUserContent = userContent
+  if (latestImage?.type === 'user') {
+    if (Array.isArray(userContent)) {
+      const parts: ContentPart[] = []
+      for (let i = 0; i < userContent.length; i++) {
+        const part = userContent[i]
+        if (part.type === 'text') {
+          parts.push(part)
+        } else if (part.type === 'image_url' && i === latestImage.partIdx) {
+          parts.push(part)
+        }
+      }
+      finalUserContent = parts
+    }
+  } else if (Array.isArray(userContent)) {
+    const textParts = userContent.filter((p) => p.type === 'text')
+    if (textParts.length === 1) {
+      finalUserContent = textParts[0].text || ''
+    } else {
+      finalUserContent = textParts
+    }
+  }
+
+  apiMessages.push({ role: 'user', content: finalUserContent })
 
   return apiMessages
 }
@@ -390,11 +444,25 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const priorMessages = messages.slice(0, userIndex)
       const contextMessages = priorMessages.slice(-config.n_contexts * 2)
-      const apiMessages = buildApiMessages(
-        config,
-        contextMessages,
-        userMsg.content,
-      )
+
+      // Reconstruct content parts if there are attachments
+      let userContent: string | ContentPart[] = userMsg.content
+      if (userMsg.attachments && userMsg.attachments.length > 0) {
+        const parts: ContentPart[] = [{ type: 'text', text: userMsg.content }]
+        for (const att of userMsg.attachments) {
+          if (att.type === 'image' && att.contentB64) {
+            parts.push({
+              type: 'image_url',
+              image_url: { url: att.contentB64 },
+            })
+          }
+        }
+        if (parts.length > 1) {
+          userContent = parts
+        }
+      }
+
+      const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
