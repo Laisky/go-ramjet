@@ -26,6 +26,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/openai"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -498,7 +499,7 @@ func OneShotChatHandler(gctx *gin.Context) {
 		return
 	}
 
-	resp, err := OneshotChat(gmw.Ctx(gctx), user, "", req.SystemPrompt, req.UserPrompt)
+	resp, err := openai.OneshotChat(gmw.Ctx(gctx), user.APIBase, user.OpenaiToken, "", req.SystemPrompt, req.UserPrompt)
 	if web.AbortErr(gctx, err) {
 		return
 	}
@@ -506,73 +507,4 @@ func OneShotChatHandler(gctx *gin.Context) {
 	gctx.JSON(http.StatusOK, gin.H{
 		"response": resp,
 	})
-}
-
-// OneshotChat get ai response from gpt-3.5-turbo
-//
-// # Args:
-//   - systemPrompt: system prompt
-//   - userPrompt: user prompt
-func OneshotChat(ctx context.Context, user *config.UserConfig, model, systemPrompt, userPrompt string) (answer string, err error) {
-	logger := gmw.GetLogger(ctx)
-	if systemPrompt == "" {
-		systemPrompt = "# Core Capabilities and Behavior\n\nI am an AI assistant focused on being helpful, direct, and accurate. I aim to:\n\n- Provide factual responses about past events\n- Think through problems systematically step-by-step\n- Use clear, varied language without repetitive phrases\n- Give concise answers to simple questions while offering to elaborate if needed\n- Format code and text using proper Markdown\n- Engage in authentic conversation by asking relevant follow-up questions\n\n# Knowledge and Limitations \n\n- My knowledge cutoff is April 2024\n- I cannot open URLs or external links\n- I acknowledge uncertainty about very obscure topics\n- I note when citations may need verification\n- I aim to be accurate but may occasionally make mistakes\n\n# Task Handling\n\nI can assist with:\n- Analysis and research\n- Mathematics and coding\n- Creative writing and teaching\n- Question answering\n- Role-play and discussions\n\nFor sensitive topics, I:\n- Provide factual, educational information\n- Acknowledge risks when relevant\n- Default to legal interpretations\n- Avoid promoting harmful activities\n- Redirect harmful requests to constructive alternatives\n\n# Formatting Standards\n\nI use consistent Markdown formatting:\n- Headers with single space after #\n- Blank lines around sections\n- Consistent emphasis markers (* or _)\n- Proper list alignment and nesting\n- Clean code block formatting\n\n# Interaction Style\n\n- I am intellectually curious\n- I show empathy for human concerns\n- I vary my language naturally\n- I engage authentically without excessive caveats\n- I aim to be helpful while avoiding potential misuse"
-	}
-
-	if model == "" {
-		model = defaultChatModel
-	}
-
-	body, err := json.Marshal(OpenaiChatReq[string]{
-		Model:     model,
-		MaxTokens: 2000,
-		Stream:    false,
-		Messages: []OpenaiReqMessage[string]{
-			{
-				Role:    OpenaiMessageRoleSystem,
-				Content: systemPrompt,
-			},
-			{
-				Role:    OpenaiMessageRoleUser,
-				Content: userPrompt,
-			},
-		},
-	})
-	if err != nil {
-		return "", errors.Wrap(err, "marshal req")
-	}
-
-	url := fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
-	req, err := http.NewRequestWithContext(ctx,
-		http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return "", errors.Wrap(err, "new request")
-	}
-
-	logger.Info("send one-shot chat request",
-		zap.String("user", user.UserName),
-	)
-	req.Header.Add("Authorization", "Bearer "+user.OpenaiToken)
-	req.Header.Add("Content-Type", "application/json")
-	resp, err := httpcli.Do(req)
-	if err != nil {
-		return "", errors.Wrap(err, "do request")
-	}
-	defer gutils.LogErr(resp.Body.Close, log.Logger)
-
-	if resp.StatusCode != http.StatusOK {
-		respText, _ := io.ReadAll(resp.Body)
-		return "", errors.Errorf("req %q [%d]%s", url, resp.StatusCode, string(respText))
-	}
-
-	respData := new(OpenaiCompletionResp)
-	if err = json.NewDecoder(resp.Body).Decode(respData); err != nil {
-		return "", errors.Wrap(err, "decode response")
-	}
-
-	if len(respData.Choices) == 0 {
-		return "", errors.New("no choices")
-	}
-
-	return respData.Choices[0].Message.Content, nil
 }

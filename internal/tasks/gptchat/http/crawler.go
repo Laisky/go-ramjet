@@ -23,6 +23,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 // fetchStaticURLContent fetch static url content
@@ -69,7 +70,8 @@ var (
 	regexpHTMLTag = regexp.MustCompile(`</?\w+>`)
 )
 
-var oneshotSummarySysPrompt = gutils.Dedent(`
+var (
+	oneshotSummarySysPrompt = gutils.Dedent(`
 	<task>You are a senior editor, and I need you to extract the key information from
 	the article below. I will provide you with a question and a lengthy article.
 	Please summarize and provide the relevant important information extracted from
@@ -80,6 +82,15 @@ var oneshotSummarySysPrompt = gutils.Dedent(`
 	<question>%s</question>
 
 	<article>%s</article>`)
+	oneshotRewrite2MarkdownPrompt = gutils.Dedent(`
+	<task>You are a professional content editor. Please help me rewrite the
+	following content into a well-structured markdown article. Ensure that the
+	content is organized with appropriate headings, subheadings, bullet points,
+	and numbered lists where necessary. The rewritten article should be clear,
+	concise, and engaging for readers.</task>
+
+	<article>%s</article>`)
+)
 
 type searchMutation struct {
 	WebSearch struct {
@@ -144,7 +155,7 @@ func webSearch(ctx context.Context, query string, user *config.UserConfig) (resu
 			// summary by LLM within a timeout context
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer summaryCancel()
-			if summaryText, err := OneshotChat(summaryCtx, user, "", "",
+			if summaryText, err := openai.OneshotChat(summaryCtx, user.APIBase, user.OpenaiToken, "", "",
 				fmt.Sprintf(oneshotSummarySysPrompt, query, addText)); err != nil {
 				logger.Warn("summary by LLM", zap.Error(err))
 			} else {

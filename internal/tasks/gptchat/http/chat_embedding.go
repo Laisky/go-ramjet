@@ -27,6 +27,7 @@ import (
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 var (
@@ -61,7 +62,8 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	switch {
 	case strings.Contains(contentType, "text/html") ||
 		strings.Contains(contentType, "application/xhtml+xml"):
-		content, err = gptTasks.FetchDynamicURLContent(ctx, url)
+		content, err = gptTasks.FetchDynamicURLContent(ctx, url,
+			gptTasks.WithMarkdownConversion(config.Config.Token, true))
 	default:
 		content, err = fetchStaticURLContent(ctx, url)
 	}
@@ -127,8 +129,8 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	functionCalling, err := OneshotChat(gmw.Ctx(gctx),
-		user, defaultChatModel, "",
+	functionCalling, err := openai.OneshotChat(gmw.Ctx(gctx),
+		user.APIBase, user.OpenaiToken, defaultChatModel, "",
 		webSearchQueryPrompt+"\n\n"+lastUserPrompt.String())
 	if err != nil {
 		logger.Error("google search query", zap.Error(err))

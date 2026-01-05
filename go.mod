@@ -3,14 +3,14 @@ module github.com/Laisky/go-ramjet
 go 1.25.3
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/Laisky/errors/v2 v2.0.1
 	github.com/Laisky/gin-middlewares/v6 v6.1.1
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-redis/v2 v2.0.1
 	github.com/Laisky/go-utils/v5 v5.2.1
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20251128143854-5d607a3cfde4
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20260105141750-ba1a5cf19d2f
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
@@ -48,6 +48,7 @@ require (
 	github.com/Laisky/fast-skiplist/v2 v2.0.1 // indirect
 	github.com/Laisky/gin-middlewares/v7 v7.0.0 // indirect
 	github.com/Laisky/go-gin-prometheus v1.0.1 // indirect
+	github.com/Laisky/go-redis/v2 v2.0.1 // indirect
 	github.com/Laisky/go-utils/v3 v3.0.1 // indirect
 	github.com/Laisky/go-utils/v6 v6.0.0 // indirect
 	github.com/Laisky/golang-fifo v1.0.1-0.20240403092208-1d90c6c33e11 // indirect

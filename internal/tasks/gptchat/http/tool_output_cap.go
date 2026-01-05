@@ -10,6 +10,7 @@ import (
 	gmw "github.com/Laisky/gin-middlewares/v6"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 const (
@@ -20,7 +21,13 @@ const (
 
 type oneshotChatFn func(ctx context.Context, user *config.UserConfig, model, systemPrompt, userPrompt string) (string, error)
 
-var oneshotChatForToolOutput oneshotChatFn = OneshotChat
+var oneshotChatForToolOutput oneshotChatFn = func(ctx context.Context, user *config.UserConfig, model, systemPrompt, userPrompt string) (string, error) {
+	if user == nil {
+		return "", errors.New("nil user")
+	}
+
+	return openai.OneshotChat(ctx, user.APIBase, user.OpenaiToken, model, systemPrompt, userPrompt)
+}
 
 // capToolOutput summarizes and truncates tool output to keep the upstream request size bounded.
 //

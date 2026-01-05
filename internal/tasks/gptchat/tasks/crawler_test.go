@@ -21,9 +21,9 @@ func setupHTMLCrawler(t *testing.T) {
 }
 
 func Test_dynamicFetchWorker(t *testing.T) {
-	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
-		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
-	}
+	// if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+	// 	t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	// }
 	setupHTMLCrawler(t)
 
 	ctx := context.Background()
@@ -34,7 +34,7 @@ func Test_dynamicFetchWorker(t *testing.T) {
 	logger := log.Logger.Named("Test_dynamicFetchWorker")
 	ctx = gmw.SetLogger(ctx, logger)
 
-	content, err := dynamicFetchWorker(ctx, url)
+	content, _, err := dynamicFetchWorker(ctx, url, "xxx", true)
 	require.NoError(t, err)
 	require.NotNil(t, content)
 

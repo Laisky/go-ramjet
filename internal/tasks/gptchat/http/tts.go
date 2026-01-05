@@ -19,6 +19,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
+	"github.com/Laisky/go-ramjet/library/openai"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -274,7 +275,7 @@ func generateSSML(ctx context.Context, user *config.UserConfig, text string) (ss
 		prompt = ttsPromptEN + text
 	}
 
-	answer, err := OneshotChat(ctx, user, "",
+	answer, err := openai.OneshotChat(ctx, user.APIBase, user.OpenaiToken, "",
 		"follow my order, return exactly what I asked",
 		prompt)
 	if err != nil {

@@ -6,21 +6,34 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
+	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
-	gredis "github.com/Laisky/go-redis/v2"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/openai"
 	rutils "github.com/Laisky/go-ramjet/library/redis"
 )
+
+const (
+	crawlerQueueKey       = "ramjet:gptchat:crawler:html:queue"
+	crawlerResultKeyPrefx = "ramjet:gptchat:crawler:html:result:"
+)
+
+func crawlerResultKey(taskID string) string {
+	return crawlerResultKeyPrefx + taskID
+}
 
 var (
 	defaultChromedpSemaLimit = 2
@@ -46,9 +59,7 @@ func RunDynamicWebCrawler() {
 			log.Logger.Named("dynamic_web_crawler").Info("start")
 			for {
 				if err := runDynamicWebCrawler(); err != nil {
-					if !gredis.IsNil(err) {
-						log.Logger.Error("run dynamic web crawler", zap.Error(err))
-					}
+					log.Logger.Error("run dynamic web crawler", zap.Error(err))
 				}
 
 				time.Sleep(time.Second)
@@ -61,9 +72,12 @@ func runDynamicWebCrawler() error {
 	ctxCrawler, cancelCrawler := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelCrawler()
 
-	task, err := rutils.GetCli().GetHTMLCrawlerTask(ctxCrawler)
+	task, err := popHTMLCrawlerTask(ctxCrawler)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
+			return nil
+		}
+		if errors.Is(err, redis.Nil) {
 			return nil
 		}
 
@@ -80,11 +94,14 @@ func runDynamicWebCrawler() error {
 	logger.Info("get task")
 	ctxCrawler = gmw.SetLogger(ctxCrawler, logger)
 
-	resultKey := rlibs.KeyPrefixTaskHTMLCrawlerResult + task.TaskID
+	// mark running
+	if err := setHTMLCrawlerTaskResult(ctxCrawler, task); err != nil {
+		logger.Warn("set running state", zap.Error(err))
+	}
 
-	content, err := dynamicFetchWorker(ctxCrawler, task.Url)
+	rawBody, markdown, err := dynamicFetchWorker(ctxCrawler, task.Url, task.APIKey, task.OutputMarkdown)
 	if err != nil {
-		now := time.Now()
+		now := time.Now().UTC()
 		reason := fmt.Sprintf("fetch url %q", task.Url)
 
 		task.Status = rlibs.TaskStatusFailed
@@ -92,11 +109,64 @@ func runDynamicWebCrawler() error {
 		task.FailedReason = &reason
 		logger.Error("dynamic fetch url", zap.Error(err))
 	} else {
-		now := time.Now()
-		task.ResultHTML = content
+		now := time.Now().UTC()
+		if task.OutputMarkdown && strings.TrimSpace(markdown) != "" {
+			task.ResultHTML = []byte(markdown)
+		} else {
+			task.ResultHTML = rawBody
+		}
 		task.Status = rlibs.TaskStatusSuccess
 		task.FinishedAt = &now
 		logger.Info("success dynamic fetch url")
+
+		var markdownPtr *string
+		if strings.TrimSpace(markdown) != "" {
+			markdownPtr = &markdown
+		}
+
+		record := &CrawlRecord{
+			TaskID:       task.TaskID,
+			CrawledAt:    now,
+			APIKeyPrefix: apiKeyPrefix(task.APIKey),
+			URL:          task.Url,
+			RawBody:      rawBody,
+			Markdown:     markdownPtr,
+		}
+		if err := SaveCrawlRecord(ctxCrawler, record); err != nil {
+			logger.Warn("persist crawl record", zap.Error(err))
+		}
+	}
+
+	if err := setHTMLCrawlerTaskResult(ctxCrawler, task); err != nil {
+		return errors.Wrap(err, "set task result")
+	}
+
+	return nil
+}
+
+func popHTMLCrawlerTask(ctx context.Context) (*rlibs.HTMLCrawlerTask, error) {
+	client := rutils.GetCli().GetDB().Client
+
+	vals, err := client.BLPop(ctx, 5*time.Second, crawlerQueueKey).Result()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if len(vals) != 2 {
+		return nil, errors.Errorf("invalid blpop response size %d", len(vals))
+	}
+
+	task, err := rlibs.NewHTMLCrawlerTaskFromString(vals[1])
+	if err != nil {
+		return nil, errors.Wrap(err, "parse task")
+	}
+
+	task.Status = rlibs.TaskStatusRunning
+	return task, nil
+}
+
+func setHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTask) error {
+	if task == nil {
+		return errors.New("task is nil")
 	}
 
 	payload, err := task.ToString()
@@ -104,13 +174,12 @@ func runDynamicWebCrawler() error {
 		return errors.Wrap(err, "serialize task")
 	}
 
-	ctxPublish, cancelPublish := context.WithTimeout(context.Background(), time.Second*30)
+	ctxPublish, cancelPublish := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelPublish()
 
-	err = rutils.GetCli().GetDB().
-		Set(ctxPublish, resultKey, payload, time.Hour*24*7).Err()
-	if err != nil {
-		return errors.Wrapf(err, "set task result %q", resultKey)
+	key := crawlerResultKey(task.TaskID)
+	if err := rutils.GetCli().GetDB().Client.Set(ctxPublish, key, payload, 7*24*time.Hour).Err(); err != nil {
+		return errors.Wrapf(err, "set task result %q", key)
 	}
 
 	return nil
@@ -144,7 +213,7 @@ func WithDuration(duration time.Duration) FetchURLOption {
 }
 
 // dynamicFetchWorker fetch dynamic url content, will render js by chromedp
-func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption) (content []byte, err error) {
+func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown bool, opts ...FetchURLOption) (rawBody []byte, markdown string, err error) {
 	startAt := time.Now()
 	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
 		With(zap.String("url", url))
@@ -165,7 +234,7 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 	}
 
 	if err = chromedpSema.Acquire(ctx, 1); err != nil {
-		return nil, errors.Wrap(err, "acquire chromedp sema")
+		return nil, "", errors.Wrap(err, "acquire chromedp sema")
 	} else {
 		defer chromedpSema.Release(1)
 	}
@@ -229,25 +298,28 @@ func dynamicFetchWorker(ctx context.Context, url string, opts ...FetchURLOption)
 	})
 
 	if err != nil {
-		return nil, errors.Wrapf(err, "run chromedp for %q", url)
+		return nil, "", errors.Wrapf(err, "run chromedp for %q", url)
 	}
 
-	content = []byte(htmlContent)
+	content := []byte(htmlContent)
 	if len(content) == 0 {
-		return nil, errors.Errorf("no content found by chromedp for %q", url)
+		return nil, "", errors.Errorf("no content found by chromedp for %q", url)
 	}
 
-	if bodyContent, err := ExtractHTMLBody(content); err != nil {
+	bodyContent, markdownText, err := ExtractHTMLBody(ctx, content, apiKey, outputMarkdown)
+	if err != nil {
 		log.Logger.Warn("extract html body", zap.Error(err))
-	} else {
-		content = bodyContent
+		return content, "", nil
 	}
+
+	rawBody = bodyContent
+	markdown = markdownText
 
 	logger.Info("succeed fetch dynamic url",
-		zap.Int("len", len(content)),
+		zap.Int("len", len(rawBody)),
 		zap.Duration("cost_secs", time.Since(startAt)))
 
-	return content, nil
+	return rawBody, markdown, nil
 }
 
 // findHTMLBody find html body recursively
@@ -264,36 +336,102 @@ func findHTMLBody(n *html.Node) *html.Node {
 }
 
 // ExtractHTMLBody extract body from html
-func ExtractHTMLBody(content []byte) (bodyContent []byte, err error) {
+func ExtractHTMLBody(ctx context.Context, content []byte, apiKey string, outputMarkdown bool) (bodyContent []byte, markdown string, err error) {
 	parsedHTML, err := html.Parse(bytes.NewReader(content))
 	if err != nil {
-		return nil, errors.Wrap(err, "parse html")
+		return nil, "", errors.Wrap(err, "parse html")
 	}
 
 	body := findHTMLBody(parsedHTML)
 	if body == nil {
-		return nil, errors.New("no body found")
+		return nil, "", errors.New("no body found")
 	}
 
 	var out bytes.Buffer
 	if err := html.Render(&out, body); err != nil {
-		return nil, errors.Wrap(err, "render html")
+		return nil, "", errors.Wrap(err, "render html")
 	}
 
-	return out.Bytes(), nil
+	var inner bytes.Buffer
+	for child := body.FirstChild; child != nil; child = child.NextSibling {
+		if err := html.Render(&inner, child); err != nil {
+			return nil, "", errors.Wrap(err, "render body")
+		}
+	}
+
+	bodyContent = out.Bytes()
+	if !outputMarkdown || strings.TrimSpace(apiKey) == "" {
+		return bodyContent, "", nil
+	}
+
+	logger := gmw.GetLogger(ctx).Named("extract_html_body")
+
+	// 1) local conversion first
+	converter := md.NewConverter("", true, nil)
+	innerHTML := inner.Bytes()
+	localInput := innerHTML
+	if len(localInput) == 0 {
+		localInput = bodyContent
+	}
+	localMarkdown, localErr := converter.ConvertString(string(localInput))
+	if localErr == nil {
+		localMarkdown = strings.TrimSpace(localMarkdown)
+		if localMarkdown != "" {
+			return bodyContent, localMarkdown, nil
+		}
+	}
+	if localErr != nil {
+		logger.Debug("local html-to-markdown failed", zap.Error(localErr))
+	}
+
+	// 2) fallback to LLM conversion
+	llmInput := innerHTML
+	if len(llmInput) == 0 {
+		llmInput = bodyContent
+	}
+	llmMarkdown, llmErr := openai.HTMLBodyToMarkdown(ctx, config.Config.API, apiKey, llmInput)
+	if llmErr != nil {
+		logger.Warn("convert html to markdown", zap.Error(llmErr))
+		return bodyContent, "", nil
+	}
+	llmMarkdown = strings.TrimSpace(llmMarkdown)
+	if llmMarkdown == "" {
+		return bodyContent, "", nil
+	}
+
+	return bodyContent, llmMarkdown, nil
 }
 
 // FetchDynamicURLContent is a wrapper for submit & fetch dynamic url content
-func FetchDynamicURLContent(ctx context.Context, url string) ([]byte, error) {
+func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchDynamicURLContentOption) ([]byte, error) {
+	opt, err := new(fetchDynamicURLContentOption).apply(opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "apply options")
+	}
+
+	// DB cache lookup
+	if record, ok, err := LoadLatestCrawlRecord(ctx, url); err != nil {
+		return nil, errors.Wrap(err, "load cache")
+	} else if ok {
+		age := time.Since(record.CrawledAt)
+		fresh := age >= 0 && age <= 3*24*time.Hour
+		if fresh {
+			if opt.outputMarkdown && record.Markdown != nil && strings.TrimSpace(*record.Markdown) != "" {
+				return []byte(*record.Markdown), nil
+			}
+			return record.RawBody, nil
+		}
+	}
+
 	// submit task
-	taskID, err := rutils.GetCli().AddHTMLCrawlerTask(ctx, url)
+	taskID, err := addHTMLCrawlerTask(ctx, url, opt.apiKey, opt.outputMarkdown)
 	if err != nil {
 		return nil, errors.Wrap(err, "submit task")
 	}
 
 	// fetch task result
 	for {
-		task, err := rutils.GetCli().GetHTMLCrawlerTaskResult(ctx, taskID)
+		task, err := getHTMLCrawlerTaskResult(ctx, taskID)
 		if err != nil {
 			return nil, errors.Wrap(err, "get task result")
 		}
@@ -306,10 +444,73 @@ func FetchDynamicURLContent(ctx context.Context, url string) ([]byte, error) {
 			time.Sleep(time.Second)
 			continue
 		case rlibs.TaskStatusFailed:
-			return nil, errors.Errorf("task failed at %s for reason %q",
-				*task.FinishedAt, *task.FailedReason)
+			if task.FinishedAt == nil || task.FailedReason == nil {
+				return nil, errors.Errorf("task %q failed", taskID)
+			}
+			return nil, errors.Errorf("task failed at %s for reason %q", *task.FinishedAt, *task.FailedReason)
 		default:
 			return nil, errors.Errorf("unknown task status %q", task.Status)
 		}
 	}
+}
+
+type fetchDynamicURLContentOption struct {
+	apiKey         string
+	outputMarkdown bool
+}
+
+func (o *fetchDynamicURLContentOption) apply(opts ...FetchDynamicURLContentOption) (*fetchDynamicURLContentOption, error) {
+	for _, opt := range opts {
+		if err := opt(o); err != nil {
+			return nil, err
+		}
+	}
+	return o, nil
+}
+
+// FetchDynamicURLContentOption customizes how FetchDynamicURLContent runs.
+type FetchDynamicURLContentOption func(*fetchDynamicURLContentOption) error
+
+// WithMarkdownConversion enables HTML body to Markdown conversion.
+//
+// When apiKey is empty, conversion will be skipped.
+func WithMarkdownConversion(apiKey string, outputMarkdown bool) FetchDynamicURLContentOption {
+	return func(opt *fetchDynamicURLContentOption) error {
+		opt.apiKey = apiKey
+		opt.outputMarkdown = outputMarkdown
+		return nil
+	}
+}
+
+func addHTMLCrawlerTask(ctx context.Context, url, apiKey string, outputMarkdown bool) (string, error) {
+	task := rlibs.NewHTMLCrawlerTaskWithOptions(url, apiKey, outputMarkdown)
+	payload, err := task.ToString()
+	if err != nil {
+		return "", errors.Wrap(err, "serialize task")
+	}
+
+	client := rutils.GetCli().GetDB().Client
+	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, 7*24*time.Hour).Err(); err != nil {
+		return "", errors.Wrap(err, "init task result")
+	}
+	if err := client.RPush(ctx, crawlerQueueKey, payload).Err(); err != nil {
+		return "", errors.Wrap(err, "enqueue task")
+	}
+
+	return task.TaskID, nil
+}
+
+func getHTMLCrawlerTaskResult(ctx context.Context, taskID string) (*rlibs.HTMLCrawlerTask, error) {
+	client := rutils.GetCli().GetDB().Client
+	payload, err := client.Get(ctx, crawlerResultKey(taskID)).Result()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	task, err := rlibs.NewHTMLCrawlerTaskFromString(payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse task result")
+	}
+
+	return task, nil
 }
