@@ -1,4 +1,4 @@
-import { CloudDownload, CloudUpload, Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ export function DataSyncManager({
 }: DataSyncManagerProps) {
   const [isSyncing, setIsSyncing] = useState(false)
 
-  const handleUpload = async () => {
+  const handleSync = async () => {
     if (!config.sync_key) {
       alert('Please enter a Sync Key to sync.')
       return
@@ -31,35 +31,17 @@ export function DataSyncManager({
 
     setIsSyncing(true)
     try {
-      const data = await onExportData()
-      await api.uploadUserData(config.sync_key, data)
-      alert('Upload successful!')
+      const cloudData = await api.downloadUserData(config.sync_key)
+      await onImportData(cloudData)
+
+      const merged = await onExportData()
+      await api.uploadUserData(config.sync_key, merged)
+
+      alert('Sync successful!')
+      window.location.reload()
     } catch (err) {
       console.error(err)
-      alert('Upload failed. See console for details.')
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
-  const handleDownload = async () => {
-    if (!config.sync_key) {
-      alert('Please enter a Sync Key to sync.')
-      return
-    }
-
-    if (!confirm('This will overwrite your local data. Continue?')) {
-      return
-    }
-
-    setIsSyncing(true)
-    try {
-      const data = await api.downloadUserData(config.sync_key)
-      await onImportData(data)
-      alert('Download and restore successful!')
-    } catch (err) {
-      console.error(err)
-      alert('Download failed. See console for details.')
+      alert('Sync failed. See console for details.')
     } finally {
       setIsSyncing(false)
     }
@@ -89,33 +71,19 @@ export function DataSyncManager({
           variant="outline"
           size="sm"
           className="flex-1 gap-2"
-          onClick={handleUpload}
+          onClick={handleSync}
           disabled={isSyncing}
         >
           {isSyncing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <CloudUpload className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" />
           )}
-          Upload
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 gap-2"
-          onClick={handleDownload}
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CloudDownload className="h-4 w-4" />
-          )}
-          Download
+          Sync with Cloud
         </Button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Sync your settings and chat history using this key. Keep it safe!
+        Sync downloads first (merge), then uploads.
       </p>
     </div>
   )

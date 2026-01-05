@@ -81,6 +81,51 @@ func userConfigS3Key(apikey string) string {
 	return "user-configs/" + hex.EncodeToString(hashed[:])
 }
 
+// syncKeyFingerprint returns a stable, non-sensitive fingerprint for a sync key.
+//
+// syncKeyFingerprint hashes the sync key and returns a short prefix suitable for logs.
+func syncKeyFingerprint(apikey string) string {
+	hashed := sha256.Sum256([]byte(apikey))
+	return hex.EncodeToString(hashed[:])[:12]
+}
+
+// isS3NoSuchKey returns true if an error indicates the S3 object key does not exist.
+func isS3NoSuchKey(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) {
+		if resp.Code == "NoSuchKey" || resp.StatusCode == 404 {
+			return true
+		}
+		msg := strings.ToLower(resp.Message)
+		if strings.Contains(msg, "does not exist") || strings.Contains(msg, "no such key") {
+			return true
+		}
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "no such key")
+}
+
+// readAllOrNotFound reads all bytes from r.
+//
+// readAllOrNotFound returns (nil, false, nil) when the underlying read fails with a
+// missing-key S3 error.
+func readAllOrNotFound(r io.Reader) ([]byte, bool, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		if isS3NoSuchKey(err) {
+			return nil, false, nil
+		}
+		return nil, false, errors.Wrap(err, "read body")
+	}
+
+	return body, true, nil
+}
+
 func UploadUserConfig(ctx *gin.Context) {
 	logger := gmw.GetLogger(ctx)
 	apikey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
@@ -89,7 +134,7 @@ func UploadUserConfig(ctx *gin.Context) {
 		return
 	}
 
-	logger = logger.With(zap.String("user", apikey[:15]))
+	logger = logger.With(zap.String("sync_key_fp", syncKeyFingerprint(apikey)))
 
 	body, err := ctx.GetRawData()
 	if web.AbortErr(ctx, errors.Wrap(err, "get raw data")) {
@@ -119,12 +164,11 @@ func UploadUserConfig(ctx *gin.Context) {
 
 	// upload cipher to s3
 	s3cli, err := s3.GetCli()
-	if err != nil {
-		logger.Error("get s3 client", zap.Error(err))
+	if web.AbortErr(ctx, errors.Wrap(err, "get s3 client")) {
+		return
 	}
 
-	logger.Debug("try to upload user config",
-		zap.Int("len", len(cipher)))
+	logger.Debug("try to upload user config", zap.Int("cipher_len", len(cipher)))
 	if _, err := s3cli.PutObject(gmw.Ctx(ctx),
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
@@ -148,15 +192,15 @@ func DownloadUserConfig(ctx *gin.Context) {
 		return
 	}
 
-	logger = logger.With(zap.String("user", apikey[:15]))
+	logger = logger.With(zap.String("sync_key_fp", syncKeyFingerprint(apikey)))
 
 	opt := minio.GetObjectOptions{}
 	opt.Set("Cache-Control", "no-cache")
 	opt.SetReqParam("tt", strconv.Itoa(time.Now().Nanosecond()))
 
 	s3cli, err := s3.GetCli()
-	if err != nil {
-		logger.Error("get s3 client", zap.Error(err))
+	if web.AbortErr(ctx, errors.Wrap(err, "get s3 client")) {
+		return
 	}
 
 	object, err := s3cli.GetObject(gmw.Ctx(ctx),
@@ -164,13 +208,27 @@ func DownloadUserConfig(ctx *gin.Context) {
 		userConfigS3Key(apikey),
 		opt,
 	)
-	if web.AbortErr(ctx, errors.Wrap(err, "get user config from s3")) {
+	if err != nil {
+		if isS3NoSuchKey(err) {
+			logger.Debug("cloud user config not found; return empty")
+			ctx.Header("Cache-Control", "no-cache")
+			ctx.Data(200, "application/json", []byte("{}"))
+			return
+		}
+		web.AbortErr(ctx, errors.Wrap(err, "get user config from s3"))
 		return
 	}
 	defer gutils.CloseWithLog(object, logger)
 
-	body, err := io.ReadAll(object)
-	if web.AbortErr(ctx, errors.Wrap(err, "read body")) {
+	body, exists, err := readAllOrNotFound(object)
+	if err != nil {
+		web.AbortErr(ctx, err)
+		return
+	}
+	if !exists {
+		logger.Debug("cloud user config not found during read; return empty")
+		ctx.Header("Cache-Control", "no-cache")
+		ctx.Data(200, "application/json", []byte("{}"))
 		return
 	}
 

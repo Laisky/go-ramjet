@@ -76,14 +76,24 @@ export const api = {
   },
 
   async downloadUserData(syncKey: string) {
-    const data = await request<any>('/user/config', {
-      method: 'GET',
-      headers: {
-        'X-LAISKY-SYNC-KEY': syncKey,
-        'Cache-Control': 'no-cache',
-      },
-    })
-    return data
+    try {
+      const data = await request<any>('/user/config', {
+        method: 'GET',
+        headers: {
+          'X-LAISKY-SYNC-KEY': syncKey,
+          'Cache-Control': 'no-cache',
+        },
+      })
+      return data
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const msg = (err.message || '').toLowerCase()
+        if ((err.status === 400 || err.status === 404) && msg.includes('does not exist')) {
+          return {}
+        }
+      }
+      throw err
+    }
   },
 
   async uploadDataset(

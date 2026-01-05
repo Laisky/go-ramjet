@@ -3,15 +3,15 @@
  */
 import { StorageKeys } from '@/utils/storage'
 
+import { uuidv7 } from './uuidv7'
+
 export type SupportedChatRole = 'user' | 'assistant'
 
 /**
  * generateChatId creates a unique chat identifier preserving chronological order.
  */
 export function generateChatId(): string {
-  const timestamp = Date.now()
-  const random = Math.random().toString(36).substring(2, 8)
-  return `chat-${timestamp}-${random}`
+  return `v2@${uuidv7()}`
 }
 
 /**

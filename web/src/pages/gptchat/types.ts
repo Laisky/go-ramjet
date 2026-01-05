@@ -7,6 +7,7 @@ export interface ChatMessageData {
   chatID: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  edited_version?: string
   model?: string
   reasoningContent?: string
   timestamp?: number

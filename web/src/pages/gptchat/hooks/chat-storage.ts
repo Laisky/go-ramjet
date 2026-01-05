@@ -4,6 +4,8 @@ import { kvDel, kvGet, kvSet } from '@/utils/storage'
 
 import type { ChatMessageData, SessionHistoryItem } from '../types'
 import { getChatDataKey, getSessionHistoryKey } from '../utils/chat-storage'
+import { recordDeletedChatId } from '../utils/deleted-chat-ids'
+import { uuidv7 } from '../utils/uuidv7'
 
 /**
  * Sanitizes a ChatMessageData object to ensure correct types.
@@ -51,6 +53,12 @@ export function sanitizeChatMessageData(
         ? sanitized.timestamp
         : Number(sanitized.timestamp)
     sanitized.timestamp = Number.isNaN(numValue) ? undefined : numValue
+  }
+
+  if (sanitized.edited_version === null) {
+    sanitized.edited_version = undefined
+  } else if (sanitized.edited_version !== undefined) {
+    sanitized.edited_version = String(sanitized.edited_version)
   }
 
   return sanitized
@@ -136,7 +144,19 @@ export function useChatStorage({
         message.chatID,
         message.role as 'user' | 'assistant',
       )
-      await kvSet(key, message)
+
+      const existing = await kvGet<ChatMessageData>(key)
+      const needsBump =
+        existing &&
+        typeof existing === 'object' &&
+        existing.content !== undefined &&
+        String(existing.content) !== String(message.content)
+
+      const toSave: ChatMessageData = needsBump
+        ? { ...message, edited_version: uuidv7() }
+        : message
+
+      await kvSet(key, toSave)
 
       const historyKey = getSessionHistoryKey(sessionId)
       const history = (await kvGet<SessionHistoryItem[]>(historyKey)) || []
@@ -146,11 +166,11 @@ export function useChatStorage({
       )
 
       const historyItem: SessionHistoryItem = {
-        chatID: message.chatID,
-        role: message.role as 'user' | 'assistant',
-        content: message.content.substring(0, 100),
-        model: message.model,
-        timestamp: message.timestamp,
+        chatID: toSave.chatID,
+        role: toSave.role as 'user' | 'assistant',
+        content: toSave.content.substring(0, 100),
+        model: toSave.model,
+        timestamp: toSave.timestamp,
       }
 
       if (existingIndex >= 0) {
@@ -171,6 +191,7 @@ export function useChatStorage({
     if (history) {
       const chatIds = new Set(history.map((h) => h.chatID))
       for (const chatId of chatIds) {
+        await recordDeletedChatId(chatId)
         await kvDel(getChatDataKey(chatId, 'user'))
         await kvDel(getChatDataKey(chatId, 'assistant'))
       }
@@ -182,6 +203,7 @@ export function useChatStorage({
 
   const deleteMessage = useCallback(
     async (chatId: string) => {
+      await recordDeletedChatId(chatId)
       await kvDel(getChatDataKey(chatId, 'user'))
       await kvDel(getChatDataKey(chatId, 'assistant'))
 

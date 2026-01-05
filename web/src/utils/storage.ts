@@ -19,6 +19,7 @@ export const StorageKeys = {
   USER_INFO: 'config_user_info',
   SESSION_DRAFTS: 'chat_session_drafts',
   CHAT_DATA_PREFIX: 'chat_data_', // ${prefix}${role}_${chatID}
+  DELETED_CHAT_IDS: 'deleted_chat_ids',
 } as const
 
 export type KvOperation = 'set' | 'del'
