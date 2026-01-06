@@ -1,9 +1,15 @@
+import { type ContentPart } from '@/utils/api'
 import { describe, expect, it } from 'vitest'
+import {
+  DefaultSessionConfig,
+  type ChatMessageData,
+  type SessionConfig,
+} from '../../types'
 import { buildApiMessages } from '../use-chat'
-import { SessionConfig, ChatMessageData } from '../../types'
 
 describe('buildApiMessages', () => {
   const config: SessionConfig = {
+    ...DefaultSessionConfig,
     selected_model: 'gpt-4o',
     n_contexts: 5,
     system_prompt: 'You are a helpful assistant',
@@ -90,7 +96,7 @@ describe('buildApiMessages', () => {
       },
     ]
 
-    const userContent = [
+    const userContent: ContentPart[] = [
       { type: 'text', text: 'Message 2' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,img2' } },
     ]
@@ -112,7 +118,7 @@ describe('buildApiMessages', () => {
 
   it('should retain only the latest image if multiple images are in userContent', () => {
     const context: ChatMessageData[] = []
-    const userContent = [
+    const userContent: ContentPart[] = [
       { type: 'text', text: 'Message 1' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,img1' } },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,img2' } },
@@ -133,7 +139,7 @@ describe('buildApiMessages', () => {
   it('should handle reconstructed userContent with images', () => {
     const context: ChatMessageData[] = []
     // This is what regenerateMessage/editAndRetry would pass to buildApiMessages
-    const userContent = [
+    const userContent: ContentPart[] = [
       { type: 'text', text: 'Regenerated message' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,img1' } },
     ]

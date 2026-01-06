@@ -39,7 +39,7 @@ func Test_dynamicFetchWorker(t *testing.T) {
 	require.NotNil(t, content)
 
 	t.Log(string(content))
-	t.Error()
+	// t.Error()
 }
 
 func Test_fetchWorker(t *testing.T) {
