@@ -33,15 +33,24 @@ type OpenAIResponsesTool struct {
 
 // OpenAIResponsesReq is a subset of the OpenAI Responses API request schema.
 type OpenAIResponsesReq struct {
-	Model           string                `json:"model"`
-	Input           any                   `json:"input,omitempty"`
-	MaxOutputTokens uint                  `json:"max_output_tokens,omitempty"`
-	Stream          bool                  `json:"stream,omitempty"`
-	Temperature     float64               `json:"temperature,omitempty"`
-	TopP            float64               `json:"top_p,omitempty"`
-	Tools           []OpenAIResponsesTool `json:"tools,omitempty"`
-	ToolChoice      any                   `json:"tool_choice,omitempty"`
-	Store           *bool                 `json:"store,omitempty"`
+	Model           string                   `json:"model"`
+	Input           any                      `json:"input,omitempty"`
+	MaxOutputTokens uint                     `json:"max_output_tokens,omitempty"`
+	Reasoning       *OpenAIResponseReasoning `json:"reasoning,omitempty"` // Optional: Configuration options for reasoning models
+	Stream          bool                     `json:"stream,omitempty"`
+	Temperature     float64                  `json:"temperature,omitempty"`
+	TopP            float64                  `json:"top_p,omitempty"`
+	Tools           []OpenAIResponsesTool    `json:"tools,omitempty"`
+	ToolChoice      any                      `json:"tool_choice,omitempty"`
+	Store           *bool                    `json:"store,omitempty"`
+}
+
+// OpenAIResponseReasoning defines reasoning options for the Responses API.
+type OpenAIResponseReasoning struct {
+	// Effort defines the reasoning effort level
+	Effort *string `json:"effort,omitempty" binding:"omitempty,oneof=low medium high"`
+	// Summary defines whether to include a summary of the reasoning
+	Summary *string `json:"summary,omitempty" binding:"omitempty,oneof=auto concise detailed"`
 }
 
 // OpenAIResponsesResp is a subset of the OpenAI Responses API response schema.
@@ -146,6 +155,9 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		Temperature:     frontendReq.Temperature,
 		TopP:            frontendReq.TopP,
 		ToolChoice:      frontendReq.ToolChoice,
+		Reasoning: &OpenAIResponseReasoning{
+			Effort: &frontendReq.ReasoningEffort,
+		},
 	}
 
 	if req.Model == "" {

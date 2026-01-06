@@ -488,9 +488,9 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 			_ = reservation
 		}
 
-		if strings.HasPrefix(frontendReq.Model, "o1") ||
-			strings.HasPrefix(frontendReq.Model, "o3") ||
-			strings.HasPrefix(frontendReq.Model, "o4") ||
+		if strings.HasPrefix(frontendReq.Model, "o") ||
+			strings.HasPrefix(frontendReq.Model, "gpt-oss-") ||
+			strings.HasPrefix(frontendReq.Model, "claude-") ||
 			strings.HasPrefix(frontendReq.Model, "gpt-5") &&
 				frontendReq.ReasoningEffort == "" {
 			frontendReq.ReasoningEffort = "high"

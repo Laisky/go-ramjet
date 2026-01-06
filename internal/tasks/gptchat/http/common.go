@@ -1,16 +1,10 @@
 package http
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
-	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -60,47 +54,47 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 	return user, nil
 }
 
-type oneapiUserResponse struct {
-	TokenID  int    `json:"token_id"`
-	UID      int    `json:"uid"`
-	Username string `json:"username"`
-}
+// type oneapiUserResponse struct {
+// 	TokenID  int    `json:"token_id"`
+// 	UID      int    `json:"uid"`
+// 	Username string `json:"username"`
+// }
 
-var (
-	cacheGetOneapiUserIDByToken sync.Map
-)
+// var (
+// 	cacheGetOneapiUserIDByToken sync.Map
+// )
 
-func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err error) {
-	// load from cache
-	if v, ok := cacheGetOneapiUserIDByToken.Load(token); ok {
-		return v.(string), nil //nolint: forcetypeassert
-	}
+// func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err error) {
+// 	// load from cache
+// 	if v, ok := cacheGetOneapiUserIDByToken.Load(token); ok {
+// 		return v.(string), nil //nolint: forcetypeassert
+// 	}
 
-	url := config.Config.ExternalBillingAPI + "/api/user/get-by-token"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", errors.Wrap(err, "new request")
-	}
+// 	url := config.Config.ExternalBillingAPI + "/api/user/get-by-token"
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// 	if err != nil {
+// 		return "", errors.Wrap(err, "new request")
+// 	}
 
-	req.Header.Add("Authorization", token)
-	resp, err := httpcli.Do(req) //nolint: bodyclose
-	if err != nil {
-		return "", errors.Wrap(err, "do request")
-	}
-	defer gutils.LogErr(resp.Body.Close, log.Logger)
-	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("bad status code %d", resp.StatusCode)
-	}
+// 	req.Header.Add("Authorization", token)
+// 	resp, err := httpcli.Do(req) //nolint: bodyclose
+// 	if err != nil {
+// 		return "", errors.Wrap(err, "do request")
+// 	}
+// 	defer gutils.LogErr(resp.Body.Close, log.Logger)
+// 	if resp.StatusCode != http.StatusOK {
+// 		return "", errors.Errorf("bad status code %d", resp.StatusCode)
+// 	}
 
-	var respData oneapiUserResponse
-	if err = json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-		return "", errors.Wrap(err, "decode response")
-	}
+// 	var respData oneapiUserResponse
+// 	if err = json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+// 		return "", errors.Wrap(err, "decode response")
+// 	}
 
-	uid = strconv.Itoa(respData.UID)
-	cacheGetOneapiUserIDByToken.Store(token, uid)
-	return uid, nil
-}
+// 	uid = strconv.Itoa(respData.UID)
+// 	cacheGetOneapiUserIDByToken.Store(token, uid)
+// 	return uid, nil
+// }
 
 // var OpenaiModelList = []string{
 // 	"gpt-3.5-turbo", "gpt-3.5-turbo-0301", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-0125",

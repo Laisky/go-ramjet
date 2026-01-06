@@ -363,64 +363,64 @@ func requestFluxImageAPI(ctx context.Context,
 }
 
 // drawFluxBySegmind draw image by replicate service
-func drawFluxBySegmind(ctx context.Context,
-	model string, req *DrawImageByFluxReplicateRequest) (img []byte, err error) {
-	logger := gmw.GetLogger(ctx)
-	logger.Debug("draw image by segmind")
+// func drawFluxBySegmind(ctx context.Context,
+// 	model string, req *DrawImageByFluxReplicateRequest) (img []byte, err error) {
+// 	logger := gmw.GetLogger(ctx)
+// 	logger.Debug("draw image by segmind")
 
-	upstreamReqData := &DrawImageByFluxSegmind{
-		Prompt:      req.Input.Prompt,
-		Steps:       req.Input.Steps,
-		Seed:        rand.Int(),
-		SamplerName: "euler",
-		Scheduler:   "normal",
-		Samples:     1,
-		Width:       2048,
-		Height:      2048,
-		Denoise:     1,
-	}
+// 	upstreamReqData := &DrawImageByFluxSegmind{
+// 		Prompt:      req.Input.Prompt,
+// 		Steps:       req.Input.Steps,
+// 		Seed:        rand.Int(),
+// 		SamplerName: "euler",
+// 		Scheduler:   "normal",
+// 		Samples:     1,
+// 		Width:       2048,
+// 		Height:      2048,
+// 		Denoise:     1,
+// 	}
 
-	upstreamReqBody, err := json.Marshal(upstreamReqData)
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal request")
-	}
+// 	upstreamReqBody, err := json.Marshal(upstreamReqData)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "marshal request")
+// 	}
 
-	var api string
-	switch model {
-	// case "flux-pro":
-	// 	api = "https://api.segmind.com/v1/flux-pro"
-	case "flux-schnell":
-		api = "https://api.segmind.com/v1/flux-schnell"
-	default:
-		return nil, errors.Errorf("unknown model %q", model)
-	}
+// 	var api string
+// 	switch model {
+// 	// case "flux-pro":
+// 	// 	api = "https://api.segmind.com/v1/flux-pro"
+// 	case "flux-schnell":
+// 		api = "https://api.segmind.com/v1/flux-schnell"
+// 	default:
+// 		return nil, errors.Errorf("unknown model %q", model)
+// 	}
 
-	logger.Debug("send request to segmind", zap.String("api", api))
-	upstreamReq, err := http.NewRequestWithContext(ctx,
-		http.MethodPost, api, bytes.NewReader(upstreamReqBody))
-	if err != nil {
-		return nil, errors.Wrap(err, "new request to draw image")
-	}
+// 	logger.Debug("send request to segmind", zap.String("api", api))
+// 	upstreamReq, err := http.NewRequestWithContext(ctx,
+// 		http.MethodPost, api, bytes.NewReader(upstreamReqBody))
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "new request to draw image")
+// 	}
 
-	upstreamReq.Header.Add("Content-Type", "application/json")
-	upstreamReq.Header.Add("x-api-key", config.Config.SegmindApikey)
+// 	upstreamReq.Header.Add("Content-Type", "application/json")
+// 	upstreamReq.Header.Add("x-api-key", config.Config.SegmindApikey)
 
-	resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
-	if err != nil {
-		return nil, errors.Wrap(err, "do request")
-	}
-	defer gutils.LogErr(resp.Body.Close, logger)
+// 	resp, err := httpcli.Do(upstreamReq) //nolint: bodyclose
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "do request")
+// 	}
+// 	defer gutils.LogErr(resp.Body.Close, logger)
 
-	if resp.StatusCode != http.StatusOK {
-		payload, _ := io.ReadAll(resp.Body)
-		return nil, errors.Errorf("bad status code [%d]%s",
-			resp.StatusCode, string(payload))
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		payload, _ := io.ReadAll(resp.Body)
+// 		return nil, errors.Errorf("bad status code [%d]%s",
+// 			resp.StatusCode, string(payload))
+// 	}
 
-	imgContent, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, "read image")
-	}
+// 	imgContent, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "read image")
+// 	}
 
-	return imgContent, nil
-}
+// 	return imgContent, nil
+// }

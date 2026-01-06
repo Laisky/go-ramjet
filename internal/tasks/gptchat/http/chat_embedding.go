@@ -20,7 +20,6 @@ import (
 	"github.com/Laisky/go-utils/v5/json"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -78,17 +77,17 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 }
 
 // findHTMLBody find html body recursively
-func findHTMLBody(n *html.Node) *html.Node {
-	if n.Type == html.ElementNode && n.Data == "body" {
-		return n
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if body := findHTMLBody(c); body != nil {
-			return body
-		}
-	}
-	return nil
-}
+// func findHTMLBody(n *html.Node) *html.Node {
+// 	if n.Type == html.ElementNode && n.Data == "body" {
+// 		return n
+// 	}
+// 	for c := n.FirstChild; c != nil; c = c.NextSibling {
+// 		if body := findHTMLBody(c); body != nil {
+// 			return body
+// 		}
+// 	}
+// 	return nil
+// }
 
 var webSearchQueryPrompt = gutils.Dedent(`
 	Do not directly answer the user's question, but rather analyze the

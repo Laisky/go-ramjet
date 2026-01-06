@@ -190,35 +190,35 @@ var (
 	regexpHref = regexp.MustCompile(`href="([^"]*)"`)
 )
 
-func _googleExtractor(n *html.Node) (ok bool, urls []string, err error) {
-	if n.Type == html.ElementNode && n.Data == "div" {
-		for _, attr := range n.Attr {
-			if attr.Key == "id" && attr.Val == "search" {
-				var buf bytes.Buffer
-				if err = html.Render(&buf, n); err != nil {
-					return false, nil, errors.WithStack(err)
-				}
+// func _googleExtractor(n *html.Node) (ok bool, urls []string, err error) {
+// 	if n.Type == html.ElementNode && n.Data == "div" {
+// 		for _, attr := range n.Attr {
+// 			if attr.Key == "id" && attr.Val == "search" {
+// 				var buf bytes.Buffer
+// 				if err = html.Render(&buf, n); err != nil {
+// 					return false, nil, errors.WithStack(err)
+// 				}
 
-				matches := regexpHref.FindAllStringSubmatch(buf.String(), -1)
-				for _, match := range matches {
-					urls = append(urls, match[1])
-				}
+// 				matches := regexpHref.FindAllStringSubmatch(buf.String(), -1)
+// 				for _, match := range matches {
+// 					urls = append(urls, match[1])
+// 				}
 
-				return true, urls, nil
-			}
-		}
-	}
+// 				return true, urls, nil
+// 			}
+// 		}
+// 	}
 
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if ok, urls, err = _googleExtractor(c); err != nil {
-			return false, nil, errors.WithStack(err)
-		} else if ok {
-			return true, urls, nil
-		}
-	}
+// 	for c := n.FirstChild; c != nil; c = c.NextSibling {
+// 		if ok, urls, err = _googleExtractor(c); err != nil {
+// 			return false, nil, errors.WithStack(err)
+// 		} else if ok {
+// 			return true, urls, nil
+// 		}
+// 	}
 
-	return false, nil, nil
-}
+// 	return false, nil, nil
+// }
 
 func _extractHtmlBody(body io.Reader) (bodyContent []byte, err error) {
 	doc, err := html.Parse(body)
