@@ -60,6 +60,7 @@ export interface SessionConfig {
   sync_key?: string
   session_name?: string
   session_visible?: boolean
+  updated_at?: number
 }
 
 export interface ChatSwitch {
@@ -133,6 +134,7 @@ export const DefaultSessionConfig: SessionConfig = {
   sync_key: '',
   session_name: 'Chat Session 1',
   session_visible: true,
+  updated_at: 0,
 }
 
 // Roles

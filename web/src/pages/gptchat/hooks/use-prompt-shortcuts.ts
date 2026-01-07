@@ -9,7 +9,16 @@ export function usePromptShortcuts(configLoading: boolean) {
   const [promptShortcuts, setPromptShortcuts] = useState<PromptShortcut[]>([])
 
   const loadPromptShortcuts = useCallback(async () => {
-    let shortcuts = await kvGet<PromptShortcut[]>(StorageKeys.PROMPT_SHORTCUTS)
+    const raw = await kvGet<
+      PromptShortcut[] | { data: PromptShortcut[]; updated_at: number }
+    >(StorageKeys.PROMPT_SHORTCUTS)
+
+    let shortcuts: PromptShortcut[] = []
+    if (Array.isArray(raw)) {
+      shortcuts = raw
+    } else if (raw && typeof raw === 'object' && Array.isArray(raw.data)) {
+      shortcuts = raw.data
+    }
 
     // If no shortcuts found (or empty array), use defaults
     if (!shortcuts || shortcuts.length === 0) {
@@ -40,7 +49,10 @@ export function usePromptShortcuts(configLoading: boolean) {
         updated = [...promptShortcuts, newShortcut]
       }
       setPromptShortcuts(updated)
-      await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
+      await kvSet(StorageKeys.PROMPT_SHORTCUTS, {
+        data: updated,
+        updated_at: Date.now(),
+      })
     },
     [promptShortcuts],
   )
@@ -51,7 +63,10 @@ export function usePromptShortcuts(configLoading: boolean) {
         s.name === oldName ? { name: newName, prompt: newPrompt } : s,
       )
       setPromptShortcuts(updated)
-      await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
+      await kvSet(StorageKeys.PROMPT_SHORTCUTS, {
+        data: updated,
+        updated_at: Date.now(),
+      })
     },
     [promptShortcuts],
   )
@@ -60,7 +75,10 @@ export function usePromptShortcuts(configLoading: boolean) {
     async (name: string) => {
       const updated = promptShortcuts.filter((s) => s.name !== name)
       setPromptShortcuts(updated)
-      await kvSet(StorageKeys.PROMPT_SHORTCUTS, updated)
+      await kvSet(StorageKeys.PROMPT_SHORTCUTS, {
+        data: updated,
+        updated_at: Date.now(),
+      })
     },
     [promptShortcuts],
   )

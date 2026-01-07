@@ -37,7 +37,10 @@ export function DatasetManager({ config }: DatasetManagerProps) {
 
   const handleDatasetKeyChange = useCallback(async (value: string) => {
     setDatasetKey(value)
-    await kvSet(StorageKeys.CUSTOM_DATASET_PASSWORD, value)
+    await kvSet(StorageKeys.CUSTOM_DATASET_PASSWORD, {
+      data: value,
+      updated_at: Date.now(),
+    })
   }, [])
 
   const refreshDatasets = useCallback(async () => {
@@ -164,10 +167,17 @@ export function DatasetManager({ config }: DatasetManagerProps) {
     let mounted = true
     ;(async () => {
       try {
-        const stored = await kvGet<string>(StorageKeys.CUSTOM_DATASET_PASSWORD)
+        const raw = await kvGet<string | { data: string; updated_at: number }>(
+          StorageKeys.CUSTOM_DATASET_PASSWORD,
+        )
+        const stored = typeof raw === 'string' ? raw : raw?.data || ''
+
         const key = stored && stored.length > 0 ? stored : randomString(16)
         if (!stored) {
-          await kvSet(StorageKeys.CUSTOM_DATASET_PASSWORD, key)
+          await kvSet(StorageKeys.CUSTOM_DATASET_PASSWORD, {
+            data: key,
+            updated_at: Date.now(),
+          })
         }
         if (mounted) {
           setDatasetKey(key)

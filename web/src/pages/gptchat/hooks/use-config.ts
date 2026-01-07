@@ -17,16 +17,30 @@ import {
   getSessionHistoryKey,
 } from '../utils/chat-storage'
 import {
+  applyUrlOverridesToConfig,
   DEFAULT_SESSION_ID,
   getActiveSessionId,
   getSessionConfigKey,
   normalizeConfigNumericFields,
-  applyUrlOverridesToConfig,
 } from '../utils/config-helpers'
 import {
   exportAllData as exportData,
   importAllData as importData,
 } from '../utils/data-sync'
+
+async function getSessionOrderFromKv(): Promise<number[]> {
+  const raw = await kvGet<number[] | { data: number[]; updated_at: number }>(
+    StorageKeys.SESSION_ORDER,
+  )
+  return Array.isArray(raw) ? raw : raw?.data || []
+}
+
+async function setSessionOrderToKv(order: number[]): Promise<void> {
+  await kvSet(StorageKeys.SESSION_ORDER, {
+    data: order,
+    updated_at: Date.now(),
+  })
+}
 
 /**
  * Hook for managing session configuration
@@ -48,8 +62,7 @@ export function useConfig() {
       k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
     )
 
-    const sessionOrder =
-      (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+    const sessionOrder = await getSessionOrderFromKv()
 
     // Sort keys by ID to keep order stable
     configKeys.sort((a, b) => {
@@ -251,6 +264,7 @@ export function useConfig() {
           ...config.chat_switch,
           ...(updates.chat_switch || {}),
         },
+        updated_at: Date.now(),
       }
 
       setConfigState(newConfig)
@@ -270,7 +284,7 @@ export function useConfig() {
    */
   const reorderSessions = useCallback(
     async (newOrder: number[]) => {
-      await kvSet(StorageKeys.SESSION_ORDER, newOrder)
+      await setSessionOrderToKv(newOrder)
       await loadSessions()
     },
     [loadSessions],
@@ -305,6 +319,7 @@ export function useConfig() {
           const newConf = {
             ...DefaultSessionConfig,
             session_name: `Chat Session ${newSessionId}`,
+            updated_at: Date.now(),
           }
           setConfigState(newConf)
           // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
@@ -342,15 +357,15 @@ export function useConfig() {
       const newConfig = {
         ...DefaultSessionConfig,
         session_name: name || `Chat Session ${newId}`,
+        updated_at: Date.now(),
       }
       await kvSet(key, newConfig)
 
       // Update session order
-      const sessionOrder =
-        (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+      const sessionOrder = await getSessionOrderFromKv()
       if (!sessionOrder.includes(newId)) {
         sessionOrder.push(newId)
-        await kvSet(StorageKeys.SESSION_ORDER, sessionOrder)
+        await setSessionOrderToKv(sessionOrder)
       }
 
       await loadSessions()
@@ -384,10 +399,10 @@ export function useConfig() {
       await kvDel(historyKey)
 
       // Update session order
-      const sessionOrder = await kvGet<number[]>(StorageKeys.SESSION_ORDER)
+      const sessionOrder = await getSessionOrderFromKv()
       if (sessionOrder) {
         const newOrder = sessionOrder.filter((id) => id !== targetSessionId)
-        await kvSet(StorageKeys.SESSION_ORDER, newOrder)
+        await setSessionOrderToKv(newOrder)
       }
 
       // If deleting current session, switch to session 1
@@ -426,6 +441,7 @@ export function useConfig() {
       const duplicatedConfig: SessionConfig = {
         ...sourceConfig,
         session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Copy`,
+        updated_at: Date.now(),
       }
 
       await kvSet(getSessionConfigKey(newSessionId), duplicatedConfig)
@@ -465,11 +481,10 @@ export function useConfig() {
       await kvSet(historyKey, duplicatedHistory)
 
       // Update session order
-      const sessionOrder =
-        (await kvGet<number[]>(StorageKeys.SESSION_ORDER)) || []
+      const sessionOrder = await getSessionOrderFromKv()
       if (!sessionOrder.includes(newSessionId)) {
         sessionOrder.push(newSessionId)
-        await kvSet(StorageKeys.SESSION_ORDER, sessionOrder)
+        await setSessionOrderToKv(sessionOrder)
       }
 
       await loadSessions()
@@ -498,12 +513,13 @@ export function useConfig() {
       api_token: preservedToken,
       api_base: preservedBase,
       session_name: DefaultSessionConfig.session_name,
+      updated_at: Date.now(),
     }
 
     await kvSet(getSessionConfigKey(DEFAULT_SESSION_ID), newConfig)
     await kvSet(getSessionHistoryKey(DEFAULT_SESSION_ID), [])
     await kvSet(StorageKeys.SELECTED_SESSION, DEFAULT_SESSION_ID)
-    await kvSet(StorageKeys.SESSION_ORDER, [DEFAULT_SESSION_ID])
+    await setSessionOrderToKv([DEFAULT_SESSION_ID])
 
     setSessionId(DEFAULT_SESSION_ID)
     setConfigState(newConfig)
@@ -530,6 +546,7 @@ export function useConfig() {
       }
 
       conf.session_name = newName
+      conf.updated_at = Date.now()
       await kvSet(key, conf)
 
       // If it's the current session, update state too
@@ -554,6 +571,7 @@ export function useConfig() {
       }
 
       conf.session_visible = visible
+      conf.updated_at = Date.now()
       await kvSet(key, conf)
 
       // If it's the current session, update state too

@@ -274,7 +274,21 @@ export async function importAllData(
     if (key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX)) continue
     if (key === StorageKeys.SELECTED_SESSION) continue
 
-    await kvSet(key, val)
+    const localVal = await kvGet<any>(key)
+    if (
+      localVal &&
+      typeof localVal === 'object' &&
+      val &&
+      typeof val === 'object'
+    ) {
+      const localTs = localVal.updated_at || 0
+      const cloudTs = (val as any).updated_at || 0
+      if (cloudTs >= localTs) {
+        await kvSet(key, val)
+      }
+    } else {
+      await kvSet(key, val)
+    }
   }
 
   // No automatic reload here; callers can choose when to refresh the UI.
