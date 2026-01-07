@@ -148,7 +148,7 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		return nil, errors.New("empty frontend request")
 	}
 
-	concise := "concise"
+	reasoningSummary := "auto"
 	req := &OpenAIResponsesReq{
 		Model:           frontendReq.Model,
 		MaxOutputTokens: frontendReq.MaxTokens,
@@ -161,7 +161,7 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 	if frontendReq.ReasoningEffort != "" {
 		req.Reasoning = &OpenAIResponseReasoning{
 			Effort:  &frontendReq.ReasoningEffort,
-			Summary: &concise,
+			Summary: &reasoningSummary,
 		}
 	}
 
