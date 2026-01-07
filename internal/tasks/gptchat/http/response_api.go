@@ -148,6 +148,7 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		return nil, errors.New("empty frontend request")
 	}
 
+	concise := "concise"
 	req := &OpenAIResponsesReq{
 		Model:           frontendReq.Model,
 		MaxOutputTokens: frontendReq.MaxTokens,
@@ -156,7 +157,8 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		TopP:            frontendReq.TopP,
 		ToolChoice:      frontendReq.ToolChoice,
 		Reasoning: &OpenAIResponseReasoning{
-			Effort: &frontendReq.ReasoningEffort,
+			Effort:  &frontendReq.ReasoningEffort,
+			Summary: &concise,
 		},
 	}
 
@@ -552,4 +554,60 @@ func extractOutputTextFromResponses(resp *OpenAIResponsesResp) string {
 	}
 
 	return strings.Join(texts, "")
+}
+
+// extractReasoningFromResponses extracts reasoning text from output items.
+func extractReasoningFromResponses(resp *OpenAIResponsesResp) string {
+	if resp == nil {
+		return ""
+	}
+
+	var reasoning []string
+	for _, item := range resp.Output {
+		switch item.Type {
+		case "reasoning":
+			var rItem struct {
+				Summary []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"summary"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if err := stdjson.Unmarshal(item.Raw(), &rItem); err == nil {
+				for _, c := range rItem.Summary {
+					if strings.TrimSpace(c.Text) != "" {
+						reasoning = append(reasoning, c.Text)
+					}
+				}
+				for _, c := range rItem.Content {
+					if strings.TrimSpace(c.Text) != "" {
+						reasoning = append(reasoning, c.Text)
+					}
+				}
+			}
+		case "message":
+			var msg struct {
+				Role    string `json:"role"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if err := stdjson.Unmarshal(item.Raw(), &msg); err == nil {
+				if strings.ToLower(strings.TrimSpace(msg.Role)) == "assistant" {
+					for _, c := range msg.Content {
+						// Some models use "thought" or "reasoning_text"
+						if (c.Type == "reasoning_text" || c.Type == "thought") && strings.TrimSpace(c.Text) != "" {
+							reasoning = append(reasoning, c.Text)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return strings.Join(reasoning, "\n")
 }

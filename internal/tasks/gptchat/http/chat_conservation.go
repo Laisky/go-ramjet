@@ -25,10 +25,10 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 		return
 	}
 
-	go saveLLMConservation(freq, req.Response)
+	go saveLLMConservation(freq, req.Response, req.Reasoning)
 }
 
-func saveLLMConservation(req *FrontendReq, respContent string) {
+func saveLLMConservation(req *FrontendReq, respContent string, reasoning string) {
 	logger := log.Logger.Named("save_llm")
 
 	if req == nil {
@@ -59,6 +59,7 @@ func saveLLMConservation(req *FrontendReq, respContent string) {
 		Model:      req.Model,
 		MaxTokens:  req.MaxTokens,
 		Completion: respContent,
+		Reasoning:  reasoning,
 	}
 	for _, msg := range req.Messages {
 		docu.Prompt = append(docu.Prompt, db.OpenaiMessage{

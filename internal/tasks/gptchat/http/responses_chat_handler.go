@@ -61,7 +61,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 					_ = reservation.Finalize(gmw.Ctx(ctx), CountTextTokens(finalText))
 				}
 				clearTokenReservation(ctx)
-				return writeFinalToUI(ctx, frontendReq, nil, finalText, nil)
+				return writeFinalToUI(ctx, frontendReq, nil, finalText, "", nil)
 			}
 		}
 	}
@@ -72,6 +72,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 		return err
 	}
 	thinkingSteps := make([]string, 0, 8)
+	var fullReasoning string
 
 	var lastUpstreamHeader http.Header
 	var finalText string
@@ -89,6 +90,19 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 		if callErr != nil {
 			web.AbortErr(ctx, callErr)
 			return callErr
+		}
+
+		// Extract reasoning and emit it immediately for streaming.
+		if reasoning := extractReasoningFromResponses(resp); reasoning != "" {
+			fullReasoning += reasoning
+			thinkingSteps = append(thinkingSteps, reasoning)
+			if frontendReq.Stream {
+				requestID := lastUpstreamHeader.Get("x-oneapi-request-id")
+				if requestID == "" {
+					requestID = lastUpstreamHeader.Get("x-request-id")
+				}
+				emitThinkingDelta(ctx, true, requestID, reasoning)
+			}
 		}
 
 		calls, extractErr := extractFunctionCallsFromResponses(resp)
@@ -153,12 +167,12 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	}
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
 		if frontendReq != nil && len(frontendReq.Messages) > 0 && finalText != "" {
-			go saveLLMConservation(frontendReq, finalText)
+			go saveLLMConservation(frontendReq, finalText, fullReasoning)
 		}
 	}
 
 	logger.Debug("responses chat completed", zap.Int("chars", len(finalText)))
-	return writeFinalToUI(ctx, frontendReq, lastUpstreamHeader, finalText, thinkingSteps)
+	return writeFinalToUI(ctx, frontendReq, lastUpstreamHeader, finalText, fullReasoning, thinkingSteps)
 }
 
 func writeFinalToUI(
@@ -166,6 +180,7 @@ func writeFinalToUI(
 	frontendReq *FrontendReq,
 	upstreamHeader http.Header,
 	finalText string,
+	reasoningText string,
 	thinkingSteps []string,
 ) error {
 	if frontendReq == nil {
@@ -217,16 +232,18 @@ func writeFinalToUI(
 		Model:  frontendReq.Model,
 		Choices: []struct {
 			Message struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			}
+				Role             string `json:"role"`
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content,omitempty"`
+			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 			Index        int    `json:"index"`
 		}{{
 			Message: struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			}{Role: "assistant", Content: finalText},
+				Role             string `json:"role"`
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content,omitempty"`
+			}{Role: "assistant", Content: finalText, ReasoningContent: reasoningText},
 			FinishReason: "stop",
 			Index:        0,
 		}},

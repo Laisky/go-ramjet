@@ -16,6 +16,7 @@ type OpenaiConservation struct {
 	MaxTokens  uint               `bson:"max_tokens" json:"max_tokens"`
 	Prompt     []OpenaiMessage    `bson:"prompt" json:"prompt"`
 	Completion string             `bson:"completion" json:"completion"`
+	Reasoning  string             `bson:"reasoning,omitempty" json:"reasoning,omitempty"`
 }
 
 // Price how many quotes for 1 usd

@@ -47,6 +47,7 @@ type LLMConservationReq struct {
 	MaxTokens uint                 `json:"max_tokens" binding:"required,min=1"`
 	Messages  []FrontendReqMessage `json:"messages" binding:"required,min=1"`
 	Response  string               `json:"response" binding:"required,min=1"`
+	Reasoning string               `json:"reasoning,omitempty"`
 }
 
 // FrontendReq request from frontend
@@ -328,9 +329,10 @@ type OpenaiCompletionResp struct {
 	} `json:"usage"`
 	Choices []struct {
 		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		}
+			Role             string `json:"role"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content,omitempty"`
+		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 		Index        int    `json:"index"`
 	} `json:"choices"`

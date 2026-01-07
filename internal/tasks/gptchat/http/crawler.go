@@ -186,9 +186,9 @@ func webSearch(ctx context.Context, query string, user *config.UserConfig) (resu
 	return result, nil
 }
 
-var (
-	regexpHref = regexp.MustCompile(`href="([^"]*)"`)
-)
+// var (
+// 	regexpHref = regexp.MustCompile(`href="([^"]*)"`)
+// )
 
 // func _googleExtractor(n *html.Node) (ok bool, urls []string, err error) {
 // 	if n.Type == html.ElementNode && n.Data == "div" {

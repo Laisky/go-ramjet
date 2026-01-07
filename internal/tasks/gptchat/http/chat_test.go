@@ -225,7 +225,7 @@ func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
 }
 
 func TestSaveLLMConservationNilReq(t *testing.T) {
-	require.NotPanics(t, func() { saveLLMConservation(nil, "response") })
+	require.NotPanics(t, func() { saveLLMConservation(nil, "response", "") })
 }
 
 func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
