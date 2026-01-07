@@ -156,10 +156,13 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		Temperature:     frontendReq.Temperature,
 		TopP:            frontendReq.TopP,
 		ToolChoice:      frontendReq.ToolChoice,
-		Reasoning: &OpenAIResponseReasoning{
+	}
+
+	if frontendReq.ReasoningEffort != "" {
+		req.Reasoning = &OpenAIResponseReasoning{
 			Effort:  &frontendReq.ReasoningEffort,
 			Summary: &concise,
-		},
+		}
 	}
 
 	if req.Model == "" {
