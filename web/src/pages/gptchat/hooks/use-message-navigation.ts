@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessageData } from '../types'
 
 interface UseMessageNavigationOptions {
@@ -14,6 +14,7 @@ export function useMessageNavigation({
   sessionId,
 }: UseMessageNavigationOptions) {
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(-1)
+  const isKeyboardSelectRef = useRef(false)
 
   // Reset selection when session changes or messages length changes
   useEffect(() => {
@@ -46,6 +47,7 @@ export function useMessageNavigation({
   }, [displayedMessages])
 
   const handleMessageSelect = useCallback((index: number) => {
+    isKeyboardSelectRef.current = false
     setSelectedMessageIndex((prev) => (prev === index ? -1 : index))
   }, [])
 
@@ -67,6 +69,7 @@ export function useMessageNavigation({
 
         e.preventDefault()
         setSelectedMessageIndex((prev) => {
+          isKeyboardSelectRef.current = true
           if (prev === -1) {
             const visibleIdx = findFirstVisibleMessageIndex()
             return visibleIdx >= 0 ? visibleIdx : displayedMessages.length - 1
@@ -84,6 +87,7 @@ export function useMessageNavigation({
 
         e.preventDefault()
         setSelectedMessageIndex((prev) => {
+          isKeyboardSelectRef.current = true
           if (prev === -1) {
             const visibleIdx = findFirstVisibleMessageIndex()
             return visibleIdx >= 0 ? visibleIdx : 0
@@ -104,7 +108,8 @@ export function useMessageNavigation({
   useEffect(() => {
     if (
       selectedMessageIndex >= 0 &&
-      selectedMessageIndex < displayedMessages.length
+      selectedMessageIndex < displayedMessages.length &&
+      isKeyboardSelectRef.current
     ) {
       const msg = displayedMessages[selectedMessageIndex]
       const el = document.getElementById(
