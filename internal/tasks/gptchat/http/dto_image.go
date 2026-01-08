@@ -18,16 +18,25 @@ type OpenaiCreateImageRequest struct {
 }
 
 // NewOpenaiCreateImageRequest create new request
-func NewOpenaiCreateImageRequest(prompt string) *OpenaiCreateImageRequest {
+func NewOpenaiCreateImageRequest(prompt string, n int) *OpenaiCreateImageRequest {
 	return &OpenaiCreateImageRequest{
 		Model:  "dall-e-3",
 		Prompt: prompt,
-		N:      1,
+		N:      n,
 		Size:   "1024x1024",
 		// Quality:        "hd",  // price double
 		ResponseFormat: "b64_json",
 		Style:          "vivid",
 	}
+}
+
+// OpenaiCreateImageEditRequest request to openai image edit api
+type OpenaiCreateImageEditRequest struct {
+	Model          string `json:"model,omitempty"`
+	Prompt         string `json:"prompt"`
+	N              int    `json:"n,omitempty"`
+	Size           string `json:"size,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
 }
 
 // OpenaiCreateImageResponse return from openai image api
@@ -52,6 +61,8 @@ type AzureCreateImageResponse struct {
 type DrawImageByTextRequest struct {
 	Prompt string `json:"prompt" binding:"required,min=1"`
 	Model  string `json:"model" binding:"required,min=1"`
+	N      int    `json:"n"`
+	Size   string `json:"size"`
 }
 
 // DrawImageByFluxSegmind is request to draw image by flux schnell

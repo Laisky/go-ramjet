@@ -3,9 +3,11 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"image"
 	"image/png"
+	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -15,6 +17,7 @@ import (
 	"golang.org/x/image/webp"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 )
 
@@ -49,6 +52,52 @@ func drawImageByImageObjkeyPrefix(taskid string) string {
 	return fmt.Sprintf("image-by-image/%s/%s/%s", year, month, taskid)
 }
 
+// isImageModel check if model is an image generation model
+func isImageModel(model string) bool {
+	switch model {
+	case "dall-e-3", "dall-e-2", "gpt-image-1", "sdxl-turbo",
+		"google/imagen-3", "google/imagen-3-fast":
+		return true
+	}
+
+	if strings.Contains(model, "flux") {
+		return true
+	}
+
+	return false
+}
+
+// GetImageModelPrice get price for image model
+func GetImageModelPrice(model string) db.Price {
+	switch model {
+	case "flux-dev", "black-forest-labs/flux-dev":
+		return db.PriceTxt2ImageFluxDev
+	case "flux-schnell", "black-forest-labs/flux-schnell":
+		return db.PriceTxt2ImageSchnell
+	case "flux-pro", "black-forest-labs/flux-pro":
+		return db.PriceTxt2ImageFluxPro
+	case "flux-fill-pro", "black-forest-labs/flux-fill-pro":
+		return db.PriceTxt2ImageFluxFillPro
+	case "flux-1.1-pro", "black-forest-labs/flux-1.1-pro":
+		return db.PriceTxt2ImageFluxPro11
+	case "flux-kontext-pro", "black-forest-labs/flux-kontext-pro":
+		return db.PriceTxt2ImageFluxKontextPro
+	case "flux-1.1-pro-ultra", "black-forest-labs/flux-1.1-pro-ultra":
+		return db.PriceTxt2ImageFluxProUltra11
+	default:
+		return db.PriceTxt2Image
+	}
+}
+
+// DecodeBase64 decode base64 string, handle data:...;base64, prefix
+func DecodeBase64(input string) ([]byte, error) {
+	if i := strings.Index(input, ","); i != -1 {
+		input = input[i+1:]
+	}
+
+	return base64.StdEncoding.DecodeString(input)
+}
+
 func uploadImage2Minio(ctx context.Context,
 	objkeyPrefix,
 	prompt string,
@@ -74,6 +123,20 @@ func uploadImage2Minio(ctx context.Context,
 			},
 		}); err != nil {
 		return errors.Wrap(err, "upload image")
+	}
+
+	// also upload prompt as a separate text file
+	promptObjkey := objkeyPrefix + ".prompt.txt"
+	if _, err := s3cli.PutObject(ctx,
+		config.Config.S3.Bucket,
+		promptObjkey,
+		strings.NewReader(prompt),
+		int64(len(prompt)),
+		minio.PutObjectOptions{
+			ContentType: "text/plain",
+		}); err != nil {
+		logger.Error("upload prompt text file", zap.Error(err))
+		// don't return error here, as the image is already uploaded
 	}
 
 	logger.Debug("succeed upload image to s3", zap.String("objkey", objkey))

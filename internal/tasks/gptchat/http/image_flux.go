@@ -97,93 +97,92 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 		return
 	}
 
-	go func() {
-		logger.Debug("start image drawing task")
-		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
-		defer cancel()
+	logger.Debug("start image drawing task")
+	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
+	defer cancel()
 
-		var pool errgroup.Group
-		anySucceed := int32(0)
-		for i := range nImage {
-			i := i
+	var pool errgroup.Group
+	anySucceed := int32(0)
+	for i := range nImage {
+		i := i
 
-			pool.Go(func() (err error) {
-				logger := logger.With(zap.Int("n_img", i))
-				taskCtx := gmw.SetLogger(taskCtx, logger)
+		pool.Go(func() (err error) {
+			logger := logger.With(zap.Int("n_img", i))
+			taskCtx := gmw.SetLogger(taskCtx, logger)
 
-				var imgContent []byte
-				switch r := req.(type) {
-				case *DrawImageByFluxReplicateRequest:
-					imgContent, err = drawFluxByReplicate(taskCtx, model, r)
-				case *InpaintingImageByFlusReplicateRequest:
-					imgContent, err = inpaitingFluxByReplicate(taskCtx, model, r)
-				default:
-					err = errors.Errorf("unknown request type %T", req)
-				}
-				if err != nil {
-					return errors.WithStack(err)
-				}
-
-				if err := checkUserExternalBilling(taskCtx,
-					user, price, "txt2image:"+model); err != nil {
-					return errors.Wrapf(err, "check user external billing for %d image", i)
-				}
-				atomic.AddInt32(&anySucceed, 1)
-				return uploadImage2Minio(taskCtx,
-					fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
-					prompt,
-					imgContent,
-					imgExt,
-				)
-			})
-		}
-
-		err = pool.Wait()
-		if err != nil {
-			// upload error msg
-			msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
-				prompt, err.Error()))
-			objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-			s3cli, errS3 := s3.GetCli()
-			if errS3 != nil {
-				logger.Error("get s3 client", zap.Error(errS3))
+			var imgContent []byte
+			switch r := req.(type) {
+			case *DrawImageByFluxReplicateRequest:
+				imgContent, err = drawFluxByReplicate(taskCtx, model, r)
+			case *InpaintingImageByFlusReplicateRequest:
+				imgContent, err = inpaitingFluxByReplicate(taskCtx, model, r)
+			default:
+				err = errors.Errorf("unknown request type %T", req)
+			}
+			if err != nil {
+				return errors.WithStack(err)
 			}
 
-			if _, errS3 := s3cli.PutObject(taskCtx,
-				config.Config.S3.Bucket,
-				objkey,
-				bytes.NewReader(msg),
-				int64(len(msg)),
-				minio.PutObjectOptions{
-					ContentType: "text/plain",
-				}); errS3 != nil {
-				logger.Error("upload error msg", zap.Error(errS3))
+			if err := checkUserExternalBilling(taskCtx,
+				user, price, "txt2image:"+model); err != nil {
+				return errors.Wrapf(err, "check user external billing for %d image", i)
 			}
-
-			logger.Error("failed to draw some images",
-				zap.Int("required", nImage),
-				zap.Int32("succeed", anySucceed),
-				zap.String("objkey", objkey),
-				zap.Error(err),
+			atomic.AddInt32(&anySucceed, 1)
+			return uploadImage2Minio(taskCtx,
+				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
+				prompt,
+				imgContent,
+				imgExt,
 			)
-			return
+		})
+	}
+
+	err = pool.Wait()
+	if err != nil {
+		// upload error msg
+		msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s",
+			prompt, err.Error()))
+		objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
+		s3cli, errS3 := s3.GetCli()
+		if errS3 != nil {
+			logger.Error("get s3 client", zap.Error(errS3))
 		}
 
-		logger.Info("succeed draw image done")
-	}()
+		if _, errS3 := s3cli.PutObject(taskCtx,
+			config.Config.S3.Bucket,
+			objkey,
+			bytes.NewReader(msg),
+			int64(len(msg)),
+			minio.PutObjectOptions{
+				ContentType: "text/plain",
+			}); errS3 != nil {
+			logger.Error("upload error msg", zap.Error(errS3))
+		}
+
+		web.AbortErr(ctx, errors.Wrapf(err, "failed to draw %d images, succeed %d, objkey %s",
+			nImage, anySucceed, objkey))
+		return
+	}
+
+	logger.Info("succeed draw image done")
 
 	var imgUrls []string
+	var openaiData []gin.H
 	for i := 0; i < nImage; i++ {
-		imgUrls = append(imgUrls, fmt.Sprintf("https://%s/%s/%s-%d%s",
+		url := fmt.Sprintf("https://%s/%s/%s-%d%s",
 			config.Config.S3.Endpoint,
 			config.Config.S3.Bucket,
 			drawImageByTxtObjkeyPrefix(taskID), i, imgExt,
-		))
+		)
+		imgUrls = append(imgUrls, url)
+		openaiData = append(openaiData, gin.H{"url": url})
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"task_id":    taskID,
 		"image_urls": imgUrls,
+		"created":    time.Now().Unix(),
+		"data":       openaiData,
 	})
 }
 

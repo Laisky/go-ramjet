@@ -444,29 +444,19 @@ export async function editImageWithMask(
     prompt: string
     image: string
     mask: string
-    steps?: number
-    guidance?: number
-    safety_tolerance?: number
-    prompt_upsampling?: boolean
   },
   apiToken: string,
   apiBase?: string,
 ): Promise<ImageEditResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
   const body = {
-    input: {
-      prompt: payload.prompt,
-      image: payload.image,
-      mask: payload.mask,
-      seed: Date.now(),
-      steps: payload.steps ?? 30,
-      guidance: payload.guidance ?? 3,
-      safety_tolerance: payload.safety_tolerance ?? 5,
-      prompt_upsampling: payload.prompt_upsampling ?? false,
-    },
+    prompt: payload.prompt,
+    image: payload.image,
+    mask: payload.mask,
+    model,
   }
 
-  const response = await fetch(`${API_BASE}/images/edit/flux/${model}`, {
+  const response = await fetch(`${API_BASE}/images/edits`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

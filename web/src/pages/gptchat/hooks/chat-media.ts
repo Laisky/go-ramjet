@@ -6,6 +6,7 @@ import {
 
 import { editImageWithMask } from '@/utils/api'
 
+import { ImageModelFluxSchnell, isImageModel } from '../models'
 import { type ChatMessageData, type SessionConfig } from '../types'
 
 export interface MaskPair {
@@ -62,7 +63,17 @@ export async function runMaskInpainting({
     model: config.selected_model,
     timestamp: Date.now(),
   }
-  setMessages((prev) => [...prev, assistantMessage])
+  setMessages((prev) => {
+    const existing = prev.find(
+      (m) => m.chatID === chatId && m.role === 'assistant',
+    )
+    if (existing) {
+      return prev.map((m) =>
+        m.chatID === chatId && m.role === 'assistant' ? assistantMessage : m,
+      )
+    }
+    return [...prev, assistantMessage]
+  })
 
   try {
     const [imageDataUrl, maskDataUrl] = await Promise.all([
@@ -71,7 +82,7 @@ export async function runMaskInpainting({
     ])
 
     const resp = await editImageWithMask(
-      'flux-fill-pro',
+      config.selected_model,
       {
         prompt: prompt.trim(),
         image: imageDataUrl,
@@ -131,20 +142,35 @@ export async function runImageModelFlow({
   setIsLoading(true)
   currentChatIdRef.current = chatId
 
+  let selectedModel = config.selected_model
+  if (!isImageModel(selectedModel) && config.chat_switch.all_in_one) {
+    selectedModel = ImageModelFluxSchnell
+  }
+
   const assistantMessage: ChatMessageData = {
     chatID: chatId,
     role: 'assistant',
     content: 'Generating image...',
-    model: config.selected_model,
+    model: selectedModel,
     timestamp: Date.now(),
   }
-  setMessages((prev) => [...prev, assistantMessage])
+  setMessages((prev) => {
+    const existing = prev.find(
+      (m) => m.chatID === chatId && m.role === 'assistant',
+    )
+    if (existing) {
+      return prev.map((m) =>
+        m.chatID === chatId && m.role === 'assistant' ? assistantMessage : m,
+      )
+    }
+    return [...prev, assistantMessage]
+  })
 
   try {
     const { generateImage } = await import('@/utils/api')
     const resp = await generateImage(
       {
-        model: config.selected_model,
+        model: selectedModel,
         prompt,
         n: config.chat_switch.draw_n_images,
         size: '1024x1024',

@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"math/rand"
@@ -108,8 +107,7 @@ func DrawByLcmHandler(ctx *gin.Context) {
 					return errors.New("empty response")
 				}
 
-				img, err := base64.StdEncoding.DecodeString(
-					strings.TrimPrefix(respBody.Data[0], "data:image/png;base64,"))
+				img, err := DecodeBase64(respBody.Data[0])
 				if err != nil {
 					return errors.Wrap(err, "decode image")
 				}

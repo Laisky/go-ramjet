@@ -3,12 +3,10 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -93,7 +91,7 @@ func DrawBySdxlturboHandlerByNvidia(ctx *gin.Context) {
 				return errors.New("empty response")
 			}
 
-			imgcontent, err := base64.StdEncoding.DecodeString(respData.Artifacts[0].Base64)
+			imgcontent, err := DecodeBase64(respData.Artifacts[0].Base64)
 			if err != nil {
 				return errors.Wrap(err, "decode image")
 			}
@@ -224,7 +222,7 @@ func DrawBySdxlturboHandlerBySelfHosted(ctx *gin.Context) {
 			var pool errgroup.Group
 			for i, img := range respData.B64Images {
 				subtask := strconv.Itoa(i)
-				imgBytes, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(img, "data:image/png;base64,"))
+				imgBytes, err := DecodeBase64(img)
 				if err != nil {
 					return errors.Wrap(err, "decode image")
 				}

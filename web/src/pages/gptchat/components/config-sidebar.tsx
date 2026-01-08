@@ -213,6 +213,32 @@ export function ConfigSidebar({
             </div>
           </div>
 
+          {/* N Images */}
+          <div>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+              <span>N Images</span>
+              <span className="text-muted-foreground">
+                {config.chat_switch.draw_n_images}
+              </span>
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={4}
+              step={1}
+              value={config.chat_switch.draw_n_images}
+              onChange={(e) =>
+                onConfigChange({
+                  chat_switch: {
+                    ...config.chat_switch,
+                    draw_n_images: parseInt(e.target.value, 10),
+                  },
+                })
+              }
+              className="w-full"
+            />
+          </div>
+
           {/* Context Count */}
           <div>
             <label className="mb-1 flex items-center justify-between text-sm font-medium">

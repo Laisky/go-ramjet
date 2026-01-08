@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { transcribeAudio } from '@/utils/api'
 import { cn } from '@/utils/cn'
+import { useUser } from '../hooks/use-user'
+import { isImageModel } from '../models'
 import type { SessionConfig } from '../types'
 import { AttachmentTag } from './attachment-tag'
 import { ImageEditorModal, type ImageEditorResult } from './image-editor-modal'
@@ -52,6 +54,8 @@ export function ChatInput({
   draftMessage,
   onDraftChange,
 }: ChatInputProps) {
+  const { user } = useUser(config.api_token)
+  const isFree = user?.is_free ?? true
   const [message, setMessage] = useState(() => draftMessage ?? '')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [isRecording, setIsRecording] = useState(false)
@@ -488,6 +492,31 @@ export function ChatInput({
             label="Voice"
             title="Enable voice mode"
           />
+
+          {(isImageModel(config.selected_model) ||
+            config.chat_switch.all_in_one) && (
+            <div className="flex items-center gap-1 rounded-md bg-muted px-2 py-1">
+              <span className="text-[10px] sm:text-[11px] font-medium">
+                Images:
+              </span>
+              <select
+                value={config.chat_switch.draw_n_images}
+                onChange={(e) =>
+                  onConfigChange?.({
+                    draw_n_images: parseInt(e.target.value, 10),
+                  })
+                }
+                disabled={isFree}
+                className="cursor-pointer bg-transparent text-[11px] focus:outline-none disabled:cursor-not-allowed"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
             {isTranscribing && !isRecording && (

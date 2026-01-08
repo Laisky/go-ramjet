@@ -250,7 +250,8 @@ export function ChatMessage({
         <div className="space-y-1">
           <div
             className={cn(
-              'sticky top-12 z-10 -mx-2 -mt-1.5 mb-1 flex flex-wrap items-center gap-2 rounded-t-md bg-inherit px-2 py-1.5 text-xs backdrop-blur-sm transition-all',
+              isAssistant && 'sticky top-12 z-10 backdrop-blur-sm',
+              'mb-2 -mx-2 -mt-1.5 flex flex-wrap items-center gap-2 rounded-t-md bg-inherit border-b border-border/10 px-2 py-1.5 text-xs transition-all',
             )}
           >
             <div
@@ -358,9 +359,14 @@ export function ChatMessage({
           {isUser ? (
             <div className="space-y-2">
               {message.content && (
-                <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
+                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground opacity-90">
                   {message.content}
-                </Markdown>
+                </div>
+              )}
+              {!message.content && message.attachments?.length && (
+                <div className="text-[11px] text-muted-foreground italic">
+                  Image prompt
+                </div>
               )}
               {message.attachments && message.attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -404,7 +410,7 @@ export function ChatMessage({
               )}
             </div>
           ) : message.content ? (
-            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base">
+            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base text-foreground">
               {message.content}
             </Markdown>
           ) : isStreaming ? (

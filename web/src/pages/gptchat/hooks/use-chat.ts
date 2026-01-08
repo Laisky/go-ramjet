@@ -464,9 +464,46 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
+      if (isDeepResearchModel()) {
+        await runDeepResearch({
+          chatId,
+          prompt: userMsg.content,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          deepResearchAbortRef,
+          currentChatIdRef,
+        })
+        return
+      }
+
+      if (isImageModel(config.selected_model)) {
+        await runImageModelFlow({
+          chatId,
+          prompt: userMsg.content,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          currentChatIdRef,
+        })
+        return
+      }
+
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
-    [config, messages, streamAssistantReply],
+    [
+      config,
+      messages,
+      isDeepResearchModel,
+      runDeepResearch,
+      runImageModelFlow,
+      saveMessage,
+      streamAssistantReply,
+    ],
   )
 
   /**
@@ -551,9 +588,46 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
+      if (isDeepResearchModel()) {
+        await runDeepResearch({
+          chatId,
+          prompt: trimmed,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          deepResearchAbortRef,
+          currentChatIdRef,
+        })
+        return
+      }
+
+      if (isImageModel(config.selected_model)) {
+        await runImageModelFlow({
+          chatId,
+          prompt: trimmed,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          currentChatIdRef,
+        })
+        return
+      }
+
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
-    [config, messages, saveMessage, streamAssistantReply],
+    [
+      config,
+      messages,
+      isDeepResearchModel,
+      runDeepResearch,
+      runImageModelFlow,
+      saveMessage,
+      streamAssistantReply,
+    ],
   )
 
   return {
