@@ -54,17 +54,16 @@ func drawImageByImageObjkeyPrefix(taskid string) string {
 
 // isImageModel check if model is an image generation model
 func isImageModel(model string) bool {
-	switch model {
-	case "dall-e-3", "dall-e-2", "gpt-image-1", "sdxl-turbo",
-		"google/imagen-3", "google/imagen-3-fast":
+	switch {
+	case strings.Contains(model, "flux-"),
+		strings.Contains(model, "dall-e-"),
+		strings.Contains(model, "sdxl-"),
+		strings.Contains(model, "gpt-image-"),
+		strings.Contains(model, "imagen-"):
 		return true
+	default:
+		return false
 	}
-
-	if strings.Contains(model, "flux") {
-		return true
-	}
-
-	return false
 }
 
 // GetImageModelPrice get price for image model

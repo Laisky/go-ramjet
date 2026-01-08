@@ -59,8 +59,8 @@ export const ImageModelFluxPro11 = 'black-forest-labs/flux-1.1-pro'
 export const ImageModelFluxKontextPro = 'black-forest-labs/flux-kontext-pro'
 export const ImageModelFluxProUltra11 = 'black-forest-labs/flux-1.1-pro-ultra'
 export const ImageModelFluxSchnell = 'black-forest-labs/flux-schnell'
-export const ImageModelImagen3 = 'imagen-3.0'
-export const ImageModelImagen3Fast = 'imagen-3.0-fast'
+export const ImageModelImagen3 = 'imagen-3.0-generate-002'
+export const ImageModelImagen3Fast = 'imagen-3.0-fast-generate-001'
 
 // Completion models
 export const CompletionModelDavinci3 = 'text-davinci-003'
