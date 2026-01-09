@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v6"
+	gutils "github.com/Laisky/go-utils/v5"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
@@ -307,7 +310,7 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 		return nil, "", errors.Errorf("no content found by chromedp for %q", url)
 	}
 
-	bodyContent, markdownText, err := ExtractHTMLBody(ctx, content, apiKey, outputMarkdown)
+	bodyContent, markdownText, err := ExtractHTMLBody(ctx, url, content, apiKey, outputMarkdown)
 	if err != nil {
 		log.Logger.Warn("extract html body", zap.Error(err))
 		return content, "", nil
@@ -337,7 +340,7 @@ func findHTMLBody(n *html.Node) *html.Node {
 }
 
 // ExtractHTMLBody extract body from html
-func ExtractHTMLBody(ctx context.Context, content []byte, apiKey string, outputMarkdown bool) (bodyContent []byte, markdown string, err error) {
+func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiKey string, outputMarkdown bool) (bodyContent []byte, markdown string, err error) {
 	parsedHTML, err := html.Parse(bytes.NewReader(content))
 	if err != nil {
 		return nil, "", errors.Wrap(err, "parse html")
@@ -385,7 +388,20 @@ func ExtractHTMLBody(ctx context.Context, content []byte, apiKey string, outputM
 		logger.Debug("local html-to-markdown failed", zap.Error(localErr))
 	}
 
-	// 2) fallback to LLM conversion
+	// 2) fallback to Jina Reader
+	if targetURL != "" {
+		jinaMarkdown, jinaErr := fetchByJinaReader(ctx, targetURL)
+		if jinaErr == nil {
+			jinaMarkdown = strings.TrimSpace(jinaMarkdown)
+			if jinaMarkdown != "" {
+				return bodyContent, jinaMarkdown, nil
+			}
+		} else {
+			logger.Debug("jina reader failed", zap.Error(jinaErr))
+		}
+	}
+
+	// 3) fallback to LLM conversion
 	llmInput := innerHTML
 	if len(llmInput) == 0 {
 		llmInput = bodyContent
@@ -401,6 +417,40 @@ func ExtractHTMLBody(ctx context.Context, content []byte, apiKey string, outputM
 	}
 
 	return bodyContent, llmMarkdown, nil
+}
+
+func fetchByJinaReader(ctx context.Context, targetURL string) (string, error) {
+	if targetURL == "" {
+		return "", errors.New("targetURL is empty")
+	}
+
+	url := "https://r.jina.ai/" + targetURL
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", errors.Wrap(err, "new request")
+	}
+
+	cli, err := gutils.NewHTTPClient()
+	if err != nil {
+		return "", errors.Wrap(err, "new http client")
+	}
+
+	resp, err := cli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "do request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("jina reader request failed: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read body")
+	}
+
+	return string(body), nil
 }
 
 // FetchDynamicURLContent is a wrapper for submit & fetch dynamic url content

@@ -88,7 +88,7 @@ func Test_extractHTMLBody(t *testing.T) {
 	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
 		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
 	}
-	got, _, err := gptTasks.ExtractHTMLBody(context.Background(), []byte(testHTMLContent), "", false)
+	got, _, err := gptTasks.ExtractHTMLBody(context.Background(), "", []byte(testHTMLContent), "", false)
 	require.NoError(t, err)
 	require.Equal(t, "<body>\n\t\t\t<h1>Hello, world!</h1>\n\t\t\t<p>This is an example of an HTML5 document.</p>\n\t\t\n\t</body>", string(got))
 }
