@@ -176,7 +176,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	if config.Config != nil && config.Config.ToolLoopMaxRounds > 0 {
 		maxRounds = config.Config.ToolLoopMaxRounds
 	}
-	for round := 0; round < maxRounds; round++ {
+	for round := 0; round < maxRounds+1; round++ {
 		r := *responsesReq
 		r.Input = inputItems
 
@@ -212,6 +212,13 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 			break
 		}
 
+		if round == maxRounds {
+			if finalText == "" {
+				finalText = extractOutputTextFromResponses(resp)
+			}
+			break
+		}
+
 		// Buffer tool-call steps (streaming starts after headers are set).
 		for _, fc := range calls {
 			thinkingSteps = append(thinkingSteps, toolStepMarker+"Upstream tool_call: "+fc.Name+"\n")
@@ -219,15 +226,25 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 				thinkingSteps = append(thinkingSteps, toolStepMarker+"args: "+fc.Arguments+"\n")
 			}
 
-			toolOutput, execInfo, toolErr := executeToolCall(ctx, user, frontendReq, fc)
-			if execInfo != "" {
-				thinkingSteps = append(thinkingSteps, toolStepMarker+execInfo+"\n")
-			}
-			if toolErr != nil {
-				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool error: "+toolErr.Error()+"\n")
-				toolOutput = "Tool execution failed: " + toolErr.Error()
+			var (
+				toolOutput string
+				execInfo   string
+				toolErr    error
+			)
+			if round == maxRounds-1 {
+				toolOutput = "Tool execution failed: maximum tool call rounds reached. Please summarize current results and respond to the user based on existing information."
+				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool loop limit reached; informing AI\n")
 			} else {
-				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool ok\n")
+				toolOutput, execInfo, toolErr = executeToolCall(ctx, user, frontendReq, fc)
+				if execInfo != "" {
+					thinkingSteps = append(thinkingSteps, toolStepMarker+execInfo+"\n")
+				}
+				if toolErr != nil {
+					thinkingSteps = append(thinkingSteps, toolStepMarker+"tool error: "+toolErr.Error()+"\n")
+					toolOutput = "Tool execution failed: " + toolErr.Error()
+				} else {
+					thinkingSteps = append(thinkingSteps, toolStepMarker+"tool ok\n")
+				}
 			}
 
 			// Feed back to upstream.
