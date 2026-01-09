@@ -241,7 +241,10 @@ export function ChatMessage({
           isUser
             ? 'ml-auto rounded-br-sm border-primary/20 bg-primary/10 text-foreground'
             : 'bg-card text-card-foreground border-border mr-auto rounded-bl-sm',
-          isStreaming && 'animate-pulse',
+          isStreaming &&
+            !message.content &&
+            !message.reasoningContent &&
+            'animate-pulse',
           isSelected &&
             'ring-2 ring-primary ring-offset-2 dark:ring-offset-background',
           onSelect && 'cursor-pointer',
@@ -413,7 +416,7 @@ export function ChatMessage({
             <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base text-foreground">
               {message.content}
             </Markdown>
-          ) : isStreaming ? (
+          ) : isStreaming && !message.reasoningContent ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
               <div

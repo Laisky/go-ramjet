@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	stdjson "encoding/json"
@@ -152,7 +153,7 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 	req := &OpenAIResponsesReq{
 		Model:           frontendReq.Model,
 		MaxOutputTokens: frontendReq.MaxTokens,
-		Stream:          false, // backend streams to UI; upstream is called synchronously for tool-loop determinism
+		Stream:          frontendReq.Stream,
 		Temperature:     frontendReq.Temperature,
 		TopP:            frontendReq.TopP,
 		ToolChoice:      frontendReq.ToolChoice,
@@ -385,6 +386,80 @@ func buildResponsesHTTPRequest(ctx *gin.Context, user *config.UserConfig, reqBod
 	return req, nil
 }
 
+// parseStreamingResponses parses a streaming Responses API response and emits deltas to the UI.
+func parseStreamingResponses(
+	ctx *gin.Context,
+	resp *http.Response,
+) (*OpenAIResponsesResp, error) {
+	logger := gmw.GetLogger(ctx)
+	scanner := bufio.NewScanner(resp.Body)
+	finalResp := new(OpenAIResponsesResp)
+
+	requestID := resp.Header.Get("x-oneapi-request-id")
+	if requestID == "" {
+		requestID = resp.Header.Get("x-request-id")
+	}
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		if !bytes.HasPrefix(line, []byte("data: ")) {
+			continue
+		}
+		data := bytes.TrimPrefix(line, []byte("data: "))
+		if bytes.Equal(data, []byte("[DONE]")) {
+			break
+		}
+
+		var event struct {
+			Type       string               `json:"type"`
+			ResponseID string               `json:"response_id"`
+			Delta      string               `json:"delta"`
+			Response   *OpenAIResponsesResp `json:"response"`
+			Error      any                  `json:"error"`
+		}
+		if err := json.Unmarshal(data, &event); err != nil {
+			logger.Warn("unmarshal responses event", zap.Error(err), zap.ByteString("data", data))
+			continue
+		}
+
+		if event.Error != nil {
+			return nil, errors.Errorf("upstream responses error: %v", event.Error)
+		}
+
+		if event.ResponseID != "" {
+			requestID = event.ResponseID
+		}
+
+		switch event.Type {
+		case "response.output_text.delta":
+			emitTextDelta(ctx, true, requestID, event.Delta)
+		case "response.refusal.delta":
+			emitTextDelta(ctx, true, requestID, "refusal: "+event.Delta)
+		case "response.reasoning_text.delta", "response.thought.delta", "response.reasoning.delta":
+			emitThinkingDelta(ctx, true, requestID, event.Delta)
+		case "response.function_call_arguments.delta":
+			emitThinkingDelta(ctx, true, requestID, event.Delta)
+		case "response.completed":
+			if event.Response != nil {
+				finalResp = event.Response
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrap(err, "scanner error")
+	}
+
+	if finalResp.ID == "" {
+		finalResp.ID = requestID
+	}
+
+	return finalResp, nil
+}
+
 // callUpstreamResponses executes a Responses API request and returns the parsed response.
 func callUpstreamResponses(
 	ctx *gin.Context,
@@ -420,6 +495,13 @@ func callUpstreamResponses(
 			resp.StatusCode,
 			truncateBytesForLog(data, 2048),
 		)
+	}
+
+	if req.Stream {
+		setStreamHeaders(ctx, resp.Header)
+		ctx.Set("llm_response_streamed", true)
+		out, err := parseStreamingResponses(ctx, resp)
+		return out, resp.Header, err
 	}
 
 	data, err := io.ReadAll(resp.Body)

@@ -187,17 +187,10 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 			return callErr
 		}
 
-		// Extract reasoning and emit it immediately for streaming.
+		// Extract reasoning (already streamed by callUpstreamResponses if Stream is true)
 		if reasoning := extractReasoningFromResponses(resp); reasoning != "" {
 			fullReasoning += reasoning
 			thinkingSteps = append(thinkingSteps, reasoning)
-			if frontendReq.Stream {
-				requestID := lastUpstreamHeader.Get("x-oneapi-request-id")
-				if requestID == "" {
-					requestID = lastUpstreamHeader.Get("x-request-id")
-				}
-				emitThinkingDelta(ctx, true, requestID, reasoning)
-			}
 		}
 
 		calls, extractErr := extractFunctionCallsFromResponses(resp)
@@ -221,9 +214,18 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 
 		// Buffer tool-call steps (streaming starts after headers are set).
 		for _, fc := range calls {
-			thinkingSteps = append(thinkingSteps, toolStepMarker+"Upstream tool_call: "+fc.Name+"\n")
+			requestID := lastUpstreamHeader.Get("x-oneapi-request-id")
+			if requestID == "" {
+				requestID = lastUpstreamHeader.Get("x-request-id")
+			}
+
+			step1 := toolStepMarker + "Upstream tool_call: " + fc.Name + "\n"
+			thinkingSteps = append(thinkingSteps, step1)
+			emitThinkingDelta(ctx, frontendReq.Stream, requestID, step1)
 			if strings.TrimSpace(fc.Arguments) != "" {
-				thinkingSteps = append(thinkingSteps, toolStepMarker+"args: "+fc.Arguments+"\n")
+				step2 := toolStepMarker + "args: " + fc.Arguments + "\n"
+				thinkingSteps = append(thinkingSteps, step2)
+				emitThinkingDelta(ctx, frontendReq.Stream, requestID, step2)
 			}
 
 			var (
@@ -233,17 +235,25 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 			)
 			if round == maxRounds-1 {
 				toolOutput = "Tool execution failed: maximum tool call rounds reached. Please summarize current results and respond to the user based on existing information."
-				thinkingSteps = append(thinkingSteps, toolStepMarker+"tool loop limit reached; informing AI\n")
+				step := toolStepMarker + "tool loop limit reached; informing AI\n"
+				thinkingSteps = append(thinkingSteps, step)
+				emitThinkingDelta(ctx, frontendReq.Stream, requestID, step)
 			} else {
 				toolOutput, execInfo, toolErr = executeToolCall(ctx, user, frontendReq, fc)
 				if execInfo != "" {
-					thinkingSteps = append(thinkingSteps, toolStepMarker+execInfo+"\n")
+					step := toolStepMarker + execInfo + "\n"
+					thinkingSteps = append(thinkingSteps, step)
+					emitThinkingDelta(ctx, frontendReq.Stream, requestID, step)
 				}
 				if toolErr != nil {
-					thinkingSteps = append(thinkingSteps, toolStepMarker+"tool error: "+toolErr.Error()+"\n")
+					step := toolStepMarker + "tool error: " + toolErr.Error() + "\n"
+					thinkingSteps = append(thinkingSteps, step)
+					emitThinkingDelta(ctx, frontendReq.Stream, requestID, step)
 					toolOutput = "Tool execution failed: " + toolErr.Error()
 				} else {
-					thinkingSteps = append(thinkingSteps, toolStepMarker+"tool ok\n")
+					step := toolStepMarker + "tool ok\n"
+					thinkingSteps = append(thinkingSteps, step)
+					emitThinkingDelta(ctx, frontendReq.Stream, requestID, step)
 				}
 			}
 
@@ -310,22 +320,26 @@ func writeFinalToUI(
 	if frontendReq.Stream {
 		setStreamHeaders(ctx, upstreamHeader)
 		enableHeartBeatForStreamReq(ctx)
-		for _, s := range thinkingSteps {
-			emitThinkingDelta(ctx, true, requestID, s)
+
+		if !ctx.GetBool("llm_response_streamed") {
+			for _, s := range thinkingSteps {
+				emitThinkingDelta(ctx, true, requestID, s)
+			}
+			for _, chunk := range chunkString(finalText, 512) {
+				_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
+					ID: requestID,
+					Choices: []OpenaiCompletionStreamRespChoice{{
+						Delta: OpenaiCompletionStreamRespDelta{
+							Role:    OpenaiMessageRoleAI,
+							Content: chunk,
+						},
+						Index:        0,
+						FinishReason: "",
+					}},
+				})
+			}
 		}
-		for _, chunk := range chunkString(finalText, 512) {
-			_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
-				ID: requestID,
-				Choices: []OpenaiCompletionStreamRespChoice{{
-					Delta: OpenaiCompletionStreamRespDelta{
-						Role:    OpenaiMessageRoleAI,
-						Content: chunk,
-					},
-					Index:        0,
-					FinishReason: "",
-				}},
-			})
-		}
+
 		_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
 			ID: requestID,
 			Choices: []OpenaiCompletionStreamRespChoice{{
@@ -522,6 +536,23 @@ func emitThinkingDelta(ctx *gin.Context, isStream bool, requestID, text string) 
 			Delta: OpenaiCompletionStreamRespDelta{
 				Role:             OpenaiMessageRoleAI,
 				ReasoningContent: text,
+			},
+			Index:        0,
+			FinishReason: "",
+		}},
+	})
+}
+
+func emitTextDelta(ctx *gin.Context, isStream bool, requestID, text string) {
+	if !isStream {
+		return
+	}
+	_ = writeChatCompletionChunk(ctx, OpenaiCompletionStreamResp{
+		ID: requestID,
+		Choices: []OpenaiCompletionStreamRespChoice{{
+			Delta: OpenaiCompletionStreamRespDelta{
+				Role:    OpenaiMessageRoleAI,
+				Content: text,
 			},
 			Index:        0,
 			FinishReason: "",
