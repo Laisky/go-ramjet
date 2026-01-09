@@ -332,17 +332,19 @@ export function useChatStreaming({
           : []
 
         // Build enabled servers with full tool definitions for backend routing
-        const enabledServers = config.mcp_servers
-          ?.filter((s) => s.enabled)
-          .map((s) => ({
-            id: s.id,
-            name: s.name,
-            url: s.url,
-            api_key: s.api_key,
-            enabled: s.enabled,
-            tools: s.tools,
-            enabled_tool_names: s.enabled_tool_names,
-          }))
+        const enabledServers = config.chat_switch.enable_mcp
+          ? config.mcp_servers
+              ?.filter((s) => s.enabled)
+              .map((s) => ({
+                id: s.id,
+                name: s.name,
+                url: s.url,
+                api_key: s.api_key,
+                enabled: s.enabled,
+                tools: s.tools,
+                enabled_tool_names: s.enabled_tool_names,
+              }))
+          : []
 
         await new Promise<void>((resolve, reject) => {
           abortControllerRef.current = sendStreamingChatRequest(

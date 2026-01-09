@@ -3,8 +3,10 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -366,4 +368,101 @@ func TestMCPAuthCandidates(t *testing.T) {
 		auths := mcpAuthCandidates("")
 		require.Empty(t, auths)
 	})
+}
+
+func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
+	t.Run("EnableMCP is nil (backward compatibility)", func(t *testing.T) {
+frontendReq := &FrontendReq{
+			Model:     "gpt-4o",
+			EnableMCP: nil,
+			MCPServers: []MCPServerConfig{
+				{
+					Enabled: true,
+					Tools: []json.RawMessage{
+						json.RawMessage(`{"name": "test_tool", "description": "test tool"}`),
+					},
+				},
+			},
+		}
+
+		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		require.NoError(t, err)
+		require.NotNil(t, respReq)
+		require.NotEmpty(t, respReq.Tools)
+		require.Equal(t, "test_tool", respReq.Tools[0].Name)
+	})
+
+	t.Run("EnableMCP is true", func(t *testing.T) {
+enable := true
+frontendReq := &FrontendReq{
+			Model:     "gpt-4o",
+			EnableMCP: &enable,
+			MCPServers: []MCPServerConfig{
+				{
+					Enabled: true,
+					Tools: []json.RawMessage{
+						json.RawMessage(`{"name": "test_tool", "description": "test tool"}`),
+					},
+				},
+			},
+		}
+
+		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		require.NoError(t, err)
+		require.NotNil(t, respReq)
+		require.NotEmpty(t, respReq.Tools)
+		require.Equal(t, "test_tool", respReq.Tools[0].Name)
+	})
+
+	t.Run("EnableMCP is false", func(t *testing.T) {
+enable := false
+frontendReq := &FrontendReq{
+			Model:     "gpt-4o",
+			EnableMCP: &enable,
+			MCPServers: []MCPServerConfig{
+				{
+					Enabled: true,
+					Tools: []json.RawMessage{
+						json.RawMessage(`{"name": "test_tool", "description": "test tool"}`),
+					},
+				},
+			},
+		}
+
+		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		require.NoError(t, err)
+		require.NotNil(t, respReq)
+		for _, tool := range respReq.Tools {
+			require.NotEqual(t, "test_tool", tool.Name, "MCP tool should not be injected when EnableMCP is false")
+		}
+	})
+}
+
+func TestExecuteToolCall_MCP_Disabled(t *testing.T) {
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+
+	enable := false
+	frontendReq := &FrontendReq{
+		EnableMCP: &enable,
+		MCPServers: []MCPServerConfig{
+			{
+				Enabled: true,
+				Tools: []json.RawMessage{
+					json.RawMessage(`{"name": "test_tool"}`),
+				},
+			},
+		},
+	}
+
+	fc := OpenAIResponsesFunctionCall{
+		Name:      "test_tool",
+		Arguments: "{}",
+	}
+
+	out, info, err := executeToolCall(ctx, nil, frontendReq, fc)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MCP is disabled")
+	require.Empty(t, out)
+	require.Empty(t, info)
 }

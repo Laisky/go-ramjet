@@ -244,7 +244,8 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 
 	// Extract tools from MCP servers if no explicit tools were provided.
 	// This allows the frontend to just send mcp_servers with cached tools.
-	if len(tools) == 0 && len(frontendReq.MCPServers) > 0 {
+	enableMCP := frontendReq.EnableMCP == nil || *frontendReq.EnableMCP
+	if enableMCP && len(tools) == 0 && len(frontendReq.MCPServers) > 0 {
 		tools = append(tools, extractToolsFromMCPServers(frontendReq.MCPServers)...)
 	}
 

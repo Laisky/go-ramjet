@@ -23,6 +23,7 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+// defaultToolLoopMaxRounds defines the default maximum number of tool loop rounds.
 const defaultToolLoopMaxRounds = 5
 
 const toolStepMarker = "[[TOOLS]] "
@@ -372,6 +373,11 @@ func executeToolCall(
 	}
 
 	// 2) Try MCP.
+	if frontendReq.EnableMCP != nil && !*frontendReq.EnableMCP {
+		gmw.GetLogger(ctx).Warn("prevent MCP tool call because it's disabled", zap.String("tool", fc.Name))
+		return "", "", errors.Errorf("MCP is disabled, but tool %q was called", fc.Name)
+	}
+
 	server := findMCPServerForToolName(frontendReq.MCPServers, fc.Name)
 	if server == nil {
 		return "", "", errors.Errorf("tool %q not found in enabled MCP servers", fc.Name)
@@ -617,6 +623,8 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 	logger.Debug("prepared responses request",
 		zap.String("model", responsesReq.Model),
 		zap.Int("tools", len(responsesReq.Tools)),
+		zap.Bool("enable_mcp", frontendReq.EnableMCP != nil && *frontendReq.EnableMCP),
+		zap.Int("mcp_servers", len(frontendReq.MCPServers)),
 	)
 
 	return frontendReq, user, responsesReq, nil

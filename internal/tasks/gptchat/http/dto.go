@@ -63,6 +63,7 @@ type FrontendReq struct {
 	N                int                  `json:"n"`
 	Tools            []OpenaiChatReqTool  `json:"tools,omitempty"`
 	ToolChoice       any                  `json:"tool_choice,omitempty"`
+	EnableMCP        *bool                `json:"enable_mcp,omitempty"`
 	MCPServers       []MCPServerConfig    `json:"mcp_servers,omitempty"`
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
 	ReasoningEffort string `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
