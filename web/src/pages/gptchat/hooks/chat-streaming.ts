@@ -234,7 +234,8 @@ export function useChatStreaming({
           // Find the index of the message we want to update.
           // In most cases it's the last message, but strictly matching by chatId is safer.
           const idx = prev.findLastIndex(
-            (m) => m.chatID === chatId && m.role === 'assistant',
+            (m: ChatMessageData) =>
+              m.chatID === chatId && m.role === 'assistant',
           )
 
           if (idx === -1) {
