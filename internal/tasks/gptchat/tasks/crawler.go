@@ -305,6 +305,23 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 		return nil, "", errors.Wrapf(err, "run chromedp for %q", url)
 	}
 
+	if isCloudflareChallenge(htmlContent) {
+		logger.Warn("cloudflare challenge detected")
+
+		// fallback to jina reader
+		if outputMarkdown {
+			logger.Info("try fallback to jina reader")
+			jinaMarkdown, jinaErr := fetchByJinaReader(ctx, url)
+			if jinaErr == nil && strings.TrimSpace(jinaMarkdown) != "" && !isCloudflareChallenge(jinaMarkdown) {
+				logger.Info("fallback to jina reader succeed")
+				return []byte(jinaMarkdown), jinaMarkdown, nil
+			}
+			logger.Warn("fallback to jina reader failed", zap.Error(jinaErr))
+		}
+
+		return nil, "", errors.Errorf("cloudflare challenge detected for %q", url)
+	}
+
 	content := []byte(htmlContent)
 	if len(content) == 0 {
 		return nil, "", errors.Errorf("no content found by chromedp for %q", url)
@@ -417,6 +434,26 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	}
 
 	return bodyContent, llmMarkdown, nil
+}
+
+// isCloudflareChallenge checks if the content is a Cloudflare challenge page
+func isCloudflareChallenge(htmlContent string) bool {
+	// Check for Cloudflare Turnstile/Challenge indicators
+	indicators := []string{
+		"cf-turnstile-response",
+		"cf-chl-widget",
+		"_cf_chl_opt",
+		"challenge-platform",
+		"challenge-error-text",
+		"Just a moment...",
+		"Verification is taking longer than expected",
+	}
+	for _, indicator := range indicators {
+		if strings.Contains(htmlContent, indicator) {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchByJinaReader(ctx context.Context, targetURL string) (string, error) {
