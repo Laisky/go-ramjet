@@ -22,11 +22,13 @@ export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
   }, [])
 
   const scrollToBottom = useCallback(
-    (options?: { force?: boolean }) => {
+    (options?: { force?: boolean; behavior?: ScrollBehavior }) => {
       if (!options?.force && !isNearBottom()) {
         return
       }
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      messagesEndRef.current?.scrollIntoView({
+        behavior: options?.behavior || 'smooth',
+      })
     },
     [isNearBottom],
   )
@@ -42,7 +44,7 @@ export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
       return
     }
     if (autoScrollRef.current || isNearBottom()) {
-      scrollToBottom({ force: true })
+      scrollToBottom({ force: true, behavior: 'auto' })
     }
   }, [messages, scrollToBottom, isNearBottom])
 

@@ -209,33 +209,78 @@ export function useChatStreaming({
       let fullContent = ''
       let fullReasoning = ''
       let fullAnnotations: Annotation[] = []
+      let turnAnnotations: Annotation[] = [] // Annotations for the current stream run
       let lastRequestId = ''
       let lastModel = ''
       const toolEventLog: string[] = []
       const toolCallAccumulator = new Map<string, ToolCallDelta>()
       const finishReasonRef = { current: null as string | null }
 
-      const updateReasoning = (thinkingChunk?: string) => {
-        const combined = [
-          ...toolEventLog,
-          thinkingChunk ? thinkingChunk : fullReasoning,
-        ]
+      let lastUpdateTime = 0
+      const THROTTLE_MS = 80 // Update UI frequently for streaming effect but avoid overloading
+
+      const updateUIMessages = (force = false) => {
+        const now = Date.now()
+        if (!force && now - lastUpdateTime < THROTTLE_MS) return
+        lastUpdateTime = now
+
+        const combinedReasoning = [...toolEventLog, fullReasoning]
           .filter(Boolean)
           .join('\n')
+        const combinedAnnotations = [...fullAnnotations, ...turnAnnotations]
+        const references = extractReferencesFromAnnotations(combinedAnnotations)
 
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.chatID === chatId && m.role === 'assistant'
-              ? { ...m, reasoningContent: combined }
-              : m,
-          ),
-        )
+        setMessages((prev) => {
+          // Find the index of the message we want to update.
+          // In most cases it's the last message, but strictly matching by chatId is safer.
+          const idx = prev.findLastIndex(
+            (m) => m.chatID === chatId && m.role === 'assistant',
+          )
+
+          if (idx === -1) {
+            console.warn(
+              `[updateUIMessages] message ${chatId} not found in state`,
+            )
+            return prev
+          }
+
+          const existing = prev[idx]
+          const updated: ChatMessageData = {
+            ...existing,
+            content: fullContent,
+            reasoningContent: combinedReasoning || undefined,
+            annotations:
+              combinedAnnotations.length > 0
+                ? combinedAnnotations
+                : existing.annotations,
+            references:
+              references.length > 0 ? references : existing.references,
+            requestid: lastRequestId || existing.requestid,
+            model: lastModel || existing.model,
+          }
+
+          // Shallow comparison to avoid redundant state updates
+          if (
+            updated.content === existing.content &&
+            updated.reasoningContent === existing.reasoningContent &&
+            updated.requestid === existing.requestid &&
+            updated.model === existing.model &&
+            (updated.annotations?.length || 0) ===
+              (existing.annotations?.length || 0)
+          ) {
+            return prev
+          }
+
+          const next = [...prev]
+          next[idx] = updated
+          return next
+        })
       }
 
       const appendToolEvent = (line: string) => {
         if (!line) return
         toolEventLog.push(line)
-        updateReasoning()
+        updateUIMessages(true) // Force update on tool events as they are significant
       }
 
       const accumulateToolCalls = (deltas: ToolCallDelta[]) => {
@@ -274,6 +319,7 @@ export function useChatStreaming({
       const runStream = async (messagesToSend: ApiChatMessage[]) => {
         finishReasonRef.current = null
         toolCallAccumulator.clear()
+        turnAnnotations = [] // Reset for each stream run
 
         const safeMaxTokens = normalizePositiveInteger(
           config.max_tokens,
@@ -324,50 +370,31 @@ export function useChatStreaming({
             {
               onContent: (chunk) => {
                 fullContent += chunk
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.chatID === chatId && m.role === 'assistant'
-                      ? { ...m, content: fullContent }
-                      : m,
-                  ),
-                )
+                updateUIMessages()
               },
               onReasoning: (chunk) => {
                 fullReasoning += chunk
-                updateReasoning(fullReasoning)
+                updateUIMessages()
               },
               onAnnotations: (annotations) => {
-                fullAnnotations = annotations
-                const references = extractReferencesFromAnnotations(annotations)
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.chatID === chatId && m.role === 'assistant'
-                      ? { ...m, annotations, references }
-                      : m,
-                  ),
-                )
+                turnAnnotations = annotations
+                updateUIMessages()
               },
               onToolCallDelta: accumulateToolCalls,
               onResponseInfo: (info) => {
                 if (info.id) lastRequestId = info.id
                 if (info.model) lastModel = info.model
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.chatID === chatId && m.role === 'assistant'
-                      ? {
-                          ...m,
-                          requestid: info.id || m.requestid,
-                          model: info.model || m.model,
-                        }
-                      : m,
-                  ),
-                )
+                updateUIMessages()
               },
               onFinish: (reason) => {
                 finishReasonRef.current = reason ?? null
               },
-              onDone: resolve,
+              onDone: () => {
+                updateUIMessages(true)
+                resolve()
+              },
               onError: (err) => {
+                updateUIMessages(true)
                 reject(err)
               },
             },
@@ -397,6 +424,7 @@ export function useChatStreaming({
               )
             }
             const toolCalls = Array.from(toolCallAccumulator.values())
+            fullAnnotations = [...fullAnnotations, ...turnAnnotations]
             workingPayload = await buildToolContinuationMessages(
               config,
               appendToolEvent,
@@ -407,6 +435,10 @@ export function useChatStreaming({
           }
           break
         }
+
+        fullAnnotations = [...fullAnnotations, ...turnAnnotations]
+        // Final UI update to ensure state is synchronized with latest closure variables
+        updateUIMessages(true)
 
         const finalMessage: ChatMessageData = {
           chatID: chatId,
