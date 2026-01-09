@@ -54,6 +54,9 @@ export function useMessageNavigation({
   // Keyboard shortcuts for message navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore keyboard events when composition is in progress (IME)
+      if (e.isComposing) return
+
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement

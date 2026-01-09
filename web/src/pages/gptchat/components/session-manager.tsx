@@ -138,6 +138,9 @@ export function SessionManager({
               autoFocus
               placeholder="Session Name"
               onKeyDown={(e) => {
+                // Ignore keyboard events when composition is in progress (IME)
+                if (e.nativeEvent.isComposing) return
+
                 if (e.key === 'Enter') {
                   if (isCreating) {
                     handleCreate()

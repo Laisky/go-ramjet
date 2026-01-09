@@ -99,6 +99,9 @@ export function EditMessageModal({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Ignore keyboard events when composition is in progress (IME)
+      if (e.nativeEvent.isComposing) return
+
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
         handleSubmit()

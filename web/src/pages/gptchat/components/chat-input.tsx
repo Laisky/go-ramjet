@@ -199,6 +199,9 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Ignore keyboard events when composition is in progress (IME)
+      if (e.nativeEvent.isComposing) return
+
       // Send on Ctrl+Enter or Cmd+Enter
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
