@@ -39,6 +39,7 @@ export interface UseChatOptions {
 export interface UseChatReturn {
   messages: ChatMessageData[]
   isLoading: boolean
+  loadingChatId: string | null
   error: string | null
   sendMessage: (content: string, attachments?: File[]) => Promise<void>
   stopGeneration: () => void
@@ -152,12 +153,20 @@ export function buildApiMessages(
  */
 export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessageData[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, _setIsLoading] = useState(false)
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const currentChatIdRef = useRef<string | null>(null)
   const deepResearchAbortRef = useRef(false)
+
+  const setIsLoading = useCallback((loading: boolean) => {
+    _setIsLoading(loading)
+    if (!loading) {
+      setLoadingChatId(null)
+    }
+  }, [])
 
   const { loadMessages, saveMessage, clearMessages, deleteMessage } =
     useChatStorage({ sessionId, setMessages, setError })
@@ -229,6 +238,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const chatId = generateChatId()
       currentChatIdRef.current = chatId
+      setLoadingChatId(chatId)
       setError(null)
 
       const contentParts: ContentPart[] = []
@@ -419,6 +429,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       const userMsg = messages[userIndex]
 
       await kvDel(getChatDataKey(chatId, 'assistant'))
+      setLoadingChatId(chatId)
 
       setMessages((prev) => {
         const next = [...prev]
@@ -540,6 +551,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       await saveMessage(updatedUser)
       await kvDel(getChatDataKey(chatId, 'assistant'))
+      setLoadingChatId(chatId)
 
       setMessages((prev) => {
         const next = [...prev]
@@ -633,6 +645,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
   return {
     messages,
     isLoading,
+    loadingChatId,
     error,
     sendMessage,
     stopGeneration,

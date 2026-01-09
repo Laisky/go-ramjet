@@ -61,6 +61,7 @@ export function GPTChatPage() {
   const {
     messages,
     isLoading: chatLoading,
+    loadingChatId,
     error,
     sendMessage,
     stopGeneration,
@@ -151,7 +152,6 @@ export function GPTChatPage() {
 
   useMcpSync(config, configLoading, updateConfig)
 
-  const lastMessage = messages[messages.length - 1]
   const currentDraftMessage = globalDraft
 
   const userMessageByChatId = useMemo(() => {
@@ -409,8 +409,7 @@ export function GPTChatPage() {
           isStreaming={
             chatLoading &&
             floatingHeaderState.message?.role === 'assistant' &&
-            lastMessage &&
-            floatingHeaderState.message?.chatID === lastMessage.chatID
+            floatingHeaderState.message?.chatID === loadingChatId
           }
         />
 
@@ -467,9 +466,7 @@ export function GPTChatPage() {
                     isStreaming={
                       chatLoading &&
                       msg.role === 'assistant' &&
-                      lastMessage &&
-                      msg.chatID === lastMessage.chatID &&
-                      msg.role === lastMessage.role
+                      msg.chatID === loadingChatId
                     }
                   />
                 ))}
