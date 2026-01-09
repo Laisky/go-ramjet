@@ -89,6 +89,7 @@ func runDynamicWebCrawler() error {
 	}
 
 	logger := log.Logger.Named("run_dynamic_web_crawler").With(
+		zap.Bool("output_markdown", task.OutputMarkdown),
 		zap.String("task_id", task.TaskID),
 		zap.String("url", task.Url))
 	logger.Info("get task")
