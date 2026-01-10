@@ -16,6 +16,7 @@ export const StorageKeys = {
   SESSION_ORDER: 'config_session_order',
   SYNC_KEY: 'config_sync_key',
   VERSION_DATE: 'config_version_date',
+  IGNORED_VERSION: 'config_ignored_version',
   USER_INFO: 'config_user_info',
   SESSION_DRAFTS: 'chat_session_drafts',
   CHAT_DATA_PREFIX: 'chat_data_', // ${prefix}${role}_${chatID}

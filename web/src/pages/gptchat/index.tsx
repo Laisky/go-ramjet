@@ -97,7 +97,7 @@ export function GPTChatPage() {
     handleLoadOlder,
   } = useChatScroll({ messages, pageSize: MESSAGE_PAGE_SIZE })
 
-  const { upgradeInfo, setUpgradeInfo } = useVersionCheck()
+  const { upgradeInfo, setUpgradeInfo, ignoreVersion } = useVersionCheck()
   const [prefillDraft, setPrefillDraft] = useState<
     | {
         id: string
@@ -540,6 +540,7 @@ export function GPTChatPage() {
           from={upgradeInfo.from}
           to={upgradeInfo.to}
           onClose={() => setUpgradeInfo(null)}
+          onIgnore={() => ignoreVersion(upgradeInfo.to)}
         />
       )}
 

@@ -4,6 +4,7 @@ interface UpgradeNotificationProps {
   from: string
   to: string
   onClose: () => void
+  onIgnore: () => void
 }
 
 /**
@@ -13,6 +14,7 @@ export function UpgradeNotification({
   from,
   to,
   onClose,
+  onIgnore,
 }: UpgradeNotificationProps) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border theme-border theme-elevated p-4 shadow-lg">
@@ -24,7 +26,10 @@ export function UpgradeNotification({
         <Button size="sm" onClick={() => window.location.reload()}>
           Reload now
         </Button>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onIgnore}>
+          Ignore this version
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose} title="Close">
           Later
         </Button>
       </div>
