@@ -356,7 +356,7 @@ export function GPTChatPage() {
       </aside>
 
       {/* Main Content Area - offset by sidebar width */}
-      <div className="ml-10 flex min-h-dvh min-w-0 flex-1 flex-col">
+      <div className="ml-10 flex min-h-dvh min-w-0 flex-col">
         {/* Header - fixed at top */}
         <header
           className="theme-surface theme-border fixed left-10 right-0 top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
@@ -443,7 +443,7 @@ export function GPTChatPage() {
 
         {/* Scrollable chat area - uses window scroll with padding for fixed header/footer */}
         <main
-          className="relative flex-1 pt-12"
+          className="relative pt-12"
           style={{ paddingBottom: `${footerHeight}px` }}
         >
           {/* Loading overlay for session switching */}

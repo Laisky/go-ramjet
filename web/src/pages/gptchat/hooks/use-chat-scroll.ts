@@ -26,7 +26,8 @@ export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
       if (!options?.force && !isNearBottom()) {
         return
       }
-      messagesEndRef.current?.scrollIntoView({
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
         behavior: options?.behavior || 'smooth',
       })
     },
