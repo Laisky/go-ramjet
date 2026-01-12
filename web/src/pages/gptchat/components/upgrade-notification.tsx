@@ -17,7 +17,7 @@ export function UpgradeNotification({
   onIgnore,
 }: UpgradeNotificationProps) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border theme-border theme-elevated p-4 shadow-lg">
+    <div className="max-w-sm rounded-lg border theme-border theme-elevated p-4 shadow-lg">
       <p className="text-sm font-medium">New version available</p>
       <p className="theme-text-muted text-xs">
         {from} → {to}

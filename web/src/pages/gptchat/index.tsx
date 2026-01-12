@@ -113,6 +113,26 @@ export function GPTChatPage() {
     attachments?: ChatAttachment[]
   } | null>(null)
 
+  const footerRef = useRef<HTMLDivElement>(null)
+  const [footerHeight, setFooterHeight] = useState(112) // Default pb-28 is 112px
+
+  // Monitor footer height to adjust main content padding
+  useEffect(() => {
+    const footer = footerRef.current
+    if (!footer) return
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target instanceof HTMLElement) {
+          setFooterHeight(entry.target.offsetHeight)
+        }
+      }
+    })
+
+    observer.observe(footer)
+    return () => observer.disconnect()
+  }, [])
+
   const displayedMessages = useMemo(() => {
     if (messages.length <= visibleCount) {
       return messages
@@ -151,6 +171,14 @@ export function GPTChatPage() {
   }, [sessionId, loadMessages, configLoading])
 
   useMcpSync(config, configLoading, updateConfig)
+
+  // Scroll to bottom when footer height changes (e.g. typing long prompt)
+  // to prevent messages from being covered.
+  useEffect(() => {
+    if (autoScrollRef.current) {
+      scrollToBottom({ force: false, behavior: 'auto' })
+    }
+  }, [footerHeight, scrollToBottom, autoScrollRef])
 
   const currentDraftMessage = globalDraft
 
@@ -414,7 +442,10 @@ export function GPTChatPage() {
         />
 
         {/* Scrollable chat area - uses window scroll with padding for fixed header/footer */}
-        <main className="relative flex-1 pt-12 pb-28">
+        <main
+          className="relative flex-1 pt-12"
+          style={{ paddingBottom: `${footerHeight}px` }}
+        >
           {/* Loading overlay for session switching */}
           {configLoading && (
             <div className="fixed inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
@@ -477,7 +508,10 @@ export function GPTChatPage() {
         </main>
 
         {/* Input (fixed to bottom of viewport) */}
-        <footer className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0">
+        <footer
+          ref={footerRef}
+          className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0"
+        >
           {/* Scroll to bottom button */}
           <button
             onClick={() => scrollToBottom({ force: true })}
@@ -536,12 +570,17 @@ export function GPTChatPage() {
       />
 
       {upgradeInfo && (
-        <UpgradeNotification
-          from={upgradeInfo.from}
-          to={upgradeInfo.to}
-          onClose={() => setUpgradeInfo(null)}
-          onIgnore={() => ignoreVersion(upgradeInfo.to)}
-        />
+        <div
+          className="fixed z-50"
+          style={{ bottom: `${footerHeight + 12}px`, right: '1rem' }}
+        >
+          <UpgradeNotification
+            from={upgradeInfo.from}
+            to={upgradeInfo.to}
+            onClose={() => setUpgradeInfo(null)}
+            onIgnore={() => ignoreVersion(upgradeInfo.to)}
+          />
+        </div>
       )}
 
       {/* Edit Message Modal */}
@@ -568,7 +607,10 @@ export function GPTChatPage() {
 
       {/* Selection TTS Player */}
       {ttsAudioUrl && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2">
+        <div
+          className="fixed left-1/2 z-50 -translate-x-1/2"
+          style={{ bottom: `${footerHeight + 12}px` }}
+        >
           <TTSAudioPlayer audioUrl={ttsAudioUrl} onClose={stopTTS} />
         </div>
       )}
