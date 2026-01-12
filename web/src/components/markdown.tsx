@@ -146,14 +146,14 @@ function CodeBlock({ code, language }: CodeBlockProps) {
           )}
         </button>
       </div>
-      <div className="code-shell__surface">
+      <div className="code-shell__surface" tabIndex={0}>
         <div className="code-shell__gutter" aria-hidden="true">
           {lines.map((_, index) => (
             <span key={`line-${index + 1}`}>{index + 1}</span>
           ))}
         </div>
         <div className="code-shell__content">
-          <pre className="hljs" tabIndex={0}>
+          <pre className="hljs">
             <code
               className="hljs"
               dangerouslySetInnerHTML={{ __html: highlighted }}
@@ -298,11 +298,9 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
           </button>
         </div>
       </div>
-      <div className="code-shell__surface">
+      <div className="code-shell__surface" tabIndex={0}>
         {showSource ? (
-          <pre className="code-shell__raw" tabIndex={0}>
-            {code}
-          </pre>
+          <pre className="code-shell__raw">{code}</pre>
         ) : renderError ? (
           <div className="code-shell__error">{renderError}</div>
         ) : (

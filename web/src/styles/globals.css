@@ -555,19 +555,22 @@ input[type="range"]::-moz-range-thumb {
 .code-shell__surface {
   display: flex;
   max-height: 520px;
-  overflow: hidden;
+  overflow: auto;
   background-color: var(--code-surface);
   color: var(--code-foreground);
 }
 
 .code-shell__gutter {
+  position: sticky;
+  left: 0;
+  z-index: 10;
   min-width: 3.25rem;
   padding: 1rem 0.75rem;
   text-align: right;
   font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
     Menlo, Monaco, Consolas, monospace;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  line-height: 1.6;
   background-color: var(--code-gutter-bg);
   color: var(--code-gutter-fg);
   border-right: 1px solid var(--code-border);
@@ -580,13 +583,12 @@ input[type="range"]::-moz-range-thumb {
 .code-shell__content {
   position: relative;
   flex: 1;
-  overflow: auto;
 }
 
 .code-shell__content pre {
   margin: 0;
   padding: 1rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1.6;
   min-width: fit-content;
 }
@@ -601,13 +603,11 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.6;
   background-color: var(--code-surface);
   color: var(--code-foreground);
-  overflow: auto;
 }
 
 .code-shell__diagram {
   width: 100%;
   padding: 1.25rem;
-  overflow: auto;
 }
 
 .code-shell__error {
