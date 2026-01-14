@@ -40,6 +40,10 @@ frontend-build: frontend-install
 frontend-test: frontend-install
 	pnpm -C web test
 
+.PHONY: dev
+dev: frontend-install
+	pnpm -C web dev
+
 .PHONY: build
 build: frontend-build
 # 	go build
