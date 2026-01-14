@@ -31,6 +31,14 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
     port: 25173,
+    // Configure HMR for the NGINX proxy setup
+    // Since NGINX may not support WebSocket properly, we use a direct connection
+    hmr: {
+      // Connect directly to the Vite server for HMR
+      host: '100.75.198.70',
+      port: 25173,
+      protocol: 'ws',
+    },
     proxy: {
       // Proxy API requests to the Go backend
       // These patterns match API endpoints that should go to the backend

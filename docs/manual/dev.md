@@ -35,10 +35,10 @@ This document explains how to set up a Go + Vite monorepo for development with r
     - [After (New Workflow)](#after-new-workflow)
   - [Summary](#summary)
 
-
 ## Overview
 
 This project is a monorepo where:
+
 - **Backend**: Go (Gin framework) serves the API and static files in production
 - **Frontend**: React + Vite SPA located in `web/`
 
@@ -65,6 +65,7 @@ The challenge: How to develop the frontend with hot reload while the backend sta
 ```
 
 In production:
+
 1. `make build` compiles the frontend into `web/dist/`
 2. The Go binary serves both API and static files
 3. Single process, single port
@@ -92,6 +93,7 @@ In production:
 ```
 
 In development:
+
 1. Go backend runs independently (only handles API)
 2. Vite dev server serves the frontend with Hot Module Replacement (HMR)
 3. Vite proxies API requests to the Go backend
@@ -121,6 +123,7 @@ make dev
 ```
 
 This runs `pnpm -C web run dev:proxy` which:
+
 - Starts Vite on port 25173
 - Uses `vite.config.dev.ts` (development-specific config)
 - Proxies API requests to the Go backend
@@ -156,12 +159,14 @@ server {
 ### `web/vite.config.ts` (Production)
 
 Default Vite config for production builds:
+
 - No base path (Go serves from root)
 - Optimized for bundling
 
 ### `web/vite.config.dev.ts` (Development)
 
 Development-specific Vite config:
+
 - No base path (NGINX forwards directly)
 - Proxy configuration for API requests
 - HMR enabled
@@ -180,12 +185,13 @@ export default defineConfig({
       },
     },
   },
-})
+});
 ```
 
 ### `web/package.json`
 
 Scripts:
+
 - `dev`: Standard Vite dev server (for local development)
 - `dev:proxy`: Development with API proxy (for testing with backend)
 - `build`: Production build
@@ -213,6 +219,7 @@ proxy: {
 ### Hot Module Replacement (HMR)
 
 Vite's HMR allows instant updates:
+
 1. You edit a React component
 2. Vite detects the change
 3. Only the changed module is sent to the browser
@@ -244,9 +251,28 @@ make build
 **Symptom**: Changes require manual page refresh.
 
 **Solution**:
+
 1. Check browser console for WebSocket errors
 2. Ensure Vite server is running (`make dev`)
 3. Check that NGINX isn't blocking WebSocket connections
+
+**Note for HTTPS environments**: When accessing through an HTTPS proxy (like NGINX with SSL), HMR may fail due to mixed content restrictions. Browsers block insecure WebSocket (`ws://`) connections from HTTPS pages. To fix this:
+
+1. **Configure NGINX to proxy WebSocket connections**:
+
+   ```nginx
+   location / {
+       proxy_pass http://127.0.0.1:25173;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_set_header Host $host;
+   }
+   ```
+
+2. **Or use HTTP directly** for development (bypassing NGINX).
+
+3. **Or hard refresh** (`Ctrl+Shift+R`) after making changes to force the browser to reload all assets.
 
 ### CORS Errors
 
@@ -259,6 +285,7 @@ make build
 **Symptom**: "Port 25173 is in use" when starting Vite.
 
 **Solution**:
+
 ```bash
 # Find and kill processes using the port
 lsof -i :25173
@@ -287,6 +314,7 @@ kill <PID>
 ## Summary
 
 This setup provides the best of both worlds:
+
 - **Development**: Instant feedback with HMR
 - **Production**: Single Go binary with embedded static files
 - **Testing**: Full API integration through Vite proxy

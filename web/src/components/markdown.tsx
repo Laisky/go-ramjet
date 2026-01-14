@@ -95,7 +95,11 @@ function highlightCode(source: string, language?: string): string {
  * CodeBlock renders multi-line code with line numbers, syntax colors, and copy controls.
  */
 function CodeBlock({ code, language }: CodeBlockProps) {
-  const normalized = useMemo(() => code.replace(/\r\n/g, '\n'), [code])
+  // Normalize line endings and remove trailing whitespace to prevent extra blank lines
+  const normalized = useMemo(
+    () => code.replace(/\r\n/g, '\n').trimEnd(),
+    [code],
+  )
   const highlighted = useMemo(
     () => highlightCode(normalized, language),
     [language, normalized],
@@ -319,7 +323,8 @@ const renderCode = ({
 }: CodeRendererProps) => {
   const match = /language-(\w+)/.exec(className || '')
   const lang = match?.[1]
-  const content = String(children).replace(/\n$/, '')
+  // Remove all trailing newlines/whitespace, then add exactly one newline for consistent display
+  const content = String(children).trimEnd()
 
   // Mermaid diagrams
   if (lang === 'mermaid') {
