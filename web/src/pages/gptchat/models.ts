@@ -53,6 +53,8 @@ export const QAModelShared = 'qa-shared'
 // Image models
 export const ImageModelDalle3 = 'dall-e-3'
 export const ImageModelGptImage1 = 'gpt-image-1'
+export const ImageModelGptImage1Mini = 'gpt-image-1-mini'
+export const ImageModelGptImage1dot5 = 'gpt-image-1.5'
 export const ImageModelSdxlTurbo = 'sdxl-turbo'
 export const ImageModelFluxDev = 'black-forest-labs/flux-dev'
 export const ImageModelFluxPro11 = 'black-forest-labs/flux-1.1-pro'
@@ -142,6 +144,8 @@ export const VisionModels = [
   ImageModelFluxProUltra11,
   ImageModelFluxDev,
   ImageModelGptImage1,
+  ImageModelGptImage1Mini,
+  ImageModelGptImage1dot5,
 ]
 
 export const QaModels = [
@@ -155,6 +159,8 @@ export const QaModels = [
 export const ImageModels = [
   ImageModelDalle3,
   ImageModelGptImage1,
+  ImageModelGptImage1Mini,
+  ImageModelGptImage1dot5,
   ImageModelSdxlTurbo,
   ImageModelFluxPro11,
   ImageModelFluxKontextPro,
@@ -239,6 +245,8 @@ export const ModelCategories: Record<string, string[]> = {
   Image: [
     ImageModelDalle3,
     ImageModelGptImage1,
+    ImageModelGptImage1Mini,
+    ImageModelGptImage1dot5,
     ImageModelSdxlTurbo,
     ImageModelFluxDev,
     ImageModelFluxPro11,

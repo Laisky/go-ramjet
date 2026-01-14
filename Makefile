@@ -42,7 +42,7 @@ frontend-test: frontend-install
 
 .PHONY: dev
 dev: frontend-install
-	pnpm -C web dev
+	pnpm -C web run dev:proxy
 
 .PHONY: build
 build: frontend-build
