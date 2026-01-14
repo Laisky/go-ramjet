@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Eye, EyeOff, Loader2, Upload } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ interface DataSyncManagerProps {
   config: SessionConfig
   onConfigChange: (updates: Partial<SessionConfig>) => void
   onExportData: () => Promise<unknown>
-  onImportData: (data: unknown) => Promise<void>
+  onImportData: (data: unknown, mode?: 'merge' | 'download') => Promise<void>
 }
 
 export function DataSyncManager({
@@ -22,25 +22,45 @@ export function DataSyncManager({
   const [isSyncing, setIsSyncing] = useState(false)
   const [showSyncKey, setShowSyncKey] = useState(false)
 
-  const handleSync = async () => {
+  const handleDownload = async () => {
     if (!config.sync_key) {
-      alert('Please enter a Sync Key to sync.')
+      alert('Please enter a Sync Key to download.')
       return
     }
 
     setIsSyncing(true)
     try {
       const cloudData = await api.downloadUserData(config.sync_key)
-      await onImportData(cloudData)
+      if (!cloudData || Object.keys(cloudData).length === 0) {
+        alert('No data found in cloud.')
+        return
+      }
 
-      const merged = await onExportData()
-      await api.uploadUserData(config.sync_key, merged)
-
-      alert('Sync successful!')
+      await onImportData(cloudData, 'download')
+      alert('Download successful!')
       window.location.reload()
     } catch (err) {
       console.error(err)
-      alert('Sync failed. See console for details.')
+      alert('Download failed. See console for details.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!config.sync_key) {
+      alert('Please enter a Sync Key to upload.')
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const data = await onExportData()
+      await api.uploadUserData(config.sync_key, data)
+      alert('Upload successful!')
+    } catch (err) {
+      console.error(err)
+      alert('Upload failed. See console for details.')
     } finally {
       setIsSyncing(false)
     }
@@ -81,19 +101,33 @@ export function DataSyncManager({
           variant="outline"
           size="sm"
           className="flex-1 gap-2"
-          onClick={handleSync}
+          onClick={handleDownload}
           disabled={isSyncing}
         >
           {isSyncing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <RefreshCw className="h-4 w-4" />
+            <Download className="h-4 w-4" />
           )}
-          Sync with Cloud
+          Download
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 gap-2"
+          onClick={handleUpload}
+          disabled={isSyncing}
+        >
+          {isSyncing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4" />
+          )}
+          Upload
         </Button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Sync downloads first (merge), then uploads.
+        Download overwrites configs and merges messages for matched sessions.
       </p>
     </div>
   )

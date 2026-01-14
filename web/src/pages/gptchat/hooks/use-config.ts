@@ -595,8 +595,8 @@ export function useConfig() {
    * Import data (overwrite existing)
    */
   const importAllData = useCallback(
-    async (data: Record<string, unknown>) => {
-      return importData(data, sessionId)
+    async (data: Record<string, unknown>, mode: 'merge' | 'download' = 'merge') => {
+      return importData(data, sessionId, mode)
     },
     [sessionId],
   )

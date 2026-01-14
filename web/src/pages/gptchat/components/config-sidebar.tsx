@@ -30,7 +30,7 @@ export interface ConfigSidebarProps {
   onEditPrompt?: (oldName: string, newName: string, newPrompt: string) => void
   onDeletePrompt?: (name: string) => void
   onExportData: () => Promise<unknown>
-  onImportData: (data: unknown) => Promise<void>
+  onImportData: (data: unknown, mode?: 'merge' | 'download') => Promise<void>
 
   // Session Management
   sessions?: { id: number; name: string; visible: boolean }[]

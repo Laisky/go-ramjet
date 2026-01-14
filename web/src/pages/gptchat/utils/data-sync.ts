@@ -182,16 +182,31 @@ function inferChatTimestampMs(chatId: string): number {
 }
 
 /**
- * Import data (incremental merge).
+ * Import data.
+ *
+ * @param mode 'merge' means incremental merge (default).
+ *             'download' means overwrite all configs, and merge messages
+ *             only for sessions that exist in both cloud and local.
  */
 export async function importAllData(
   data: Record<string, unknown>,
   sessionId: number,
+  mode: 'merge' | 'download' = 'merge',
 ): Promise<void> {
   const incoming = (data && typeof data === 'object' ? data : {}) as Record<
     string,
     unknown
   >
+
+  const localKeys = await kvList()
+  const localSessionConfigKeys = new Set(
+    localKeys.filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX)),
+  )
+  const cloudSessionConfigKeys = new Set(
+    Object.keys(incoming).filter((k) =>
+      k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
+    ),
+  )
 
   // 1) Merge deleted ids and apply deletions BEFORE merging messages.
   const localDeleted = normalizeDeletedChatIds(
@@ -238,7 +253,6 @@ export async function importAllData(
   }
 
   // 3) Rebuild session histories using merged chat payloads.
-  const localKeys = await kvList()
   const historyKeys = new Set<string>()
 
   for (const k of localKeys) {
@@ -249,21 +263,49 @@ export async function importAllData(
   }
 
   for (const historyKey of historyKeys) {
+    // Extract session ID to check matching
+    const sessIdSuffix = historyKey.substring(
+      StorageKeys.SESSION_HISTORY_PREFIX.length,
+    )
+    const configKey = StorageKeys.SESSION_CONFIG_PREFIX + sessIdSuffix
+
     const localHistory =
       (await kvGet<SessionHistoryItem[]>(historyKey)) ||
       ([] as SessionHistoryItem[])
     const cloudHistory = normalizeHistoryList(incoming[historyKey])
 
-    const chatIds = new Set<string>()
-    for (const item of localHistory) {
-      if (item?.chatID) chatIds.add(item.chatID)
-    }
-    for (const item of cloudHistory) {
-      if (item?.chatID) chatIds.add(item.chatID)
-    }
+    if (mode === 'download') {
+      const isMatched =
+        localSessionConfigKeys.has(configKey) &&
+        cloudSessionConfigKeys.has(configKey)
 
-    for (const id of deletedSet) chatIds.delete(id)
-    await rebuildSessionHistory(historyKey, Array.from(chatIds))
+      if (isMatched) {
+        // Match -> attempt to merge
+        const chatIds = new Set<string>()
+        for (const item of localHistory) {
+          if (item?.chatID) chatIds.add(item.chatID)
+        }
+        for (const item of cloudHistory) {
+          if (item?.chatID) chatIds.add(item.chatID)
+        }
+        for (const id of deletedSet) chatIds.delete(id)
+        await rebuildSessionHistory(historyKey, Array.from(chatIds))
+      } else {
+        // Not matched -> do nothing for history in download mode
+        continue
+      }
+    } else {
+      // mode === 'merge' (default behavior)
+      const chatIds = new Set<string>()
+      for (const item of localHistory) {
+        if (item?.chatID) chatIds.add(item.chatID)
+      }
+      for (const item of cloudHistory) {
+        if (item?.chatID) chatIds.add(item.chatID)
+      }
+      for (const id of deletedSet) chatIds.delete(id)
+      await rebuildSessionHistory(historyKey, Array.from(chatIds))
+    }
   }
 
   // 4) Overwrite non-chat keys from cloud (settings, session configs, shortcuts, etc).
@@ -274,20 +316,26 @@ export async function importAllData(
     if (key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX)) continue
     if (key === StorageKeys.SELECTED_SESSION) continue
 
-    const localVal = await kvGet<any>(key)
-    if (
-      localVal &&
-      typeof localVal === 'object' &&
-      val &&
-      typeof val === 'object'
-    ) {
-      const localTs = localVal.updated_at || 0
-      const cloudTs = (val as any).updated_at || 0
-      if (cloudTs >= localTs) {
+    if (mode === 'download') {
+      // Download mode: unconditional overwrite
+      await kvSet(key, val)
+    } else {
+      // Merge mode: conditional overwrite based on updated_at
+      const localVal = await kvGet<any>(key)
+      if (
+        localVal &&
+        typeof localVal === 'object' &&
+        val &&
+        typeof val === 'object'
+      ) {
+        const localTs = localVal.updated_at || 0
+        const cloudTs = (val as any).updated_at || 0
+        if (cloudTs >= localTs) {
+          await kvSet(key, val)
+        }
+      } else {
         await kvSet(key, val)
       }
-    } else {
-      await kvSet(key, val)
     }
   }
 

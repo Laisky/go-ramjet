@@ -301,9 +301,9 @@ export function GPTChatPage() {
   }, [purgeAllSessions, clearMessages])
 
   const handleImportData = useCallback(
-    async (data: unknown) => {
+    async (data: unknown, mode: 'merge' | 'download' = 'merge') => {
       // Accept any shape but ensure we pass an object map to storage importer
-      await importAllData((data as Record<string, unknown>) || {})
+      await importAllData((data as Record<string, unknown>) || {}, mode)
     },
     [importAllData],
   )
