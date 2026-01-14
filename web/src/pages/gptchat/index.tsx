@@ -11,6 +11,7 @@ import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
   ChatInput,
   ChatMessage,
+  ChatSearch,
   ConfigSidebar,
   EditMessageModal,
   FloatingMessageHeader,
@@ -95,6 +96,7 @@ export function GPTChatPage() {
     scrollToBottom,
     scrollToTop,
     handleLoadOlder,
+    scrollToMessage,
   } = useChatScroll({ messages, pageSize: MESSAGE_PAGE_SIZE })
 
   const { upgradeInfo, setUpgradeInfo, ignoreVersion } = useVersionCheck()
@@ -406,6 +408,10 @@ export function GPTChatPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ChatSearch
+              messages={messages}
+              onSelectMessage={scrollToMessage}
+            />
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>

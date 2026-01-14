@@ -100,6 +100,38 @@ export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
     })
   }, [messages.length, pageSize])
 
+  const scrollToMessage = useCallback(
+    (chatId: string, role: string) => {
+      const id = `chat-message-${chatId}-${role}`
+
+      // Find message index to update visibility if needed
+      const msgIndex = messages.findIndex(
+        (m) => m.chatID === chatId && m.role === role,
+      )
+      if (msgIndex === -1) return
+
+      // If message is older than currently visible, expand visible count
+      const isVisibleCount = messages.length - msgIndex
+      if (isVisibleCount > visibleCount) {
+        setVisibleCount(isVisibleCount)
+      }
+
+      // Wait for re-render if we expanded visibleCount
+      requestAnimationFrame(() => {
+        const element = document.getElementById(id)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          // Add a temporary highlight effect
+          element.classList.add('ring-2', 'ring-primary', 'ring-offset-2')
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2')
+          }, 2000)
+        }
+      })
+    },
+    [messages, visibleCount],
+  )
+
   return {
     messagesEndRef,
     showScrollButton,
@@ -110,5 +142,6 @@ export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
     scrollToTop,
     handleLoadOlder,
     isNearBottom,
+    scrollToMessage,
   }
 }

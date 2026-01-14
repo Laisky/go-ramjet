@@ -1,6 +1,7 @@
 export { AttachmentTag } from './attachment-tag'
 export { ChatInput } from './chat-input'
 export { ChatMessage } from './chat-message'
+export { ChatSearch } from './chat-search'
 export { ConfigSidebar } from './config-sidebar'
 export { EditMessageModal } from './edit-message-modal'
 export { FloatingMessageHeader } from './floating-message-header'
