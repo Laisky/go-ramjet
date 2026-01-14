@@ -4,17 +4,32 @@ import type { ChatMessageData } from '../types'
 interface UseChatScrollOptions {
   messages: ChatMessageData[]
   pageSize: number
+  sessionId: string | number
 }
 
 /**
  * useChatScroll manages scrolling behavior for the chat interface.
  */
-export function useChatScroll({ messages, pageSize }: UseChatScrollOptions) {
+export function useChatScroll({
+  messages,
+  pageSize,
+  sessionId,
+}: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const autoScrollRef = useRef(true)
   const suppressAutoScrollOnceRef = useRef(false)
+
+  // Reset state when session changes
+  useEffect(() => {
+    setVisibleCount(pageSize)
+    autoScrollRef.current = true
+    suppressAutoScrollOnceRef.current = false
+    // Immediately scroll to top when switching sessions to prevent
+    // being stuck at the bottom of the previous (possibly longer) session.
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [sessionId, pageSize])
 
   const isNearBottom = useCallback(() => {
     const { scrollTop, scrollHeight, clientHeight } = document.documentElement

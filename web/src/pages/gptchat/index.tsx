@@ -97,7 +97,7 @@ export function GPTChatPage() {
     scrollToTop,
     handleLoadOlder,
     scrollToMessage,
-  } = useChatScroll({ messages, pageSize: MESSAGE_PAGE_SIZE })
+  } = useChatScroll({ messages, pageSize: MESSAGE_PAGE_SIZE, sessionId })
 
   const { upgradeInfo, setUpgradeInfo, ignoreVersion } = useVersionCheck()
   const [prefillDraft, setPrefillDraft] = useState<
@@ -467,6 +467,7 @@ export function GPTChatPage() {
           )}
 
           <div
+            key={sessionId}
             ref={messagesContainerRef}
             className="min-h-0 overflow-x-hidden px-1 pt-1 sm:px-2 sm:pt-1.5 md:px-4"
           >

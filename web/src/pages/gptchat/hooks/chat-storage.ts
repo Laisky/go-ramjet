@@ -91,6 +91,10 @@ export function useChatStorage({
 
   const loadMessages = useCallback(async () => {
     const loadingSessionId = sessionId
+    // Clear current messages while loading new ones to prevent
+    // UI from showing old session's messages and to reset scroll state.
+    setMessages([])
+
     try {
       const key = getSessionHistoryKey(sessionId)
       const history = await kvGet<SessionHistoryItem[]>(key)
