@@ -563,6 +563,35 @@ export async function uploadFiles(
   return response.json()
 }
 
+/**
+ * Upload a single file for chat context
+ */
+export async function uploadFile(
+  file: File,
+  apiToken: string,
+): Promise<{ url: string }> {
+  const fileExt = file.name.slice(file.name.lastIndexOf('.'))
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('file_ext', fileExt)
+
+  const response = await fetch(`${getApiBase()}/files/chat`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      'X-Laisky-User-Id': await getSHA1(apiToken),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`[${response.status}]: ${text}`)
+  }
+
+  return response.json()
+}
+
 export async function transcribeAudio(
   file: File,
   apiToken: string,

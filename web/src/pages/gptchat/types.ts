@@ -25,6 +25,7 @@ export interface ChatAttachment {
   cacheKey?: string
   url?: string
   type: 'image' | 'file'
+  file?: File
 }
 
 export interface Annotation {

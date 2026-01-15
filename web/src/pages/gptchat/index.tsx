@@ -248,9 +248,9 @@ export function GPTChatPage() {
   }, [updateConfig])
 
   const handleSend = useCallback(
-    async (content: string, files?: File[]) => {
+    async (content: string, attachments?: ChatAttachment[]) => {
       autoScrollRef.current = true
-      await sendMessage(content, files)
+      await sendMessage(content, attachments)
       requestAnimationFrame(() => scrollToBottom({ force: true }))
     },
     [scrollToBottom, sendMessage, autoScrollRef],
@@ -595,6 +595,7 @@ export function GPTChatPage() {
         <EditMessageModal
           content={editingMessage.content}
           attachments={editingMessage.attachments}
+          apiToken={config.api_token}
           onClose={() => setEditingMessage(null)}
           onConfirm={handleConfirmEdit}
         />

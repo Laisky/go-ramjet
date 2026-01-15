@@ -18,6 +18,7 @@ import {
   type SessionConfig,
 } from '../types'
 import { generateChatId, getChatDataKey } from '../utils/chat-storage'
+import { fileToDataUrl } from '../utils/format'
 import { runDeepResearch } from './chat-deep-research'
 import { runImageModelFlow, runMaskInpainting } from './chat-media'
 import { useChatStorage } from './chat-storage'
@@ -41,7 +42,10 @@ export interface UseChatReturn {
   isLoading: boolean
   loadingChatId: string | null
   error: string | null
-  sendMessage: (content: string, attachments?: File[]) => Promise<void>
+  sendMessage: (
+    content: string,
+    attachments?: ChatAttachment[],
+  ) => Promise<void>
   stopGeneration: () => void
   clearMessages: () => Promise<void>
   deleteMessage: (chatId: string) => Promise<void>
@@ -182,35 +186,24 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
   })
 
   /**
-   * fileToDataUrl converts a File object to a base64 data URL string for inline usage.
-   */
-  const fileToDataUrl = useCallback(async (file: File): Promise<string> => {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('Failed to read file'))
-      reader.readAsDataURL(file)
-    })
-  }, [])
-
-  /**
    * findMaskPair searches a file list for matching image and mask pairs used by inpainting flows.
    */
-  const findMaskPair = useCallback((files?: File[]) => {
-    if (!files || files.length === 0) return null
+  const findMaskPair = useCallback((attachments?: ChatAttachment[]) => {
+    if (!attachments || attachments.length === 0) return null
     const normalizeName = (name: string) => name.replace(/\.[^.]+$/, '')
 
-    for (const file of files) {
-      const lower = file.name.toLowerCase()
+    for (const att of attachments) {
+      if (!att.file) continue
+      const lower = att.filename.toLowerCase()
       if (!lower.includes('-mask')) continue
       const base = normalizeName(lower.split('-mask')[0])
-      const image = files.find((f) => {
-        if (f === file) return false
-        const fname = normalizeName(f.name.toLowerCase())
+      const pair = attachments.find((a) => {
+        if (a === att || !a.file) return false
+        const fname = normalizeName(a.filename.toLowerCase())
         return fname === base || fname.startsWith(base)
       })
-      if (image) {
-        return { image, mask: file }
+      if (pair && pair.file && att.file) {
+        return { image: pair.file, mask: att.file }
       }
     }
     return null
@@ -232,7 +225,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
    * sendMessage handles user submission, attachment processing, and dispatches assistant streams.
    */
   const sendMessage = useCallback(
-    async (content: string, attachments?: File[]) => {
+    async (content: string, attachments?: ChatAttachment[]) => {
       const safeContent = String(content || '').trim()
       if (!safeContent) return
 
@@ -254,27 +247,21 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       pushTextPart(finalContent)
 
       if (attachments && attachments.length > 0) {
-        try {
-          const { uploadFiles } = await import('@/utils/api')
-
-          for (const file of attachments) {
-            if (file.type.startsWith('image/')) {
-              const b64 = await fileToDataUrl(file)
-              attachmentMarkdown.push(`![${file.name}](${b64})`)
+        for (const att of attachments) {
+          if (att.type === 'image') {
+            const b64 =
+              att.contentB64 || (att.file ? await fileToDataUrl(att.file) : '')
+            if (b64) {
+              attachmentMarkdown.push(`![${att.filename}](${b64})`)
               contentParts.push({ type: 'image_url', image_url: { url: b64 } })
-            } else {
-              const { cache_keys } = await uploadFiles([file], config.api_token)
-              const note = cache_keys?.[0]
-                ? `[File uploaded: ${file.name} (key: ${cache_keys[0]})]`
-                : `[File uploaded: ${file.name}]`
-              attachmentMarkdown.push(note)
-              pushTextPart(`\n\n${note}`)
             }
+          } else if (att.type === 'file') {
+            const note = att.url
+              ? `[File uploaded: ${att.filename} (url: ${att.url})]`
+              : `[File uploaded: ${att.filename}]`
+            attachmentMarkdown.push(note)
+            // pushTextPart(`\n\n${note}`) // we don't necessarily need to push it again if it's already in the text from MessageInput
           }
-        } catch (err) {
-          console.error('File upload failed', err)
-          setError('Failed to process attachments')
-          return
         }
       }
 
@@ -285,8 +272,14 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
           (m) => !m.startsWith('!['),
         )
         if (nonImageMarkdown.length > 0) {
-          finalContent =
-            `${finalContent}\n\n${nonImageMarkdown.join('\n\n')}`.trim()
+          // Check if any of these notes are already in finalContent to avoid duplication
+          const missingNotes = nonImageMarkdown.filter(
+            (note) => !finalContent.includes(note),
+          )
+          if (missingNotes.length > 0) {
+            finalContent =
+              `${finalContent}\n\n${missingNotes.join('\n\n')}`.trim()
+          }
         }
       }
 
@@ -295,22 +288,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         role: 'user',
         content: finalContent,
         timestamp: Date.now(),
-        attachments: attachments?.map((file) => ({
-          filename: file.name,
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-          url: file.type.startsWith('image/') ? undefined : undefined, // will be handled by upload if needed
-        })),
-      }
-
-      // For images, we want to store the base64 in the attachment so it can be rendered
-      if (attachments && userMessage.attachments) {
-        for (let i = 0; i < attachments.length; i++) {
-          if (attachments[i].type.startsWith('image/')) {
-            userMessage.attachments[i].contentB64 = await fileToDataUrl(
-              attachments[i],
-            )
-          }
-        }
+        attachments: attachments,
       }
 
       setMessages((prev) => [...prev, userMessage])

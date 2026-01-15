@@ -2,26 +2,18 @@
  * Chat input component with file attachments and feature toggles.
  */
 import { Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { transcribeAudio } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import { useUser } from '../hooks/use-user'
 import { isImageModel } from '../models'
-import type { SessionConfig } from '../types'
-import { AttachmentTag } from './attachment-tag'
-import { ImageEditorModal, type ImageEditorResult } from './image-editor-modal'
+import type { ChatAttachment, SessionConfig } from '../types'
+import { MessageInput } from './message-input'
 
 export interface ChatInputProps {
-  onSend: (message: string, files?: File[]) => void
+  onSend: (message: string, attachments?: ChatAttachment[]) => void
   onStop?: () => void
   isLoading?: boolean
   disabled?: boolean
@@ -57,47 +49,13 @@ export function ChatInput({
   const { user } = useUser(config.api_token)
   const isFree = user?.is_free ?? true
   const [message, setMessage] = useState(() => draftMessage ?? '')
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
-  const [editorIndex, setEditorIndex] = useState<number | null>(null)
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const lastPrefillIdRef = useRef<string | null>(null)
-
-  const appendFiles = useCallback((files: File[]) => {
-    if (!files.length) return
-    setAttachedFiles((prev) => [...prev, ...files])
-  }, [])
-
-  const closeEditor = useCallback(() => {
-    setIsEditorOpen(false)
-    setEditorIndex(null)
-  }, [])
-
-  const openEditorForIndex = useCallback((index: number) => {
-    setEditorIndex(index)
-    setIsEditorOpen(true)
-  }, [])
-
-  const handleEditorSave = useCallback(
-    (result: ImageEditorResult) => {
-      setAttachedFiles((prev) => {
-        if (editorIndex === null) return prev
-        const next = [...prev]
-        next[editorIndex] = result.imageFile
-        if (result.maskFile) {
-          next.splice(editorIndex + 1, 0, result.maskFile)
-        }
-        return next
-      })
-      closeEditor()
-    },
-    [closeEditor, editorIndex],
-  )
 
   // Helper to update message and sync to parent
   const updateMessage = useCallback(
@@ -119,14 +77,6 @@ export function ChatInput({
       setMessage(draftMessage)
     }
   }, [draftMessage])
-
-  useEffect(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.style.height = 'auto'
-    const maxHeight = 240
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
-  }, [message])
 
   useEffect(() => {
     if (!prefillDraft || prefillDraft.id === lastPrefillIdRef.current) {
@@ -153,13 +103,6 @@ export function ChatInput({
     }
   }, [])
 
-  useEffect(() => {
-    if (editorIndex !== null && editorIndex >= attachedFiles.length) {
-      setEditorIndex(null)
-      setIsEditorOpen(false)
-    }
-  }, [attachedFiles.length, editorIndex])
-
   // Auto-focus when input becomes enabled or session/model/config changes
   useEffect(() => {
     if (!disabled && !isLoading && !isTranscribing && !isSidebarOpen) {
@@ -183,13 +126,12 @@ export function ChatInput({
   const handleSend = useCallback(() => {
     const trimmed = String(message || '').trim()
     if (!trimmed || disabled || isLoading || isTranscribing) return
-    const payload = trimmed
-    onSend(payload, attachedFiles.length > 0 ? attachedFiles : undefined)
+    onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     updateMessage('')
-    setAttachedFiles([])
+    setAttachments([])
   }, [
     message,
-    attachedFiles,
+    attachments,
     disabled,
     isLoading,
     isTranscribing,
@@ -198,7 +140,7 @@ export function ChatInput({
   ])
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Ignore keyboard events when composition is in progress (IME)
       if (e.nativeEvent.isComposing) return
 
@@ -211,68 +153,6 @@ export function ChatInput({
     },
     [handleSend],
   )
-
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files
-      if (files) {
-        appendFiles(Array.from(files))
-      }
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    },
-    [appendFiles],
-  )
-
-  const removeFile = useCallback((index: number) => {
-    setAttachedFiles((prev) => prev.filter((_, i) => i !== index))
-    setEditorIndex((prev) => {
-      if (prev === null) return prev
-      if (prev === index) {
-        setIsEditorOpen(false)
-        return null
-      }
-      if (prev > index) {
-        return prev - 1
-      }
-      return prev
-    })
-  }, [])
-
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = Array.from(e.clipboardData?.items || [])
-      const files: File[] = []
-      items.forEach((item) => {
-        if (item.kind === 'file') {
-          const file = item.getAsFile()
-          if (file) {
-            files.push(file)
-          }
-        }
-      })
-      if (files.length > 0) {
-        appendFiles(files)
-      }
-    },
-    [appendFiles],
-  )
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      if (e.dataTransfer?.files?.length) {
-        appendFiles(Array.from(e.dataTransfer.files))
-      }
-    },
-    [appendFiles],
-  )
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-  }, [])
 
   const toggleSwitch = useCallback(
     (key: keyof SessionConfig['chat_switch']) => {
@@ -359,48 +239,22 @@ export function ChatInput({
     }
   }, [isRecording, startRecording, stopRecording])
 
-  const editorFile = editorIndex !== null ? attachedFiles[editorIndex] : null
-
   return (
     <>
-      <div
-        className="theme-surface w-full p-1"
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        {attachedFiles.length > 0 && (
-          <div className="mb-1 flex flex-wrap gap-1">
-            {attachedFiles.map((file, index) => (
-              <AttachmentTag
-                key={`${file.name}-${index}`}
-                filename={file.name}
-                type={file.type.startsWith('image/') ? 'image' : 'file'}
-                size={file.size}
-                file={file}
-                onRemove={() => removeFile(index)}
-                onEdit={() => openEditorForIndex(index)}
-              />
-            ))}
-          </div>
-        )}
-
+      <div className="theme-surface w-full p-1">
         <div className="flex items-start gap-1.5">
-          <div className="relative flex-1">
-            <Textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => updateMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={placeholder}
-              disabled={disabled || isLoading || isTranscribing}
-              className="min-h-[80px] w-full resize-none rounded-md border-0 bg-transparent px-0 pr-16 pb-1.5 text-base shadow-none ring-0 focus:ring-0 dark:bg-transparent"
-              rows={3}
-            />
-            <span className="pointer-events-none absolute bottom-0 left-0 text-[9px] text-muted-foreground/50">
-              Ctrl+Enter to send
-            </span>
-          </div>
+          <MessageInput
+            textareaRef={textareaRef}
+            value={message}
+            onChange={updateMessage}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled || isLoading || isTranscribing}
+            apiToken={config.api_token}
+            className="flex-1"
+          />
 
           <div className="flex shrink-0 self-stretch items-stretch gap-1">
             <div className="flex flex-col gap-1">
@@ -423,24 +277,6 @@ export function ChatInput({
                   <Send className="h-5 w-5" />
                 </Button>
               )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.txt,.md"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || isLoading}
-                className="flex-1 w-12 rounded-md p-0 shadow-sm"
-                title="Attach file"
-              >
-                <Image className="h-5 w-5" />
-              </Button>
             </div>
 
             {config.chat_switch.enable_talk && (
@@ -528,12 +364,6 @@ export function ChatInput({
           </div>
         </div>
       </div>
-      <ImageEditorModal
-        open={isEditorOpen}
-        file={editorFile}
-        onClose={closeEditor}
-        onSave={handleEditorSave}
-      />
     </>
   )
 }
