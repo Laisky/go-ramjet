@@ -99,9 +99,14 @@ function normalizeCodeBlockContent(source: string): string {
   const normalized = (source ?? '').replace(/\r\n/g, '\n')
   const lines = normalized.split('\n')
 
+  const isBlankLine = (line: string) => {
+    const withoutAnsi = line.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    return withoutAnsi.replace(/[\p{White_Space}\p{Cf}\p{Cc}]/gu, '') === ''
+  }
+
   let trailingEmpty = 0
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    if (lines[i].trim() === '') {
+    if (isBlankLine(lines[i])) {
       trailingEmpty += 1
     } else {
       break
@@ -110,6 +115,9 @@ function normalizeCodeBlockContent(source: string): string {
 
   if (trailingEmpty > 1) {
     lines.splice(lines.length - (trailingEmpty - 1), trailingEmpty - 1)
+    console.debug('[Markdown] trimmed trailing blank lines', {
+      removed: trailingEmpty - 1,
+    })
   }
 
   const joined = lines.join('\n')
@@ -120,25 +128,56 @@ function normalizeCodeBlockContent(source: string): string {
 }
 
 /**
+ * trimTrailingBlankLines ensures at most one trailing blank line for display.
+ */
+function trimTrailingBlankLines(lines: string[]): string[] {
+  if (lines.length === 0) {
+    return ['']
+  }
+
+  const isBlankLine = (line: string) => {
+    const withoutAnsi = line.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    return withoutAnsi.replace(/[\p{White_Space}\p{Cf}\p{Cc}]/gu, '') === ''
+  }
+
+  let trailingEmpty = 0
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (isBlankLine(lines[i])) {
+      trailingEmpty += 1
+    } else {
+      break
+    }
+  }
+
+  if (trailingEmpty > 1) {
+    return lines.slice(0, lines.length - (trailingEmpty - 1))
+  }
+
+  return lines
+}
+
+/**
  * CodeBlock renders multi-line code with line numbers, syntax colors, and copy controls.
  */
 function CodeBlock({ code, language }: CodeBlockProps) {
   // Normalize line endings and keep a single trailing newline to prevent extra blank lines
-  const normalized = useMemo(
-    () => normalizeCodeBlockContent(code),
-    [code],
+  const normalized = useMemo(() => normalizeCodeBlockContent(code), [code])
+  const displayLines = useMemo(
+    () => trimTrailingBlankLines(normalized.split('\n')),
+    [normalized],
   )
-  const highlighted = useMemo(
-    () => highlightCode(normalized, language),
-    [language, normalized],
-  )
+  const highlighted = useMemo(() => {
+    const highlightedText = highlightCode(displayLines.join('\n'), language)
+    const highlightedLines = highlightedText.split('\n')
+    if (highlightedLines.length > displayLines.length) {
+      return highlightedLines.slice(0, displayLines.length).join('\n')
+    }
+    return highlightedText
+  }, [language, displayLines])
   const [copied, setCopied] = useState(false)
   const lines = useMemo(() => {
-    if (!normalized) {
-      return ['']
-    }
-    return normalized.split('\n')
-  }, [normalized])
+    return displayLines.length > 0 ? displayLines : ['']
+  }, [displayLines])
 
   const handleCopy = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.clipboard) {
@@ -351,7 +390,9 @@ const renderCode = ({
 }: CodeRendererProps) => {
   const match = /language-(\w+)/.exec(className || '')
   const lang = match?.[1]
-  const rawContent = String(children ?? '')
+  const rawContent = Array.isArray(children)
+    ? children.map((child) => String(child ?? '')).join('')
+    : String(children ?? '')
 
   // Mermaid diagrams
   if (lang === 'mermaid') {
@@ -366,10 +407,7 @@ const renderCode = ({
 
   if (shouldRenderAsBlock) {
     return (
-      <CodeBlock
-        code={normalizeCodeBlockContent(rawContent)}
-        language={lang}
-      />
+      <CodeBlock code={normalizeCodeBlockContent(rawContent)} language={lang} />
     )
   }
 

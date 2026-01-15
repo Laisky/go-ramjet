@@ -561,9 +561,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .code-shell__gutter {
-  position: sticky;
+  position: relative;
   left: 0;
-  z-index: 10;
+  z-index: 0;
   min-width: 3.25rem;
   padding: 1rem 0.75rem;
   text-align: right;
@@ -591,6 +591,11 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.85rem;
   line-height: 1.6;
   min-width: fit-content;
+}
+
+.code-shell__content pre code {
+  display: block;
+  line-height: 1.6;
 }
 
 .code-shell__raw {
