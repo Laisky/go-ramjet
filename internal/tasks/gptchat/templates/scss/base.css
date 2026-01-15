@@ -1,66 +1,90 @@
 body {
   width: 100vw;
-  overflow-y: hidden; }
-  body #headerbar {
-    padding: 0px; }
-    body #headerbar .bi.bi-coin {
-      color: #ffc82c; }
-    body #headerbar > .container-fluid {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: nowrap;
-      padding: 0px; }
-      body #headerbar > .container-fluid .container-fluid.left {
-        display: flex;
-        justify-content: flex-start; }
-        body #headerbar > .container-fluid .container-fluid.left .navbar-nav {
-          display: flex;
-          flex-direction: row; }
-      body #headerbar > .container-fluid .navbar-nav {
-        margin-bottom: 0 !important; }
-        body #headerbar > .container-fluid .navbar-nav a.dropdown-toggle.active {
-          -webkit-text-stroke: 1px #0063f6; }
-      body #headerbar > .container-fluid ul.dropdown-menu {
-        min-width: fit-content; }
-      body #headerbar > .container-fluid a[data-bs-toggle="offcanvas"] {
-        border-style: none;
-        background: none; }
-  body #hiddenChatConfigSideBar #prompt-market .prompt-labels span {
-    cursor: pointer;
-    margin-right: 5px; }
-  body #hiddenChatConfigSideBar .offcanvas-header {
-    padding-bottom: 0px; }
-  body #hiddenChatConfigSideBar .offcanvas-body {
-    padding-top: 0px; }
-    body #hiddenChatConfigSideBar .offcanvas-body .system-prompt .input {
-      padding: 2px;
-      min-height: 180px;
-      font-size: 0.8em; }
-    body #hiddenChatConfigSideBar .offcanvas-body .dropdown-menu {
-      min-width: inherit;
-      padding: 0px; }
-    body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts {
-      margin-bottom: 5px !important; }
-      body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge {
-        margin-right: 5px;
-        cursor: pointer;
-        height: 22px; }
-        body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge .bi.bi-pencil-square {
-          margin-left: 5px; }
-    body #hiddenChatConfigSideBar .offcanvas-body .input-group {
-      margin-bottom: 5px !important; }
-      body #hiddenChatConfigSideBar .offcanvas-body .input-group label {
-        margin-bottom: 0px; }
-      body #hiddenChatConfigSideBar .offcanvas-body .input-group label[for="configStaticContext"] {
-        width: 100%; }
-      body #hiddenChatConfigSideBar .offcanvas-body .input-group i.bi {
-        font-size: small; }
-      body #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.save-prompt,
-      body #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.open-prompt-market {
-        cursor: pointer;
-        margin-left: 5px; }
+  overflow-y: hidden;
+}
+body #headerbar {
+  padding: 0px;
+}
+body #headerbar .bi.bi-coin {
+  color: #ffc82c;
+}
+body #headerbar > .container-fluid {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  padding: 0px;
+}
+body #headerbar > .container-fluid .container-fluid.left {
+  display: flex;
+  justify-content: flex-start;
+}
+body #headerbar > .container-fluid .container-fluid.left .navbar-nav {
+  display: flex;
+  flex-direction: row;
+}
+body #headerbar > .container-fluid .navbar-nav {
+  margin-bottom: 0 !important;
+}
+body #headerbar > .container-fluid .navbar-nav a.dropdown-toggle.active {
+  -webkit-text-stroke: 1px #0063f6;
+}
+body #headerbar > .container-fluid ul.dropdown-menu {
+  min-width: fit-content;
+}
+body #headerbar > .container-fluid a[data-bs-toggle='offcanvas'] {
+  border-style: none;
+  background: none;
+}
+body #hiddenChatConfigSideBar #prompt-market .prompt-labels span {
+  cursor: pointer;
+  margin-right: 5px;
+}
+body #hiddenChatConfigSideBar .offcanvas-header {
+  padding-bottom: 0px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body {
+  padding-top: 0px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .system-prompt .input {
+  padding: 2px;
+  min-height: 180px;
+  font-size: 0.8em;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .dropdown-menu {
+  min-width: inherit;
+  padding: 0px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts {
+  margin-bottom: 5px !important;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge {
+  margin-right: 5px;
+  cursor: pointer;
+  height: 22px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .prompt-shortcuts span.badge .bi.bi-pencil-square {
+  margin-left: 5px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .input-group {
+  margin-bottom: 5px !important;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .input-group label {
+  margin-bottom: 0px;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .input-group label[for='configStaticContext'] {
+  width: 100%;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .input-group i.bi {
+  font-size: small;
+}
+body #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.save-prompt,
+body #hiddenChatConfigSideBar .offcanvas-body .input-group .system-prompt .bi.open-prompt-market {
+  cursor: pointer;
+  margin-left: 5px;
+}
 
-  body #hiddenChatConfigSideBar .mcp-manager .add-mcp-server {
-    cursor: pointer; }
+body #hiddenChatConfigSideBar .mcp-manager .add-mcp-server {
+  cursor: pointer;
+}
 
 /*# sourceMappingURL=base.css.map */

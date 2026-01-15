@@ -3,9 +3,9 @@ name: ci
 on:
   push:
     branches:
-      - "master"
-      - "main"
-      - "test/ci"
+      - 'master'
+      - 'main'
+      - 'test/ci'
     paths-ignore:
       - 'docs/**'
       - 'doc/**'

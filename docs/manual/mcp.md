@@ -37,12 +37,12 @@ This manual provides comprehensive guidance for using MCP (Model Context Protoco
 
 MCP (Model Context Protocol) is a standardized protocol that allows AI language models to interact with external tools and services. When MCP is enabled, the AI can:
 
--   Call external APIs and services
--   Execute code and scripts
--   Search databases and knowledge bases
--   Interact with file systems
--   Perform web searches and fetch web content
--   And much more, depending on the available tools
+- Call external APIs and services
+- Execute code and scripts
+- Search databases and knowledge bases
+- Interact with file systems
+- Perform web searches and fetch web content
+- And much more, depending on the available tools
 
 The GPTChat application supports MCP through remote MCP servers that expose tool definitions and execution endpoints.
 
@@ -56,10 +56,10 @@ MCP allows the AI assistant to go beyond simple text generation by giving it acc
 
 **Example use cases:**
 
--   "Search the web for the latest news about AI"
--   "What's the current weather in Tokyo?"
--   "Calculate the hash of this text"
--   "Fetch the content of this URL"
+- "Search the web for the latest news about AI"
+- "What's the current weather in Tokyo?"
+- "Calculate the hash of this text"
+- "Fetch the content of this URL"
 
 ### Enabling MCP
 
@@ -78,20 +78,20 @@ Once MCP is enabled, you can interact with the AI as normal. The AI will automat
 
 **Tips for effective tool usage:**
 
--   Be specific about what you need (e.g., "Fetch the content from https://example.com" instead of "Check this link")
--   The AI will explain what tools it's using in the response
--   Complex tasks may require multiple tool calls
+- Be specific about what you need (e.g., "Fetch the content from https://example.com" instead of "Check this link")
+- The AI will explain what tools it's using in the response
+- Complex tasks may require multiple tool calls
 
 ### Understanding Tool Call Output
 
 When the AI uses MCP tools, you'll see a collapsible **"💭 Reasoning & Tools"** section in the response. This shows:
 
--   **🔧 Tool Events**: A log of which tools were called and their results
-    -   `Upstream tool_call: <tool_name>` - The AI requested this tool
-    -   `args: {...}` - The arguments passed to the tool
-    -   `exec MCP tool: <tool_name> @ <server_url>` - Tool execution details
-    -   `tool ok` - Tool executed successfully
-    -   `tool error: <message>` - Tool execution failed
+- **🔧 Tool Events**: A log of which tools were called and their results
+  - `Upstream tool_call: <tool_name>` - The AI requested this tool
+  - `args: {...}` - The arguments passed to the tool
+  - `exec MCP tool: <tool_name> @ <server_url>` - Tool execution details
+  - `tool ok` - Tool executed successfully
+  - `tool error: <message>` - Tool execution failed
 
 Click on the "💭 Reasoning & Tools" header to expand or collapse this section.
 
@@ -105,9 +105,9 @@ MCP configuration is stored per-session in the browser's IndexedDB. Each chat se
 
 The configuration includes:
 
--   **MCP Servers**: List of remote MCP server endpoints
--   **Tool Definitions**: Cached tool schemas from each server
--   **Enabled Tools**: Which specific tools are active
+- **MCP Servers**: List of remote MCP server endpoints
+- **Tool Definitions**: Cached tool schemas from each server
+- **Enabled Tools**: Which specific tools are active
 
 ### Adding MCP Servers
 
@@ -115,9 +115,9 @@ The configuration includes:
 2. Navigate to the **MCP Servers** section
 3. Click **Add Server**
 4. Fill in the server details:
-    - **Name**: A friendly name for the server (e.g., "Web Tools")
-    - **URL**: The MCP server endpoint (e.g., `https://mcp.laisky.com`)
-    - **API Key**: Authentication key (required for most servers)
+   - **Name**: A friendly name for the server (e.g., "Web Tools")
+   - **URL**: The MCP server endpoint (e.g., `https://mcp.laisky.com`)
+   - **API Key**: Authentication key (required for most servers)
 5. Click **Save**
 6. The application will automatically sync available tools
 
@@ -136,14 +136,14 @@ The default MCP server at `https://mcp.laisky.com` provides the following tools:
 
 **Configuration for mcp.laisky.com:**
 
--   **URL**: `https://mcp.laisky.com`
--   **API Key**: Your Laisky API key (same as the chat API key, e.g., `sk-xxx...`)
+- **URL**: `https://mcp.laisky.com`
+- **API Key**: Your Laisky API key (same as the chat API key, e.g., `sk-xxx...`)
 
 **Important Notes:**
 
--   The `web_search` tool incurs a cost per query (billed through your API key)
--   The `ask_user` tool requires you to have the [Ask User Console](https://mcp.laisky.com/mcp/tools/ask_user) open to respond
--   The `get_user_request` tool uses the [User Requests Console](https://mcp.laisky.com/mcp/tools/get_user_requests)
+- The `web_search` tool incurs a cost per query (billed through your API key)
+- The `ask_user` tool requires you to have the [Ask User Console](https://mcp.laisky.com/mcp/tools/ask_user) open to respond
+- The `get_user_request` tool uses the [User Requests Console](https://mcp.laisky.com/mcp/tools/get_user_requests)
 
 ### Syncing Tools
 
@@ -166,14 +166,14 @@ You can control which tools are available:
 
 **Enable/Disable a Server:**
 
--   Toggle the switch next to the server name
--   Disabled servers won't contribute tools to requests
+- Toggle the switch next to the server name
+- Disabled servers won't contribute tools to requests
 
 **Select Specific Tools:**
 
--   Click on a server to expand its tool list
--   Check/uncheck individual tools
--   Only checked tools will be sent to the AI
+- Click on a server to expand its tool list
+- Check/uncheck individual tools
+- Only checked tools will be sent to the AI
 
 ### Backend Configuration
 
@@ -181,11 +181,11 @@ The backend handles MCP tool execution. Key configuration options in `settings.y
 
 ```yaml
 openai:
-    # Maximum number of tool-loop iterations
-    tool_loop_max_rounds: 5
+  # Maximum number of tool-loop iterations
+  tool_loop_max_rounds: 5
 
-    # Rate limiting for freetier users (seconds between MCP calls)
-    rate_limit_expensive_models_interval_secs: 600
+  # Rate limiting for freetier users (seconds between MCP calls)
+  rate_limit_expensive_models_interval_secs: 600
 ```
 
 **Backend behavior:**
@@ -193,8 +193,8 @@ openai:
 1. Receives requests with tools and MCP server configurations
 2. Sends requests to upstream LLM with tool definitions
 3. When the LLM requests tool calls:
-    - Tries local tools first (built-in functions)
-    - Falls back to MCP servers for external tools
+   - Tries local tools first (built-in functions)
+   - Falls back to MCP servers for external tools
 4. Executes tools and feeds results back to the LLM
 5. Loops until the LLM provides a final answer or max rounds reached
 6. Streams thinking/tool events via `delta.reasoning_content`
@@ -244,9 +244,9 @@ If you encounter issues not covered here:
 1. Check the browser console for detailed error logs
 2. Review the reasoning panel for tool-specific errors
 3. Contact support with:
-    - The exact error message
-    - The tool you were trying to use
-    - Steps to reproduce the issue
+   - The exact error message
+   - The tool you were trying to use
+   - Steps to reproduce the issue
 
 ---
 
@@ -309,21 +309,21 @@ Tools follow the OpenAI function calling schema:
 
 ```json
 {
-    "type": "function",
-    "function": {
-        "name": "tool_name",
-        "description": "What the tool does",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "param1": {
-                    "type": "string",
-                    "description": "Parameter description"
-                }
-            },
-            "required": ["param1"]
+  "type": "function",
+  "function": {
+    "name": "tool_name",
+    "description": "What the tool does",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "param1": {
+          "type": "string",
+          "description": "Parameter description"
         }
+      },
+      "required": ["param1"]
     }
+  }
 }
 ```
 
@@ -331,9 +331,9 @@ Tools follow the OpenAI function calling schema:
 
 The application supports these MCP server endpoints:
 
--   `POST /` - JSON-RPC endpoint (for initialize, tools/list, tools/call)
--   `POST /v1/tools` - REST-style tool list
--   `POST /v1/tools/call` - REST-style tool execution
--   `POST /tools/call` - Alternative tool execution endpoint
+- `POST /` - JSON-RPC endpoint (for initialize, tools/list, tools/call)
+- `POST /v1/tools` - REST-style tool list
+- `POST /v1/tools/call` - REST-style tool execution
+- `POST /tools/call` - Alternative tool execution endpoint
 
 The application tries multiple endpoint variations to maximize compatibility with different MCP server implementations.

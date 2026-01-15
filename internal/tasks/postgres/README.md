@@ -55,7 +55,6 @@ tasks:
 The `backup_file_prefix` controls the generated S3 key and the local filename used for logs/temp files.
 
 - If `backup_file_prefix` ends with `/` (directory-like):
-
   - S3 key: `<prefix><database>-YYYYMMDD.gz`
   - Local filename: `<database>-YYYYMMDD.gz`
   - Example: `backup_file_prefix: "backup/postgre/prod/oneapi/"` produces
@@ -165,19 +164,15 @@ zcat oneapi-20250909.gz | psql -h 127.0.0.1 -U postgres -d oneapi
 ## Troubleshooting
 
 - `pg_dump: command not found`
-
   - Install PostgreSQL client tools and ensure `pg_dump` is in PATH
 
 - Authentication failures to PostgreSQL
-
   - Verify host/port/user/password; ensure network and pg_hba.conf allow the connection
 
 - S3 upload errors (403/NoSuchBucket)
-
   - Check credentials, bucket existence, and permissions; verify endpoint URL and TLS settings
 
 - Backup skipped unexpectedly ("already exists")
-
   - The task is idempotent per day. Delete or move the object if you want to re-run for the same date
 
 - Large databases timing out
@@ -199,8 +194,8 @@ zcat oneapi-20250909.gz | psql -h 127.0.0.1 -U postgres -d oneapi
 Given:
 
 ```yaml
-backup_file_prefix: "backup/postgre/prod/oneapi/"
-database: "oneapi"
+backup_file_prefix: 'backup/postgre/prod/oneapi/'
+database: 'oneapi'
 ```
 
 Generates:
@@ -211,8 +206,8 @@ Generates:
 Given:
 
 ```yaml
-backup_file_prefix: "backup/postgre/prod/oneapi/oneapi"
-database: "oneapi"
+backup_file_prefix: 'backup/postgre/prod/oneapi/oneapi'
+database: 'oneapi'
 ```
 
 Generates:

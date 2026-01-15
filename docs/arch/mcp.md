@@ -30,10 +30,10 @@ We will modify `newSessionConfig()` to include:
 ```javascript
 mcp_servers: [
   {
-    id: "uuid...",
-    name: "My Weather Server",
-    url: "https://mcp.example.com",
-    api_key: "sk-...",
+    id: 'uuid...',
+    name: 'My Weather Server',
+    url: 'https://mcp.example.com',
+    api_key: 'sk-...',
     enabled: true,
     tools: [], // Cached tool definitions fetched from remote
   },
@@ -56,18 +56,12 @@ Find the `div` inside `#hiddenChatConfigSideBar` (Config Sidebar) and add this s
 <div class="mb-3 mcp-manager">
   <label class="form-label d-flex justify-content-between">
     MCP Servers
-    <i
-      class="bi bi-plus-circle add-mcp-server"
-      style="cursor: pointer;"
-      title="Add MCP Server"
-    ></i>
+    <i class="bi bi-plus-circle add-mcp-server" style="cursor: pointer;" title="Add MCP Server"></i>
   </label>
   <div class="list-group mcp-server-list">
     <!-- Servers will be rendered here by JS -->
   </div>
-  <div class="form-text">
-    Remote MCP servers provide tools/functions for the AI.
-  </div>
+  <div class="form-text">Remote MCP servers provide tools/functions for the AI.</div>
 </div>
 ```
 
@@ -81,47 +75,26 @@ Add this new Modal HTML at the bottom of your page (near other modals like `#sin
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Configure MCP Server</h5>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-          aria-label="Close"
-        ></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" class="mcp-id" />
         <div class="mb-3">
           <label class="form-label">Server Name</label>
-          <input
-            type="text"
-            class="form-control mcp-name"
-            placeholder="e.g. Weather Tools"
-          />
+          <input type="text" class="form-control mcp-name" placeholder="e.g. Weather Tools" />
         </div>
         <div class="mb-3">
           <label class="form-label">MCP URL</label>
-          <input
-            type="text"
-            class="form-control mcp-url"
-            placeholder="https://mcp-server.com"
-          />
+          <input type="text" class="form-control mcp-url" placeholder="https://mcp-server.com" />
         </div>
         <div class="mb-3">
           <label class="form-label">API Key (Optional)</label>
-          <input
-            type="password"
-            class="form-control mcp-key"
-            placeholder="sk-..."
-          />
+          <input type="password" class="form-control mcp-key" placeholder="sk-..." />
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary btn-save-mcp">
-          Save & Sync
-        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-save-mcp">Save & Sync</button>
       </div>
     </div>
   </div>
@@ -139,7 +112,7 @@ Modify the existing function to initialize the `mcp_servers` array.
 function newSessionConfig() {
   return {
     // ... existing fields ...
-    api_token: "FREETIER-" + libs.RandomString(32),
+    api_token: 'FREETIER-' + libs.RandomString(32),
     // ... existing fields ...
     chat_switch: {
       all_in_one: false,
@@ -162,9 +135,9 @@ Copy this entire block of functions into your script (e.g., before `setupChatJs`
  * MCP Server Manager Logic
  */
 async function setupMCPManager() {
-  const container = document.querySelector(".mcp-manager");
-  const listContainer = container.querySelector(".mcp-server-list");
-  const modalEle = document.getElementById("modal-mcp-edit");
+  const container = document.querySelector('.mcp-manager');
+  const listContainer = container.querySelector('.mcp-server-list');
+  const modalEle = document.getElementById('modal-mcp-edit');
   const modal = new window.bootstrap.Modal(modalEle);
 
   // Render List from Session Config
@@ -172,29 +145,25 @@ async function setupMCPManager() {
     const sconfig = await getChatSessionConfig();
     const servers = sconfig.mcp_servers || [];
 
-    listContainer.innerHTML = "";
+    listContainer.innerHTML = '';
     if (servers.length === 0) {
-      listContainer.innerHTML =
-        '<div class="text-muted small fst-italic">No servers configured.</div>';
+      listContainer.innerHTML = '<div class="text-muted small fst-italic">No servers configured.</div>';
       return;
     }
 
     servers.forEach((server) => {
       const toolCount = server.tools ? server.tools.length : 0;
-      const statusColor = server.enabled ? "text-success" : "text-secondary";
-      const item = document.createElement("div");
-      item.className =
-        "list-group-item d-flex justify-content-between align-items-center";
+      const statusColor = server.enabled ? 'text-success' : 'text-secondary';
+      const item = document.createElement('div');
+      item.className = 'list-group-item d-flex justify-content-between align-items-center';
       item.innerHTML = `
                 <div class="d-flex align-items-center overflow-hidden">
                     <div class="form-check form-switch me-2">
                         <input class="form-check-input mcp-enable-switch" type="checkbox" ${
-                          server.enabled ? "checked" : ""
+                          server.enabled ? 'checked' : ''
                         } data-id="${server.id}">
                     </div>
-                    <div class="text-truncate" style="max-width: 130px;" title="${libs.sanitizeHTML(
-                      server.url
-                    )}">
+                    <div class="text-truncate" style="max-width: 130px;" title="${libs.sanitizeHTML(server.url)}">
                         <strong>${libs.sanitizeHTML(server.name)}</strong>
                         <div class="small text-muted" style="font-size: 0.75rem;">${toolCount} tools</div>
                     </div>
@@ -220,8 +189,8 @@ async function setupMCPManager() {
   // Bind events for buttons inside the list
   const bindListEvents = () => {
     // Toggle Enable/Disable
-    listContainer.querySelectorAll(".mcp-enable-switch").forEach((el) => {
-      el.addEventListener("change", async (e) => {
+    listContainer.querySelectorAll('.mcp-enable-switch').forEach((el) => {
+      el.addEventListener('change', async (e) => {
         const id = e.target.dataset.id;
         const sconfig = await getChatSessionConfig();
         const server = sconfig.mcp_servers.find((s) => s.id === id);
@@ -234,8 +203,8 @@ async function setupMCPManager() {
     });
 
     // Sync (Fetch Tools)
-    listContainer.querySelectorAll(".btn-sync").forEach((el) => {
-      el.addEventListener("click", async (e) => {
+    listContainer.querySelectorAll('.btn-sync').forEach((el) => {
+      el.addEventListener('click', async (e) => {
         const id = e.currentTarget.dataset.id;
         await syncMCPServerTools(id);
         await renderList();
@@ -243,8 +212,8 @@ async function setupMCPManager() {
     });
 
     // Edit
-    listContainer.querySelectorAll(".btn-edit").forEach((el) => {
-      el.addEventListener("click", async (e) => {
+    listContainer.querySelectorAll('.btn-edit').forEach((el) => {
+      el.addEventListener('click', async (e) => {
         const id = e.currentTarget.dataset.id;
         const sconfig = await getChatSessionConfig();
         const server = sconfig.mcp_servers.find((s) => s.id === id);
@@ -255,10 +224,10 @@ async function setupMCPManager() {
     });
 
     // Delete
-    listContainer.querySelectorAll(".btn-del").forEach((el) => {
-      el.addEventListener("click", async (e) => {
+    listContainer.querySelectorAll('.btn-del').forEach((el) => {
+      el.addEventListener('click', async (e) => {
         const id = e.currentTarget.dataset.id;
-        ConfirmModal("Delete this MCP server?", async () => {
+        ConfirmModal('Delete this MCP server?', async () => {
           const sconfig = await getChatSessionConfig();
           sconfig.mcp_servers = sconfig.mcp_servers.filter((s) => s.id !== id);
           await saveChatSessionConfig(sconfig);
@@ -270,79 +239,77 @@ async function setupMCPManager() {
 
   // Open Modal (Add or Edit)
   const openModal = (server = null) => {
-    const body = modalEle.querySelector(".modal-body");
+    const body = modalEle.querySelector('.modal-body');
     if (server) {
-      body.querySelector(".mcp-id").value = server.id;
-      body.querySelector(".mcp-name").value = server.name;
-      body.querySelector(".mcp-url").value = server.url;
-      body.querySelector(".mcp-key").value = server.api_key || "";
+      body.querySelector('.mcp-id').value = server.id;
+      body.querySelector('.mcp-name').value = server.name;
+      body.querySelector('.mcp-url').value = server.url;
+      body.querySelector('.mcp-key').value = server.api_key || '';
     } else {
-      body.querySelector(".mcp-id").value = "";
-      body.querySelector(".mcp-name").value = "";
-      body.querySelector(".mcp-url").value = "";
-      body.querySelector(".mcp-key").value = "";
+      body.querySelector('.mcp-id').value = '';
+      body.querySelector('.mcp-name').value = '';
+      body.querySelector('.mcp-url').value = '';
+      body.querySelector('.mcp-key').value = '';
     }
     modal.show();
   };
 
   // Save Button Handler
-  modalEle
-    .querySelector(".btn-save-mcp")
-    .addEventListener("click", async () => {
-      const body = modalEle.querySelector(".modal-body");
-      const id = body.querySelector(".mcp-id").value;
-      const name = body.querySelector(".mcp-name").value.trim();
-      const url = body.querySelector(".mcp-url").value.trim();
-      const apiKey = body.querySelector(".mcp-key").value.trim();
+  modalEle.querySelector('.btn-save-mcp').addEventListener('click', async () => {
+    const body = modalEle.querySelector('.modal-body');
+    const id = body.querySelector('.mcp-id').value;
+    const name = body.querySelector('.mcp-name').value.trim();
+    const url = body.querySelector('.mcp-url').value.trim();
+    const apiKey = body.querySelector('.mcp-key').value.trim();
 
-      if (!name || !url) {
-        showalert("warning", "Name and URL are required.");
-        return;
+    if (!name || !url) {
+      showalert('warning', 'Name and URL are required.');
+      return;
+    }
+
+    try {
+      ShowSpinner();
+      const sconfig = await getChatSessionConfig();
+
+      // Ensure array exists
+      if (!sconfig.mcp_servers) sconfig.mcp_servers = [];
+
+      let server;
+      if (id) {
+        // Update existing
+        server = sconfig.mcp_servers.find((s) => s.id === id);
+        server.name = name;
+        server.url = url;
+        server.api_key = apiKey;
+      } else {
+        // Create new
+        server = {
+          id: libs.RandomString(8),
+          name,
+          url,
+          api_key: apiKey,
+          enabled: true,
+          tools: [],
+        };
+        sconfig.mcp_servers.push(server);
       }
 
-      try {
-        ShowSpinner();
-        const sconfig = await getChatSessionConfig();
+      // Save basic info first
+      await saveChatSessionConfig(sconfig);
 
-        // Ensure array exists
-        if (!sconfig.mcp_servers) sconfig.mcp_servers = [];
-
-        let server;
-        if (id) {
-          // Update existing
-          server = sconfig.mcp_servers.find((s) => s.id === id);
-          server.name = name;
-          server.url = url;
-          server.api_key = apiKey;
-        } else {
-          // Create new
-          server = {
-            id: libs.RandomString(8),
-            name,
-            url,
-            api_key: apiKey,
-            enabled: true,
-            tools: [],
-          };
-          sconfig.mcp_servers.push(server);
-        }
-
-        // Save basic info first
-        await saveChatSessionConfig(sconfig);
-
-        // Auto-fetch tools
-        modal.hide(); // Hide modal first
-        await syncMCPServerTools(server.id); // This will update config again
-        await renderList();
-      } catch (err) {
-        showalert("danger", "Error saving MCP server: " + err.message);
-      } finally {
-        HideSpinner();
-      }
-    });
+      // Auto-fetch tools
+      modal.hide(); // Hide modal first
+      await syncMCPServerTools(server.id); // This will update config again
+      await renderList();
+    } catch (err) {
+      showalert('danger', 'Error saving MCP server: ' + err.message);
+    } finally {
+      HideSpinner();
+    }
+  });
 
   // Add Button Handler
-  container.querySelector(".add-mcp-server").addEventListener("click", () => {
+  container.querySelector('.add-mcp-server').addEventListener('click', () => {
     openModal();
   });
 
@@ -355,7 +322,7 @@ async function setupMCPManager() {
     async () => {
       await renderList();
     },
-    "mcp_manager_session_change"
+    'mcp_manager_session_change'
   );
 }
 
@@ -374,7 +341,7 @@ async function syncMCPServerTools(serverId) {
     // Common pattern for OpenAI tools is often just GET /tools
     const headers = {};
     if (server.api_key) {
-      headers["Authorization"] = `Bearer ${server.api_key}`;
+      headers['Authorization'] = `Bearer ${server.api_key}`;
     }
 
     // We assume the MCP URL provided points to the base.
@@ -384,7 +351,7 @@ async function syncMCPServerTools(serverId) {
     // if (!fetchUrl.endsWith('/tools')) fetchUrl = fetchUrl.replace(/\/+$/, '') + '/tools';
 
     const resp = await fetch(fetchUrl, {
-      method: "GET",
+      method: 'GET',
       headers: headers,
     });
 
@@ -399,21 +366,15 @@ async function syncMCPServerTools(serverId) {
     } else if (data.tools && Array.isArray(data.tools)) {
       tools = data.tools;
     } else {
-      throw new Error("Invalid tool list format received");
+      throw new Error('Invalid tool list format received');
     }
 
     server.tools = tools;
     await saveChatSessionConfig(sconfig);
-    showalert(
-      "success",
-      `Successfully fetched ${tools.length} tools for ${server.name}`
-    );
+    showalert('success', `Successfully fetched ${tools.length} tools for ${server.name}`);
   } catch (err) {
     console.error(err);
-    showalert(
-      "danger",
-      `Failed to fetch tools from ${server.name}: ${err.message}`
-    );
+    showalert('danger', `Failed to fetch tools from ${server.name}: ${err.message}`);
   } finally {
     HideSpinner();
   }

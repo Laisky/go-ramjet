@@ -1,8 +1,8 @@
-import { renderHook, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useConfig } from '../use-config'
 import { kvGet } from '@/utils/storage'
-import { DefaultModel, ChatModelGPT4Turbo } from '../../models'
+import { renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ChatModelGPT4Turbo, DefaultModel } from '../../models'
+import { useConfig } from '../use-config'
 
 // Mock storage
 vi.mock('@/utils/storage', () => ({
@@ -47,9 +47,12 @@ describe('useConfig', () => {
 
     const { result } = renderHook(() => useConfig())
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false)
-    }, { timeout: 3000 })
+    await waitFor(
+      () => {
+        expect(result.current.isLoading).toBe(false)
+      },
+      { timeout: 3000 },
+    )
 
     expect(result.current.config.selected_model).toBe(ChatModelGPT4Turbo)
     expect(result.current.config.selected_chat_model).toBe(ChatModelGPT4Turbo)

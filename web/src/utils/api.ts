@@ -184,12 +184,7 @@ export async function getSHA1(str: string): Promise<string> {
   let hash = 2166136261
   for (let i = 0; i < str.length; i += 1) {
     hash ^= str.charCodeAt(i)
-    hash +=
-      (hash << 1) +
-      (hash << 4) +
-      (hash << 7) +
-      (hash << 8) +
-      (hash << 24)
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)
   }
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
@@ -576,14 +571,17 @@ export async function transcribeAudio(
   formData.append('file', file)
   formData.append('model', 'whisper-1')
 
-  const response = await fetch(`${getApiBase()}/oneapi/v1/audio/transcriptions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
+  const response = await fetch(
+    `${getApiBase()}/oneapi/v1/audio/transcriptions`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'X-Laisky-User-Id': await getSHA1(apiToken),
+      },
+      body: formData,
     },
-    body: formData,
-  })
+  )
 
   if (!response.ok) {
     const text = await response.text()

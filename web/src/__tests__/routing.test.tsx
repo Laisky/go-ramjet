@@ -7,7 +7,9 @@ describe('routing', () => {
   it('renders landing page with task cards', () => {
     renderApp('/')
 
-    expect(screen.getByRole('heading', { name: 'go-ramjet' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'go-ramjet' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('GPT Chat')).toBeInTheDocument()
     expect(screen.getByText('Audit Log')).toBeInTheDocument()
   })
@@ -18,7 +20,9 @@ describe('routing', () => {
 
     await user.click(screen.getByText('Heartbeat'))
 
-    expect(screen.getByRole('heading', { name: 'Heartbeat', level: 2 })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Heartbeat', level: 2 }),
+    ).toBeInTheDocument()
     expect(screen.getByText('/heartbeat')).toBeInTheDocument()
   })
 })

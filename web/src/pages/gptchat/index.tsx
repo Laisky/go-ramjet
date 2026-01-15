@@ -411,10 +411,7 @@ export function GPTChatPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <ChatSearch
-              messages={messages}
-              onSelectMessage={scrollToMessage}
-            />
+            <ChatSearch messages={messages} onSelectMessage={scrollToMessage} />
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>

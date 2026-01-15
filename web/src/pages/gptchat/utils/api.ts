@@ -86,7 +86,10 @@ export const api = {
     } catch (err) {
       if (err instanceof ApiError) {
         const msg = (err.message || '').toLowerCase()
-        if ((err.status === 400 || err.status === 404) && msg.includes('does not exist')) {
+        if (
+          (err.status === 400 || err.status === 404) &&
+          msg.includes('does not exist')
+        ) {
           return {}
         }
       }

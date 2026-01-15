@@ -18,7 +18,11 @@ interface ChatSearchProps {
 /**
  * ChatSearch provides a command-palette style search interface for messages.
  */
-export function ChatSearch({ messages, onSelectMessage, onClose }: ChatSearchProps) {
+export function ChatSearch({
+  messages,
+  onSelectMessage,
+  onClose,
+}: ChatSearchProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ChatMessageData[]>([])
@@ -105,10 +109,7 @@ export function ChatSearch({ messages, onSelectMessage, onClose }: ChatSearchPro
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10dvh] backdrop-blur-[2px]">
-          <div
-            className="fixed inset-0"
-            onClick={() => setIsOpen(false)}
-          />
+          <div className="fixed inset-0" onClick={() => setIsOpen(false)} />
           <Card className="theme-surface theme-border relative z-10 w-full max-w-xl overflow-hidden rounded-xl border shadow-2xl">
             <div className="flex items-center border-b px-3">
               <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
@@ -140,10 +141,14 @@ export function ChatSearch({ messages, onSelectMessage, onClose }: ChatSearchPro
                       onClick={() => handleSelect(msg)}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wider",
-                          msg.role === 'user' ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                        )}>
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wider',
+                            msg.role === 'user'
+                              ? 'bg-primary/20 text-primary'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
                           {msg.role}
                         </span>
                         {msg.timestamp && (
@@ -172,10 +177,12 @@ export function ChatSearch({ messages, onSelectMessage, onClose }: ChatSearchPro
             <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <kbd className="rounded border bg-background px-1">↑↓</kbd> navigate
+                  <kbd className="rounded border bg-background px-1">↑↓</kbd>{' '}
+                  navigate
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="rounded border bg-background px-1">Enter</kbd> select
+                  <kbd className="rounded border bg-background px-1">Enter</kbd>{' '}
+                  select
                 </span>
               </div>
               <div className="flex items-center gap-1">

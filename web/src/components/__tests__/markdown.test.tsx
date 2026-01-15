@@ -10,14 +10,7 @@ describe('Markdown code blocks', () => {
   }
 
   it('keeps only one trailing blank line in code blocks', () => {
-    const content = [
-      '```go',
-      'package main',
-      '',
-      '',
-      '',
-      '```',
-    ].join('\n')
+    const content = ['```go', 'package main', '', '', '', '```'].join('\n')
 
     const { container } = render(<Markdown>{content}</Markdown>)
 

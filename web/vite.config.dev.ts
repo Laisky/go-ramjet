@@ -42,10 +42,11 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the Go backend
       // These patterns match API endpoints that should go to the backend
-      '^/gptchat/(api|user|audit|audio|images|deepresearch|ramjet|oneapi|version|favicon\\.ico|create-payment-intent)': {
-        target: 'http://127.0.0.1:24456',
-        changeOrigin: true,
-      },
+      '^/gptchat/(api|user|audit|audio|images|deepresearch|ramjet|oneapi|version|favicon\\.ico|create-payment-intent)':
+        {
+          target: 'http://127.0.0.1:24456',
+          changeOrigin: true,
+        },
       // Also proxy other task endpoints
       '^/(jav|auditlog|arweave|crawler|heartbeat|es|gitlab|health|version)': {
         target: 'http://127.0.0.1:24456',

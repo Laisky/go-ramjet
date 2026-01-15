@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   /* Base Colors */
@@ -48,8 +48,15 @@ body {
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--background);
@@ -394,8 +401,9 @@ body {
   background: rgba(0, 0, 0, 0.08);
   padding: 0.15em 0.4em;
   border-radius: 0.25rem;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, monospace;
+  font-family:
+    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   display: inline;
   line-height: 1;
 }
@@ -412,7 +420,7 @@ body {
 }
 
 /* Range slider styling */
-input[type="range"] {
+input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
@@ -421,11 +429,11 @@ input[type="range"] {
   cursor: pointer;
 }
 
-.dark input[type="range"] {
+.dark input[type='range'] {
   background: rgba(255, 255, 255, 0.1);
 }
 
-input[type="range"]::-webkit-slider-thumb {
+input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
@@ -436,11 +444,11 @@ input[type="range"]::-webkit-slider-thumb {
   transition: transform 0.15s ease;
 }
 
-input[type="range"]::-webkit-slider-thumb:hover {
+input[type='range']::-webkit-slider-thumb:hover {
   transform: scale(1.1);
 }
 
-input[type="range"]::-moz-range-thumb {
+input[type='range']::-moz-range-thumb {
   width: 16px;
   height: 16px;
   background: #3b82f6;
@@ -567,8 +575,9 @@ input[type="range"]::-moz-range-thumb {
   min-width: 3.25rem;
   padding: 1rem 0.75rem;
   text-align: right;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, monospace;
+  font-family:
+    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-size: 0.85rem;
   line-height: 1.6;
   background-color: var(--code-gutter-bg);
@@ -602,8 +611,9 @@ input[type="range"]::-moz-range-thumb {
   margin: 0;
   width: 100%;
   padding: 1.5rem;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, monospace;
+  font-family:
+    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-size: 0.85rem;
   line-height: 1.6;
   background-color: var(--code-surface);
@@ -638,8 +648,9 @@ input[type="range"]::-moz-range-thumb {
 
 .hljs {
   background: transparent;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, monospace;
+  font-family:
+    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-weight: 400;
   color: var(--code-foreground);
 }

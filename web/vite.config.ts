@@ -8,10 +8,11 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
     proxy: {
-      '^/(gptchat|jav|auditlog|arweave|crawler|heartbeat|es|gitlab|health|version)': {
-        target: 'http://127.0.0.1:24456',
-        changeOrigin: true,
-      },
+      '^/(gptchat|jav|auditlog|arweave|crawler|heartbeat|es|gitlab|health|version)':
+        {
+          target: 'http://127.0.0.1:24456',
+          changeOrigin: true,
+        },
     },
   },
   resolve: {

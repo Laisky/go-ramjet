@@ -8,24 +8,24 @@ tasks:
     interval: 86400
     # backups are streamed directly to S3; no local files will be written
     dbs:
-      - host: "127.0.0.1"
+      - host: '127.0.0.1'
         port: 5432
-        user: "postgres"
-        password: "your-password"
-        database: "your-db-1"
-        backup_file_prefix: "pg-your-db-1"
-      - host: "127.0.0.1"
+        user: 'postgres'
+        password: 'your-password'
+        database: 'your-db-1'
+        backup_file_prefix: 'pg-your-db-1'
+      - host: '127.0.0.1'
         port: 5432
-        user: "postgres"
-        password: "your-password"
-        database: "your-db-2"
-        backup_file_prefix: "pg-your-db-2"
+        user: 'postgres'
+        password: 'your-password'
+        database: 'your-db-2'
+        backup_file_prefix: 'pg-your-db-2'
     s3:
-      enable: true  # must be true to upload to S3; task also requires tasks.postgres.enable=true
-      endpoint: "https://minio.example.com"
-      access_key: "minio-access-key"
-      access_secret: "minio-secret-key"
-      bucket: "backups"
+      enable: true # must be true to upload to S3; task also requires tasks.postgres.enable=true
+      endpoint: 'https://minio.example.com'
+      access_key: 'minio-access-key'
+      access_secret: 'minio-secret-key'
+      bucket: 'backups'
   backups:
     interval: 3600
     configs:
@@ -37,9 +37,9 @@ tasks:
       #   mode: "rsync"
       #   remote: rsync's argument
   elasticsearch:
-    url: "http://localhost:8999/1037308040/"
-    interval: 60  # seconds
-    batch: 10000  # number of documents will be deleted in each loop
+    url: 'http://localhost:8999/1037308040/'
+    interval: 60 # seconds
+    batch: 10000 # number of documents will be deleted in each loop
     configs:
       # demo
       # - index: sit-cp-logs
@@ -48,7 +48,7 @@ tasks:
       # ------------------------------
       # cp & bot logs
       - index: sit-cp-logs
-        expire: 259200  # 3 days
+        expire: 259200 # 3 days
       - index: uat-cp-logs
         expire: 259200
       - index: perf-cp-logs
@@ -57,7 +57,7 @@ tasks:
         expire: 259200
       # spring logs
       - index: sit-spring-logs
-        expire: 1209600  # 15 days
+        expire: 1209600 # 15 days
       - index: uat-spring-logs
         expire: 1209600
       - index: perf-spring-logs
@@ -66,7 +66,7 @@ tasks:
         expire: 1209600
       # gateway logs
       - index: sit-gateway-logs
-        expire: 259200  # 3 days
+        expire: 259200 # 3 days
       - index: uat-gateway-logs
         expire: 259200
       - index: perf-gateway-logs
@@ -75,7 +75,7 @@ tasks:
         expire: 259200
       # spark logs
       - index: sit-spark-logs
-        expire: 604800  # 7 days
+        expire: 604800 # 7 days
       - index: uat-spark-logs
         expire: 604800
       - index: perf-spark-logs
@@ -84,7 +84,7 @@ tasks:
         expire: 604800
       # geely logs
       - index: sit-geely-logs
-        expire: 2592000  # 30 days
+        expire: 2592000 # 30 days
       - index: perf-geely-logs
         expire: 2592000
       - index: prod-geely-logs

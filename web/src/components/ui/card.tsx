@@ -40,7 +40,9 @@ export function CardDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-muted-foreground text-sm', className)} {...props} />
+  return (
+    <p className={cn('text-muted-foreground text-sm', className)} {...props} />
+  )
 }
 
 export function CardContent({

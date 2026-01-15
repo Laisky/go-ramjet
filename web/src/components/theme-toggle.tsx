@@ -16,8 +16,10 @@ export function ThemeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme()
 
   const icon = (() => {
-    if (theme === 'system') return <Monitor className="h-4 w-4" aria-hidden="true" />
-    if (resolvedTheme === 'dark') return <Moon className="h-4 w-4" aria-hidden="true" />
+    if (theme === 'system')
+      return <Monitor className="h-4 w-4" aria-hidden="true" />
+    if (resolvedTheme === 'dark')
+      return <Moon className="h-4 w-4" aria-hidden="true" />
     return <Sun className="h-4 w-4" aria-hidden="true" />
   })()
 
@@ -30,9 +32,15 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => setTheme('system')}>System</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme('light')}>Light</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme('dark')}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTheme('system')}>
+          System
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTheme('light')}>
+          Light
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTheme('dark')}>
+          Dark
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

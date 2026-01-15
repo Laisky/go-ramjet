@@ -53,9 +53,13 @@ export async function migrateLegacyData() {
               if (!existing) {
                 const parsed = JSON.parse(rawVal)
                 await kvSet(key, parsed)
-                console.debug(`[migration] Migrated key from localStorage: ${key}`)
+                console.debug(
+                  `[migration] Migrated key from localStorage: ${key}`,
+                )
               } else {
-                console.debug(`[migration] Skip migrating key ${key}, already exists in KV`)
+                console.debug(
+                  `[migration] Skip migrating key ${key}, already exists in KV`,
+                )
               }
             }
           } catch (err) {

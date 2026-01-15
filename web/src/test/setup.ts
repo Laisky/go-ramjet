@@ -11,7 +11,7 @@ if (!window.localStorage) {
       store.clear()
     },
     getItem(key: string) {
-      return store.has(key) ? store.get(key) ?? null : null
+      return store.has(key) ? (store.get(key) ?? null) : null
     },
     key(index: number) {
       const keys = Array.from(store.keys())

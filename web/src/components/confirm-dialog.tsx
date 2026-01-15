@@ -51,7 +51,11 @@ export function ConfirmDialog({
             </DialogPrimitive.Description>
           </div>
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
+            <Button
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              disabled={loading}
+            >
               {cancelText}
             </Button>
             <Button

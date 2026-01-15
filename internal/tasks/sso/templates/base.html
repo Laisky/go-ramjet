@@ -1,57 +1,54 @@
 {{define "base"}}
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SSO</title>
     <link rel="icon" href="favicon.ico" />
-    <link rel="stylesheet" href="https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css" media="print" onload="this.media='all'" />
-    <link rel="stylesheet" href="https://s3.laisky.com/static/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" media="print" onload="this.media='all'" >
-    <link rel="stylesheet" href="https://s3.laisky.com/static/prism/1.30.0/prism.css" media="print" onload="this.media='all'" />
-    <style>
+    <link
+      rel="stylesheet"
+      href="https://s3.laisky.com/static/twitter-bootstrap/5.2.3/css/bootstrap.min.css"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <link
+      rel="stylesheet"
+      href="https://s3.laisky.com/static/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <link rel="stylesheet" href="https://s3.laisky.com/static/prism/1.30.0/prism.css" media="print" onload="this.media = 'all'" />
+    <style></style>
+    {{block "header" .}} {{end}}
+  </head>
 
-    </style>
-    {{block "header" .}}
-    {{end}}
-</head>
-
-<body>
-    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar" style="padding: 0px;">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">SSO</a>
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                            User
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" data-page="login"></a></li>
-                            <li><a class="dropdown-item" href="#" data-page="register"></a></li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-
-            <button type="button" data-bs-toggle="offcanvas" data-bs-target="#hiddenChatConfigSideBar"
-                aria-controls="hiddenChatConfigSideBar">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
+  <body>
+    <nav class="fixed-top navbar navbar-expand-sm bg-light" id="headerbar" style="padding: 0px">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">SSO</a>
+        <div class="collapse navbar-collapse">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"> User </a>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" data-page="login"></a></li>
+                <li><a class="dropdown-item" href="#" data-page="register"></a></li>
+              </ul>
+            </li>
+          </ul>
         </div>
+
+        <button type="button" data-bs-toggle="offcanvas" data-bs-target="#hiddenChatConfigSideBar" aria-controls="hiddenChatConfigSideBar">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      </div>
     </nav>
 
+    {{block "body" .}} {{end}}
 
-    {{block "body" .}}
-    {{end}}
-
-    <script>
-
-    </script>
+    <script></script>
 
     <script defer src="https://s3.laisky.com/static/twitter-bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
     <script defer src="https://s3.laisky.com/static/sse/0.6.1/sse.js"></script>
@@ -59,12 +56,7 @@
     <script defer src="https://s3.laisky.com/static/prism/1.30.0/prism.js"></script>
     <script defer src="https://s3.laisky.com/static/fuse.js/6.6.2/fuse.min.js"></script>
 
-    {{block "ga" .}}
-    {{end}}
-
-    {{block "mainjs" .}}
-    {{end}}
-</body>
-
+    {{block "ga" .}} {{end}} {{block "mainjs" .}} {{end}}
+  </body>
 </html>
 {{end}}

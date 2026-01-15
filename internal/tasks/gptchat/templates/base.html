@@ -1,221 +1,239 @@
 {{define "base"}}
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat</title>
     <link rel="icon" href="favicon.ico" />
     <link href="{{.BootstrapCss}}" rel="stylesheet" />
-    <link rel="stylesheet" href="{{.BootstrapIcons}}">
+    <link rel="stylesheet" href="{{.BootstrapIcons}}" />
     <link href="{{.PrismCss}}" rel="stylesheet" />
     <link href="/static/{{.SiteCss}}" rel="stylesheet" />
-    {{block "header" .}}
-    {{end}}
-</head>
+    {{block "header" .}} {{end}}
+  </head>
 
-<body>
+  <body>
     <nav class="fixed-top navbar navbar-expand" id="headerbar">
-        <div class="container-fluid">
-            <div class="container-fluid left">
-                <a class="navbar-brand" href="#">OpenAI</a>
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                            Chat
-                        </a>
-                        <ul class="dropdown-menu chat-models">
-                            <li><a class="dropdown-item" href="#">loading...</a></li>
-                            <!-- <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo-1106">gpt-3.5-turbo-1106</a></li>
+      <div class="container-fluid">
+        <div class="container-fluid left">
+          <a class="navbar-brand" href="#">OpenAI</a>
+          <ul class="navbar-nav">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"> Chat </a>
+              <ul class="dropdown-menu chat-models">
+                <li><a class="dropdown-item" href="#">loading...</a></li>
+                <!-- <li><a class="dropdown-item" href="#" data-model="gpt-3.5-turbo-1106">gpt-3.5-turbo-1106</a></li>
                             <li><a class="dropdown-item disabled" href="#" data-model="gpt-4">gpt-4</a></li>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
                             <li><a class="dropdown-item disabled" href="#" data-model="text-davinci-003">davinci-003</a></li> -->
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                            Draw
-                        </a>
-                        <ul class="dropdown-menu image-models">
-                            <li><a class="dropdown-item" href="#">loading...</a></li>
-                            <!-- <li><a class="dropdown-item" href="#" data-model="dall-e-3">dall-e-3</a></li>
+              </ul>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"> Draw </a>
+              <ul class="dropdown-menu image-models">
+                <li><a class="dropdown-item" href="#">loading...</a></li>
+                <!-- <li><a class="dropdown-item" href="#" data-model="dall-e-3">dall-e-3</a></li>
                             <li><a class="dropdown-item" href="#" data-model="img-to-img">img-to-img</a></li>
                             <li><a class="dropdown-item" href="#" data-model="sdxl-turbo">sdxl-turbo</a></li> -->
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/pay/" target="_blank">Pay</a>
-                    </li>
-                    <li class="nav-item dropdown" style="display: none;">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                            Bots
-                        </a>
-                        <ul class="dropdown-menu qa-models">
-                            <li><a class="dropdown-item" href="#" data-model="qa-custom">custom</a></li>
-                        </ul>
-                    </li>
+              </ul>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="https://wiki.laisky.com/projects/gpt/pay/" target="_blank">Pay</a>
+            </li>
+            <li class="nav-item dropdown" style="display: none">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"> Bots </a>
+              <ul class="dropdown-menu qa-models">
+                <li><a class="dropdown-item" href="#" data-model="qa-custom">custom</a></li>
+              </ul>
+            </li>
+          </ul>
+        </div>
 
-                </ul>
-            </div>
-
-
-            <ul class="navbar-nav">
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
-                        aria-expanded="false">
-                        <i class="bi bi-toggles2"></i>
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="#" type="button" data-bs-toggle="offcanvas"
-                                data-bs-target="#offcanvasSession" aria-controls="offcanvasSession">
-                                <i class="bi bi-stack" data-bs-toggle="tooltip" data-bs-placement="top"
-                                    title="manage sessions"></i>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="#" type="button" data-bs-toggle="offcanvas"
-                                data-bs-target="#hiddenChatConfigSideBar" aria-controls="hiddenChatConfigSideBar">
-                                <i class="bi bi-tools" data-bs-toggle="tooltip" data-bs-placement="top"
-                                    title="configuration"></i>
-                            </a>
-                        </li>
-                        <!-- <li>
+        <ul class="navbar-nav">
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-toggles2"></i>
+            </a>
+            <ul class="dropdown-menu">
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="#"
+                  type="button"
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#offcanvasSession"
+                  aria-controls="offcanvasSession"
+                >
+                  <i class="bi bi-stack" data-bs-toggle="tooltip" data-bs-placement="top" title="manage sessions"></i>
+                </a>
+              </li>
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="#"
+                  type="button"
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#hiddenChatConfigSideBar"
+                  aria-controls="hiddenChatConfigSideBar"
+                >
+                  <i class="bi bi-tools" data-bs-toggle="tooltip" data-bs-placement="top" title="configuration"></i>
+                </a>
+              </li>
+              <!-- <li>
                             <a class="dropdown-item" href="https://wiki.laisky.com/projects/gpt/pay/"
                                 target="_blank">
                                 <i class="bi bi-patch-question-fill" data-bs-toggle="tooltip" data-bs-placement="top"
                                     title="tutorial"></i>
                             </a>
                         </li> -->
-                    </ul>
-                </li>
             </ul>
-        </div>
+          </li>
+        </ul>
+      </div>
     </nav>
 
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="hiddenChatConfigSideBar"
-        aria-labelledby="toggleChatConfigSidebarBtn">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="toggleChatConfigSidebarBtn">Configurations</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body">
-            <div class="input-group mb-3">
-                <label for="token" class="form-label">api-key:</label>
-                <div class="input-group mb-3 token-type" style="padding: 0px;">
-                    <!-- <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button"
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="hiddenChatConfigSideBar" aria-labelledby="toggleChatConfigSidebarBtn">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="toggleChatConfigSidebarBtn">Configurations</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="input-group mb-3">
+          <label for="token" class="form-label">api-key:</label>
+          <div class="input-group mb-3 token-type" style="padding: 0px">
+            <!-- <button class="btn btn-outline-secondary dropdown-toggle show-val" type="button"
                         data-bs-toggle="dropdown" aria-expanded="false">proxy</button>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" data-value="proxy" href="#">proxy</a></li>
                         <li><a class="dropdown-item disabled" data-value="direct" href="#">direct</a></li>
                     </ul> -->
-                    <input dir="auto" type="text" class="form-control input api-token" value="">
-                </div>
-            </div>
-            <div class="input-group mb-3" style="display: none;">
-                <label for="api-base" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top"
-                    title="For Azure users, please provide the complete Azure address, for example, https://xxx.openai.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2023-12-01-preview">api-base
-                    <i class="bi bi-info-circle"></i>:</label>
-                <div class="input-group mb-3" style="padding: 0px;">
-                    <input dir="auto" type="text" class="form-control input api-base" value="https://api.openai.com"
-                        placeholder="https://api.openai.com">
-                </div>
-            </div>
-            <div class="mb-3 input-group contexts">
-                <label for="configChatNContexts" class="form-label" data-bs-toggle="tooltip" data-bs-placement="top"
-                    title="Sending how many recent contexts each time, may lead to AI repeating the answer to the recent question.">
-                    contexts <i class="bi bi-info-circle"></i> - <span class="contexts-val"></span>
-                </label>
-                <input dir="auto" type="range" class="form-range input contexts" min="1" max="30" step="1" value="6">
-            </div>
-            <div class="mb-3 input-group max-token">
-                <label for="configMaxTokens" class="form-label">
-                    max tokens - <span class="max-token-val"></span>
-                </label>
-                <input dir="auto" type="range" class="form-range input max-token" min="1000" max="100000" step="1000"
-                    value="1000">
-            </div>
-            <div class="mb-3 input-group temperature">
-                <label for="configTemperature" class="form-label">
-                    temperature - <span class="temperature-val"></span>
-                </label>
-                <input dir="auto" type="range" class="form-range input temperature" min="0" max="2" step="0.1"
-                    value="1">
-            </div>
-            <div class="mb-3 input-group presence_penalty">
-                <label for="configpresence_penalty" class="form-label">
-                    presence_penalty - <span class="presence_penalty-val"></span>
-                </label>
-                <input dir="auto" type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1"
-                    value="0">
-            </div>
-            <div class="mb-3 input-group frequency_penalty">
-                <label for="configfrequency_penalty" class="form-label">
-                    frequency_penalty - <span class="frequency_penalty-val"></span>
-                </label>
-                <input dir="auto" type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1"
-                    value="0">
-            </div>
-            <div class="mb-3 input-group system-prompt">
-                <label for="configStaticContext" class="form-label">
-                    system prompt <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
-                        title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers."></i>:
-                    <span style="float: right;">
-                        <i class="bi bi-bookmark-star save-prompt" data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="save current prompt to shortcuts"></i>
-                        <i class="bi bi-search open-prompt-market" data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="search more open prompts"></i>
-                    </span>
-                </label>
-                <textarea dir="auto" class="form-control input" placeholder="something always send to AI"></textarea>
-            </div>
-            <div class="mb-3 prompt-shortcuts">
-                <span class="badge text-bg-info"
-                    data-prompt="The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can.">
-                    chat</span>
-            </div>
+            <input dir="auto" type="text" class="form-control input api-token" value="" />
+          </div>
+        </div>
+        <div class="input-group mb-3" style="display: none">
+          <label
+            for="api-base"
+            class="form-label"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
+            title="For Azure users, please provide the complete Azure address, for example, https://xxx.openai.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2023-12-01-preview"
+            >api-base <i class="bi bi-info-circle"></i>:</label
+          >
+          <div class="input-group mb-3" style="padding: 0px">
+            <input
+              dir="auto"
+              type="text"
+              class="form-control input api-base"
+              value="https://api.openai.com"
+              placeholder="https://api.openai.com"
+            />
+          </div>
+        </div>
+        <div class="mb-3 input-group contexts">
+          <label
+            for="configChatNContexts"
+            class="form-label"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
+            title="Sending how many recent contexts each time, may lead to AI repeating the answer to the recent question."
+          >
+            contexts <i class="bi bi-info-circle"></i> - <span class="contexts-val"></span>
+          </label>
+          <input dir="auto" type="range" class="form-range input contexts" min="1" max="30" step="1" value="6" />
+        </div>
+        <div class="mb-3 input-group max-token">
+          <label for="configMaxTokens" class="form-label"> max tokens - <span class="max-token-val"></span> </label>
+          <input dir="auto" type="range" class="form-range input max-token" min="1000" max="100000" step="1000" value="1000" />
+        </div>
+        <div class="mb-3 input-group temperature">
+          <label for="configTemperature" class="form-label"> temperature - <span class="temperature-val"></span> </label>
+          <input dir="auto" type="range" class="form-range input temperature" min="0" max="2" step="0.1" value="1" />
+        </div>
+        <div class="mb-3 input-group presence_penalty">
+          <label for="configpresence_penalty" class="form-label"> presence_penalty - <span class="presence_penalty-val"></span> </label>
+          <input dir="auto" type="range" class="form-range input presence_penalty" min="-2" max="2" step="0.1" value="0" />
+        </div>
+        <div class="mb-3 input-group frequency_penalty">
+          <label for="configfrequency_penalty" class="form-label"> frequency_penalty - <span class="frequency_penalty-val"></span> </label>
+          <input dir="auto" type="range" class="form-range input frequency_penalty" min="-2" max="2" step="0.1" value="0" />
+        </div>
+        <div class="mb-3 input-group system-prompt">
+          <label for="configStaticContext" class="form-label">
+            system prompt
+            <i
+              class="bi bi-info-circle"
+              data-bs-toggle="tooltip"
+              data-bs-placement="top"
+              title="This is a prompt on how AI should respond with limiting words, which helps AI provide better answers."
+            ></i
+            >:
+            <span style="float: right">
+              <i
+                class="bi bi-bookmark-star save-prompt"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="save current prompt to shortcuts"
+              ></i>
+              <i
+                class="bi bi-search open-prompt-market"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="search more open prompts"
+              ></i>
+            </span>
+          </label>
+          <textarea dir="auto" class="form-control input" placeholder="something always send to AI"></textarea>
+        </div>
+        <div class="mb-3 prompt-shortcuts">
+          <span
+            class="badge text-bg-info"
+            data-prompt="The following is a conversation with Chat-GPT, an AI created by OpenAI. The AI is helpful, creative, clever, and very friendly, it's mainly focused on solving coding problems, so it likely provide code example whenever it can and every code block is rendered as markdown. However, it also has a sense of humor and can talk about anything. Please answer user's last question, and if possible, reference the context as much as you can."
+          >
+            chat</span
+          >
+        </div>
 
-            <!-- MCP Server Management Section -->
-            <div class="mb-3 mcp-manager">
-                <label class="form-label d-flex justify-content-between align-items-center">
-                    MCP Servers
-                    <i class="bi bi-plus-circle add-mcp-server" title="Add MCP Server"></i>
-                </label>
-                <div class="list-group mcp-server-list">
-                    <!-- Servers will be rendered here by JS -->
-                </div>
-                <div class="form-text">
-                    Remote MCP servers provide tools/functions for the AI.
-                </div>
-            </div>
+        <!-- MCP Server Management Section -->
+        <div class="mb-3 mcp-manager">
+          <label class="form-label d-flex justify-content-between align-items-center">
+            MCP Servers
+            <i class="bi bi-plus-circle add-mcp-server" title="Add MCP Server"></i>
+          </label>
+          <div class="list-group mcp-server-list">
+            <!-- Servers will be rendered here by JS -->
+          </div>
+          <div class="form-text">Remote MCP servers provide tools/functions for the AI.</div>
+        </div>
 
-            <div class="input-group mb-3">
-                <span class="input-group-text">sync key</span>
-                <input dir="auto" type="text" class="form-control input sync-key" value="">
-            </div>
+        <div class="input-group mb-3">
+          <span class="input-group-text">sync key</span>
+          <input dir="auto" type="text" class="form-control input sync-key" value="" />
+        </div>
 
-            <button class="btn btn-success submit" data-bs-toggle="tooltip" data-bs-placement="top" title="Save">
-                <i class="bi bi-file-earmark-check"></i>
-            </button>
+        <button class="btn btn-success submit" data-bs-toggle="tooltip" data-bs-placement="top" title="Save">
+          <i class="bi bi-file-earmark-check"></i>
+        </button>
 
-            <button class="btn btn-primary dropdown-toggle" type="button" id="cloudSyncDropdown"
-                data-bs-toggle="dropdown" aria-expanded="false"
-                title="Synchronization with the cloud, all data is encrypted by the sync key.">
-                <i class="bi bi-clouds"></i> Backup
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="cloudSyncDropdown">
-                <li><a class="btn dropdown-item" href="#" data-app-fn="upload-config">Upload</a></li>
-                <li><a class="btn dropdown-item" href="#" data-app-fn="download-config">Download</a></li>
-            </ul>
+        <button
+          class="btn btn-primary dropdown-toggle"
+          type="button"
+          id="cloudSyncDropdown"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          title="Synchronization with the cloud, all data is encrypted by the sync key."
+        >
+          <i class="bi bi-clouds"></i> Backup
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="cloudSyncDropdown">
+          <li><a class="btn dropdown-item" href="#" data-app-fn="upload-config">Upload</a></li>
+          <li><a class="btn dropdown-item" href="#" data-app-fn="download-config">Download</a></li>
+        </ul>
 
-            <!-- <div class="btn-group" role="group">
+        <!-- <div class="btn-group" role="group">
                 <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown"
                     aria-expanded="false">
                     <i class="bi bi-clouds" data-bs-toggle="tooltip" data-bs-placement="top"
@@ -233,85 +251,89 @@
                 </ul>
             </div> -->
 
-            <button class="btn btn-warning clear-chats" data-bs-toggle="tooltip" data-bs-placement="top"
-                title="Clear current chat history but keep the session settings.">
-                <i class="bi bi-trash3"></i>
-                <i class="bi bi-chat-dots"></i>
-            </button>
-            <button class="btn btn-danger reset" data-bs-toggle="tooltip" data-bs-placement="top" title="Reset all">
-                <i class="bi bi-bootstrap-reboot"></i>
-            </button>
-        </div>
+        <button
+          class="btn btn-warning clear-chats"
+          data-bs-toggle="tooltip"
+          data-bs-placement="top"
+          title="Clear current chat history but keep the session settings."
+        >
+          <i class="bi bi-trash3"></i>
+          <i class="bi bi-chat-dots"></i>
+        </button>
+        <button class="btn btn-danger reset" data-bs-toggle="tooltip" data-bs-placement="top" title="Reset all">
+          <i class="bi bi-bootstrap-reboot"></i>
+        </button>
+      </div>
     </div>
 
     <div class="modal" id="deleteCheckModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Delete?</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <!-- <p>Are you sure you want to delete this item?</p> -->
-                    <div class="d-flex justify-content-center">
-                        <button type="button" class="btn btn-success me-2 yes">Yes</button>
-                        <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal" no>No</button>
-                    </div>
-                </div>
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Delete?</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <!-- <p>Are you sure you want to delete this item?</p> -->
+            <div class="d-flex justify-content-center">
+              <button type="button" class="btn btn-success me-2 yes">Yes</button>
+              <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal" no>No</button>
             </div>
+          </div>
         </div>
+      </div>
     </div>
 
     <div class="modal" id="singleInputModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Input</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <div class="mb-3">
-                        <label class="form-label">Input:</label>
-                        <input dir="auto" type="text" class="form-control mb-3 title">
-                    </div>
-                    <div class="d-flex justify-content-center">
-                        <button type="button" class="btn btn-success me-2 yes">Yes</button>
-                        <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal" no>No</button>
-                    </div>
-                </div>
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Input</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="mb-3">
+              <label class="form-label">Input:</label>
+              <input dir="auto" type="text" class="form-control mb-3 title" />
             </div>
+            <div class="d-flex justify-content-center">
+              <button type="button" class="btn btn-success me-2 yes">Yes</button>
+              <button type="button" class="btn btn-danger ms-2" data-bs-dismiss="modal" no>No</button>
+            </div>
+          </div>
         </div>
+      </div>
     </div>
 
     <!-- Modal: Add/Edit MCP Server -->
     <div class="modal fade" id="modal-mcp-edit" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Configure MCP Server</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" class="mcp-id" />
-                    <div class="mb-3">
-                        <label class="form-label">Server Name</label>
-                        <input type="text" class="form-control mcp-name" placeholder="e.g. Weather Tools" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">MCP URL</label>
-                        <input type="text" class="form-control mcp-url" placeholder="https://mcp-server.com" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">API Key (Optional)</label>
-                        <input type="password" class="form-control mcp-key" placeholder="sk-..." />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary btn-save-mcp">Save &amp; Sync</button>
-                </div>
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Configure MCP Server</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" class="mcp-id" />
+            <div class="mb-3">
+              <label class="form-label">Server Name</label>
+              <input type="text" class="form-control mcp-name" placeholder="e.g. Weather Tools" />
             </div>
+            <div class="mb-3">
+              <label class="form-label">MCP URL</label>
+              <input type="text" class="form-control mcp-url" placeholder="https://mcp-server.com" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">API Key (Optional)</label>
+              <input type="password" class="form-control mcp-key" placeholder="sk-..." />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary btn-save-mcp">Save &amp; Sync</button>
+          </div>
         </div>
+      </div>
     </div>
 
     <!-- <div class="modal" id="editModel" tabindex="-1">
@@ -332,87 +354,80 @@
 
     <!-- Add this div to your HTML code -->
     <div id="spinner" class="spinner-container" hidden>
-        <div class="spinner"></div>
+      <div class="spinner"></div>
     </div>
 
     <!-- Add this CSS code to your stylesheet -->
     <style>
-        .spinner-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+      .spinner-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .spinner {
+        border: 16px solid #f3f3f3;
+        border-top: 16px solid #3498db;
+        border-radius: 50%;
+        width: 120px;
+        height: 120px;
+        animation: spin 2s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
         }
 
-        .spinner {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            animation: spin 2s linear infinite;
+        100% {
+          transform: rotate(360deg);
         }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
+      }
     </style>
 
-    {{block "body" .}}
-    {{end}}
+    {{block "body" .}} {{end}}
 
-    <script src="https://js.sentry-cdn.com/b69cdec9bcfe0a72438804bef2fecab5.min.js" crossorigin="anonymous"
-        async></script>
+    <script src="https://js.sentry-cdn.com/b69cdec9bcfe0a72438804bef2fecab5.min.js" crossorigin="anonymous" async></script>
     <script src="https://s3.laisky.com/static/mathjax/2.7.3/MathJax-2.7.3/MathJax.js?config=TeX-MML-AM_CHTML" async></script>
     <script type="module">
-        (async () => {
-            window.Version = "{{.Version}}";
-            window.data = JSON.parse({{ .DataJSON }});
+      (async () => {
+          window.Version = "{{.Version}}";
+          window.data = JSON.parse({{ .DataJSON }});
 
 
-            // modules need to load before main.js
-            window.libs = await import("/static/{{.LibJs}}");
-            let futures = [];
-            futures.push(window.libs.LoadJsModules([
-                "{{.BootstrapJs}}",
-                // "{{.SeeJs}}",
-                "{{.PrismJs}}",
-                "{{.FuseJs}}",
-                "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
-                "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
-                "/static/{{.DataJs}}",
-                "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
-                "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
-            ]));
-            futures.push(window.libs.LoadJsModules([
-                "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js",
-            ], "module"));
-            await Promise.all(futures);
+          // modules need to load before main.js
+          window.libs = await import("/static/{{.LibJs}}");
+          let futures = [];
+          futures.push(window.libs.LoadJsModules([
+              "{{.BootstrapJs}}",
+              // "{{.SeeJs}}",
+              "{{.PrismJs}}",
+              "{{.FuseJs}}",
+              "https://s3.laisky.com/static/js-sha1/v0.6.0/sha1.min.js",
+              "https://s3.laisky.com/static/pouchdb/8.0.1/pouchdb.min.js",
+              "/static/{{.DataJs}}",
+              "https://s3.laisky.com/static/marked/12.0.1/lib/marked.umd.js",
+              "https://s3.laisky.com/static/mermaid/10.9.0/dist/mermaid.min.js"
+          ]));
+          futures.push(window.libs.LoadJsModules([
+              "https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js",
+          ], "module"));
+          await Promise.all(futures);
 
-            window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js")).SSE;
+          window.SSE = (await import("https://s3.laisky.com/static/sse/2.4.1-patch/sse-v6.js")).SSE;
 
-            await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
-        })();
+          await window.libs.LoadJsModules(["/static/{{.SiteJs}}"], "module");
+      })();
     </script>
 
-    {{block "ga" .}}
-    {{end}}
-
-    {{block "mainjs" .}}
-    {{end}}
-</body>
-
+    {{block "ga" .}} {{end}} {{block "mainjs" .}} {{end}}
+  </body>
 </html>
 {{end}}
