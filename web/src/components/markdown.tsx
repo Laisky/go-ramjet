@@ -92,12 +92,25 @@ function highlightCode(source: string, language?: string): string {
 }
 
 /**
+ * normalizeCodeBlockContent trims trailing whitespace and ensures a single
+ * trailing newline so code blocks don't accumulate extra blank lines.
+ */
+function normalizeCodeBlockContent(source: string): string {
+  const normalized = (source ?? '').replace(/\r\n/g, '\n')
+  const trimmed = normalized.replace(/\s+$/, '')
+  if (!trimmed) {
+    return ''
+  }
+  return `${trimmed}\n`
+}
+
+/**
  * CodeBlock renders multi-line code with line numbers, syntax colors, and copy controls.
  */
 function CodeBlock({ code, language }: CodeBlockProps) {
-  // Normalize line endings and remove trailing whitespace to prevent extra blank lines
+  // Normalize line endings and keep a single trailing newline to prevent extra blank lines
   const normalized = useMemo(
-    () => code.replace(/\r\n/g, '\n').trimEnd(),
+    () => normalizeCodeBlockContent(code),
     [code],
   )
   const highlighted = useMemo(
@@ -323,8 +336,8 @@ const renderCode = ({
 }: CodeRendererProps) => {
   const match = /language-(\w+)/.exec(className || '')
   const lang = match?.[1]
-  // Remove all trailing newlines/whitespace, then add exactly one newline for consistent display
-  const content = String(children).trimEnd()
+  // Normalize code block content to keep exactly one trailing newline
+  const content = normalizeCodeBlockContent(String(children ?? ''))
 
   // Mermaid diagrams
   if (lang === 'mermaid') {

@@ -21,6 +21,29 @@ export function useChatScroll({
   const autoScrollRef = useRef(true)
   const suppressAutoScrollOnceRef = useRef(false)
 
+  const getScrollElement = useCallback(() => {
+    return document.scrollingElement || document.documentElement
+  }, [])
+
+  const scrollToPosition = useCallback(
+    (top: number, behavior: ScrollBehavior) => {
+      const scrollElement = getScrollElement()
+      if (typeof scrollElement.scrollTo === 'function') {
+        scrollElement.scrollTo({ top, behavior })
+      } else {
+        scrollElement.scrollTop = top
+      }
+
+      if (document.documentElement.scrollTop !== top) {
+        document.documentElement.scrollTop = top
+      }
+      if (document.body.scrollTop !== top) {
+        document.body.scrollTop = top
+      }
+    },
+    [getScrollElement],
+  )
+
   // Reset state when session changes
   useEffect(() => {
     setVisibleCount(pageSize)
@@ -28,30 +51,38 @@ export function useChatScroll({
     suppressAutoScrollOnceRef.current = false
     // Immediately scroll to top when switching sessions to prevent
     // being stuck at the bottom of the previous (possibly longer) session.
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [sessionId, pageSize])
+    scrollToPosition(0, 'auto')
+    console.debug('[useChatScroll] reset scroll for session change', {
+      sessionId,
+      messageCount: messages.length,
+    })
+    requestAnimationFrame(() => {
+      scrollToPosition(0, 'auto')
+    })
+  }, [sessionId, pageSize, scrollToPosition, messages.length])
 
   const isNearBottom = useCallback(() => {
-    const { scrollTop, scrollHeight, clientHeight } = document.documentElement
+    const { scrollTop, scrollHeight, clientHeight } = getScrollElement()
     return scrollHeight - scrollTop - clientHeight < 120
-  }, [])
+  }, [getScrollElement])
 
   const scrollToBottom = useCallback(
     (options?: { force?: boolean; behavior?: ScrollBehavior }) => {
       if (!options?.force && !isNearBottom()) {
         return
       }
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: options?.behavior || 'smooth',
-      })
+      const scrollElement = getScrollElement()
+      scrollToPosition(
+        scrollElement.scrollHeight,
+        options?.behavior || 'smooth',
+      )
     },
-    [isNearBottom],
+    [isNearBottom, getScrollElement, scrollToPosition],
   )
 
   const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
+    scrollToPosition(0, 'smooth')
+  }, [scrollToPosition])
 
   // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom
   useEffect(() => {
@@ -101,19 +132,41 @@ export function useChatScroll({
     return () => window.removeEventListener('scroll', handleScroll)
   }, [isNearBottom])
 
+  // Clamp scroll position when content shrinks (e.g., switching to shorter sessions).
+  useEffect(() => {
+    const clampScroll = () => {
+      const scrollElement = getScrollElement()
+      const maxScrollTop = Math.max(
+        scrollElement.scrollHeight - scrollElement.clientHeight,
+        0,
+      )
+      if (scrollElement.scrollTop > maxScrollTop) {
+        scrollToPosition(maxScrollTop, 'auto')
+        console.debug('[useChatScroll] clamped scroll position', {
+          sessionId,
+          messageCount: messages.length,
+          maxScrollTop,
+          currentScrollTop: scrollElement.scrollTop,
+        })
+      }
+    }
+    requestAnimationFrame(clampScroll)
+  }, [messages.length, sessionId, getScrollElement, scrollToPosition])
+
   const handleLoadOlder = useCallback(() => {
-    const prevScrollHeight = document.documentElement.scrollHeight
-    const prevScrollTop = window.scrollY
+    const scrollElement = getScrollElement()
+    const prevScrollHeight = scrollElement.scrollHeight
+    const prevScrollTop = scrollElement.scrollTop
 
     setVisibleCount((prev) => Math.min(prev + pageSize, messages.length))
 
     // Keep the viewport anchored after older messages are prepended.
     requestAnimationFrame(() => {
-      const nextScrollHeight = document.documentElement.scrollHeight
+      const nextScrollHeight = getScrollElement().scrollHeight
       const delta = nextScrollHeight - prevScrollHeight
-      window.scrollTo({ top: prevScrollTop + Math.max(delta, 0) })
+      scrollToPosition(prevScrollTop + Math.max(delta, 0), 'auto')
     })
-  }, [messages.length, pageSize])
+  }, [messages.length, pageSize, getScrollElement, scrollToPosition])
 
   const scrollToMessage = useCallback(
     (chatId: string, role: string) => {
