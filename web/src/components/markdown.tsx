@@ -92,16 +92,31 @@ function highlightCode(source: string, language?: string): string {
 }
 
 /**
- * normalizeCodeBlockContent trims trailing whitespace and ensures a single
- * trailing newline so code blocks don't accumulate extra blank lines.
+ * normalizeCodeBlockContent trims trailing blank lines to at most one without
+ * introducing extra whitespace when none existed.
  */
 function normalizeCodeBlockContent(source: string): string {
   const normalized = (source ?? '').replace(/\r\n/g, '\n')
-  const trimmed = normalized.replace(/\s+$/, '')
-  if (!trimmed) {
+  const lines = normalized.split('\n')
+
+  let trailingEmpty = 0
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (lines[i].trim() === '') {
+      trailingEmpty += 1
+    } else {
+      break
+    }
+  }
+
+  if (trailingEmpty > 1) {
+    lines.splice(lines.length - (trailingEmpty - 1), trailingEmpty - 1)
+  }
+
+  const joined = lines.join('\n')
+  if (joined.trim() === '') {
     return ''
   }
-  return `${trimmed}\n`
+  return joined
 }
 
 /**
@@ -336,22 +351,26 @@ const renderCode = ({
 }: CodeRendererProps) => {
   const match = /language-(\w+)/.exec(className || '')
   const lang = match?.[1]
-  // Normalize code block content to keep exactly one trailing newline
-  const content = normalizeCodeBlockContent(String(children ?? ''))
+  const rawContent = String(children ?? '')
 
   // Mermaid diagrams
   if (lang === 'mermaid') {
-    return <MermaidDiagram code={content} />
+    return <MermaidDiagram code={normalizeCodeBlockContent(rawContent)} />
   }
 
   // Only render as code block if:
   // 1. Has a language class AND not inline
   // 2. OR has multiple lines
-  const hasMultipleLines = content.includes('\n')
+  const hasMultipleLines = rawContent.includes('\n')
   const shouldRenderAsBlock = !inline && (className || hasMultipleLines)
 
   if (shouldRenderAsBlock) {
-    return <CodeBlock code={content} language={lang} />
+    return (
+      <CodeBlock
+        code={normalizeCodeBlockContent(rawContent)}
+        language={lang}
+      />
+    )
   }
 
   // Inline code

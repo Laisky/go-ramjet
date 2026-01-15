@@ -179,8 +179,19 @@ export async function getSHA1(str: string): Promise<string> {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
   }
-  // Fallback - should not happen in modern browsers
-  throw new Error('crypto.subtle not available')
+  // Fallback for non-secure contexts (e.g., local dev over HTTP)
+  console.debug('[getSHA1] crypto.subtle not available; using fallback hash')
+  let hash = 2166136261
+  for (let i = 0; i < str.length; i += 1) {
+    hash ^= str.charCodeAt(i)
+    hash +=
+      (hash << 1) +
+      (hash << 4) +
+      (hash << 7) +
+      (hash << 8) +
+      (hash << 24)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 /**
