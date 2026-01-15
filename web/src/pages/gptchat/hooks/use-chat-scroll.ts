@@ -20,6 +20,7 @@ export function useChatScroll({
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const autoScrollRef = useRef(true)
   const suppressAutoScrollOnceRef = useRef(false)
+  const manualScrollRef = useRef(false)
 
   const getScrollElement = useCallback(() => {
     return document.scrollingElement || document.documentElement
@@ -59,7 +60,7 @@ export function useChatScroll({
     requestAnimationFrame(() => {
       scrollToPosition(0, 'auto')
     })
-  }, [sessionId, pageSize, scrollToPosition, messages.length])
+  }, [sessionId, pageSize, scrollToPosition])
 
   const isNearBottom = useCallback(() => {
     const { scrollTop, scrollHeight, clientHeight } = getScrollElement()
@@ -68,7 +69,22 @@ export function useChatScroll({
 
   const scrollToBottom = useCallback(
     (options?: { force?: boolean; behavior?: ScrollBehavior }) => {
+      if (options?.force) {
+        autoScrollRef.current = true
+        manualScrollRef.current = false
+        console.debug('[useChatScroll] auto-follow enabled', {
+          sessionId,
+          reason: 'force-scroll',
+        })
+      }
       if (!options?.force && !isNearBottom()) {
+        return
+      }
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({
+          behavior: options?.behavior || 'smooth',
+          block: 'end',
+        })
         return
       }
       const scrollElement = getScrollElement()
@@ -77,12 +93,20 @@ export function useChatScroll({
         options?.behavior || 'smooth',
       )
     },
-    [isNearBottom, getScrollElement, scrollToPosition],
+    [isNearBottom, getScrollElement, scrollToPosition, sessionId],
   )
 
   const scrollToTop = useCallback(() => {
     scrollToPosition(0, 'smooth')
   }, [scrollToPosition])
+
+  /**
+   * isAtBottom checks whether the viewport is effectively at the bottom.
+   */
+  const isAtBottom = useCallback(() => {
+    const { scrollTop, scrollHeight, clientHeight } = getScrollElement()
+    return scrollHeight - scrollTop - clientHeight <= 8
+  }, [getScrollElement])
 
   // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom
   useEffect(() => {
@@ -123,14 +147,76 @@ export function useChatScroll({
       // Disable auto-follow as soon as user scrolls away
       if (!near) {
         autoScrollRef.current = false
-      } else {
-        autoScrollRef.current = true
+        return
       }
+
+      if (manualScrollRef.current) {
+        if (isAtBottom()) {
+          manualScrollRef.current = false
+          autoScrollRef.current = true
+          console.debug('[useChatScroll] auto-follow enabled', {
+            sessionId,
+            reason: 'user-returned-to-bottom',
+          })
+        } else {
+          autoScrollRef.current = false
+        }
+        return
+      }
+
+      autoScrollRef.current = true
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [isNearBottom])
+  }, [isNearBottom, isAtBottom, sessionId])
+
+  // Detect explicit user scroll intent (wheel/touch/keyboard) to stop auto-follow immediately.
+  useEffect(() => {
+    // markManualScroll disables auto-follow based on explicit user scroll intent.
+    const markManualScroll = (source: string) => {
+      if (!manualScrollRef.current) {
+        manualScrollRef.current = true
+        autoScrollRef.current = false
+        console.debug('[useChatScroll] auto-follow disabled', {
+          sessionId,
+          source,
+        })
+      }
+    }
+
+    const handleWheel = () => markManualScroll('wheel')
+    const handleTouchMove = () => markManualScroll('touchmove')
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable) return
+      if (target instanceof HTMLInputElement) return
+      if (target instanceof HTMLTextAreaElement) return
+
+      const keys = new Set([
+        'PageUp',
+        'PageDown',
+        'Home',
+        'End',
+        'ArrowUp',
+        'ArrowDown',
+        ' ',
+      ])
+      if (keys.has(event.key)) {
+        markManualScroll('keyboard')
+      }
+    }
+
+    window.addEventListener('wheel', handleWheel, { passive: true })
+    window.addEventListener('touchmove', handleTouchMove, { passive: true })
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [sessionId])
 
   // Clamp scroll position when content shrinks (e.g., switching to shorter sessions).
   useEffect(() => {
