@@ -25,7 +25,7 @@ vi.mock('@/pages/gptchat/utils/migration', () => ({
 
 // Mock API base
 vi.mock('@/utils/api', () => ({
-  API_BASE: 'http://localhost:24456',
+  getApiBase: () => 'http://localhost:24456',
 }))
 
 describe('useConfig', () => {

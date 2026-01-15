@@ -6,7 +6,7 @@ import {
 } from 'react'
 
 import {
-  API_BASE,
+  getApiBase,
   sendStreamingChatRequest,
   type ChatMessage as ApiChatMessage,
   type ChatTool,
@@ -460,7 +460,7 @@ export function useChatStreaming({
         if (lastRequestId) {
           try {
             const resp = await fetch(
-              `${API_BASE}/oneapi/api/cost/request/${lastRequestId}`,
+              `${getApiBase()}/oneapi/api/cost/request/${lastRequestId}`,
               {
                 headers: {
                   Authorization: `Bearer ${config.api_token}`,

@@ -122,6 +122,9 @@ export function GPTChatPage() {
   useEffect(() => {
     const footer = footerRef.current
     if (!footer) return
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {

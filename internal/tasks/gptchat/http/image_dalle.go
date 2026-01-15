@@ -169,6 +169,9 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 
 	openaiReq := NewOpenaiCreateImageRequest(prompt, n)
 	openaiReq.Model = model
+	if strings.Contains(model, "dall-e-3") {
+		openaiReq.Style = "vivid"
+	}
 	if size != "" {
 		openaiReq.Size = size
 	}

@@ -26,7 +26,6 @@ func NewOpenaiCreateImageRequest(prompt string, n int) *OpenaiCreateImageRequest
 		Size:   "1024x1024",
 		// Quality:        "hd",  // price double
 		ResponseFormat: "b64_json",
-		Style:          "vivid",
 	}
 }
 

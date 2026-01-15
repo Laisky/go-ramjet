@@ -1,4 +1,4 @@
-import { API_BASE } from '@/utils/api'
+import { getApiBase } from '@/utils/api'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -19,7 +19,12 @@ export function useVersionCheck() {
 
   const checkUpgrade = useCallback(async () => {
     try {
-      const resp = await fetch(`${API_BASE}/version`, { cache: 'no-cache' })
+      const path = `${getApiBase()}/version`
+      const url =
+        typeof window !== 'undefined' && window.location?.origin
+          ? new URL(path, window.location.origin).toString()
+          : path
+      const resp = await fetch(url, { cache: 'no-cache' })
       if (!resp.ok) return
       const data = (await resp.json()) as VersionResponse
       const serverVer = data.Settings?.find(

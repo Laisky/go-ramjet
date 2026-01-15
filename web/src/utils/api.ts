@@ -5,9 +5,20 @@ import type { Annotation } from '@/pages/gptchat/types'
  * Handles both regular requests and streaming SSE responses.
  */
 
-export const API_BASE = window.location.pathname.startsWith('/gptchat')
-  ? '/gptchat'
-  : ''
+/**
+ * getApiBase resolves the API base path from the current location.
+ */
+export function getApiBase(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  const pathname = window.location?.pathname || ''
+  const segments = pathname.split('/').filter(Boolean)
+  if (segments[0] === 'gptchat') {
+    return '/gptchat'
+  }
+  return ''
+}
 
 export interface ToolCallFunction {
   name: string
@@ -206,7 +217,7 @@ export async function sendChatRequest(
 ): Promise<ChatCompletionResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`${API_BASE}/api`, {
+  const response = await fetch(`${getApiBase()}/api`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ...request, stream: false }),
@@ -253,7 +264,7 @@ export function sendStreamingChatRequest(
       const headers = await buildHeaders(apiToken, apiBase)
       headers['Accept'] = 'text/event-stream'
 
-      const response = await fetch(`${API_BASE}/api`, {
+      const response = await fetch(`${getApiBase()}/api`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ ...request, stream: true }),
@@ -421,7 +432,7 @@ export async function generateImage(
 ): Promise<ImageGenerationResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`${API_BASE}/images/generations`, {
+  const response = await fetch(`${getApiBase()}/images/generations`, {
     method: 'POST',
     headers,
     body: JSON.stringify(request),
@@ -456,7 +467,7 @@ export async function editImageWithMask(
     model,
   }
 
-  const response = await fetch(`${API_BASE}/images/edits`, {
+  const response = await fetch(`${getApiBase()}/images/edits`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -480,7 +491,7 @@ export async function createDeepResearchTask(
 ): Promise<{ task_id: string }> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`${API_BASE}/deepresearch`, {
+  const response = await fetch(`${getApiBase()}/deepresearch`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ prompt }),
@@ -504,7 +515,7 @@ export async function fetchDeepResearchStatus(
 ): Promise<DeepResearchTask> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`${API_BASE}/deepresearch/${taskId}`, {
+  const response = await fetch(`${getApiBase()}/deepresearch/${taskId}`, {
     method: 'GET',
     headers,
   })
@@ -529,7 +540,7 @@ export async function uploadFiles(
     formData.append('files', file)
   }
 
-  const response = await fetch(`${API_BASE}/files/chat`, {
+  const response = await fetch(`${getApiBase()}/files/chat`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiToken}`,
@@ -554,7 +565,7 @@ export async function transcribeAudio(
   formData.append('file', file)
   formData.append('model', 'whisper-1')
 
-  const response = await fetch(`${API_BASE}/oneapi/v1/audio/transcriptions`, {
+  const response = await fetch(`${getApiBase()}/oneapi/v1/audio/transcriptions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiToken}`,
@@ -588,7 +599,7 @@ export async function transcribeAudio(
 export async function getCurrentUser(
   apiToken: string,
 ): Promise<{ username: string; is_member: boolean }> {
-  const response = await fetch(`${API_BASE}/user/me`, {
+  const response = await fetch(`${getApiBase()}/user/me`, {
     headers: {
       Authorization: `Bearer ${apiToken}`,
     },
@@ -608,7 +619,7 @@ export async function getCurrentUser(
 export async function createPaymentIntent(
   items: object[],
 ): Promise<{ clientSecret: string }> {
-  const response = await fetch(`${API_BASE}/create-payment-intent`, {
+  const response = await fetch(`${getApiBase()}/create-payment-intent`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -637,7 +648,7 @@ export async function fetchTTS(
   text: string,
   apiToken: string,
 ): Promise<string> {
-  const url = `${API_BASE}/audio/tts?apikey=${encodeURIComponent(apiToken)}&text=${encodeURIComponent(text)}`
+  const url = `${getApiBase()}/audio/tts?apikey=${encodeURIComponent(apiToken)}&text=${encodeURIComponent(text)}`
 
   console.debug('[fetchTTS] Requesting TTS audio:', {
     textLength: text.length,
