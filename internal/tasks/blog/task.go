@@ -3,34 +3,110 @@ package blog
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v5"
 	"github.com/Laisky/zap"
+	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
+var (
+	blogDBMu   sync.RWMutex
+	blogDB     *Blog
+	blogDBCfg  blogDBConfig
+	newBlogDB  = NewBlogDB
+	pingBlogDB = defaultPingBlogDB
+)
+
+type blogDBConfig struct {
+	addr           string
+	dbName         string
+	user           string
+	pwd            string
+	postColName    string
+	keywordColName string
+}
+
+// prepareDB returns a cached blog database connection for task executions.
+// It initializes the connection once per process and reuses it across runs.
 func prepareDB(ctx context.Context) (db *Blog, err error) {
-	if db, err = NewBlogDB(ctx,
-		gconfig.Shared.GetString("db.blog.addr"),
-		gconfig.Shared.GetString("db.blog.db"),
-		gconfig.Shared.GetString("db.blog.user"),
-		gconfig.Shared.GetString("db.blog.passwd"),
-		gconfig.Shared.GetString("db.blog.collections.posts"),
-		gconfig.Shared.GetString("db.blog.collections.stats"),
+	cfg := blogDBConfig{
+		addr:           gconfig.Shared.GetString("db.blog.addr"),
+		dbName:         gconfig.Shared.GetString("db.blog.db"),
+		user:           gconfig.Shared.GetString("db.blog.user"),
+		pwd:            gconfig.Shared.GetString("db.blog.passwd"),
+		postColName:    gconfig.Shared.GetString("db.blog.collections.posts"),
+		keywordColName: gconfig.Shared.GetString("db.blog.collections.stats"),
+	}
+
+	blogDBMu.RLock()
+	cacheDB := blogDB
+	cacheCfg := blogDBCfg
+	blogDBMu.RUnlock()
+	cachePingFailed := false
+
+	if cacheDB != nil && cacheCfg == cfg {
+		if err := pingBlogDB(ctx, cacheDB); err == nil {
+			return cacheDB, nil
+		} else {
+			log.Logger.Warn("blog mongodb ping failed, reconnecting", zap.Error(err))
+			cachePingFailed = true
+		}
+	}
+
+	blogDBMu.Lock()
+	defer blogDBMu.Unlock()
+
+	if blogDB != nil && blogDBCfg == cfg {
+		if !(cachePingFailed && blogDB == cacheDB) {
+			if err := pingBlogDB(ctx, blogDB); err == nil {
+				return blogDB, nil
+			} else {
+				log.Logger.Warn("blog mongodb ping failed, reconnecting", zap.Error(err))
+			}
+		}
+	}
+
+	if db, err = newBlogDB(ctx,
+		cfg.addr,
+		cfg.dbName,
+		cfg.user,
+		cfg.pwd,
+		cfg.postColName,
+		cfg.keywordColName,
 	); err != nil {
 		return nil, errors.Wrapf(err, "connect to blog db %s/%s/%s",
-			gconfig.Shared.GetString("db.blog.addr"),
-			gconfig.Shared.GetString("db.blog.db"),
-			gconfig.Shared.GetString("db.blog.collections.posts"),
+			cfg.addr,
+			cfg.dbName,
+			cfg.postColName,
 		)
 	}
-	return
+
+	if blogDB != nil && blogDB.db != nil {
+		blogDB.Close(ctx)
+	}
+
+	blogDB = db
+	blogDBCfg = cfg
+	return blogDB, nil
+}
+
+func defaultPingBlogDB(ctx context.Context, db *Blog) error {
+	if db == nil || db.db == nil {
+		return errors.New("blog db not initialized")
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return db.db.CurrentDB().RunCommand(pingCtx, bson.D{{Key: "ping", Value: 1}}).Err()
 }
 
 func runRSSTask() {
@@ -43,7 +119,6 @@ func runRSSTask() {
 		log.Logger.Error("connect to database got error", zap.Error(err))
 		return
 	}
-	defer db.Close(ctx)
 
 	w, err := NewRssWorker(db)
 	if err != nil {
@@ -105,7 +180,6 @@ func runKeywordTask() {
 		log.Logger.Error("connect to database got error", zap.Error(err))
 		return
 	}
-	defer db.Close(ctx)
 
 	iter, err := db.GetPostIter(ctx)
 	if err != nil {

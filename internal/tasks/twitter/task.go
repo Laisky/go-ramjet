@@ -3,6 +3,7 @@ package twitter
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -10,10 +11,92 @@ import (
 	gutils "github.com/Laisky/go-utils/v5"
 	glog "github.com/Laisky/go-utils/v5/log"
 	"github.com/Laisky/zap"
+	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
 	"github.com/Laisky/go-ramjet/library/log"
 )
+
+var (
+	twitterDaoMu  sync.RWMutex
+	twitterDao    *mongoDao
+	twitterDaoCfg mongoDialConfig
+	newMongoDao   = NewDao
+	pingMongoDao  = defaultPingMongoDao
+)
+
+type mongoDialConfig struct {
+	addr   string
+	dbName string
+	user   string
+	pwd    string
+}
+
+// getMongoDao returns the cached twitter MongoDB DAO for the given connection settings.
+// It uses ctx for the initial connection and returns any connection error.
+func getMongoDao(ctx context.Context, addr, dbName, user, pwd string) (*mongoDao, error) {
+	cfg := mongoDialConfig{
+		addr:   addr,
+		dbName: dbName,
+		user:   user,
+		pwd:    pwd,
+	}
+
+	twitterDaoMu.RLock()
+	cacheDao := twitterDao
+	cacheCfg := twitterDaoCfg
+	twitterDaoMu.RUnlock()
+	cachePingFailed := false
+
+	if cacheDao != nil && cacheCfg == cfg {
+		if err := pingMongoDao(ctx, cacheDao); err == nil {
+			return cacheDao, nil
+		} else {
+			log.Logger.Warn("twitter mongodb ping failed, reconnecting", zap.Error(err))
+			cachePingFailed = true
+		}
+	}
+
+	twitterDaoMu.Lock()
+	defer twitterDaoMu.Unlock()
+
+	if twitterDao != nil && twitterDaoCfg == cfg {
+		if !(cachePingFailed && twitterDao == cacheDao) {
+			if err := pingMongoDao(ctx, twitterDao); err == nil {
+				return twitterDao, nil
+			} else {
+				log.Logger.Warn("twitter mongodb ping failed, reconnecting", zap.Error(err))
+			}
+		}
+
+		if twitterDao.db != nil {
+			if err := twitterDao.db.Close(ctx); err != nil {
+				log.Logger.Warn("close twitter mongodb", zap.Error(err))
+			}
+		}
+		twitterDao = nil
+	}
+
+	dao, err := newMongoDao(ctx, addr, dbName, user, pwd)
+	if err != nil {
+		return nil, errors.Wrap(err, "new twitter dao")
+	}
+
+	twitterDao = dao
+	twitterDaoCfg = cfg
+	return twitterDao, nil
+}
+
+func defaultPingMongoDao(ctx context.Context, dao *mongoDao) error {
+	if dao == nil || dao.db == nil {
+		return errors.New("mongo dao not initialized")
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return dao.db.CurrentDB().RunCommand(pingCtx, bson.D{{Key: "ping", Value: 1}}).Err()
+}
 
 func bindTask() {
 	log.Logger.Info("bind twitter search sync monitor...")
@@ -43,7 +126,7 @@ func syncFromMongodb2Es(logger glog.Logger) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
-	twitterDao, err := NewDao(ctx,
+	twitterDao, err := getMongoDao(ctx,
 		gconfig.Shared.GetString("db.twitter.addr"),
 		gconfig.Shared.GetString("db.twitter.db"),
 		gconfig.Shared.GetString("db.twitter.user"),
