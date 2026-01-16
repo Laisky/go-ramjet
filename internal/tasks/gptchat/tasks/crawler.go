@@ -29,13 +29,8 @@ import (
 	rutils "github.com/Laisky/go-ramjet/library/redis"
 )
 
-const (
-	crawlerQueueKey       = "ramjet:gptchat:crawler:html:queue"
-	crawlerResultKeyPrefx = "ramjet:gptchat:crawler:html:result:"
-)
-
 func crawlerResultKey(taskID string) string {
-	return crawlerResultKeyPrefx + taskID
+	return rlibs.KeyPrefixTaskHTMLCrawlerResult + taskID
 }
 
 var (
@@ -151,7 +146,7 @@ func runDynamicWebCrawler() error {
 func popHTMLCrawlerTask(ctx context.Context) (*rlibs.HTMLCrawlerTask, error) {
 	client := rutils.GetCli().GetDB().Client
 
-	vals, err := client.BLPop(ctx, 5*time.Second, crawlerQueueKey).Result()
+	vals, err := client.BLPop(ctx, 5*time.Second, rlibs.KeyTaskHTMLCrawlerPending).Result()
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -581,7 +576,7 @@ func addHTMLCrawlerTask(ctx context.Context, url, apiKey string, outputMarkdown 
 	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, 7*24*time.Hour).Err(); err != nil {
 		return "", errors.Wrap(err, "init task result")
 	}
-	if err := client.RPush(ctx, crawlerQueueKey, payload).Err(); err != nil {
+	if err := client.RPush(ctx, rlibs.KeyTaskHTMLCrawlerPending, payload).Err(); err != nil {
 		return "", errors.Wrap(err, "enqueue task")
 	}
 
