@@ -29,17 +29,17 @@ export function useChatScroll({
   const scrollToPosition = useCallback(
     (top: number, behavior: ScrollBehavior) => {
       const scrollElement = getScrollElement()
-      if (typeof scrollElement.scrollTo === 'function') {
+
+      // Use window.scrollTo for the main document to ensure consistent behavior across browsers
+      if (
+        scrollElement === document.documentElement ||
+        scrollElement === document.body
+      ) {
+        window.scrollTo({ top, behavior })
+      } else if (typeof scrollElement.scrollTo === 'function') {
         scrollElement.scrollTo({ top, behavior })
       } else {
         scrollElement.scrollTop = top
-      }
-
-      if (document.documentElement.scrollTop !== top) {
-        document.documentElement.scrollTop = top
-      }
-      if (document.body.scrollTop !== top) {
-        document.body.scrollTop = top
       }
     },
     [getScrollElement],
@@ -57,6 +57,7 @@ export function useChatScroll({
       sessionId,
       messageCount: messages.length,
     })
+    // Use an extra frame to ensure any late-loading content is accounted for
     requestAnimationFrame(() => {
       scrollToPosition(0, 'auto')
     })
@@ -64,7 +65,9 @@ export function useChatScroll({
 
   const isNearBottom = useCallback(() => {
     const { scrollTop, scrollHeight, clientHeight } = getScrollElement()
-    return scrollHeight - scrollTop - clientHeight < 120
+    // Distance to absolute bottom. Using a slightly larger threshold (160px)
+    // to account for footers and varied input heights.
+    return scrollHeight - scrollTop - clientHeight < 160
   }, [getScrollElement])
 
   const scrollToBottom = useCallback(
@@ -77,21 +80,22 @@ export function useChatScroll({
           reason: 'force-scroll',
         })
       }
+
       if (!options?.force && !isNearBottom()) {
         return
       }
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({
-          behavior: options?.behavior || 'smooth',
-          block: 'end',
-        })
-        return
-      }
-      const scrollElement = getScrollElement()
-      scrollToPosition(
-        scrollElement.scrollHeight,
-        options?.behavior || 'smooth',
-      )
+
+      // Always prefer calculating the absolute bottom because we have a
+      // fixed footer and rely on document padding to push content above it.
+      requestAnimationFrame(() => {
+        const scrollElement = getScrollElement()
+        const targetScrollTop = Math.max(
+          0,
+          scrollElement.scrollHeight - scrollElement.clientHeight,
+        )
+
+        scrollToPosition(targetScrollTop, options?.behavior || 'smooth')
+      })
     },
     [isNearBottom, getScrollElement, scrollToPosition, sessionId],
   )

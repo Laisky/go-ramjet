@@ -37,11 +37,19 @@ const setScrollMetrics = (
 describe('useChatScroll', () => {
   beforeEach(() => {
     setScrollMetrics(0, 1000, 500)
+    // Both documentElement.scrollTo and window.scrollTo are used
+    const scrollToMock = vi.fn((options: { top?: number }) => {
+      const top = options?.top ?? 0
+      document.documentElement.scrollTop = top
+    })
+
     Object.defineProperty(document.documentElement, 'scrollTo', {
-      value: vi.fn((options: { top?: number }) => {
-        const top = options?.top ?? 0
-        document.documentElement.scrollTop = top
-      }),
+      value: scrollToMock,
+      writable: true,
+      configurable: true,
+    })
+    Object.defineProperty(window, 'scrollTo', {
+      value: scrollToMock,
       writable: true,
       configurable: true,
     })
@@ -78,8 +86,7 @@ describe('useChatScroll', () => {
 
     rerender({ sessionId: 2, messages: buildMessages(3) })
 
-    const scrollToSpy = document.documentElement
-      .scrollTo as unknown as ReturnType<typeof vi.fn>
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
 
     await waitFor(() => {
       expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
@@ -120,15 +127,14 @@ describe('useChatScroll', () => {
 
     setScrollMetrics(0, 1000, 500)
 
-    const scrollToSpy = document.documentElement
-      .scrollTo as unknown as ReturnType<typeof vi.fn>
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollToSpy.mockClear()
 
     setScrollMetrics(0, 1200, 500)
     rerender({ messages: buildMessages(2) })
 
     await waitFor(() => {
-      expect(scrollToSpy).toHaveBeenCalledWith({ top: 1200, behavior: 'auto' })
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 700, behavior: 'auto' })
     })
   })
 
@@ -144,8 +150,7 @@ describe('useChatScroll', () => {
 
     setScrollMetrics(0, 2000, 500)
 
-    const scrollToSpy = document.documentElement
-      .scrollTo as unknown as ReturnType<typeof vi.fn>
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
 
     await waitFor(() => {
       expect(scrollToSpy).toHaveBeenCalled()
@@ -176,8 +181,7 @@ describe('useChatScroll', () => {
 
     result.current.autoScrollRef.current = false
 
-    const scrollToSpy = document.documentElement
-      .scrollTo as unknown as ReturnType<typeof vi.fn>
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollToSpy.mockClear()
 
     result.current.scrollToBottom({ force: true, behavior: 'auto' })
