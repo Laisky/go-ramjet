@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatMessageData } from '../../types'
 import { useChatScroll } from '../use-chat-scroll'
 
+let scrollTopValue = 0
+let scrollHeightValue = 0
+let clientHeightValue = 0
+
+/**
+ * buildMessages creates mock chat messages for scroll hook tests.
+ */
 const buildMessages = (count: number): ChatMessageData[] => {
   return Array.from({ length: count }, (_, i) => ({
     chatID: `chat-${i}`,
@@ -12,26 +19,17 @@ const buildMessages = (count: number): ChatMessageData[] => {
   }))
 }
 
+/**
+ * setScrollMetrics updates the mocked scroll metrics for the window.
+ */
 const setScrollMetrics = (
   scrollTop: number,
   scrollHeight: number,
   clientHeight: number,
 ) => {
-  Object.defineProperty(document.documentElement, 'scrollTop', {
-    value: scrollTop,
-    writable: true,
-    configurable: true,
-  })
-  Object.defineProperty(document.documentElement, 'scrollHeight', {
-    value: scrollHeight,
-    writable: true,
-    configurable: true,
-  })
-  Object.defineProperty(document.documentElement, 'clientHeight', {
-    value: clientHeight,
-    writable: true,
-    configurable: true,
-  })
+  scrollTopValue = scrollTop
+  scrollHeightValue = scrollHeight
+  clientHeightValue = clientHeight
 }
 
 describe('useChatScroll', () => {
@@ -40,9 +38,24 @@ describe('useChatScroll', () => {
     // Both documentElement.scrollTo and window.scrollTo are used
     const scrollToMock = vi.fn((options: { top?: number }) => {
       const top = options?.top ?? 0
-      document.documentElement.scrollTop = top
+      scrollTopValue = top
     })
 
+    Object.defineProperty(window, 'scrollY', {
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value
+      },
+      configurable: true,
+    })
+    Object.defineProperty(window, 'pageYOffset', {
+      get: () => scrollTopValue,
+      configurable: true,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      get: () => clientHeightValue,
+      configurable: true,
+    })
     Object.defineProperty(document.documentElement, 'scrollTo', {
       value: scrollToMock,
       writable: true,
@@ -54,8 +67,29 @@ describe('useChatScroll', () => {
       configurable: true,
     })
     Object.defineProperty(document.body, 'scrollTop', {
-      value: 0,
-      writable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value
+      },
+      configurable: true,
+    })
+    Object.defineProperty(document.documentElement, 'scrollTop', {
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value
+      },
+      configurable: true,
+    })
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      get: () => scrollHeightValue,
+      configurable: true,
+    })
+    Object.defineProperty(document.body, 'scrollHeight', {
+      get: () => scrollHeightValue,
+      configurable: true,
+    })
+    Object.defineProperty(document.documentElement, 'clientHeight', {
+      get: () => clientHeightValue,
       configurable: true,
     })
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
@@ -111,7 +145,7 @@ describe('useChatScroll', () => {
     rerender({ messages: buildMessages(2) })
 
     await waitFor(() => {
-      expect(document.documentElement.scrollTop).toBe(600)
+      expect(window.scrollY).toBe(600)
     })
   })
 
