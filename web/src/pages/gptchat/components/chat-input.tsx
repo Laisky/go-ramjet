@@ -9,7 +9,7 @@ import { transcribeAudio } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import { useUser } from '../hooks/use-user'
 import { isImageModel } from '../models'
-import type { ChatAttachment, SessionConfig } from '../types'
+import type { ChatAttachment, SelectionData, SessionConfig } from '../types'
 import { MessageInput } from './message-input'
 
 export interface ChatInputProps {
@@ -26,6 +26,7 @@ export interface ChatInputProps {
   onPrefillUsed?: (id: string) => void
   draftMessage?: string
   onDraftChange?: (value: string) => void
+  onSelectionChange?: (selection: SelectionData | null) => void
 }
 
 /**
@@ -45,6 +46,7 @@ export function ChatInput({
   onPrefillUsed,
   draftMessage,
   onDraftChange,
+  onSelectionChange,
 }: ChatInputProps) {
   const { user } = useUser(config.api_token)
   const isFree = user?.is_free ?? true
@@ -56,6 +58,7 @@ export function ChatInput({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const lastPrefillIdRef = useRef<string | null>(null)
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
 
   // Helper to update message and sync to parent
   const updateMessage = useCallback(
@@ -138,6 +141,83 @@ export function ChatInput({
     onSend,
     updateMessage,
   ])
+
+  /**
+   * emitInputSelection reports a text selection in the textarea to the parent.
+   */
+  const emitInputSelection = useCallback(
+    (position?: { top: number; left: number }) => {
+      if (!onSelectionChange) return
+      const textarea = textareaRef.current
+      if (!textarea) return
+      const start = textarea.selectionStart ?? 0
+      const end = textarea.selectionEnd ?? 0
+      if (start === end) {
+        onSelectionChange(null)
+        return
+      }
+
+      const text = textarea.value.slice(start, end)
+      if (!text.trim()) {
+        onSelectionChange(null)
+        return
+      }
+
+      const rect = textarea.getBoundingClientRect()
+      const fallbackPosition = {
+        top: rect.top + 8,
+        left: rect.left + rect.width / 2,
+      }
+
+      onSelectionChange({
+        text,
+        copyText: text,
+        source: 'input',
+        position: position ?? fallbackPosition,
+      })
+    },
+    [onSelectionChange],
+  )
+
+  /**
+   * handleInputMouseUp captures pointer coordinates and emits selection data.
+   */
+  const handleInputMouseUp = useCallback(
+    (e: React.MouseEvent<HTMLTextAreaElement>) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY }
+      emitInputSelection({ top: e.clientY, left: e.clientX })
+    },
+    [emitInputSelection],
+  )
+
+  /**
+   * handleInputKeyUp emits selection data for keyboard-based selections.
+   */
+  const handleInputKeyUp = useCallback(() => {
+    const lastPointer = lastPointerRef.current
+    emitInputSelection(
+      lastPointer ? { top: lastPointer.y, left: lastPointer.x } : undefined,
+    )
+  }, [emitInputSelection])
+
+  /**
+   * handleInputSelect emits selection data when the textarea selection changes.
+   */
+  const handleInputSelect = useCallback(() => {
+    const lastPointer = lastPointerRef.current
+    emitInputSelection(
+      lastPointer ? { top: lastPointer.y, left: lastPointer.x } : undefined,
+    )
+  }, [emitInputSelection])
+
+  /**
+   * handleInputBlur clears selection data when the textarea loses focus.
+   */
+  const handleInputBlur = useCallback(() => {
+    if (onSelectionChange) {
+      onSelectionChange(null)
+    }
+  }, [onSelectionChange])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -250,6 +330,10 @@ export function ChatInput({
             attachments={attachments}
             onAttachmentsChange={setAttachments}
             onKeyDown={handleKeyDown}
+            onKeyUp={handleInputKeyUp}
+            onMouseUp={handleInputMouseUp}
+            onSelect={handleInputSelect}
+            onBlur={handleInputBlur}
             placeholder={placeholder}
             disabled={disabled || isLoading || isTranscribing}
             apiToken={config.api_token}

@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
-
-interface SelectionData {
-  text: string
-  position: { top: number; left: number }
-}
+import type { SelectionData } from '../types'
+import { rangeToMarkdown } from '../utils/selection-markdown'
 
 /**
  * useSelection tracks text selection within a container.
@@ -19,24 +16,38 @@ export function useSelection(
       // Small delay to allow selection to be finalized
       setTimeout(() => {
         const selection = window.getSelection()
-        if (selection && selection.toString().trim().length > 0) {
-          const range = selection.getRangeAt(0)
-          const rect = range.getBoundingClientRect()
-
-          // Check if selection is within the messages container
-          const container = containerRef.current
-          if (container && container.contains(selection.anchorNode)) {
-            setSelectionData({
-              text: selection.toString(),
-              position: {
-                top: clientY || rect.top,
-                left: clientX || rect.left + rect.width / 2,
-              },
-            })
-          }
-        } else {
+        if (!selection || selection.toString().trim().length === 0) {
           setSelectionData(null)
+          return
         }
+
+        if (selection.rangeCount === 0) {
+          setSelectionData(null)
+          return
+        }
+
+        const range = selection.getRangeAt(0)
+        const rect = range.getBoundingClientRect()
+
+        // Check if selection is within the messages container
+        const container = containerRef.current
+        const anchorNode = selection.anchorNode
+        if (container && anchorNode && container.contains(anchorNode)) {
+          const text = selection.toString()
+          const markdown = rangeToMarkdown(range)
+          setSelectionData({
+            text,
+            copyText: markdown || text,
+            source: 'message',
+            position: {
+              top: clientY || rect.top,
+              left: clientX || rect.left + rect.width / 2,
+            },
+          })
+          return
+        }
+
+        setSelectionData(null)
       }, 10)
     }
 

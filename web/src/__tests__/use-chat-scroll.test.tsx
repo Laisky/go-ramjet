@@ -7,7 +7,10 @@ import type { ChatMessageData } from '@/pages/gptchat/types'
 /**
  * createMessage builds a minimal chat message for hook testing.
  */
-function createMessage(id: string, role: ChatMessageData['role']): ChatMessageData {
+function createMessage(
+  id: string,
+  role: ChatMessageData['role'],
+): ChatMessageData {
   return {
     chatID: id,
     role,

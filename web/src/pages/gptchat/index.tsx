@@ -16,9 +16,9 @@ import {
   EditMessageModal,
   FloatingMessageHeader,
   ModelSelector,
+  SelectionTTSPlayer,
   SelectionToolbar,
   SessionDock,
-  TTSAudioPlayer,
   UpgradeNotification,
 } from './components'
 import { useChat } from './hooks/use-chat'
@@ -33,7 +33,12 @@ import { useSelection } from './hooks/use-selection'
 import { useTTS } from './hooks/use-tts'
 import { useVersionCheck } from './hooks/use-version-check'
 import { ImageModelFluxDev, isImageModel } from './models'
-import type { ChatAttachment, ChatMessageData, SessionConfig } from './types'
+import type {
+  ChatAttachment,
+  ChatMessageData,
+  SelectionData,
+  SessionConfig,
+} from './types'
 import { DefaultSessionConfig } from './types'
 
 const MESSAGE_PAGE_SIZE = 40
@@ -151,10 +156,15 @@ export function GPTChatPage() {
   })
 
   const { selectionData, setSelectionData } = useSelection(messagesContainerRef)
+  const [inputSelectionData, setInputSelectionData] =
+    useState<SelectionData | null>(null)
+  const activeSelectionData = inputSelectionData || selectionData
 
   const {
     requestTTS,
     stopTTS,
+    isLoading: isTtsLoading,
+    error: ttsError,
     audioUrl: ttsAudioUrl,
   } = useTTS({
     apiToken: config.api_token || '',
@@ -322,25 +332,49 @@ export function GPTChatPage() {
     (text: string) => {
       setPrefillDraft({ id: Date.now().toString(), text })
       setSelectionData(null)
+      setInputSelectionData(null)
     },
     [setSelectionData],
   )
 
+  /**
+   * handleInputSelectionChange updates selection state from the input textarea.
+   */
+  const handleInputSelectionChange = useCallback(
+    (data: SelectionData | null) => {
+      setInputSelectionData(data)
+      if (data) {
+        setSelectionData(null)
+      }
+    },
+    [setSelectionData],
+  )
+
+  /**
+   * clearSelection resets selection toolbar state.
+   */
+  const clearSelection = useCallback(() => {
+    setSelectionData(null)
+    setInputSelectionData(null)
+  }, [setSelectionData])
+
   const handleSelectionCopy = useCallback(async () => {
-    if (selectionData) {
+    if (activeSelectionData) {
       try {
-        await navigator.clipboard.writeText(selectionData.text)
+        await navigator.clipboard.writeText(
+          activeSelectionData.copyText || activeSelectionData.text,
+        )
       } catch (err) {
         console.error('Failed to copy selection:', err)
       }
     }
-  }, [selectionData])
+  }, [activeSelectionData])
 
   const handleSelectionTTS = useCallback(() => {
-    if (selectionData) {
-      requestTTS(selectionData.text)
+    if (activeSelectionData) {
+      requestTTS(activeSelectionData.text)
     }
-  }, [selectionData, requestTTS])
+  }, [activeSelectionData, requestTTS])
 
   return (
     <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
@@ -546,6 +580,7 @@ export function GPTChatPage() {
             draftMessage={currentDraftMessage}
             onDraftChange={handleDraftChange}
             placeholder={messagePlaceholder}
+            onSelectionChange={handleInputSelectionChange}
           />
         </footer>
       </div>
@@ -602,24 +637,31 @@ export function GPTChatPage() {
       )}
 
       {/* Selection Toolbar */}
-      {selectionData && (
+      {activeSelectionData && (
         <SelectionToolbar
-          text={selectionData.text}
-          position={selectionData.position}
+          text={activeSelectionData.text}
+          position={activeSelectionData.position}
           onCopy={handleSelectionCopy}
           onTTS={handleSelectionTTS}
-          onQuote={handleQuote}
-          onClose={() => setSelectionData(null)}
+          onQuote={
+            activeSelectionData.source === 'message' ? handleQuote : undefined
+          }
+          onClose={clearSelection}
         />
       )}
 
       {/* Selection TTS Player */}
-      {ttsAudioUrl && (
+      {(ttsAudioUrl || isTtsLoading || ttsError) && (
         <div
           className="fixed left-1/2 z-50 -translate-x-1/2"
           style={{ bottom: `${footerHeight + 12}px` }}
         >
-          <TTSAudioPlayer audioUrl={ttsAudioUrl} onClose={stopTTS} />
+          <SelectionTTSPlayer
+            audioUrl={ttsAudioUrl}
+            isLoading={isTtsLoading}
+            error={ttsError}
+            onClose={stopTTS}
+          />
         </div>
       )}
     </div>

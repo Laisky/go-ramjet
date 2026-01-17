@@ -16,6 +16,10 @@ export interface MessageInputProps {
   disabled?: boolean
   apiToken: string
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  onKeyUp?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  onMouseUp?: (e: React.MouseEvent<HTMLTextAreaElement>) => void
+  onSelect?: (e: React.SyntheticEvent<HTMLTextAreaElement>) => void
+  onBlur?: (e: React.FocusEvent<HTMLTextAreaElement>) => void
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>
   autoFocus?: boolean
   className?: string
@@ -51,6 +55,10 @@ export function MessageInput({
   disabled,
   apiToken,
   onKeyDown,
+  onKeyUp,
+  onMouseUp,
+  onSelect,
+  onBlur,
   textareaRef: externalTextareaRef,
   autoFocus,
   className,
@@ -281,6 +289,10 @@ export function MessageInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onKeyUp={onKeyUp}
+          onMouseUp={onMouseUp}
+          onSelect={onSelect}
+          onBlur={onBlur}
           onPaste={handlePaste}
           placeholder={placeholder}
           disabled={disabled || isUploading}

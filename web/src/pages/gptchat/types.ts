@@ -101,6 +101,16 @@ export interface PromptShortcut {
   prompt: string
 }
 
+/**
+ * SelectionData represents selected text and toolbar positioning.
+ */
+export interface SelectionData {
+  text: string
+  copyText: string
+  source: 'message' | 'input'
+  position: { top: number; left: number }
+}
+
 // Default configuration values
 export const DefaultSessionConfig: SessionConfig = {
   api_token: '',

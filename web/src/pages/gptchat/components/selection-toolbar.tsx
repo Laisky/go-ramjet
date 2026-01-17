@@ -97,8 +97,14 @@ export function SelectionToolbar({
         top: `${adjustedPosition.top}px`,
         left: `${adjustedPosition.left}px`,
       }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onMouseUp={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onMouseUp={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
     >
       <Button
         variant="ghost"
