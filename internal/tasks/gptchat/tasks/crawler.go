@@ -109,10 +109,9 @@ func runDynamicWebCrawler() error {
 		logger.Error("dynamic fetch url", zap.Error(err))
 	} else {
 		now := time.Now().UTC()
+		task.ResultHTML = rawBody
 		if task.OutputMarkdown && strings.TrimSpace(markdown) != "" {
-			task.ResultHTML = []byte(markdown)
-		} else {
-			task.ResultHTML = rawBody
+			task.ResultMarkdown = []byte(markdown)
 		}
 		task.Status = rlibs.TaskStatusSuccess
 		task.FinishedAt = &now
