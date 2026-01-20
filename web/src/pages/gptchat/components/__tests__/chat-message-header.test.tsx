@@ -11,6 +11,7 @@ vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="check-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
   Edit2: () => <div data-testid="edit-icon" />,
+  GitFork: () => <div data-testid="fork-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
   RotateCcw: () => <div data-testid="rotate-icon" />,
   Trash2: () => <div data-testid="trash-icon" />,
@@ -73,6 +74,15 @@ describe('ChatMessageHeader', () => {
 
     fireEvent.click(deleteButton)
     expect(onDelete).toHaveBeenCalledWith('test-chat-id')
+  })
+
+  it('handles fork action', () => {
+    const onFork = vi.fn()
+    render(<ChatMessageHeader message={mockMessage} onFork={onFork} />)
+    const forkButton = screen.getByTitle('Fork session')
+
+    fireEvent.click(forkButton)
+    expect(onFork).toHaveBeenCalledWith('test-chat-id', 'user')
   })
 
   it('handles regenerate action for assistant', () => {

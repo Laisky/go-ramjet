@@ -28,6 +28,8 @@ export interface FloatingMessageHeaderProps {
     content: string
     attachments?: ChatAttachment[]
   }) => void
+  /** Callback to fork the session */
+  onFork?: (chatId: string, role: string) => void
   /** The paired user message (for edit/resend) */
   pairedUserMessage?: ChatMessageData
   /** Whether the message is streaming */
@@ -55,6 +57,7 @@ export function FloatingMessageHeader({
   onDelete,
   onRegenerate,
   onEditResend,
+  onFork,
   pairedUserMessage,
   isStreaming,
   apiToken,
@@ -118,6 +121,7 @@ export function FloatingMessageHeader({
         onDelete={onDelete}
         onRegenerate={onRegenerate}
         onEditResend={onEditResend}
+        onFork={onFork}
         pairedUserMessage={pairedUserMessage}
         isStreaming={isStreaming}
         apiToken={apiToken}

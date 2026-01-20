@@ -25,6 +25,7 @@ export interface ChatMessageProps {
     content: string
     attachments?: ChatAttachment[]
   }) => void
+  onFork?: (chatId: string, role: string) => void
   pairedUserMessage?: ChatMessageData
   isSelected?: boolean
   /** Called when user clicks the message to toggle selection */
@@ -82,6 +83,7 @@ export function ChatMessage({
   isStreaming,
   onRegenerate,
   onEditResend,
+  onFork,
   pairedUserMessage,
   isSelected,
   onSelect,
@@ -184,6 +186,7 @@ export function ChatMessage({
             isStreaming={isStreaming}
             onRegenerate={onRegenerate}
             onEditResend={onEditResend}
+            onFork={onFork}
             pairedUserMessage={pairedUserMessage}
             apiToken={apiToken}
             className={cn(isAssistant && 'sticky top-12 z-10 backdrop-blur-sm')}

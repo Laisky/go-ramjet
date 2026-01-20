@@ -61,6 +61,7 @@ export function GPTChatPage() {
     renameSession,
     updateSessionVisibility,
     duplicateSession,
+    forkSession,
     purgeAllSessions,
     exportAllData,
     importAllData,
@@ -277,6 +278,20 @@ export function GPTChatPage() {
     [regenerateMessage, autoScrollRef, suppressAutoScrollOnceRef],
   )
 
+  const handleFork = useCallback(
+    async (chatId: string, role: string) => {
+      const newSessionId = await forkSession(
+        sessionId,
+        chatId,
+        role as 'user' | 'assistant',
+      )
+      if (newSessionId) {
+        switchSession(newSessionId)
+      }
+    },
+    [forkSession, sessionId, switchSession],
+  )
+
   const handleEditResend = useCallback(
     (payload: {
       chatId: string
@@ -471,6 +486,7 @@ export function GPTChatPage() {
           onDelete={deleteMessage}
           onRegenerate={handleRegenerate}
           onEditResend={handleEditResend}
+          onFork={handleFork}
           pairedUserMessage={
             floatingHeaderState.chatId
               ? userMessageByChatId.get(floatingHeaderState.chatId)
@@ -535,6 +551,7 @@ export function GPTChatPage() {
                     onDelete={deleteMessage}
                     onRegenerate={handleRegenerate}
                     onEditResend={handleEditResend}
+                    onFork={handleFork}
                     pairedUserMessage={userMessageByChatId.get(msg.chatID)}
                     isSelected={idx === selectedMessageIndex}
                     onSelect={handleMessageSelect}

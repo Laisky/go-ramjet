@@ -4,6 +4,7 @@ import {
   Check,
   Copy,
   Edit2,
+  GitFork,
   Loader2,
   RotateCcw,
   Trash2,
@@ -33,6 +34,7 @@ export interface ChatMessageHeaderProps {
     content: string
     attachments?: ChatAttachment[]
   }) => void
+  onFork?: (chatId: string, role: string) => void
   pairedUserMessage?: ChatMessageData
   /** API token for TTS functionality */
   apiToken?: string
@@ -61,6 +63,7 @@ export function ChatMessageHeader({
   isStreaming,
   onRegenerate,
   onEditResend,
+  onFork,
   pairedUserMessage,
   apiToken,
   ttsStatus,
@@ -96,6 +99,12 @@ export function ChatMessageHeader({
       onDelete(message.chatID)
     }
   }, [message.chatID, onDelete])
+
+  const handleFork = useCallback(() => {
+    if (onFork) {
+      onFork(message.chatID, message.role)
+    }
+  }, [message.chatID, message.role, onFork])
 
   const handleRegenerate = useCallback(() => {
     if (onRegenerate) {
@@ -285,6 +294,24 @@ export function ChatMessageHeader({
                   : 'Copy message'}
             </TooltipContent>
           </Tooltip>
+
+          {onFork && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFork}
+                  className="h-7 w-7 rounded-md p-0"
+                  title="Fork session"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Fork session from here</TooltipContent>
+            </Tooltip>
+          )}
+
           {onDelete && (
             <Tooltip>
               <TooltipTrigger asChild>

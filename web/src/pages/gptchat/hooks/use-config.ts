@@ -493,6 +493,85 @@ export function useConfig() {
     [loadSessions],
   )
 
+  const forkSession = useCallback(
+    async (
+      sourceSessionId: number,
+      upToChatId: string,
+      upToRole: 'user' | 'assistant',
+    ) => {
+      const sessionKeys = await kvList()
+      const sessionIds = sessionKeys
+        .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
+        .map((k) =>
+          parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10),
+        )
+        .filter((id) => !Number.isNaN(id))
+
+      const newSessionId =
+        sessionIds.length > 0 ? Math.max(...sessionIds) + 1 : DEFAULT_SESSION_ID
+
+      const sourceConfigKey = getSessionConfigKey(sourceSessionId)
+      const sourceConfig =
+        (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
+      const forkedConfig: SessionConfig = {
+        ...sourceConfig,
+        session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Fork`,
+        updated_at: Date.now(),
+      }
+
+      await kvSet(getSessionConfigKey(newSessionId), forkedConfig)
+
+      const sourceHistory =
+        (await kvGet<SessionHistoryItem[]>(
+          getSessionHistoryKey(sourceSessionId),
+        )) || []
+      const historyKey = getSessionHistoryKey(newSessionId)
+      const idMap = new Map<string, string>()
+      const forkedHistory: SessionHistoryItem[] = []
+
+      for (const item of sourceHistory) {
+        if (!item.chatID) {
+          continue
+        }
+
+        let nextChatId = idMap.get(item.chatID)
+        if (!nextChatId) {
+          nextChatId = generateChatId()
+          idMap.set(item.chatID, nextChatId)
+        }
+
+        forkedHistory.push({ ...item, chatID: nextChatId })
+
+        const chatData = await kvGet<ChatMessageData>(
+          getChatDataKey(item.chatID, item.role),
+        )
+        if (chatData) {
+          await kvSet(getChatDataKey(nextChatId, item.role), {
+            ...chatData,
+            chatID: nextChatId,
+          })
+        }
+
+        if (item.chatID === upToChatId && item.role === upToRole) {
+          break
+        }
+      }
+
+      await kvSet(historyKey, forkedHistory)
+
+      // Update session order
+      const sessionOrder = await getSessionOrderFromKv()
+      if (!sessionOrder.includes(newSessionId)) {
+        sessionOrder.push(newSessionId)
+        await setSessionOrderToKv(sessionOrder)
+      }
+
+      await loadSessions()
+      return newSessionId
+    },
+    [loadSessions],
+  )
+
   const purgeAllSessions = useCallback(async () => {
     const keys = await kvList()
     for (const key of keys) {
@@ -617,6 +696,7 @@ export function useConfig() {
     renameSession,
     updateSessionVisibility,
     duplicateSession,
+    forkSession,
     purgeAllSessions,
     exportAllData,
     importAllData,
