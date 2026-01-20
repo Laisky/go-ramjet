@@ -2,7 +2,7 @@
  * Hook to track which message header has scrolled out of view.
  * Returns the message data for the floating header display.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ChatMessageData } from '../types'
 
@@ -16,8 +16,12 @@ export interface UseFloatingHeaderOptions {
 }
 
 export interface FloatingHeaderState {
-  /** The message that should show in the floating header */
-  message: ChatMessageData | null
+  /** The message ID that should show in the floating header */
+  chatId: string | null
+  /** The message role */
+  role: string | null
+  /** The index of the message in the messages array */
+  index: number | null
   /** Whether the floating header should be visible */
   visible: boolean
 }
@@ -39,16 +43,27 @@ export function useFloatingHeader({
   topOffset = 48, // Default header height (12 * 4 = 48px for top-12)
 }: UseFloatingHeaderOptions): FloatingHeaderState {
   const [state, setState] = useState<FloatingHeaderState>({
-    message: null,
+    chatId: null,
+    role: null,
+    index: null,
     visible: false,
   })
+
+  // Create a lookup map for performance if messages array is large
+  const messageLookup = useMemo(() => {
+    const map = new Map<string, number>()
+    messages.forEach((m, i) => {
+      map.set(`${m.chatID}-${m.role}`, i)
+    })
+    return map
+  }, [messages])
 
   const rafRef = useRef<number | null>(null)
 
   const updateFloatingHeader = useCallback(() => {
     if (!containerRef.current || messages.length === 0) {
       if (state.visible) {
-        setState({ message: null, visible: false })
+        setState({ chatId: null, role: null, index: null, visible: false })
       }
       return
     }
@@ -60,7 +75,7 @@ export function useFloatingHeader({
 
     if (messageElements.length === 0) {
       if (state.visible) {
-        setState({ message: null, visible: false })
+        setState({ chatId: null, role: null, index: null, visible: false })
       }
       return
     }
@@ -70,7 +85,9 @@ export function useFloatingHeader({
     // starts to be covered by the main header.
     const floatingHeaderThreshold = topOffset
 
-    let targetMessage: ChatMessageData | null = null
+    let targetChatId: string | null = null
+    let targetRole: string | null = null
+    let targetIndex: number | null = null
 
     // Find the message whose header is above the threshold but body is still visible
     for (let i = 0; i < messageElements.length; i++) {
@@ -84,40 +101,42 @@ export function useFloatingHeader({
       const chatId = idParts.slice(2, -1).join('-')
       const role = idParts[idParts.length - 1]
 
-      // Find the corresponding message
-      const msg = messages.find((m) => m.chatID === chatId && m.role === role)
-      if (!msg) continue
-
       // The message header has scrolled above the threshold
       // We use a small buffer to ensure it's actually being covered by the main header
       const headerScrolledOut = rect.top < floatingHeaderThreshold - 10
       const bodyStillVisible = rect.bottom > floatingHeaderThreshold + 60 // At least 60px of body visible
 
       if (headerScrolledOut && bodyStillVisible) {
-        targetMessage = msg
-        // Continue checking - we want the last one that matches (topmost message with header out of view)
+        targetChatId = chatId
+        targetRole = role
+        targetIndex = messageLookup.get(`${chatId}-${role}`) ?? null
+        // Stop checking - we want the first one that matches
         break
       }
     }
 
-    const newVisible = targetMessage !== null
-    const currentChatId = state.message?.chatID
-    const currentRole = state.message?.role
-    const newChatId = targetMessage?.chatID
-    const newRole = targetMessage?.role
+    const newVisible = targetChatId !== null
 
-    // Only update state if something changed
-    if (
-      newVisible !== state.visible ||
-      currentChatId !== newChatId ||
-      currentRole !== newRole
-    ) {
-      setState({
-        message: targetMessage,
-        visible: newVisible,
-      })
-    }
-  }, [containerRef, messages, state.message, state.visible, topOffset])
+    setState((prev) => {
+      // Only update state if something changed.
+      // We check for:
+      // 1. Visibility change
+      // 2. Different message (id or role changed)
+      if (
+        newVisible !== prev.visible ||
+        prev.chatId !== targetChatId ||
+        prev.role !== targetRole
+      ) {
+        return {
+          chatId: targetChatId,
+          role: targetRole,
+          index: targetIndex,
+          visible: newVisible,
+        }
+      }
+      return prev
+    })
+  }, [containerRef, messages.length, topOffset, state.visible, messageLookup])
 
   // Handle scroll events with requestAnimationFrame for performance
   const handleScroll = useCallback(() => {

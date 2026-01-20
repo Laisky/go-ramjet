@@ -1,18 +1,7 @@
 /**
  * Chat message component for displaying user and assistant messages.
  */
-import {
-  Bot,
-  Check,
-  Copy,
-  Edit2,
-  Loader2,
-  RotateCcw,
-  Trash2,
-  User,
-  Volume2,
-  VolumeX,
-} from 'lucide-react'
+import { Check, Copy, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import { Markdown } from '@/components/markdown'
@@ -23,6 +12,7 @@ import { cn } from '@/utils/cn'
 import { useTTS } from '../hooks/use-tts'
 import type { ChatAttachment, ChatMessageData } from '../types'
 import { formatCostUsd } from '../utils/format'
+import { ChatMessageHeader } from './chat-message-header'
 import { TTSAudioPlayer } from './tts-audio-player'
 
 export interface ChatMessageProps {
@@ -98,7 +88,6 @@ export function ChatMessage({
   messageIndex,
   apiToken,
 }: ChatMessageProps) {
-  const [copied, setCopied] = useState(false)
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
@@ -121,27 +110,6 @@ export function ChatMessage({
     }
   }, [message.chatID]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pairedUserContent = isUser
-    ? message.content
-    : pairedUserMessage?.content || ''
-  const canEditMessage = Boolean(onEditResend && pairedUserContent)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
-
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(message.chatID)
-    }
-  }
-
   const handleCopyReference = async (url: string, index: number) => {
     try {
       await navigator.clipboard.writeText(url)
@@ -152,52 +120,11 @@ export function ChatMessage({
     }
   }
 
-  // Show TTS button for assistant messages when API token is available
-  const showSpeechButton = Boolean(apiToken && isAssistant && message.content)
-  const actionDisabled = Boolean(isStreaming && isAssistant)
-
-  const handleToggleSpeech = useCallback(() => {
-    if (!apiToken || !message.content) {
-      console.debug('[ChatMessage] TTS not available:', {
-        hasApiToken: !!apiToken,
-        hasContent: !!message.content,
-      })
-      return
-    }
-    if (ttsAudioUrl) {
-      // Audio already loaded - stop it
-      stopTTS()
-      return
-    }
-    // Request new TTS audio
-    requestTTS(message.content)
-  }, [apiToken, message.content, ttsAudioUrl, stopTTS, requestTTS])
-
   const handleRegenerate = useCallback(() => {
     if (onRegenerate) {
       onRegenerate(message.chatID)
     }
   }, [message.chatID, onRegenerate])
-
-  const handleEditClick = useCallback(() => {
-    if (canEditMessage && onEditResend) {
-      onEditResend({
-        chatId: message.chatID,
-        content: pairedUserContent,
-        attachments: isUser
-          ? message.attachments
-          : pairedUserMessage?.attachments,
-      })
-    }
-  }, [
-    canEditMessage,
-    message.chatID,
-    message.attachments,
-    onEditResend,
-    pairedUserContent,
-    isUser,
-    pairedUserMessage?.attachments,
-  ])
 
   const handleCardClick = useCallback(
     (e: React.MouseEvent) => {
@@ -251,109 +178,23 @@ export function ChatMessage({
         )}
       >
         <div className="space-y-1">
-          <div
-            className={cn(
-              isAssistant && 'sticky top-12 z-10 backdrop-blur-sm',
-              'mb-2 -mx-2 -mt-1.5 flex flex-wrap items-center gap-2 rounded-t-md bg-inherit border-b border-border/10 px-2 py-1.5 text-xs transition-all',
-            )}
-          >
-            <div
-              className={cn(
-                'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
-                isUser
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground',
-              )}
-            >
-              {isUser ? (
-                <User className="h-3 w-3" />
-              ) : (
-                <Bot className="h-3 w-3" />
-              )}
-            </div>
-            <span className={cn('font-semibold', 'text-foreground')}>
-              {isUser ? 'You' : 'Assistant'}
-            </span>
-            {message.timestamp && (
-              <span className="text-[11px] text-muted-foreground">
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </span>
-            )}
-
-            <div className="ml-auto flex flex-wrap items-center gap-1 text-[11px] opacity-100 transition-opacity md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-              {canEditMessage && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditClick}
-                  className="h-7 w-7 rounded-md p-0"
-                  title="Edit & resend"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isAssistant && onRegenerate && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRegenerate}
-                  className="h-7 w-7 rounded-md p-0"
-                  disabled={actionDisabled}
-                  title="Regenerate response"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {showSpeechButton && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleSpeech}
-                  className="h-7 w-7 rounded-md p-0"
-                  disabled={ttsLoading}
-                  title={
-                    ttsLoading
-                      ? 'Loading audio...'
-                      : ttsAudioUrl
-                        ? 'Stop narration'
-                        : 'Play narration'
-                  }
-                >
-                  {ttsLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : ttsAudioUrl ? (
-                    <VolumeX className="h-3.5 w-3.5" />
-                  ) : (
-                    <Volume2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                className="h-7 w-7 rounded-md p-0"
-                title="Copy message"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              {onDelete && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDelete}
-                  className="h-7 w-7 rounded-md p-0 text-destructive"
-                  title="Delete message"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          </div>
+          <ChatMessageHeader
+            message={message}
+            onDelete={onDelete}
+            isStreaming={isStreaming}
+            onRegenerate={onRegenerate}
+            onEditResend={onEditResend}
+            pairedUserMessage={pairedUserMessage}
+            apiToken={apiToken}
+            className={cn(isAssistant && 'sticky top-12 z-10 backdrop-blur-sm')}
+            ttsStatus={{
+              isLoading: ttsLoading,
+              audioUrl: ttsAudioUrl,
+              error: ttsError,
+              requestTTS,
+              stopTTS,
+            }}
+          />
 
           {isAssistant && message.reasoningContent && (
             <ReasoningBlock content={message.reasoningContent} />

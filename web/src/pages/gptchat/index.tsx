@@ -463,21 +463,25 @@ export function GPTChatPage() {
 
         {/* Floating message header - appears when a message's inline header scrolls out of view */}
         <FloatingMessageHeader
-          message={floatingHeaderState.message}
+          messages={messages}
+          chatId={floatingHeaderState.chatId}
+          role={floatingHeaderState.role}
           visible={floatingHeaderState.visible}
           onDelete={deleteMessage}
           onRegenerate={handleRegenerate}
           onEditResend={handleEditResend}
           pairedUserMessage={
-            floatingHeaderState.message
-              ? userMessageByChatId.get(floatingHeaderState.message.chatID)
+            floatingHeaderState.chatId
+              ? userMessageByChatId.get(floatingHeaderState.chatId)
               : undefined
           }
           apiToken={config.api_token}
+          messageIndex={floatingHeaderState.index}
+          onSelect={handleMessageSelect}
           isStreaming={
             chatLoading &&
-            floatingHeaderState.message?.role === 'assistant' &&
-            floatingHeaderState.message?.chatID === loadingChatId
+            floatingHeaderState.role === 'assistant' &&
+            floatingHeaderState.chatId === loadingChatId
           }
         />
 
