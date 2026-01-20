@@ -1,6 +1,12 @@
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   closestCenter,
@@ -20,14 +26,9 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   Check,
   Copy,
+  Download,
   Edit2,
   Eye,
   EyeOff,
@@ -50,6 +51,7 @@ interface SessionManagerProps {
   onUpdateSessionVisibility?: (id: number, visible: boolean) => void
   onDuplicateSession?: (id: number) => void
   onReorderSessions?: (ids: number[]) => void
+  onExportSession?: (id: number, name: string) => void
 }
 
 export function SessionManager({
@@ -62,6 +64,7 @@ export function SessionManager({
   onUpdateSessionVisibility,
   onDuplicateSession,
   onReorderSessions,
+  onExportSession,
 }: SessionManagerProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -203,6 +206,7 @@ export function SessionManager({
                 onUpdateSessionVisibility={onUpdateSessionVisibility}
                 onDuplicateSession={onDuplicateSession}
                 onDeleteSession={onDeleteSession}
+                onExportSession={onExportSession}
                 canDelete={sessions.length > 1}
               />
             ))}
@@ -221,6 +225,7 @@ interface SortableSessionItemProps {
   onUpdateSessionVisibility?: (id: number, visible: boolean) => void
   onDuplicateSession?: (id: number) => void
   onDeleteSession: (id: number) => void
+  onExportSession?: (id: number, name: string) => void
   canDelete: boolean
 }
 
@@ -232,6 +237,7 @@ function SortableSessionItem({
   onUpdateSessionVisibility,
   onDuplicateSession,
   onDeleteSession,
+  onExportSession,
   canDelete,
 }: SortableSessionItemProps) {
   const {
@@ -329,6 +335,15 @@ function SortableSessionItem({
               <DropdownMenuItem onClick={() => onDuplicateSession(session.id)}>
                 <Copy className="mr-2 h-4 w-4" />
                 <span>Duplicate</span>
+              </DropdownMenuItem>
+            )}
+
+            {onExportSession && (
+              <DropdownMenuItem
+                onClick={() => onExportSession(session.id, session.name)}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                <span>Export XML</span>
               </DropdownMenuItem>
             )}
 

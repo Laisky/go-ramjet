@@ -43,6 +43,7 @@ export interface ConfigSidebarProps {
   onDuplicateSession?: (id: number) => void
   onReorderSessions?: (ids: number[]) => void
   onPurgeAllSessions?: () => void
+  onExportSession?: (id: number, name: string) => void
 }
 
 /**
@@ -71,6 +72,7 @@ export function ConfigSidebar({
   onDuplicateSession,
   onReorderSessions,
   onPurgeAllSessions,
+  onExportSession,
 }: ConfigSidebarProps) {
   const [showApiKey, setShowApiKey] = useState(false)
 
@@ -116,6 +118,7 @@ export function ConfigSidebar({
                   onUpdateSessionVisibility={onUpdateSessionVisibility}
                   onDuplicateSession={onDuplicateSession}
                   onReorderSessions={onReorderSessions}
+                  onExportSession={onExportSession}
                 />
               </section>
             )}

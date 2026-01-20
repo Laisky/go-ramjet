@@ -40,6 +40,7 @@ import type {
   SessionConfig,
 } from './types'
 import { DefaultSessionConfig } from './types'
+import { exportSessionToXml } from './utils/session-export'
 
 const MESSAGE_PAGE_SIZE = 40
 
@@ -613,6 +614,7 @@ export function GPTChatPage() {
         onDuplicateSession={duplicateSession}
         onReorderSessions={reorderSessions}
         onPurgeAllSessions={handlePurgeAllSessions}
+        onExportSession={exportSessionToXml}
       />
 
       {upgradeInfo && (
