@@ -20,6 +20,12 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Check,
   Copy,
   Edit2,
@@ -27,6 +33,7 @@ import {
   EyeOff,
   GripVertical,
   MessageSquare,
+  MoreVertical,
   Plus,
   Trash2,
   X,
@@ -273,68 +280,77 @@ function SortableSessionItem({
           >
             {session.name}
           </span>
+          {!session.visible && (
+            <EyeOff className="h-3 w-3 text-muted-foreground/60 ml-1 flex-shrink-0" />
+          )}
         </button>
       </div>
 
-      <div
-        className={`flex gap-1 transition-opacity ${
-          !session.visible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        }`}
-      >
-        {onUpdateSessionVisibility && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`h-6 w-6 p-0 ${session.visible ? 'text-muted-foreground' : 'text-warning'} hover:text-primary`}
-            onClick={() =>
-              onUpdateSessionVisibility(session.id, !session.visible)
-            }
-            title={session.visible ? 'Hide from sidebar' : 'Show in sidebar'}
-          >
-            {session.visible ? (
-              <Eye className="h-3 w-3" />
-            ) : (
-              <EyeOff className="h-3 w-3" />
-            )}
-          </Button>
-        )}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
-          onClick={() => onStartEdit(session.id, session.name)}
-        >
-          <Edit2 className="h-3 w-3" />
-        </Button>
-
-        {onDuplicateSession && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-success"
-            onClick={() => onDuplicateSession(session.id)}
-          >
-            <Copy className="h-3 w-3" />
-          </Button>
-        )}
-
-        {canDelete && (
-          <ConfirmDialog
-            title="Delete Session"
-            description={`Are you sure you want to delete "${session.name}"? This will delete all chat history and settings for this session.`}
-            onConfirm={() => onDeleteSession(session.id)}
-            trigger={
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+      <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            {onUpdateSessionVisibility && (
+              <DropdownMenuItem
+                onClick={() =>
+                  onUpdateSessionVisibility(session.id, !session.visible)
+                }
               >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            }
-          />
-        )}
+                {session.visible ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    <span>Hide Session</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    <span>Show Session</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+            )}
+
+            <DropdownMenuItem
+              onClick={() => onStartEdit(session.id, session.name)}
+            >
+              <Edit2 className="mr-2 h-4 w-4" />
+              <span>Rename</span>
+            </DropdownMenuItem>
+
+            {onDuplicateSession && (
+              <DropdownMenuItem onClick={() => onDuplicateSession(session.id)}>
+                <Copy className="mr-2 h-4 w-4" />
+                <span>Duplicate</span>
+              </DropdownMenuItem>
+            )}
+
+            {canDelete && (
+              <ConfirmDialog
+                title="Delete Session"
+                description={`Are you sure you want to delete "${session.name}"? This will delete all chat history and settings for this session.`}
+                variant="destructive"
+                onConfirm={() => onDeleteSession(session.id)}
+                trigger={
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Delete Session</span>
+                  </DropdownMenuItem>
+                }
+              />
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
