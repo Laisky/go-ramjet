@@ -52,6 +52,8 @@ export interface ChatMessageHeaderProps {
   isFloating?: boolean
   /** Whether to always show actions (even when not hovered) */
   showActionsAlways?: boolean
+  /** Preferred side for tooltips */
+  tooltipSide?: 'top' | 'bottom' | 'left' | 'right'
 }
 
 /**
@@ -70,11 +72,14 @@ export function ChatMessageHeader({
   className,
   isFloating,
   showActionsAlways,
+  tooltipSide,
 }: ChatMessageHeaderProps) {
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState(false)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
+
+  const effectiveTooltipSide = tooltipSide ?? (isFloating ? 'bottom' : 'top')
 
   const pairedUserContent = isUser
     ? message.content
@@ -194,7 +199,9 @@ export function ChatMessageHeader({
                   <Edit2 className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Edit & resend</TooltipContent>
+              <TooltipContent side={effectiveTooltipSide}>
+                Edit & resend
+              </TooltipContent>
             </Tooltip>
           )}
           {isAssistant && onRegenerate && (
@@ -211,7 +218,9 @@ export function ChatMessageHeader({
                   <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Regenerate response</TooltipContent>
+              <TooltipContent side={effectiveTooltipSide}>
+                Regenerate response
+              </TooltipContent>
             </Tooltip>
           )}
           {showSpeechButton && (
@@ -248,7 +257,7 @@ export function ChatMessageHeader({
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">
+              <TooltipContent side={effectiveTooltipSide}>
                 {ttsStatus?.isLoading
                   ? 'Loading audio...'
                   : ttsStatus?.error
@@ -286,7 +295,7 @@ export function ChatMessageHeader({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">
+            <TooltipContent side={effectiveTooltipSide}>
               {copyError
                 ? 'Failed to copy'
                 : copied
@@ -308,7 +317,9 @@ export function ChatMessageHeader({
                   <GitFork className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Fork session from here</TooltipContent>
+              <TooltipContent side={effectiveTooltipSide}>
+                Fork session from here
+              </TooltipContent>
             </Tooltip>
           )}
 
@@ -325,7 +336,9 @@ export function ChatMessageHeader({
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Delete message</TooltipContent>
+              <TooltipContent side={effectiveTooltipSide}>
+                Delete message
+              </TooltipContent>
             </Tooltip>
           )}
         </div>

@@ -190,6 +190,7 @@ export function ChatMessage({
             pairedUserMessage={pairedUserMessage}
             apiToken={apiToken}
             className={cn(isAssistant && 'sticky top-12 z-10 backdrop-blur-sm')}
+            tooltipSide={isAssistant ? 'bottom' : 'top'}
             ttsStatus={{
               isLoading: ttsLoading,
               audioUrl: ttsAudioUrl,
