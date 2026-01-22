@@ -5,6 +5,7 @@ interface UseChatScrollOptions {
   messages: ChatMessageData[]
   pageSize: number
   sessionId: string | number
+  contentRef?: React.RefObject<HTMLElement>
 }
 
 /**
@@ -14,6 +15,7 @@ export function useChatScroll({
   messages,
   pageSize,
   sessionId,
+  contentRef,
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -21,6 +23,7 @@ export function useChatScroll({
   const autoScrollRef = useRef(true)
   const suppressAutoScrollOnceRef = useRef(false)
   const manualScrollRef = useRef(false)
+  const pendingSessionScrollRef = useRef(false)
 
   const getScrollElement = useCallback(() => {
     return document.scrollingElement || document.documentElement
@@ -97,11 +100,31 @@ export function useChatScroll({
     [getScrollElement],
   )
 
+  const clampScrollPosition = useCallback(
+    (reason: string) => {
+      const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
+      const maxScrollTop = Math.max(scrollHeight - clientHeight, 0)
+      if (scrollTop > maxScrollTop) {
+        scrollToPosition(maxScrollTop, 'auto')
+        console.debug('[useChatScroll] clamped scroll position', {
+          sessionId,
+          reason,
+          messageCount: messages.length,
+          maxScrollTop,
+          currentScrollTop: scrollTop,
+        })
+      }
+    },
+    [getScrollMetrics, scrollToPosition, sessionId, messages.length],
+  )
+
   // Reset state when session changes
   useEffect(() => {
     setVisibleCount(pageSize)
     autoScrollRef.current = true
     suppressAutoScrollOnceRef.current = false
+    manualScrollRef.current = false
+    pendingSessionScrollRef.current = true
     // Immediately scroll to top when switching sessions to prevent
     // being stuck at the bottom of the previous (possibly longer) session.
     scrollToPosition(0, 'auto')
@@ -156,6 +179,16 @@ export function useChatScroll({
     },
     [isNearBottom, getScrollMetrics, scrollToPosition, sessionId],
   )
+
+  useEffect(() => {
+    if (!pendingSessionScrollRef.current) return
+    if (messages.length === 0) return
+    pendingSessionScrollRef.current = false
+    scrollToBottom({ force: true, behavior: 'auto' })
+    requestAnimationFrame(() => {
+      clampScrollPosition('session-load')
+    })
+  }, [messages.length, scrollToBottom, clampScrollPosition])
 
   const scrollToTop = useCallback(() => {
     scrollToPosition(0, 'smooth')
@@ -281,21 +314,25 @@ export function useChatScroll({
 
   // Clamp scroll position when content shrinks (e.g., switching to shorter sessions).
   useEffect(() => {
-    const clampScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
-      const maxScrollTop = Math.max(scrollHeight - clientHeight, 0)
-      if (scrollTop > maxScrollTop) {
-        scrollToPosition(maxScrollTop, 'auto')
-        console.debug('[useChatScroll] clamped scroll position', {
-          sessionId,
-          messageCount: messages.length,
-          maxScrollTop,
-          currentScrollTop: scrollTop,
-        })
-      }
-    }
-    requestAnimationFrame(clampScroll)
-  }, [messages.length, sessionId, getScrollMetrics, scrollToPosition])
+    requestAnimationFrame(() => {
+      clampScrollPosition('content-length-change')
+    })
+  }, [messages.length, sessionId, clampScrollPosition])
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const target = contentRef?.current || document.body
+    if (!target) return
+
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        clampScrollPosition('content-resize')
+      })
+    })
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [contentRef, clampScrollPosition])
 
   const handleLoadOlder = useCallback(() => {
     const { scrollTop, scrollHeight } = getScrollMetrics()

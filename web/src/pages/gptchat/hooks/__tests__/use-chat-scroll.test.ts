@@ -7,6 +7,8 @@ import { useChatScroll } from '../use-chat-scroll'
 let scrollTopValue = 0
 let scrollHeightValue = 0
 let clientHeightValue = 0
+let resizeObserverCallback: ResizeObserverCallback | null = null
+let resizeObserverInstance: ResizeObserver | null = null
 
 /**
  * buildMessages creates mock chat messages for scroll hook tests.
@@ -35,6 +37,8 @@ const setScrollMetrics = (
 describe('useChatScroll', () => {
   beforeEach(() => {
     setScrollMetrics(0, 1000, 500)
+    resizeObserverCallback = null
+    resizeObserverInstance = null
     // Both documentElement.scrollTo and window.scrollTo are used
     const scrollToMock = vi.fn((options: { top?: number }) => {
       const top = options?.top ?? 0
@@ -96,6 +100,24 @@ describe('useChatScroll', () => {
       cb(0)
       return 0
     })
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeObserverCallback = callback
+          resizeObserverInstance = this as unknown as ResizeObserver
+        }
+        observe() {
+          return undefined
+        }
+        disconnect() {
+          return undefined
+        }
+        unobserve() {
+          return undefined
+        }
+      },
+    )
   })
 
   afterEach(() => {
@@ -227,6 +249,56 @@ describe('useChatScroll', () => {
 
     await waitFor(() => {
       expect(scrollToSpy).toHaveBeenCalled()
+    })
+  })
+
+  it('scrolls to bottom after session load even when auto-follow was disabled', async () => {
+    const { rerender } = renderHook(
+      ({ sessionId, messages }) =>
+        useChatScroll({ messages, pageSize: 40, sessionId }),
+      {
+        initialProps: {
+          sessionId: 1,
+          messages: buildMessages(2),
+        },
+      },
+    )
+
+    setScrollMetrics(0, 1000, 500)
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    rerender({ sessionId: 2, messages: [] })
+
+    setScrollMetrics(0, 800, 500)
+    rerender({ sessionId: 2, messages: buildMessages(3) })
+
+    await waitFor(() => {
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 300, behavior: 'auto' })
+    })
+  })
+
+  it('clamps scroll position when content height shrinks without message count change', async () => {
+    renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(5),
+        },
+      },
+    )
+
+    setScrollMetrics(600, 1000, 400)
+
+    setScrollMetrics(600, 700, 400)
+
+    if (resizeObserverCallback && resizeObserverInstance) {
+      resizeObserverCallback([], resizeObserverInstance)
+    }
+
+    await waitFor(() => {
+      expect(window.scrollY).toBe(300)
     })
   })
 })

@@ -104,7 +104,12 @@ export function GPTChatPage() {
     scrollToTop,
     handleLoadOlder,
     scrollToMessage,
-  } = useChatScroll({ messages, pageSize: MESSAGE_PAGE_SIZE, sessionId })
+  } = useChatScroll({
+    messages,
+    pageSize: MESSAGE_PAGE_SIZE,
+    sessionId,
+    contentRef: messagesContainerRef,
+  })
 
   const { upgradeInfo, setUpgradeInfo, ignoreVersion } = useVersionCheck()
   const [prefillDraft, setPrefillDraft] = useState<
