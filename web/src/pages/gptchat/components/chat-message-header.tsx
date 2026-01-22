@@ -172,11 +172,6 @@ export function ChatMessageHeader({
         <span className={cn('font-semibold', 'text-foreground')}>
           {isUser ? 'You' : 'Assistant'}
         </span>
-        {message.timestamp && (
-          <span className="text-[11px] text-muted-foreground">
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </span>
-        )}
 
         <div
           className={cn(

@@ -325,13 +325,17 @@ export function ChatMessage({
             </div>
           )}
 
-          {isAssistant && (
+          {(isAssistant || message.timestamp) && (
             <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-muted-foreground/60">
-              {message.model && <span>{message.model}</span>}
-              {(() => {
-                const formattedCost = formatCostUsd(message.costUsd)
-                return formattedCost ? <span>${formattedCost}</span> : null
-              })()}
+              {isAssistant && message.model && <span>{message.model}</span>}
+              {isAssistant &&
+                (() => {
+                  const formattedCost = formatCostUsd(message.costUsd)
+                  return formattedCost ? <span>${formattedCost}</span> : null
+                })()}
+              {message.timestamp && (
+                <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+              )}
             </div>
           )}
         </div>
