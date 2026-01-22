@@ -190,13 +190,20 @@ export function useConfig() {
         }
 
         // Generate sync_key if missing
-        if (!finalConfig.sync_key) {
-          finalConfig.sync_key =
-            'sync-' +
-            Math.random().toString(36).substring(2, 15) +
-            Math.random().toString(36).substring(2, 15)
-          configChanged = true
+        let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
+        if (!globalSyncKey) {
+          // migration: if session config has sync_key, use it as global
+          if (finalConfig.sync_key) {
+            globalSyncKey = finalConfig.sync_key
+          } else {
+            globalSyncKey =
+              'sync-' +
+              Math.random().toString(36).substring(2, 15) +
+              Math.random().toString(36).substring(2, 15)
+          }
+          await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
         }
+        finalConfig.sync_key = globalSyncKey
 
         // Auto-generate FREETIER token if missing
         if (
@@ -257,6 +264,13 @@ export function useConfig() {
    */
   const updateConfig = useCallback(
     async (updates: Partial<SessionConfig>) => {
+      // Handle global sync key
+      let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
+      if (updates.sync_key !== undefined) {
+        globalSyncKey = updates.sync_key
+        await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
+      }
+
       const newConfig = {
         ...config,
         ...updates,
@@ -264,6 +278,7 @@ export function useConfig() {
           ...config.chat_switch,
           ...(updates.chat_switch || {}),
         },
+        sync_key: globalSyncKey ?? config.sync_key,
         updated_at: Date.now(),
       }
 
@@ -302,6 +317,7 @@ export function useConfig() {
 
         const key = getSessionConfigKey(newSessionId)
         const savedConfig = await kvGet<SessionConfig>(key)
+        const globalSyncKey = (await kvGet<string>(StorageKeys.SYNC_KEY)) || ''
 
         if (savedConfig) {
           setConfigState(
@@ -313,6 +329,7 @@ export function useConfig() {
                 ...DefaultSessionConfig.chat_switch,
                 ...savedConfig.chat_switch,
               },
+              sync_key: globalSyncKey || savedConfig.sync_key,
             }),
           )
         } else {
@@ -320,6 +337,7 @@ export function useConfig() {
             ...DefaultSessionConfig,
             session_name: `Chat Session ${newSessionId}`,
             updated_at: Date.now(),
+            sync_key: globalSyncKey,
           }
           setConfigState(newConf)
           // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
@@ -354,10 +372,12 @@ export function useConfig() {
 
       // Initialize new session with defaults
       const key = getSessionConfigKey(newId)
+      const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
       const newConfig = {
         ...DefaultSessionConfig,
         session_name: name || `Chat Session ${newId}`,
         updated_at: Date.now(),
+        sync_key: globalSyncKey || '',
       }
       await kvSet(key, newConfig)
 
@@ -438,10 +458,12 @@ export function useConfig() {
       const sourceConfigKey = getSessionConfigKey(sourceSessionId)
       const sourceConfig =
         (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
+      const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
       const duplicatedConfig: SessionConfig = {
         ...sourceConfig,
         session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Copy`,
         updated_at: Date.now(),
+        sync_key: globalSyncKey || sourceConfig.sync_key,
       }
 
       await kvSet(getSessionConfigKey(newSessionId), duplicatedConfig)
@@ -513,10 +535,12 @@ export function useConfig() {
       const sourceConfigKey = getSessionConfigKey(sourceSessionId)
       const sourceConfig =
         (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
+      const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
       const forkedConfig: SessionConfig = {
         ...sourceConfig,
         session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Fork`,
         updated_at: Date.now(),
+        sync_key: globalSyncKey || sourceConfig.sync_key,
       }
 
       await kvSet(getSessionConfigKey(newSessionId), forkedConfig)
@@ -587,10 +611,12 @@ export function useConfig() {
 
     const preservedToken = config.api_token
     const preservedBase = config.api_base
+    const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
     const newConfig: SessionConfig = {
       ...DefaultSessionConfig,
       api_token: preservedToken,
       api_base: preservedBase,
+      sync_key: globalSyncKey || '',
       session_name: DefaultSessionConfig.session_name,
       updated_at: Date.now(),
     }

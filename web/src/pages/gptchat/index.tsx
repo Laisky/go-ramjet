@@ -261,7 +261,8 @@ export function GPTChatPage() {
   )
 
   const handleReset = useCallback(async () => {
-    await updateConfig(DefaultSessionConfig)
+    const { sync_key, ...rest } = DefaultSessionConfig
+    await updateConfig(rest)
   }, [updateConfig])
 
   const handleSend = useCallback(
