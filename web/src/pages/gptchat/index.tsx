@@ -102,6 +102,7 @@ export function GPTChatPage() {
     suppressAutoScrollOnceRef,
     scrollToBottom,
     scrollToTop,
+    resetScroll,
     handleLoadOlder,
     scrollToMessage,
   } = useChatScroll({
@@ -328,12 +329,14 @@ export function GPTChatPage() {
 
   const handleClearChats = useCallback(async () => {
     await clearMessages()
-  }, [clearMessages])
+    resetScroll()
+  }, [clearMessages, resetScroll])
 
   const handlePurgeAllSessions = useCallback(async () => {
     await purgeAllSessions()
     await clearMessages()
-  }, [purgeAllSessions, clearMessages])
+    resetScroll()
+  }, [purgeAllSessions, clearMessages, resetScroll])
 
   const handleImportData = useCallback(
     async (data: unknown, mode: 'merge' | 'download' = 'merge') => {

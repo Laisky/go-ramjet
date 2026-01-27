@@ -5,7 +5,7 @@ interface UseChatScrollOptions {
   messages: ChatMessageData[]
   pageSize: number
   sessionId: string | number
-  contentRef?: React.RefObject<HTMLElement>
+  contentRef?: React.RefObject<HTMLElement | null>
 }
 
 /**
@@ -195,6 +195,17 @@ export function useChatScroll({
   }, [scrollToPosition])
 
   /**
+   * resetScroll resets scroll state and moves viewport to top.
+   */
+  const resetScroll = useCallback(() => {
+    setVisibleCount(pageSize)
+    autoScrollRef.current = true
+    suppressAutoScrollOnceRef.current = false
+    manualScrollRef.current = false
+    scrollToPosition(0, 'auto')
+  }, [pageSize, scrollToPosition])
+
+  /**
    * isAtBottom checks whether the viewport is effectively at the bottom.
    */
   const isAtBottom = useCallback(() => {
@@ -319,6 +330,15 @@ export function useChatScroll({
     })
   }, [messages.length, sessionId, clampScrollPosition])
 
+  // Automatically reset scroll and return to top when messages are cleared
+  // in the current session.
+  useEffect(() => {
+    if (messages.length === 0 && !pendingSessionScrollRef.current) {
+      scrollToPosition(0, 'auto')
+      autoScrollRef.current = true
+    }
+  }, [messages.length, scrollToPosition])
+
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') return
     const target = contentRef?.current || document.body
@@ -389,6 +409,7 @@ export function useChatScroll({
     suppressAutoScrollOnceRef,
     scrollToBottom,
     scrollToTop,
+    resetScroll,
     handleLoadOlder,
     isNearBottom,
     scrollToMessage,

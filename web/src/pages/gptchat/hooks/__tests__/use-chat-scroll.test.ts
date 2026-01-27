@@ -301,4 +301,59 @@ describe('useChatScroll', () => {
       expect(window.scrollY).toBe(300)
     })
   })
+
+  it('resets scroll and enables auto-follow when messages are cleared within the same session', async () => {
+    const { result, rerender } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    // Simulate being scrolled down and auto-follow disabled
+    setScrollMetrics(800, 2000, 500)
+    result.current.autoScrollRef.current = false
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    // Clear messages
+    rerender({ messages: [] })
+
+    await waitFor(() => {
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
+      expect(result.current.autoScrollRef.current).toBe(true)
+    })
+  })
+
+  it('maintains auto-follow if messages are cleared and then immediately repopulated', async () => {
+    const { result, rerender } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    // Clear messages
+    rerender({ messages: [] })
+
+    // Check if auto-follow is enabled
+    expect(result.current.autoScrollRef.current).toBe(true)
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    // Repopulate messages
+    rerender({ messages: buildMessages(5) })
+
+    await waitFor(() => {
+      // Should auto-scroll to bottom of the new messages
+      expect(scrollToSpy).toHaveBeenCalled()
+      expect(result.current.autoScrollRef.current).toBe(true)
+    })
+  })
 })
