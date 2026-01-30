@@ -56,7 +56,7 @@ export const ImageModelDalle3 = 'dall-e-3'
 export const ImageModelGptImage1 = 'gpt-image-1'
 export const ImageModelGptImage1Mini = 'gpt-image-1-mini'
 export const ImageModelGptImage1dot5 = 'gpt-image-1.5'
-export const ImageModelSdxlTurbo = 'sdxl-turbo'
+// export const ImageModelSdxlTurbo = 'sdxl-turbo'
 export const ImageModelFluxDev = 'black-forest-labs/flux-dev'
 export const ImageModelFluxPro11 = 'black-forest-labs/flux-1.1-pro'
 export const ImageModelFluxKontextPro = 'black-forest-labs/flux-kontext-pro'
@@ -164,7 +164,7 @@ export const ImageModels = [
   ImageModelGptImage1,
   ImageModelGptImage1Mini,
   ImageModelGptImage1dot5,
-  ImageModelSdxlTurbo,
+  // ImageModelSdxlTurbo,
   ImageModelFluxPro11,
   ImageModelFluxKontextPro,
   ImageModelFluxDev,
@@ -188,7 +188,7 @@ export const FreeModels = [
   QAModelBasebit,
   QAModelSecurity,
   QAModelImmigrate,
-  ImageModelSdxlTurbo,
+  // ImageModelSdxlTurbo,
 ]
 
 export const AllModels = [
@@ -251,7 +251,7 @@ export const ModelCategories: Record<string, string[]> = {
     ImageModelGptImage1,
     ImageModelGptImage1Mini,
     ImageModelGptImage1dot5,
-    ImageModelSdxlTurbo,
+    // ImageModelSdxlTurbo,
     ImageModelFluxDev,
     ImageModelFluxPro11,
     ImageModelFluxKontextPro,
