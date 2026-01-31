@@ -372,6 +372,9 @@ func base64Encode(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// responsesStreamMaxLineBytes defines the max SSE line size accepted by the responses stream scanner.
+const responsesStreamMaxLineBytes = 20 * 1024 * 1024
+
 // buildResponsesHTTPRequest creates an HTTP request to /v1/responses.
 func buildResponsesHTTPRequest(ctx *gin.Context, user *config.UserConfig, reqBody []byte) (*http.Request, error) {
 	newURL := fmt.Sprintf("%s/%s", strings.TrimRight(user.APIBase, "/"), "v1/responses")
@@ -398,6 +401,8 @@ func parseStreamingResponses(
 ) (*OpenAIResponsesResp, error) {
 	logger := gmw.GetLogger(ctx)
 	scanner := bufio.NewScanner(resp.Body)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, responsesStreamMaxLineBytes)
 	finalResp := new(OpenAIResponsesResp)
 
 	requestID := resp.Header.Get("x-oneapi-request-id")
@@ -455,6 +460,11 @@ func parseStreamingResponses(
 	}
 
 	if err := scanner.Err(); err != nil {
+		logger.Debug("responses stream scanner error",
+			zap.Error(err),
+			zap.Int("max_line_bytes", responsesStreamMaxLineBytes),
+			zap.String("request_id", requestID),
+		)
 		return nil, errors.Wrap(err, "scanner error")
 	}
 

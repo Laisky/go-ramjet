@@ -1,9 +1,14 @@
 package http
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Laisky/go-utils/v5/json"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -124,4 +129,47 @@ func TestConvertFrontendToResponsesRequest_DisableMCPNoTools(t *testing.T) {
 	require.NotNil(t, respReq)
 	require.Nil(t, respReq.ToolChoice)
 	require.Len(t, respReq.Tools, 0)
+}
+
+// TestParseStreamingResponses_LargeLine ensures the stream parser accepts large SSE lines without scanner errors.
+func TestParseStreamingResponses_LargeLine(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+
+	largeDelta := strings.Repeat("a", 200*1024)
+	data1, err := json.Marshal(map[string]any{
+		"type":        "response.output_text.delta",
+		"response_id": "resp-large",
+		"delta":       largeDelta,
+	})
+	require.NoError(t, err)
+
+	data2, err := json.Marshal(map[string]any{
+		"type": "response.completed",
+		"response": &OpenAIResponsesResp{
+			ID: "resp-large",
+		},
+	})
+	require.NoError(t, err)
+
+	var sse strings.Builder
+	sse.WriteString("data: ")
+	sse.Write(data1)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data2)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: [DONE]\n\n")
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(sse.String())),
+	}
+
+	out, err := parseStreamingResponses(ctx, resp)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "resp-large", out.ID)
 }
