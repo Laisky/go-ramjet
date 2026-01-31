@@ -305,6 +305,7 @@ func writeFinalToUI(
 	reasoningText string,
 	thinkingSteps []string,
 ) error {
+	logger := gmw.GetLogger(ctx)
 	if frontendReq == nil {
 		return errors.New("empty frontend request")
 	}
@@ -321,7 +322,13 @@ func writeFinalToUI(
 		setStreamHeaders(ctx, upstreamHeader)
 		enableHeartBeatForStreamReq(ctx)
 
-		if !ctx.GetBool("llm_response_streamed") {
+		if !ctx.GetBool("llm_response_streamed") || !responseContentStreamed(ctx) {
+			if ctx.GetBool("llm_response_streamed") && !responseContentStreamed(ctx) {
+				logger.Debug("streamed response missing content, emitting final fallback",
+					zap.Int("chars", len(finalText)),
+					zap.String("request_id", requestID),
+				)
+			}
 			for _, s := range thinkingSteps {
 				emitThinkingDelta(ctx, true, requestID, s)
 			}

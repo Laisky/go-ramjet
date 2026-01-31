@@ -20,6 +20,51 @@ type CodeRendererProps = HTMLAttributes<HTMLElement> &
     children?: ReactNode
   }
 
+const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:'])
+const DATA_IMAGE_PREFIX = /^data:image\/[a-z0-9.+-]+;base64,/i
+
+/**
+ * sanitizeMarkdownUrl ensures only safe URLs are rendered by ReactMarkdown.
+ * It allows data:image base64 sources for images while blocking other data URLs.
+ */
+function sanitizeMarkdownUrl(url: string, key?: string): string {
+  const trimmed = String(url || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (DATA_IMAGE_PREFIX.test(trimmed) && key !== 'href') {
+    return trimmed
+  }
+
+  if (
+    trimmed.startsWith('#') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./') ||
+    trimmed.startsWith('../')
+  ) {
+    return trimmed
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (SAFE_PROTOCOLS.has(parsed.protocol)) {
+      return trimmed
+    }
+  } catch (err) {
+    if (!trimmed.includes(':')) {
+      return trimmed
+    }
+  }
+
+  console.debug('[Markdown] blocked unsafe url', {
+    key,
+    length: trimmed.length,
+    hasProtocol: trimmed.includes(':'),
+  })
+  return ''
+}
+
 /**
  * useColorScheme watches the root element and media query to determine the active theme.
  */
@@ -454,8 +499,9 @@ export function Markdown({ children, className }: MarkdownProps) {
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        rehypePlugins={[rehypeKatex, rehypeRaw]}
         components={components}
+        urlTransform={(url, key) => sanitizeMarkdownUrl(url, key)}
       >
         {children}
       </ReactMarkdown>

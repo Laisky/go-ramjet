@@ -6,6 +6,8 @@ The purpose of this project is to implement a CRON job server that supports vari
 
 Each task also can handle web requests, so the project also includes a web server component.
 
+Local tools and debugging related sensitive information is saved in .github/instructions/laisky.instructions.md.
+
 ### Codes
 
 All code must be written in English. Avoid using any other languages in code, comments, or documentation.

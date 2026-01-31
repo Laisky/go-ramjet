@@ -57,4 +57,15 @@ describe('Markdown code blocks', () => {
     }
     expect(trailingEmpty).toBeLessThanOrEqual(1)
   })
+
+  it('renders data image URLs in markdown images', () => {
+    const dataUrl = 'data:image/png;base64,AAA'
+    const content = `![Image](${dataUrl})`
+
+    const { container } = render(<Markdown>{content}</Markdown>)
+
+    const img = container.querySelector('img') as HTMLImageElement | null
+    expect(img).not.toBeNull()
+    expect(img?.getAttribute('src')).toBe(dataUrl)
+  })
 })

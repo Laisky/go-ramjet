@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
+	gmw "github.com/Laisky/gin-middlewares/v6"
 	"github.com/Laisky/go-utils/v5/json"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -172,4 +174,123 @@ func TestParseStreamingResponses_LargeLine(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, out)
 	require.Equal(t, "resp-large", out.ID)
+}
+
+func TestExtractOutputTextFromResponses_WithImages(t *testing.T) {
+	raw := `{
+		"id":"resp-1",
+		"output_text":"Here you go!",
+		"output":[
+			{"type":"message","role":"assistant","content":[
+				{"type":"output_image","image_url":{"url":"data:image/png;base64,AAA"}}
+			]}
+		]
+	}`
+
+	resp := new(OpenAIResponsesResp)
+	require.NoError(t, json.Unmarshal([]byte(raw), resp))
+
+	out := extractOutputTextFromResponses(resp)
+	require.Equal(t, "Here you go!\n\n![Image](data:image/png;base64,AAA)", out)
+}
+
+func TestExtractOutputTextFromResponses_MessageTextAndImages(t *testing.T) {
+	raw := `{
+		"id":"resp-2",
+		"output_text":"",
+		"output":[
+			{"type":"message","role":"assistant","content":[
+				{"type":"output_text","text":"Hello"},
+				{"type":"image_url","image_url":{"url":"data:image/png;base64,BBB"}}
+			]}
+		]
+	}`
+
+	resp := new(OpenAIResponsesResp)
+	require.NoError(t, json.Unmarshal([]byte(raw), resp))
+
+	out := extractOutputTextFromResponses(resp)
+	require.Equal(t, "Hello\n\n![Image](data:image/png;base64,BBB)", out)
+}
+
+func TestParseStreamingResponses_ChatCompletionFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(string(gmw.CtxKeyLock), &sync.RWMutex{})
+
+	chunk1 := OpenaiCompletionStreamResp{
+		ID:      "chatcmpl-1",
+		Object:  "chat.completion.chunk",
+		Created: 123,
+		Model:   "gemini",
+		Choices: []OpenaiCompletionStreamRespChoice{{
+			Delta: OpenaiCompletionStreamRespDelta{
+				Role:    OpenaiMessageRoleAI,
+				Content: "Here",
+			},
+			Index: 0,
+		}},
+	}
+	chunk2 := OpenaiCompletionStreamResp{
+		ID:      "chatcmpl-1",
+		Object:  "chat.completion.chunk",
+		Created: 123,
+		Model:   "gemini",
+		Choices: []OpenaiCompletionStreamRespChoice{{
+			Delta: OpenaiCompletionStreamRespDelta{
+				Content: []map[string]any{{
+					"type": "image_url",
+					"image_url": map[string]any{
+						"url": "data:image/png;base64,AAA",
+					},
+				}},
+			},
+			Index: 0,
+		}},
+	}
+	chunk3 := OpenaiCompletionStreamResp{
+		ID:      "chatcmpl-1",
+		Object:  "chat.completion.chunk",
+		Created: 123,
+		Model:   "gemini",
+		Choices: []OpenaiCompletionStreamRespChoice{{
+			Delta:        OpenaiCompletionStreamRespDelta{Role: OpenaiMessageRoleAI},
+			Index:        0,
+			FinishReason: "stop",
+		}},
+	}
+
+	data1, err := json.Marshal(chunk1)
+	require.NoError(t, err)
+	data2, err := json.Marshal(chunk2)
+	require.NoError(t, err)
+	data3, err := json.Marshal(chunk3)
+	require.NoError(t, err)
+
+	var sse strings.Builder
+	sse.WriteString("data: ")
+	sse.Write(data1)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data2)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data3)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: [DONE]\n\n")
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(sse.String())),
+	}
+
+	out, err := parseStreamingResponses(ctx, resp)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "chatcmpl-1", out.ID)
+	require.Contains(t, out.OutputText, "Here")
+	require.Contains(t, out.OutputText, "![Image](data:image/png;base64,AAA)")
+	require.Contains(t, recorder.Body.String(), "![Image](data:image/png;base64,AAA)")
 }

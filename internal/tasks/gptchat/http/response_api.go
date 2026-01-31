@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -375,6 +376,14 @@ func base64Encode(b []byte) string {
 // responsesStreamMaxLineBytes defines the max SSE line size accepted by the responses stream scanner.
 const responsesStreamMaxLineBytes = 20 * 1024 * 1024
 
+// llmResponseContentStreamedKey stores whether any assistant content was streamed.
+const llmResponseContentStreamedKey = "llm_response_content_streamed"
+
+// defaultImageMimeType defines the fallback MIME type for base64 image payloads.
+const defaultImageMimeType = "image/png"
+
+var base64BodyPattern = regexp.MustCompile(`^[A-Za-z0-9+/=]+$`)
+
 // buildResponsesHTTPRequest creates an HTTP request to /v1/responses.
 func buildResponsesHTTPRequest(ctx *gin.Context, user *config.UserConfig, reqBody []byte) (*http.Request, error) {
 	newURL := fmt.Sprintf("%s/%s", strings.TrimRight(user.APIBase, "/"), "v1/responses")
@@ -394,6 +403,24 @@ func buildResponsesHTTPRequest(ctx *gin.Context, user *config.UserConfig, reqBod
 	return req, nil
 }
 
+// markResponseContentStreamed records that assistant content has been streamed for this request.
+// It takes a Gin context to store the flag and does not return a value.
+func markResponseContentStreamed(ctx *gin.Context) {
+	if ctx == nil {
+		return
+	}
+	ctx.Set(llmResponseContentStreamedKey, true)
+}
+
+// responseContentStreamed reports whether assistant content was streamed for this request.
+// It takes a Gin context and returns true when content has been emitted.
+func responseContentStreamed(ctx *gin.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	return ctx.GetBool(llmResponseContentStreamedKey)
+}
+
 // parseStreamingResponses parses a streaming Responses API response and emits deltas to the UI.
 func parseStreamingResponses(
 	ctx *gin.Context,
@@ -404,6 +431,9 @@ func parseStreamingResponses(
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, responsesStreamMaxLineBytes)
 	finalResp := new(OpenAIResponsesResp)
+	var contentBuf strings.Builder
+	streamedContent := false
+	loggedChatFallback := false
 
 	requestID := resp.Header.Get("x-oneapi-request-id")
 	if requestID == "" {
@@ -443,11 +473,45 @@ func parseStreamingResponses(
 			requestID = event.ResponseID
 		}
 
+		if event.Type == "" && event.Delta == "" && event.Response == nil {
+			var chunk OpenaiCompletionStreamResp
+			if err := json.Unmarshal(data, &chunk); err == nil && chunk.Object == "chat.completion.chunk" {
+				if !loggedChatFallback {
+					logger.Debug("responses stream received chat completion chunks",
+						zap.String("request_id", requestID),
+					)
+					loggedChatFallback = true
+				}
+				if chunk.ID != "" {
+					requestID = chunk.ID
+				}
+				for _, choice := range chunk.Choices {
+					content, reasoning := extractChatCompletionDeltaContent(choice.Delta)
+					if reasoning != "" {
+						emitThinkingDelta(ctx, true, requestID, reasoning)
+					}
+					if content != "" {
+						emitTextDelta(ctx, true, requestID, content)
+						markResponseContentStreamed(ctx)
+						streamedContent = true
+						contentBuf.WriteString(content)
+					}
+				}
+				continue
+			}
+		}
+
 		switch event.Type {
 		case "response.output_text.delta":
 			emitTextDelta(ctx, true, requestID, event.Delta)
+			markResponseContentStreamed(ctx)
+			streamedContent = true
+			contentBuf.WriteString(event.Delta)
 		case "response.refusal.delta":
 			emitTextDelta(ctx, true, requestID, "refusal: "+event.Delta)
+			markResponseContentStreamed(ctx)
+			streamedContent = true
+			contentBuf.WriteString("refusal: " + event.Delta)
 		case "response.reasoning_text.delta", "response.thought.delta", "response.reasoning.delta":
 			emitThinkingDelta(ctx, true, requestID, event.Delta)
 		case "response.function_call_arguments.delta":
@@ -455,6 +519,33 @@ func parseStreamingResponses(
 		case "response.completed":
 			if event.Response != nil {
 				finalResp = event.Response
+				imageMarkdown := extractOutputImageMarkdownFromResponses(event.Response)
+				if !streamedContent {
+					finalContent := extractOutputTextFromResponses(event.Response)
+					if finalContent != "" {
+						emitTextDelta(ctx, true, requestID, finalContent)
+						markResponseContentStreamed(ctx)
+						streamedContent = true
+						contentBuf.WriteString(finalContent)
+						logger.Debug("responses stream emitted final content fallback",
+							zap.Int("chars", len(finalContent)),
+							zap.String("request_id", requestID),
+						)
+					}
+				} else if imageMarkdown != "" {
+					emitTextDelta(ctx, true, requestID, imageMarkdown)
+					merged := appendMarkdownBlock(contentBuf.String(), imageMarkdown)
+					contentBuf.Reset()
+					contentBuf.WriteString(merged)
+				}
+
+				if imageMarkdown != "" {
+					logger.Debug("responses stream output images",
+						zap.Int("image_count", countMarkdownImages(imageMarkdown)),
+						zap.Int("markdown_chars", len(imageMarkdown)),
+						zap.String("request_id", requestID),
+					)
+				}
 			}
 		}
 	}
@@ -470,6 +561,9 @@ func parseStreamingResponses(
 
 	if finalResp.ID == "" {
 		finalResp.ID = requestID
+	}
+	if strings.TrimSpace(finalResp.OutputText) == "" && contentBuf.Len() > 0 {
+		finalResp.OutputText = contentBuf.String()
 	}
 
 	return finalResp, nil
@@ -623,39 +717,47 @@ func extractOutputTextFromResponses(resp *OpenAIResponsesResp) string {
 	if resp == nil {
 		return ""
 	}
+	baseText := ""
 	if strings.TrimSpace(resp.OutputText) != "" {
-		return resp.OutputText
+		baseText = resp.OutputText
 	}
 
 	// Typical shape:
 	// {"type":"message","role":"assistant","content":[{"type":"output_text","text":"..."}]}
-	texts := make([]string, 0, 4)
-	for _, item := range resp.Output {
-		if item.Type != "message" {
-			continue
-		}
-		var msg struct {
-			Type    string `json:"type"`
-			Role    string `json:"role"`
-			Content []struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"content"`
-		}
-		if err := json.Unmarshal(item.Raw(), &msg); err != nil {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(msg.Role)) != "assistant" {
-			continue
-		}
-		for _, c := range msg.Content {
-			if c.Type == "output_text" && strings.TrimSpace(c.Text) != "" {
-				texts = append(texts, c.Text)
+	if baseText == "" {
+		texts := make([]string, 0, 4)
+		for _, item := range resp.Output {
+			if item.Type != "message" {
+				continue
+			}
+			var msg struct {
+				Type    string `json:"type"`
+				Role    string `json:"role"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if err := json.Unmarshal(item.Raw(), &msg); err != nil {
+				continue
+			}
+			if strings.ToLower(strings.TrimSpace(msg.Role)) != "assistant" {
+				continue
+			}
+			for _, c := range msg.Content {
+				if (c.Type == "output_text" || c.Type == "text") && strings.TrimSpace(c.Text) != "" {
+					texts = append(texts, c.Text)
+				}
 			}
 		}
+		baseText = strings.Join(texts, "")
 	}
 
-	return strings.Join(texts, "")
+	imageMarkdown := extractOutputImageMarkdownFromResponses(resp)
+	if imageMarkdown == "" {
+		return baseText
+	}
+	return appendMarkdownBlock(baseText, imageMarkdown)
 }
 
 // extractReasoningFromResponses extracts reasoning text from output items.
@@ -712,4 +814,293 @@ func extractReasoningFromResponses(resp *OpenAIResponsesResp) string {
 	}
 
 	return strings.Join(reasoning, "\n")
+}
+
+// extractChatCompletionDeltaContent extracts text and reasoning from a chat completion delta.
+// It takes a delta and returns the content string plus any reasoning string.
+func extractChatCompletionDeltaContent(delta OpenaiCompletionStreamRespDelta) (string, string) {
+	var content strings.Builder
+	switch v := delta.Content.(type) {
+	case string:
+		content.WriteString(v)
+	case []any:
+		for _, raw := range v {
+			part, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			partType := strings.ToLower(strings.TrimSpace(stringValue(part["type"])))
+			switch partType {
+			case "text", "output_text":
+				content.WriteString(stringValue(part["text"]))
+			case "image_url", "output_image", "image":
+				url := extractImageURLFromMap(part, extractMimeTypeFromMap(part))
+				if url != "" {
+					content.WriteString("\n")
+					content.WriteString(buildImageMarkdown(url))
+					content.WriteString("\n")
+				}
+			}
+		}
+	case []map[string]any:
+		for _, part := range v {
+			partType := strings.ToLower(strings.TrimSpace(stringValue(part["type"])))
+			switch partType {
+			case "text", "output_text":
+				content.WriteString(stringValue(part["text"]))
+			case "image_url", "output_image", "image":
+				url := extractImageURLFromMap(part, extractMimeTypeFromMap(part))
+				if url != "" {
+					content.WriteString("\n")
+					content.WriteString(buildImageMarkdown(url))
+					content.WriteString("\n")
+				}
+			}
+		}
+	case []StreamRespContent:
+		for _, part := range v {
+			switch strings.ToLower(strings.TrimSpace(part.Type)) {
+			case "image_url", "output_image", "image":
+				if part.ImageUrl.Url != "" {
+					content.WriteString("\n")
+					content.WriteString(buildImageMarkdown(part.ImageUrl.Url))
+					content.WriteString("\n")
+				}
+			}
+		}
+	}
+
+	reasoning := ""
+	if delta.ReasoningContent != "" {
+		reasoning = delta.ReasoningContent
+	} else if delta.Reasoning != "" {
+		reasoning = delta.Reasoning
+	}
+	return content.String(), reasoning
+}
+
+// extractOutputImageMarkdownFromResponses builds markdown for any images in the response.
+// It takes a Responses API response and returns markdown for images, or an empty string.
+func extractOutputImageMarkdownFromResponses(resp *OpenAIResponsesResp) string {
+	urls := extractOutputImageURLsFromResponses(resp)
+	if len(urls) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	for _, url := range urls {
+		if strings.TrimSpace(url) == "" {
+			continue
+		}
+		if out.Len() > 0 {
+			out.WriteString("\n\n")
+		}
+		out.WriteString(buildImageMarkdown(url))
+	}
+	return out.String()
+}
+
+// extractOutputImageURLsFromResponses pulls image URLs or data URIs from response output items.
+// It takes a Responses API response and returns a list of URLs in the order encountered.
+func extractOutputImageURLsFromResponses(resp *OpenAIResponsesResp) []string {
+	if resp == nil {
+		return nil
+	}
+	out := make([]string, 0, 2)
+	for _, item := range resp.Output {
+		switch item.Type {
+		case "message":
+			var msg struct {
+				Role    string           `json:"role"`
+				Content []map[string]any `json:"content"`
+			}
+			if err := json.Unmarshal(item.Raw(), &msg); err != nil {
+				continue
+			}
+			if strings.ToLower(strings.TrimSpace(msg.Role)) != "assistant" {
+				continue
+			}
+			for _, part := range msg.Content {
+				url := extractImageURLFromMap(part, extractMimeTypeFromMap(part))
+				if url != "" {
+					out = append(out, url)
+				}
+			}
+		case "output_image", "image", "image_url":
+			var raw map[string]any
+			if err := json.Unmarshal(item.Raw(), &raw); err != nil {
+				continue
+			}
+			url := extractImageURLFromMap(raw, extractMimeTypeFromMap(raw))
+			if url != "" {
+				out = append(out, url)
+			}
+		}
+	}
+	return out
+}
+
+// extractImageURLFromMap normalizes supported image fields into a URL or data URI.
+// It takes a map of fields plus a MIME hint and returns a usable URL string.
+func extractImageURLFromMap(raw map[string]any, mimeHint string) string {
+	if raw == nil {
+		return ""
+	}
+	nextMime := mimeHint
+	if mt := extractMimeTypeFromMap(raw); mt != "" {
+		nextMime = mt
+	}
+	if url := normalizeImageURL(raw["image_url"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["image"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["url"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["b64_json"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["data"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["inline_data"], nextMime); url != "" {
+		return url
+	}
+	if url := normalizeImageURL(raw["inlineData"], nextMime); url != "" {
+		return url
+	}
+	return ""
+}
+
+// normalizeImageURL formats an image URL or base64 payload into a usable URL string.
+// It takes a raw value and a MIME hint, returning a URL or data URI string.
+func normalizeImageURL(raw any, mimeHint string) string {
+	switch v := raw.(type) {
+	case string:
+		return ensureImageURL(v, mimeHint)
+	case map[string]any:
+		nextMime := mimeHint
+		if mt := extractMimeTypeFromMap(v); mt != "" {
+			nextMime = mt
+		}
+		if url := normalizeImageURL(v["url"], nextMime); url != "" {
+			return url
+		}
+		if url := normalizeImageURL(v["image_url"], nextMime); url != "" {
+			return url
+		}
+		if url := normalizeImageURL(v["b64_json"], nextMime); url != "" {
+			return url
+		}
+		if url := normalizeImageURL(v["data"], nextMime); url != "" {
+			return url
+		}
+		if url := normalizeImageURL(v["inline_data"], nextMime); url != "" {
+			return url
+		}
+		if url := normalizeImageURL(v["inlineData"], nextMime); url != "" {
+			return url
+		}
+	}
+	return ""
+}
+
+// ensureImageURL builds a data URI when given a raw base64 string.
+// It takes the raw string and MIME hint, returning a URL or data URI string.
+func ensureImageURL(raw string, mimeHint string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "data:image/") ||
+		strings.HasPrefix(lower, "http://") ||
+		strings.HasPrefix(lower, "https://") ||
+		strings.HasPrefix(lower, "blob:") {
+		return value
+	}
+	if strings.Contains(value, ":") {
+		return value
+	}
+	if looksLikeBase64(value) {
+		return fmt.Sprintf("data:%s;base64,%s", normalizeImageMimeType(mimeHint), value)
+	}
+	return value
+}
+
+// normalizeImageMimeType ensures the MIME type is an image/* variant.
+// It takes a MIME hint and returns a safe image MIME type.
+func normalizeImageMimeType(mimeHint string) string {
+	mimeType := strings.TrimSpace(mimeHint)
+	if strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+		return mimeType
+	}
+	return defaultImageMimeType
+}
+
+// looksLikeBase64 checks if a string resembles base64 payloads without headers.
+// It takes the string to inspect and returns true when it matches the pattern.
+func looksLikeBase64(value string) bool {
+	if len(value) < 32 {
+		return false
+	}
+	return base64BodyPattern.MatchString(value)
+}
+
+// extractMimeTypeFromMap reads common mime type keys from a map.
+// It takes a map of fields and returns the MIME type string when present.
+func extractMimeTypeFromMap(raw map[string]any) string {
+	if raw == nil {
+		return ""
+	}
+	if mt := stringValue(raw["mime_type"]); mt != "" {
+		return mt
+	}
+	if mt := stringValue(raw["mimeType"]); mt != "" {
+		return mt
+	}
+	return ""
+}
+
+// stringValue converts a loosely typed field into a trimmed string.
+// It takes an arbitrary value and returns the string form when supported.
+func stringValue(raw any) string {
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []byte:
+		return strings.TrimSpace(string(v))
+	default:
+		return ""
+	}
+}
+
+// buildImageMarkdown formats a URL into a markdown image block.
+// It takes the image URL and returns a markdown string.
+func buildImageMarkdown(url string) string {
+	return fmt.Sprintf("![Image](%s)", url)
+}
+
+// appendMarkdownBlock appends a markdown block to existing text with spacing.
+// It takes the base text and the new block, returning the combined string.
+func appendMarkdownBlock(base string, block string) string {
+	if strings.TrimSpace(block) == "" {
+		return base
+	}
+	if strings.TrimSpace(base) == "" {
+		return strings.TrimSpace(block)
+	}
+	trimmedBase := strings.TrimRight(base, "\n")
+	trimmedBlock := strings.TrimSpace(block)
+	return trimmedBase + "\n\n" + trimmedBlock
+}
+
+// countMarkdownImages counts image markdown blocks in the provided string.
+// It takes markdown content and returns the number of image tags found.
+func countMarkdownImages(markdown string) int {
+	if strings.TrimSpace(markdown) == "" {
+		return 0
+	}
+	return strings.Count(markdown, "![Image](")
 }
