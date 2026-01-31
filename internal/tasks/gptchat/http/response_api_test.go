@@ -102,3 +102,26 @@ func TestConvertFrontendToResponsesRequest_Files(t *testing.T) {
 	require.Equal(t, "input_image", part2["type"])
 	require.Contains(t, part2["image_url"], "base64,")
 }
+
+func TestConvertFrontendToResponsesRequest_DisableMCPNoTools(t *testing.T) {
+	enableMCP := false
+	frontendReq := &FrontendReq{
+		Model:     "gpt-4o-mini",
+		EnableMCP: &enableMCP,
+		Messages: []FrontendReqMessage{
+			{Role: OpenaiMessageRoleUser, Content: FrontendReqMessageContent{StringContent: "hello"}},
+		},
+		Tools: []OpenaiChatReqTool{
+			{Type: "function", Function: OpenaiChatReqToolFn{Name: "how-to-subscribe"}},
+		},
+		MCPServers: []MCPServerConfig{
+			{Enabled: true},
+		},
+	}
+
+	respReq, err := convertFrontendToResponsesRequest(frontendReq)
+	require.NoError(t, err)
+	require.NotNil(t, respReq)
+	require.Nil(t, respReq.ToolChoice)
+	require.Len(t, respReq.Tools, 0)
+}

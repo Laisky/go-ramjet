@@ -221,6 +221,12 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 
 	req.Input = msgs
 
+	enableMCP := frontendReq.EnableMCP == nil || *frontendReq.EnableMCP
+	if !enableMCP {
+		req.ToolChoice = nil
+		return req, nil
+	}
+
 	// Convert tools from chat-completions tool schema to Responses tool schema.
 	tools := make([]OpenAIResponsesTool, 0, len(frontendReq.Tools))
 	for _, t := range frontendReq.Tools {
@@ -245,8 +251,7 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 
 	// Extract tools from MCP servers if no explicit tools were provided.
 	// This allows the frontend to just send mcp_servers with cached tools.
-	enableMCP := frontendReq.EnableMCP == nil || *frontendReq.EnableMCP
-	if enableMCP && len(tools) == 0 && len(frontendReq.MCPServers) > 0 {
+	if len(tools) == 0 && len(frontendReq.MCPServers) > 0 {
 		tools = append(tools, extractToolsFromMCPServers(frontendReq.MCPServers)...)
 	}
 
@@ -475,6 +480,7 @@ func callUpstreamResponses(
 	logger.Debug("send responses request to upstream",
 		zap.String("model", req.Model),
 		zap.Int("payload_bytes", len(body)),
+		zap.Any("request", sanitizePayloadForLog(req)),
 	)
 
 	upReq, err := buildResponsesHTTPRequest(ctx, user, body)

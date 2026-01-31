@@ -618,6 +618,10 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 			return nil, nil, nil, errors.Wrap(err, "request is illegal")
 		}
 
+		logger.Debug("received frontend request",
+			zap.Any("request", sanitizePayloadForLog(frontendReq)),
+		)
+
 		// enhance user query
 		if config.Config.RamjetURL != "" &&
 			frontendReq.LaiskyExtra != nil &&
