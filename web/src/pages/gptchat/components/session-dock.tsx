@@ -78,28 +78,26 @@ export function SessionDock({
 
       <div className="flex w-full flex-col border-t border-border">
         <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <ConfirmDialog
-                  title="Clear Chat History"
-                  description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
-                  onConfirm={onClearChats}
-                  trigger={
-                    <button
-                      className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
-                      aria-label="Clear Chat History"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  }
-                />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Clear Chat History</p>
-            </TooltipContent>
-          </Tooltip>
+          <ConfirmDialog
+            title="Clear Chat History"
+            description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
+            onConfirm={onClearChats}
+            trigger={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
+                    aria-label="Clear Chat History"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Clear Chat History</p>
+                </TooltipContent>
+              </Tooltip>
+            }
+          />
         </TooltipProvider>
       </div>
     </div>
