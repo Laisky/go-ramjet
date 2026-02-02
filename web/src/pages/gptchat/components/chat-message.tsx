@@ -2,7 +2,7 @@
  * Chat message component for displaying user and assistant messages.
  */
 import { Check, Copy, RotateCcw } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 
 import { Markdown } from '@/components/markdown'
 import { Button } from '@/components/ui/button'
@@ -76,8 +76,9 @@ function ReasoningBlock({ content }: { content: string }) {
 
 /**
  * ChatMessage renders a single chat message with markdown support.
+ * Memoized to prevent redundant re-renders of message history during streaming.
  */
-export function ChatMessage({
+export const ChatMessage = memo(function ChatMessage({
   message,
   onDelete,
   isStreaming,
@@ -228,6 +229,8 @@ export function ChatMessage({
                           src={att.contentB64}
                           alt={att.filename || 'image'}
                           className="w-full h-auto object-contain max-h-[300px]"
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             console.error('Image failed to load', att.filename)
                             e.currentTarget.style.display = 'none'
@@ -342,4 +345,4 @@ export function ChatMessage({
       </Card>
     </div>
   )
-}
+})

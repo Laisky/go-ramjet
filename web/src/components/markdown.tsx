@@ -477,6 +477,7 @@ const renderImage = ({ src, alt }: { src?: string; alt?: string }) => {
       alt={alt}
       className="max-w-full h-auto rounded-lg my-2 border border-border"
       loading="lazy"
+      decoding="async"
     />
   )
 }

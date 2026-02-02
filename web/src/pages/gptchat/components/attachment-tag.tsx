@@ -72,6 +72,8 @@ export function AttachmentTag({
             src={displayUrl}
             alt={filename}
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       ) : (

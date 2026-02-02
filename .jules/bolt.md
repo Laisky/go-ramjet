@@ -1,0 +1,3 @@
+## 2025-05-15 - [Chat Performance Optimization]
+**Learning:** In a chat application where messages are streamed token by token, the entire message list often re-renders. When messages contain large base64 images, this causes significant UI jank. 'React.memo' on the message component is the most effective way to prevent these redundant re-renders. Additionally, 'decoding="async"' on image tags is crucial for offloading the heavy work of base64 image decoding from the main thread.
+**Action:** Always memoize core list components in real-time interfaces and use asynchronous image decoding for heavy assets.
