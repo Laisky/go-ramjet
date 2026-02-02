@@ -112,6 +112,7 @@ export function SelectionToolbar({
         className="h-8 w-8 p-0"
         onClick={handleCopy}
         title="Copy selection"
+        aria-label="Copy selection"
       >
         {copied ? (
           <Check className="h-4 w-4 text-success" />
@@ -125,6 +126,7 @@ export function SelectionToolbar({
         className="h-8 w-8 p-0"
         onClick={handleTTS}
         title="Read selection"
+        aria-label="Read selection"
       >
         <Volume2 className="h-4 w-4" />
       </Button>
@@ -135,6 +137,7 @@ export function SelectionToolbar({
           className="h-8 w-8 p-0"
           onClick={handleQuote}
           title="Quote selection"
+          aria-label="Quote selection"
         >
           <Quote className="h-4 w-4" />
         </Button>
@@ -146,6 +149,7 @@ export function SelectionToolbar({
         className="h-8 w-8 p-0"
         onClick={handleClose}
         title="Close"
+        aria-label="Close toolbar"
       >
         <X className="h-4 w-4" />
       </Button>

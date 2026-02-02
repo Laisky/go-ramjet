@@ -103,6 +103,7 @@ export function ChatSearch({
         onClick={() => setIsOpen(true)}
         className="h-9 w-9 rounded-md px-0"
         title="Search messages (Ctrl+K)"
+        aria-label="Search messages"
       >
         <Search className="h-4 w-4" />
       </Button>

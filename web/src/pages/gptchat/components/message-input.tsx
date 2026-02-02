@@ -313,6 +313,7 @@ export function MessageInput({
           disabled={disabled || isUploading}
           className="absolute right-2 bottom-2 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
           title="Attach files (Images, PDF, Doc, Text)"
+          aria-label="Attach files"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

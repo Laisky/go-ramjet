@@ -480,6 +480,7 @@ export function GPTChatPage() {
               onClick={() => setConfigOpen(true)}
               className="h-9 w-9 rounded-md px-0"
               title="Settings"
+              aria-label="Settings"
             >
               <Settings className="h-4 w-4" />
             </Button>

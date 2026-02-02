@@ -347,6 +347,7 @@ export function ChatInput({
                   onClick={onStop}
                   variant="destructive"
                   className="flex-1 w-12 rounded-md p-0 shadow-sm"
+                  aria-label="Stop generation"
                 >
                   <Square className="h-5 w-5" />
                 </Button>
@@ -357,6 +358,8 @@ export function ChatInput({
                     !String(message || '').trim() || disabled || isTranscribing
                   }
                   className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
+                  aria-label="Send message"
+                  title="Send message (Ctrl+Enter)"
                 >
                   <Send className="h-5 w-5" />
                 </Button>
@@ -471,6 +474,8 @@ function ToggleButton({
     <button
       onClick={onClick}
       title={title}
+      role="switch"
+      aria-checked={active}
       className={cn(
         'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] transition-colors',
         active

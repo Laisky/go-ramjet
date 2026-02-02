@@ -41,6 +41,7 @@ export function SessionDock({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onSwitchSession(session.id)}
+                  aria-label={`Switch to session ${session.name}`}
                   className={cn(
                     'flex h-9 w-full items-center justify-center border-b border-border text-[11px] font-bold transition-colors',
                     session.id === activeSessionId
@@ -76,19 +77,30 @@ export function SessionDock({
       </div>
 
       <div className="flex w-full flex-col border-t border-border">
-        <ConfirmDialog
-          title="Clear Chat History"
-          description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
-          onConfirm={onClearChats}
-          trigger={
-            <button
-              className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
-              title="Clear Chat History"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          }
-        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <ConfirmDialog
+                  title="Clear Chat History"
+                  description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
+                  onConfirm={onClearChats}
+                  trigger={
+                    <button
+                      className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
+                      aria-label="Clear Chat History"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  }
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Clear Chat History</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   )
