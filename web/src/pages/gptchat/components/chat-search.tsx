@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import type { ChatMessageData } from '../types'
 
@@ -97,16 +98,17 @@ export function ChatSearch({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-        className="h-9 w-9 rounded-md px-0"
-        title="Search messages (Ctrl+K)"
-        aria-label="Search messages"
-      >
-        <Search className="h-4 w-4" />
-      </Button>
+      <TooltipWrapper content="Search messages (Ctrl+K)">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsOpen(true)}
+          className="h-9 w-9 rounded-md px-0"
+          aria-label="Search messages"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+      </TooltipWrapper>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10dvh] backdrop-blur-[2px]">

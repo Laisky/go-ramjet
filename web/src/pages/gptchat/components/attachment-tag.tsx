@@ -1,3 +1,4 @@
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { Edit2, Paperclip, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -90,32 +91,36 @@ export function AttachmentTag({
       </div>
 
       {isImage && onEdit && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit()
-          }}
-          className="flex items-center gap-1 rounded-md bg-popover px-1.5 py-0.5 text-[10px] text-popover-foreground shadow-sm transition-colors hover:bg-accent"
-          title="Edit image"
-        >
-          <Edit2 className="h-3 w-3" />
-          Edit
-        </button>
+        <TooltipWrapper content="Edit image">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="flex items-center gap-1 rounded-md bg-popover px-1.5 py-0.5 text-[10px] text-popover-foreground shadow-sm transition-colors hover:bg-accent"
+            aria-label="Edit image"
+          >
+            <Edit2 className="h-3 w-3" />
+            Edit
+          </button>
+        </TooltipWrapper>
       )}
 
       {onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          title="Remove attachment"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <TooltipWrapper content="Remove attachment">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+            className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            aria-label="Remove attachment"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </TooltipWrapper>
       )}
     </div>
   )

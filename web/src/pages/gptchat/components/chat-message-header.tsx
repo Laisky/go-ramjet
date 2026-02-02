@@ -15,12 +15,7 @@ import {
 import { useCallback, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import type { ChatAttachment, ChatMessageData } from '../types'
 
@@ -150,194 +145,169 @@ export function ChatMessageHeader({
   const actionDisabled = Boolean(isStreaming && isAssistant)
 
   return (
-    <TooltipProvider>
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs transition-all',
+        !isFloating &&
+          'mb-2 -mx-2 -mt-1.5 rounded-t-md bg-inherit border-b border-border/10',
+        className,
+      )}
+    >
       <div
         className={cn(
-          'flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs transition-all',
-          !isFloating &&
-            'mb-2 -mx-2 -mt-1.5 rounded-t-md bg-inherit border-b border-border/10',
-          className,
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+          isUser
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted text-muted-foreground',
         )}
       >
-        <div
-          className={cn(
-            'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
-            isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {isUser ? <User className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
-        </div>
-        <span className={cn('font-semibold', 'text-foreground')}>
-          {isUser ? 'You' : 'Assistant'}
-        </span>
+        {isUser ? <User className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+      </div>
+      <span className={cn('font-semibold', 'text-foreground')}>
+        {isUser ? 'You' : 'Assistant'}
+      </span>
 
-        <div
-          className={cn(
-            'ml-auto flex flex-wrap items-center gap-1 text-[11px] transition-opacity',
-            showActionsAlways
-              ? 'opacity-100'
-              : 'opacity-100 md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100',
-          )}
-        >
-          {canEditMessage && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditClick}
-                  className="h-7 w-7 rounded-md p-0"
-                  title="Edit & resend"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={effectiveTooltipSide}>
-                Edit & resend
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {isAssistant && onRegenerate && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRegenerate}
-                  className="h-7 w-7 rounded-md p-0"
-                  disabled={actionDisabled}
-                  title="Regenerate response"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={effectiveTooltipSide}>
-                Regenerate response
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {showSpeechButton && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleSpeech}
-                  className={cn(
-                    'h-7 w-7 rounded-md p-0',
-                    ttsStatus?.error &&
-                      'text-destructive hover:text-destructive',
-                  )}
-                  disabled={ttsStatus?.isLoading}
-                  title={
-                    ttsStatus?.isLoading
-                      ? 'Loading audio...'
-                      : ttsStatus?.error
-                        ? `TTS Error: ${ttsStatus.error}`
-                        : ttsStatus?.audioUrl
-                          ? 'Stop narration'
-                          : 'Play narration'
-                  }
-                >
-                  {ttsStatus?.isLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : ttsStatus?.error ? (
-                    <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                  ) : ttsStatus?.audioUrl ? (
-                    <VolumeX className="h-3.5 w-3.5" />
-                  ) : (
-                    <Volume2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={effectiveTooltipSide}>
-                {ttsStatus?.isLoading
+      <div
+        className={cn(
+          'ml-auto flex flex-wrap items-center gap-1 text-[11px] transition-opacity',
+          showActionsAlways
+            ? 'opacity-100'
+            : 'opacity-100 md:opacity-0 md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100',
+        )}
+      >
+        {canEditMessage && (
+          <TooltipWrapper content="Edit & resend" side={effectiveTooltipSide}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleEditClick}
+              className="h-7 w-7 rounded-md p-0"
+              aria-label="Edit & resend"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipWrapper>
+        )}
+        {isAssistant && onRegenerate && (
+          <TooltipWrapper
+            content="Regenerate response"
+            side={effectiveTooltipSide}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRegenerate}
+              className="h-7 w-7 rounded-md p-0"
+              disabled={actionDisabled}
+              aria-label="Regenerate response"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipWrapper>
+        )}
+        {showSpeechButton && (
+          <TooltipWrapper
+            content={
+              ttsStatus?.isLoading
+                ? 'Loading audio...'
+                : ttsStatus?.error
+                  ? `TTS Error: ${ttsStatus.error}`
+                  : ttsStatus?.audioUrl
+                    ? 'Stop narration'
+                    : 'Play narration'
+            }
+            side={effectiveTooltipSide}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleSpeech}
+              className={cn(
+                'h-7 w-7 rounded-md p-0',
+                ttsStatus?.error && 'text-destructive hover:text-destructive',
+              )}
+              disabled={ttsStatus?.isLoading}
+              aria-label={
+                ttsStatus?.isLoading
                   ? 'Loading audio...'
                   : ttsStatus?.error
                     ? `TTS Error: ${ttsStatus.error}`
                     : ttsStatus?.audioUrl
                       ? 'Stop narration'
-                      : 'Play narration'}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                className={cn(
-                  'h-7 w-7 rounded-md p-0',
-                  copyError && 'text-destructive hover:text-destructive',
-                )}
-                title={
-                  copyError
-                    ? 'Failed to copy'
-                    : copied
-                      ? 'Copied!'
-                      : 'Copy message'
-                }
-              >
-                {copyError ? (
-                  <AlertCircle className="h-3.5 w-3.5" />
-                ) : copied ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side={effectiveTooltipSide}>
-              {copyError
-                ? 'Failed to copy'
-                : copied
-                  ? 'Copied!'
-                  : 'Copy message'}
-            </TooltipContent>
-          </Tooltip>
+                      : 'Play narration'
+              }
+            >
+              {ttsStatus?.isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : ttsStatus?.error ? (
+                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+              ) : ttsStatus?.audioUrl ? (
+                <VolumeX className="h-3.5 w-3.5" />
+              ) : (
+                <Volume2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </TooltipWrapper>
+        )}
+        <TooltipWrapper
+          content={
+            copyError ? 'Failed to copy' : copied ? 'Copied!' : 'Copy message'
+          }
+          side={effectiveTooltipSide}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            className={cn(
+              'h-7 w-7 rounded-md p-0',
+              copyError && 'text-destructive hover:text-destructive',
+            )}
+            aria-label={
+              copyError ? 'Failed to copy' : copied ? 'Copied!' : 'Copy message'
+            }
+          >
+            {copyError ? (
+              <AlertCircle className="h-3.5 w-3.5" />
+            ) : copied ? (
+              <Check className="h-3.5 w-3.5 text-success" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </TooltipWrapper>
 
-          {onFork && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleFork}
-                  className="h-7 w-7 rounded-md p-0"
-                  title="Fork session"
-                >
-                  <GitFork className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={effectiveTooltipSide}>
-                Fork session from here
-              </TooltipContent>
-            </Tooltip>
-          )}
+        {onFork && (
+          <TooltipWrapper
+            content="Fork session from here"
+            side={effectiveTooltipSide}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleFork}
+              className="h-7 w-7 rounded-md p-0"
+              aria-label="Fork session"
+            >
+              <GitFork className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipWrapper>
+        )}
 
-          {onDelete && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDelete}
-                  className="h-7 w-7 rounded-md p-0 text-destructive"
-                  title="Delete message"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side={effectiveTooltipSide}>
-                Delete message
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        {onDelete && (
+          <TooltipWrapper content="Delete message" side={effectiveTooltipSide}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              className="h-7 w-7 rounded-md p-0 text-destructive"
+              aria-label="Delete message"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipWrapper>
+        )}
       </div>
-    </TooltipProvider>
+    </div>
   )
 }

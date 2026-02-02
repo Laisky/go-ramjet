@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
@@ -474,16 +475,17 @@ export function GPTChatPage() {
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setConfigOpen(true)}
-              className="h-9 w-9 rounded-md px-0"
-              title="Settings"
-              aria-label="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
+            <TooltipWrapper content="Settings">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfigOpen(true)}
+                className="h-9 w-9 rounded-md px-0"
+                aria-label="Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </TooltipWrapper>
           </div>
         </header>
 

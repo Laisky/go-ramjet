@@ -5,6 +5,7 @@ import { Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { transcribeAudio } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import { useUser } from '../hooks/use-user'
@@ -343,26 +344,31 @@ export function ChatInput({
           <div className="flex shrink-0 self-stretch items-stretch gap-1">
             <div className="flex flex-col gap-1">
               {isLoading ? (
-                <Button
-                  onClick={onStop}
-                  variant="destructive"
-                  className="flex-1 w-12 rounded-md p-0 shadow-sm"
-                  aria-label="Stop generation"
-                >
-                  <Square className="h-5 w-5" />
-                </Button>
+                <TooltipWrapper content="Stop generation" side="left">
+                  <Button
+                    onClick={onStop}
+                    variant="destructive"
+                    className="flex-1 w-12 rounded-md p-0 shadow-sm"
+                    aria-label="Stop generation"
+                  >
+                    <Square className="h-5 w-5" />
+                  </Button>
+                </TooltipWrapper>
               ) : (
-                <Button
-                  onClick={handleSend}
-                  disabled={
-                    !String(message || '').trim() || disabled || isTranscribing
-                  }
-                  className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
-                  aria-label="Send message"
-                  title="Send message (Ctrl+Enter)"
-                >
-                  <Send className="h-5 w-5" />
-                </Button>
+                <TooltipWrapper content="Send message (Ctrl+Enter)" side="left">
+                  <Button
+                    onClick={handleSend}
+                    disabled={
+                      !String(message || '').trim() ||
+                      disabled ||
+                      isTranscribing
+                    }
+                    className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
+                    aria-label="Send message"
+                  >
+                    <Send className="h-5 w-5" />
+                  </Button>
+                </TooltipWrapper>
               )}
             </div>
 
@@ -471,20 +477,22 @@ function ToggleButton({
   title,
 }: ToggleButtonProps) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      role="switch"
-      aria-checked={active}
-      className={cn(
-        'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] transition-colors',
-        active
-          ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80',
-      )}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </button>
+    <TooltipWrapper content={title}>
+      <button
+        onClick={onClick}
+        role="switch"
+        aria-checked={active}
+        aria-label={label}
+        className={cn(
+          'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] transition-colors',
+          active
+            ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+            : 'bg-muted text-muted-foreground hover:bg-muted/80',
+        )}
+      >
+        {icon}
+        <span className="hidden sm:inline">{label}</span>
+      </button>
+    </TooltipWrapper>
   )
 }

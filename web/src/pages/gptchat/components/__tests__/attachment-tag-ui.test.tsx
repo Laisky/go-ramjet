@@ -10,7 +10,7 @@ describe('AttachmentTag UI', () => {
         filename="test.png"
         type="image"
         contentB64="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-      />
+      />,
     )
     const img = screen.getByAltText('test.png')
     expect(img).toBeInTheDocument()
