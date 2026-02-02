@@ -17,13 +17,19 @@ describe('buildApiMessages', () => {
     api_base: 'https://api.openai.com',
   }
 
-  it('should retain only the latest image in the entire history', () => {
+  it('should retain only the latest media in the entire history', () => {
     const context: ChatMessageData[] = [
       {
         chatID: '1',
         role: 'user',
-        content: 'Message 1',
+        content:
+          'Message 1\n\n[File uploaded: report.pdf (url: https://example.com/report.pdf)]',
         attachments: [
+          {
+            filename: 'report.pdf',
+            type: 'file',
+            url: 'https://example.com/report.pdf',
+          },
           {
             filename: 'img1.png',
             type: 'image',
@@ -61,7 +67,7 @@ describe('buildApiMessages', () => {
       content: 'You are a helpful assistant',
     })
 
-    // Message 1 should have NO image now
+    // Message 1 should have NO media now
     expect(result[1]).toEqual({ role: 'user', content: 'Message 1' })
 
     // Message 2 should have NO image
@@ -80,13 +86,17 @@ describe('buildApiMessages', () => {
     expect(result[4]).toEqual({ role: 'user', content: 'Message 3' })
   })
 
-  it('should prefer image in userContent over context', () => {
+  it('should prefer user content media over context', () => {
     const context: ChatMessageData[] = [
       {
         chatID: '1',
         role: 'user',
-        content: 'Message 1',
+        content: 'Message 1\n\n[File uploaded: legacy.csv]',
         attachments: [
+          {
+            filename: 'legacy.csv',
+            type: 'file',
+          },
           {
             filename: 'img1.png',
             type: 'image',
@@ -104,7 +114,7 @@ describe('buildApiMessages', () => {
     const result = buildApiMessages(config, context, userContent)
 
     expect(result).toHaveLength(3)
-    // Message 1 should have NO image
+    // Message 1 should have NO media
     expect(result[1]).toEqual({ role: 'user', content: 'Message 1' })
     // Current user message should have the image
     expect(result[2]).toEqual({
@@ -116,7 +126,7 @@ describe('buildApiMessages', () => {
     })
   })
 
-  it('should retain only the latest image if multiple images are in userContent', () => {
+  it('should retain all images if multiple images are in userContent', () => {
     const context: ChatMessageData[] = []
     const userContent: ContentPart[] = [
       { type: 'text', text: 'Message 1' },
@@ -131,9 +141,91 @@ describe('buildApiMessages', () => {
       role: 'user',
       content: [
         { type: 'text', text: 'Message 1' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,img1' } },
         { type: 'image_url', image_url: { url: 'data:image/png;base64,img2' } },
       ],
     })
+  })
+
+  it('should prefer assistant images when both user and assistant have images', () => {
+    const context: ChatMessageData[] = [
+      {
+        chatID: '1',
+        role: 'user',
+        content: 'User with image',
+        attachments: [
+          {
+            filename: 'img-user.png',
+            type: 'image',
+            contentB64: 'data:image/png;base64,user',
+          },
+        ],
+      },
+      {
+        chatID: '1',
+        role: 'assistant',
+        content: 'Assistant with image',
+        attachments: [
+          {
+            filename: 'img-assistant.png',
+            type: 'image',
+            contentB64: 'data:image/png;base64,assistant',
+          },
+        ],
+      },
+    ]
+
+    const result = buildApiMessages(config, context, 'New prompt')
+
+    expect(result).toHaveLength(4)
+    expect(result[1]).toEqual({ role: 'user', content: 'User with image' })
+    expect(result[2]).toEqual({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Assistant with image' },
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,assistant' },
+        },
+      ],
+    })
+  })
+
+  it('should drop historical media when user prompt has file notes', () => {
+    const context: ChatMessageData[] = [
+      {
+        chatID: '1',
+        role: 'user',
+        content: 'Old message',
+        attachments: [
+          {
+            filename: 'old.png',
+            type: 'image',
+            contentB64: 'data:image/png;base64,old',
+          },
+        ],
+      },
+      {
+        chatID: '2',
+        role: 'assistant',
+        content: 'Old reply\n\n[File uploaded: notes.txt]',
+        attachments: [
+          {
+            filename: 'notes.txt',
+            type: 'file',
+          },
+        ],
+      },
+    ]
+
+    const userContent = 'New prompt\n\n[File uploaded: input.csv]'
+
+    const result = buildApiMessages(config, context, userContent)
+
+    expect(result).toHaveLength(4)
+    expect(result[1]).toEqual({ role: 'user', content: 'Old message' })
+    expect(result[2]).toEqual({ role: 'assistant', content: 'Old reply' })
+    expect(result[3]).toEqual({ role: 'user', content: userContent })
   })
 
   it('should handle reconstructed userContent with images', () => {
