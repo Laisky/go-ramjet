@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes'
 
 import { App } from '@/app'
 import '@/styles/globals.css'
+import '@/styles/cv.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -33,6 +33,8 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/arweave"
 	// jav
 	_ "github.com/Laisky/go-ramjet/internal/tasks/jav"
+	// cv
+	_ "github.com/Laisky/go-ramjet/internal/tasks/cv"
 	// telegram notes
 	_ "github.com/Laisky/go-ramjet/internal/tasks/telegram/notes"
 	// postgres backup

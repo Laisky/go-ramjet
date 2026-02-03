@@ -7,6 +7,7 @@ import {
   Heart,
   MessageSquare,
   Search,
+  User,
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -40,6 +41,12 @@ const Tasks: TaskDefinition[] = [
     title: 'Audit Log',
     description: 'Receive and list audit logs via HTTP API.',
     icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    key: 'cv',
+    title: 'CV',
+    description: 'Single-page resume editor with live markdown preview.',
+    icon: <User className="h-5 w-5" />,
   },
   {
     key: 'jav',

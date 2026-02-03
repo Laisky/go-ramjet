@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	glog "github.com/Laisky/go-utils/v5/log"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/laisky-blog-graphql/library/db/mongo"
 	model "github.com/Laisky/laisky-blog-graphql/library/models/telegram"
 	"github.com/Laisky/zap"

@@ -12,7 +12,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     location.pathname.startsWith('/gptchat') ||
     window.location.hostname === 'chat.laisky.com' ||
     window.location.hostname === 'chat2.laisky.com'
-  const containerClass = isChatPage ? 'w-full px-0' : 'mx-auto max-w-5xl px-4'
+  const isCvPage = location.pathname.startsWith('/cv')
+  const isSpecialPage = isChatPage || isCvPage
+  const containerClass = isSpecialPage
+    ? 'w-full px-0'
+    : 'mx-auto max-w-5xl px-4'
 
   return (
     <div
@@ -21,7 +25,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         isChatPage ? 'min-h-dvh max-w-full overflow-x-hidden' : 'min-h-screen',
       )}
     >
-      {!isChatPage && (
+      {!isSpecialPage && (
         <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
           <div
             className={`${containerClass} flex items-center justify-between py-3`}

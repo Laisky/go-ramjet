@@ -12,7 +12,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/redis/go-redis/v9"
 
-	glog "github.com/Laisky/go-utils/v5/log"
+	glog "github.com/Laisky/go-utils/v6/log"
 
 	"github.com/Laisky/go-ramjet/library/log"
 	rutils "github.com/Laisky/go-ramjet/library/redis"

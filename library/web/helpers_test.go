@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	gmw "github.com/Laisky/gin-middlewares/v6"
-	glog "github.com/Laisky/go-utils/v5/log"
+	gmw "github.com/Laisky/gin-middlewares/v7"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

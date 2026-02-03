@@ -20,6 +20,11 @@ export const Tasks: TaskDefinition[] = [
     description: 'Receive and list audit logs via HTTP API.',
   },
   {
+    key: 'cv',
+    title: 'CV',
+    description: 'Single-page resume editor with markdown preview.',
+  },
+  {
     key: 'jav',
     title: 'JAV',
     description: 'Search endpoint for the JAV task.',

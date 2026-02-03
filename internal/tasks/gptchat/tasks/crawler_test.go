@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	gmw "github.com/Laisky/gin-middlewares/v6"
+	gmw "github.com/Laisky/gin-middlewares/v7"
 	gconfig "github.com/Laisky/go-config/v2"
-	glog "github.com/Laisky/go-utils/v5/log"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/library/log"

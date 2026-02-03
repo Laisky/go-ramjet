@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	gmw "github.com/Laisky/gin-middlewares/v6"
+	gmw "github.com/Laisky/gin-middlewares/v7"
 
 	"github.com/Laisky/go-ramjet/library/web"
 )

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	gutils "github.com/Laisky/go-utils/v5"
-	"github.com/Laisky/go-utils/v5/json"
+	gutils "github.com/Laisky/go-utils/v6"
+	"github.com/Laisky/go-utils/v6/json"
 	"github.com/Laisky/testify/require"
 	"github.com/gin-gonic/gin"
 

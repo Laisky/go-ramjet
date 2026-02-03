@@ -44,6 +44,12 @@ export function TaskPage() {
         ]
       case 'jav':
         return [{ label: 'Search (q=...)', href: '/jav/search?q=example' }]
+      case 'cv':
+        return [
+          { label: 'Open CV Page', href: '/cv' },
+          { label: 'CV content API', href: '/cv/content' },
+          { label: 'CV PDF', href: '/cv/pdf' },
+        ]
       case 'arweave':
         return [
           { label: 'Gateway', href: '/arweave/gateway/' },

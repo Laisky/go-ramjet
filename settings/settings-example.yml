@@ -26,6 +26,22 @@ tasks:
       access_key: 'minio-access-key'
       access_secret: 'minio-secret-key'
       bucket: 'backups'
+  cv:
+    # s3 storage for CV content and pdf
+    s3:
+      enable: true
+      # endpoint for the object storage, without scheme is preferred
+      endpoint: 's3.laisky.com'
+      # access credentials
+      access_key: 'minio-access-key'
+      access_secret: 'minio-secret-key'
+      # bucket that contains the private/cv prefix
+      bucket: 'your-bucket'
+      # prefix folder for cv assets
+      prefix: 'private/cv'
+      # object names under the prefix
+      content_key: 'cv.md'
+      pdf_key: 'cv.pdf'
   backups:
     interval: 3600
     configs:

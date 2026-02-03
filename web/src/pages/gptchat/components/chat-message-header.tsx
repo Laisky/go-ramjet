@@ -143,6 +143,18 @@ export function ChatMessageHeader({
 
   const showSpeechButton = Boolean(apiToken && isAssistant && message.content)
   const actionDisabled = Boolean(isStreaming && isAssistant)
+  const copyLabel = copyError
+    ? 'Failed to copy'
+    : copied
+      ? 'Copied!'
+      : 'Copy message'
+  const ttsLabel = ttsStatus?.isLoading
+    ? 'Loading audio...'
+    : ttsStatus?.error
+      ? `TTS Error: ${ttsStatus.error}`
+      : ttsStatus?.audioUrl
+        ? 'Stop narration'
+        : 'Play narration'
 
   return (
     <div
@@ -182,6 +194,7 @@ export function ChatMessageHeader({
               size="sm"
               onClick={handleEditClick}
               className="h-7 w-7 rounded-md p-0"
+              title="Edit & resend"
               aria-label="Edit & resend"
             >
               <Edit2 className="h-3.5 w-3.5" />
@@ -199,6 +212,7 @@ export function ChatMessageHeader({
               onClick={handleRegenerate}
               className="h-7 w-7 rounded-md p-0"
               disabled={actionDisabled}
+              title="Regenerate response"
               aria-label="Regenerate response"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -207,15 +221,7 @@ export function ChatMessageHeader({
         )}
         {showSpeechButton && (
           <TooltipWrapper
-            content={
-              ttsStatus?.isLoading
-                ? 'Loading audio...'
-                : ttsStatus?.error
-                  ? `TTS Error: ${ttsStatus.error}`
-                  : ttsStatus?.audioUrl
-                    ? 'Stop narration'
-                    : 'Play narration'
-            }
+            content={ttsLabel}
             side={effectiveTooltipSide}
           >
             <Button
@@ -227,15 +233,8 @@ export function ChatMessageHeader({
                 ttsStatus?.error && 'text-destructive hover:text-destructive',
               )}
               disabled={ttsStatus?.isLoading}
-              aria-label={
-                ttsStatus?.isLoading
-                  ? 'Loading audio...'
-                  : ttsStatus?.error
-                    ? `TTS Error: ${ttsStatus.error}`
-                    : ttsStatus?.audioUrl
-                      ? 'Stop narration'
-                      : 'Play narration'
-              }
+              title={ttsLabel}
+              aria-label={ttsLabel}
             >
               {ttsStatus?.isLoading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -250,9 +249,7 @@ export function ChatMessageHeader({
           </TooltipWrapper>
         )}
         <TooltipWrapper
-          content={
-            copyError ? 'Failed to copy' : copied ? 'Copied!' : 'Copy message'
-          }
+          content={copyLabel}
           side={effectiveTooltipSide}
         >
           <Button
@@ -263,9 +260,8 @@ export function ChatMessageHeader({
               'h-7 w-7 rounded-md p-0',
               copyError && 'text-destructive hover:text-destructive',
             )}
-            aria-label={
-              copyError ? 'Failed to copy' : copied ? 'Copied!' : 'Copy message'
-            }
+            title={copyLabel}
+            aria-label={copyLabel}
           >
             {copyError ? (
               <AlertCircle className="h-3.5 w-3.5" />
@@ -287,6 +283,7 @@ export function ChatMessageHeader({
               size="sm"
               onClick={handleFork}
               className="h-7 w-7 rounded-md p-0"
+              title="Fork session"
               aria-label="Fork session"
             >
               <GitFork className="h-3.5 w-3.5" />
@@ -301,6 +298,7 @@ export function ChatMessageHeader({
               size="sm"
               onClick={handleDelete}
               className="h-7 w-7 rounded-md p-0 text-destructive"
+              title="Delete message"
               aria-label="Delete message"
             >
               <Trash2 className="h-3.5 w-3.5" />

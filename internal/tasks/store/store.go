@@ -10,7 +10,7 @@ import (
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-utils/v5"
+	"github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"golang.org/x/sync/singleflight"
 

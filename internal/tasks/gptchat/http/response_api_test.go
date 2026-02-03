@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	gmw "github.com/Laisky/gin-middlewares/v6"
-	"github.com/Laisky/go-utils/v5/json"
+	gmw "github.com/Laisky/gin-middlewares/v7"
+	"github.com/Laisky/go-utils/v6/json"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
