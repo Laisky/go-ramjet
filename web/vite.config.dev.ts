@@ -47,6 +47,10 @@ export default defineConfig({
           target: 'http://127.0.0.1:24456',
           changeOrigin: true,
         },
+      '^/cv/(content|pdf)': {
+        target: 'http://127.0.0.1:24456',
+        changeOrigin: true,
+      },
       // Also proxy other task endpoints
       '^/(jav|auditlog|arweave|crawler|heartbeat|es|gitlab|health|version)': {
         target: 'http://127.0.0.1:24456',

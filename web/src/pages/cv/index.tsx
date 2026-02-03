@@ -82,7 +82,7 @@ function buildAuthHeaders(token: string | null): HeadersInit {
  */
 function buildSSORedirectURL(): string {
   const currentURL = window.location.href
-  return `https://sso.laisky.com/redirect_to=${encodeURIComponent(currentURL)}`
+  return `https://sso.laisky.com/?redirect_to=${encodeURIComponent(currentURL)}`
 }
 
 /**
@@ -128,6 +128,9 @@ export function CVPage() {
           headers: buildAuthHeaders(authToken),
         })
         if (!response.ok) {
+          console.debug(
+            `[CV] Load failed: ${response.status} ${response.statusText} ${response.url}`,
+          )
           throw new Error('Failed to load CV content')
         }
         const payload = (await response.json()) as CvContentPayload
@@ -135,7 +138,11 @@ export function CVPage() {
         setSavedContent(payload.content)
         setLastSavedAt(payload.updated_at ?? null)
       } catch (err) {
-        console.error('[CV] Failed to load content')
+        if (err instanceof Error) {
+          console.error(`[CV] Failed to load content: ${err.message}`)
+        } else {
+          console.error('[CV] Failed to load content')
+        }
       } finally {
         setLoading(false)
       }
@@ -167,6 +174,9 @@ export function CVPage() {
         throw new Error('Unauthorized')
       }
       if (!response.ok) {
+        console.debug(
+          `[CV] Save failed: ${response.status} ${response.statusText} ${response.url}`,
+        )
         throw new Error('Failed to save CV content')
       }
       const payload = (await response.json()) as CvContentPayload
@@ -179,6 +189,8 @@ export function CVPage() {
         setAuthToken(null)
         setAuthMessage('SSO token expired. Please sign in again.')
         console.warn('[CV] Unauthorized SSO token')
+      } else if (err instanceof Error) {
+        console.error(`[CV] Failed to save content: ${err.message}`)
       } else {
         console.error('[CV] Failed to save content')
       }
@@ -205,6 +217,9 @@ export function CVPage() {
         headers: buildAuthHeaders(authToken),
       })
       if (!response.ok) {
+        console.debug(
+          `[CV] PDF download failed: ${response.status} ${response.statusText} ${response.url}`,
+        )
         throw new Error('PDF not available')
       }
       const blob = await response.blob()
@@ -340,8 +355,8 @@ export function CVPage() {
                           Edit CV
                         </Dialog.Title>
                         <Dialog.Description className="cv-modal-description">
-                          Update the markdown and save to refresh the live CV and
-                          PDF.
+                          Update the markdown and save to refresh the live CV
+                          and PDF.
                         </Dialog.Description>
                       </div>
                       <Dialog.Close asChild>
