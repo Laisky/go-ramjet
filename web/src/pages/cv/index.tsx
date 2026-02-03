@@ -312,7 +312,7 @@ export function CVPage() {
             <span className="cv-kicker">Curriculum Vitae</span>
             <h1 className="cv-title">{parsed.title}</h1>
             <p className="cv-subtitle">{parsed.subtitle}</p>
-            <p className="cv-summary">{parsed.summaryLine}</p>
+            {/* <p className="cv-summary">{parsed.summaryLine}</p> */}
             <div className="cv-badges">
               {parsed.badges.map((badge) => (
                 <span key={badge} className="cv-badge">
