@@ -78,6 +78,14 @@ function buildAuthHeaders(token: string | null): HeadersInit {
 }
 
 /**
+ * buildSSORedirectURL builds the SSO login redirect URL for the current page.
+ */
+function buildSSORedirectURL(): string {
+  const currentURL = window.location.href
+  return `https://sso.laisky.com/redirect_to=${encodeURIComponent(currentURL)}`
+}
+
+/**
  * setMetaTag updates or inserts a meta tag with the given attribute and value.
  */
 function setMetaTag(key: 'name' | 'property', value: string, content: string) {
@@ -226,6 +234,11 @@ export function CVPage() {
     }
   }, [parsed.email])
 
+  // handleLogin redirects to the SSO login page.
+  const handleLogin = useCallback(() => {
+    window.location.assign(buildSSORedirectURL())
+  }, [])
+
   // handleEditorOpenChange syncs editor open state and clears draft on close.
   const handleEditorOpenChange = useCallback(
     (open: boolean) => {
@@ -302,90 +315,100 @@ export function CVPage() {
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
-            <Dialog.Root
-              open={editorOpen}
-              onOpenChange={handleEditorOpenChange}
-            >
-              <Dialog.Trigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="cv-edit-button"
-                  disabled={!canEdit}
-                  title={
-                    canEdit ? 'Edit CV content' : 'Sign in via SSO to edit'
-                  }
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </Button>
-              </Dialog.Trigger>
-              <Dialog.Portal>
-                <Dialog.Overlay className="cv-modal-overlay" />
-                <Dialog.Content className="cv-modal-content">
-                  <div className="cv-modal-header">
-                    <div>
-                      <Dialog.Title className="cv-modal-title">
-                        Edit CV
-                      </Dialog.Title>
-                      <Dialog.Description className="cv-modal-description">
-                        Update the markdown and save to refresh the live CV and
-                        PDF.
-                      </Dialog.Description>
+            {canEdit ? (
+              <Dialog.Root
+                open={editorOpen}
+                onOpenChange={handleEditorOpenChange}
+              >
+                <Dialog.Trigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cv-edit-button"
+                    title="Edit CV content"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                </Dialog.Trigger>
+                <Dialog.Portal>
+                  <Dialog.Overlay className="cv-modal-overlay" />
+                  <Dialog.Content className="cv-modal-content">
+                    <div className="cv-modal-header">
+                      <div>
+                        <Dialog.Title className="cv-modal-title">
+                          Edit CV
+                        </Dialog.Title>
+                        <Dialog.Description className="cv-modal-description">
+                          Update the markdown and save to refresh the live CV and
+                          PDF.
+                        </Dialog.Description>
+                      </div>
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="cv-modal-close"
+                          aria-label="Close"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </Dialog.Close>
                     </div>
-                    <Dialog.Close asChild>
-                      <button
-                        type="button"
-                        className="cv-modal-close"
-                        aria-label="Close"
+                    <div className="cv-modal-status">
+                      <span>
+                        {isDirty ? 'Unsaved changes' : 'All changes saved'}
+                      </span>
+                      <span>
+                        {lastSavedAt
+                          ? `Last saved ${new Date(lastSavedAt).toLocaleString()}`
+                          : 'No saved data yet'}
+                      </span>
+                    </div>
+                    {authMessage ? (
+                      <div className="cv-modal-alert">{authMessage}</div>
+                    ) : null}
+                    <Textarea
+                      className="cv-editor-textarea"
+                      value={content}
+                      onChange={(event) => setContent(event.target.value)}
+                      spellCheck={false}
+                      disabled={loading}
+                      placeholder={
+                        loading ? 'Loading...' : 'Write your CV in markdown'
+                      }
+                    />
+                    <div className="cv-modal-actions">
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelEdit}
+                        disabled={saving}
                       >
                         <X className="h-4 w-4" />
-                      </button>
-                    </Dialog.Close>
-                  </div>
-                  <div className="cv-modal-status">
-                    <span>
-                      {isDirty ? 'Unsaved changes' : 'All changes saved'}
-                    </span>
-                    <span>
-                      {lastSavedAt
-                        ? `Last saved ${new Date(lastSavedAt).toLocaleString()}`
-                        : 'No saved data yet'}
-                    </span>
-                  </div>
-                  {authMessage ? (
-                    <div className="cv-modal-alert">{authMessage}</div>
-                  ) : null}
-                  <Textarea
-                    className="cv-editor-textarea"
-                    value={content}
-                    onChange={(event) => setContent(event.target.value)}
-                    spellCheck={false}
-                    disabled={loading || !canEdit}
-                    placeholder={
-                      loading ? 'Loading...' : 'Write your CV in markdown'
-                    }
-                  />
-                  <div className="cv-modal-actions">
-                    <Button
-                      variant="outline"
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                    >
-                      <X className="h-4 w-4" />
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleSave}
-                      disabled={saving || loading || !isDirty || isEmpty}
-                    >
-                      <Save className="h-4 w-4" />
-                      {saving ? 'Saving' : 'Save'}
-                    </Button>
-                  </div>
-                </Dialog.Content>
-              </Dialog.Portal>
-            </Dialog.Root>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSave}
+                        disabled={saving || loading || !isDirty || isEmpty}
+                      >
+                        <Save className="h-4 w-4" />
+                        {saving ? 'Saving' : 'Save'}
+                      </Button>
+                    </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="cv-edit-button"
+                onClick={handleLogin}
+                title="Login via SSO"
+              >
+                <Pencil className="h-4 w-4" />
+                Login
+              </Button>
+            )}
           </div>
         </header>
 
