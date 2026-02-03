@@ -97,7 +97,10 @@ function stripLeadingTitleBlock(content: string): {
 /**
  * extractSection removes a section by heading and returns its lines with the remainder.
  */
-function extractSection(content: string, heading: string): {
+function extractSection(
+  content: string,
+  heading: string,
+): {
   sectionLines: string[]
   rest: string
 } {
@@ -109,7 +112,10 @@ function extractSection(content: string, heading: string): {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim()
     if (line.toLowerCase().startsWith('## ')) {
-      const title = line.replace(/^##\s+/, '').trim().toLowerCase()
+      const title = line
+        .replace(/^##\s+/, '')
+        .trim()
+        .toLowerCase()
       if (title === normalizedHeading) {
         start = i
         break

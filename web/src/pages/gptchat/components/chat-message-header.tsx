@@ -220,10 +220,7 @@ export function ChatMessageHeader({
           </TooltipWrapper>
         )}
         {showSpeechButton && (
-          <TooltipWrapper
-            content={ttsLabel}
-            side={effectiveTooltipSide}
-          >
+          <TooltipWrapper content={ttsLabel} side={effectiveTooltipSide}>
             <Button
               variant="ghost"
               size="sm"
@@ -248,10 +245,7 @@ export function ChatMessageHeader({
             </Button>
           </TooltipWrapper>
         )}
-        <TooltipWrapper
-          content={copyLabel}
-          side={effectiveTooltipSide}
-        >
+        <TooltipWrapper content={copyLabel} side={effectiveTooltipSide}>
           <Button
             variant="ghost"
             size="sm"

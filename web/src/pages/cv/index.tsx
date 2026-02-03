@@ -111,26 +111,29 @@ export function CVPage() {
   const canEdit = Boolean(authToken)
 
   // loadContent fetches CV markdown from the backend API.
-  const loadContent = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true)
-    try {
-      const response = await fetch('/cv/content', {
-        signal,
-        headers: buildAuthHeaders(authToken),
-      })
-      if (!response.ok) {
-        throw new Error('Failed to load CV content')
+  const loadContent = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      try {
+        const response = await fetch('/cv/content', {
+          signal,
+          headers: buildAuthHeaders(authToken),
+        })
+        if (!response.ok) {
+          throw new Error('Failed to load CV content')
+        }
+        const payload = (await response.json()) as CvContentPayload
+        setContent(payload.content)
+        setSavedContent(payload.content)
+        setLastSavedAt(payload.updated_at ?? null)
+      } catch (err) {
+        console.error('[CV] Failed to load content')
+      } finally {
+        setLoading(false)
       }
-      const payload = (await response.json()) as CvContentPayload
-      setContent(payload.content)
-      setSavedContent(payload.content)
-      setLastSavedAt(payload.updated_at ?? null)
-    } catch (err) {
-      console.error('[CV] Failed to load content')
-    } finally {
-      setLoading(false)
-    }
-  }, [authToken])
+    },
+    [authToken],
+  )
 
   // handleSave persists the current markdown to the backend API.
   const handleSave = useCallback(async () => {
@@ -299,7 +302,10 @@ export function CVPage() {
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
-            <Dialog.Root open={editorOpen} onOpenChange={handleEditorOpenChange}>
+            <Dialog.Root
+              open={editorOpen}
+              onOpenChange={handleEditorOpenChange}
+            >
               <Dialog.Trigger asChild>
                 <Button
                   variant="ghost"
@@ -338,7 +344,9 @@ export function CVPage() {
                     </Dialog.Close>
                   </div>
                   <div className="cv-modal-status">
-                    <span>{isDirty ? 'Unsaved changes' : 'All changes saved'}</span>
+                    <span>
+                      {isDirty ? 'Unsaved changes' : 'All changes saved'}
+                    </span>
                     <span>
                       {lastSavedAt
                         ? `Last saved ${new Date(lastSavedAt).toLocaleString()}`
