@@ -1,6 +1,21 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Download, Mail, Pencil, Save, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Activity,
+  BookOpen,
+  Check,
+  Copy,
+  Cpu,
+  Download,
+  Mail,
+  Megaphone,
+  MessageSquare,
+  Pencil,
+  Save,
+  Server,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,6 +30,26 @@ type CvContentPayload = {
   is_default: boolean
 }
 const AUTH_TOKEN_STORAGE_KEY = 'cv_sso_token'
+const FALLBACK_EMAIL = 'job@laisky.com'
+
+type PersonalLink = {
+  label: string
+  href: string
+  Icon: LucideIcon
+}
+
+const PERSONAL_LINKS: PersonalLink[] = [
+  {
+    label: 'Blog',
+    href: 'https://blog.laisky.com/pages/0/#gsc.tab=0',
+    Icon: BookOpen,
+  },
+  { label: 'AI Chat', href: 'https://chat.laisky.com/', Icon: MessageSquare },
+  { label: 'MCP Server', href: 'https://mcp.laisky.com/', Icon: Server },
+  { label: 'OneAPI', href: 'https://oneapi.laisky.com/', Icon: Cpu },
+  { label: 'Channel', href: 'http://t.me/laiskynotes', Icon: Megaphone },
+  { label: 'Status', href: 'https://status.laisky.com/', Icon: Activity },
+]
 
 /**
  * readAuthTokenFromURL pulls the SSO token from the current URL query string.
@@ -112,8 +147,13 @@ export function CVPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>(
+    'idle',
+  )
+  const copyTimeoutRef = useRef<number | null>(null)
 
   const parsed = useMemo(() => parseCvContent(content), [content])
+  const emailValue = parsed.email ?? FALLBACK_EMAIL
   const isDirty = content !== savedContent
   const isEmpty = content.trim().length === 0
   const canEdit = Boolean(authToken)
@@ -237,17 +277,25 @@ export function CVPage() {
     }
   }, [authToken, downloadBusy, parsed.title])
 
-  // handleCopyEmail copies the contact email to the clipboard.
+  // handleCopyEmail copies the contact email to the clipboard and updates UI state.
   const handleCopyEmail = useCallback(async () => {
-    if (!parsed.email) {
-      return
+    if (copyTimeoutRef.current !== null) {
+      window.clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = null
     }
     try {
-      await navigator.clipboard.writeText(parsed.email)
+      await navigator.clipboard.writeText(emailValue)
+      setCopyState('copied')
     } catch (err) {
       console.warn('[CV] Failed to copy email')
+      setCopyState('error')
+    } finally {
+      copyTimeoutRef.current = window.setTimeout(() => {
+        setCopyState('idle')
+        copyTimeoutRef.current = null
+      }, 1600)
     }
-  }, [parsed.email])
+  }, [emailValue])
 
   // handleLogin redirects to the SSO login page.
   const handleLogin = useCallback(() => {
@@ -277,6 +325,14 @@ export function CVPage() {
     const storedToken = readStoredAuthToken()
     if (storedToken) {
       setAuthToken(storedToken)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current)
+      }
     }
   }, [])
 
@@ -434,10 +490,26 @@ export function CVPage() {
               <div className="cv-card-body">
                 <div className="cv-contact-email">
                   <Mail className="h-4 w-4" />
-                  {parsed.email ?? 'job@laisky.com'}
+                  {emailValue}
                 </div>
-                <Button variant="outline" size="sm" onClick={handleCopyEmail}>
-                  Copy Email
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyEmail}
+                  className={`cv-copy-button${
+                    copyState === 'copied'
+                      ? ' cv-copy-button--success'
+                      : copyState === 'error'
+                        ? ' cv-copy-button--error'
+                        : ''
+                  }`}
+                >
+                  {copyState === 'copied' ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  {copyState === 'copied' ? 'Copied' : 'Copy Email'}
                 </Button>
               </div>
               <div className="cv-link-list">
@@ -457,6 +529,21 @@ export function CVPage() {
                   </a>
                 ))}
               </nav>
+            </div>
+            <div className="cv-card">
+              <div className="cv-card-title">Links</div>
+              <div className="cv-personal-links">
+                {PERSONAL_LINKS.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="cv-personal-link"
+                  >
+                    <link.Icon className="h-4 w-4" />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
             </div>
             <div className="cv-card cv-meta-card">
               <div className="cv-card-title">Status</div>
@@ -478,18 +565,6 @@ export function CVPage() {
                 <CvMarkdown content={parsed.previewContent} />
               </div>
             )}
-            <div id="contact-actions" className="cv-contact-panel">
-              <div className="cv-contact-title">Let’s talk</div>
-              <div className="cv-contact-copy">
-                <span>{parsed.email ?? 'job@laisky.com'}</span>
-                <Button variant="outline" size="sm" onClick={handleCopyEmail}>
-                  Copy Email
-                </Button>
-              </div>
-              <p className="cv-contact-note">
-                Best reached asynchronously via email.
-              </p>
-            </div>
           </main>
         </div>
       </div>

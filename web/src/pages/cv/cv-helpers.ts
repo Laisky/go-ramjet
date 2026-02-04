@@ -190,6 +190,14 @@ function extractLinks(content: string): { links: CvLink[]; email?: string } {
   const links: CvLink[] = []
 
   const addLink = (label: string, href: string) => {
+    if (
+      label === 'GitHub' &&
+      links.some(
+        (item) => item.label === 'GitHub' || item.href.includes('github.com'),
+      )
+    ) {
+      return
+    }
     if (!links.some((item) => item.href === href)) {
       links.push({ label, href })
     }
