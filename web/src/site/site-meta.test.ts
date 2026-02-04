@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { bootstrapSite, resolveSiteId, resolveSiteTheme } from './site-meta'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { bootstrapSite, resolveSiteId } from './site-meta'
 
 describe('site-meta', () => {
   const originalEnv = process.env
