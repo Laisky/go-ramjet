@@ -229,7 +229,25 @@ func (r *CVPDFRenderer) Render(ctx context.Context, content string) ([]byte, err
 		return nil, err
 	}
 
-	return renderHTMLToPDF(ctx, htmlDoc)
+	basePDF, err := renderHTMLToPDF(ctx, htmlDoc)
+	if err != nil {
+		return nil, err
+	}
+
+	lettersPDF, err := renderRecommendationLettersPDF(ctx, cvRecommendationLetters)
+	if err != nil {
+		return nil, errors.Wrap(err, "render recommendation letters pdf")
+	}
+	if len(lettersPDF) == 0 {
+		return basePDF, nil
+	}
+
+	mergedPDF, err := mergePDFBytes(ctx, basePDF, lettersPDF)
+	if err != nil {
+		return nil, errors.Wrap(err, "merge cv pdf with recommendation letters")
+	}
+
+	return mergedPDF, nil
 }
 
 // renderMarkdown converts markdown into HTML.
@@ -243,6 +261,7 @@ func (r *CVPDFRenderer) renderMarkdown(content string) (string, error) {
 }
 
 // buildHTML wraps rendered markdown HTML in the PDF template.
+// It takes the title and HTML body content and returns the HTML document or an error.
 func (r *CVPDFRenderer) buildHTML(title string, bodyHTML string) (string, error) {
 	var buf bytes.Buffer
 	data := struct {

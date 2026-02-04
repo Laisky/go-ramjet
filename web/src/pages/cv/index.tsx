@@ -39,6 +39,12 @@ type PersonalLink = {
   Icon: LucideIcon
 }
 
+type RecommendationLetter = {
+  label: string
+  href: string
+  imageSrc: string
+}
+
 const PERSONAL_LINKS: PersonalLink[] = [
   {
     label: 'Blog',
@@ -51,6 +57,21 @@ const PERSONAL_LINKS: PersonalLink[] = [
   { label: 'Channel', href: 'http://t.me/laiskynotes', Icon: Megaphone },
   { label: 'CV', href: 'https://cv.laisky.com/', Icon: FileUser },
   { label: 'Status', href: 'https://status.laisky.com/', Icon: Activity },
+]
+
+const RECOMMENDATION_LETTERS: RecommendationLetter[] = [
+  {
+    label: 'Basebit',
+    href: 'https://s3.laisky.com/public/personal/cv/laisky/recommend-letter-bbt.JPG',
+    imageSrc:
+      'https://s3.laisky.com/public/personal/cv/laisky/recommend-letter-bbt.JPG',
+  },
+  {
+    label: 'Pateo',
+    href: 'https://s3.laisky.com/public/personal/cv/laisky/recommend-letter-pateo.JPG',
+    imageSrc:
+      'https://s3.laisky.com/public/personal/cv/laisky/recommend-letter-pateo.JPG',
+  },
 ]
 
 /**
@@ -142,11 +163,11 @@ function setMetaTag(key: 'name' | 'property', value: string, content: string) {
 function buildPdfURL(lastSavedAt: string | null): string {
   const fallback = Date.now()
   if (!lastSavedAt) {
-    return `/cv/pdf?ts=${fallback}`
+    return `/cv/pdf?ts=${fallback}&fresh=1`
   }
   const parsed = Date.parse(lastSavedAt)
   const stamp = Number.isNaN(parsed) ? fallback : parsed
-  return `/cv/pdf?ts=${stamp}`
+  return `/cv/pdf?ts=${stamp}&fresh=1`
 }
 
 /**
@@ -592,6 +613,30 @@ export function CVPage() {
                   >
                     <link.Icon className="h-4 w-4" />
                     {link.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div className="cv-card">
+              <div className="cv-card-title">Recommendation Letters</div>
+              <div className="cv-recommendation-list">
+                {RECOMMENDATION_LETTERS.map((letter) => (
+                  <a
+                    key={letter.href}
+                    href={letter.href}
+                    className="cv-recommendation-item"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="cv-recommendation-label">
+                      {letter.label}
+                    </span>
+                    <img
+                      className="cv-recommendation-image"
+                      src={letter.imageSrc}
+                      alt={`${letter.label} recommendation letter`}
+                      loading="lazy"
+                    />
                   </a>
                 ))}
               </div>

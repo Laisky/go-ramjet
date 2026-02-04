@@ -4,7 +4,7 @@ package cv
 const defaultCVMarkdown = `# Zhonghua (Laisky) Cai
 Ottawa, ON, Canada · Open to remote (Canada/US)
 job@laisky.com · LinkedIn: https://www.linkedin.com/in/zhonghua-cai-14237926/
-GitHub: https://github.com/Laisky · Blog: https://blog.laisky.com/pages/0/
+GitHub: https://github.com/Laisky · Blog: https://blog.laisky.com/
 
 ## Summary
 Senior Software Engineer (Backend/Infrastructure) with 10+ years building and running Linux services and internal platforms (PaaS/SaaS/Infra). I focus on **user value** (external users and internal developers) and build systems that are **reliable, maintainable, and fast**. Strong in distributed systems, production ownership, and cross-team delivery.

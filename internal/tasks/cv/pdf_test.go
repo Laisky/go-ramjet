@@ -1,33 +1,93 @@
 package cv
 
 import (
-	"strings"
+	"bytes"
+	"context"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/phpdave11/gofpdf"
 	"github.com/stretchr/testify/require"
 )
 
-// TestExtractMarkdownTitle verifies the first H1 is used as the PDF title.
-func TestExtractMarkdownTitle(t *testing.T) {
+// TestRenderRecommendationLettersPDFWithFetcher verifies recommendation letters render into a multi-page PDF.
+// It takes a testing.T and returns no values.
+func TestRenderRecommendationLettersPDFWithFetcher(t *testing.T) {
 	t.Parallel()
 
-	title := extractMarkdownTitle("# My CV\n\n## Experience\nContent")
-	require.Equal(t, "My CV", title)
+	imagePayload := buildTestPNG(t, 320, 640)
+	fetcher := func(_ context.Context, _ string) (recommendationImage, error) {
+		return recommendationImage{
+			Payload:   imagePayload,
+			ImageType: "PNG",
+			WidthPx:   320,
+			HeightPx:  640,
+		}, nil
+	}
 
-	fallback := extractMarkdownTitle("## Experience\nContent")
-	require.Equal(t, "CV", fallback)
+	letters := []pdfRecommendationLetter{
+		{Label: "A", ImageURL: "mock://a"},
+		{Label: "B", ImageURL: "mock://b"},
+	}
+
+	pdfBytes, err := renderRecommendationLettersPDFWithFetcher(context.Background(), letters, fetcher)
+	require.NoError(t, err)
+	require.NotEmpty(t, pdfBytes)
+
+	pageCount, err := api.PageCount(bytes.NewReader(pdfBytes), nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, pageCount)
 }
 
-// TestCVPDFRendererBuildHTML verifies the template wraps rendered HTML.
-func TestCVPDFRendererBuildHTML(t *testing.T) {
+// TestMergePDFBytes verifies PDF byte slices are merged into a single PDF.
+// It takes a testing.T and returns no values.
+func TestMergePDFBytes(t *testing.T) {
 	t.Parallel()
 
-	renderer, err := NewCVPDFRenderer()
-	require.NoError(t, err)
+	first := buildTestPDF(t, "First")
+	second := buildTestPDF(t, "Second")
 
-	htmlDoc, err := renderer.buildHTML("Sample CV", "<h1>Sample</h1><p>Body</p>")
+	merged, err := mergePDFBytes(context.Background(), first, second)
 	require.NoError(t, err)
-	require.True(t, strings.Contains(htmlDoc, "<title>Sample CV</title>"))
-	require.True(t, strings.Contains(htmlDoc, "<h1>Sample</h1>"))
-	require.True(t, strings.Contains(htmlDoc, "<p>Body</p>"))
+	require.NotEmpty(t, merged)
+
+	pageCount, err := api.PageCount(bytes.NewReader(merged), nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, pageCount)
+}
+
+// buildTestPNG creates a solid PNG image for tests.
+// It takes a testing.T plus width/height and returns the PNG bytes.
+func buildTestPNG(t *testing.T, width int, height int) []byte {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: 200, G: 180, B: 120, A: 255})
+		}
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
+}
+
+// buildTestPDF creates a one-page PDF with a text label.
+// It takes a testing.T and label text and returns the PDF bytes.
+func buildTestPDF(t *testing.T, label string) []byte {
+	t.Helper()
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Helvetica", "", 16)
+	pdf.Cell(40, 10, label)
+	require.NoError(t, pdf.Error())
+
+	var buf bytes.Buffer
+	require.NoError(t, pdf.Output(&buf))
+	return buf.Bytes()
 }
