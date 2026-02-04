@@ -128,14 +128,22 @@ const cvPDFTemplate = `<!doctype html>
   </body>
 </html>`
 
+// PDFRenderer renders markdown content into PDF bytes.
+//
+// Render converts the provided markdown content and returns the PDF bytes or an error.
+type PDFRenderer interface {
+	Render(ctx context.Context, content string) ([]byte, error)
+}
+
 // PDFService renders CV markdown into PDF and uploads it to object storage.
 type PDFService struct {
-	renderer *CVPDFRenderer
+	renderer PDFRenderer
 	store    *S3PDFStore
 }
 
 // NewPDFService creates a PDFService using the provided renderer and store.
-func NewPDFService(renderer *CVPDFRenderer, store *S3PDFStore) (*PDFService, error) {
+// It takes a renderer implementation and an S3 store, and returns the configured service or an error.
+func NewPDFService(renderer PDFRenderer, store *S3PDFStore) (*PDFService, error) {
 	if renderer == nil {
 		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
 	}
@@ -149,13 +157,25 @@ func NewPDFService(renderer *CVPDFRenderer, store *S3PDFStore) (*PDFService, err
 	}, nil
 }
 
+// Render converts markdown content into a PDF document and returns the PDF bytes or an error.
+func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context done")
+	}
+	if s.renderer == nil {
+		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
+	}
+
+	return s.renderer.Render(ctx, content)
+}
+
 // RenderAndStore renders markdown into a PDF and persists it to object storage.
 func (s *PDFService) RenderAndStore(ctx context.Context, content string) error {
 	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "context done")
 	}
 
-	pdfBytes, err := s.renderer.Render(ctx, content)
+	pdfBytes, err := s.Render(ctx, content)
 	if err != nil {
 		return errors.Wrap(err, "render cv pdf")
 	}

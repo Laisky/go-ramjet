@@ -98,6 +98,40 @@ func (h *handler) saveContent(c *gin.Context) {
 func (h *handler) downloadPDF(c *gin.Context) {
 	logger := gmw.GetLogger(c)
 
+	cacheBuster := strings.TrimSpace(c.Query("ts"))
+	if shouldRenderFreshPDF(c) && h.pdfService != nil && h.store != nil {
+		payload, err := h.store.Load(gmw.Ctx(c))
+		if web.AbortErr(c, err) {
+			return
+		}
+
+		pdfBytes, err := h.pdfService.Render(gmw.Ctx(c), payload.Content)
+		if web.AbortErr(c, err) {
+			return
+		}
+
+		if h.pdfStore != nil {
+			if err := h.pdfStore.Save(gmw.Ctx(c), pdfBytes); err != nil {
+				logger.Warn("cv pdf store failed", zap.Error(err))
+			} else {
+				logger.Debug("cv pdf stored", zap.Int("pdf_bytes", len(pdfBytes)))
+			}
+		}
+
+		logger.Debug("cv pdf download",
+			zap.String("source", "render"),
+			zap.String("cache_buster", cacheBuster),
+			zap.Int("content_bytes", len(payload.Content)),
+			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
+		c.Header("Cache-Control", cvPDFCacheControl)
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.Header("Surrogate-Control", "no-store")
+		c.Header("Content-Disposition", "attachment; filename=\"cv.pdf\"")
+		c.Data(http.StatusOK, "application/pdf", pdfBytes)
+		return
+	}
+
 	if h.pdfStore == nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -118,7 +152,6 @@ func (h *handler) downloadPDF(c *gin.Context) {
 		}
 	}()
 
-	cacheBuster := strings.TrimSpace(c.Query("ts"))
 	logger.Debug("cv pdf download",
 		zap.String("source", "s3"),
 		zap.String("cache_buster", cacheBuster))
@@ -128,6 +161,26 @@ func (h *handler) downloadPDF(c *gin.Context) {
 	c.Header("Surrogate-Control", "no-store")
 	c.Header("Content-Disposition", "attachment; filename=\"cv.pdf\"")
 	c.DataFromReader(http.StatusOK, size, "application/pdf", reader, nil)
+}
+
+// shouldRenderFreshPDF reports whether the request context c asks for a freshly rendered PDF.
+// It inspects c's query parameters and headers and returns true when a fresh PDF is requested.
+func shouldRenderFreshPDF(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+
+	if strings.TrimSpace(c.Query("ts")) != "" || strings.TrimSpace(c.Query("fresh")) != "" {
+		return true
+	}
+
+	cacheControl := strings.ToLower(strings.TrimSpace(c.GetHeader("Cache-Control")))
+	if strings.Contains(cacheControl, "no-cache") || strings.Contains(cacheControl, "no-store") {
+		return true
+	}
+
+	pragma := strings.ToLower(strings.TrimSpace(c.GetHeader("Pragma")))
+	return strings.Contains(pragma, "no-cache")
 }
 
 // formatUpdatedAt formats updatedAt as RFC3339, returning an empty string when nil.

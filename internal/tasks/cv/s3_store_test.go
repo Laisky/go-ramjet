@@ -141,7 +141,7 @@ func TestCompositeContentStoreFallback(t *testing.T) {
 	require.False(t, payload.IsDefault)
 }
 
-// TestS3PDFStoreSaveAndOpen verifies PDF payloads are stored and retrieved.
+// TestS3PDFStoreSaveAndOpen verifies PDF payloads are stored and retrieved; it takes a testing.T and returns no values.
 func TestS3PDFStoreSaveAndOpen(t *testing.T) {
 	t.Parallel()
 
@@ -163,7 +163,7 @@ func TestS3PDFStoreSaveAndOpen(t *testing.T) {
 	require.NoError(t, reader.Close())
 }
 
-// TestS3PDFStoreSaveSetsCacheControl ensures PDF uploads include cache-control metadata.
+// TestS3PDFStoreSaveSetsCacheControl ensures PDF uploads include cache-control metadata; it takes a testing.T and returns no values.
 func TestS3PDFStoreSaveSetsCacheControl(t *testing.T) {
 	t.Parallel()
 

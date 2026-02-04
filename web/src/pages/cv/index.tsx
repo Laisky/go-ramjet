@@ -137,7 +137,7 @@ function setMetaTag(key: 'name' | 'property', value: string, content: string) {
 }
 
 /**
- * buildPdfURL creates a cache-busting PDF URL based on the last saved timestamp.
+ * buildPdfURL creates a cache-busting PDF URL using lastSavedAt and returns the URL string.
  */
 function buildPdfURL(lastSavedAt: string | null): string {
   const fallback = Date.now()
