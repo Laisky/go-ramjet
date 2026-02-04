@@ -1,4 +1,4 @@
-:root[data-site='chat'] {
+:root[data-site='chat'].dark {
   --background: #0b1020;
   --foreground: #e2e8f0;
   --card: #0f172a;
@@ -18,7 +18,7 @@
   --ring: #38bdf8;
 }
 
-:root[data-site='cv'] {
+:root[data-site='cv']:not(.dark) {
   --background: #fdfbf6;
   --foreground: #0b1020;
   --card: #ffffff;
