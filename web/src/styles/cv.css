@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+html {
+  scroll-behavior: smooth;
+}
+
 .cv-page {
   min-height: 100vh;
   color: #0b1020;
@@ -110,6 +114,33 @@
   gap: 16px;
 }
 
+@media (max-width: 1023px) {
+  .cv-aside {
+    display: none;
+  }
+}
+
+.cv-hero-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--cv-border);
+}
+
+.cv-hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+@media (min-width: 1024px) {
+  .cv-hero-contact {
+    display: none;
+  }
+}
+
 .cv-card {
   border: 1px solid var(--cv-border);
   border-radius: 18px;
@@ -141,31 +172,83 @@
   color: var(--cv-ink);
 }
 
+.cv-contact-email-clickable {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  transition: opacity 0.2s ease;
+}
+
+.cv-contact-email-clickable:hover {
+  opacity: 0.7;
+}
+
+.cv-copy-feedback {
+  position: absolute;
+  left: 100%;
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #16a34a;
+  background: #f0fdf4;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  white-space: nowrap;
+  animation: cv-feedback-pop 1.6s ease forwards;
+  z-index: 10;
+}
+
+@keyframes cv-feedback-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 .cv-copy-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .cv-copy-button--success {
-  border-color: rgba(34, 197, 94, 0.55);
-  box-shadow: 0 10px 18px -14px rgba(34, 197, 94, 0.65);
+  border-color: #22c55e !important;
+  background-color: #f0fdf4 !important;
+  color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
   animation: cv-copy-pop 0.35s ease;
 }
 
 .cv-copy-button--success svg {
   color: #16a34a;
+  animation: cv-check-bounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.cv-copy-button--error {
-  border-color: rgba(239, 68, 68, 0.55);
-  box-shadow: 0 10px 18px -14px rgba(239, 68, 68, 0.6);
-  animation: cv-copy-pop 0.35s ease;
+@keyframes cv-check-bounce {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .cv-link-list {

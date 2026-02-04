@@ -48,6 +48,7 @@ const PERSONAL_LINKS: PersonalLink[] = [
   { label: 'MCP Server', href: 'https://mcp.laisky.com/', Icon: Server },
   { label: 'OneAPI', href: 'https://oneapi.laisky.com/', Icon: Cpu },
   { label: 'Channel', href: 'http://t.me/laiskynotes', Icon: Megaphone },
+  { label: 'CV', href: 'https://cv.laisky.com/', Icon: Megaphone },
   { label: 'Status', href: 'https://status.laisky.com/', Icon: Activity },
 ]
 
@@ -147,9 +148,7 @@ export function CVPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>(
-    'idle',
-  )
+  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const copyTimeoutRef = useRef<number | null>(null)
 
   const parsed = useMemo(() => parseCvContent(content), [content])
@@ -288,7 +287,6 @@ export function CVPage() {
       setCopyState('copied')
     } catch (err) {
       console.warn('[CV] Failed to copy email')
-      setCopyState('error')
     } finally {
       copyTimeoutRef.current = window.setTimeout(() => {
         setCopyState('idle')
@@ -375,6 +373,36 @@ export function CVPage() {
                   {badge}
                 </span>
               ))}
+            </div>
+
+            <div className="cv-hero-contact">
+              <button
+                type="button"
+                className="cv-contact-email cv-contact-email-clickable"
+                onClick={handleCopyEmail}
+                title="Click to copy email"
+              >
+                <Mail className="h-4 w-4" />
+                {emailValue}
+                {copyState === 'copied' && (
+                  <span key={Date.now()} className="cv-copy-feedback">
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </span>
+                )}
+              </button>
+              <div className="cv-hero-links">
+                {PERSONAL_LINKS.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="cv-personal-link"
+                  >
+                    <link.Icon className="h-4 w-4" />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
           <div className="cv-hero-actions cv-no-print">
@@ -488,20 +516,30 @@ export function CVPage() {
             <div className="cv-card">
               <div className="cv-card-title">Contact</div>
               <div className="cv-card-body">
-                <div className="cv-contact-email">
+                <button
+                  type="button"
+                  className="cv-contact-email cv-contact-email-clickable"
+                  onClick={handleCopyEmail}
+                  title="Click to copy email"
+                >
                   <Mail className="h-4 w-4" />
                   {emailValue}
-                </div>
+                  {copyState === 'copied' && (
+                    <span
+                      key={Date.now()}
+                      className="cv-copy-feedback"
+                    >
+                      <Check className="h-4 w-4" />
+                      Copied
+                    </span>
+                  )}
+                </button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleCopyEmail}
                   className={`cv-copy-button${
-                    copyState === 'copied'
-                      ? ' cv-copy-button--success'
-                      : copyState === 'error'
-                        ? ' cv-copy-button--error'
-                        : ''
+                    copyState === 'copied' ? ' cv-copy-button--success' : ''
                   }`}
                 >
                   {copyState === 'copied' ? (
