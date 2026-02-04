@@ -19,13 +19,17 @@ type fakeS3Object struct {
 }
 
 type fakeS3Client struct {
-	mu      sync.Mutex
-	objects map[string]fakeS3Object
+	mu             sync.Mutex
+	objects        map[string]fakeS3Object
+	putObjectOpts  map[string]minio.PutObjectOptions
 }
 
 // newFakeS3Client creates an in-memory S3 client for tests.
 func newFakeS3Client() *fakeS3Client {
-	return &fakeS3Client{objects: make(map[string]fakeS3Object)}
+	return &fakeS3Client{
+		objects:       make(map[string]fakeS3Object),
+		putObjectOpts: make(map[string]minio.PutObjectOptions),
+	}
 }
 
 // GetObject returns a reader for an object stored in memory.
@@ -40,8 +44,8 @@ func (f *fakeS3Client) GetObject(_ context.Context, _ string, objectName string,
 	return io.NopCloser(bytes.NewReader(obj.content)), nil
 }
 
-// PutObject stores an object in memory.
-func (f *fakeS3Client) PutObject(_ context.Context, _ string, objectName string, reader io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
+// PutObject stores an object in memory and captures the put options.
+func (f *fakeS3Client) PutObject(_ context.Context, _ string, objectName string, reader io.Reader, _ int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
 	payload, err := io.ReadAll(reader)
 	if err != nil {
 		return minio.UploadInfo{}, err
@@ -55,6 +59,7 @@ func (f *fakeS3Client) PutObject(_ context.Context, _ string, objectName string,
 		updatedAt:  time.Now().UTC(),
 		objectName: objectName,
 	}
+	f.putObjectOpts[objectName] = opts
 
 	return minio.UploadInfo{Key: objectName}, nil
 }
@@ -156,4 +161,24 @@ func TestS3PDFStoreSaveAndOpen(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, payload, loaded)
 	require.NoError(t, reader.Close())
+}
+
+// TestS3PDFStoreSaveSetsCacheControl ensures PDF uploads include cache-control metadata.
+func TestS3PDFStoreSaveSetsCacheControl(t *testing.T) {
+	t.Parallel()
+
+	client := newFakeS3Client()
+	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	err = store.Save(context.Background(), []byte("%PDF-1.4 mock"))
+	require.NoError(t, err)
+
+	client.mu.Lock()
+	opts, ok := client.putObjectOpts["cv.pdf"]
+	client.mu.Unlock()
+
+	require.True(t, ok)
+	require.Equal(t, cvPDFCacheControl, opts.CacheControl)
+	require.Equal(t, "application/pdf", opts.ContentType)
 }

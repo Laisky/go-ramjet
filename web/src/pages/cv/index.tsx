@@ -137,6 +137,19 @@ function setMetaTag(key: 'name' | 'property', value: string, content: string) {
 }
 
 /**
+ * buildPdfURL creates a cache-busting PDF URL based on the last saved timestamp.
+ */
+function buildPdfURL(lastSavedAt: string | null): string {
+  const fallback = Date.now()
+  if (!lastSavedAt) {
+    return `/cv/pdf?ts=${fallback}`
+  }
+  const parsed = Date.parse(lastSavedAt)
+  const stamp = Number.isNaN(parsed) ? fallback : parsed
+  return `/cv/pdf?ts=${stamp}`
+}
+
+/**
  * CVPage renders the CV presentation with an editor modal.
  */
 export function CVPage() {
@@ -157,6 +170,7 @@ export function CVPage() {
   const isDirty = content !== savedContent
   const isEmpty = content.trim().length === 0
   const canEdit = Boolean(authToken)
+  const pdfURL = useMemo(() => buildPdfURL(lastSavedAt), [lastSavedAt])
 
   // loadContent fetches CV markdown from the backend API.
   const loadContent = useCallback(
@@ -253,8 +267,9 @@ export function CVPage() {
     }
     setDownloadBusy(true)
     try {
-      const response = await fetch('/cv/pdf', {
+      const response = await fetch(pdfURL, {
         headers: buildAuthHeaders(authToken),
+        cache: 'no-store',
       })
       if (!response.ok) {
         console.debug(
@@ -275,7 +290,7 @@ export function CVPage() {
     } finally {
       setDownloadBusy(false)
     }
-  }, [authToken, downloadBusy, parsed.title])
+  }, [authToken, downloadBusy, parsed.title, pdfURL])
 
   // handleCopyEmail copies the contact email to the clipboard and updates UI state.
   const handleCopyEmail = useCallback(async () => {

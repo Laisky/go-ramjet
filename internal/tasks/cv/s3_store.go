@@ -210,7 +210,10 @@ func (s *S3PDFStore) Save(ctx context.Context, payload []byte) error {
 		s.key,
 		bytes.NewReader(payload),
 		int64(len(payload)),
-		minio.PutObjectOptions{ContentType: "application/pdf"},
+		minio.PutObjectOptions{
+			ContentType:  "application/pdf",
+			CacheControl: cvPDFCacheControl,
+		},
 	)
 	if err != nil {
 		return errors.Wrap(err, "put s3 pdf")

@@ -3,6 +3,7 @@ package cv
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -88,7 +89,8 @@ func (h *handler) saveContent(c *gin.Context) {
 	}
 
 	logger.Debug("cv content saved",
-		zap.Int("bytes", len(payload.Content)))
+		zap.Int("bytes", len(payload.Content)),
+		zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 	c.JSON(http.StatusOK, payload)
 }
 
@@ -116,7 +118,22 @@ func (h *handler) downloadPDF(c *gin.Context) {
 		}
 	}()
 
-	logger.Debug("cv pdf download", zap.String("source", "s3"))
+	cacheBuster := strings.TrimSpace(c.Query("ts"))
+	logger.Debug("cv pdf download",
+		zap.String("source", "s3"),
+		zap.String("cache_buster", cacheBuster))
+	c.Header("Cache-Control", cvPDFCacheControl)
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
 	c.Header("Content-Disposition", "attachment; filename=\"cv.pdf\"")
 	c.DataFromReader(http.StatusOK, size, "application/pdf", reader, nil)
+}
+
+// formatUpdatedAt formats updatedAt as RFC3339, returning an empty string when nil.
+func formatUpdatedAt(updatedAt *time.Time) string {
+	if updatedAt == nil {
+		return ""
+	}
+	return updatedAt.UTC().Format(time.RFC3339)
 }
