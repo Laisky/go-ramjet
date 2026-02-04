@@ -6,6 +6,7 @@ import {
   Copy,
   Cpu,
   Download,
+  FileUser,
   Mail,
   Megaphone,
   MessageSquare,
@@ -48,7 +49,7 @@ const PERSONAL_LINKS: PersonalLink[] = [
   { label: 'MCP Server', href: 'https://mcp.laisky.com/', Icon: Server },
   { label: 'OneAPI', href: 'https://oneapi.laisky.com/', Icon: Cpu },
   { label: 'Channel', href: 'http://t.me/laiskynotes', Icon: Megaphone },
-  { label: 'CV', href: 'https://cv.laisky.com/', Icon: Megaphone },
+  { label: 'CV', href: 'https://cv.laisky.com/', Icon: FileUser },
   { label: 'Status', href: 'https://status.laisky.com/', Icon: Activity },
 ]
 
@@ -525,10 +526,7 @@ export function CVPage() {
                   <Mail className="h-4 w-4" />
                   {emailValue}
                   {copyState === 'copied' && (
-                    <span
-                      key={Date.now()}
-                      className="cv-copy-feedback"
-                    >
+                    <span key={Date.now()} className="cv-copy-feedback">
                       <Check className="h-4 w-4" />
                       Copied
                     </span>
