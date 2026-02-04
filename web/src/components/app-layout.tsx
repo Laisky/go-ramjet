@@ -1,18 +1,18 @@
 import { Link, useLocation } from 'react-router-dom'
 
 import { ThemeToggle } from '@/components/theme-toggle'
+import { getActiveSiteId } from '@/site/site-meta'
 import { cn } from '@/utils/cn'
 
 /**
- * AppLayout provides the global shell with header.
+ * AppLayout wraps children with the global shell layout and returns the layout element.
  */
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
+  const siteId = getActiveSiteId()
   const isChatPage =
-    location.pathname.startsWith('/gptchat') ||
-    window.location.hostname === 'chat.laisky.com' ||
-    window.location.hostname === 'chat2.laisky.com'
-  const isCvPage = location.pathname.startsWith('/cv')
+    location.pathname.startsWith('/gptchat') || siteId === 'chat'
+  const isCvPage = location.pathname.startsWith('/cv') || siteId === 'cv'
   const isSpecialPage = isChatPage || isCvPage
   const containerClass = isSpecialPage
     ? 'w-full px-0'

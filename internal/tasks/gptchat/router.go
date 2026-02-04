@@ -54,12 +54,16 @@ func bindHTTP() {
 		"chat.laisky.com",
 		"chat2.laisky.com",
 	}, web.SiteMetadata{
+		ID:      "chat",
+		Theme:   "chat",
 		Title:   "Chat",
 		Favicon: "/favicon.ico",
 	})
 	web.RegisterSiteMetadata([]string{
 		"/gptchat",
 	}, web.SiteMetadata{
+		ID:      "chat",
+		Theme:   "chat",
 		Title:   "Chat",
 		Favicon: "/gptchat/favicon.ico",
 	})

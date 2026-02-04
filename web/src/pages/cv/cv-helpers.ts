@@ -25,9 +25,9 @@ const FALLBACK_SUMMARY =
   'Senior Software Engineer | Backend and Infrastructure | PaaS and Platform'
 const FALLBACK_BADGES = [
   '10+ years',
-  'Go / Python',
-  'Kubernetes / AWS',
-  'Security and Confidential Computing',
+  'Go / Python / JavaScript',
+  'Backend / Infra / Linux',
+  'Security / TEE',
 ]
 
 /**

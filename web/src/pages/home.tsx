@@ -14,7 +14,6 @@ import { Link } from 'react-router-dom'
 
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
-import { GPTChatPage } from './gptchat'
 
 interface TaskDefinition {
   key: string
@@ -87,23 +86,13 @@ const Tasks: TaskDefinition[] = [
 ]
 
 /**
- * HomePage renders the unified landing page with task cards.
+ * HomePage renders the unified landing page with task cards and returns the page element.
  */
 export function HomePage() {
-  const hostname = window.location.hostname
-  const isChatDomain =
-    hostname === 'chat.laisky.com' || hostname === 'chat2.laisky.com'
-
   useEffect(() => {
-    if (!isChatDomain) {
-      setPageTitle('Laisky')
-      setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
-    }
-  }, [isChatDomain])
-
-  if (isChatDomain) {
-    return <GPTChatPage />
-  }
+    setPageTitle('Laisky')
+    setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
+  }, [])
 
   const featuredTask = Tasks.find((t) => t.featured)
   const otherTasks = Tasks.filter((t) => !t.featured)

@@ -108,3 +108,28 @@ tasks:
       # monitor
       - index: monitor-stats-write
         expire: 2592000
+
+web:
+  # optional multi-site metadata used by the SPA index renderer
+  sites:
+    - id: chat
+      hosts:
+        - 'chat.laisky.com'
+        - 'chat2.laisky.com'
+      theme: chat
+      title: 'Chat'
+      favicon: '/favicon.ico'
+      description: 'Chat with AI models including GPT, Claude, and Gemini.'
+      og_image: 'https://s3.laisky.com/uploads/2025/12/favicon.ico'
+      theme_color: '#0b1020'
+    - id: cv
+      hosts:
+        - 'cv.laisky.com'
+      path_prefixes:
+        - '/cv'
+      theme: cv
+      title: 'Zhonghua (Laisky) Cai | CV'
+      favicon: 'https://s3.laisky.com/uploads/2025/12/favicon.ico'
+      description: 'Curriculum vitae and engineering portfolio.'
+      og_image: 'https://s3.laisky.com/uploads/2025/12/favicon.ico'
+      theme_color: '#fdfbf6'

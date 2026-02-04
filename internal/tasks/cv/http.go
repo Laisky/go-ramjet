@@ -28,6 +28,8 @@ type handler struct {
 // bindHTTP registers CV routes and metadata.
 func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFService) {
 	web.RegisterSiteMetadata([]string{"/cv"}, web.SiteMetadata{
+		ID:      "cv",
+		Theme:   "cv",
 		Title:   "Zhonghua (Laisky) Cai | CV",
 		Favicon: "https://s3.laisky.com/uploads/2025/12/favicon.ico",
 	})

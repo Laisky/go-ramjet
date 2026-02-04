@@ -4,85 +4,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )
-
-var (
-	reTitle   = regexp.MustCompile(`(?i)<title>.*?</title>`)
-	reFavicon = regexp.MustCompile(`(?i)<link[^>]*?rel="icon"[^>]*?>`)
-	reHref    = regexp.MustCompile(`(?i)href="[^"]*"`)
-)
-
-// SiteMetadata represents metadata for a specific site.
-type SiteMetadata struct {
-	Title   string
-	Favicon string
-}
-
-var (
-	siteMetadataMu     sync.RWMutex
-	siteMetadataByHost = make(map[string]SiteMetadata)
-	siteMetadataByPath = make(map[string]SiteMetadata)
-)
-
-// RegisterSiteMetadata registers metadata for a specific host or path prefix.
-// If hostOrPath starts with "/", it is treated as a path prefix.
-// Otherwise, it is treated as a host.
-func RegisterSiteMetadata(hostsOrPaths []string, metadata SiteMetadata) {
-	siteMetadataMu.Lock()
-	defer siteMetadataMu.Unlock()
-
-	for _, hop := range hostsOrPaths {
-		if strings.HasPrefix(hop, "/") {
-			siteMetadataByPath[hop] = metadata
-		} else {
-			siteMetadataByHost[hop] = metadata
-		}
-	}
-}
-
-func getSiteMetadata(host, path string) SiteMetadata {
-	siteMetadataMu.RLock()
-	defer siteMetadataMu.RUnlock()
-
-	log.Logger.Debug("get site metadata", zap.String("host", host), zap.String("path", path))
-
-	// Try host match first
-	if meta, ok := siteMetadataByHost[host]; ok {
-		log.Logger.Debug("host match", zap.String("host", host), zap.String("title", meta.Title))
-		return meta
-	}
-
-	// Try path prefix match (longest match first)
-	var bestMatch string
-	var bestMeta SiteMetadata
-	for p, meta := range siteMetadataByPath {
-		if strings.HasPrefix(path, p) && len(p) > len(bestMatch) {
-			bestMatch = p
-			bestMeta = meta
-		}
-	}
-
-	if bestMatch != "" {
-		log.Logger.Debug("path match", zap.String("path", path), zap.String("bestMatch", bestMatch), zap.String("title", bestMeta.Title))
-		return bestMeta
-	}
-
-	// Default
-	log.Logger.Debug("use default metadata", zap.String("host", host), zap.String("path", path))
-	return SiteMetadata{
-		Title:   "Laisky",
-		Favicon: "https://s3.laisky.com/uploads/2025/12/favicon.ico",
-	}
-}
 
 // RegisterSPA registers handlers that serve a built SPA (Vite output) from distDir.
 //
@@ -97,10 +27,10 @@ func getSiteMetadata(host, path string) SiteMetadata {
 //   - error: wrapped error when index.html cannot be read.
 func RegisterSPA(r *gin.Engine, distDir string) error {
 	if r == nil {
-		return errors.New("router is nil")
+		return errors.WithStack(errors.New("router is nil"))
 	}
 	if strings.TrimSpace(distDir) == "" {
-		return errors.New("distDir is empty")
+		return errors.WithStack(errors.New("distDir is empty"))
 	}
 
 	indexPath := filepath.Join(distDir, "index.html")
@@ -114,7 +44,10 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		r.StaticFS("/assets", http.Dir(assetsDir))
 	}
 
+	// indexHandler serves the SPA index for request context c and returns no value.
 	indexHandler := func(c *gin.Context) {
+		logger := gmw.GetLogger(c)
+
 		c.Header("Cache-Control", "no-store")
 		indexBytes, err := os.ReadFile(indexPath)
 		if err != nil {
@@ -122,16 +55,8 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
-		meta := getSiteMetadata(c.Request.Host, c.Request.URL.Path)
-		content := string(indexBytes)
-		if meta.Title != "" {
-			content = reTitle.ReplaceAllString(content, "<title>"+meta.Title+"</title>")
-		}
-		if meta.Favicon != "" {
-			content = reFavicon.ReplaceAllStringFunc(content, func(s string) string {
-				return reHref.ReplaceAllString(s, `href="`+meta.Favicon+`"`)
-			})
-		}
+		meta := getSiteMetadata(logger, c.Request.Host, c.Request.URL.Path)
+		content := applySiteMetadataToHTML(string(indexBytes), meta)
 
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(content))
 	}
@@ -139,6 +64,8 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 	r.GET("/", indexHandler)
 
 	r.NoRoute(func(c *gin.Context) {
+		logger := gmw.GetLogger(c)
+
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			c.Status(http.StatusNotFound)
 			return
@@ -179,7 +106,7 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 
 		if newPath != cleanPath {
 			fpath = filepath.Join(distDir, strings.TrimPrefix(newPath, "/"))
-			log.Logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath), zap.String("fpath", fpath))
+			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath), zap.String("fpath", fpath))
 			info, err = os.Stat(fpath)
 			if err == nil && !info.IsDir() {
 				c.File(fpath)

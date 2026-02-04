@@ -1,0 +1,39 @@
+:root[data-site='chat'] {
+  --background: #0b1020;
+  --foreground: #e2e8f0;
+  --card: #0f172a;
+  --card-foreground: #e2e8f0;
+  --popover: #0f172a;
+  --popover-foreground: #e2e8f0;
+  --primary: #38bdf8;
+  --primary-foreground: #0b1020;
+  --secondary: #111827;
+  --secondary-foreground: #e2e8f0;
+  --muted: #111827;
+  --muted-foreground: #94a3b8;
+  --accent: #1f2937;
+  --accent-foreground: #e2e8f0;
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #38bdf8;
+}
+
+:root[data-site='cv'] {
+  --background: #fdfbf6;
+  --foreground: #0b1020;
+  --card: #ffffff;
+  --card-foreground: #0b1020;
+  --popover: #ffffff;
+  --popover-foreground: #0b1020;
+  --primary: #b45309;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f1e8;
+  --secondary-foreground: #0b1020;
+  --muted: #f3efe6;
+  --muted-foreground: #5c6478;
+  --accent: #f3efe6;
+  --accent-foreground: #0b1020;
+  --border: rgba(15, 23, 42, 0.12);
+  --input: rgba(15, 23, 42, 0.12);
+  --ring: #b45309;
+}
