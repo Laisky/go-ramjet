@@ -7,13 +7,13 @@ import {
   Heart,
   MessageSquare,
   Search,
+  User,
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
-import { GPTChatPage } from './gptchat'
 
 interface TaskDefinition {
   key: string
@@ -40,6 +40,12 @@ const Tasks: TaskDefinition[] = [
     title: 'Audit Log',
     description: 'Receive and list audit logs via HTTP API.',
     icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    key: 'cv',
+    title: 'CV',
+    description: 'Single-page resume editor with live markdown preview.',
+    icon: <User className="h-5 w-5" />,
   },
   {
     key: 'jav',
@@ -80,23 +86,13 @@ const Tasks: TaskDefinition[] = [
 ]
 
 /**
- * HomePage renders the unified landing page with task cards.
+ * HomePage renders the unified landing page with task cards and returns the page element.
  */
 export function HomePage() {
-  const hostname = window.location.hostname
-  const isChatDomain =
-    hostname === 'chat.laisky.com' || hostname === 'chat2.laisky.com'
-
   useEffect(() => {
-    if (!isChatDomain) {
-      setPageTitle('Laisky')
-      setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
-    }
-  }, [isChatDomain])
-
-  if (isChatDomain) {
-    return <GPTChatPage />
-  }
+    setPageTitle('Laisky')
+    setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
+  }, [])
 
   const featuredTask = Tasks.find((t) => t.featured)
   const otherTasks = Tasks.filter((t) => !t.featured)

@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 
 export interface SelectionTTSPlayerProps {
@@ -60,15 +61,17 @@ export function SelectionTTSPlayer({
     >
       <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="font-medium text-foreground/80">Selection audio</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          className="h-6 w-6 rounded-md p-0"
-          title="Close audio player"
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        <TooltipWrapper content="Close audio player">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-6 w-6 rounded-md p-0"
+            aria-label="Close audio player"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipWrapper>
       </div>
 
       {isLoading && (

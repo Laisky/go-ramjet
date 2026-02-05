@@ -4,7 +4,7 @@ package singleton
 import (
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	gjwt "github.com/Laisky/go-utils/v5/jwt"
+	gjwt "github.com/Laisky/go-utils/v6/jwt"
 	"github.com/Laisky/laisky-blog-graphql/library/auth"
 )
 

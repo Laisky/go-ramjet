@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v6"
+	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"

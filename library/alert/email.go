@@ -5,7 +5,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	emailSDK "github.com/Laisky/go-utils/v5/email"
+	emailSDK "github.com/Laisky/go-utils/v6/email"
 	"github.com/Laisky/zap"
 )
 

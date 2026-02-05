@@ -24,7 +24,7 @@ func TestFetchDynamicURLContent(t *testing.T) {
 	gptTasks.RunDynamicWebCrawler()
 
 	ctx := context.Background()
-	url := "https://blog.laisky.com/pages/0/"
+	url := "https://blog.laisky.com/"
 
 	content, err := gptTasks.FetchDynamicURLContent(ctx, url)
 	require.NoError(t, err)

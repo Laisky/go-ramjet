@@ -2,7 +2,7 @@
 package log
 
 import (
-	glog "github.com/Laisky/go-utils/v5/log"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 )
 

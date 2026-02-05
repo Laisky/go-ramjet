@@ -44,7 +44,8 @@ func TestRegisterSPA(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/", nil)
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
-		require.Equal(t, "<html>v1</html>", w.Body.String())
+		require.Contains(t, w.Body.String(), "<html>v1</html>")
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="default"`)
 	})
 
 	t.Run("serve root index with cache bust", func(t *testing.T) {
@@ -56,7 +57,8 @@ func TestRegisterSPA(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/", nil)
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
-		require.Equal(t, "<html>v2</html>", w.Body.String())
+		require.Contains(t, w.Body.String(), "<html>v2</html>")
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="default"`)
 	})
 
 	t.Run("serve assets", func(t *testing.T) {
@@ -82,7 +84,8 @@ func TestRegisterSPA(t *testing.T) {
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
 		// Should serve current index.html
-		require.Equal(t, "<html>v2</html>", w.Body.String())
+		require.Contains(t, w.Body.String(), "<html>v2</html>")
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="default"`)
 	})
 
 	t.Run("404 for non-html", func(t *testing.T) {
@@ -121,6 +124,8 @@ func TestSiteMetadata(t *testing.T) {
 
 	// Register metadata
 	RegisterSiteMetadata([]string{"chat.example.com", "/gptchat"}, SiteMetadata{
+		ID:      "chat",
+		Theme:   "chat",
 		Title:   "Custom Chat",
 		Favicon: "/custom.ico",
 	})
@@ -133,6 +138,8 @@ func TestSiteMetadata(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Laisky</title>")
 		require.Contains(t, w.Body.String(), `href="https://s3.laisky.com/uploads/2025/12/favicon.ico"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="default"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-theme" content="default"`)
 	})
 
 	t.Run("host match", func(t *testing.T) {
@@ -143,6 +150,8 @@ func TestSiteMetadata(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Custom Chat</title>")
 		require.Contains(t, w.Body.String(), `href="/custom.ico"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="chat"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-theme" content="chat"`)
 	})
 
 	t.Run("path match", func(t *testing.T) {
@@ -153,11 +162,15 @@ func TestSiteMetadata(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Custom Chat</title>")
 		require.Contains(t, w.Body.String(), `href="/custom.ico"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="chat"`)
+		require.Contains(t, w.Body.String(), `name="ramjet-theme" content="chat"`)
 	})
 
 	t.Run("chat2 host match", func(t *testing.T) {
 		// Register chat2
 		RegisterSiteMetadata([]string{"chat2.example.com"}, SiteMetadata{
+			ID:    "chat2",
+			Theme: "chat",
 			Title: "Chat 2",
 		})
 
@@ -167,5 +180,6 @@ func TestSiteMetadata(t *testing.T) {
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Chat 2</title>")
+		require.Contains(t, w.Body.String(), `name="ramjet-site" content="chat2"`)
 	})
 }

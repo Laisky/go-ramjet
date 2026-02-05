@@ -8,8 +8,8 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
-	gutils "github.com/Laisky/go-utils/v5"
-	glog "github.com/Laisky/go-utils/v5/log"
+	gutils "github.com/Laisky/go-utils/v6"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"go.mongodb.org/mongo-driver/bson"
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/Laisky/errors/v2"
-	gutils "github.com/Laisky/go-utils/v5"
+	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v76"
@@ -54,12 +54,16 @@ func bindHTTP() {
 		"chat.laisky.com",
 		"chat2.laisky.com",
 	}, web.SiteMetadata{
+		ID:      "chat",
+		Theme:   "chat",
 		Title:   "Chat",
 		Favicon: "/favicon.ico",
 	})
 	web.RegisterSiteMetadata([]string{
 		"/gptchat",
 	}, web.SiteMetadata{
+		ID:      "chat",
+		Theme:   "chat",
 		Title:   "Chat",
 		Favicon: "/gptchat/favicon.ico",
 	})

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	gmw "github.com/Laisky/gin-middlewares/v6"
-	glog "github.com/Laisky/go-utils/v5/log"
+	gmw "github.com/Laisky/gin-middlewares/v7"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
@@ -45,6 +45,7 @@ type normalizeHandler struct {
 	handler http.Handler
 }
 
+// ServeHTTP normalizes the request URL in r and forwards it to h.handler, returning no value.
 func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Nginx's proxy_pass might merge the prefix with the next component
 	// if trailing slashes are mismatched.
@@ -68,6 +69,7 @@ func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
+// RunServer starts the HTTP server on the provided address and blocks until it exits, returning no value.
 func RunServer(addr string) {
 	if err := gmw.EnableMetric(Server); err != nil {
 		log.Logger.Panic("enable metrics", zap.Error(err))
@@ -76,6 +78,10 @@ func RunServer(addr string) {
 	Server.Any("/health", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "hello, world")
 	})
+
+	if err := LoadSiteMetadataFromSettings(); err != nil {
+		log.Logger.Error("load site metadata", zap.Error(err))
+	}
 
 	// Register SPA if built assets exist.
 	// This does not affect existing task routes, because the fallback only triggers on NoRoute.

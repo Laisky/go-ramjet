@@ -7,7 +7,7 @@ package cmd
 // 	"github.com/Laisky/go-ramjet/library/log"
 
 // 	gconfig "github.com/Laisky/go-config/v2"
-// 	gcmd "github.com/Laisky/go-utils/v5/cmd"
+// 	gcmd "github.com/Laisky/go-utils/v6/cmd"
 // 	"github.com/Laisky/zap"
 // 	"github.com/spf13/cobra"
 // )

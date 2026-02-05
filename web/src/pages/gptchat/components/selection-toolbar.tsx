@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { Check, Copy, Quote, Volume2, X } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -106,49 +107,57 @@ export function SelectionToolbar({
         e.stopPropagation()
       }}
     >
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 w-8 p-0"
-        onClick={handleCopy}
-        title="Copy selection"
-      >
-        {copied ? (
-          <Check className="h-4 w-4 text-success" />
-        ) : (
-          <Copy className="h-4 w-4" />
-        )}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 w-8 p-0"
-        onClick={handleTTS}
-        title="Read selection"
-      >
-        <Volume2 className="h-4 w-4" />
-      </Button>
-      {onQuote && (
+      <TooltipWrapper content="Copy selection">
         <Button
           variant="ghost"
           size="sm"
           className="h-8 w-8 p-0"
-          onClick={handleQuote}
-          title="Quote selection"
+          onClick={handleCopy}
+          aria-label="Copy selection"
         >
-          <Quote className="h-4 w-4" />
+          {copied ? (
+            <Check className="h-4 w-4 text-success" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
         </Button>
+      </TooltipWrapper>
+      <TooltipWrapper content="Read selection">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={handleTTS}
+          aria-label="Read selection"
+        >
+          <Volume2 className="h-4 w-4" />
+        </Button>
+      </TooltipWrapper>
+      {onQuote && (
+        <TooltipWrapper content="Quote selection">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={handleQuote}
+            aria-label="Quote selection"
+          >
+            <Quote className="h-4 w-4" />
+          </Button>
+        </TooltipWrapper>
       )}
       <div className="mx-1 h-4 w-[1px] bg-border" />
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 w-8 p-0"
-        onClick={handleClose}
-        title="Close"
-      >
-        <X className="h-4 w-4" />
-      </Button>
+      <TooltipWrapper content="Close">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={handleClose}
+          aria-label="Close toolbar"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </TooltipWrapper>
     </div>,
     document.body,
   )

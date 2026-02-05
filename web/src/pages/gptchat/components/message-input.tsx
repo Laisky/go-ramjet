@@ -1,4 +1,5 @@
 import { Textarea } from '@/components/ui/textarea'
+import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { uploadFile } from '@/utils/api'
 import { cn } from '@/utils/cn'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -307,27 +308,29 @@ export function MessageInput({
           onChange={handleFileSelect}
           className="hidden"
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled || isUploading}
-          className="absolute right-2 bottom-2 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
-          title="Attach files (Images, PDF, Doc, Text)"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <TooltipWrapper content="Attach files (Images, PDF, Doc, Text)">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || isUploading}
+            className="absolute right-2 bottom-2 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+            aria-label="Attach files"
           >
-            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+        </TooltipWrapper>
       </div>
 
       <ImageEditorModal

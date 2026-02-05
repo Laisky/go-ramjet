@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	gutils "github.com/Laisky/go-utils/v5"
+	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 
