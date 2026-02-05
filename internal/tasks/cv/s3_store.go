@@ -236,10 +236,21 @@ func (s *S3PDFStore) Open(ctx context.Context) (io.ReadCloser, int64, error) {
 		return nil, 0, errors.Wrap(err, "context done")
 	}
 
+	logger := gmw.GetLogger(ctx)
 	info, statErr := s.client.StatObject(ctx, s.bucket, s.key, minio.StatObjectOptions{})
 	if statErr != nil {
 		if isS3NoSuchKey(statErr) {
+			logger.Debug("cv pdf stat object not found",
+				zap.String("bucket", s.bucket),
+				zap.String("key", s.key))
 			return nil, 0, errors.WithStack(ErrObjectNotFound)
+		}
+		if isS3AccessDenied(statErr) {
+			logger.Debug("cv pdf stat access denied, fallback to get object",
+				zap.String("bucket", s.bucket),
+				zap.String("key", s.key),
+				zap.Error(statErr))
+			return s.openAfterStatAccessDenied(ctx, statErr)
 		}
 		return nil, 0, errors.Wrap(statErr, "stat s3 pdf")
 	}
@@ -253,6 +264,21 @@ func (s *S3PDFStore) Open(ctx context.Context) (io.ReadCloser, int64, error) {
 	}
 
 	return reader, info.Size, nil
+}
+
+// openAfterStatAccessDenied retries opening the PDF object when stat is denied.
+// It takes a context and the original stat error, and returns a reader, object size, and an error.
+func (s *S3PDFStore) openAfterStatAccessDenied(ctx context.Context, statErr error) (io.ReadCloser, int64, error) {
+	reader, err := s.client.GetObject(ctx, s.bucket, s.key, minio.GetObjectOptions{})
+	if err != nil {
+		if isS3NoSuchKey(err) || isS3AccessDenied(err) {
+			return nil, 0, errors.WithStack(ErrObjectNotFound)
+		}
+		return nil, 0, errors.Wrapf(err, "get s3 pdf after stat denied: %v", statErr)
+	}
+
+	// The object is readable but stat was denied, so stream with unknown length.
+	return reader, -1, nil
 }
 
 // Save uploads the CV PDF to S3.
@@ -494,6 +520,27 @@ func isS3NoSuchKey(err error) bool {
 
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "no such key")
+}
+
+// isS3AccessDenied checks whether an error represents an S3 access-denied response.
+func isS3AccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) {
+		if resp.Code == "AccessDenied" || resp.StatusCode == 403 {
+			return true
+		}
+		msg := strings.ToLower(resp.Message)
+		if strings.Contains(msg, "access denied") || strings.Contains(msg, "forbidden") {
+			return true
+		}
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "access denied") || strings.Contains(msg, "forbidden")
 }
 
 // joinObjectKey joins an optional prefix with a key name.

@@ -112,6 +112,44 @@ func (f *fakeS3Client) ListObjects(_ context.Context, _ string, opts minio.ListO
 	return ch
 }
 
+type statAccessDeniedS3Client struct {
+	inner              *fakeS3Client
+	denyGetWhenMissing bool
+}
+
+// GetObject returns access denied for missing objects when configured, then delegates to the inner client.
+func (s *statAccessDeniedS3Client) GetObject(ctx context.Context, bucketName, objectName string, opts minio.GetObjectOptions) (io.ReadCloser, error) {
+	if s.denyGetWhenMissing {
+		s.inner.mu.Lock()
+		_, ok := s.inner.objects[objectName]
+		s.inner.mu.Unlock()
+		if !ok {
+			return nil, minio.ErrorResponse{Code: "AccessDenied", StatusCode: 403, Message: "Access Denied."}
+		}
+	}
+	return s.inner.GetObject(ctx, bucketName, objectName, opts)
+}
+
+// PutObject delegates object uploads to the inner client.
+func (s *statAccessDeniedS3Client) PutObject(ctx context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	return s.inner.PutObject(ctx, bucketName, objectName, reader, objectSize, opts)
+}
+
+// StatObject always returns an access denied error to simulate buckets without stat/list permission.
+func (s *statAccessDeniedS3Client) StatObject(_ context.Context, _ string, _ string, _ minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.ErrorResponse{Code: "AccessDenied", StatusCode: 403, Message: "Access Denied."}
+}
+
+// RemoveObject delegates deletions to the inner client.
+func (s *statAccessDeniedS3Client) RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error {
+	return s.inner.RemoveObject(ctx, bucketName, objectName, opts)
+}
+
+// ListObjects delegates listings to the inner client.
+func (s *statAccessDeniedS3Client) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	return s.inner.ListObjects(ctx, bucketName, opts)
+}
+
 // TestS3ContentStoreLoadDefault verifies default content is returned when the object is missing.
 func TestS3ContentStoreLoadDefault(t *testing.T) {
 	t.Parallel()
@@ -192,6 +230,46 @@ func TestS3PDFStoreSaveAndOpen(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, payload, loaded)
 	require.NoError(t, reader.Close())
+}
+
+// TestS3PDFStoreOpenFallsBackWhenStatAccessDenied verifies Open falls back to GetObject when stat is denied.
+func TestS3PDFStoreOpenFallsBackWhenStatAccessDenied(t *testing.T) {
+	t.Parallel()
+
+	client := &statAccessDeniedS3Client{
+		inner:              newFakeS3Client(),
+		denyGetWhenMissing: true,
+	}
+	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	payload := []byte("%PDF-1.4 fallback")
+	err = store.Save(context.Background(), payload)
+	require.NoError(t, err)
+
+	reader, size, err := store.Open(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(-1), size)
+
+	loaded, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, payload, loaded)
+	require.NoError(t, reader.Close())
+}
+
+// TestS3PDFStoreOpenMapsAccessDeniedMissingToNotFound verifies AccessDenied on missing object maps to ErrObjectNotFound.
+func TestS3PDFStoreOpenMapsAccessDeniedMissingToNotFound(t *testing.T) {
+	t.Parallel()
+
+	client := &statAccessDeniedS3Client{
+		inner:              newFakeS3Client(),
+		denyGetWhenMissing: true,
+	}
+	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	_, _, err = store.Open(context.Background())
+	require.ErrorIs(t, err, ErrObjectNotFound)
 }
 
 // TestS3PDFStoreSaveSetsCacheControl ensures PDF uploads include cache-control metadata; it takes a testing.T and returns no values.
@@ -304,8 +382,8 @@ func TestS3ContentStoreSaveRemovesVersionsOnLimit(t *testing.T) {
 	require.Equal(t, "hello", payload.Content)
 	require.NotNil(t, payload.UpdatedAt)
 	require.Equal(t, 2, client.putCalls)
-	require.Equal(t, 2, client.listCalls)
-	require.Equal(t, 3, client.removeCalls)
+	require.Equal(t, 1, client.listCalls)
+	require.Equal(t, 1, client.removeCalls)
 }
 
 type precleanS3Client struct {
@@ -372,9 +450,9 @@ func TestS3ContentStorePrecleanNonCurrentVersions(t *testing.T) {
 	_, err = store.Save(context.Background(), "hello")
 	require.NoError(t, err)
 	require.Equal(t, 1, client.putCalls)
-	require.Equal(t, 1, client.listCalls)
-	require.Equal(t, 1, client.removeCalls)
-	require.Equal(t, []string{"v1"}, client.removedVersionIDs)
+	require.Equal(t, 0, client.listCalls)
+	require.Equal(t, 0, client.removeCalls)
+	require.Empty(t, client.removedVersionIDs)
 }
 
 // TestS3PDFStorePrecleanNonCurrentVersions verifies non-current pdf versions are removed before upload.

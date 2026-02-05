@@ -110,10 +110,15 @@ func (h *handler) downloadPDF(c *gin.Context) {
 	reader, size, err := h.pdfStore.Open(gmw.Ctx(c))
 	if err != nil {
 		if errors.Is(err, ErrObjectNotFound) {
+			logger.Debug("cv pdf unavailable, trigger async refresh",
+				zap.String("cache_buster", cacheBuster))
 			h.triggerAsyncPDFRefresh(c, cacheBuster)
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
+		logger.Debug("cv pdf open failed",
+			zap.String("cache_buster", cacheBuster),
+			zap.Error(err))
 		web.AbortErr(c, err)
 		return
 	}

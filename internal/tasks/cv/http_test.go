@@ -245,6 +245,53 @@ func TestDownloadPDFMissingTriggersAsyncRender(t *testing.T) {
 	waitForPDFStore(t, pdfStore, 2*time.Second)
 }
 
+// TestDownloadPDFAccessDeniedMissingTriggersAsyncRender verifies AccessDenied-missing PDFs trigger background render.
+// It takes a testing.T and returns no values.
+func TestDownloadPDFAccessDeniedMissingTriggersAsyncRender(t *testing.T) {
+	t.Parallel()
+
+	content := "CV async access denied"
+	payload := ContentPayload{Content: content, IsDefault: false}
+	store := &fakeContentStore{payload: payload}
+
+	client := &statAccessDeniedS3Client{
+		inner:              newFakeS3Client(),
+		denyGetWhenMissing: true,
+	}
+	pdfStore, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	signal := make(chan struct{}, 1)
+	renderer := &signalPDFRenderer{ch: signal}
+	pdfService, err := NewPDFService(renderer, pdfStore)
+	require.NoError(t, err)
+
+	h := &handler{
+		store:      store,
+		pdfStore:   pdfStore,
+		pdfService: pdfService,
+	}
+	ctx, recorder := newCVTestContext(http.MethodGet, "/cv/pdf?ts=1700000000002")
+
+	h.downloadPDF(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusNotFound, ctx.Writer.Status())
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	select {
+	case <-signal:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for async pdf render after access denied")
+	}
+
+	waitForPDFStore(t, pdfStore, 2*time.Second)
+}
+
 // waitForPDFStore waits for the PDF to appear in the store within the timeout.
 // It takes a testing.T, PDF store, and timeout duration and returns no values.
 func waitForPDFStore(t *testing.T, store *S3PDFStore, timeout time.Duration) {
