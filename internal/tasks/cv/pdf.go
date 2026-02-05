@@ -35,10 +35,9 @@ const cvPDFTemplate = `<!doctype html>
     <style>
       :root {
         --cv-ink: #0b1020;
-        --cv-muted: #5c6478;
-        --cv-accent: #9a3412;
-        --cv-border: #ddd7cc;
-        --cv-paper: #fdfaf5;
+        --cv-muted: #4b5366;
+        --cv-accent: #8f2d14;
+        --cv-border: #d6d2c6;
       }
 
       @page {
@@ -53,7 +52,7 @@ const cvPDFTemplate = `<!doctype html>
       body {
         margin: 0;
         padding: 0;
-        background: var(--cv-paper);
+        background: #ffffff;
         color: var(--cv-ink);
         font-family: "Newsreader", "Times New Roman", serif;
         font-size: 12pt;
@@ -70,25 +69,33 @@ const cvPDFTemplate = `<!doctype html>
 
       h1 {
         font-size: 26pt;
-        margin-bottom: 6pt;
-      }
-
-      h2 {
-        font-size: 16pt;
-        margin-top: 22pt;
-        margin-bottom: 8pt;
-        padding-bottom: 6pt;
-        border-bottom: 1px solid var(--cv-border);
-      }
-
-      h3 {
-        font-size: 12.5pt;
-        margin-top: 14pt;
         margin-bottom: 4pt;
       }
 
+      h2 {
+        font-size: 15.5pt;
+        margin-top: 18pt;
+        margin-bottom: 6pt;
+        padding-bottom: 5pt;
+        border-bottom: 1px solid var(--cv-border);
+        break-before: auto;
+        break-after: auto;
+        page-break-before: auto;
+        page-break-after: auto;
+      }
+
+      h3 {
+        font-size: 12pt;
+        margin-top: 12pt;
+        margin-bottom: 4pt;
+        break-before: auto;
+        break-after: auto;
+        page-break-before: auto;
+        page-break-after: auto;
+      }
+
       p {
-        margin: 0 0 8pt;
+        margin: 0 0 6pt;
       }
 
       a {
@@ -97,12 +104,25 @@ const cvPDFTemplate = `<!doctype html>
       }
 
       ul {
-        margin: 6pt 0 10pt;
-        padding-left: 18pt;
+        margin: 4pt 0 8pt;
+        padding-left: 16pt;
+        break-inside: auto;
+        page-break-inside: auto;
       }
 
       li {
-        margin-bottom: 4pt;
+        margin-bottom: 3pt;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      h2 + p,
+      h2 + ul,
+      h2 + ol,
+      h3 + p,
+      h3 + ul,
+      h3 + ol {
+        margin-top: 2pt;
       }
 
       .cv-container {

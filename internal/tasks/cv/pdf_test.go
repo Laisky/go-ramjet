@@ -59,6 +59,18 @@ func TestMergePDFBytes(t *testing.T) {
 	require.Equal(t, 2, pageCount)
 }
 
+// TestCVPDFTemplateStyling verifies the PDF template includes layout rules for consistent pagination.
+// It takes a testing.T and returns no values.
+func TestCVPDFTemplateStyling(t *testing.T) {
+	t.Parallel()
+
+	require.NotContains(t, cvPDFTemplate, "--cv-paper")
+	require.Contains(t, cvPDFTemplate, "background: #ffffff;")
+	require.Contains(t, cvPDFTemplate, "break-after: auto;")
+	require.Contains(t, cvPDFTemplate, "page-break-after: auto;")
+	require.Contains(t, cvPDFTemplate, "break-inside: auto;")
+}
+
 // buildTestPNG creates a solid PNG image for tests.
 // It takes a testing.T plus width/height and returns the PNG bytes.
 func buildTestPNG(t *testing.T, width int, height int) []byte {

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v7"
+	"github.com/Laisky/zap"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -158,21 +160,49 @@ func (s *S3ContentStore) Load(ctx context.Context) (payload ContentPayload, err 
 }
 
 // Save writes CV content to S3 and returns the updated metadata.
+// It takes a context and content string, and returns the stored payload or an error.
 func (s *S3ContentStore) Save(ctx context.Context, content string) (ContentPayload, error) {
 	if err := ctx.Err(); err != nil {
 		return ContentPayload{}, errors.Wrap(err, "context done")
 	}
 
 	payload := []byte(content)
-	_, err := s.client.PutObject(ctx,
-		s.bucket,
-		s.contentKey,
-		bytes.NewReader(payload),
-		int64(len(payload)),
-		minio.PutObjectOptions{ContentType: "text/markdown; charset=utf-8"},
-	)
-	if err != nil {
-		return ContentPayload{}, errors.Wrap(err, "put s3 content")
+	logger := gmw.GetLogger(ctx)
+
+	// removed, err := s.deleteContentNonCurrentVersions(ctx)
+	// if err != nil {
+	// 	return ContentPayload{}, errors.Wrap(err, "delete content non-current versions")
+	// }
+	// logger.Debug("cv content non-current versions cleaned",
+	// 	zap.String("bucket", s.bucket),
+	// 	zap.String("key", s.contentKey),
+	// 	zap.Int("removed", removed))
+
+	putErr := s.putContentObject(ctx, payload)
+	if putErr != nil {
+		if !isVersionLimitErr(putErr) {
+			return ContentPayload{}, errors.Wrap(putErr, "put s3 content")
+		}
+
+		logger.Debug("cv content version limit reached, cleaning all versions",
+			zap.String("bucket", s.bucket),
+			zap.String("key", s.contentKey),
+			zap.Int("bytes", len(payload)))
+
+		removed, err := s.deleteContentNonCurrentVersions(ctx)
+		if err != nil {
+			return ContentPayload{}, errors.Wrap(err, "delete content versions")
+		}
+
+		logger.Debug("cv content versions cleaned",
+			zap.String("bucket", s.bucket),
+			zap.String("key", s.contentKey),
+			zap.Int("removed", removed))
+
+		putErr = s.putContentObject(ctx, payload)
+		if putErr != nil {
+			return ContentPayload{}, errors.Wrap(putErr, "put s3 content after deleting versions")
+		}
 	}
 
 	updatedAt := time.Now().UTC()
@@ -181,6 +211,23 @@ func (s *S3ContentStore) Save(ctx context.Context, content string) (ContentPaylo
 		UpdatedAt: &updatedAt,
 		IsDefault: false,
 	}, nil
+}
+
+// putContentObject uploads the markdown payload to S3.
+// It takes a context and payload bytes, and returns an error if the upload fails.
+func (s *S3ContentStore) putContentObject(ctx context.Context, payload []byte) error {
+	_, err := s.client.PutObject(ctx,
+		s.bucket,
+		s.contentKey,
+		bytes.NewReader(payload),
+		int64(len(payload)),
+		minio.PutObjectOptions{ContentType: "text/markdown; charset=utf-8"},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Open opens the CV PDF object from S3.
@@ -217,6 +264,17 @@ func (s *S3PDFStore) Save(ctx context.Context, payload []byte) error {
 		return errors.WithStack(errors.New("pdf payload is empty"))
 	}
 
+	logger := gmw.GetLogger(ctx)
+
+	removed, err := s.deletePDFNonCurrentVersions(ctx)
+	if err != nil {
+		return errors.Wrap(err, "delete pdf non-current versions")
+	}
+	logger.Debug("cv pdf non-current versions cleaned",
+		zap.String("bucket", s.bucket),
+		zap.String("key", s.key),
+		zap.Int("removed", removed))
+
 	putErr := s.putPDFObject(ctx, payload)
 	if putErr == nil {
 		return nil
@@ -224,6 +282,11 @@ func (s *S3PDFStore) Save(ctx context.Context, payload []byte) error {
 	if !isVersionLimitErr(putErr) {
 		return errors.Wrap(putErr, "put s3 pdf")
 	}
+
+	logger.Debug("cv pdf version limit reached, cleaning all versions",
+		zap.String("bucket", s.bucket),
+		zap.String("key", s.key),
+		zap.Int("bytes", len(payload)))
 
 	if err := s.deletePDFVersions(ctx); err != nil {
 		return errors.Wrap(err, "delete pdf versions")
@@ -255,6 +318,78 @@ func (s *S3PDFStore) putPDFObject(ctx context.Context, payload []byte) error {
 	}
 
 	return nil
+}
+
+// deleteContentVersions removes all known versions for the content object when versioning is enabled.
+// It takes a context and returns the number of deleted versions and an error if cleanup fails.
+func (s *S3ContentStore) deleteContentVersions(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, errors.Wrap(err, "context done")
+	}
+	if s.client == nil {
+		return 0, errors.WithStack(errors.New("s3 client is nil"))
+	}
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       s.contentKey,
+		Recursive:    true,
+		WithVersions: true,
+	}
+
+	removed := 0
+	for obj := range s.client.ListObjects(ctx, s.bucket, opts) {
+		if obj.Err != nil {
+			return removed, errors.Wrap(obj.Err, "list content versions")
+		}
+		if obj.Key != s.contentKey {
+			continue
+		}
+		if strings.TrimSpace(obj.VersionID) == "" {
+			continue
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, s.contentKey, minio.RemoveObjectOptions{VersionID: obj.VersionID}); err != nil {
+			return removed, errors.Wrap(err, "remove content version")
+		}
+		removed++
+	}
+
+	return removed, nil
+}
+
+// deleteContentNonCurrentVersions removes non-current versions for the content object.
+// It takes a context and returns the number of deleted versions and an error if cleanup fails.
+func (s *S3ContentStore) deleteContentNonCurrentVersions(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, errors.Wrap(err, "context done")
+	}
+	if s.client == nil {
+		return 0, errors.WithStack(errors.New("s3 client is nil"))
+	}
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       s.contentKey,
+		Recursive:    true,
+		WithVersions: true,
+	}
+
+	removed := 0
+	for obj := range s.client.ListObjects(ctx, s.bucket, opts) {
+		if obj.Err != nil {
+			return removed, errors.Wrap(obj.Err, "list content non-current versions")
+		}
+		if obj.Key != s.contentKey {
+			continue
+		}
+		if strings.TrimSpace(obj.VersionID) == "" || obj.IsLatest {
+			continue
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, s.contentKey, minio.RemoveObjectOptions{VersionID: obj.VersionID}); err != nil {
+			return removed, errors.Wrap(err, "remove content non-current version")
+		}
+		removed++
+	}
+
+	return removed, nil
 }
 
 // deletePDFVersions removes all known versions for the PDF object when versioning is enabled.
@@ -289,6 +424,42 @@ func (s *S3PDFStore) deletePDFVersions(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// deletePDFNonCurrentVersions removes non-current versions for the PDF object when versioning is enabled.
+// It takes a context and returns the number of deleted versions and an error if the cleanup fails.
+func (s *S3PDFStore) deletePDFNonCurrentVersions(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, errors.Wrap(err, "context done")
+	}
+	if s.client == nil {
+		return 0, errors.WithStack(errors.New("s3 client is nil"))
+	}
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       s.key,
+		Recursive:    true,
+		WithVersions: true,
+	}
+
+	removed := 0
+	for obj := range s.client.ListObjects(ctx, s.bucket, opts) {
+		if obj.Err != nil {
+			return removed, errors.Wrap(obj.Err, "list pdf non-current versions")
+		}
+		if obj.Key != s.key {
+			continue
+		}
+		if strings.TrimSpace(obj.VersionID) == "" || obj.IsLatest {
+			continue
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, s.key, minio.RemoveObjectOptions{VersionID: obj.VersionID}); err != nil {
+			return removed, errors.Wrap(err, "remove pdf non-current version")
+		}
+		removed++
+	}
+
+	return removed, nil
 }
 
 // isVersionLimitErr reports whether err is related to exceeding object version limits.

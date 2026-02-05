@@ -21,9 +21,9 @@ type fakeS3Object struct {
 }
 
 type fakeS3Client struct {
-	mu             sync.Mutex
-	objects        map[string]fakeS3Object
-	putObjectOpts  map[string]minio.PutObjectOptions
+	mu            sync.Mutex
+	objects       map[string]fakeS3Object
+	putObjectOpts map[string]minio.PutObjectOptions
 }
 
 // newFakeS3Client creates an in-memory S3 client for tests.
@@ -215,10 +215,11 @@ func TestS3PDFStoreSaveSetsCacheControl(t *testing.T) {
 }
 
 type versionLimitS3Client struct {
-	putCalls    int
-	removeCalls int
-	listCalls   int
-	versions    []minio.ObjectInfo
+	putCalls          int
+	removeCalls       int
+	listCalls         int
+	versions          []minio.ObjectInfo
+	removedVersionIDs []string
 }
 
 // GetObject is unused in this test and returns a not found error.
@@ -245,8 +246,9 @@ func (v *versionLimitS3Client) StatObject(_ context.Context, _ string, _ string,
 }
 
 // RemoveObject counts removals and returns nil.
-func (v *versionLimitS3Client) RemoveObject(_ context.Context, _ string, _ string, _ minio.RemoveObjectOptions) error {
+func (v *versionLimitS3Client) RemoveObject(_ context.Context, _ string, _ string, opts minio.RemoveObjectOptions) error {
 	v.removeCalls++
+	v.removedVersionIDs = append(v.removedVersionIDs, opts.VersionID)
 	return nil
 }
 
@@ -269,7 +271,7 @@ func TestS3PDFStoreSaveRemovesVersionsOnLimit(t *testing.T) {
 	client := &versionLimitS3Client{
 		versions: []minio.ObjectInfo{
 			{Key: "cv.pdf", VersionID: "v1"},
-			{Key: "cv.pdf", VersionID: "v2"},
+			{Key: "cv.pdf", VersionID: "v2", IsLatest: true},
 		},
 	}
 	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
@@ -278,6 +280,122 @@ func TestS3PDFStoreSaveRemovesVersionsOnLimit(t *testing.T) {
 	err = store.Save(context.Background(), []byte("%PDF-1.4 mock"))
 	require.NoError(t, err)
 	require.Equal(t, 2, client.putCalls)
+	require.Equal(t, 2, client.listCalls)
+	require.Equal(t, 3, client.removeCalls)
+}
+
+// TestS3ContentStoreSaveRemovesVersionsOnLimit ensures content cleanup happens when S3 rejects new versions.
+// It takes a testing.T and returns no values.
+func TestS3ContentStoreSaveRemovesVersionsOnLimit(t *testing.T) {
+	t.Parallel()
+
+	client := &versionLimitS3Client{
+		versions: []minio.ObjectInfo{
+			{Key: "cv.md", VersionID: "v1"},
+			{Key: "cv.md", VersionID: "v2", IsLatest: true},
+			{Key: "other.md", VersionID: "v3"},
+		},
+	}
+	store, err := NewS3ContentStore(client, "bucket", "cv.md", "default")
+	require.NoError(t, err)
+
+	payload, err := store.Save(context.Background(), "hello")
+	require.NoError(t, err)
+	require.Equal(t, "hello", payload.Content)
+	require.NotNil(t, payload.UpdatedAt)
+	require.Equal(t, 2, client.putCalls)
+	require.Equal(t, 2, client.listCalls)
+	require.Equal(t, 3, client.removeCalls)
+}
+
+type precleanS3Client struct {
+	putCalls          int
+	removeCalls       int
+	listCalls         int
+	versions          []minio.ObjectInfo
+	removedVersionIDs []string
+}
+
+// GetObject is unused in this test and returns a not found error.
+func (p *precleanS3Client) GetObject(_ context.Context, _ string, _ string, _ minio.GetObjectOptions) (io.ReadCloser, error) {
+	return nil, minio.ErrorResponse{Code: "NoSuchKey", StatusCode: 404}
+}
+
+// PutObject succeeds and counts calls.
+func (p *precleanS3Client) PutObject(_ context.Context, _ string, _ string, reader io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
+	p.putCalls++
+	_, err := io.ReadAll(reader)
+	if err != nil {
+		return minio.UploadInfo{}, err
+	}
+	return minio.UploadInfo{Key: "cv.pdf"}, nil
+}
+
+// StatObject returns a not found error for this test client.
+func (p *precleanS3Client) StatObject(_ context.Context, _ string, _ string, _ minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.ErrorResponse{Code: "NoSuchKey", StatusCode: 404}
+}
+
+// RemoveObject counts removals and records version IDs.
+func (p *precleanS3Client) RemoveObject(_ context.Context, _ string, _ string, opts minio.RemoveObjectOptions) error {
+	p.removeCalls++
+	p.removedVersionIDs = append(p.removedVersionIDs, opts.VersionID)
+	return nil
+}
+
+// ListObjects streams configured versions and counts the call.
+func (p *precleanS3Client) ListObjects(_ context.Context, _ string, _ minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	p.listCalls++
+	ch := make(chan minio.ObjectInfo, len(p.versions))
+	for _, obj := range p.versions {
+		ch <- obj
+	}
+	close(ch)
+	return ch
+}
+
+// TestS3ContentStorePrecleanNonCurrentVersions verifies non-current content versions are removed before upload.
+// It takes a testing.T and returns no values.
+func TestS3ContentStorePrecleanNonCurrentVersions(t *testing.T) {
+	t.Parallel()
+
+	client := &precleanS3Client{
+		versions: []minio.ObjectInfo{
+			{Key: "cv.md", VersionID: "v1"},
+			{Key: "cv.md", VersionID: "v2", IsLatest: true},
+			{Key: "other.md", VersionID: "v3"},
+		},
+	}
+	store, err := NewS3ContentStore(client, "bucket", "cv.md", "default")
+	require.NoError(t, err)
+
+	_, err = store.Save(context.Background(), "hello")
+	require.NoError(t, err)
+	require.Equal(t, 1, client.putCalls)
 	require.Equal(t, 1, client.listCalls)
-	require.Equal(t, 2, client.removeCalls)
+	require.Equal(t, 1, client.removeCalls)
+	require.Equal(t, []string{"v1"}, client.removedVersionIDs)
+}
+
+// TestS3PDFStorePrecleanNonCurrentVersions verifies non-current pdf versions are removed before upload.
+// It takes a testing.T and returns no values.
+func TestS3PDFStorePrecleanNonCurrentVersions(t *testing.T) {
+	t.Parallel()
+
+	client := &precleanS3Client{
+		versions: []minio.ObjectInfo{
+			{Key: "cv.pdf", VersionID: "v1"},
+			{Key: "cv.pdf", VersionID: "v2", IsLatest: true},
+			{Key: "other.pdf", VersionID: "v3"},
+		},
+	}
+	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	err = store.Save(context.Background(), []byte("%PDF-1.4 mock"))
+	require.NoError(t, err)
+	require.Equal(t, 1, client.putCalls)
+	require.Equal(t, 1, client.listCalls)
+	require.Equal(t, 1, client.removeCalls)
+	require.Equal(t, []string{"v1"}, client.removedVersionIDs)
 }
