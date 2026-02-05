@@ -17,6 +17,8 @@ type S3Client interface {
 	GetObject(ctx context.Context, bucketName, objectName string, opts minio.GetObjectOptions) (io.ReadCloser, error)
 	PutObject(ctx context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error)
 	StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error)
+	RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error
+	ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
 }
 
 // S3ContentStore persists CV content in an S3-compatible object store.
@@ -61,6 +63,16 @@ func (m *minioClientAdapter) PutObject(ctx context.Context, bucketName, objectNa
 // StatObject retrieves metadata for the requested S3 object.
 func (m *minioClientAdapter) StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
 	return m.client.StatObject(ctx, bucketName, objectName, opts)
+}
+
+// RemoveObject removes an object (or a specific version) from the S3 bucket.
+func (m *minioClientAdapter) RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error {
+	return m.client.RemoveObject(ctx, bucketName, objectName, opts)
+}
+
+// ListObjects returns a channel of object info records for the provided bucket and options.
+func (m *minioClientAdapter) ListObjects(ctx context.Context, bucketName string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	return m.client.ListObjects(ctx, bucketName, opts)
 }
 
 // NewS3ContentStore creates a content store backed by S3.
@@ -205,6 +217,29 @@ func (s *S3PDFStore) Save(ctx context.Context, payload []byte) error {
 		return errors.WithStack(errors.New("pdf payload is empty"))
 	}
 
+	putErr := s.putPDFObject(ctx, payload)
+	if putErr == nil {
+		return nil
+	}
+	if !isVersionLimitErr(putErr) {
+		return errors.Wrap(putErr, "put s3 pdf")
+	}
+
+	if err := s.deletePDFVersions(ctx); err != nil {
+		return errors.Wrap(err, "delete pdf versions")
+	}
+
+	putErr = s.putPDFObject(ctx, payload)
+	if putErr != nil {
+		return errors.Wrap(putErr, "put s3 pdf after deleting versions")
+	}
+
+	return nil
+}
+
+// putPDFObject uploads the PDF payload to S3.
+// It takes a context and payload bytes and returns an error if the upload fails.
+func (s *S3PDFStore) putPDFObject(ctx context.Context, payload []byte) error {
 	_, err := s.client.PutObject(ctx,
 		s.bucket,
 		s.key,
@@ -216,10 +251,54 @@ func (s *S3PDFStore) Save(ctx context.Context, payload []byte) error {
 		},
 	)
 	if err != nil {
-		return errors.Wrap(err, "put s3 pdf")
+		return err
 	}
 
 	return nil
+}
+
+// deletePDFVersions removes all known versions for the PDF object when versioning is enabled.
+// It takes a context and returns an error when the cleanup fails.
+func (s *S3PDFStore) deletePDFVersions(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return errors.Wrap(err, "context done")
+	}
+	if s.client == nil {
+		return errors.WithStack(errors.New("s3 client is nil"))
+	}
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       s.key,
+		Recursive:    true,
+		WithVersions: true,
+	}
+
+	for obj := range s.client.ListObjects(ctx, s.bucket, opts) {
+		if obj.Err != nil {
+			return errors.Wrap(obj.Err, "list pdf versions")
+		}
+		if obj.Key != s.key {
+			continue
+		}
+		if strings.TrimSpace(obj.VersionID) == "" {
+			continue
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, s.key, minio.RemoveObjectOptions{VersionID: obj.VersionID}); err != nil {
+			return errors.Wrap(err, "remove pdf version")
+		}
+	}
+
+	return nil
+}
+
+// isVersionLimitErr reports whether err is related to exceeding object version limits.
+// It takes an error and returns true when the error indicates a version limit issue.
+func isVersionLimitErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "limit on the number of versions")
 }
 
 // ErrObjectNotFound indicates an expected object is missing.

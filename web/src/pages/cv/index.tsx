@@ -163,11 +163,11 @@ function setMetaTag(key: 'name' | 'property', value: string, content: string) {
 function buildPdfURL(lastSavedAt: string | null): string {
   const fallback = Date.now()
   if (!lastSavedAt) {
-    return `/cv/pdf?ts=${fallback}&fresh=1`
+    return `/cv/pdf?ts=${fallback}`
   }
   const parsed = Date.parse(lastSavedAt)
   const stamp = Number.isNaN(parsed) ? fallback : parsed
-  return `/cv/pdf?ts=${stamp}&fresh=1`
+  return `/cv/pdf?ts=${stamp}`
 }
 
 /**

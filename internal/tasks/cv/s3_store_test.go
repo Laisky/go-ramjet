@@ -3,7 +3,9 @@ package cv
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -79,6 +81,35 @@ func (f *fakeS3Client) StatObject(_ context.Context, _ string, objectName string
 		Size:         int64(len(obj.content)),
 		LastModified: obj.updatedAt,
 	}, nil
+}
+
+// RemoveObject deletes an object from the in-memory store.
+func (f *fakeS3Client) RemoveObject(_ context.Context, _ string, objectName string, _ minio.RemoveObjectOptions) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	delete(f.objects, objectName)
+	delete(f.putObjectOpts, objectName)
+	return nil
+}
+
+// ListObjects streams object info for keys matching the prefix.
+func (f *fakeS3Client) ListObjects(_ context.Context, _ string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	ch := make(chan minio.ObjectInfo, len(f.objects))
+	f.mu.Lock()
+	for key, obj := range f.objects {
+		if opts.Prefix != "" && key != opts.Prefix && !strings.HasPrefix(key, opts.Prefix) {
+			continue
+		}
+		ch <- minio.ObjectInfo{
+			Key:          obj.objectName,
+			Size:         int64(len(obj.content)),
+			LastModified: obj.updatedAt,
+		}
+	}
+	f.mu.Unlock()
+	close(ch)
+	return ch
 }
 
 // TestS3ContentStoreLoadDefault verifies default content is returned when the object is missing.
@@ -181,4 +212,72 @@ func TestS3PDFStoreSaveSetsCacheControl(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, cvPDFCacheControl, opts.CacheControl)
 	require.Equal(t, "application/pdf", opts.ContentType)
+}
+
+type versionLimitS3Client struct {
+	putCalls    int
+	removeCalls int
+	listCalls   int
+	versions    []minio.ObjectInfo
+}
+
+// GetObject is unused in this test and returns a not found error.
+func (v *versionLimitS3Client) GetObject(_ context.Context, _ string, _ string, _ minio.GetObjectOptions) (io.ReadCloser, error) {
+	return nil, minio.ErrorResponse{Code: "NoSuchKey", StatusCode: 404}
+}
+
+// PutObject returns a version limit error on the first call and succeeds afterwards.
+func (v *versionLimitS3Client) PutObject(_ context.Context, _ string, _ string, reader io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
+	v.putCalls++
+	if v.putCalls == 1 {
+		return minio.UploadInfo{}, errors.New("You've exceeded the limit on the number of versions you can create on this object")
+	}
+	_, err := io.ReadAll(reader)
+	if err != nil {
+		return minio.UploadInfo{}, err
+	}
+	return minio.UploadInfo{Key: "cv.pdf"}, nil
+}
+
+// StatObject returns a not found error for this test client.
+func (v *versionLimitS3Client) StatObject(_ context.Context, _ string, _ string, _ minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	return minio.ObjectInfo{}, minio.ErrorResponse{Code: "NoSuchKey", StatusCode: 404}
+}
+
+// RemoveObject counts removals and returns nil.
+func (v *versionLimitS3Client) RemoveObject(_ context.Context, _ string, _ string, _ minio.RemoveObjectOptions) error {
+	v.removeCalls++
+	return nil
+}
+
+// ListObjects streams configured versions and counts the call.
+func (v *versionLimitS3Client) ListObjects(_ context.Context, _ string, _ minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	v.listCalls++
+	ch := make(chan minio.ObjectInfo, len(v.versions))
+	for _, obj := range v.versions {
+		ch <- obj
+	}
+	close(ch)
+	return ch
+}
+
+// TestS3PDFStoreSaveRemovesVersionsOnLimit ensures version cleanup happens when S3 rejects new versions.
+// It takes a testing.T and returns no values.
+func TestS3PDFStoreSaveRemovesVersionsOnLimit(t *testing.T) {
+	t.Parallel()
+
+	client := &versionLimitS3Client{
+		versions: []minio.ObjectInfo{
+			{Key: "cv.pdf", VersionID: "v1"},
+			{Key: "cv.pdf", VersionID: "v2"},
+		},
+	}
+	store, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	err = store.Save(context.Background(), []byte("%PDF-1.4 mock"))
+	require.NoError(t, err)
+	require.Equal(t, 2, client.putCalls)
+	require.Equal(t, 1, client.listCalls)
+	require.Equal(t, 2, client.removeCalls)
 }
