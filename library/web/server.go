@@ -29,7 +29,16 @@ func init() {
 			gmw.WithLogger(log.Logger),
 		),
 		gmw.LockableMw(),
+		securityMiddleware,
 	)
+}
+
+func securityMiddleware(c *gin.Context) {
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("X-Frame-Options", "SAMEORIGIN")
+	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
+	c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	c.Next()
 }
 
 type normalizeHandler struct {
