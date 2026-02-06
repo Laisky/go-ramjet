@@ -6,7 +6,7 @@ describe('Vite proxy config', () => {
   it('proxies CV API endpoints in dev proxy config', () => {
     const configPath = path.join(__dirname, 'vite.config.dev.ts')
     const config = readFileSync(configPath, 'utf8')
-    expect(config).toContain('/cv/(content|pdf)')
+    expect(config).toContain('/cv/(content|pdf|meta)')
   })
 
   it('proxies CV API endpoints in default dev config', () => {

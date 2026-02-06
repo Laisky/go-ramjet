@@ -47,7 +47,7 @@ export default defineConfig({
           target: 'http://127.0.0.1:24456',
           changeOrigin: true,
         },
-      '^/cv/(content|pdf)': {
+      '^/cv/(content|pdf|meta)': {
         target: 'http://127.0.0.1:24456',
         changeOrigin: true,
       },

@@ -24,6 +24,7 @@ import { setPageFavicon, setPageTitle } from '@/utils/dom'
 
 import { parseCvContent } from './cv-helpers'
 import { CvMarkdown } from './cv-markdown'
+import { mergeCVPageMeta, resolveCVPageMeta, type CVPageMetaPayload } from './page-meta'
 
 type CvContentPayload = {
   content: string
@@ -184,6 +185,7 @@ export function CVPage() {
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+  const [pageMeta, setPageMeta] = useState(() => resolveCVPageMeta())
   const copyTimeoutRef = useRef<number | null>(null)
 
   const parsed = useMemo(() => parseCvContent(content), [content])
@@ -378,22 +380,63 @@ export function CVPage() {
   }, [loadContent])
 
   useEffect(() => {
+    const controller = new AbortController()
+    const loadPageMeta = async () => {
+      try {
+        const response = await fetch('/cv/meta', {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        if (!response.ok) {
+          console.debug(
+            `[CV] Metadata load failed: ${response.status} ${response.statusText} ${response.url}`,
+          )
+          return
+        }
+
+        const payload = (await response.json()) as CVPageMetaPayload
+        setPageMeta((current) => {
+          const merged = mergeCVPageMeta(current, payload)
+          console.debug(
+            `[CV] Metadata loaded from /cv/meta: favicon=${merged.faviconHref} og_image=${merged.ogImage}`,
+          )
+          return merged
+        })
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return
+        }
+        if (err instanceof Error) {
+          console.debug(`[CV] Metadata request failed: ${err.message}`)
+          return
+        }
+        console.debug('[CV] Metadata request failed')
+      }
+    }
+
+    loadPageMeta()
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    console.debug(
+      `[CV] Resolved page metadata: favicon=${pageMeta.faviconHref} og_image=${pageMeta.ogImage}`,
+    )
+  }, [pageMeta.faviconHref, pageMeta.ogImage])
+
+  useEffect(() => {
     if (!content) {
       return
     }
     const title = `${parsed.title} | Senior Software Engineer`
     setPageTitle(title)
-    setPageFavicon('https://s3.laisky.com/uploads/2025/12/favicon.ico')
+    setPageFavicon(pageMeta.faviconHref)
     setMetaTag('name', 'description', parsed.summaryLine)
     setMetaTag('property', 'og:title', title)
     setMetaTag('property', 'og:description', parsed.summaryLine)
     setMetaTag('property', 'og:type', 'profile')
-    setMetaTag(
-      'property',
-      'og:image',
-      'https://s3.laisky.com/uploads/2025/12/favicon.ico',
-    )
-  }, [content, parsed.summaryLine, parsed.title])
+    setMetaTag('property', 'og:image', pageMeta.ogImage)
+  }, [content, pageMeta.faviconHref, pageMeta.ogImage, parsed.summaryLine, parsed.title])
 
   return (
     <div className="cv-page">

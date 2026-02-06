@@ -12,14 +12,27 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
+	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
-const pdfAsyncRenderTimeout = 60 * time.Second
+const (
+	pdfAsyncRenderTimeout = 60 * time.Second
+	cvSitePathPrefix      = "/cv"
+	cvSiteID              = "cv"
+	cvSiteTheme           = "cv"
+	cvSiteTitle           = "Zhonghua (Laisky) Cai | CV"
+)
 
 // contentRequest represents the payload for updating CV content.
 type contentRequest struct {
 	Content string `json:"content"`
+}
+
+// pageMetaResponse represents response payload for CV page metadata.
+type pageMetaResponse struct {
+	Favicon string `json:"favicon"`
+	OGImage string `json:"og_image"`
 }
 
 // handler provides HTTP handlers for the CV task.
@@ -29,14 +42,26 @@ type handler struct {
 	pdfService *PDFService
 }
 
+// buildCVSiteMetadata returns base site metadata for the CV page.
+// It takes no parameters and returns metadata that keeps favicon resolution in web.sites/default metadata.
+func buildCVSiteMetadata() web.SiteMetadata {
+	return web.SiteMetadata{
+		ID:    cvSiteID,
+		Theme: cvSiteTheme,
+		Title: cvSiteTitle,
+	}
+}
+
 // bindHTTP registers CV routes and metadata.
 func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFService) {
-	web.RegisterSiteMetadata([]string{"/cv"}, web.SiteMetadata{
-		ID:      "cv",
-		Theme:   "cv",
-		Title:   "Zhonghua (Laisky) Cai | CV",
-		Favicon: "https://s3.laisky.com/uploads/2025/12/favicon.ico",
-	})
+	siteMeta := buildCVSiteMetadata()
+	web.RegisterSiteMetadata([]string{cvSitePathPrefix}, siteMeta)
+	log.Logger.Debug("register cv site metadata",
+		zap.String("path_prefix", cvSitePathPrefix),
+		zap.String("site_id", siteMeta.ID),
+		zap.String("theme", siteMeta.Theme),
+		zap.String("title", siteMeta.Title),
+		zap.String("favicon_source", "web.sites_or_default"))
 
 	h := &handler{
 		store:      store,
@@ -44,10 +69,28 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 		pdfService: pdfService,
 	}
 
-	grp := web.Server.Group("/cv")
+	grp := web.Server.Group(cvSitePathPrefix)
+	grp.GET("/meta", h.getPageMeta)
 	grp.GET("/content", h.getContent)
 	grp.PUT("/content", auth.AuthMw, h.saveContent)
 	grp.GET("/pdf", h.downloadPDF)
+}
+
+// getPageMeta returns resolved CV page metadata for the current request host/path.
+func (h *handler) getPageMeta(c *gin.Context) {
+	logger := gmw.GetLogger(c)
+	meta := web.ResolveSiteMetadata(c.Request.Host, c.Request.URL.Path)
+	resp := pageMetaResponse{
+		Favicon: meta.Favicon,
+		OGImage: meta.OGImage,
+	}
+
+	logger.Debug("cv page metadata resolved",
+		zap.String("host", c.Request.Host),
+		zap.String("path", c.Request.URL.Path),
+		zap.String("favicon", resp.Favicon),
+		zap.String("og_image", resp.OGImage))
+	c.JSON(http.StatusOK, resp)
 }
 
 // getContent returns the stored CV markdown content.

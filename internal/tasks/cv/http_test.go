@@ -2,6 +2,7 @@ package cv
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // newCVTestContext builds a gin context for the provided method and URL and returns the context plus recorder.
@@ -22,6 +25,49 @@ func newCVTestContext(method string, url string) (*gin.Context, *httptest.Respon
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = req
 	return ctx, recorder
+}
+
+// TestBuildCVSiteMetadata verifies base CV metadata keeps favicon inheriting from global site metadata.
+// It takes a testing.T and returns no values.
+func TestBuildCVSiteMetadata(t *testing.T) {
+	t.Parallel()
+
+	meta := buildCVSiteMetadata()
+	require.Equal(t, cvSiteID, meta.ID)
+	require.Equal(t, cvSiteTheme, meta.Theme)
+	require.Equal(t, cvSiteTitle, meta.Title)
+	require.Empty(t, meta.Favicon)
+}
+
+// TestGetPageMeta verifies the CV metadata endpoint returns resolved favicon and og:image.
+// It takes a testing.T and returns no values.
+func TestGetPageMeta(t *testing.T) {
+	web.RegisterSiteMetadata([]string{cvSitePathPrefix}, web.SiteMetadata{
+		ID:      cvSiteID,
+		Theme:   cvSiteTheme,
+		Title:   cvSiteTitle,
+		Favicon: "https://example.com/cv.ico",
+		OGImage: "https://example.com/cv-og.png",
+	})
+
+	h := &handler{}
+	ctx, recorder := newCVTestContext(http.MethodGet, "/cv/meta")
+	ctx.Request.Host = "127.0.0.1:24456"
+
+	h.getPageMeta(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload pageMetaResponse
+	err := json.NewDecoder(resp.Body).Decode(&payload)
+	require.NoError(t, err)
+	require.Equal(t, "https://example.com/cv.ico", payload.Favicon)
+	require.Equal(t, "https://example.com/cv-og.png", payload.OGImage)
 }
 
 // TestDownloadPDFSetsNoCacheHeaders verifies PDF responses disable caching; it takes a testing.T and returns no values.

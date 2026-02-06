@@ -92,6 +92,12 @@ func getSiteMetadata(logger glog.Logger, host, path string) SiteMetadata {
 	return defaultMeta
 }
 
+// ResolveSiteMetadata returns resolved metadata for host and path without debug logging.
+// It takes host and path strings and returns merged site metadata with defaults applied.
+func ResolveSiteMetadata(host, path string) SiteMetadata {
+	return getSiteMetadata(nil, host, path)
+}
+
 // normalizeHost normalizes the provided host string for metadata matching and returns the normalized host.
 func normalizeHost(host string) string {
 	host = strings.TrimSpace(host)
