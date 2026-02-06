@@ -6,6 +6,9 @@ html {
 
 .cv-page {
   min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
   color: #0b1020;
   font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif;
   background:
@@ -21,6 +24,7 @@ html {
 }
 
 .cv-shell {
+  width: min(1120px, 100%);
   max-width: 1120px;
   margin: 0 auto;
   padding: 56px 24px 80px;
@@ -106,6 +110,7 @@ html {
   display: grid;
   gap: 32px;
   margin-top: 48px;
+  min-width: 0;
 }
 
 .cv-aside {
@@ -208,14 +213,17 @@ html {
     opacity: 0;
     transform: translateX(-10px);
   }
+
   10% {
     opacity: 1;
     transform: translateX(0);
   }
+
   80% {
     opacity: 1;
     transform: translateX(0);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-10px);
@@ -246,6 +254,7 @@ html {
   0% {
     transform: scale(0);
   }
+
   100% {
     transform: scale(1);
   }
@@ -352,11 +361,25 @@ html {
 }
 
 .cv-main {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--cv-border);
   border-radius: 26px;
   padding: 32px;
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 30px 50px -35px var(--cv-shadow);
+}
+
+.cv-content {
+  min-width: 0;
+  max-width: none;
+  overflow-wrap: anywhere;
+}
+
+.cv-content pre,
+.cv-content table {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .cv-loading {
@@ -565,6 +588,47 @@ html {
 
   .cv-grid {
     grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .cv-shell {
+    padding: 26px 14px 44px;
+  }
+
+  .cv-grid {
+    margin-top: 28px;
+    gap: 20px;
+  }
+
+  .cv-main {
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+
+  .cv-copy-feedback {
+    left: 0;
+    top: calc(100% + 8px);
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .cv-shell {
+    padding: 20px 10px 36px;
+  }
+
+  .cv-main {
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
+
+  .cv-title {
+    font-size: clamp(2rem, 11vw, 2.6rem);
+  }
+
+  .cv-kicker {
+    letter-spacing: 0.28em;
   }
 }
 

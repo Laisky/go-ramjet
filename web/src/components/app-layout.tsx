@@ -41,7 +41,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className={cn(
           containerClass,
           'flex-1 min-h-0',
-          isChatPage ? 'flex flex-col py-0' : 'py-6',
+          isSpecialPage ? 'py-0' : 'py-6',
+          isChatPage && 'flex flex-col',
         )}
       >
         {children}
