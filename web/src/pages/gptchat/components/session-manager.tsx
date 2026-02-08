@@ -1,4 +1,3 @@
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -40,6 +39,7 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
+import { ConfirmAction } from './confirm-action'
 
 interface SessionManagerProps {
   sessions: { id: number; name: string; visible: boolean }[]
@@ -348,10 +348,9 @@ function SortableSessionItem({
             )}
 
             {canDelete && (
-              <ConfirmDialog
-                title="Delete Session"
-                description={`Are you sure you want to delete "${session.name}"? This will delete all chat history and settings for this session.`}
-                variant="destructive"
+              <ConfirmAction
+                action="delete-session"
+                context={{ sessionName: session.name }}
                 onConfirm={() => onDeleteSession(session.id)}
                 trigger={
                   <DropdownMenuItem

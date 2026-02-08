@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import type { ChatAttachment, ChatMessageData } from '../types'
+import { ConfirmAction } from './confirm-action'
 
 export interface ChatMessageHeaderProps {
   message: ChatMessageData
@@ -286,18 +287,21 @@ export function ChatMessageHeader({
         )}
 
         {onDelete && (
-          <TooltipWrapper content="Delete message" side={effectiveTooltipSide}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDelete}
-              className="h-7 w-7 rounded-md p-0 text-destructive"
-              title="Delete message"
-              aria-label="Delete message"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipWrapper>
+          <ConfirmAction
+            action="delete-message"
+            onConfirm={handleDelete}
+            trigger={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 rounded-md p-0 text-destructive"
+                title="Delete message"
+                aria-label="Delete message"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            }
+          />
         )}
       </div>
     </div>

@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { ConfirmAction } from './confirm-action'
 import { DataSyncManager } from './data-sync-manager'
 import { DatasetManager } from './dataset-manager'
 import { McpServerManager } from './mcp-server-manager'
@@ -396,10 +397,8 @@ export function ConfigSidebar({
 
           {/* Actions */}
           <div className="flex gap-2 border-t border-border pt-4">
-            <ConfirmDialog
-              title="Clear Chat History"
-              description="Are you sure you want to clear all chat history in this session? This action cannot be undone."
-              variant="destructive"
+            <ConfirmAction
+              action="clear-chat-history"
               onConfirm={onClearChats}
               trigger={
                 <Button
@@ -429,10 +428,8 @@ export function ConfigSidebar({
             />
 
             {onPurgeAllSessions && (
-              <ConfirmDialog
-                title="Purge All Sessions"
-                variant="destructive"
-                description="Remove every session, config, and chat history while keeping your current API token and base URL. This cannot be undone."
+              <ConfirmAction
+                action="purge-all-sessions"
                 onConfirm={onPurgeAllSessions}
                 trigger={
                   <Button

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatMessageData } from '../../types'
 import { ChatMessageHeader } from '../chat-message-header'
@@ -17,6 +18,7 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <div data-testid="trash-icon" />,
   Volume2: () => <div data-testid="volume2-icon" />,
   VolumeX: () => <div data-testid="volumex-icon" />,
+  X: () => <div data-testid="x-icon" />,
 }))
 
 describe('ChatMessageHeader', () => {
@@ -36,8 +38,9 @@ describe('ChatMessageHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Mock navigator.clipboard
-    Object.assign(navigator, {
-      clipboard: {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
         writeText: vi.fn().mockImplementation(() => Promise.resolve()),
       },
     })
@@ -67,12 +70,17 @@ describe('ChatMessageHeader', () => {
     expect(screen.getByTestId('check-icon')).toBeInTheDocument()
   })
 
-  it('handles delete action', () => {
+  it('requires confirmation before delete action', async () => {
     const onDelete = vi.fn()
+    const user = userEvent.setup()
     render(<ChatMessageHeader message={mockMessage} onDelete={onDelete} />)
     const deleteButton = screen.getByTitle('Delete message')
 
-    fireEvent.click(deleteButton)
+    await user.click(deleteButton)
+    expect(screen.getByText('Delete Message')).toBeInTheDocument()
+    expect(onDelete).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
     expect(onDelete).toHaveBeenCalledWith('test-chat-id')
   })
 
@@ -100,8 +108,9 @@ describe('ChatMessageHeader', () => {
   })
 
   it('handles copy failure', async () => {
-    Object.assign(navigator, {
-      clipboard: {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
         writeText: vi
           .fn()
           .mockImplementation(() => Promise.reject(new Error('failed'))),

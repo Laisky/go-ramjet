@@ -191,9 +191,15 @@ export function useChatStorage({
   const clearMessages = useCallback(async () => {
     const historyKey = getSessionHistoryKey(sessionId)
     const history = await kvGet<SessionHistoryItem[]>(historyKey)
+    const chatIds = new Set((history || []).map((h) => h.chatID))
+
+    console.debug('[useChatStorage] clearMessages start', {
+      sessionId,
+      historyItems: history?.length || 0,
+      chatPairs: chatIds.size,
+    })
 
     if (history) {
-      const chatIds = new Set(history.map((h) => h.chatID))
       for (const chatId of chatIds) {
         await recordDeletedChatId(chatId)
         await kvDel(getChatDataKey(chatId, 'user'))
@@ -203,10 +209,18 @@ export function useChatStorage({
 
     await kvSet(historyKey, [])
     setMessages([])
+    console.debug('[useChatStorage] clearMessages complete', {
+      sessionId,
+      chatPairsCleared: chatIds.size,
+    })
   }, [sessionId, setMessages])
 
   const deleteMessage = useCallback(
     async (chatId: string) => {
+      console.debug('[useChatStorage] deleteMessage start', {
+        sessionId,
+        chatId,
+      })
       await recordDeletedChatId(chatId)
       await kvDel(getChatDataKey(chatId, 'user'))
       await kvDel(getChatDataKey(chatId, 'assistant'))
@@ -219,6 +233,10 @@ export function useChatStorage({
       }
 
       setMessages((prev) => prev.filter((m) => m.chatID !== chatId))
+      console.debug('[useChatStorage] deleteMessage complete', {
+        sessionId,
+        chatId,
+      })
     },
     [sessionId, setMessages],
   )

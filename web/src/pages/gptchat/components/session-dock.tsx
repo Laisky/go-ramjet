@@ -1,4 +1,3 @@
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   Tooltip,
   TooltipContent,
@@ -7,6 +6,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/utils/cn'
 import { Plus, Trash2 } from 'lucide-react'
+import { ConfirmAction } from './confirm-action'
 
 interface SessionDockProps {
   sessions: { id: number; name: string; visible: boolean }[]
@@ -77,28 +77,19 @@ export function SessionDock({
       </div>
 
       <div className="flex w-full flex-col border-t border-border">
-        <TooltipProvider>
-          <ConfirmDialog
-            title="Clear Chat History"
-            description="Are you sure you want to clear all chat history for the current session? This action cannot be undone."
-            onConfirm={onClearChats}
-            trigger={
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
-                    aria-label="Clear Chat History"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Clear Chat History</p>
-                </TooltipContent>
-              </Tooltip>
-            }
-          />
-        </TooltipProvider>
+        <ConfirmAction
+          action="clear-chat-history"
+          onConfirm={onClearChats}
+          trigger={
+            <button
+              className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
+              aria-label="Clear Chat History"
+              title="Clear Chat History"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          }
+        />
       </div>
     </div>
   )

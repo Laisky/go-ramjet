@@ -24,7 +24,11 @@ import { setPageFavicon, setPageTitle } from '@/utils/dom'
 
 import { parseCvContent } from './cv-helpers'
 import { CvMarkdown } from './cv-markdown'
-import { mergeCVPageMeta, resolveCVPageMeta, type CVPageMetaPayload } from './page-meta'
+import {
+  mergeCVPageMeta,
+  resolveCVPageMeta,
+  type CVPageMetaPayload,
+} from './page-meta'
 
 type CvContentPayload = {
   content: string
@@ -436,7 +440,13 @@ export function CVPage() {
     setMetaTag('property', 'og:description', parsed.summaryLine)
     setMetaTag('property', 'og:type', 'profile')
     setMetaTag('property', 'og:image', pageMeta.ogImage)
-  }, [content, pageMeta.faviconHref, pageMeta.ogImage, parsed.summaryLine, parsed.title])
+  }, [
+    content,
+    pageMeta.faviconHref,
+    pageMeta.ogImage,
+    parsed.summaryLine,
+    parsed.title,
+  ])
 
   return (
     <div className="cv-page">
