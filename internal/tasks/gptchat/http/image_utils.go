@@ -97,6 +97,36 @@ func DecodeBase64(input string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(input)
 }
 
+const (
+	metadataSkipReasonEmpty        = "empty_prompt"
+	metadataSkipReasonInvalidChars = "invalid_chars"
+)
+
+// isASCIIPrintable returns true when input contains only ASCII printable characters.
+func isASCIIPrintable(input string) bool {
+	for _, r := range input {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+
+	return true
+}
+
+// buildImageUserMetadata returns safe metadata and a skip reason if the prompt is not eligible.
+func buildImageUserMetadata(prompt string) (map[string]string, string) {
+	if prompt == "" {
+		return nil, metadataSkipReasonEmpty
+	}
+	if !isASCIIPrintable(prompt) {
+		return nil, metadataSkipReasonInvalidChars
+	}
+
+	return map[string]string{
+		"prompt": prompt,
+	}, ""
+}
+
 func uploadImage2Minio(ctx context.Context,
 	objkeyPrefix,
 	prompt string,
@@ -110,17 +140,24 @@ func uploadImage2Minio(ctx context.Context,
 	}
 
 	objkey := objkeyPrefix + imgExt
+	userMetadata, skipReason := buildImageUserMetadata(prompt)
+	putOpts := minio.PutObjectOptions{
+		ContentType: "image/png",
+	}
+	if len(userMetadata) > 0 {
+		putOpts.UserMetadata = userMetadata
+	} else if skipReason != "" {
+		logger.Debug("skip prompt metadata",
+			zap.String("reason", skipReason),
+			zap.Int("prompt_len", len(prompt)))
+	}
+
 	if _, err := s3cli.PutObject(ctx,
 		config.Config.S3.Bucket,
 		objkey,
 		bytes.NewReader(imgContent),
 		int64(len(imgContent)),
-		minio.PutObjectOptions{
-			ContentType: "image/png",
-			UserMetadata: map[string]string{
-				"prompt": prompt,
-			},
-		}); err != nil {
+		putOpts); err != nil {
 		return errors.Wrap(err, "upload image")
 	}
 

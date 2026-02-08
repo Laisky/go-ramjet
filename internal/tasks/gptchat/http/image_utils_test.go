@@ -44,3 +44,21 @@ func TestExtractPromptFromMessages(t *testing.T) {
 
 	require.Equal(t, "second", prompt)
 }
+
+func TestBuildImageUserMetadata(t *testing.T) {
+	metadata, reason := buildImageUserMetadata("simple prompt")
+	require.Empty(t, reason)
+	require.Equal(t, map[string]string{"prompt": "simple prompt"}, metadata)
+
+	metadata, reason = buildImageUserMetadata("")
+	require.Equal(t, metadataSkipReasonEmpty, reason)
+	require.Nil(t, metadata)
+
+	metadata, reason = buildImageUserMetadata("line\nbreak")
+	require.Equal(t, metadataSkipReasonInvalidChars, reason)
+	require.Nil(t, metadata)
+
+	metadata, reason = buildImageUserMetadata("中文")
+	require.Equal(t, metadataSkipReasonInvalidChars, reason)
+	require.Nil(t, metadata)
+}
