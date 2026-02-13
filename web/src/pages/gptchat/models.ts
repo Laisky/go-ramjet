@@ -181,6 +181,8 @@ export const FreeModels = [
   ChatModelGroqLlama4,
   ChatModelQwen332B,
   ChatModelGPT4OMini,
+  ChatModelGPT41Nano,
+  ChatModelGPT5Nano,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
   ChatModelDeepSeekChat,
