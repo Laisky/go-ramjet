@@ -37,6 +37,8 @@ var (
 
 const (
 	freeModelRateLimitCost = 3
+	freeUserMaxTokens      = 4500
+	freeUserMaxResponses   = 1
 )
 
 // GetCurrentUser get current user
@@ -253,14 +255,86 @@ func DownloadUserConfig(ctx *gin.Context) {
 	ctx.Data(200, "application/json", gzout.Bytes())
 }
 
+// findLastUserMessageIdx returns the index of the last user message in messages.
+//
+// findLastUserMessageIdx returns -1 when no user message exists.
+func findLastUserMessageIdx(messages []FrontendReqMessage) int {
+	for idx := len(messages) - 1; idx >= 0; idx-- {
+		if messages[idx].Role == OpenaiMessageRoleUser {
+			return idx
+		}
+	}
+
+	return -1
+}
+
+// findOldestRemovableMessageIdx returns the oldest message index that can be dropped.
+//
+// findOldestRemovableMessageIdx keeps firstSystemIdx and lastUserIdx untouched and
+// returns -1 when no removable message remains.
+func findOldestRemovableMessageIdx(messages []FrontendReqMessage, firstSystemIdx, lastUserIdx int) int {
+	for idx := range messages {
+		if idx == firstSystemIdx || idx == lastUserIdx {
+			continue
+		}
+
+		return idx
+	}
+
+	return -1
+}
+
+// applyFreeUserQuotaLimits adjusts req in place to satisfy free-user quotas.
+//
+// applyFreeUserQuotaLimits caps req.MaxTokens/req.N and drops oldest req.Messages
+// while preserving the first system message and the last user message. It returns
+// dropped message count, final prompt token count, whether req was changed, and an
+// error when prompt tokens still exceed promptTokenLimit with no removable messages.
+func applyFreeUserQuotaLimits(req *FrontendReq, promptTokenLimit int) (droppedMessages int, finalPromptTokens int, changed bool, err error) {
+	if req.MaxTokens > freeUserMaxTokens {
+		req.MaxTokens = freeUserMaxTokens
+		changed = true
+	}
+
+	if req.N > freeUserMaxResponses {
+		req.N = freeUserMaxResponses
+		changed = true
+	}
+
+	firstSystemIdx := -1
+	if len(req.Messages) > 0 && req.Messages[0].Role == OpenaiMessageRoleSystem {
+		firstSystemIdx = 0
+	}
+	lastUserIdx := findLastUserMessageIdx(req.Messages)
+
+	finalPromptTokens = req.PromptTokens()
+	for promptTokenLimit > 0 && finalPromptTokens > promptTokenLimit && len(req.Messages) > 0 {
+		oldestRemovableIdx := findOldestRemovableMessageIdx(req.Messages, firstSystemIdx, lastUserIdx)
+		if oldestRemovableIdx < 0 {
+			return droppedMessages, finalPromptTokens, changed,
+				errors.Errorf("prompt tokens %d exceeds free-user limit %d even after preserving first system and last user messages",
+					finalPromptTokens, promptTokenLimit)
+		}
+
+		req.Messages = append(req.Messages[:oldestRemovableIdx], req.Messages[oldestRemovableIdx+1:]...)
+		droppedMessages++
+		changed = true
+
+		if oldestRemovableIdx < lastUserIdx {
+			lastUserIdx--
+		}
+		finalPromptTokens = req.PromptTokens()
+	}
+
+	return droppedMessages, finalPromptTokens, changed, nil
+}
+
 // IsModelAllowed check if model is allowed
 func IsModelAllowed(ctx context.Context,
 	user *config.UserConfig,
 	req *FrontendReq) error {
 	onceLimiter.Do(setupRateLimiter)
 	logger := gmw.GetLogger(ctx)
-
-	nPromptTokens := req.PromptTokens()
 
 	switch {
 	case user.BYOK: // bypass if user bring their own token
@@ -338,24 +412,19 @@ func IsModelAllowed(ctx context.Context,
 	}
 
 	if !user.NoLimitExpensiveModels {
-		if user.LimitPromptTokenLength > 0 && nPromptTokens > user.LimitPromptTokenLength {
-			return errors.Errorf(
-				"The length of the prompt you submitted is %d, exceeds the limit for free users %d, "+
-					"you need upgrade to a paid membership to use longer prompt tokens, "+
-					"more info at https://wiki.laisky.com/projects/gpt/pay/",
-				nPromptTokens, user.LimitPromptTokenLength)
+		droppedMessages, finalPromptTokens, changed, err := applyFreeUserQuotaLimits(req, user.LimitPromptTokenLength)
+		if err != nil {
+			return errors.WithStack(err)
 		}
 
-		if req.MaxTokens > 4500 {
-			return errors.New("max_tokens is limited to 4500 for free users, " +
-				"you need upgrade to a paid membership to use larger max_tokens, " +
-				"more info at https://wiki.laisky.com/projects/gpt/pay/")
-		}
-
-		if req.N > 1 {
-			return errors.New("free users are limited to 1 response per request, " +
-				"you need upgrade to a paid membership to use larger n, " +
-				"more info at https://wiki.laisky.com/projects/gpt/pay/")
+		if changed {
+			logger.Debug("auto adjusted free user request to satisfy quota",
+				zap.String("model", req.Model),
+				zap.Int("dropped_messages", droppedMessages),
+				zap.Int("prompt_tokens", finalPromptTokens),
+				zap.Uint("max_tokens", req.MaxTokens),
+				zap.Int("n", req.N),
+			)
 		}
 	}
 

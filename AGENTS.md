@@ -1,6 +1,8 @@
-# Repository Guidelines
+# Agents Guidelines
 
-## Project
+**No matter what language you receive, Only using English as output for codes, comments, chat, documents and everything else.**
+
+## This Project
 
 The purpose of this project is to implement a CRON job server that supports various tasks, each task being an independent directory under `internal/tasks/`.
 
@@ -8,17 +10,15 @@ Each task also can handle web requests, so the project also includes a web serve
 
 Local tools and debugging related sensitive information is saved in .github/instructions/laisky.instructions.md.
 
-### Codes
-
-All code must be written in English. Avoid using any other languages in code, comments, or documentation.
-
-Every single code file should not exceed 800 lines. If a file exceeds this limit, please split it into smaller files based on functionality. Automatically generated files are exempt from this rule.
-
 ### Debug & Logging
 
 When debugging, add targeted DEBUG logs that include essential details to help developers pinpoint hard‑to‑diagnose issues. After debugging, retain any logs that could be useful for future troubleshooting, but **never** include sensitive data like API keys or passwords in those logs.
 
 ## General
+
+Every single code file should not exceed 800 lines. If a file exceeds this limit, please split it into smaller files based on functionality. Automatically generated files are exempt from this rule.
+
+When debugging, add targeted DEBUG logs that include essential details to help developers pinpoint hard‑to‑diagnose issues. After debugging, retain any logs that could be useful for future troubleshooting, but **never** include sensitive data like API keys or passwords in those logs.
 
 ### Agents
 
@@ -26,7 +26,13 @@ Multiple agents might be modifying the code at the same time. If you come across
 
 Should use TODOs tool to track tasks and progress.
 
-After making any code changes, always verify that the code is correct: the syntax must be valid, the project should still build successfully(via `go vet ./...` or `make build`), and all unit tests must pass. If any test fails, investigate whether the problem lies in the implementation or the test itself, and, respecting the user's specifications, fix the issue carefully.
+After making any code changes, always verify that the code is correct: the syntax must be valid, the project should still build successfully(via `go vet ./...`, `go test -race ./...` or `make build-frontend-modern`), and all unit tests must pass. If any test fails, investigate whether the problem lies in the implementation or the test itself, and, respecting the user's specifications, fix the issue carefully.
+
+### Security
+
+Always use constant time comparison for sensitive data. Follow OWASP recommendations for password hashing iterations (minimum 10,000 in this context).
+
+Never directly use user input or any untrusted external input to build a database query or allocate memory, to prevent injection or DoS attacks. Always sanitize and validate user inputs before using them in queries.
 
 ### TimeZone
 
@@ -47,17 +53,17 @@ Use `"github.com/stretchr/testify/require"` for assertions in tests.
 Every function/interface must have a comment explaining its purpose, parameters, and return values. This is crucial for maintaining code clarity and facilitating future maintenance.
 The comment should start with the function/interface name and be in complete sentences.
 
-### Golang Style
+## Golang Style
 
 This project is developed and run using Go 1.25. Please use the newest Go syntax and features as much as possible.
 
 Ideally, a single file should not exceed 600 lines. Please split the overly long files according to their functionality.
 
-#### Context
+### Context
 
 Whenever feasible, utilize context to manage the lifecycle of the call chain.
 
-#### Golang Error Handling
+### Golang Error Handling
 
 All errors should be handled, and the error handling should be as close to the source of the error as possible.
 
@@ -69,7 +75,7 @@ Every error must be processed a single time—either returned or logged—but ne
 
 Avoid returning raw errors; wrap them with errors.Wrap, errors.Wrapf, or errors.WithStack to preserve essential stack traces and contextual information.
 
-#### Golang ORM
+### Golang ORM
 
 Use `gorm.io/gorm`, never use `gorm.io/gorm/clause`/`Preload`.
 
@@ -93,7 +99,7 @@ db.Model(&User{}).
 
 ```
 
-#### Logging
+### Logging
 
 All code paths invoked by a request must use `gmw.GetLogger(c)` to retrieve the logger instead of the global `logger.Logger`. The logger returned by `gmw.GetLogger(c)` embeds rich call‑specific context.
 
@@ -104,13 +110,13 @@ Adopt these logger and error‑handling best practices:
 3. Prefer the structured Zap logger over `fmt.Sprintf` for log messages.
 4. Never swallow errors silently; every error should be returned or recorded in the logs.
 
-### CSS Style
+## CSS Style
 
 Avoid using `!important` in CSS. If you find yourself needing to use it, consider whether the CSS can be refactored to avoid this necessity.
 
 Avoid inline styles in HTML or JSX. Instead, use CSS classes to manage styles. This approach promotes better maintainability and separation of concerns in your codebase.
 
-### Web
+## Web
 
 When using the web console for debugging, avoid logging objects—they’re hard to copy. Strive to log only strings, making it simple for me to copy all the output and analyze it.
 
