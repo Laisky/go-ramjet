@@ -170,7 +170,7 @@ type OpenAI struct {
 	LimitUploadFileBytes int `json:"limit_upload_file_bytes" mapstructure:"limit_upload_file_bytes"`
 	// EnableMemory enables transparent memory hooks in chat flow.
 	EnableMemory bool `json:"enable_memory" mapstructure:"enable_memory"`
-	// MemoryProject is the memory project namespace, default to go-ramjet.
+	// MemoryProject is the memory project namespace, default to go-ramjet-memory
 	MemoryProject string `json:"memory_project" mapstructure:"memory_project"`
 	// MemoryStorageMCPURL is MCP endpoint for memory storage backend, default to https://mcp.laisky.com
 	MemoryStorageMCPURL string `json:"memory_storage_mcp_url" mapstructure:"memory_storage_mcp_url"`

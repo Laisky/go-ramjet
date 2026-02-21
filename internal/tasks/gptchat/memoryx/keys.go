@@ -33,7 +33,7 @@ func BuildRuntimeKeys(conf *config.OpenAI, user *config.UserConfig, header http.
 	keys := RuntimeKeys{UserID: strings.TrimSpace(user.UserName), TurnID: uuid.NewString()}
 	keys.Project = strings.TrimSpace(conf.MemoryProject)
 	if keys.Project == "" {
-		keys.Project = "gptchat"
+		keys.Project = "go-ramjet-memory"
 	}
 
 	keys.SessionID = sessionIDFromAPIKey(user)
@@ -44,7 +44,7 @@ func BuildRuntimeKeys(conf *config.OpenAI, user *config.UserConfig, header http.
 	return keys
 }
 
-// sessionIDFromAPIKey derives a stable memory session id from user api key.
+// sessionIDFromAPIKey derives a stable memory session id from user tokens.
 //
 // Parameters:
 //   - user: Authenticated user config.
@@ -56,9 +56,9 @@ func sessionIDFromAPIKey(user *config.UserConfig) string {
 		return ""
 	}
 
-	raw := strings.TrimSpace(user.OpenaiToken)
+	raw := strings.TrimSpace(user.Token)
 	if raw == "" {
-		raw = strings.TrimSpace(user.Token)
+		raw = strings.TrimSpace(user.OpenaiToken)
 	}
 	if raw == "" {
 		return ""

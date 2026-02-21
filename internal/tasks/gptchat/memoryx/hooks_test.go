@@ -9,8 +9,9 @@ import (
 	"github.com/Laisky/go-utils/v6/agents/files"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-utils/v6/agents/memory"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 type stubEngine struct {
