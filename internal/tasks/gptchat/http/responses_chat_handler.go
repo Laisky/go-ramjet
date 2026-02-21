@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/memoryx"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -27,6 +28,15 @@ import (
 const defaultToolLoopMaxRounds = 5
 
 const toolStepMarker = "[[TOOLS]] "
+
+const (
+	ctxKeyMemoryTurn = "ctx_memory_turn"
+)
+
+type memoryTurnContext struct {
+	Enabled bool
+	Keys    memoryx.RuntimeKeys
+}
 
 // ChatHandler handles the web UI chat endpoint.
 //
@@ -141,6 +151,9 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 
 	// If MCP is enabled (api keys present), skip cache to avoid persisting secrets.
 	cacheAllowed := true
+	if config.Config != nil && config.Config.EnableMemory {
+		cacheAllowed = false
+	}
 	for _, srv := range frontendReq.MCPServers {
 		if strings.TrimSpace(srv.APIKey) != "" {
 			cacheAllowed = false
@@ -290,6 +303,30 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
 		if frontendReq != nil && len(frontendReq.Messages) > 0 && finalText != "" {
 			go saveLLMConservation(frontendReq, finalText, fullReasoning)
+		}
+	}
+
+	if memoryState, ok := ctx.Get(ctxKeyMemoryTurn); ok {
+		if state, ok := memoryState.(memoryTurnContext); ok && state.Enabled {
+			if err = memoryx.AfterTurnHook(gmw.Ctx(ctx), config.Config, user, state.Keys, inputItems, finalText); err != nil {
+				logger.Warn("memory after turn failed",
+					zap.Bool("memory_enabled", true),
+					zap.String("memory_project", state.Keys.Project),
+					zap.String("memory_session_id", state.Keys.SessionID),
+					zap.String("memory_turn_id", state.Keys.TurnID),
+					zap.Int("memory_after_output_chars", len(finalText)),
+					zap.String("memory_error_stage", "after_turn"),
+					zap.Error(err),
+				)
+			} else {
+				logger.Debug("memory after turn completed",
+					zap.Bool("memory_enabled", true),
+					zap.String("memory_project", state.Keys.Project),
+					zap.String("memory_session_id", state.Keys.SessionID),
+					zap.String("memory_turn_id", state.Keys.TurnID),
+					zap.Int("memory_after_output_chars", len(finalText)),
+				)
+			}
 		}
 	}
 
@@ -679,11 +716,61 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 		return nil, nil, nil, errors.Wrap(err, "convert to responses request")
 	}
 
+	memoryState := memoryTurnContext{Enabled: config.Config != nil && config.Config.EnableMemory}
+	if memoryState.Enabled {
+		inputItems, flattenErr := flattenResponsesInput(responsesReq.Input)
+		if flattenErr != nil {
+			logger.Warn("memory before turn skipped",
+				zap.Bool("memory_enabled", true),
+				zap.String("memory_error_stage", "flatten_input"),
+				zap.Error(flattenErr),
+			)
+		} else {
+			beforeResult, beforeErr := memoryx.BeforeTurnHook(
+				gmw.Ctx(ctx),
+				config.Config,
+				user,
+				ctx.Request.Header,
+				inputItems,
+				120000,
+			)
+			memoryState.Keys = beforeResult.Keys
+			if beforeErr != nil {
+				logger.Warn("memory before turn failed",
+					zap.Bool("memory_enabled", true),
+					zap.Bool("memory_cold_start_fallback", beforeResult.ColdStartFallback),
+					zap.String("memory_project", beforeResult.Keys.Project),
+					zap.String("memory_session_id", beforeResult.Keys.SessionID),
+					zap.String("memory_turn_id", beforeResult.Keys.TurnID),
+					zap.Int("memory_before_items", len(beforeResult.InputItems)),
+					zap.Int("memory_recall_fact_ids_count", len(beforeResult.RecallFactIDs)),
+					zap.Int("memory_context_tokens", beforeResult.ContextTokenCount),
+					zap.String("memory_error_stage", "before_turn"),
+					zap.Error(beforeErr),
+				)
+			} else {
+				responsesReq.Input = beforeResult.PreparedInput
+				logger.Debug("memory before turn completed",
+					zap.Bool("memory_enabled", true),
+					zap.Bool("memory_cold_start_fallback", beforeResult.ColdStartFallback),
+					zap.String("memory_project", beforeResult.Keys.Project),
+					zap.String("memory_session_id", beforeResult.Keys.SessionID),
+					zap.String("memory_turn_id", beforeResult.Keys.TurnID),
+					zap.Int("memory_before_items", len(beforeResult.InputItems)),
+					zap.Int("memory_recall_fact_ids_count", len(beforeResult.RecallFactIDs)),
+					zap.Int("memory_context_tokens", beforeResult.ContextTokenCount),
+				)
+			}
+		}
+	}
+	ctx.Set(ctxKeyMemoryTurn, memoryState)
+
 	logger.Debug("prepared responses request",
 		zap.String("model", responsesReq.Model),
 		zap.Int("tools", len(responsesReq.Tools)),
 		zap.Bool("enable_mcp", frontendReq.EnableMCP != nil && *frontendReq.EnableMCP),
 		zap.Int("mcp_servers", len(frontendReq.MCPServers)),
+		zap.Bool("memory_enabled", memoryState.Enabled),
 	)
 
 	return frontendReq, user, responsesReq, nil

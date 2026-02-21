@@ -58,6 +58,11 @@ func SetupConfig() (err error) {
 		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
+	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet"))
+	Config.MemoryStorageMCPURL = trimUrl(gutils.OptionalVal(&Config.MemoryStorageMCPURL, "https://mcp.laisky.com"))
+	Config.MemoryModel = gutils.OptionalVal(&Config.MemoryModel, "openai/gpt-oss-120b")
+	Config.MemoryLLMTimeoutSeconds = gutils.OptionalVal(&Config.MemoryLLMTimeoutSeconds, 15)
+	Config.MemoryLLMMaxOutputTokens = gutils.OptionalVal(&Config.MemoryLLMMaxOutputTokens, 512)
 	// Config.DefaultOpenaiToken = gutils.OptionalVal(
 	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
@@ -67,6 +72,24 @@ func SetupConfig() (err error) {
 	Config.API = strings.TrimRight(Config.API, "/")
 	Config.ExternalBillingAPI = strings.TrimRight(Config.ExternalBillingAPI, "/")
 	Config.RamjetURL = strings.TrimRight(Config.RamjetURL, "/")
+
+	if Config.MemoryProject == "" {
+		return errors.New("openai.memory_project is empty")
+	}
+
+	if Config.EnableMemory {
+		if Config.MemoryStorageMCPURL == "" {
+			return errors.New("openai.memory_storage_mcp_url is required when memory is enabled")
+		}
+	}
+
+	if Config.MemoryLLMTimeoutSeconds <= 0 {
+		return errors.New("openai.memory_llm_timeout_seconds should be > 0")
+	}
+
+	if Config.MemoryLLMMaxOutputTokens <= 0 {
+		return errors.New("openai.memory_llm_max_output_tokens should be > 0")
+	}
 
 	return nil
 }
@@ -145,6 +168,18 @@ type OpenAI struct {
 	LcmBasicAuthPassword string `json:"lcm_basic_auth_password" mapstructure:"lcm_basic_auth_password"`
 	// LimitUploadFileBytes (optional) limit upload file bytes, default is 20MB
 	LimitUploadFileBytes int `json:"limit_upload_file_bytes" mapstructure:"limit_upload_file_bytes"`
+	// EnableMemory enables transparent memory hooks in chat flow.
+	EnableMemory bool `json:"enable_memory" mapstructure:"enable_memory"`
+	// MemoryProject is the memory project namespace, default to go-ramjet.
+	MemoryProject string `json:"memory_project" mapstructure:"memory_project"`
+	// MemoryStorageMCPURL is MCP endpoint for memory storage backend, default to https://mcp.laisky.com
+	MemoryStorageMCPURL string `json:"memory_storage_mcp_url" mapstructure:"memory_storage_mcp_url"`
+	// MemoryModel is optional model used by heuristic memory extraction, default is openai/gpt-oss-120b
+	MemoryModel string `json:"memory_model" mapstructure:"memory_model"`
+	// MemoryLLMTimeoutSeconds is timeout for heuristic memory LLM calls.
+	MemoryLLMTimeoutSeconds int `json:"memory_llm_timeout_seconds" mapstructure:"memory_llm_timeout_seconds"`
+	// MemoryLLMMaxOutputTokens limits output tokens for heuristic memory LLM calls.
+	MemoryLLMMaxOutputTokens int `json:"memory_llm_max_output_tokens" mapstructure:"memory_llm_max_output_tokens"`
 
 	// Azure (optional) azure config
 	Azure azureConfig `json:"azure" mapstructure:"azure"`

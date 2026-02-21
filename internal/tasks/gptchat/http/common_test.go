@@ -83,3 +83,40 @@ func TestGetUserByAuthHeader_SKTokenUsesOwnImageToken(t *testing.T) {
 		t.Fatalf("expected BYOK to be true for sk- token user")
 	}
 }
+
+func TestGetUserByAuthHeader_ApiBaseOverrideValid(t *testing.T) {
+	setupTestConfig()
+
+	userToken := "sk-123456789abcdef"
+	ctx := newAuthContext(userToken)
+	ctx.Request.Header.Set("X-Laisky-Api-Base", "https://api.example.com")
+
+	user, err := getUserByAuthHeader(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if user.APIBase != "https://api.example.com" {
+		t.Fatalf("expected APIBase override to be applied, got %q", user.APIBase)
+	}
+	if user.ImageUrl != "https://api.example.com/v1/images/generations" {
+		t.Fatalf("expected ImageUrl to follow APIBase override, got %q", user.ImageUrl)
+	}
+}
+
+func TestGetUserByAuthHeader_ApiBaseOverrideInvalidIgnored(t *testing.T) {
+	setupTestConfig()
+
+	userToken := "sk-123456789abcdef"
+	ctx := newAuthContext(userToken)
+	ctx.Request.Header.Set("X-Laisky-Api-Base", "javascript:alert(1)")
+
+	user, err := getUserByAuthHeader(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if user.APIBase != "https://oneapi.laisky.com" {
+		t.Fatalf("expected invalid api base to be ignored, got %q", user.APIBase)
+	}
+}

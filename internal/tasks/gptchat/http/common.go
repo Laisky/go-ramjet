@@ -1,10 +1,12 @@
 package http
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -205,6 +207,8 @@ SWITCH_FOR_USER:
 			// 	user.NoLimitImageModels = true
 			// }
 		}
+
+		applyUserAPIBaseOverride(gctx, user, logger)
 	default: // use server's token in settings
 		return nil, errors.New("invalid token")
 		// for _, u := range config.Config.UserTokens {
@@ -261,4 +265,80 @@ SWITCH_FOR_USER:
 	}
 
 	return user, nil
+}
+
+// applyUserAPIBaseOverride applies strict user-provided API base for BYOK users.
+//
+// Parameters:
+//   - gctx: Current gin request context.
+//   - user: Target user config to modify in place.
+//   - logger: Request logger used for diagnostics.
+func applyUserAPIBaseOverride(gctx *gin.Context, user *config.UserConfig, logger *glog.LoggerT) {
+	if gctx == nil || user == nil || !user.BYOK {
+		return
+	}
+
+	raw := strings.TrimSpace(gctx.Request.Header.Get("X-Laisky-Api-Base"))
+	if raw == "" {
+		return
+	}
+
+	override, err := validateAPIBase(raw)
+	if err != nil {
+		logger.Warn("ignore invalid X-Laisky-Api-Base",
+			zap.String("api_base", raw),
+			zap.Error(err),
+		)
+		return
+	}
+
+	user.APIBase = override
+	switch {
+	case strings.Contains(override, "openai.azure.com"):
+		user.ImageUrl = override
+	case strings.Contains(override, "api.openai.com"):
+		user.ImageUrl = "https://api.openai.com/v1/images/generations"
+	default:
+		user.ImageUrl = override + "/v1/images/generations"
+	}
+
+	logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
+}
+
+// validateAPIBase validates and normalizes a user-provided API base URL.
+//
+// Parameters:
+//   - raw: Raw API base header value.
+//
+// Returns:
+//   - string: Normalized API base URL without trailing slash.
+//   - error: Non-nil when URL is invalid or unsafe.
+func validateAPIBase(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", errors.Wrap(err, "parse api base")
+	}
+
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return "", errors.Errorf("unsupported api base scheme %q", parsed.Scheme)
+	}
+
+	if parsed.Host == "" {
+		return "", errors.New("api base host is empty")
+	}
+
+	if parsed.User != nil {
+		return "", errors.New("api base must not contain user info")
+	}
+
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("api base must not contain query or fragment")
+	}
+
+	normalized := strings.TrimRight(parsed.String(), "/")
+	if normalized == "" {
+		return "", errors.New("api base is empty")
+	}
+
+	return normalized, nil
 }

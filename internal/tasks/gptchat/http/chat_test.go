@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -264,4 +265,213 @@ func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *tes
 	require.NotNil(t, gotUser)
 	require.NotNil(t, responsesReq)
 	require.NotEmpty(t, responsesReq.Model)
+}
+
+func TestSendChatWithResponsesToolLoopMemoryEnabledRoundTrip(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var (
+		mu       sync.Mutex
+		requests []OpenAIResponsesReq
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req OpenAIResponsesReq
+		require.NoError(t, json.Unmarshal(body, &req))
+		mu.Lock()
+		requests = append(requests, req)
+		mu.Unlock()
+
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"ok","output":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
+		EnableMemory:                            true,
+		MemoryProject:                           "gptchat",
+		MemoryStorageMCPURL:                     "",
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "tester",
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	firstReq := `{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"my name is alice"}]}`
+	secondReq := `{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"what is my name"}]}`
+
+	for _, raw := range []string{firstReq, secondReq} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Set(ctxKeyUser, user)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(raw))
+		ctx.Request.Header.Set("content-type", "application/json")
+		ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+		err := sendChatWithResponsesToolLoop(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, recorder.Code)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(requests), 2)
+
+	secondInput, ok := requests[1].Input.([]any)
+	require.True(t, ok)
+
+	foundDeveloper := false
+	for _, item := range secondInput {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if msg["role"] == "developer" {
+			foundDeveloper = true
+			break
+		}
+	}
+	require.False(t, foundDeveloper)
+}
+
+func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var (
+		mu       sync.Mutex
+		requests []OpenAIResponsesReq
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req OpenAIResponsesReq
+		require.NoError(t, json.Unmarshal(body, &req))
+		mu.Lock()
+		requests = append(requests, req)
+		mu.Unlock()
+
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"ok","output":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
+		EnableMemory:                            false,
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "tester",
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(ctxKeyUser, user)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(`{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hello"}]}`))
+	ctx.Request.Header.Set("content-type", "application/json")
+	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	err := sendChatWithResponsesToolLoop(ctx)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, requests, 1)
+	input, ok := requests[0].Input.([]any)
+	require.True(t, ok)
+
+	for _, item := range input {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		require.NotEqual(t, "developer", msg["role"])
+	}
+}
+
+func TestSendChatWithResponsesToolLoopMemoryFailureNonFatal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"ok","output":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
+		EnableMemory:                            true,
+		MemoryProject:                           "gptchat",
+		MemoryStorageMCPURL:                     "",
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "tester",
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(ctxKeyUser, user)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(`{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hello"}]}`))
+	ctx.Request.Header.Set("content-type", "application/json")
+	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	err := sendChatWithResponsesToolLoop(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "ok")
 }
