@@ -58,7 +58,7 @@ func SetupConfig() (err error) {
 		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
-	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet"))
+	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet-memory"))
 	Config.MemoryStorageMCPURL = trimUrl(gutils.OptionalVal(&Config.MemoryStorageMCPURL, "https://mcp.laisky.com"))
 	Config.MemoryModel = gutils.OptionalVal(&Config.MemoryModel, "openai/gpt-oss-120b")
 	Config.MemoryLLMTimeoutSeconds = gutils.OptionalVal(&Config.MemoryLLMTimeoutSeconds, 15)
