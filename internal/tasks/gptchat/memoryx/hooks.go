@@ -95,7 +95,8 @@ func BeforeTurnHook(
 	}
 
 	result.InputItems = prepared.InputItems
-	result.PreparedInput = MemoryItemsToResponsesInput(prepared.InputItems)
+	result.InputItems = preserveSystemMessageItems(inputItems, result.InputItems)
+	result.PreparedInput = MemoryItemsToResponsesInput(result.InputItems)
 	result.RecallFactIDs = append(result.RecallFactIDs, prepared.RecallFactIDs...)
 	result.ContextTokenCount = prepared.ContextTokenCount
 	memoryRecallFactCount.Add(int64(len(prepared.RecallFactIDs)))

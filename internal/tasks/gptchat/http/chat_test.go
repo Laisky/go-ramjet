@@ -170,6 +170,17 @@ func Test_bodyChecker(t *testing.T) {
 	require.True(t, req.LaiskyExtra.ChatSwitch.EnableGoogleSearch)
 }
 
+// TestFrontendReqUnmarshalEnableMemory verifies enable_memory can be parsed from frontend payload.
+func TestFrontendReqUnmarshalEnableMemory(t *testing.T) {
+	raw := `{"model":"gpt-4.1","stream":false,"max_tokens":128,"messages":[{"role":"user","content":"hi"}],"laisky_extra":{"chat_switch":{"enable_memory":false}}}`
+	req := new(FrontendReq)
+	err := json.Unmarshal([]byte(raw), req)
+	require.NoError(t, err)
+	require.NotNil(t, req.LaiskyExtra)
+	require.NotNil(t, req.LaiskyExtra.ChatSwitch.EnableMemory)
+	require.False(t, *req.LaiskyExtra.ChatSwitch.EnableMemory)
+}
+
 func Test_functionCallsRegexp(t *testing.T) {
 	text := "```python\nsearch_web(\"Ottawa ON Canada weather forecast this week\")\n```"
 	matched := functionCallsRegexp.FindAllStringSubmatch(text, -1)

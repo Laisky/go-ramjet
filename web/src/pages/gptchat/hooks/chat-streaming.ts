@@ -366,6 +366,7 @@ export function useChatStreaming({
                   disable_https_crawler:
                     config.chat_switch.disable_https_crawler,
                   all_in_one: config.chat_switch.all_in_one,
+                  enable_memory: config.chat_switch.enable_memory,
                 },
               },
             },

@@ -68,6 +68,7 @@ export interface ChatRequest {
       disable_https_crawler?: boolean
       enable_google_search?: boolean
       all_in_one?: boolean
+      enable_memory?: boolean
     }
   }
 }

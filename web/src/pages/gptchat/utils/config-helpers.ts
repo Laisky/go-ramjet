@@ -12,6 +12,7 @@ const UrlConfigBooleanFields = new Set([
   'disable_https_crawler',
   'enable_talk',
   'enable_mcp',
+  'enable_memory',
 ])
 const UrlConfigIntegerFields = new Set([
   'max_tokens',
@@ -77,6 +78,10 @@ const UrlParamAliasMap = new Map<string, string>([
   ['enabletalk', 'chat_switch.enable_talk'],
   ['chat_switch.enable_talk', 'chat_switch.enable_talk'],
   ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
+  ['enable_memory', 'chat_switch.enable_memory'],
+  ['enablememory', 'chat_switch.enable_memory'],
+  ['chat_switch.enable_memory', 'chat_switch.enable_memory'],
+  ['chat_switch.enablememory', 'chat_switch.enable_memory'],
   ['draw_model', 'selected_draw_model'],
   ['imagemodel', 'selected_draw_model'],
   ['selected_draw_model', 'selected_draw_model'],

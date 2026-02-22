@@ -95,6 +95,13 @@ Validation rules:
 2. `AfterTurn` failure: log warning, do not fail chat response.
 3. Memory errors are observable via structured logging fields, without leaking secrets.
 
+## 8.1 Runtime Switch and Prompt Safety
+
+1. Memory is globally gated by `openai.enable_memory` and can be toggled per request via `laisky_extra.chat_switch.enable_memory`.
+2. Per-request memory switch defaults to enabled when omitted.
+3. During `BeforeTurn`, original `system` messages are preserved and cannot be overwritten by recalled memory content.
+4. Memory-recalled context can still be injected as additional non-system items (for example `developer` role blocks).
+
 ## 9. Metrics (Current)
 
 Memory metrics are exported via `expvar`:

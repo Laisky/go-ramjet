@@ -1,7 +1,7 @@
 /**
  * Chat input component with file attachments and feature toggles.
  */
-import { Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
+import { Brain, Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -415,6 +415,14 @@ export function ChatInput({
             icon={<Image className="h-3 w-3" />}
             label="Draw"
             title="Combine chat and image generation"
+          />
+
+          <ToggleButton
+            active={config.chat_switch.enable_memory}
+            onClick={() => toggleSwitch('enable_memory')}
+            icon={<Brain className="h-3 w-3" />}
+            label="Memory"
+            title="Enable long-term memory for this session"
           />
 
           <ToggleButton

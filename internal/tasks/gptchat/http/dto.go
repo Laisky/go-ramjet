@@ -80,6 +80,8 @@ type FrontendReq struct {
 			DisableHttpsCrawler bool `json:"disable_https_crawler"`
 			// EnableGoogleSearch enable google search
 			EnableGoogleSearch bool `json:"enable_google_search"`
+			// EnableMemory enables memory hooks for this request.
+			EnableMemory *bool `json:"enable_memory,omitempty"`
 		} `json:"chat_switch"`
 	} `json:"laisky_extra,omitempty"`
 }
