@@ -45,8 +45,9 @@ In `convert2UpstreamResponsesRequest`:
 
 1. Parse frontend request and resolve authenticated user.
 2. Convert current Responses input to `[]memory.ResponseItem`.
-3. Run `BeforeTurn`.
-4. Replace upstream `responsesReq.Input` with converted `BeforeTurnOutput.InputItems`.
+3. Build `BeforeTurn` `CurrentInput` from only the latest `user` message (exclude `system` and earlier turns).
+4. Run `BeforeTurn`.
+5. Replace upstream `responsesReq.Input` with converted `BeforeTurnOutput.InputItems`.
 
 Effect: recalled memory (including SDK-generated `developer` blocks) is injected before inference.
 

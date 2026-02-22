@@ -54,14 +54,14 @@ func BeforeTurnHook(
 
 	result.Keys = BuildRuntimeKeys(conf, user, reqHeader)
 
-	inputItems, err := ResponsesInputToMemoryItems(responsesInput)
+	originalInputItems, err := ResponsesInputToMemoryItems(responsesInput)
 	if err != nil {
 		memoryBeforeTurnFail.Add(1)
 		observeLatencyHistogram(memoryBeforeLatencyMs, time.Since(startedAt).Milliseconds())
 		memoryBeforeLatencyCount.Add(1)
 		return result, errors.Wrap(err, "responses input to memory items")
 	}
-	result.InputItems = inputItems
+	result.InputItems = selectLatestUserMessageItems(originalInputItems)
 
 	engine, err := GetEngine(ctx, conf, user)
 	if err != nil {
@@ -76,13 +76,13 @@ func BeforeTurnHook(
 		SessionID:    result.Keys.SessionID,
 		UserID:       result.Keys.UserID,
 		TurnID:       result.Keys.TurnID,
-		CurrentInput: inputItems,
+		CurrentInput: result.InputItems,
 		MaxInputTok:  maxInputTok,
 	})
 	if err != nil {
 		if isMemoryColdStartNotFound(err) {
 			result.ColdStartFallback = true
-			result.PreparedInput = MemoryItemsToResponsesInput(result.InputItems)
+			result.PreparedInput = MemoryItemsToResponsesInput(originalInputItems)
 			observeLatencyHistogram(memoryBeforeLatencyMs, time.Since(startedAt).Milliseconds())
 			memoryBeforeLatencyCount.Add(1)
 			return result, nil
@@ -95,7 +95,7 @@ func BeforeTurnHook(
 	}
 
 	result.InputItems = prepared.InputItems
-	result.InputItems = preserveSystemMessageItems(inputItems, result.InputItems)
+	result.InputItems = preserveSystemMessageItems(originalInputItems, result.InputItems)
 	result.PreparedInput = MemoryItemsToResponsesInput(result.InputItems)
 	result.RecallFactIDs = append(result.RecallFactIDs, prepared.RecallFactIDs...)
 	result.ContextTokenCount = prepared.ContextTokenCount
