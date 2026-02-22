@@ -438,6 +438,83 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
 	}
 }
 
+func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var (
+		mu       sync.Mutex
+		requests []OpenAIResponsesReq
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req OpenAIResponsesReq
+		require.NoError(t, json.Unmarshal(body, &req))
+		mu.Lock()
+		requests = append(requests, req)
+		mu.Unlock()
+
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"ok","output":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		DefaultImageToken:                       "srv-image-token",
+		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RamjetURL:                               "",
+		EnableMemory:                            true,
+		MemoryProject:                           "gptchat",
+		MemoryStorageMCPURL:                     "",
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	user := &config.UserConfig{
+		Token:         "FREETIER-abcdefgh",
+		UserName:      "free-user",
+		IsFree:        true,
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-shared",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	rawReq := `{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hello"}],"laisky_extra":{"chat_switch":{"enable_memory":true}}}`
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(ctxKeyUser, user)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(rawReq))
+	ctx.Request.Header.Set("content-type", "application/json")
+	ctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	err := sendChatWithResponsesToolLoop(ctx)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, requests, 1)
+	input, ok := requests[0].Input.([]any)
+	require.True(t, ok)
+
+	for _, item := range input {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		require.NotEqual(t, "developer", msg["role"])
+	}
+}
+
 func TestSendChatWithResponsesToolLoopMemoryFailureNonFatal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

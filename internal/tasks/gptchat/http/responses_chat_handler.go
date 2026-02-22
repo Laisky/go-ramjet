@@ -656,6 +656,7 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 	}
 
 	frontendReq := &FrontendReq{}
+	requestMemoryEnabled := true
 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
 		frontendReq, err = bodyChecker(ctx.Request.Body)
 		if err != nil {
@@ -684,6 +685,10 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 				}
 			}
 			frontendReq.embeddingGoogleSearch(ctx, user)
+		}
+
+		if frontendReq.LaiskyExtra != nil && frontendReq.LaiskyExtra.ChatSwitch.EnableMemory != nil {
+			requestMemoryEnabled = *frontendReq.LaiskyExtra.ChatSwitch.EnableMemory
 		}
 
 		// never forward app-specific config to upstream.
@@ -716,7 +721,14 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 		return nil, nil, nil, errors.Wrap(err, "convert to responses request")
 	}
 
-	memoryState := memoryTurnContext{Enabled: config.Config != nil && config.Config.EnableMemory}
+	memoryState := memoryTurnContext{
+		Enabled: config.Config != nil && config.Config.EnableMemory && requestMemoryEnabled && !user.IsFree,
+	}
+	if user.IsFree && config.Config != nil && config.Config.EnableMemory {
+		logger.Debug("memory disabled for free-tier user",
+			zap.String("user", user.UserName),
+		)
+	}
 	if memoryState.Enabled {
 		inputItems, flattenErr := flattenResponsesInput(responsesReq.Input)
 		if flattenErr != nil {

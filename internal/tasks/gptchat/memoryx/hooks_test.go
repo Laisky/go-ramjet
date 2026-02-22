@@ -265,3 +265,28 @@ func TestBeforeTurnHookColdStartFallbackKeepsOriginalInput(t *testing.T) {
 	require.Equal(t, "system", first["role"])
 	require.Equal(t, "user", second["role"])
 }
+
+func TestBeforeTurnHookDisabledForFreeUser(t *testing.T) {
+	conf := &config.OpenAI{
+		EnableMemory:        true,
+		MemoryProject:       "gptchat",
+		MemoryStorageMCPURL: "https://mcp.example.com",
+	}
+	user := &config.UserConfig{UserName: "alice", IsFree: true}
+
+	before, err := BeforeTurnHook(context.Background(), conf, user, http.Header{}, []any{}, 120000)
+	require.NoError(t, err)
+	require.False(t, before.Enabled)
+}
+
+func TestAfterTurnHookDisabledForFreeUser(t *testing.T) {
+	conf := &config.OpenAI{
+		EnableMemory:        true,
+		MemoryProject:       "gptchat",
+		MemoryStorageMCPURL: "https://mcp.example.com",
+	}
+	user := &config.UserConfig{UserName: "alice", IsFree: true}
+
+	err := AfterTurnHook(context.Background(), conf, user, RuntimeKeys{}, []any{}, "hi")
+	require.NoError(t, err)
+}

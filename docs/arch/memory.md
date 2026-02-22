@@ -100,8 +100,9 @@ Validation rules:
 
 1. Memory is globally gated by `openai.enable_memory` and can be toggled per request via `laisky_extra.chat_switch.enable_memory`.
 2. Per-request memory switch defaults to enabled when omitted.
-3. During `BeforeTurn`, original `system` messages are preserved and cannot be overwritten by recalled memory content.
-4. Memory-recalled context can still be injected as additional non-system items (for example `developer` role blocks).
+3. Free-tier users (`user.IsFree`) are always blocked from memory activation, even when global and per-request switches are enabled.
+4. During `BeforeTurn`, original `system` messages are preserved and cannot be overwritten by recalled memory content.
+5. Memory-recalled context can still be injected as additional non-system items (for example `developer` role blocks).
 
 ## 9. Metrics (Current)
 

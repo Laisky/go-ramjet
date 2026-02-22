@@ -48,7 +48,7 @@ func BeforeTurnHook(
 	maxInputTok int,
 ) (BeforeTurnResult, error) {
 	startedAt := time.Now().UTC()
-	result := BeforeTurnResult{Enabled: isMemoryEnabled(conf)}
+	result := BeforeTurnResult{Enabled: isMemoryEnabled(conf, user)}
 	if !result.Enabled {
 		return result, nil
 	}
@@ -146,7 +146,7 @@ func AfterTurnHook(
 	finalText string,
 ) error {
 	startedAt := time.Now().UTC()
-	if !isMemoryEnabled(conf) {
+	if !isMemoryEnabled(conf, user) {
 		return nil
 	}
 	memoryAfterTurnTotal.Add(1)
@@ -195,6 +195,18 @@ func AfterTurnHook(
 	return nil
 }
 
-func isMemoryEnabled(conf *config.OpenAI) bool {
-	return conf != nil && conf.EnableMemory
+// isMemoryEnabled returns whether transparent memory is enabled for the current request.
+//
+// Parameters:
+//   - conf: Global gptchat OpenAI config.
+//   - user: Current authenticated user.
+//
+// Returns:
+//   - bool: True when memory is globally enabled and user is not a free-tier user.
+func isMemoryEnabled(conf *config.OpenAI, user *config.UserConfig) bool {
+	if conf == nil || !conf.EnableMemory {
+		return false
+	}
+
+	return user == nil || !user.IsFree
 }
