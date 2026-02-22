@@ -22,6 +22,8 @@ type BeforeTurnResult struct {
 	PreparedInput     []any
 	RecallFactIDs     []string
 	ContextTokenCount int
+	MemoryTaggedItems int
+	MemoryTaggedParts int
 }
 
 // BeforeTurnHook runs memory injection before upstream chat call.
@@ -95,6 +97,7 @@ func BeforeTurnHook(
 	}
 
 	result.InputItems = prepared.InputItems
+	result.InputItems, result.MemoryTaggedItems, result.MemoryTaggedParts = wrapMemoryReferenceDeveloperItems(result.InputItems)
 	result.InputItems = preserveSystemMessageItems(originalInputItems, result.InputItems)
 	result.PreparedInput = MemoryItemsToResponsesInput(result.InputItems)
 	result.RecallFactIDs = append(result.RecallFactIDs, prepared.RecallFactIDs...)

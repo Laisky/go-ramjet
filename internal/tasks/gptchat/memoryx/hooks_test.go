@@ -109,8 +109,15 @@ func TestBeforeTurnHookInjectsDeveloperMessage(t *testing.T) {
 	before, err := BeforeTurnHook(context.Background(), conf, user, http.Header{}, []any{}, 120000)
 	require.NoError(t, err)
 	require.Len(t, before.PreparedInput, 1)
+	require.Equal(t, 1, before.MemoryTaggedItems)
+	require.Equal(t, 1, before.MemoryTaggedParts)
 	msg := before.PreparedInput[0].(map[string]any)
 	require.Equal(t, "developer", msg["role"])
+	content := msg["content"].([]map[string]any)
+	part := content[0]
+	require.Contains(t, part["text"].(string), memoryReferenceBeginTag)
+	require.Contains(t, part["text"].(string), memoryReferenceNotice)
+	require.Contains(t, part["text"].(string), memoryReferenceEndTag)
 }
 
 func TestBeforeTurnHookColdStartFallbackOnNotFound(t *testing.T) {
@@ -183,25 +190,27 @@ func TestBeforeTurnHookOnlySendsLatestUserMessageToMemory(t *testing.T) {
 
 	input := []any{
 		map[string]any{
-			"role": "system",
+			"role":    "system",
 			"content": []any{map[string]any{"type": "input_text", "text": "session-a system"}},
 		},
 		map[string]any{
-			"role": "user",
+			"role":    "user",
 			"content": []any{map[string]any{"type": "input_text", "text": "first question"}},
 		},
 		map[string]any{
-			"role": "assistant",
+			"role":    "assistant",
 			"content": []any{map[string]any{"type": "input_text", "text": "first answer"}},
 		},
 		map[string]any{
-			"role": "user",
+			"role":    "user",
 			"content": []any{map[string]any{"type": "input_text", "text": "latest question"}},
 		},
 	}
 
 	before, err := BeforeTurnHook(context.Background(), conf, user, http.Header{}, input, 120000)
 	require.NoError(t, err)
+	require.Equal(t, 1, before.MemoryTaggedItems)
+	require.Equal(t, 1, before.MemoryTaggedParts)
 	require.Len(t, st.beforeIn.CurrentInput, 1)
 	require.Equal(t, "message", st.beforeIn.CurrentInput[0].Type)
 	require.Equal(t, "user", st.beforeIn.CurrentInput[0].Role)
@@ -213,6 +222,9 @@ func TestBeforeTurnHookOnlySendsLatestUserMessageToMemory(t *testing.T) {
 	second := before.PreparedInput[1].(map[string]any)
 	require.Equal(t, "system", first["role"])
 	require.Equal(t, "developer", second["role"])
+	content := second["content"].([]map[string]any)
+	part := content[0]
+	require.Contains(t, part["text"].(string), memoryReferenceBeginTag)
 }
 
 func TestBeforeTurnHookColdStartFallbackKeepsOriginalInput(t *testing.T) {
@@ -234,11 +246,11 @@ func TestBeforeTurnHookColdStartFallbackKeepsOriginalInput(t *testing.T) {
 
 	input := []any{
 		map[string]any{
-			"role": "system",
+			"role":    "system",
 			"content": []any{map[string]any{"type": "input_text", "text": "session-b system"}},
 		},
 		map[string]any{
-			"role": "user",
+			"role":    "user",
 			"content": []any{map[string]any{"type": "input_text", "text": "hello"}},
 		},
 	}
