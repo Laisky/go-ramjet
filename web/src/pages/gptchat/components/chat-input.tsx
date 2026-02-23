@@ -336,7 +336,7 @@ export function ChatInput({
             onSelect={handleInputSelect}
             onBlur={handleInputBlur}
             placeholder={placeholder}
-            disabled={disabled || isLoading || isTranscribing}
+            disabled={disabled || isTranscribing}
             apiToken={config.api_token}
             className="flex-1"
           />
