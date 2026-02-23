@@ -132,7 +132,7 @@ export const DefaultSessionConfig: SessionConfig = {
     all_in_one: false,
     enable_talk: false,
     enable_mcp: false,
-    enable_memory: true,
+    enable_memory: false,
     draw_n_images: 1,
   },
   mcp_servers: [
