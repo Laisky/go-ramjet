@@ -6,6 +6,7 @@ import type { ChatMessageData, SessionHistoryItem } from '../types'
 import { getChatDataKey, getSessionHistoryKey } from '../utils/chat-storage'
 import { recordDeletedChatId } from '../utils/deleted-chat-ids'
 import { uuidv7 } from '../utils/uuidv7'
+import { useChatStorageConcurrencyState } from './chat-storage-concurrency'
 
 /**
  * Sanitizes a ChatMessageData object to ensure correct types.
@@ -80,6 +81,12 @@ export interface ChatStorageApi {
 /**
  * useChatStorage provides persistence helpers for chat sessions.
  * It handles loading history, saving messages, and removing chat pairs.
+ *
+ * Concurrency model:
+ * - Each load gets a monotonic load token snapshot.
+ * - Each mutation bumps a mutation version.
+ * - Any in-flight load is dropped when session changes, a newer load starts,
+ *   or a mutation happens after that load begins.
  */
 export function useChatStorage({
   sessionId,
@@ -87,10 +94,27 @@ export function useChatStorage({
   setError,
 }: ChatStorageOptions): ChatStorageApi {
   const sessionIdRef = useRef(sessionId)
+  const concurrency = useChatStorageConcurrencyState()
   sessionIdRef.current = sessionId
 
   const loadMessages = useCallback(async () => {
     const loadingSessionId = sessionId
+    const { loadToken, startMutationVersion } = concurrency.beginLoad()
+
+    const isStale = () =>
+      concurrency.isStaleLoad({
+        loadingSessionId,
+        currentSessionId: sessionIdRef.current,
+        loadToken,
+        startMutationVersion,
+      })
+
+    console.debug('[useChatStorage] loadMessages start', {
+      sessionId: loadingSessionId,
+      loadToken,
+      mutationVersion: startMutationVersion,
+    })
+
     // Clear current messages while loading new ones to prevent
     // UI from showing old session's messages and to reset scroll state.
     setMessages([])
@@ -99,11 +123,24 @@ export function useChatStorage({
       const key = getSessionHistoryKey(sessionId)
       const history = await kvGet<SessionHistoryItem[]>(key)
 
-      if (loadingSessionId !== sessionIdRef.current) {
+      if (isStale()) {
+        console.debug('[useChatStorage] loadMessages dropped as stale', {
+          sessionId: loadingSessionId,
+          currentSessionId: sessionIdRef.current,
+          loadToken,
+          currentLoadToken: concurrency.getLoadToken(),
+          mutationVersion: concurrency.getMutationVersion(),
+          startMutationVersion,
+          stage: 'after-history-fetch',
+        })
         return
       }
 
       if (!history || history.length === 0) {
+        console.debug('[useChatStorage] loadMessages empty history', {
+          sessionId: loadingSessionId,
+          loadToken,
+        })
         setMessages([])
         return
       }
@@ -112,6 +149,19 @@ export function useChatStorage({
       const seenChatIds = new Set<string>()
 
       for (const item of history) {
+        if (isStale()) {
+          console.debug('[useChatStorage] loadMessages dropped as stale', {
+            sessionId: loadingSessionId,
+            currentSessionId: sessionIdRef.current,
+            loadToken,
+            currentLoadToken: concurrency.getLoadToken(),
+            mutationVersion: concurrency.getMutationVersion(),
+            startMutationVersion,
+            stage: 'before-item-load',
+          })
+          return
+        }
+
         if (seenChatIds.has(item.chatID)) {
           continue
         }
@@ -122,6 +172,19 @@ export function useChatStorage({
 
         const userData = await kvGet<ChatMessageData>(userKey)
         const assistantData = await kvGet<ChatMessageData>(assistantKey)
+
+        if (isStale()) {
+          console.debug('[useChatStorage] loadMessages dropped as stale', {
+            sessionId: loadingSessionId,
+            currentSessionId: sessionIdRef.current,
+            loadToken,
+            currentLoadToken: concurrency.getLoadToken(),
+            mutationVersion: concurrency.getMutationVersion(),
+            startMutationVersion,
+            stage: 'after-item-load',
+          })
+          return
+        }
 
         if (userData && typeof userData === 'object' && userData.content) {
           loadedMessages.push(sanitizeChatMessageData(userData))
@@ -135,6 +198,25 @@ export function useChatStorage({
         }
       }
 
+      if (isStale()) {
+        console.debug('[useChatStorage] loadMessages dropped as stale', {
+          sessionId: loadingSessionId,
+          currentSessionId: sessionIdRef.current,
+          loadToken,
+          currentLoadToken: concurrency.getLoadToken(),
+          mutationVersion: concurrency.getMutationVersion(),
+          startMutationVersion,
+          stage: 'before-set-messages',
+        })
+        return
+      }
+
+      console.debug('[useChatStorage] loadMessages complete', {
+        sessionId: loadingSessionId,
+        loadToken,
+        historyItems: history.length,
+        loadedMessages: loadedMessages.length,
+      })
       setMessages(loadedMessages)
     } catch (err) {
       console.error('Failed to load messages:', err)
@@ -144,6 +226,8 @@ export function useChatStorage({
 
   const saveMessage = useCallback(
     async (message: ChatMessageData) => {
+      concurrency.markMutation()
+
       const key = getChatDataKey(
         message.chatID,
         message.role as 'user' | 'assistant',
@@ -185,10 +269,12 @@ export function useChatStorage({
 
       await kvSet(historyKey, history)
     },
-    [sessionId],
+    [concurrency, sessionId],
   )
 
   const clearMessages = useCallback(async () => {
+    concurrency.markMutation()
+
     const historyKey = getSessionHistoryKey(sessionId)
     const history = await kvGet<SessionHistoryItem[]>(historyKey)
     const chatIds = new Set((history || []).map((h) => h.chatID))
@@ -213,10 +299,12 @@ export function useChatStorage({
       sessionId,
       chatPairsCleared: chatIds.size,
     })
-  }, [sessionId, setMessages])
+  }, [concurrency, sessionId, setMessages])
 
   const deleteMessage = useCallback(
     async (chatId: string) => {
+      concurrency.markMutation()
+
       console.debug('[useChatStorage] deleteMessage start', {
         sessionId,
         chatId,
@@ -238,7 +326,7 @@ export function useChatStorage({
         chatId,
       })
     },
-    [sessionId, setMessages],
+    [concurrency, sessionId, setMessages],
   )
 
   return { loadMessages, saveMessage, clearMessages, deleteMessage }
