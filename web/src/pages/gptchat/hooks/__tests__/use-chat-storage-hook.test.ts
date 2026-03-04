@@ -152,7 +152,7 @@ describe('useChatStorage hook', () => {
     )
 
     const loadPromise = result.current.loadMessages()
-    expect(setMessages).toHaveBeenCalledTimes(1)
+    expect(setMessages).not.toHaveBeenCalled()
 
     const savePromise = result.current.saveMessage({
       chatID: 'chat-local',
@@ -164,6 +164,48 @@ describe('useChatStorage hook', () => {
     await savePromise
     await loadPromise
 
-    expect(setMessages).toHaveBeenCalledTimes(1)
+    expect(setMessages).not.toHaveBeenCalled()
+  })
+
+  it('should keep existing UI messages when stale load is invalidated', async () => {
+    const historyFetch = deferred<any>()
+    let historyGetCount = 0
+
+    ;(kvGet as any).mockImplementation((key: string) => {
+      if (key === 'chat_user_session_1') {
+        historyGetCount += 1
+        if (historyGetCount === 1) {
+          return historyFetch.promise
+        }
+        return Promise.resolve([])
+      }
+      return Promise.resolve(null)
+    })
+
+    const { result } = renderHook(() =>
+      useChatStorage({
+        sessionId: 1,
+        setMessages,
+        setError,
+      }),
+    )
+
+    const loadPromise = result.current.loadMessages()
+
+    await result.current.saveMessage({
+      chatID: 'chat-fresh',
+      role: 'user',
+      content: 'fresh message',
+    } as any)
+
+    historyFetch.resolve([{ chatID: 'old', role: 'user', content: 'old' }])
+    await loadPromise
+
+    expect(setMessages).not.toHaveBeenCalledWith([])
+    expect(setMessages).not.toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ chatID: 'old', content: 'old' }),
+      ]),
+    )
   })
 })

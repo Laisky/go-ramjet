@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   type ChatMessage as ApiChatMessage,
@@ -223,6 +223,31 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     abortControllerRef,
     currentChatIdRef,
   })
+
+  /**
+   * Reset transient chat UI state when switching sessions and abort in-flight work
+   * from the previous session to prevent stale updates from affecting the new view.
+   */
+  useEffect(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      console.debug('[useChat] aborted in-flight stream on session change', {
+        sessionId,
+      })
+    }
+
+    deepResearchAbortRef.current = true
+    currentChatIdRef.current = null
+    setLoadingChatId(null)
+    setError(null)
+    setMessages([])
+    setIsLoading(false)
+
+    console.debug('[useChat] reset state for session change', {
+      sessionId,
+    })
+  }, [sessionId, setIsLoading])
 
   /**
    * findMaskPair searches a file list for matching image and mask pairs used by inpainting flows.
