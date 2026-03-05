@@ -186,6 +186,7 @@ export function ConfigSidebar({
                   'Deepseek',
                   'Others',
                 ]}
+                allowedModels={user?.allowed_models}
                 selectedModel={
                   config.selected_chat_model || config.selected_model
                 }
@@ -203,6 +204,7 @@ export function ConfigSidebar({
               <ModelSelector
                 label="Draw"
                 categories={['Image']}
+                allowedModels={user?.allowed_models}
                 selectedModel={
                   config.selected_draw_model || config.selected_model
                 }

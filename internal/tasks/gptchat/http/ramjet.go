@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 
 // OneapiProxyHandler proxy to oneapi url
 func OneapiProxyHandler(ctx *gin.Context) {
+	logger := gmw.GetLogger(ctx).Named("oneapi_proxy")
+
 	url := ctx.Request.URL
 	targetUrl := "https://oneapi.laisky.com" + "/" + strings.TrimPrefix(
 		strings.TrimPrefix(url.Path, "/"), "gptchat/oneapi/")
@@ -82,6 +85,26 @@ func OneapiProxyHandler(ctx *gin.Context) {
 		return
 	}
 
+	if isOneAPIModelListRequest(ctx.Request) {
+		filteredPayload, filteredCnt, upstreamCnt, ferr := filterOneAPIModelListPayloadByUser(user, payload)
+		if ferr != nil {
+			logger.Warn("failed to filter oneapi model list payload",
+				zap.String("username", user.UserName),
+				zap.Error(ferr),
+			)
+		} else {
+			payload = filteredPayload
+			if filteredCnt != upstreamCnt {
+				logger.Debug("filtered oneapi model list by user allowlist",
+					zap.String("username", user.UserName),
+					zap.Int("upstream_models", upstreamCnt),
+					zap.Int("filtered_models", filteredCnt),
+					zap.Int("allowed_models", len(user.AllowedModels)),
+				)
+			}
+		}
+	}
+
 	for k, v := range resp.Header {
 		if len(v) == 0 {
 			continue
@@ -91,6 +114,112 @@ func OneapiProxyHandler(ctx *gin.Context) {
 	}
 	ctx.Header("Access-Control-Expose-Headers", "x-oneapi-request-id, x-request-id")
 	ctx.Data(resp.StatusCode, resp.Header.Get("Content-Type"), payload)
+}
+
+// isOneAPIModelListRequest returns whether the current proxied request targets OneAPI model listing.
+//
+// Parameters:
+//   - req: Incoming client request.
+//
+// Returns:
+//   - bool: True when request is GET /oneapi/v1/models.
+func isOneAPIModelListRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+
+	if req.Method != http.MethodGet {
+		return false
+	}
+
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	path = strings.TrimPrefix(path, "gptchat/")
+	path = strings.TrimPrefix(path, "oneapi/")
+	return path == "v1/models"
+}
+
+// filterOneAPIModelListPayloadByUser filters OneAPI /v1/models payload by user allowlist.
+//
+// Parameters:
+//   - user: Current resolved user.
+//   - payload: Raw upstream response body.
+//
+// Returns:
+//   - []byte: Filtered JSON payload; may equal the input payload when no filtering is needed.
+//   - int: Number of models after filtering.
+//   - int: Number of models before filtering.
+//   - error: Non-nil when payload cannot be parsed for filtering.
+func filterOneAPIModelListPayloadByUser(user *config.UserConfig, payload []byte) ([]byte, int, int, error) {
+	if user == nil || user.BYOK || len(user.AllowedModels) == 0 || slices.Contains(user.AllowedModels, "*") {
+		modelsCnt, err := countOneAPIModels(payload)
+		if err != nil {
+			return payload, 0, 0, errors.Wrap(err, "count oneapi models")
+		}
+
+		return payload, modelsCnt, modelsCnt, nil
+	}
+
+	var modelList map[string]any
+	if err := json.Unmarshal(payload, &modelList); err != nil {
+		return nil, 0, 0, errors.Wrap(err, "unmarshal oneapi model list payload")
+	}
+
+	rawData, ok := modelList["data"].([]any)
+	if !ok {
+		return nil, 0, 0, errors.New("oneapi model list payload missing data array")
+	}
+
+	allowedSet := make(map[string]struct{}, len(user.AllowedModels))
+	for _, model := range user.AllowedModels {
+		allowedSet[model] = struct{}{}
+	}
+
+	filtered := make([]any, 0, len(rawData))
+	for _, item := range rawData {
+		modelEntry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		modelID, ok := modelEntry["id"].(string)
+		if !ok {
+			continue
+		}
+
+		if _, ok = allowedSet[modelID]; ok {
+			filtered = append(filtered, item)
+		}
+	}
+
+	modelList["data"] = filtered
+	filteredPayload, err := json.Marshal(modelList)
+	if err != nil {
+		return nil, 0, 0, errors.Wrap(err, "marshal filtered oneapi model list payload")
+	}
+
+	return filteredPayload, len(filtered), len(rawData), nil
+}
+
+// countOneAPIModels counts model entries in a OneAPI /v1/models response payload.
+//
+// Parameters:
+//   - payload: Raw upstream response body.
+//
+// Returns:
+//   - int: Count of model entries.
+//   - error: Non-nil when payload is not a valid model list payload.
+func countOneAPIModels(payload []byte) (int, error) {
+	var modelList map[string]any
+	if err := json.Unmarshal(payload, &modelList); err != nil {
+		return 0, errors.Wrap(err, "unmarshal oneapi model list payload")
+	}
+
+	rawData, ok := modelList["data"].([]any)
+	if !ok {
+		return 0, errors.New("oneapi model list payload missing data array")
+	}
+
+	return len(rawData), nil
 }
 
 // RamjetProxyHandler proxy to ramjet url

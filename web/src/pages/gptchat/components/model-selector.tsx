@@ -22,6 +22,7 @@ export interface ModelSelectorProps {
   selectedModel: string
   onModelChange: (model: string) => void
   disabled?: boolean
+  allowedModels?: string[]
   label?: string
   categories?: string[]
   active?: boolean
@@ -37,6 +38,7 @@ export function ModelSelector({
   selectedModel,
   onModelChange,
   disabled,
+  allowedModels,
   label,
   categories,
   active,
@@ -46,14 +48,31 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
 
+  const allowAll =
+    !allowedModels ||
+    allowedModels.length === 0 ||
+    allowedModels.includes('*')
+  const allowedSet = new Set(allowedModels || [])
+
   const filteredCategories = categories?.length
     ? Object.entries(ModelCategories).filter(([category]) =>
         categories.includes(category),
       )
     : Object.entries(ModelCategories)
 
+  const visibleCategories = filteredCategories
+    .map(([category, models]) => {
+      if (allowAll) {
+        return [category, models] as const
+      }
+
+      const visibleModels = models.filter((model) => allowedSet.has(model))
+      return [category, visibleModels] as const
+    })
+    .filter(([, models]) => models.length > 0)
+
   const displayModel =
-    selectedModel || filteredCategories[0]?.[1]?.[0] || 'Select a model'
+    selectedModel || visibleCategories[0]?.[1]?.[0] || 'Select a model'
 
   const triggerLabel = label || 'Model'
 
@@ -112,7 +131,7 @@ export function ModelSelector({
         align="start"
         className="max-h-[420px] w-[320px] overflow-y-auto"
       >
-        {filteredCategories.map(([category, models]) => (
+        {visibleCategories.map(([category, models]) => (
           <div key={category}>
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               {category}

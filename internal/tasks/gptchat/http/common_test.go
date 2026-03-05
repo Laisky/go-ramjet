@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
@@ -31,7 +32,38 @@ func setupTestConfig() {
 		DefaultImageUrl:    "https://api.openai.com/v1/images/generations",
 		ExternalBillingAPI: "https://oneapi.laisky.com",
 		RamjetURL:          "https://app.laisky.com",
+		UserTokens: []*config.UserConfig{
+			{
+				Token:         config.FreetierUserToken,
+				UserName:      "public",
+				APIBase:       "https://oneapi.laisky.com",
+				ImageUrl:      "https://oneapi.laisky.com/v1/images/generations",
+				AllowedModels: []string{"gpt-4o-mini", "gpt-5-mini"},
+			},
+		},
 	}
+}
+
+func TestGetUserByAuthHeader_FreeTierUsesConfiguredAllowedModels(t *testing.T) {
+	setupTestConfig()
+
+	ctx := newAuthContext("")
+
+	user, err := getUserByAuthHeader(ctx)
+	require.NoError(t, err)
+	require.True(t, user.IsFree)
+	require.Equal(t, []string{"gpt-4o-mini", "gpt-5-mini"}, user.AllowedModels)
+}
+
+func TestGetUserByAuthHeader_FreeTierPrefixedTokenUsesConfiguredAllowedModels(t *testing.T) {
+	setupTestConfig()
+
+	ctx := newAuthContext("FREETIER-abcdef1234567890")
+
+	user, err := getUserByAuthHeader(ctx)
+	require.NoError(t, err)
+	require.True(t, user.IsFree)
+	require.Equal(t, []string{"gpt-4o-mini", "gpt-5-mini"}, user.AllowedModels)
 }
 
 func TestGetUserByAuthHeader_LaiskyTokenUsesOwnImageToken(t *testing.T) {

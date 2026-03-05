@@ -33,6 +33,7 @@ import { usePromptShortcuts } from './hooks/use-prompt-shortcuts'
 import { useSelection } from './hooks/use-selection'
 import { useTTS } from './hooks/use-tts'
 import { useVersionCheck } from './hooks/use-version-check'
+import { useUser } from './hooks/use-user'
 import { ImageModelFluxDev, isImageModel } from './models'
 import type {
   ChatAttachment,
@@ -179,6 +180,7 @@ export function GPTChatPage() {
   } = useTTS({
     apiToken: config.api_token || '',
   })
+  const { user } = useUser(config.api_token)
 
   const chatModel = config.selected_chat_model || config.selected_model
   const drawModel = config.selected_draw_model || ImageModelFluxDev
@@ -451,6 +453,7 @@ export function GPTChatPage() {
                   'Deepseek',
                   'Others',
                 ]}
+                allowedModels={user?.allowed_models}
                 selectedModel={chatModel}
                 active={!isDrawActive}
                 onModelChange={handleChatModelChange}
@@ -461,6 +464,7 @@ export function GPTChatPage() {
               <ModelSelector
                 label="Draw"
                 categories={['Image']}
+                allowedModels={user?.allowed_models}
                 selectedModel={drawModel}
                 active={isDrawActive}
                 onModelChange={handleDrawModelChange}

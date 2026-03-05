@@ -8,9 +8,7 @@ export function useUser(token: string) {
     error,
     mutate,
   } = useSWR<UserConfig>(
-    token && token !== 'DEFAULT_PROXY_TOKEN' && !token.startsWith('FREETIER-')
-      ? ['/user/me', token]
-      : null,
+    token ? ['/user/me', token] : null,
     ([, t]: [string, string]) => api.fetchCurrentUser(t),
     {
       revalidateOnFocus: false,
@@ -20,7 +18,7 @@ export function useUser(token: string) {
 
   return {
     user,
-    isLoading: !error && !user && !!token && !token.startsWith('FREETIER-'),
+    isLoading: !error && !user && !!token,
     isError: error,
     mutate,
   }
