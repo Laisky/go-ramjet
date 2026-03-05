@@ -25,7 +25,7 @@ RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
 ENV SPEECHSDK_ROOT=/opt/azure/speech
 ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
 ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
-ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 RUN mkdir -p $SPEECHSDK_ROOT
 RUN wget -O SpeechSDK-Linux.tar.gz https://s3.laisky.com/public/SpeechSDK-Linux.tar.gz \
     && tar --strip 1 -xzf SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
@@ -63,25 +63,32 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget curl
     # --------------------------------------------
     && update-ca-certificates 2>/dev/null || true
 
-# install google-chrome
-# RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-RUN wget https://s3.laisky.com/public/google-chrome-stable_current_amd64.deb \
-    && apt install -y ./google-chrome-stable_current_amd64.deb \
-    && rm google-chrome-stable_current_amd64.deb
-
-# install pg_dump
-# Use the Debian bookworm codename directly to avoid needing lsb_release
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg \
+# install google-chrome from the official Google APT repository
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+    | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
+    && chmod a+r /etc/apt/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+    > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y postgresql-client-17
+    && apt-get install -y --no-install-recommends google-chrome-stable
+
+# install pg_dump from PGDG
+# Use the Debian bookworm codename directly to avoid needing lsb_release
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg \
+    && chmod a+r /etc/apt/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-17
 
 # install azure sdk
 RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
 ENV SPEECHSDK_ROOT=/opt/azure/speech
 ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
 ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
-ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 RUN mkdir -p $SPEECHSDK_ROOT
 COPY --from=gobuild /opt/azure/speech $SPEECHSDK_ROOT
 
