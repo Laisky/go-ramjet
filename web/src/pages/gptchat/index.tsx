@@ -1,7 +1,7 @@
 /**
  * GPTChat page - main chat interface.
  */
-import { ArrowDown, Settings } from 'lucide-react'
+import { ArrowDown, ArrowUp, Settings } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -159,10 +159,11 @@ export function GPTChatPage() {
     return messages.slice(-visibleCount)
   }, [messages, visibleCount])
 
-  const { selectedMessageIndex, handleMessageSelect } = useMessageNavigation({
-    displayedMessages,
-    sessionId,
-  })
+  const { selectedMessageIndex, handleMessageSelect, navigateMessageUp } =
+    useMessageNavigation({
+      displayedMessages,
+      sessionId,
+    })
 
   const { selectionData, setSelectionData } = useSelection(messagesContainerRef)
   const [inputSelectionData, setInputSelectionData] =
@@ -587,6 +588,20 @@ export function GPTChatPage() {
           ref={footerRef}
           className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0"
         >
+          {/* Scroll up button */}
+          <button
+            onClick={navigateMessageUp}
+            className={cn(
+              'absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
+              showScrollButton
+                ? 'translate-y-0 opacity-100'
+                : 'translate-y-4 opacity-0 pointer-events-none',
+            )}
+            aria-label="Scroll up by message"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+
           {/* Scroll to bottom button */}
           <button
             onClick={() => scrollToBottom({ force: true })}

@@ -46,10 +46,53 @@ export function useMessageNavigation({
     return 0
   }, [displayedMessages])
 
+  /**
+   * findLastVisibleMessageIndex finds the index of the last message
+   * that is currently visible in the viewport.
+   */
+  const findLastVisibleMessageIndex = useCallback((): number => {
+    if (displayedMessages.length === 0) return -1
+
+    const viewportTop = 0
+    const viewportBottom = window.innerHeight
+
+    for (let i = displayedMessages.length - 1; i >= 0; i--) {
+      const msg = displayedMessages[i]
+      const el = document.getElementById(
+        `chat-message-${msg.chatID}-${msg.role}`,
+      )
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+          return i
+        }
+      }
+    }
+
+    return displayedMessages.length - 1
+  }, [displayedMessages])
+
   const handleMessageSelect = useCallback((index: number) => {
     isKeyboardSelectRef.current = false
     setSelectedMessageIndex((prev) => (prev === index ? -1 : index))
   }, [])
+
+  /**
+   * navigateMessageUp moves the current selection up by one message.
+   * It starts from the first visible message when no message is selected.
+   * It returns no value.
+   */
+  const navigateMessageUp = useCallback(() => {
+    setSelectedMessageIndex((prev) => {
+      isKeyboardSelectRef.current = true
+      if (prev === -1) {
+        const visibleIdx = findLastVisibleMessageIndex()
+        return visibleIdx >= 0 ? visibleIdx : displayedMessages.length - 1
+      }
+
+      return Math.max(0, prev - 1)
+    })
+  }, [displayedMessages.length, findLastVisibleMessageIndex])
 
   // Keyboard shortcuts for message navigation
   useEffect(() => {
@@ -71,14 +114,7 @@ export function useMessageNavigation({
         }
 
         e.preventDefault()
-        setSelectedMessageIndex((prev) => {
-          isKeyboardSelectRef.current = true
-          if (prev === -1) {
-            const visibleIdx = findFirstVisibleMessageIndex()
-            return visibleIdx >= 0 ? visibleIdx : displayedMessages.length - 1
-          }
-          return Math.max(0, prev - 1)
-        })
+        navigateMessageUp()
       } else if (e.key === 'ArrowDown') {
         if (isInput && !e.altKey) {
           if (e.target instanceof HTMLTextAreaElement) {
@@ -105,7 +141,7 @@ export function useMessageNavigation({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [displayedMessages, findFirstVisibleMessageIndex])
+  }, [displayedMessages, findFirstVisibleMessageIndex, navigateMessageUp])
 
   // Scroll selected message into view
   useEffect(() => {
@@ -128,5 +164,6 @@ export function useMessageNavigation({
     selectedMessageIndex,
     setSelectedMessageIndex,
     handleMessageSelect,
+    navigateMessageUp,
   }
 }
