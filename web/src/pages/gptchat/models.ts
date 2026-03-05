@@ -4,18 +4,20 @@
  */
 
 // Chat models
-export const ChatModelGPT4Turbo = 'gpt-4-turbo'
+// export const ChatModelGPT4Turbo = 'gpt-4-turbo'
 export const ChatModelGPT41 = 'gpt-4.1'
-export const ChatModelGPT41Mini = 'gpt-4.1-mini'
-export const ChatModelGPT41Nano = 'gpt-4.1-nano'
-export const ChatModelGPT5Dot2 = 'gpt-5.2'
-export const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro'
+// export const ChatModelGPT41Mini = 'gpt-4.1-mini'
+// export const ChatModelGPT41Nano = 'gpt-4.1-nano'
+// export const ChatModelGPT5Dot2 = 'gpt-5.2'
+export const ChatModelGPT5Dot4 = 'gpt-5.4'
+// export const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro'
+export const ChatModelGPT5Dot4Pro = 'gpt-5.4-pro'
 export const ChatModelGPT5Dot1 = 'gpt-5.1'
 // export const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex'
 export const ChatModelGPT5Dot2Codex = 'gpt-5.2-codex'
 export const ChatModelGPT5Mini = 'gpt-5-mini'
 export const ChatModelGPT5Nano = 'gpt-5-nano'
-export const ChatModelGPT5Pro = 'gpt-5-pro'
+// export const ChatModelGPT5Pro = 'gpt-5-pro'
 export const ChatModelGPT4O = 'gpt-4o'
 export const ChatModelGPT4OSearch = 'gpt-4o-search-preview'
 export const ChatModelGPT4OMini = 'gpt-4o-mini'
@@ -31,13 +33,13 @@ export const ChatModelGPTO4Mini = 'o4-mini'
 export const ChatModelGPTO4MiniDeepresearch = 'o4-mini-deepresearch'
 export const ChatModelDeepSeekChat = 'deepseek-chat'
 export const ChatModelDeepSeekResoner = 'deepseek-reasoner'
-export const ChatModelClaude45Opus = 'claude-opus-4-5'
-export const ChatModelClaude45Sonnet = 'claude-sonnet-4-5'
+export const ChatModelClaude46Opus = 'claude-opus-4-6'
+export const ChatModelClaude46Sonnet = 'claude-sonnet-4-6'
 export const ChatModelClaude45Haiku = 'claude-haiku-4-5'
 export const ChatModelGemini25Pro = 'gemini-2.5-pro'
-export const ChatModelGemini3Pro = 'gemini-3-pro-preview'
-export const ChatModelGemini25Flash = 'gemini-2.5-flash'
-export const ChatModelGemini25FlashImage = 'gemini-2.5-flash-image'
+export const ChatModelGemini3dot1Pro = 'gemini-3.1-pro-preview'
+export const ChatModelGemini31FlashLite = 'gemini-3.1-flash-lite-preview'
+export const ChatModelGemini31FlashImage = 'gemini-3.1-flash-image-preview'
 export const ChatModelDeepResearch = 'deep-research'
 export const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile'
 export const ChatModelGroqLlama4 = 'meta-llama/llama-guard-4-12b'
@@ -75,21 +77,23 @@ export const DefaultModel = ChatModelGPT4OMini
 export const ChatModels = [
   ChatModelDeepResearch,
   ChatModelGPT41,
-  ChatModelGPT41Mini,
-  ChatModelGPT41Nano,
+  // ChatModelGPT41Mini,
+  // ChatModelGPT41Nano,
   ChatModelGPT5Dot1,
-  ChatModelGPT5Dot2,
-  ChatModelGPT5Dot2Pro,
+  // ChatModelGPT5Dot2,
+  // ChatModelGPT5Dot2Pro,
+  ChatModelGPT5Dot4,
+  ChatModelGPT5Dot4Pro,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot2Codex,
   ChatModelGPT5Mini,
   ChatModelGPT5Nano,
-  ChatModelGPT5Pro,
+  // ChatModelGPT5Pro,
   ChatModelGPT4O,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
-  ChatModelGPT4Turbo,
+  // ChatModelGPT4Turbo,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
   ChatModelGPTO1,
@@ -101,42 +105,44 @@ export const ChatModels = [
   ChatModelGPTO4MiniDeepresearch,
   ChatModelDeepSeekChat,
   ChatModelDeepSeekResoner,
-  ChatModelClaude45Opus,
-  ChatModelClaude45Sonnet,
+  ChatModelClaude46Opus,
+  ChatModelClaude46Sonnet,
   ChatModelClaude45Haiku,
   ChatModelGroqllama3With70B,
   ChatModelGroqLlama4,
   ChatModelQwen332B,
   ChatModelKimiK2,
   ChatModelGemini25Pro,
-  ChatModelGemini3Pro,
-  ChatModelGemini25Flash,
-  ChatModelGemini25FlashImage,
+  ChatModelGemini3dot1Pro,
+  ChatModelGemini31FlashLite,
+  ChatModelGemini31FlashImage,
 ]
 
 export const VisionModels = [
-  ChatModelGPT4Turbo,
+  // ChatModelGPT4Turbo,
   ChatModelGPT41,
-  ChatModelGPT41Mini,
-  ChatModelGPT41Nano,
+  // ChatModelGPT41Mini,
+  // ChatModelGPT41Nano,
   ChatModelGPT5Dot1,
-  ChatModelGPT5Dot2,
-  ChatModelGPT5Dot2Pro,
+  // ChatModelGPT5Dot2,
+  // ChatModelGPT5Dot2Pro,
+  ChatModelGPT5Dot4,
+  ChatModelGPT5Dot4Pro,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot2Codex,
   ChatModelGPT5Mini,
   ChatModelGPT5Nano,
-  ChatModelGPT5Pro,
+  // ChatModelGPT5Pro,
   ChatModelGPT4O,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
   ChatModelGemini25Pro,
-  ChatModelGemini3Pro,
-  ChatModelGemini25Flash,
-  ChatModelGemini25FlashImage,
-  ChatModelClaude45Opus,
-  ChatModelClaude45Sonnet,
+  ChatModelGemini3dot1Pro,
+  ChatModelGemini31FlashLite,
+  ChatModelGemini31FlashImage,
+  ChatModelClaude46Opus,
+  ChatModelClaude46Sonnet,
   ChatModelClaude45Haiku,
   ChatModelGPTO1,
   ChatModelGPTO3,
@@ -181,12 +187,12 @@ export const FreeModels = [
   ChatModelGroqLlama4,
   ChatModelQwen332B,
   ChatModelGPT4OMini,
-  ChatModelGPT41Nano,
+  // ChatModelGPT41Nano,
   ChatModelGPT5Nano,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
   ChatModelDeepSeekChat,
-  ChatModelGemini25Flash,
+  ChatModelGemini31FlashLite,
   QAModelBasebit,
   QAModelSecurity,
   QAModelImmigrate,
@@ -210,17 +216,19 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGPTOSS20B,
     ChatModelGPT4OSearch,
     ChatModelGPT41,
-    ChatModelGPT41Mini,
-    ChatModelGPT41Nano,
+    // ChatModelGPT41Mini,
+    // ChatModelGPT41Nano,
     ChatModelGPT5Dot1,
-    ChatModelGPT5Dot2,
-    ChatModelGPT5Dot2Pro,
+    // ChatModelGPT5Dot2,
+    // ChatModelGPT5Dot2Pro,
+    ChatModelGPT5Dot4,
+    ChatModelGPT5Dot4Pro,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot2Codex,
     ChatModelGPT5Mini,
     ChatModelGPT5Nano,
-    ChatModelGPT5Pro,
-    ChatModelGPT4Turbo,
+    // ChatModelGPT5Pro,
+    // ChatModelGPT4Turbo,
     ChatModelGPTO1,
     ChatModelGPTO3,
     ChatModelGPTO3Mini,
@@ -231,14 +239,14 @@ export const ModelCategories: Record<string, string[]> = {
   ],
   Anthropic: [
     ChatModelClaude45Haiku,
-    ChatModelClaude45Opus,
-    ChatModelClaude45Sonnet,
+    ChatModelClaude46Opus,
+    ChatModelClaude46Sonnet,
   ],
   Google: [
     ChatModelGemini25Pro,
-    ChatModelGemini3Pro,
-    ChatModelGemini25Flash,
-    ChatModelGemini25FlashImage,
+    ChatModelGemini3dot1Pro,
+    ChatModelGemini31FlashLite,
+    ChatModelGemini31FlashImage,
   ],
   Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
   Others: [

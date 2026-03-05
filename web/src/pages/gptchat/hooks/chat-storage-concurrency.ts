@@ -4,9 +4,10 @@ import { useMemo, useRef } from 'react'
  * ChatStorageConcurrencyState encapsulates load and mutation counters for chat storage operations.
  */
 export interface ChatStorageConcurrencyState {
-  beginLoad: (
-    sessionId: number,
-  ) => { loadToken: number; startMutationVersion: number }
+  beginLoad: (sessionId: number) => {
+    loadToken: number
+    startMutationVersion: number
+  }
   markMutation: (sessionId: number) => void
   isStaleLoad: (params: {
     loadingSessionId: number

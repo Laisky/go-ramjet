@@ -273,7 +273,10 @@ describe('useChatStorage hook', () => {
 
     expect(setMessages).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ chatID: 'chat2', content: 'session2 message' }),
+        expect.objectContaining({
+          chatID: 'chat2',
+          content: 'session2 message',
+        }),
       ]),
     )
   })
