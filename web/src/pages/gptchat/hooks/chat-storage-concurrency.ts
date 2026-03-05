@@ -4,8 +4,10 @@ import { useMemo, useRef } from 'react'
  * ChatStorageConcurrencyState encapsulates load and mutation counters for chat storage operations.
  */
 export interface ChatStorageConcurrencyState {
-  beginLoad: () => { loadToken: number; startMutationVersion: number }
-  markMutation: () => void
+  beginLoad: (
+    sessionId: number,
+  ) => { loadToken: number; startMutationVersion: number }
+  markMutation: (sessionId: number) => void
   isStaleLoad: (params: {
     loadingSessionId: number
     currentSessionId: number
@@ -25,7 +27,16 @@ export interface ChatStorageConcurrencyState {
  */
 export function useChatStorageConcurrencyState(): ChatStorageConcurrencyState {
   const loadTokenRef = useRef(0)
-  const mutationVersionRef = useRef(0)
+  const mutationVersionBySessionRef = useRef(new Map<number, number>())
+
+  /**
+   * getMutationVersionForSession returns the current mutation version for a given session.
+   *
+   * @param sessionId - The chat session identifier.
+   * @returns The current mutation version for the session.
+   */
+  const getMutationVersionForSession = (sessionId: number): number =>
+    mutationVersionBySessionRef.current.get(sessionId) || 0
 
   return useMemo(
     () => ({
@@ -34,16 +45,17 @@ export function useChatStorageConcurrencyState(): ChatStorageConcurrencyState {
        *
        * @returns The new load token and mutation version snapshot for this load.
        */
-      beginLoad: () => ({
+      beginLoad: (sessionId: number) => ({
         loadToken: ++loadTokenRef.current,
-        startMutationVersion: mutationVersionRef.current,
+        startMutationVersion: getMutationVersionForSession(sessionId),
       }),
 
       /**
        * markMutation increments mutation version so in-flight loads can be invalidated.
        */
-      markMutation: () => {
-        mutationVersionRef.current += 1
+      markMutation: (sessionId: number) => {
+        const currentVersion = getMutationVersionForSession(sessionId)
+        mutationVersionBySessionRef.current.set(sessionId, currentVersion + 1)
       },
 
       /**
@@ -65,7 +77,7 @@ export function useChatStorageConcurrencyState(): ChatStorageConcurrencyState {
       }) =>
         loadingSessionId !== currentSessionId ||
         loadToken !== loadTokenRef.current ||
-        mutationVersionRef.current !== startMutationVersion,
+        getMutationVersionForSession(loadingSessionId) !== startMutationVersion,
 
       /**
        * getLoadToken returns the latest load token.
@@ -79,7 +91,16 @@ export function useChatStorageConcurrencyState(): ChatStorageConcurrencyState {
        *
        * @returns Current mutation version value.
        */
-      getMutationVersion: () => mutationVersionRef.current,
+      getMutationVersion: () => {
+        let highest = 0
+        for (const version of mutationVersionBySessionRef.current.values()) {
+          if (version > highest) {
+            highest = version
+          }
+        }
+
+        return highest
+      },
     }),
     [],
   )

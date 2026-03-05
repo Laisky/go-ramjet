@@ -17,6 +17,7 @@ vi.mock('@/utils/storage', () => ({
 describe('useChatStorage hook', () => {
   const setMessages = vi.fn()
   const setError = vi.fn()
+  const setMessagesAlt = vi.fn()
 
   const deferred = <T>() => {
     let resolve!: (value: T | PromiseLike<T>) => void
@@ -205,6 +206,74 @@ describe('useChatStorage hook', () => {
     expect(setMessages).not.toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ chatID: 'old', content: 'old' }),
+      ]),
+    )
+  })
+
+  it('should not invalidate session load by mutations from another session', async () => {
+    const historyFetchSession2 = deferred<any>()
+
+    ;(kvGet as any).mockImplementation((key: string) => {
+      if (key === 'chat_user_session_2') {
+        return historyFetchSession2.promise
+      }
+
+      if (key === 'chat_data_user_chat2') {
+        return Promise.resolve({
+          chatID: 'chat2',
+          role: 'user',
+          content: 'session2 message',
+        })
+      }
+
+      if (key === 'chat_data_assistant_chat2') {
+        return Promise.resolve(null)
+      }
+
+      if (key === 'chat_data_user_chat1') {
+        return Promise.resolve(null)
+      }
+
+      if (key === 'chat_user_session_1') {
+        return Promise.resolve([])
+      }
+
+      return Promise.resolve(null)
+    })
+
+    const hookSession1 = renderHook(() =>
+      useChatStorage({
+        sessionId: 1,
+        setMessages: setMessagesAlt,
+        setError,
+      }),
+    )
+
+    const hookSession2 = renderHook(() =>
+      useChatStorage({
+        sessionId: 2,
+        setMessages,
+        setError,
+      }),
+    )
+
+    const loadPromise = hookSession2.result.current.loadMessages()
+
+    // Trigger a mutation in another session while session 2 is loading.
+    await hookSession1.result.current.saveMessage({
+      chatID: 'chat1',
+      role: 'user',
+      content: 'session1 write',
+    } as any)
+
+    historyFetchSession2.resolve([
+      { chatID: 'chat2', role: 'user', content: 'session2 message' },
+    ])
+    await loadPromise
+
+    expect(setMessages).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ chatID: 'chat2', content: 'session2 message' }),
       ]),
     )
   })

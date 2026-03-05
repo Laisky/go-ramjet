@@ -99,7 +99,8 @@ export function useChatStorage({
 
   const loadMessages = useCallback(async () => {
     const loadingSessionId = sessionId
-    const { loadToken, startMutationVersion } = concurrency.beginLoad()
+    const { loadToken, startMutationVersion } =
+      concurrency.beginLoad(loadingSessionId)
 
     const isStale = () =>
       concurrency.isStaleLoad({
@@ -112,7 +113,7 @@ export function useChatStorage({
     console.debug('[useChatStorage] loadMessages start', {
       sessionId: loadingSessionId,
       loadToken,
-      mutationVersion: startMutationVersion,
+      startMutationVersion,
     })
 
     try {
@@ -137,7 +138,8 @@ export function useChatStorage({
           sessionId: loadingSessionId,
           loadToken,
         })
-        setMessages([])
+        // Keep current UI state intact when a stale/empty history response races
+        // with newer local updates or a subsequent session switch load.
         return
       }
 
@@ -222,7 +224,7 @@ export function useChatStorage({
 
   const saveMessage = useCallback(
     async (message: ChatMessageData) => {
-      concurrency.markMutation()
+      concurrency.markMutation(sessionId)
 
       const key = getChatDataKey(
         message.chatID,
@@ -269,7 +271,7 @@ export function useChatStorage({
   )
 
   const clearMessages = useCallback(async () => {
-    concurrency.markMutation()
+    concurrency.markMutation(sessionId)
 
     const historyKey = getSessionHistoryKey(sessionId)
     const history = await kvGet<SessionHistoryItem[]>(historyKey)
@@ -299,7 +301,7 @@ export function useChatStorage({
 
   const deleteMessage = useCallback(
     async (chatId: string) => {
-      concurrency.markMutation()
+      concurrency.markMutation(sessionId)
 
       console.debug('[useChatStorage] deleteMessage start', {
         sessionId,
