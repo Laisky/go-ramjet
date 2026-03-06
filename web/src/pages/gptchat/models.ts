@@ -10,6 +10,7 @@ export const ChatModelGPT41 = 'gpt-4.1'
 // export const ChatModelGPT41Nano = 'gpt-4.1-nano'
 // export const ChatModelGPT5Dot2 = 'gpt-5.2'
 export const ChatModelGPT5Dot4 = 'gpt-5.4'
+export const ChatModelGPT5Dot2 = 'gpt-5.2'
 // export const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro'
 export const ChatModelGPT5Dot4Pro = 'gpt-5.4-pro'
 export const ChatModelGPT5Dot1 = 'gpt-5.1'
@@ -84,6 +85,7 @@ export const ChatModels = [
   // ChatModelGPT5Dot2Pro,
   ChatModelGPT5Dot4,
   ChatModelGPT5Dot4Pro,
+  ChatModelGPT5Dot2,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   ChatModelGPT5Mini,
@@ -128,6 +130,7 @@ export const VisionModels = [
   // ChatModelGPT5Dot2Pro,
   ChatModelGPT5Dot4,
   ChatModelGPT5Dot4Pro,
+  ChatModelGPT5Dot2,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   ChatModelGPT5Mini,
@@ -223,6 +226,7 @@ export const ModelCategories: Record<string, string[]> = {
     // ChatModelGPT5Dot2Pro,
     ChatModelGPT5Dot4,
     ChatModelGPT5Dot4Pro,
+    ChatModelGPT5Dot2,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot3Codex,
     ChatModelGPT5Mini,
