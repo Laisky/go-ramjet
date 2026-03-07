@@ -54,24 +54,28 @@ export function ChatSearch({
     }
   }, [isOpen])
 
-  // Simple fuzzy search (matches all words)
+  // Simple fuzzy search (matches all words) with debouncing to prevent excessive filtering during rapid typing.
   useEffect(() => {
     if (!query.trim()) {
       setResults([])
       return
     }
 
-    const words = query.toLowerCase().trim().split(/\s+/)
-    const filtered = messages
-      .filter((m) => {
-        const content = m.content.toLowerCase()
-        return words.every((word) => content.includes(word))
-      })
-      .reverse() // Newest results first
-      .slice(0, 50) // Limit results
+    const timer = setTimeout(() => {
+      const words = query.toLowerCase().trim().split(/\s+/)
+      const filtered = messages
+        .filter((m) => {
+          const content = m.content.toLowerCase()
+          return words.every((word) => content.includes(word))
+        })
+        .reverse() // Newest results first
+        .slice(0, 50) // Limit results
 
-    setResults(filtered)
-    setSelectedIndex(0)
+      setResults(filtered)
+      setSelectedIndex(0)
+    }, 200)
+
+    return () => clearTimeout(timer)
   }, [query, messages])
 
   const handleSelect = useCallback(
