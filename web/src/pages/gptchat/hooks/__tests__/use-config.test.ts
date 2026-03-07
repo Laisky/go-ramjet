@@ -1,8 +1,26 @@
 import { kvGet } from '@/utils/storage'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatModelGPT5Mini, DefaultModel } from '../../models'
+import { DefaultSessionConfig } from '../../types'
 import { useConfig } from '../use-config'
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (value: T) => void
+}
+
+/**
+ * createDeferred builds a promise whose resolution is controlled by the test.
+ */
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
 
 // Mock storage
 vi.mock('@/utils/storage', () => ({
@@ -15,6 +33,8 @@ vi.mock('@/utils/storage', () => ({
     SELECTED_SESSION: 'config_selected_session',
     VERSION_DATE: 'config_version_date',
     SESSION_HISTORY_PREFIX: 'chat_user_session_',
+    SESSION_ORDER: 'config_session_order',
+    SYNC_KEY: 'config_sync_key',
   },
 }))
 
@@ -91,5 +111,71 @@ describe('useConfig', () => {
     expect(result.current.config.selected_model).toBe('dall-e-3')
     expect(result.current.config.selected_chat_model).toBe(DefaultModel)
     expect(result.current.config.selected_draw_model).toBe('dall-e-3')
+  })
+
+  it('should update config state before async persistence completes', async () => {
+    const syncKeyDeferred = createDeferred<string | null>()
+
+    ;(kvGet as any).mockImplementation((key: string) => {
+      if (key === 'config_selected_session') return Promise.resolve(1)
+      if (key === 'chat_user_config_1') {
+        return Promise.resolve({
+          ...DefaultSessionConfig,
+          sync_key: 'sync-existing',
+        })
+      }
+      if (key === 'config_sync_key') return syncKeyDeferred.promise
+      return Promise.resolve(null)
+    })
+
+    const { result } = renderHook(() => useConfig())
+
+    syncKeyDeferred.resolve('sync-existing')
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    const persistDeferred = createDeferred<string | null>()
+    ;(kvGet as any).mockImplementation((key: string) => {
+      if (key === 'config_sync_key') return persistDeferred.promise
+      if (key === 'config_selected_session') return Promise.resolve(1)
+      if (key === 'chat_user_config_1')
+        return Promise.resolve(result.current.config)
+      return Promise.resolve(null)
+    })
+
+    await act(async () => {
+      void result.current.updateConfig({ system_prompt: 'updated prompt' })
+    })
+
+    expect(result.current.config.system_prompt).toBe('updated prompt')
+
+    persistDeferred.resolve('sync-existing')
+
+    await waitFor(() => {
+      expect(result.current.config.system_prompt).toBe('updated prompt')
+    })
+  })
+
+  it('should persist an explicitly updated sync key without blocking state updates', async () => {
+    ;(kvGet as any).mockImplementation((key: string) => {
+      if (key === 'config_selected_session') return Promise.resolve(1)
+      if (key === 'chat_user_config_1') return Promise.resolve(null)
+      if (key === 'config_sync_key') return Promise.resolve('sync-initial')
+      return Promise.resolve(null)
+    })
+
+    const { result } = renderHook(() => useConfig())
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    await act(async () => {
+      void result.current.updateConfig({ sync_key: 'sync-updated' })
+    })
+
+    expect(result.current.config.sync_key).toBe('sync-updated')
   })
 })

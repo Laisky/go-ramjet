@@ -1,7 +1,7 @@
 /**
  * React hook for managing chat configuration.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
 import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
@@ -52,6 +52,16 @@ export function useConfig() {
     { id: number; name: string; visible: boolean }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
+  const configRef = useRef(config)
+  const sessionIdRef = useRef(sessionId)
+
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   /**
    * Load all available sessions
@@ -262,37 +272,55 @@ export function useConfig() {
   /**
    * Update and persist configuration
    */
-  const updateConfig = useCallback(
-    async (updates: Partial<SessionConfig>) => {
-      // Handle global sync key
-      let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
+  const updateConfig = useCallback(async (updates: Partial<SessionConfig>) => {
+    const baseConfig = configRef.current
+    const newConfig = {
+      ...baseConfig,
+      ...updates,
+      chat_switch: {
+        ...baseConfig.chat_switch,
+        ...(updates.chat_switch || {}),
+      },
+      sync_key: updates.sync_key ?? baseConfig.sync_key,
+      updated_at: Date.now(),
+    }
+
+    configRef.current = newConfig
+    setConfigState(newConfig)
+
+    console.debug('[useConfig] queued config update', {
+      sessionId: sessionIdRef.current,
+      updatedKeys: Object.keys(updates),
+      chatSwitchKeys: updates.chat_switch
+        ? Object.keys(updates.chat_switch)
+        : [],
+      hasApiTokenUpdate: updates.api_token !== undefined,
+      apiTokenLength:
+        typeof newConfig.api_token === 'string'
+          ? newConfig.api_token.length
+          : 0,
+      systemPromptLength:
+        typeof newConfig.system_prompt === 'string'
+          ? newConfig.system_prompt.length
+          : 0,
+    })
+
+    try {
       if (updates.sync_key !== undefined) {
-        globalSyncKey = updates.sync_key
-        await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
+        await kvSet(StorageKeys.SYNC_KEY, updates.sync_key)
       }
 
-      const newConfig = {
-        ...config,
-        ...updates,
-        chat_switch: {
-          ...config.chat_switch,
-          ...(updates.chat_switch || {}),
-        },
-        sync_key: globalSyncKey ?? config.sync_key,
-        updated_at: Date.now(),
-      }
-
-      setConfigState(newConfig)
-
-      try {
-        const key = getSessionConfigKey(sessionId)
-        await kvSet(key, newConfig)
-      } catch (error) {
-        console.error('Failed to save config:', error)
-      }
-    },
-    [config, sessionId, loadSessions],
-  )
+      const key = getSessionConfigKey(sessionIdRef.current)
+      await kvSet(key, newConfig)
+      console.debug('[useConfig] persisted config update', {
+        sessionId: sessionIdRef.current,
+        updatedAt: newConfig.updated_at,
+        updatedKeys: Object.keys(updates),
+      })
+    } catch (error) {
+      console.error('Failed to save config:', error)
+    }
+  }, [])
 
   /**
    * Reorder sessions

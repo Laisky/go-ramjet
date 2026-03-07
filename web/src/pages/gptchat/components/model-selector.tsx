@@ -49,9 +49,7 @@ export function ModelSelector({
   const [open, setOpen] = useState(false)
 
   const allowAll =
-    !allowedModels ||
-    allowedModels.length === 0 ||
-    allowedModels.includes('*')
+    !allowedModels || allowedModels.length === 0 || allowedModels.includes('*')
   const allowedSet = new Set(allowedModels || [])
 
   const filteredCategories = categories?.length
