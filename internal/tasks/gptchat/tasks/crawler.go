@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -14,7 +12,6 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
-	gutils "github.com/Laisky/go-utils/v6"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/network"
@@ -296,21 +293,30 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 	})
 
 	if err != nil {
+		if outputMarkdown {
+			logger.Warn("direct dynamic fetch failed, fallback to web fetch proxies", zap.Error(err))
+			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
+			if proxyErr == nil {
+				logger.Info("web fetch proxy fallback succeeded after direct fetch failure")
+				return []byte(proxyMarkdown), proxyMarkdown, nil
+			}
+			logger.Warn("web fetch proxy fallback failed after direct fetch failure", zap.Error(proxyErr))
+		}
+
 		return nil, "", errors.Wrapf(err, "run chromedp for %q", url)
 	}
 
 	if isCloudflareChallenge(htmlContent) {
 		logger.Warn("cloudflare challenge detected")
 
-		// fallback to jina reader
 		if outputMarkdown {
-			logger.Info("try fallback to jina reader")
-			jinaMarkdown, jinaErr := fetchByJinaReader(ctx, url)
-			if jinaErr == nil && strings.TrimSpace(jinaMarkdown) != "" && !isCloudflareChallenge(jinaMarkdown) {
-				logger.Info("fallback to jina reader succeed")
-				return []byte(jinaMarkdown), jinaMarkdown, nil
+			logger.Info("try fallback to web fetch proxies")
+			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
+			if proxyErr == nil {
+				logger.Info("fallback to web fetch proxy succeeded")
+				return []byte(proxyMarkdown), proxyMarkdown, nil
 			}
-			logger.Warn("fallback to jina reader failed", zap.Error(jinaErr))
+			logger.Warn("fallback to web fetch proxies failed", zap.Error(proxyErr))
 		}
 
 		return nil, "", errors.Errorf("cloudflare challenge detected for %q", url)
@@ -318,6 +324,16 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 
 	content := []byte(htmlContent)
 	if len(content) == 0 {
+		if outputMarkdown {
+			logger.Warn("empty content from direct dynamic fetch, fallback to web fetch proxies")
+			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
+			if proxyErr == nil {
+				logger.Info("web fetch proxy fallback succeeded after empty content")
+				return []byte(proxyMarkdown), proxyMarkdown, nil
+			}
+			logger.Warn("web fetch proxy fallback failed after empty content", zap.Error(proxyErr))
+		}
+
 		return nil, "", errors.Errorf("no content found by chromedp for %q", url)
 	}
 
@@ -399,16 +415,16 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 		logger.Debug("local html-to-markdown failed", zap.Error(localErr))
 	}
 
-	// 2) fallback to Jina Reader
+	// 2) fallback to web fetch proxies
 	if targetURL != "" {
-		jinaMarkdown, jinaErr := fetchByJinaReader(ctx, targetURL)
-		if jinaErr == nil {
-			jinaMarkdown = strings.TrimSpace(jinaMarkdown)
-			if jinaMarkdown != "" {
-				return bodyContent, jinaMarkdown, nil
+		proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, targetURL)
+		if proxyErr == nil {
+			proxyMarkdown = strings.TrimSpace(proxyMarkdown)
+			if proxyMarkdown != "" {
+				return bodyContent, proxyMarkdown, nil
 			}
 		} else {
-			logger.Debug("jina reader failed", zap.Error(jinaErr))
+			logger.Debug("web fetch proxies failed", zap.Error(proxyErr))
 		}
 	}
 
@@ -448,40 +464,6 @@ func isCloudflareChallenge(htmlContent string) bool {
 		}
 	}
 	return false
-}
-
-func fetchByJinaReader(ctx context.Context, targetURL string) (string, error) {
-	if targetURL == "" {
-		return "", errors.New("targetURL is empty")
-	}
-
-	url := "https://r.jina.ai/" + targetURL
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", errors.Wrap(err, "new request")
-	}
-
-	cli, err := gutils.NewHTTPClient()
-	if err != nil {
-		return "", errors.Wrap(err, "new http client")
-	}
-
-	resp, err := cli.Do(req)
-	if err != nil {
-		return "", errors.Wrap(err, "do request")
-	}
-	defer gutils.LogErr(resp.Body.Close, log.Logger)
-
-	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("jina reader request failed: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", errors.Wrap(err, "read body")
-	}
-
-	return string(body), nil
 }
 
 // FetchDynamicURLContent is a wrapper for submit & fetch dynamic url content
