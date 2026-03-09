@@ -186,6 +186,18 @@ openai:
 
   # Rate limiting for freetier users (seconds between MCP calls)
   rate_limit_expensive_models_interval_secs: 600
+
+  # Optional markdown-oriented web fetch fallbacks used by GPTChat crawling
+  web_fetch:
+    jina:
+      enabled: true
+      prefix: https://r.jina.ai/
+    scrapeless:
+      enabled: true
+      api: https://api.scrapeless.com/api/v2/unlocker/request
+      api_key: ${SCRAPELESS_API_KEY}
+      actor: unlocker.webunlocker
+      proxy_country: ANY
 ```
 
 **Backend behavior:**

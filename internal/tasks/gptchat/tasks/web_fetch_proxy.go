@@ -1,7 +1,9 @@
 package tasks
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -29,12 +32,37 @@ type prefixedWebFetchProxy struct {
 	prefix string
 }
 
+// scrapelessWebFetchProxy calls the Scrapeless universal scraping API.
+type scrapelessWebFetchProxy struct {
+	apiURL       string
+	apiKey       string
+	actor        string
+	proxyCountry string
+}
+
+// scrapelessRequestPayload is the request body sent to Scrapeless.
+type scrapelessRequestPayload struct {
+	Actor string                 `json:"actor"`
+	Input scrapelessRequestInput `json:"input"`
+	Proxy scrapelessRequestProxy `json:"proxy"`
+}
+
+// scrapelessRequestInput contains the target request details.
+type scrapelessRequestInput struct {
+	URL      string         `json:"url"`
+	Method   string         `json:"method"`
+	Redirect bool           `json:"redirect"`
+	Headers  map[string]any `json:"headers,omitempty"`
+}
+
+// scrapelessRequestProxy contains proxy routing options.
+type scrapelessRequestProxy struct {
+	Country string `json:"country"`
+}
+
 var (
 	newCrawlerHTTPClient = gutils.NewHTTPClient
-	webFetchProxies      = []webFetchProxy{
-		prefixedWebFetchProxy{name: "jina", prefix: "https://r.jina.ai/"},
-		prefixedWebFetchProxy{name: "defuddle", prefix: "https://defuddle.md/"},
-	}
+	webFetchProxies      []webFetchProxy
 )
 
 // Name returns the proxy name.
@@ -47,6 +75,69 @@ func (p prefixedWebFetchProxy) Fetch(ctx context.Context, targetURL string) (str
 	return fetchByWebFetchProxyPrefix(ctx, p.name, p.prefix, targetURL)
 }
 
+// Name returns the proxy name.
+func (p scrapelessWebFetchProxy) Name() string {
+	return "scrapeless"
+}
+
+// Fetch retrieves targetURL through the Scrapeless API.
+func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (string, error) {
+	if strings.TrimSpace(targetURL) == "" {
+		return "", errors.New("targetURL is empty")
+	}
+	if strings.TrimSpace(p.apiKey) == "" {
+		return "", errors.New("scrapeless api key is empty")
+	}
+
+	payload := scrapelessRequestPayload{
+		Actor: p.actor,
+		Input: scrapelessRequestInput{
+			URL:      targetURL,
+			Method:   http.MethodGet,
+			Redirect: false,
+		},
+		Proxy: scrapelessRequestProxy{Country: p.proxyCountry},
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", errors.Wrap(err, "marshal scrapeless payload")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.apiURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", errors.Wrap(err, "new scrapeless request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-token", p.apiKey)
+
+	cli, err := newCrawlerHTTPClient()
+	if err != nil {
+		return "", errors.Wrap(err, "new scrapeless http client")
+	}
+
+	resp, err := cli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "scrapeless request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read scrapeless body")
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", errors.Errorf("scrapeless request failed: %d body=%s", resp.StatusCode, truncateForLog(string(body), 256))
+	}
+
+	content, err := extractScrapelessContent(body)
+	if err != nil {
+		return "", errors.Wrap(err, "extract scrapeless content")
+	}
+
+	return content, nil
+}
+
 // webFetchProxyResult carries a single proxy fetch attempt result.
 type webFetchProxyResult struct {
 	name string
@@ -55,10 +146,21 @@ type webFetchProxyResult struct {
 }
 
 // registeredWebFetchProxies returns a snapshot of configured web fetch proxies.
-func registeredWebFetchProxies() []webFetchProxy {
-	proxies := make([]webFetchProxy, len(webFetchProxies))
-	copy(proxies, webFetchProxies)
-	return proxies
+func registeredWebFetchProxies() ([]webFetchProxy, error) {
+	if webFetchProxies != nil {
+		proxies := make([]webFetchProxy, len(webFetchProxies))
+		copy(proxies, webFetchProxies)
+		return proxies, nil
+	}
+
+	providers, err := buildConfiguredWebFetchProxies()
+	if err != nil {
+		return nil, errors.Wrap(err, "build configured web fetch proxies")
+	}
+
+	proxies := make([]webFetchProxy, len(providers))
+	copy(proxies, providers)
+	return proxies, nil
 }
 
 // fetchByWebFetchProxyRace returns the first successful proxy response body.
@@ -67,7 +169,10 @@ func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, er
 		return "", errors.New("targetURL is empty")
 	}
 
-	proxies := registeredWebFetchProxies()
+	proxies, err := registeredWebFetchProxies()
+	if err != nil {
+		return "", errors.Wrap(err, "register web fetch proxies")
+	}
 	if len(proxies) == 0 {
 		return "", errors.New("no web fetch proxies configured")
 	}
@@ -112,7 +217,7 @@ func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, er
 		return errors.Errorf("all web fetch proxies failed: %s", strings.Join(errMsgs, "; "))
 	})
 
-	if err := gutils.RaceErrWithCtx(ctx, raceFns...); err != nil {
+	if err = gutils.RaceErrWithCtx(ctx, raceFns...); err != nil {
 		return "", errors.Wrap(err, "race web fetch proxies")
 	}
 
@@ -121,6 +226,168 @@ func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, er
 		zap.Int("len", len(result.body)))
 
 	return result.body, nil
+}
+
+// buildConfiguredWebFetchProxies builds providers from GPTChat config.
+func buildConfiguredWebFetchProxies() ([]webFetchProxy, error) {
+	providers := make([]webFetchProxy, 0, 3)
+	webFetchConfig := currentWebFetchConfig()
+
+	if webFetchProviderEnabled(webFetchConfig.Jina.Enabled, true) {
+		if webFetchConfig.Jina.Prefix == "" {
+			return nil, errors.New("jina prefix is empty")
+		}
+		providers = append(providers, prefixedWebFetchProxy{name: "jina", prefix: webFetchConfig.Jina.Prefix})
+	}
+
+	if webFetchProviderEnabled(webFetchConfig.Defuddle.Enabled, true) {
+		if webFetchConfig.Defuddle.Prefix == "" {
+			return nil, errors.New("defuddle prefix is empty")
+		}
+		providers = append(providers, prefixedWebFetchProxy{name: "defuddle", prefix: webFetchConfig.Defuddle.Prefix})
+	}
+
+	if webFetchProviderEnabled(webFetchConfig.Scrapeless.Enabled, false) {
+		if webFetchConfig.Scrapeless.API == "" {
+			return nil, errors.New("scrapeless api is empty")
+		}
+		if strings.TrimSpace(webFetchConfig.Scrapeless.APIKey) == "" {
+			return nil, errors.New("scrapeless api key is empty")
+		}
+		providers = append(providers, scrapelessWebFetchProxy{
+			apiURL:       webFetchConfig.Scrapeless.API,
+			apiKey:       webFetchConfig.Scrapeless.APIKey,
+			actor:        webFetchConfig.Scrapeless.Actor,
+			proxyCountry: webFetchConfig.Scrapeless.ProxyCountry,
+		})
+	}
+
+	return providers, nil
+}
+
+// webFetchProviderEnabled returns the configured enabled state or the provided default.
+func webFetchProviderEnabled(enabled *bool, defaultValue bool) bool {
+	if enabled == nil {
+		return defaultValue
+	}
+
+	return *enabled
+}
+
+// currentWebFetchConfig returns the configured web fetch providers or zero values when config is unavailable.
+func currentWebFetchConfig() iconfig.WebFetchConfig {
+	if iconfig.Config == nil {
+		return iconfig.WebFetchConfig{
+			Jina:     iconfig.PrefixWebFetchProxyConfig{Prefix: "https://r.jina.ai/"},
+			Defuddle: iconfig.PrefixWebFetchProxyConfig{Prefix: "https://defuddle.md/"},
+			Scrapeless: iconfig.ScrapelessWebFetchProxyConfig{
+				API:          "https://api.scrapeless.com/api/v2/unlocker/request",
+				Actor:        "unlocker.webunlocker",
+				ProxyCountry: "ANY",
+			},
+		}
+	}
+
+	return iconfig.Config.WebFetch
+}
+
+// extractScrapelessContent extracts the first useful string payload from a Scrapeless response.
+func extractScrapelessContent(body []byte) (string, error) {
+	content := strings.TrimSpace(string(body))
+	if content == "" {
+		return "", errors.New("scrapeless returned empty body")
+	}
+	if content[0] != '{' && content[0] != '[' {
+		if isCloudflareChallenge(content) {
+			return "", errors.New("scrapeless returned cloudflare challenge")
+		}
+
+		return content, nil
+	}
+
+	var payload any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", errors.Wrap(err, "unmarshal scrapeless body")
+	}
+
+	if extracted := findFirstStringValue(payload, "content", "html", "body", "markdown", "text", "data"); extracted != "" {
+		if isCloudflareChallenge(extracted) {
+			return "", errors.New("scrapeless returned cloudflare challenge")
+		}
+
+		return extracted, nil
+	}
+
+	return "", errors.Errorf("scrapeless content not found in response: %s", truncateForLog(content, 256))
+}
+
+// findFirstStringValue searches nested JSON-like data for the first non-empty string under preferred keys.
+func findFirstStringValue(value any, preferredKeys ...string) string {
+	for _, key := range preferredKeys {
+		if extracted := findStringValueForKey(value, key); extracted != "" {
+			return strings.TrimSpace(extracted)
+		}
+	}
+
+	return ""
+}
+
+// findStringValueForKey recursively searches for a non-empty string under the provided key.
+func findStringValueForKey(value any, key string) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		if direct, ok := typed[key]; ok {
+			if text := directStringValue(direct); text != "" {
+				return text
+			}
+		}
+
+		for _, nested := range typed {
+			if text := findStringValueForKey(nested, key); text != "" {
+				return text
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if text := findStringValueForKey(nested, key); text != "" {
+				return text
+			}
+		}
+	}
+
+	return ""
+}
+
+// directStringValue unwraps nested values until it finds a string payload.
+func directStringValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		for _, nested := range typed {
+			if text := directStringValue(nested); text != "" {
+				return text
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if text := directStringValue(nested); text != "" {
+				return text
+			}
+		}
+	}
+
+	return ""
+}
+
+// truncateForLog shortens log payloads while keeping the prefix readable.
+func truncateForLog(s string, limit int) string {
+	s = strings.TrimSpace(s)
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+
+	return s[:limit] + "..."
 }
 
 // fetchByWebFetchProxyPrefix fetches targetURL through a prefixed web proxy endpoint.

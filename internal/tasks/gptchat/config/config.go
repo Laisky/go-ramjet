@@ -63,6 +63,17 @@ func SetupConfig() (err error) {
 	Config.MemoryModel = gutils.OptionalVal(&Config.MemoryModel, "openai/gpt-oss-120b")
 	Config.MemoryLLMTimeoutSeconds = gutils.OptionalVal(&Config.MemoryLLMTimeoutSeconds, 15)
 	Config.MemoryLLMMaxOutputTokens = gutils.OptionalVal(&Config.MemoryLLMMaxOutputTokens, 512)
+	Config.WebFetch.Jina.Prefix = normalizeWebFetchPrefix(
+		gutils.OptionalVal(&Config.WebFetch.Jina.Prefix, "https://r.jina.ai/"))
+	Config.WebFetch.Defuddle.Prefix = normalizeWebFetchPrefix(
+		gutils.OptionalVal(&Config.WebFetch.Defuddle.Prefix, "https://defuddle.md/"))
+	Config.WebFetch.Scrapeless.API = trimUrl(gutils.OptionalVal(
+		&Config.WebFetch.Scrapeless.API, "https://api.scrapeless.com/api/v2/unlocker/request"))
+	Config.WebFetch.Scrapeless.APIKey = strings.TrimSpace(Config.WebFetch.Scrapeless.APIKey)
+	Config.WebFetch.Scrapeless.Actor = strings.TrimSpace(gutils.OptionalVal(
+		&Config.WebFetch.Scrapeless.Actor, "unlocker.webunlocker"))
+	Config.WebFetch.Scrapeless.ProxyCountry = strings.ToUpper(strings.TrimSpace(gutils.OptionalVal(
+		&Config.WebFetch.Scrapeless.ProxyCountry, "ANY")))
 	// Config.DefaultOpenaiToken = gutils.OptionalVal(
 	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
@@ -91,7 +102,30 @@ func SetupConfig() (err error) {
 		return errors.New("openai.memory_llm_max_output_tokens should be > 0")
 	}
 
+	if webFetchEnabled(Config.WebFetch.Scrapeless.Enabled, false) && Config.WebFetch.Scrapeless.APIKey == "" {
+		return errors.New("openai.web_fetch.scrapeless.api_key is required when scrapeless is enabled")
+	}
+
 	return nil
+}
+
+// normalizeWebFetchPrefix trims whitespace and ensures the prefix ends with '/'.
+func normalizeWebFetchPrefix(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return ""
+	}
+
+	return strings.TrimRight(prefix, "/") + "/"
+}
+
+// webFetchEnabled returns the configured enabled state or the provided default.
+func webFetchEnabled(enabled *bool, defaultValue bool) bool {
+	if enabled == nil {
+		return defaultValue
+	}
+
+	return *enabled
 }
 
 func trimUrl(url string) string {
@@ -180,9 +214,43 @@ type OpenAI struct {
 	MemoryLLMTimeoutSeconds int `json:"memory_llm_timeout_seconds" mapstructure:"memory_llm_timeout_seconds"`
 	// MemoryLLMMaxOutputTokens limits output tokens for heuristic memory LLM calls.
 	MemoryLLMMaxOutputTokens int `json:"memory_llm_max_output_tokens" mapstructure:"memory_llm_max_output_tokens"`
+	// WebFetch configures markdown-oriented web fetch proxy providers.
+	WebFetch WebFetchConfig `json:"web_fetch" mapstructure:"web_fetch"`
 
 	// Azure (optional) azure config
 	Azure azureConfig `json:"azure" mapstructure:"azure"`
+}
+
+// WebFetchConfig configures available web fetch proxy providers.
+type WebFetchConfig struct {
+	// Jina configures the Jina proxy provider.
+	Jina PrefixWebFetchProxyConfig `json:"jina" mapstructure:"jina"`
+	// Defuddle configures the Defuddle proxy provider.
+	Defuddle PrefixWebFetchProxyConfig `json:"defuddle" mapstructure:"defuddle"`
+	// Scrapeless configures the Scrapeless universal scraping provider.
+	Scrapeless ScrapelessWebFetchProxyConfig `json:"scrapeless" mapstructure:"scrapeless"`
+}
+
+// PrefixWebFetchProxyConfig configures a prefix-based web fetch proxy.
+type PrefixWebFetchProxyConfig struct {
+	// Enabled toggles the provider. Nil means use the code default.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled"`
+	// Prefix is prepended to the target URL.
+	Prefix string `json:"prefix" mapstructure:"prefix"`
+}
+
+// ScrapelessWebFetchProxyConfig configures the Scrapeless provider.
+type ScrapelessWebFetchProxyConfig struct {
+	// Enabled toggles the provider. Nil means use the code default.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled"`
+	// API is the Scrapeless request endpoint.
+	API string `json:"api" mapstructure:"api"`
+	// APIKey authenticates requests to Scrapeless.
+	APIKey string `json:"-" mapstructure:"api_key"`
+	// Actor selects the Scrapeless actor.
+	Actor string `json:"actor" mapstructure:"actor"`
+	// ProxyCountry selects the regional proxy pool.
+	ProxyCountry string `json:"proxy_country" mapstructure:"proxy_country"`
 }
 
 type azureConfig struct {
