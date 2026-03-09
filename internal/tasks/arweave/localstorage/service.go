@@ -137,6 +137,7 @@ func RunSaveUrlContent(ctx context.Context) {
 
 					content, err := gptTasks.FetchDynamicURLContent(taskCtx,
 						task.url,
+						gptTasks.WithMarkdownConversion("", false),
 					)
 					if err != nil {
 						return errors.Wrapf(err, "fetch url %s", task.url)

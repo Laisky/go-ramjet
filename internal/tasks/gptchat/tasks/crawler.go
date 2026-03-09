@@ -34,6 +34,8 @@ var (
 	defaultChromedpSemaLimit = 2
 	// chromedpSema chromedp cost too much memory, so limit it
 	chromedpSema *semaphore.Weighted
+	// fetchDynamicHTMLContent renders a page and returns the raw HTML for the current crawl attempt.
+	fetchDynamicHTMLContent = fetchDynamicHTMLByChromedp
 )
 
 func init() {
@@ -207,18 +209,12 @@ func WithDuration(duration time.Duration) FetchURLOption {
 	}
 }
 
-// dynamicFetchWorker fetch dynamic url content, will render js by chromedp
-func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown bool, opts ...FetchURLOption) (rawBody []byte, markdown string, err error) {
-	startAt := time.Now()
-	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
-		With(zap.String("url", url))
+// fetchDynamicHTMLByChromedp renders targetURL through chromedp and returns the full HTML document.
+func fetchDynamicHTMLByChromedp(ctx context.Context, targetURL string) (htmlContent string, err error) {
+	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_html_by_chromedp").With(
+		zap.String("url", targetURL),
+	)
 
-	// opt, err := new(fetchURLOption).apply(opts...)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "apply options")
-	// }
-
-	logger.Debug("fetch dynamic url")
 	headers := map[string]any{
 		//nolint: lll
 		"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537",
@@ -229,28 +225,18 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 	}
 
 	if err = chromedpSema.Acquire(ctx, 1); err != nil {
-		return nil, "", errors.Wrap(err, "acquire chromedp sema")
-	} else {
-		defer chromedpSema.Release(1)
+		return "", errors.Wrap(err, "acquire chromedp sema")
 	}
+	defer chromedpSema.Release(1)
 
-	// create chrome options with proxy settings
 	chromeOpts := append(chromedp.DefaultExecAllocatorOptions[:],
-		// Skip Chrome's first-run / welcome screens to avoid extra overhead
 		chromedp.NoDefaultBrowserCheck,
-		// Skip first run UI popup
 		chromedp.NoFirstRun,
-		// Set initial window size (important for responsive sites)
 		chromedp.WindowSize(1920, 1080),
-		// Run in headless mode (no GUI) - essential for Docker/server environments
 		chromedp.Flag("headless", true),
-		// Disable GPU acceleration - prevents issues in containerized environments
 		chromedp.Flag("disable-gpu", true),
-		// Use /tmp instead of /dev/shm - prevents crashes when /dev/shm is too small in Docker
 		chromedp.Flag("disable-dev-shm-usage", true),
-		// Disable sandbox - required for running in Docker (less secure but necessary)
 		chromedp.Flag("no-sandbox", true),
-		// Disable setuid sandbox - complementary to no-sandbox for Docker environments
 		chromedp.Flag("disable-setuid-sandbox", true),
 	)
 	if os.Getenv("CRAWLER_HTTP_PROXY") != "" {
@@ -264,14 +250,11 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 	chromeCtx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
-	var htmlContent string
 	err = chromedp.Run(chromeCtx, chromedp.Tasks{
 		network.Enable(),
-		// Set headers before navigation!
 		network.SetExtraHTTPHeaders(network.Headers(headers)),
-		chromedp.Navigate(url),
+		chromedp.Navigate(targetURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		// Wait for document.readyState to be complete
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var readyState string
 			for {
@@ -285,56 +268,110 @@ func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown 
 			}
 			return nil
 		}),
-		// Additional wait: Let dynamic JS scripts finish executing.
-		// Adjust the sleep duration or use more advanced conditions as needed.
 		chromedp.Sleep(2 * time.Second),
-		// Get the full HTML after dynamic scripts have rendered
 		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
 	})
-
 	if err != nil {
-		if outputMarkdown {
-			logger.Warn("direct dynamic fetch failed, fallback to web fetch proxies", zap.Error(err))
-			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
-			if proxyErr == nil {
-				logger.Info("web fetch proxy fallback succeeded after direct fetch failure")
-				return []byte(proxyMarkdown), proxyMarkdown, nil
-			}
-			logger.Warn("web fetch proxy fallback failed after direct fetch failure", zap.Error(proxyErr))
+		return "", errors.Wrapf(err, "run chromedp for %q", targetURL)
+	}
+
+	return htmlContent, nil
+}
+
+// fallbackDynamicFetchWithProxy attempts configured web fetch proxies after direct crawling fails.
+func fallbackDynamicFetchWithProxy(
+	ctx context.Context,
+	targetURL string,
+	outputMarkdown bool,
+	trigger string,
+	primaryErr error,
+) (rawBody []byte, markdown string, err error) {
+	logger := gmw.GetLogger(ctx).Named("fallback_dynamic_fetch_with_proxy").With(
+		zap.String("url", targetURL),
+		zap.String("trigger", trigger),
+		zap.Bool("output_markdown", outputMarkdown),
+	)
+	logger.Debug("attempt web fetch proxy fallback")
+
+	proxyBody, err := fetchByWebFetchProxyRace(ctx, targetURL)
+	if err != nil {
+		fields := []zap.Field{zap.Error(err)}
+		if primaryErr != nil {
+			fields = append(fields, zap.String("primary_error", primaryErr.Error()))
+		}
+		logger.Warn("web fetch proxy fallback failed", fields...)
+		if primaryErr != nil {
+			return nil, "", errors.Wrapf(primaryErr, "web fetch proxy fallback after %s", trigger)
 		}
 
-		return nil, "", errors.Wrapf(err, "run chromedp for %q", url)
+		return nil, "", errors.Wrapf(err, "web fetch proxy fallback after %s", trigger)
+	}
+
+	proxyBody = strings.TrimSpace(proxyBody)
+	if proxyBody == "" {
+		err = errors.Errorf("web fetch proxy returned empty body after %s", trigger)
+		fields := []zap.Field{zap.Error(err)}
+		if primaryErr != nil {
+			fields = append(fields, zap.String("primary_error", primaryErr.Error()))
+		}
+		logger.Warn("web fetch proxy fallback returned empty body", fields...)
+		if primaryErr != nil {
+			return nil, "", errors.Wrapf(primaryErr, "web fetch proxy fallback after %s", trigger)
+		}
+
+		return nil, "", err
+	}
+
+	logger.Info("web fetch proxy fallback succeeded", zap.Int("len", len(proxyBody)))
+	if outputMarkdown {
+		return []byte(proxyBody), proxyBody, nil
+	}
+
+	return []byte(proxyBody), "", nil
+}
+
+// dynamicFetchWorker fetch dynamic url content, will render js by chromedp
+func dynamicFetchWorker(ctx context.Context, url, apiKey string, outputMarkdown bool, opts ...FetchURLOption) (rawBody []byte, markdown string, err error) {
+	startAt := time.Now()
+	logger := gmw.GetLogger(ctx).Named("fetch_dynamic_url_content").
+		With(zap.String("url", url))
+
+	// opt, err := new(fetchURLOption).apply(opts...)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "apply options")
+	// }
+
+	logger.Debug("fetch dynamic url", zap.Bool("output_markdown", outputMarkdown))
+
+	htmlContent, err := fetchDynamicHTMLContent(ctx, url)
+	if err != nil {
+		logger.Warn("direct dynamic fetch failed, try web fetch proxies", zap.Error(err))
+		if rawBody, markdown, err = fallbackDynamicFetchWithProxy(ctx, url, outputMarkdown, "direct_fetch_failed", err); err == nil {
+			return rawBody, markdown, nil
+		}
+
+		return nil, "", err
 	}
 
 	if isCloudflareChallenge(htmlContent) {
-		logger.Warn("cloudflare challenge detected")
-
-		if outputMarkdown {
-			logger.Info("try fallback to web fetch proxies")
-			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
-			if proxyErr == nil {
-				logger.Info("fallback to web fetch proxy succeeded")
-				return []byte(proxyMarkdown), proxyMarkdown, nil
-			}
-			logger.Warn("fallback to web fetch proxies failed", zap.Error(proxyErr))
+		challengeErr := errors.Errorf("cloudflare challenge detected for %q", url)
+		logger.Warn("cloudflare challenge detected", zap.String("trigger", "cloudflare_challenge"))
+		if rawBody, markdown, err = fallbackDynamicFetchWithProxy(ctx, url, outputMarkdown, "cloudflare_challenge", challengeErr); err == nil {
+			return rawBody, markdown, nil
 		}
 
-		return nil, "", errors.Errorf("cloudflare challenge detected for %q", url)
+		return nil, "", err
 	}
 
 	content := []byte(htmlContent)
 	if len(content) == 0 {
-		if outputMarkdown {
-			logger.Warn("empty content from direct dynamic fetch, fallback to web fetch proxies")
-			proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, url)
-			if proxyErr == nil {
-				logger.Info("web fetch proxy fallback succeeded after empty content")
-				return []byte(proxyMarkdown), proxyMarkdown, nil
-			}
-			logger.Warn("web fetch proxy fallback failed after empty content", zap.Error(proxyErr))
+		emptyErr := errors.Errorf("no content found by chromedp for %q", url)
+		logger.Warn("empty content from direct dynamic fetch", zap.String("trigger", "empty_direct_content"))
+		if rawBody, markdown, err = fallbackDynamicFetchWithProxy(ctx, url, outputMarkdown, "empty_direct_content", emptyErr); err == nil {
+			return rawBody, markdown, nil
 		}
 
-		return nil, "", errors.Errorf("no content found by chromedp for %q", url)
+		return nil, "", err
 	}
 
 	bodyContent, markdownText, err := ExtractHTMLBody(ctx, url, content, apiKey, outputMarkdown)
@@ -391,7 +428,7 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	}
 
 	bodyContent = out.Bytes()
-	if !outputMarkdown || strings.TrimSpace(apiKey) == "" {
+	if !outputMarkdown {
 		return bodyContent, "", nil
 	}
 
@@ -429,6 +466,10 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	}
 
 	// 3) fallback to LLM conversion
+	if strings.TrimSpace(apiKey) == "" {
+		return bodyContent, "", nil
+	}
+
 	llmInput := innerHTML
 	if len(llmInput) == 0 {
 		llmInput = bodyContent
@@ -524,6 +565,8 @@ type fetchDynamicURLContentOption struct {
 }
 
 func (o *fetchDynamicURLContentOption) apply(opts ...FetchDynamicURLContentOption) (*fetchDynamicURLContentOption, error) {
+	o.outputMarkdown = true
+
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
 			return nil, err

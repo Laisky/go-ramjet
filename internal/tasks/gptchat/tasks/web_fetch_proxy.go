@@ -188,7 +188,15 @@ func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, er
 	for _, proxy := range proxies {
 		proxy := proxy
 		raceFns = append(raceFns, func(ctx context.Context) error {
+			logger.Debug("start web fetch proxy request", zap.String("proxy", proxy.Name()))
 			body, err := proxy.Fetch(ctx, targetURL)
+			if err != nil {
+				logger.Debug("web fetch proxy request failed", zap.String("proxy", proxy.Name()), zap.Error(err))
+			} else {
+				logger.Debug("web fetch proxy request succeeded",
+					zap.String("proxy", proxy.Name()),
+					zap.Int("len", len(body)))
+			}
 			select {
 			case resultCh <- webFetchProxyResult{name: proxy.Name(), body: body, err: err}:
 			case <-ctx.Done():
