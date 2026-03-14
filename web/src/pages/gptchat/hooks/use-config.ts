@@ -134,8 +134,9 @@ export function useConfig() {
         const savedConfig = await kvGet<SessionConfig>(key)
         console.debug(`[useConfig] load session ${activeSessionId} config`, {
           hasSavedConfig: !!savedConfig,
-          // @ts-expect-error -- selected_model may exist on legacy config shapes
-          legacySelectedModel: savedConfig?.selected_model,
+          legacySelectedModel: (
+            savedConfig as unknown as Record<string, unknown>
+          )?.selected_model,
         })
 
         let finalConfig = {

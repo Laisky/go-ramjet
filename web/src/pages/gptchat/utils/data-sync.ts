@@ -237,7 +237,7 @@ export async function importAllData(
     const normalizedCloud: ChatMessageData = {
       ...cloudMsg,
       chatID: cloudMsg.chatID || parsed.chatId,
-      role: (cloudMsg.role as string) || parsed.role,
+      role: cloudMsg.role || parsed.role,
     }
 
     const localMsg = await kvGet<ChatMessageData>(key)
