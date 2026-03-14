@@ -59,7 +59,7 @@ const PERSONAL_LINKS: PersonalLink[] = [
   { label: 'AI Chat', href: 'https://chat.laisky.com/', Icon: MessageSquare },
   { label: 'MCP Server', href: 'https://mcp.laisky.com/', Icon: Server },
   { label: 'OneAPI', href: 'https://oneapi.laisky.com/', Icon: Cpu },
-  { label: 'Channel', href: 'http://t.me/laiskynotes', Icon: Megaphone },
+  { label: 'Channel', href: 'https://t.me/laiskynotes', Icon: Megaphone },
   { label: 'CV', href: 'https://cv.laisky.com/', Icon: FileUser },
   { label: 'Status', href: 'https://status.laisky.com/', Icon: Activity },
 ]
@@ -486,6 +486,8 @@ export function CVPage() {
                   <a
                     key={link.href}
                     href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="cv-personal-link"
                   >
                     <link.Icon className="h-4 w-4" />
@@ -603,8 +605,8 @@ export function CVPage() {
 
         <div className="cv-grid">
           <aside className="cv-aside cv-no-print">
-            <div className="cv-card">
-              <div className="cv-card-title">Contact</div>
+            <div className="cv-card cv-card--contact">
+              <h2 className="cv-card-title">Contact</h2>
               <div className="cv-card-body">
                 <button
                   type="button"
@@ -645,23 +647,15 @@ export function CVPage() {
                 ))}
               </div>
             </div>
-            <div className="cv-card">
-              <div className="cv-card-title">Sections</div>
-              <nav className="cv-nav">
-                {parsed.navItems.map((item) => (
-                  <a key={item.id} href={`#${item.id}`}>
-                    {item.label}
-                  </a>
-                ))}
-              </nav>
-            </div>
-            <div className="cv-card">
-              <div className="cv-card-title">Links</div>
+            <div className="cv-card cv-card--links">
+              <h2 className="cv-card-title">Links</h2>
               <div className="cv-personal-links">
                 {PERSONAL_LINKS.map((link) => (
                   <a
                     key={link.href}
                     href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="cv-personal-link"
                   >
                     <link.Icon className="h-4 w-4" />
@@ -671,7 +665,7 @@ export function CVPage() {
               </div>
             </div>
             <div className="cv-card">
-              <div className="cv-card-title">Recommendation Letters</div>
+              <h2 className="cv-card-title">Recommendation Letters</h2>
               <div className="cv-recommendation-list">
                 {RECOMMENDATION_LETTERS.map((letter) => (
                   <a
@@ -694,8 +688,8 @@ export function CVPage() {
                 ))}
               </div>
             </div>
-            <div className="cv-card cv-meta-card">
-              <div className="cv-card-title">Status</div>
+            <div className="cv-card cv-meta-card cv-card--status">
+              <h2 className="cv-card-title">Status</h2>
               <div className="cv-meta">
                 {loading
                   ? 'Loading content...'

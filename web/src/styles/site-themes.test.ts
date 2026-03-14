@@ -19,4 +19,8 @@ describe('site-themes.css', () => {
     // Should NOT contain unconditional cv selector
     expect(cssContent).not.toContain(":root[data-site='cv'] {")
   })
+
+  it('cv site theme should have a dark mode variant', () => {
+    expect(cssContent).toContain(":root[data-site='cv'].dark")
+  })
 })

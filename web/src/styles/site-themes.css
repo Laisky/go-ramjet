@@ -33,10 +33,30 @@
   --secondary: #f6f1e8;
   --secondary-foreground: #0b1020;
   --muted: #f3efe6;
-  --muted-foreground: #5c6478;
+  --muted-foreground: #4a5568;
   --accent: #f3efe6;
   --accent-foreground: #0b1020;
   --border: rgba(15, 23, 42, 0.12);
   --input: rgba(15, 23, 42, 0.12);
   --ring: #b45309;
+}
+
+:root[data-site='cv'].dark {
+  --background: #111318;
+  --foreground: #e2e4e9;
+  --card: #1a1c28;
+  --card-foreground: #e2e4e9;
+  --popover: #1a1c28;
+  --popover-foreground: #e2e4e9;
+  --primary: #d97706;
+  --primary-foreground: #111318;
+  --secondary: #1e2030;
+  --secondary-foreground: #e2e4e9;
+  --muted: #1e2030;
+  --muted-foreground: #8b90a0;
+  --accent: #252738;
+  --accent-foreground: #e2e4e9;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #d97706;
 }

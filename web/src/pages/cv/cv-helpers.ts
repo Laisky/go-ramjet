@@ -1,8 +1,3 @@
-export type CvNavItem = {
-  id: string
-  label: string
-}
-
 export type CvLink = {
   label: string
   href: string
@@ -13,7 +8,6 @@ export type ParsedCv = {
   subtitle: string
   summaryLine: string
   previewContent: string
-  navItems: CvNavItem[]
   badges: string[]
   links: CvLink[]
   email?: string
@@ -154,19 +148,6 @@ function extractSummaryLine(content: string): string {
 }
 
 /**
- * extractNavItems collects H2 headings as anchor navigation items.
- */
-function extractNavItems(content: string): CvNavItem[] {
-  return content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('## '))
-    .map((line) => line.replace(/^##\s+/, '').trim())
-    .filter((label) => label.length > 0)
-    .map((label) => ({ label, id: slugify(label) }))
-}
-
-/**
  * extractBadges parses bullet lines into badge strings.
  */
 function extractBadges(lines: string[]): string[] {
@@ -237,7 +218,6 @@ export function parseCvContent(content: string): ParsedCv {
     'proof',
   )
   const badges = extractBadges(badgeLines)
-  const navItems = extractNavItems(withoutProof)
   const { links, email } = extractLinks(content)
 
   return {
@@ -245,7 +225,6 @@ export function parseCvContent(content: string): ParsedCv {
     subtitle: subtitle || FALLBACK_SUBTITLE,
     summaryLine,
     previewContent: withoutProof,
-    navItems,
     badges,
     links,
     email,

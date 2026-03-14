@@ -35,11 +35,11 @@ export function CvMarkdown({ content }: { content: string }) {
       const id = text ? slugify(text) : undefined
       const Tag = `h${level}` as const
       const className =
-        level === 1
-          ? 'text-4xl font-semibold tracking-tight'
-          : level === 2
-            ? 'scroll-mt-28 text-2xl font-semibold tracking-tight'
-            : 'scroll-mt-24 text-xl font-semibold'
+        level === 2
+          ? 'cv-heading-anchor'
+          : level === 3
+            ? 'cv-heading-anchor'
+            : undefined
 
       return (
         <Tag id={id} className={className}>
