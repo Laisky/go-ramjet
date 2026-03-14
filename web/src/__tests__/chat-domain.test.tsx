@@ -1,5 +1,5 @@
 import { renderApp } from '@/test/render'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -46,23 +46,28 @@ describe('chat domain proxying', () => {
     expect(document.title).toBe('Laisky')
   })
 
-  it('renders GPTChatPage on chat.laisky.com', () => {
+  it('renders GPTChatPage on chat.laisky.com', async () => {
     setSiteMeta('chat')
     renderApp('/')
 
     expect(
       screen.queryByRole('heading', { name: 'go-ramjet' }),
     ).not.toBeInTheDocument()
-    expect(document.title).toBe('Chat')
+    // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
+    await waitFor(() => expect(document.title).toBe('Chat'), {
+      timeout: 5000,
+    })
   })
 
-  it('renders GPTChatPage on chat2.laisky.com', () => {
+  it('renders GPTChatPage on chat2.laisky.com', async () => {
     setSiteMeta('chat')
     renderApp('/')
 
     expect(
       screen.queryByRole('heading', { name: 'go-ramjet' }),
     ).not.toBeInTheDocument()
-    expect(document.title).toBe('Chat')
+    await waitFor(() => expect(document.title).toBe('Chat'), {
+      timeout: 5000,
+    })
   })
 })

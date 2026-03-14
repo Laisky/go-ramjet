@@ -20,8 +20,9 @@ describe('routing', () => {
 
     await user.click(screen.getByText('Heartbeat'))
 
+    // TaskPage is lazy-loaded, so wait for it to appear
     expect(
-      screen.getByRole('heading', { name: 'Heartbeat', level: 2 }),
+      await screen.findByRole('heading', { name: 'Heartbeat', level: 2 }),
     ).toBeInTheDocument()
     expect(screen.getByText('/heartbeat')).toBeInTheDocument()
   })

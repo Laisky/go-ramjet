@@ -1,10 +1,26 @@
+import { Suspense, lazy } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/app-layout'
-import { CVPage } from '@/pages/cv'
-import { GPTChatPage } from '@/pages/gptchat'
-import { TaskPage } from '@/pages/task'
 import { SiteLanding } from '@/site/site-landing'
+
+const GPTChatPage = lazy(() =>
+  import('@/pages/gptchat').then((m) => ({ default: m.GPTChatPage })),
+)
+const CVPage = lazy(() =>
+  import('@/pages/cv').then((m) => ({ default: m.CVPage })),
+)
+const TaskPage = lazy(() =>
+  import('@/pages/task').then((m) => ({ default: m.TaskPage })),
+)
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+    </div>
+  )
+}
 
 function NotFoundPage() {
   return (
@@ -27,13 +43,15 @@ function NotFoundPage() {
 export function App() {
   return (
     <AppLayout>
-      <Routes>
-        <Route path="/" element={<SiteLanding />} />
-        <Route path="/gptchat" element={<GPTChatPage />} />
-        <Route path="/cv" element={<CVPage />} />
-        <Route path="/tasks/:task" element={<TaskPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<SiteLanding />} />
+          <Route path="/gptchat" element={<GPTChatPage />} />
+          <Route path="/cv" element={<CVPage />} />
+          <Route path="/tasks/:task" element={<TaskPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
     </AppLayout>
   )
 }

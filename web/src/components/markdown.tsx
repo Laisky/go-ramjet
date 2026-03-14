@@ -1,7 +1,7 @@
 import hljs from 'highlight.js/lib/common'
 import { Check, Copy, Eye, EyeOff } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Components, ExtraProps } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
@@ -491,6 +491,10 @@ const components: Components = {
   img: renderImage,
 }
 
+// Stable plugin arrays to avoid ReactMarkdown re-parsing on every render
+const remarkPlugins = [remarkGfm, remarkMath]
+const rehypePlugins = [rehypeKatex, rehypeRaw]
+
 export type MarkdownProps = {
   children: string
   className?: string
@@ -498,13 +502,17 @@ export type MarkdownProps = {
 
 /**
  * Markdown renders markdown content with syntax highlighting, math, and Mermaid diagrams.
+ * Memoized to skip re-renders when the markdown content hasn't changed.
  */
-export function Markdown({ children, className }: MarkdownProps) {
+export const Markdown = memo(function Markdown({
+  children,
+  className,
+}: MarkdownProps) {
   return (
     <div className={className}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeRaw]}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
         components={components}
         urlTransform={(url, key) => sanitizeMarkdownUrl(url, key)}
       >
@@ -512,4 +520,4 @@ export function Markdown({ children, className }: MarkdownProps) {
       </ReactMarkdown>
     </div>
   )
-}
+})

@@ -28,4 +28,42 @@ export default defineConfig({
   define: {
     global: 'window',
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core - cached long-term, rarely changes
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // Markdown rendering pipeline - heavy, only needed for chat messages
+          'vendor-markdown': [
+            'react-markdown',
+            'remark-gfm',
+            'remark-math',
+            'rehype-katex',
+            'rehype-raw',
+          ],
+          // Syntax highlighting
+          'vendor-hljs': ['highlight.js'],
+          // KaTeX CSS + fonts
+          'vendor-katex': ['katex'],
+          // Local database layer
+          'vendor-pouchdb': ['pouchdb-browser'],
+          // Radix UI primitives
+          'vendor-radix': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-scroll-area',
+            '@radix-ui/react-select',
+            '@radix-ui/react-separator',
+            '@radix-ui/react-slider',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+          ],
+          // Payment - rarely used
+          'vendor-stripe': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+        },
+      },
+    },
+  },
 })

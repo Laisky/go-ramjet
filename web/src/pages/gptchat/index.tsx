@@ -2,7 +2,15 @@
  * GPTChat page - main chat interface.
  */
 import { ArrowDown, ArrowUp, Settings } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -13,8 +21,6 @@ import {
   ChatInput,
   ChatMessage,
   ChatSearch,
-  ConfigSidebar,
-  EditMessageModal,
   FloatingMessageHeader,
   ModelSelector,
   SelectionTTSPlayer,
@@ -22,6 +28,18 @@ import {
   SessionDock,
   UpgradeNotification,
 } from './components'
+
+// Lazy load heavy sidebar & modal components - only needed on user interaction
+const ConfigSidebar = lazy(() =>
+  import('./components/config-sidebar').then((m) => ({
+    default: m.ConfigSidebar,
+  })),
+)
+const EditMessageModal = lazy(() =>
+  import('./components/edit-message-modal').then((m) => ({
+    default: m.EditMessageModal,
+  })),
+)
 import { useChat } from './hooks/use-chat'
 import { useChatScroll } from './hooks/use-chat-scroll'
 import { useConfig } from './hooks/use-config'
@@ -659,32 +677,36 @@ export function GPTChatPage() {
         </footer>
       </div>
 
-      {/* Config Sidebar */}
-      <ConfigSidebar
-        isOpen={configOpen}
-        onClose={() => setConfigOpen(false)}
-        config={config}
-        onConfigChange={handleConfigChange}
-        onClearChats={handleClearChats}
-        onReset={handleReset}
-        promptShortcuts={promptShortcuts}
-        onSavePrompt={handleSavePrompt}
-        onEditPrompt={handleEditPrompt}
-        onDeletePrompt={handleDeletePrompt}
-        onExportData={exportAllData}
-        onImportData={handleImportData}
-        sessions={sessions}
-        activeSessionId={sessionId}
-        onCreateSession={createSession}
-        onDeleteSession={deleteSession}
-        onSwitchSession={switchSession}
-        onRenameSession={renameSession}
-        onUpdateSessionVisibility={updateSessionVisibility}
-        onDuplicateSession={duplicateSession}
-        onReorderSessions={reorderSessions}
-        onPurgeAllSessions={handlePurgeAllSessions}
-        onExportSession={exportSessionToXml}
-      />
+      {/* Config Sidebar - lazy loaded */}
+      {configOpen && (
+        <Suspense fallback={null}>
+          <ConfigSidebar
+            isOpen={configOpen}
+            onClose={() => setConfigOpen(false)}
+            config={config}
+            onConfigChange={handleConfigChange}
+            onClearChats={handleClearChats}
+            onReset={handleReset}
+            promptShortcuts={promptShortcuts}
+            onSavePrompt={handleSavePrompt}
+            onEditPrompt={handleEditPrompt}
+            onDeletePrompt={handleDeletePrompt}
+            onExportData={exportAllData}
+            onImportData={handleImportData}
+            sessions={sessions}
+            activeSessionId={sessionId}
+            onCreateSession={createSession}
+            onDeleteSession={deleteSession}
+            onSwitchSession={switchSession}
+            onRenameSession={renameSession}
+            onUpdateSessionVisibility={updateSessionVisibility}
+            onDuplicateSession={duplicateSession}
+            onReorderSessions={reorderSessions}
+            onPurgeAllSessions={handlePurgeAllSessions}
+            onExportSession={exportSessionToXml}
+          />
+        </Suspense>
+      )}
 
       {upgradeInfo && (
         <div
@@ -700,15 +722,17 @@ export function GPTChatPage() {
         </div>
       )}
 
-      {/* Edit Message Modal */}
+      {/* Edit Message Modal - lazy loaded */}
       {editingMessage && (
-        <EditMessageModal
-          content={editingMessage.content}
-          attachments={editingMessage.attachments}
-          apiToken={config.api_token}
-          onClose={() => setEditingMessage(null)}
-          onConfirm={handleConfirmEdit}
-        />
+        <Suspense fallback={null}>
+          <EditMessageModal
+            content={editingMessage.content}
+            attachments={editingMessage.attachments}
+            apiToken={config.api_token}
+            onClose={() => setEditingMessage(null)}
+            onConfirm={handleConfirmEdit}
+          />
+        </Suspense>
       )}
 
       {/* Selection Toolbar */}
