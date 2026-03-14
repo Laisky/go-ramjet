@@ -66,55 +66,55 @@ body {
 :root {
   color-scheme: light;
 
-  /* Core Palette - Light (Sage / Natural Calm) */
+  /* Core Palette - Light (Subtle Papyrus) */
 
-  /* Warm off-white background — like paper, not a screen */
-  --background: oklch(98% 0.008 95);
-  --foreground: oklch(18% 0.025 145);
+  /* Nearly neutral with the faintest warm breath */
+  --background: oklch(97.5% 0.008 85);
+  --foreground: oklch(20% 0.015 60);
 
-  /* Cards slightly warmer than background */
-  --card: oklch(99.5% 0.005 95);
-  --card-foreground: oklch(18% 0.025 145);
+  /* Cards: barely distinguishable from background */
+  --card: oklch(98.5% 0.006 85);
+  --card-foreground: oklch(20% 0.015 60);
 
-  --popover: oklch(99.5% 0.005 95);
-  --popover-foreground: oklch(18% 0.025 145);
+  --popover: oklch(98.5% 0.006 85);
+  --popover-foreground: oklch(20% 0.015 60);
 
-  /* Primary: sage green — muted, natural, calm */
-  --primary: oklch(50% 0.1 155);
-  --primary-foreground: oklch(99% 0 0);
+  /* Primary: quiet warm brown — present but never loud */
+  --primary: oklch(48% 0.06 65);
+  --primary-foreground: oklch(98% 0.005 85);
 
-  /* Secondary / Muted: warm gray-green */
-  --secondary: oklch(95% 0.012 130);
-  --secondary-foreground: oklch(25% 0.03 145);
+  /* Secondary / Muted: whisper of warmth */
+  --secondary: oklch(94% 0.008 80);
+  --secondary-foreground: oklch(30% 0.02 60);
 
-  --muted: oklch(95% 0.012 130);
-  --muted-foreground: oklch(52% 0.025 145);
+  --muted: oklch(94% 0.008 80);
+  --muted-foreground: oklch(52% 0.015 60);
 
-  /* Accent: soft sage tint for selected/hover states */
-  --accent: oklch(93% 0.03 150);
-  --accent-foreground: oklch(35% 0.08 155);
+  /* Accent: barely-there warm tint for hover/selected */
+  --accent: oklch(92.5% 0.015 80);
+  --accent-foreground: oklch(35% 0.04 60);
 
-  /* Semantic feedback — warm tones */
+  /* Semantic feedback */
   --destructive: oklch(58% 0.2 25);
   --destructive-foreground: oklch(99% 0 0);
 
-  --success: oklch(56% 0.15 150);
+  --success: oklch(56% 0.12 155);
   --success-foreground: oklch(99% 0 0);
 
   --warning: oklch(70% 0.15 70);
   --warning-foreground: oklch(99% 0 0);
 
-  /* Borders: warm gray-green, not cold */
-  --border: oklch(90% 0.016 130);
-  --input: oklch(90% 0.016 130);
-  --ring: oklch(50% 0.1 155);
+  /* Borders: gentle warm edge, almost neutral */
+  --border: oklch(90% 0.01 80);
+  --input: oklch(90% 0.01 80);
+  --ring: oklch(48% 0.06 65);
 
-  /* Semantic surface tints */
-  --surface-user: oklch(95% 0.04 150);       /* soft sage for user messages */
-  --surface-reasoning: oklch(97% 0.025 80);  /* amber tint for thinking */
-  --surface-assistant: oklch(99.5% 0.004 95); /* warm paper for AI replies */
+  /* Semantic surface tints — subtle differentiation */
+  --surface-user: oklch(94.5% 0.015 78);      /* faint warm tint for user */
+  --surface-reasoning: oklch(96% 0.012 80);   /* barely warm for thinking */
+  --surface-assistant: oklch(98% 0.005 85);   /* almost indistinguishable from card */
 
-  --shadow-soft: rgba(30, 45, 35, 0.07);
+  --shadow-soft: rgba(50, 40, 25, 0.05);
 
   /* Code tokens - Always Dark (Refined) */
   --code-surface: #0f172a;
@@ -133,51 +133,51 @@ body {
 .dark {
   color-scheme: dark;
 
-  /* Core Palette - Dark (Deep Forest / Olive Night) */
+  /* Core Palette - Dark (Quiet Warm Night) */
 
-  /* Deep olive-tinted dark background — warmer than pure black */
-  --background: oklch(13% 0.02 145);
-  --foreground: oklch(93% 0.015 110);
+  /* Deep near-neutral with the faintest warm undertone */
+  --background: oklch(14% 0.008 60);
+  --foreground: oklch(92% 0.008 80);
 
-  /* Cards: slightly lighter olive-dark */
-  --card: oklch(18% 0.025 145);
-  --card-foreground: oklch(93% 0.015 110);
+  /* Cards: subtle lift from background */
+  --card: oklch(18% 0.01 60);
+  --card-foreground: oklch(92% 0.008 80);
 
-  --popover: oklch(13% 0.02 145);
-  --popover-foreground: oklch(93% 0.015 110);
+  --popover: oklch(14% 0.008 60);
+  --popover-foreground: oklch(92% 0.008 80);
 
-  /* Primary: lighter sage — readable on dark */
-  --primary: oklch(68% 0.1 155);
-  --primary-foreground: oklch(14% 0.025 145);
+  /* Primary: muted warm tone — visible but restrained */
+  --primary: oklch(72% 0.06 70);
+  --primary-foreground: oklch(15% 0.01 60);
 
-  --secondary: oklch(22% 0.025 145);
-  --secondary-foreground: oklch(90% 0.012 110);
+  --secondary: oklch(22% 0.01 60);
+  --secondary-foreground: oklch(90% 0.006 80);
 
-  --muted: oklch(22% 0.025 145);
-  --muted-foreground: oklch(62% 0.02 145);
+  --muted: oklch(22% 0.01 60);
+  --muted-foreground: oklch(60% 0.01 70);
 
-  --accent: oklch(26% 0.05 150);
-  --accent-foreground: oklch(78% 0.08 155);
+  --accent: oklch(26% 0.02 65);
+  --accent-foreground: oklch(78% 0.04 70);
 
   --destructive: oklch(42% 0.16 25);
   --destructive-foreground: oklch(95% 0 0);
 
-  --success: oklch(38% 0.1 150);
+  --success: oklch(38% 0.1 155);
   --success-foreground: oklch(95% 0 0);
 
   --warning: oklch(45% 0.1 70);
   --warning-foreground: oklch(95% 0 0);
 
-  --border: oklch(25% 0.025 145);
-  --input: oklch(25% 0.025 145);
-  --ring: oklch(68% 0.1 155);
+  --border: oklch(25% 0.01 60);
+  --input: oklch(25% 0.01 60);
+  --ring: oklch(72% 0.06 70);
 
-  /* Semantic surface tints */
-  --surface-user: oklch(24% 0.045 150);       /* muted sage for user messages */
-  --surface-reasoning: oklch(22% 0.04 80);    /* amber-tinted for thinking */
-  --surface-assistant: oklch(18% 0.025 145);  /* slightly lighter card */
+  /* Semantic surface tints — subtle */
+  --surface-user: oklch(24% 0.018 65);       /* hint of warmth for user */
+  --surface-reasoning: oklch(21% 0.015 80);  /* barely warm for thinking */
+  --surface-assistant: oklch(18% 0.01 60);   /* just above card */
 
-  --shadow-soft: rgba(0, 0, 0, 0.4);
+  --shadow-soft: rgba(0, 0, 0, 0.35);
 }
 
 .dark body {
@@ -220,11 +220,11 @@ body {
 
 .surface-reasoning {
   background-color: var(--surface-reasoning);
-  border-color: oklch(82% 0.12 80);
+  border-color: oklch(82% 0.05 78);
 }
 
 .dark .surface-reasoning {
-  border-color: oklch(38% 0.08 80);
+  border-color: oklch(36% 0.04 70);
 }
 
 .surface-assistant {
