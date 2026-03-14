@@ -239,6 +239,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
     deepResearchAbortRef.current = true
     currentChatIdRef.current = null
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
     setLoadingChatId(null)
     setError(null)
     setMessages([])
@@ -427,13 +428,10 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       config,
       currentChatIdRef,
       findMaskPair,
-      fileToDataUrl,
       isDeepResearchModel,
       messages,
-      runDeepResearch,
-      runImageModelFlow,
-      runMaskInpainting,
       saveMessage,
+      setIsLoading,
       streamAssistantReply,
     ],
   )
@@ -450,7 +448,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     if (!deepResearchAbortRef.current) {
       deepResearchAbortRef.current = true
     }
-  }, [])
+  }, [setIsLoading])
 
   /**
    * regenerateMessage replays the assistant response for an existing user turn.
@@ -552,9 +550,8 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       config,
       messages,
       isDeepResearchModel,
-      runDeepResearch,
-      runImageModelFlow,
       saveMessage,
+      setIsLoading,
       streamAssistantReply,
     ],
   )
@@ -677,9 +674,8 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       config,
       messages,
       isDeepResearchModel,
-      runDeepResearch,
-      runImageModelFlow,
       saveMessage,
+      setIsLoading,
       streamAssistantReply,
     ],
   )

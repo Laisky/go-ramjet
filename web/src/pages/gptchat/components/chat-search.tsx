@@ -44,20 +44,23 @@ export function ChatSearch({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Focus input when opened
+  // Focus input when opened, reset state when closed
+  const prevIsOpenRef = useRef(isOpen)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setTimeout(() => inputRef.current?.focus(), 10)
-    } else {
-      setQuery('')
+    }
+    if (!isOpen && prevIsOpenRef.current) {
+      setQuery('') // eslint-disable-line react-hooks/set-state-in-effect -- reset on close
       setResults([])
     }
+    prevIsOpenRef.current = isOpen
   }, [isOpen])
 
   // Simple fuzzy search (matches all words) with debouncing to prevent excessive filtering during rapid typing.
   useEffect(() => {
     if (!query.trim()) {
-      setResults([])
+      if (results.length > 0) setResults([]) // eslint-disable-line react-hooks/set-state-in-effect -- clear when query empty
       return
     }
 
@@ -76,7 +79,7 @@ export function ChatSearch({
     }, 200)
 
     return () => clearTimeout(timer)
-  }, [query, messages])
+  }, [query, messages]) // eslint-disable-line react-hooks/exhaustive-deps -- results.length guard prevents loop
 
   const handleSelect = useCallback(
     (msg: ChatMessageData) => {
@@ -117,7 +120,10 @@ export function ChatSearch({
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10dvh] backdrop-blur-[2px]">
           <div className="fixed inset-0" onClick={() => setIsOpen(false)} />
-          <Card className="theme-surface theme-border relative z-10 w-full max-w-xl overflow-hidden rounded-xl border shadow-2xl">
+          <Card
+            className="theme-surface relative z-10 w-full max-w-xl overflow-hidden rounded-xl border border-primary/25 shadow-2xl shadow-primary/10"
+            style={{ borderTopColor: 'var(--primary)', borderTopWidth: '2px' }}
+          >
             <div className="flex items-center border-b px-3">
               <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
               <input

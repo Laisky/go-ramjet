@@ -18,7 +18,7 @@ export function useMessageNavigation({
 
   // Reset selection when session changes or messages length changes
   useEffect(() => {
-    setSelectedMessageIndex(-1)
+    setSelectedMessageIndex(-1) // eslint-disable-line react-hooks/set-state-in-effect -- reset on session/messages change
   }, [displayedMessages.length, sessionId])
 
   /**

@@ -12,6 +12,10 @@ import remarkMath from 'remark-math'
 import { cn } from '@/utils/cn'
 import 'katex/dist/katex.min.css'
 
+// ANSI escape sequence pattern built via string to avoid no-control-regex lint error.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1B\[[0-9;]*[A-Za-z]/g
+
 type ColorScheme = 'dark' | 'light'
 
 type CodeRendererProps = HTMLAttributes<HTMLElement> &
@@ -51,7 +55,7 @@ function sanitizeMarkdownUrl(url: string, key?: string): string {
     if (SAFE_PROTOCOLS.has(parsed.protocol)) {
       return trimmed
     }
-  } catch (err) {
+  } catch {
     if (!trimmed.includes(':')) {
       return trimmed
     }
@@ -145,7 +149,7 @@ function normalizeCodeBlockContent(source: string): string {
   const lines = normalized.split('\n')
 
   const isBlankLine = (line: string) => {
-    const withoutAnsi = line.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    const withoutAnsi = line.replace(ANSI_RE, '')
     return withoutAnsi.replace(/[\p{White_Space}\p{Cf}\p{Cc}]/gu, '') === ''
   }
 
@@ -181,7 +185,7 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   }
 
   const isBlankLine = (line: string) => {
-    const withoutAnsi = line.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+    const withoutAnsi = line.replace(ANSI_RE, '')
     return withoutAnsi.replace(/[\p{White_Space}\p{Cf}\p{Cc}]/gu, '') === ''
   }
 
@@ -313,7 +317,7 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
         mermaid.initialize({
           startOnLoad: false,
           theme: scheme === 'dark' ? 'dark' : 'default',
-          securityLevel: 'loose',
+          securityLevel: 'strict',
           fontFamily: 'inherit',
           flowchart: {
             useMaxWidth: true,

@@ -6,21 +6,35 @@ import '@testing-library/jest-dom'
 
 // Mock TooltipWrapper to avoid Radix UI issues in tests
 vi.mock('@/components/ui/tooltip-wrapper', () => ({
-  TooltipWrapper: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipWrapper: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 describe('ChatSearch', () => {
   const mockMessages: ChatMessageData[] = [
     { chatID: '1', role: 'user', content: 'apple pie', timestamp: Date.now() },
-    { chatID: '2', role: 'assistant', content: 'banana bread', timestamp: Date.now() },
-    { chatID: '3', role: 'user', content: 'cherry tart', timestamp: Date.now() },
+    {
+      chatID: '2',
+      role: 'assistant',
+      content: 'banana bread',
+      timestamp: Date.now(),
+    },
+    {
+      chatID: '3',
+      role: 'user',
+      content: 'cherry tart',
+      timestamp: Date.now(),
+    },
   ]
 
   it('debounces the search query', async () => {
     vi.useFakeTimers()
     const onSelectMessage = vi.fn()
 
-    render(<ChatSearch messages={mockMessages} onSelectMessage={onSelectMessage} />)
+    render(
+      <ChatSearch messages={mockMessages} onSelectMessage={onSelectMessage} />,
+    )
 
     // Open the search dialog
     const searchButton = screen.getByLabelText('Search messages')

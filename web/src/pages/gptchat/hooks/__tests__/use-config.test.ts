@@ -1,6 +1,6 @@
 import { kvGet } from '@/utils/storage'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatModelGPT5Mini, DefaultModel } from '../../models'
 import { DefaultSessionConfig } from '../../types'
 import { useConfig } from '../use-config'
@@ -59,7 +59,7 @@ describe('useConfig', () => {
       // selected_chat_model is missing
     }
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'config_selected_session') return Promise.resolve(1)
       if (key === 'chat_user_config_1') return Promise.resolve(legacyConfig)
       return Promise.resolve(null)
@@ -79,7 +79,7 @@ describe('useConfig', () => {
   })
 
   it('should use DefaultModel if no saved config exists', async () => {
-    ;(kvGet as any).mockResolvedValue(null)
+    ;(kvGet as Mock).mockResolvedValue(null)
 
     const { result } = renderHook(() => useConfig())
 
@@ -96,7 +96,7 @@ describe('useConfig', () => {
       selected_model: 'dall-e-3',
     }
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'config_selected_session') return Promise.resolve(1)
       if (key === 'chat_user_config_1') return Promise.resolve(legacyConfig)
       return Promise.resolve(null)
@@ -116,7 +116,7 @@ describe('useConfig', () => {
   it('should update config state before async persistence completes', async () => {
     const syncKeyDeferred = createDeferred<string | null>()
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'config_selected_session') return Promise.resolve(1)
       if (key === 'chat_user_config_1') {
         return Promise.resolve({
@@ -137,7 +137,7 @@ describe('useConfig', () => {
     })
 
     const persistDeferred = createDeferred<string | null>()
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'config_sync_key') return persistDeferred.promise
       if (key === 'config_selected_session') return Promise.resolve(1)
       if (key === 'chat_user_config_1')
@@ -159,7 +159,7 @@ describe('useConfig', () => {
   })
 
   it('should persist an explicitly updated sync key without blocking state updates', async () => {
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'config_selected_session') return Promise.resolve(1)
       if (key === 'chat_user_config_1') return Promise.resolve(null)
       if (key === 'config_sync_key') return Promise.resolve('sync-initial')

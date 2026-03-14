@@ -19,6 +19,7 @@ import {
   type Annotation,
   type ChatMessageData,
   type McpServerConfig,
+  type McpTool,
   type SessionConfig,
 } from '../types'
 import { callMCPTool } from '../utils/mcp'
@@ -110,7 +111,7 @@ const resolveServerForTool = (config: SessionConfig, toolName: string) => {
       if (!server.tools || server.tools.length === 0) {
         return true
       }
-      return server.tools.some((tool: any) => tool?.name === toolName)
+      return server.tools.some((tool: McpTool) => tool?.name === toolName)
     }) || null
   )
 }

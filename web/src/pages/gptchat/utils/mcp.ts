@@ -43,7 +43,7 @@ async function fetchJSONOrSSE(resp: Response): Promise<unknown> {
         if (dataStr && dataStr !== '[DONE]') {
           try {
             return JSON.parse(dataStr)
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -161,7 +161,9 @@ async function ensureMCPSession(
     throw new Error(`HTTP ${resp.status} during MCP init`)
   }
 
-  const initData: any = await fetchJSONOrSSE(resp)
+  const initData = (await fetchJSONOrSSE(resp)) as {
+    error?: { message?: string }
+  } | null
   if (initData?.error) {
     throw new Error(initData.error.message || 'MCP initialize error')
   }
@@ -235,7 +237,10 @@ export async function syncMCPServerTools(
     throw new Error(`HTTP ${resp.status} fetching tools`)
   }
 
-  const data: any = await fetchJSONOrSSE(resp)
+  const data = (await fetchJSONOrSSE(resp)) as {
+    error?: { message?: string }
+    result?: { tools?: unknown[] }
+  } | null
   if (!data) throw new Error('Invalid JSON-RPC response')
   if (data.error) throw new Error(data.error.message || 'MCP error')
 
@@ -288,7 +293,7 @@ function stringifyToolResult(data: unknown): string {
   if (typeof data === 'number' || typeof data === 'boolean') return String(data)
   try {
     return JSON.stringify(data)
-  } catch (err) {
+  } catch {
     return String(data)
   }
 }

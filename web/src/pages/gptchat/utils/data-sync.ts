@@ -237,7 +237,7 @@ export async function importAllData(
     const normalizedCloud: ChatMessageData = {
       ...cloudMsg,
       chatID: cloudMsg.chatID || parsed.chatId,
-      role: (cloudMsg.role as any) || parsed.role,
+      role: (cloudMsg.role as string) || parsed.role,
     }
 
     const localMsg = await kvGet<ChatMessageData>(key)
@@ -321,7 +321,7 @@ export async function importAllData(
       await kvSet(key, val)
     } else {
       // Merge mode: conditional overwrite based on updated_at
-      const localVal = await kvGet<any>(key)
+      const localVal = await kvGet<Record<string, unknown>>(key)
       if (
         localVal &&
         typeof localVal === 'object' &&
@@ -329,7 +329,7 @@ export async function importAllData(
         typeof val === 'object'
       ) {
         const localTs = localVal.updated_at || 0
-        const cloudTs = (val as any).updated_at || 0
+        const cloudTs = (val as Record<string, unknown>).updated_at || 0
         if (cloudTs >= localTs) {
           await kvSet(key, val)
         }

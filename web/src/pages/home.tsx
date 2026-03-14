@@ -13,6 +13,7 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Card, CardDescription, CardTitle } from '@/components/ui/card'
+import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 
 interface TaskDefinition {
@@ -21,6 +22,7 @@ interface TaskDefinition {
   description: string
   icon: React.ReactNode
   featured?: boolean
+  iconColor?: string
 }
 
 /**
@@ -40,48 +42,62 @@ const Tasks: TaskDefinition[] = [
     title: 'Audit Log',
     description: 'Receive and list audit logs via HTTP API.',
     icon: <FileText className="h-5 w-5" />,
+    iconColor:
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   },
   {
     key: 'cv',
     title: 'CV',
     description: 'Single-page resume editor with live markdown preview.',
     icon: <User className="h-5 w-5" />,
+    iconColor: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
   },
   {
     key: 'jav',
     title: 'JAV',
     description: 'Search endpoint for the JAV task.',
     icon: <Film className="h-5 w-5" />,
+    iconColor:
+      'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
   },
   {
     key: 'arweave',
     title: 'Arweave',
     description: 'Gateway/DNS and local cache utilities.',
     icon: <Globe className="h-5 w-5" />,
+    iconColor:
+      'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   },
   {
     key: 'crawler',
     title: 'Crawler',
     description: 'Search endpoint for crawler service.',
     icon: <Search className="h-5 w-5" />,
+    iconColor: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
   },
   {
     key: 'gitlab',
     title: 'GitLab',
     description: 'Fetch files from GitLab via API.',
     icon: <GitBranch className="h-5 w-5" />,
+    iconColor:
+      'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   },
   {
     key: 'heartbeat',
     title: 'Heartbeat',
     description: 'Quick health endpoint with goroutine stats.',
     icon: <Heart className="h-5 w-5" />,
+    iconColor:
+      'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
   },
   {
     key: 'elasticsearch',
     title: 'Elasticsearch',
     description: 'Rollover info and password generator endpoints.',
     icon: <Database className="h-5 w-5" />,
+    iconColor:
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   },
 ]
 
@@ -101,7 +117,7 @@ export function HomePage() {
     <div className="space-y-8">
       {/* Hero Section */}
       <section className="space-y-4 text-center">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">
           go-ramjet
         </h1>
         <p className="mx-auto max-w-2xl text-muted-foreground">
@@ -115,22 +131,18 @@ export function HomePage() {
       {featuredTask && (
         <section>
           <Link to={`/gptchat`} className="block">
-            <Card className="group relative overflow-hidden bg-primary p-6 text-primary-foreground transition-all hover:shadow-xl hover:shadow-primary/20">
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary-foreground/10" />
-              <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-primary-foreground/10" />
-              <div className="relative">
-                <div className="mb-4 inline-flex rounded-lg bg-primary-foreground/20 p-3">
-                  {featuredTask.icon}
-                </div>
-                <CardTitle className="mb-2 text-2xl text-primary-foreground">
-                  {featuredTask.title}
-                </CardTitle>
-                <CardDescription className="text-primary-foreground/80">
-                  {featuredTask.description}
-                </CardDescription>
-                <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium">
-                  Open Chat →
-                </div>
+            <Card className="group bg-primary p-6 text-primary-foreground transition-shadow hover:shadow-xl hover:shadow-primary/20">
+              <div className="mb-4 inline-flex rounded-lg bg-primary-foreground/20 p-3">
+                {featuredTask.icon}
+              </div>
+              <CardTitle className="mb-2 text-2xl text-primary-foreground">
+                {featuredTask.title}
+              </CardTitle>
+              <CardDescription className="text-primary-foreground/80">
+                {featuredTask.description}
+              </CardDescription>
+              <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium">
+                Open Chat →
               </div>
             </Card>
           </Link>
@@ -145,7 +157,13 @@ export function HomePage() {
             <Link key={task.key} to={`/tasks/${task.key}`} className="block">
               <Card className="group h-full transition-all hover:border-primary/50 hover:shadow-md">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-muted p-2 text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
+                  <div
+                    className={cn(
+                      'rounded-lg p-2 transition-colors',
+                      task.iconColor ??
+                        'bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground',
+                    )}
+                  >
                     {task.icon}
                   </div>
                   <div className="flex-1">

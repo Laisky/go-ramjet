@@ -26,11 +26,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}
     >
       {!isSpecialPage && (
-        <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
+        <header className="sticky top-0 z-40 border-b border-primary/15 bg-background/80 backdrop-blur-md">
           <div
             className={`${containerClass} flex items-center justify-between py-3`}
           >
-            <Link to="/" className="text-sm font-semibold tracking-tight">
+            <Link
+              to="/"
+              className="text-sm font-semibold tracking-tight text-primary"
+            >
               go-ramjet
             </Link>
             <ThemeToggle />

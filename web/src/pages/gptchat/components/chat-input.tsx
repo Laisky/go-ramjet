@@ -80,7 +80,7 @@ export function ChatInput({
     if (draftMessage !== undefined && draftMessage !== message) {
       setMessage(draftMessage)
     }
-  }, [draftMessage])
+  }, [draftMessage]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally sync only on external draft changes
 
   useEffect(() => {
     if (!prefillDraft || prefillDraft.id === lastPrefillIdRef.current) {
@@ -269,7 +269,7 @@ export function ChatInput({
         setIsTranscribing(false)
       }
     },
-    [config.api_base, config.api_token],
+    [config.api_token, updateMessage],
   )
 
   const stopRecording = useCallback(() => {
@@ -379,6 +379,13 @@ export function ChatInput({
                 disabled={disabled || isLoading || isTranscribing}
                 variant={isRecording ? 'destructive' : 'outline'}
                 className="w-10 rounded-md p-0 shadow-sm"
+                aria-label={
+                  isRecording
+                    ? 'Stop recording'
+                    : isTranscribing
+                      ? 'Transcribing'
+                      : 'Start voice recording'
+                }
               >
                 {isRecording ? (
                   <Square className="h-5 w-5" />
@@ -447,6 +454,7 @@ export function ChatInput({
                   })
                 }
                 disabled={isFree}
+                aria-label="Number of images to generate"
                 className="cursor-pointer bg-transparent text-[11px] focus:outline-none disabled:cursor-not-allowed"
               >
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (

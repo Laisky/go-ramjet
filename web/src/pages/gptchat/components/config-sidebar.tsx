@@ -2,7 +2,7 @@
  * Configuration sidebar for chat settings.
  */
 import { Eye, EyeOff, Settings, Trash2, User, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
@@ -76,13 +76,36 @@ export function ConfigSidebar({
   onExportSession,
 }: ConfigSidebarProps) {
   const [showApiKey, setShowApiKey] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
   const { user } = useUser(config.api_token)
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  // Focus sidebar when opened
+  useEffect(() => {
+    if (isOpen) {
+      sidebarRef.current?.focus()
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div
+      className="fixed inset-0 z-50 flex"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -90,14 +113,23 @@ export function ConfigSidebar({
       />
 
       {/* Sidebar */}
-      <div className="bg-card text-card-foreground relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg">
+      <div
+        ref={sidebarRef}
+        tabIndex={-1}
+        className="bg-card text-card-foreground relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg outline-none"
+      >
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Settings className="h-5 w-5" />
             Configuration
           </h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close settings"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -150,9 +182,15 @@ export function ConfigSidebar({
 
           {/* API Token */}
           <div>
-            <label className="mb-1 block text-sm font-medium">API Key</label>
+            <label
+              htmlFor="cfg-api-key"
+              className="mb-1 block text-sm font-medium"
+            >
+              API Key
+            </label>
             <div className="relative">
               <Input
+                id="cfg-api-key"
                 type={showApiKey ? 'text' : 'password'}
                 value={config.api_token}
                 onChange={(e) => onConfigChange({ api_token: e.target.value })}
@@ -163,6 +201,7 @@ export function ConfigSidebar({
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
                 className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
+                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
               >
                 {showApiKey ? (
                   <EyeOff className="h-4 w-4" />
@@ -221,13 +260,17 @@ export function ConfigSidebar({
 
           {/* N Images */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-n-images"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>N Images</span>
               <span className="text-muted-foreground">
                 {config.chat_switch.draw_n_images}
               </span>
             </label>
             <input
+              id="cfg-n-images"
               type="range"
               min={1}
               max={4}
@@ -247,11 +290,15 @@ export function ConfigSidebar({
 
           {/* Context Count */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-contexts"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>Contexts</span>
               <span className="text-muted-foreground">{config.n_contexts}</span>
             </label>
             <input
+              id="cfg-contexts"
               type="range"
               min={1}
               max={30}
@@ -266,11 +313,15 @@ export function ConfigSidebar({
 
           {/* Max Tokens */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-max-tokens"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>Max Tokens</span>
               <span className="text-muted-foreground">{config.max_tokens}</span>
             </label>
             <input
+              id="cfg-max-tokens"
               type="range"
               min={1000}
               max={100000}
@@ -285,13 +336,17 @@ export function ConfigSidebar({
 
           {/* Temperature */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-temperature"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>Temperature</span>
               <span className="text-muted-foreground">
                 {config.temperature.toFixed(1)}
               </span>
             </label>
             <input
+              id="cfg-temperature"
               type="range"
               min={0}
               max={2}
@@ -306,13 +361,17 @@ export function ConfigSidebar({
 
           {/* Presence Penalty */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-presence-penalty"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>Presence Penalty</span>
               <span className="text-muted-foreground">
                 {config.presence_penalty.toFixed(1)}
               </span>
             </label>
             <input
+              id="cfg-presence-penalty"
               type="range"
               min={-2}
               max={2}
@@ -327,13 +386,17 @@ export function ConfigSidebar({
 
           {/* Frequency Penalty */}
           <div>
-            <label className="mb-1 flex items-center justify-between text-sm font-medium">
+            <label
+              htmlFor="cfg-frequency-penalty"
+              className="mb-1 flex items-center justify-between text-sm font-medium"
+            >
               <span>Frequency Penalty</span>
               <span className="text-muted-foreground">
                 {config.frequency_penalty.toFixed(1)}
               </span>
             </label>
             <input
+              id="cfg-frequency-penalty"
               type="range"
               min={-2}
               max={2}

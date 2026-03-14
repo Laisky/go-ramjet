@@ -81,14 +81,14 @@ export function useChatScroll({
         if (isJsdom && !isMockedScrollTo) {
           try {
             scrollElement.scrollTop = top
-          } catch (err) {
+          } catch {
             // Ignore jsdom scrollTop assignment errors.
           }
           return
         }
         try {
           window.scrollTo({ top, behavior })
-        } catch (err) {
+        } catch {
           scrollElement.scrollTop = top
         }
       } else if (typeof scrollElement.scrollTo === 'function') {
@@ -120,7 +120,7 @@ export function useChatScroll({
 
   // Reset state when session changes
   useEffect(() => {
-    setVisibleCount(pageSize)
+    setVisibleCount(pageSize) // eslint-disable-line react-hooks/set-state-in-effect -- reset on session change
     autoScrollRef.current = true
     suppressAutoScrollOnceRef.current = false
     manualScrollRef.current = false
@@ -136,7 +136,7 @@ export function useChatScroll({
     requestAnimationFrame(() => {
       scrollToPosition(0, 'auto')
     })
-  }, [sessionId, pageSize, scrollToPosition])
+  }, [sessionId, pageSize, scrollToPosition]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isNearBottom = useCallback(() => {
     const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
@@ -226,6 +226,7 @@ export function useChatScroll({
 
   useEffect(() => {
     setVisibleCount((prev) => {
+      // eslint-disable-line react-hooks/set-state-in-effect -- clamp visible count to message bounds
       if (messages.length === 0) {
         return pageSize
       }

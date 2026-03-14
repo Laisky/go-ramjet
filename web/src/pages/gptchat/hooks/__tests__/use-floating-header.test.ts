@@ -36,7 +36,8 @@ describe('useFloatingHeader', () => {
       ({ msgs }) =>
         useFloatingHeader({
           messages: msgs,
-          containerRef: mockContainer as any,
+          containerRef:
+            mockContainer as unknown as React.RefObject<HTMLElement | null>,
         }),
       { initialProps: { msgs: messages } },
     )
@@ -82,7 +83,11 @@ describe('useFloatingHeader', () => {
     mockContainer.current.querySelectorAll.mockReturnValue([element1, element2])
 
     const { result } = renderHook(() =>
-      useFloatingHeader({ messages, containerRef: mockContainer as any }),
+      useFloatingHeader({
+        messages,
+        containerRef:
+          mockContainer as unknown as React.RefObject<HTMLElement | null>,
+      }),
     )
 
     act(() => {

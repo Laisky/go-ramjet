@@ -52,7 +52,6 @@ export function ImageEditorModal({
 }: ImageEditorModalProps) {
   const baseCanvasRef = useRef<HTMLCanvasElement>(null)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null)
   const [brushSize, setBrushSize] = useState(32)
   const [isErasing, setIsErasing] = useState(false)
@@ -63,9 +62,12 @@ export function ImageEditorModal({
     y: 0,
   })
 
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+
+  // Create/revoke object URL when file prop changes.
   useEffect(() => {
     if (!file) {
-      setImageUrl(null)
+      setImageUrl(null) // eslint-disable-line react-hooks/set-state-in-effect -- sync with file prop
       return
     }
     const url = URL.createObjectURL(file)
@@ -75,14 +77,14 @@ export function ImageEditorModal({
 
   useEffect(() => {
     if (!open || !imageUrl) {
-      setLoadedImage(null)
+      if (loadedImage) setLoadedImage(null) // eslint-disable-line react-hooks/set-state-in-effect -- reset when closed
       return
     }
 
     const img = new Image()
     img.onload = () => setLoadedImage(img)
     img.src = imageUrl
-  }, [imageUrl, open])
+  }, [imageUrl, open]) // eslint-disable-line react-hooks/exhaustive-deps -- loadedImage guard prevents loop
 
   useEffect(() => {
     const baseCanvas = baseCanvasRef.current
@@ -111,7 +113,7 @@ export function ImageEditorModal({
 
     const maskCtx = maskCanvas.getContext('2d')
     maskCtx?.clearRect(0, 0, width, height)
-    setHasMask(false)
+    setHasMask(false) // eslint-disable-line react-hooks/set-state-in-effect -- sync with canvas reset
   }, [open, loadedImage])
 
   const pointerToCanvas = useCallback(

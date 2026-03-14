@@ -95,7 +95,7 @@ export function useChatStorage({
 }: ChatStorageOptions): ChatStorageApi {
   const sessionIdRef = useRef(sessionId)
   const concurrency = useChatStorageConcurrencyState()
-  sessionIdRef.current = sessionId
+  sessionIdRef.current = sessionId // eslint-disable-line react-hooks/refs -- keep ref in sync for stale closure checks
 
   const loadMessages = useCallback(async () => {
     const loadingSessionId = sessionId
@@ -220,7 +220,7 @@ export function useChatStorage({
       console.error('Failed to load messages:', err)
       setError('Failed to load messages')
     }
-  }, [sessionId, setMessages, setError])
+  }, [sessionId, concurrency, setMessages, setError])
 
   const saveMessage = useCallback(
     async (message: ChatMessageData) => {

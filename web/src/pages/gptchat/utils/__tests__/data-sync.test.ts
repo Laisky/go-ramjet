@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { importAllData } from '../data-sync'
 
 import * as storageMod from '@/utils/storage'
+import type { SessionHistoryItem } from '../../types'
 
 vi.mock('@/utils/storage', () => {
-  const store = new Map<string, any>()
+  const store = new Map<string, unknown>()
 
   return {
     kvGet: vi.fn(async (key: string) => store.get(key) ?? null),
-    kvSet: vi.fn(async (key: string, val: any) => {
+    kvSet: vi.fn(async (key: string, val: unknown) => {
       store.set(key, val)
     }),
     kvDel: vi.fn(async (key: string) => {
@@ -26,6 +27,10 @@ vi.mock('@/utils/storage', () => {
   }
 })
 
+const mockStorage = storageMod as typeof storageMod & {
+  __store: Map<string, unknown>
+}
+
 const U1 = '00000000-0000-7000-8000-000000000001'
 const U2 = '00000000-0000-7000-8000-000000000002'
 
@@ -40,12 +45,12 @@ function historyKey(sessionId: number) {
 describe('data-sync importAllData (incremental merge)', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
-    ;(storageMod as any).__store.clear()
+    mockStorage.__store.clear()
   })
 
   it('keeps the newer message based on edited_version', async () => {
     // local newer
-    await (storageMod as any).kvSet(chatKey('user', 'c1'), {
+    await mockStorage.kvSet(chatKey('user', 'c1'), {
       chatID: 'c1',
       role: 'user',
       content: 'local',
@@ -66,14 +71,14 @@ describe('data-sync importAllData (incremental merge)', () => {
       ],
     }
 
-    await importAllData(cloud as any, 1)
+    await importAllData(cloud as Record<string, unknown>, 1)
 
-    const final = await (storageMod as any).kvGet(chatKey('user', 'c1'))
-    expect(final.content).toBe('local')
+    const final = await mockStorage.kvGet(chatKey('user', 'c1'))
+    expect(final).toHaveProperty('content', 'local')
   })
 
   it('accepts cloud message when local has no edited_version', async () => {
-    await (storageMod as any).kvSet(chatKey('assistant', 'c2'), {
+    await mockStorage.kvSet(chatKey('assistant', 'c2'), {
       chatID: 'c2',
       role: 'assistant',
       content: 'local',
@@ -94,22 +99,22 @@ describe('data-sync importAllData (incremental merge)', () => {
       ],
     }
 
-    await importAllData(cloud as any, 1)
+    await importAllData(cloud as Record<string, unknown>, 1)
 
-    const final = await (storageMod as any).kvGet(chatKey('assistant', 'c2'))
-    expect(final.content).toBe('cloud')
+    const final = await mockStorage.kvGet(chatKey('assistant', 'c2'))
+    expect(final).toHaveProperty('content', 'cloud')
   })
 
   it('applies deleted_chat_ids before trimming and blocks resurrection', async () => {
     // local has an old chat that will be trimmed away from deleted list
     const oldChatId = 'oldest'
-    await (storageMod as any).kvSet(chatKey('user', oldChatId), {
+    await mockStorage.kvSet(chatKey('user', oldChatId), {
       chatID: oldChatId,
       role: 'user',
       content: 'local',
       timestamp: 1,
     })
-    await (storageMod as any).kvSet(historyKey(1), [
+    await mockStorage.kvSet(historyKey(1), [
       { chatID: oldChatId, role: 'user', content: 'local', timestamp: 1 },
     ])
 
@@ -118,7 +123,7 @@ describe('data-sync importAllData (incremental merge)', () => {
       deleted_version: `00000000-0000-7000-8000-${i.toString(16).padStart(12, '0')}`,
     }))
 
-    const cloud: any = {
+    const cloud: Record<string, unknown> = {
       deleted_chat_ids: deletedEntries,
       [chatKey('user', oldChatId)]: {
         chatID: oldChatId,
@@ -135,15 +140,19 @@ describe('data-sync importAllData (incremental merge)', () => {
     await importAllData(cloud, 1)
 
     // oldChatId must be deleted locally
-    const msg = await (storageMod as any).kvGet(chatKey('user', oldChatId))
+    const msg = await mockStorage.kvGet(chatKey('user', oldChatId))
     expect(msg).toBe(null)
 
     // deleted list must be trimmed to 1000, so the oldest entry drops
-    const savedDeleted = await (storageMod as any).kvGet('deleted_chat_ids')
+    const savedDeleted = await mockStorage.kvGet('deleted_chat_ids')
     expect(savedDeleted).toHaveLength(1000)
 
     // and history must not contain oldChatId
-    const hist = await (storageMod as any).kvGet(historyKey(1))
-    expect(hist.find((h: any) => h.chatID === oldChatId)).toBeUndefined()
+    const hist = (await mockStorage.kvGet(historyKey(1))) as
+      | SessionHistoryItem[]
+      | null
+    expect(
+      hist?.find((h: SessionHistoryItem) => h.chatID === oldChatId),
+    ).toBeUndefined()
   })
 })

@@ -311,7 +311,7 @@ export function CVPage() {
       link.download = `${parsed.title.replace(/\s+/g, '-')}-CV.pdf`
       link.click()
       URL.revokeObjectURL(url)
-    } catch (err) {
+    } catch {
       console.warn('[CV] PDF download failed, falling back to print')
       window.print()
     } finally {
@@ -328,7 +328,7 @@ export function CVPage() {
     try {
       await navigator.clipboard.writeText(emailValue)
       setCopyState('copied')
-    } catch (err) {
+    } catch {
       console.warn('[CV] Failed to copy email')
     } finally {
       copyTimeoutRef.current = window.setTimeout(() => {

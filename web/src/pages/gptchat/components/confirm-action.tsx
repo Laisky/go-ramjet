@@ -41,6 +41,7 @@ interface ConfirmActionCopy {
 /**
  * getConfirmActionCopy returns standardized dialog copy for destructive actions.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getConfirmActionCopy(
   action: ConfirmActionType,
   context?: ConfirmActionContext,

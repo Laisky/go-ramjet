@@ -40,7 +40,7 @@ function ReasoningBlock({ content }: { content: string }) {
   const { thinking, toolEvents } = splitReasoningContent(content)
 
   return (
-    <Card className="mb-2 border-dashed bg-muted p-3">
+    <Card className="mb-2 border-dashed surface-reasoning p-3">
       <details
         className="text-xs text-muted-foreground"
         open={!!toolEvents.length}
@@ -169,8 +169,8 @@ export const ChatMessage = memo(function ChatMessage({
         className={cn(
           'group/message relative w-full max-w-full rounded-md border px-2 py-1.5 transition-all sm:w-fit sm:max-w-[92%] sm:px-2.5 sm:py-2 md:max-w-[880px]',
           isUser
-            ? 'ml-auto rounded-br-sm border-primary/20 bg-primary/10 text-foreground'
-            : 'bg-card text-card-foreground border-border mr-auto rounded-bl-sm',
+            ? 'ml-auto rounded-br-sm border-primary/30 surface-user text-foreground'
+            : 'surface-assistant text-card-foreground border-border/60 mr-auto rounded-bl-sm',
           isStreaming &&
             !message.content &&
             !message.reasoningContent &&
@@ -302,7 +302,7 @@ export const ChatMessage = memo(function ChatMessage({
                       <button
                         className="text-muted-foreground/50 transition hover:text-foreground"
                         onClick={() => handleCopyReference(ref.url, ref.index)}
-                        title="Copy reference URL"
+                        aria-label="Copy reference URL"
                       >
                         {copiedCitation === ref.index ? (
                           <Check className="h-3 w-3 text-success" />

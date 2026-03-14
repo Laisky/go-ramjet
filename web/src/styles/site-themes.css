@@ -1,21 +1,24 @@
 :root[data-site='chat'].dark {
-  --background: #0b1020;
-  --foreground: #e2e8f0;
-  --card: #0f172a;
-  --card-foreground: #e2e8f0;
-  --popover: #0f172a;
-  --popover-foreground: #e2e8f0;
-  --primary: #38bdf8;
-  --primary-foreground: #0b1020;
-  --secondary: #111827;
-  --secondary-foreground: #e2e8f0;
-  --muted: #111827;
-  --muted-foreground: #94a3b8;
-  --accent: #1f2937;
-  --accent-foreground: #e2e8f0;
-  --border: #1f2937;
-  --input: #1f2937;
-  --ring: #38bdf8;
+  --background: oklch(13% 0.02 145);
+  --foreground: oklch(93% 0.015 110);
+  --card: oklch(18% 0.025 145);
+  --card-foreground: oklch(93% 0.015 110);
+  --popover: oklch(13% 0.02 145);
+  --popover-foreground: oklch(93% 0.015 110);
+  --primary: oklch(68% 0.1 155);
+  --primary-foreground: oklch(14% 0.025 145);
+  --secondary: oklch(22% 0.025 145);
+  --secondary-foreground: oklch(90% 0.012 110);
+  --muted: oklch(22% 0.025 145);
+  --muted-foreground: oklch(62% 0.02 145);
+  --accent: oklch(26% 0.05 150);
+  --accent-foreground: oklch(78% 0.08 155);
+  --border: oklch(25% 0.025 145);
+  --input: oklch(25% 0.025 145);
+  --ring: oklch(68% 0.1 155);
+  --surface-user: oklch(24% 0.045 150);
+  --surface-reasoning: oklch(22% 0.04 80);
+  --surface-assistant: oklch(18% 0.025 145);
 }
 
 :root[data-site='cv']:not(.dark) {

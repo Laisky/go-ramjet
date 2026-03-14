@@ -153,7 +153,7 @@ export function useFloatingHeader({
     window.addEventListener('scroll', handleScroll, { passive: true })
 
     // Initial check
-    updateFloatingHeader()
+    updateFloatingHeader() // eslint-disable-line react-hooks/set-state-in-effect -- sync with scroll position on mount
 
     return () => {
       window.removeEventListener('scroll', handleScroll)
@@ -165,7 +165,7 @@ export function useFloatingHeader({
 
   // Update when messages change
   useEffect(() => {
-    updateFloatingHeader()
+    updateFloatingHeader() // eslint-disable-line react-hooks/set-state-in-effect -- sync with DOM after message change
   }, [messages, updateFloatingHeader])
 
   return state

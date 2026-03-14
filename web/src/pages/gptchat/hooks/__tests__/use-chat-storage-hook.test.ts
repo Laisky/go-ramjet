@@ -1,6 +1,7 @@
 import { kvGet } from '@/utils/storage'
 import { renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ChatMessageData } from '../../types'
 import { useChatStorage } from '../chat-storage'
 
 // Mock storage
@@ -35,7 +36,7 @@ describe('useChatStorage hook', () => {
     const mockHistory = [{ chatID: 'chat1', role: 'user', content: 'hi' }]
     const mockUserData = { chatID: 'chat1', role: 'user', content: 'hi' }
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_1') return Promise.resolve(mockHistory)
       if (key === 'chat_data_user_chat1') return Promise.resolve(mockUserData)
       return Promise.resolve(null)
@@ -57,12 +58,12 @@ describe('useChatStorage hook', () => {
   })
 
   it('should abort loading if sessionId changes during fetch (race condition)', async () => {
-    let resolveFetch: (val: any) => void
+    let resolveFetch: (val: unknown) => void
     const fetchPromise = new Promise((resolve) => {
       resolveFetch = resolve
     })
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_1') return fetchPromise
       return Promise.resolve(null)
     })
@@ -91,9 +92,9 @@ describe('useChatStorage hook', () => {
   })
 
   it('should abort stale load when session changes during per-item fetch', async () => {
-    const userFetch = deferred<any>()
+    const userFetch = deferred<unknown>()
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_1') {
         return Promise.resolve([
           { chatID: 'chat1', role: 'user', content: 'a' },
@@ -135,9 +136,9 @@ describe('useChatStorage hook', () => {
   })
 
   it('should not overwrite newer local updates from an in-flight load', async () => {
-    const historyFetch = deferred<any>()
+    const historyFetch = deferred<unknown>()
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_1') {
         return historyFetch.promise
       }
@@ -159,7 +160,7 @@ describe('useChatStorage hook', () => {
       chatID: 'chat-local',
       role: 'user',
       content: 'local update',
-    } as any)
+    } as ChatMessageData)
 
     historyFetch.resolve([])
     await savePromise
@@ -169,10 +170,10 @@ describe('useChatStorage hook', () => {
   })
 
   it('should keep existing UI messages when stale load is invalidated', async () => {
-    const historyFetch = deferred<any>()
+    const historyFetch = deferred<unknown>()
     let historyGetCount = 0
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_1') {
         historyGetCount += 1
         if (historyGetCount === 1) {
@@ -197,7 +198,7 @@ describe('useChatStorage hook', () => {
       chatID: 'chat-fresh',
       role: 'user',
       content: 'fresh message',
-    } as any)
+    } as ChatMessageData)
 
     historyFetch.resolve([{ chatID: 'old', role: 'user', content: 'old' }])
     await loadPromise
@@ -211,9 +212,9 @@ describe('useChatStorage hook', () => {
   })
 
   it('should not invalidate session load by mutations from another session', async () => {
-    const historyFetchSession2 = deferred<any>()
+    const historyFetchSession2 = deferred<unknown>()
 
-    ;(kvGet as any).mockImplementation((key: string) => {
+    ;(kvGet as Mock).mockImplementation((key: string) => {
       if (key === 'chat_user_session_2') {
         return historyFetchSession2.promise
       }
@@ -264,7 +265,7 @@ describe('useChatStorage hook', () => {
       chatID: 'chat1',
       role: 'user',
       content: 'session1 write',
-    } as any)
+    } as ChatMessageData)
 
     historyFetchSession2.resolve([
       { chatID: 'chat2', role: 'user', content: 'session2 message' },

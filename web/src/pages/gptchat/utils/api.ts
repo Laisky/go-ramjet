@@ -56,7 +56,7 @@ export const api = {
     })
   },
 
-  async uploadUserData(syncKey: string, data: any) {
+  async uploadUserData(syncKey: string, data: unknown) {
     // Compress data
     const jsonStr = JSON.stringify(data)
 
@@ -75,7 +75,7 @@ export const api = {
 
   async downloadUserData(syncKey: string) {
     try {
-      const data = await request<any>('/user/config', {
+      const data = await request<unknown>('/user/config', {
         method: 'GET',
         headers: {
           'X-LAISKY-SYNC-KEY': syncKey,

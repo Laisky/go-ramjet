@@ -30,42 +30,38 @@ export function SelectionToolbar({
   const [copied, setCopied] = useState(false)
   const [adjustedPosition, setAdjustedPosition] = useState(position)
 
-  // Ensure the toolbar stays within the viewport
+  // Ensure the toolbar stays within the viewport.
+  // This is a DOM-measurement effect that must sync state with layout.
   useEffect(() => {
-    if (toolbarRef.current) {
-      const rect = toolbarRef.current.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
+    if (!toolbarRef.current) return
+    const rect = toolbarRef.current.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
 
-      let { top, left } = position
+    let { top, left } = position
 
-      // Center horizontally relative to the selection
-      left = left - rect.width / 2
+    // Center horizontally relative to the selection
+    left = left - rect.width / 2
 
-      // Adjust horizontally to stay in viewport
-      if (left + rect.width > viewportWidth - 10) {
-        left = viewportWidth - rect.width - 10
-      }
-      if (left < 10) {
-        left = 10
-      }
-
-      // Adjust vertically (show above selection if possible, else below)
-      // 'top' passed in is the top of the selection rect or mouse Y
-      const viewportHeight = window.innerHeight
-      if (top - rect.height < 10) {
-        // Not enough space above, show below the selection
-        top = top + 25
-
-        // If also not enough space below, clamp to viewport
-        if (top + rect.height > viewportHeight - 10) {
-          top = viewportHeight - rect.height - 10
-        }
-      } else {
-        top = top - rect.height - 10
-      }
-
-      setAdjustedPosition({ top, left })
+    // Adjust horizontally to stay in viewport
+    if (left + rect.width > viewportWidth - 10) {
+      left = viewportWidth - rect.width - 10
     }
+    if (left < 10) {
+      left = 10
+    }
+
+    // Adjust vertically (show above selection if possible, else below)
+    const viewportHeight = window.innerHeight
+    if (top - rect.height < 10) {
+      top = top + 25
+      if (top + rect.height > viewportHeight - 10) {
+        top = viewportHeight - rect.height - 10
+      }
+    } else {
+      top = top - rect.height - 10
+    }
+
+    setAdjustedPosition({ top, left }) // eslint-disable-line react-hooks/set-state-in-effect -- DOM measurement sync
   }, [position, text])
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -93,7 +89,7 @@ export function SelectionToolbar({
   return createPortal(
     <div
       ref={toolbarRef}
-      className="fixed z-[100] flex items-center gap-0.5 rounded-lg border bg-popover p-1 shadow-lg animate-in fade-in zoom-in duration-150"
+      className="fixed z-[100] flex items-center gap-0.5 rounded-lg border border-primary/25 bg-popover p-1 shadow-lg shadow-primary/10 animate-in fade-in zoom-in duration-150"
       style={{
         top: `${adjustedPosition.top}px`,
         left: `${adjustedPosition.left}px`,

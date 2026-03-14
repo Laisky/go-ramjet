@@ -39,26 +39,23 @@ export function AttachmentTag({
   onEdit,
   className,
 }: AttachmentTagProps) {
-  const [displayUrl, setDisplayUrl] = useState<string | null>(
-    url || contentB64 || null,
-  )
   const isImage = type === 'image'
+  const [objectUrl, setObjectUrl] = useState<string | null>(null)
 
+  // Create/revoke object URL for File objects without a URL/B64.
   useEffect(() => {
-    // If we have a File object but no URL/B64, create an object URL
     if (isImage && file && !url && !contentB64) {
-      const objectUrl = URL.createObjectURL(file)
-      setDisplayUrl(objectUrl)
-      return () => URL.revokeObjectURL(objectUrl)
+      const newUrl = URL.createObjectURL(file)
+      setObjectUrl(newUrl) // eslint-disable-line react-hooks/set-state-in-effect -- sync object URL with file prop
+      return () => {
+        URL.revokeObjectURL(newUrl)
+        setObjectUrl(null)
+      }
     }
+    setObjectUrl(null)
   }, [file, isImage, url, contentB64])
 
-  // Update displayUrl if url or contentB64 changes
-  useEffect(() => {
-    if (url || contentB64) {
-      setDisplayUrl(url || contentB64 || null)
-    }
-  }, [url, contentB64])
+  const displayUrl = url || contentB64 || objectUrl
 
   return (
     <div

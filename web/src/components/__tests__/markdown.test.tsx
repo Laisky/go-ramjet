@@ -5,6 +5,7 @@ import { Markdown } from '../markdown'
 
 describe('Markdown code blocks', () => {
   const isBlankLine = (line: string) => {
+    // eslint-disable-next-line no-control-regex
     const withoutAnsi = line.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
     return withoutAnsi.replace(/[\p{White_Space}\p{Cf}\p{Cc}]/gu, '') === ''
   }

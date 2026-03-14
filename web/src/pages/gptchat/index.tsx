@@ -266,7 +266,8 @@ export function GPTChatPage() {
   )
 
   const handleReset = useCallback(async () => {
-    const { sync_key, ...rest } = DefaultSessionConfig
+    // Reset all config except sync_key
+    const { sync_key: __unused, ...rest } = DefaultSessionConfig // eslint-disable-line @typescript-eslint/no-unused-vars
     await updateConfig(rest)
   }, [updateConfig])
 
@@ -408,9 +409,9 @@ export function GPTChatPage() {
   return (
     <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
       {/* Session Dock (Fixed Left Sidebar) */}
-      <aside className="theme-surface theme-border fixed left-0 top-0 z-40 flex h-dvh w-10 shrink-0 flex-col border-r">
+      <aside className="fixed left-0 top-0 z-40 flex h-dvh w-10 shrink-0 flex-col border-r border-primary/20 bg-primary/5 dark:bg-primary/8">
         {/* Dock header area */}
-        <div className="flex h-12 shrink-0 items-center justify-center border-b border-border">
+        <div className="flex h-12 shrink-0 items-center justify-center border-b border-primary/20">
           <span className="text-base">💬</span>
         </div>
         {/* Session buttons */}
@@ -473,6 +474,22 @@ export function GPTChatPage() {
                 tone="ghost"
               />
             </div>
+            <TooltipWrapper content="Pay / Top up">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 shrink-0 min-w-[70px] rounded-md px-2 text-sm font-semibold"
+                onClick={() =>
+                  window.open(
+                    'https://wiki.laisky.com/projects/gpt/pay/#page_gpt_pay',
+                    '_blank',
+                    'noopener,noreferrer',
+                  )
+                }
+              >
+                Pay
+              </Button>
+            </TooltipWrapper>
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -520,7 +537,7 @@ export function GPTChatPage() {
         />
 
         {/* Scrollable chat area - uses window scroll with padding for fixed header/footer */}
-        <main
+        <section
           className="relative pt-12"
           style={{ paddingBottom: `${footerHeight}px` }}
         >
@@ -545,8 +562,12 @@ export function GPTChatPage() {
           >
             {messages.length === 0 ? (
               <div className="flex min-h-[calc(100dvh-10rem)] flex-col items-center justify-center text-center">
-                <div className="mb-4 text-4xl">💬</div>
-                <h2 className="text-lg font-medium">Start a conversation</h2>
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-3xl ring-1 ring-primary/20">
+                  💬
+                </div>
+                <h2 className="mt-2 text-lg font-semibold text-primary">
+                  Start a conversation
+                </h2>
                 <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                   Type a message below to begin chatting with the AI. You can
                   change the model and settings using the button above.
@@ -585,7 +606,7 @@ export function GPTChatPage() {
               </div>
             )}
           </div>
-        </main>
+        </section>
 
         {/* Input (fixed to bottom of viewport) */}
         <footer
@@ -596,7 +617,7 @@ export function GPTChatPage() {
           <button
             onClick={navigateMessageUp}
             className={cn(
-              'absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
+              'absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-4 opacity-0 pointer-events-none',
@@ -610,7 +631,7 @@ export function GPTChatPage() {
           <button
             onClick={() => scrollToBottom({ force: true })}
             className={cn(
-              'absolute bottom-full right-2 mb-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground shadow-lg ring-1 ring-border backdrop-blur transition-all hover:bg-muted/80',
+              'absolute bottom-full right-2 mb-4 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20',
               showScrollButton
                 ? 'translate-y-0 opacity-100'
                 : 'translate-y-4 opacity-0 pointer-events-none',
