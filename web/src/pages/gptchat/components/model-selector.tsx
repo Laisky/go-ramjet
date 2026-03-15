@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/utils/cn'
-import { ModelCategories, isFreeModel, isImageModel } from '../models'
+import { ModelCategories, isFreeModel } from '../models'
 
 /**
  * ModelSelectorProps describes the configuration for rendering a model picker dropdown.
@@ -114,11 +114,6 @@ export function ModelSelector({
                     Free
                   </Badge>
                 )}
-                {isImageModel(displayModel) && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    🎨
-                  </Badge>
-                )}
               </span>
             </span>
           )}
@@ -148,11 +143,6 @@ export function ModelSelector({
                   {isFreeModel(model) && (
                     <Badge variant="success" className="text-[10px]">
                       Free
-                    </Badge>
-                  )}
-                  {isImageModel(model) && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      🎨
                     </Badge>
                   )}
                 </span>
