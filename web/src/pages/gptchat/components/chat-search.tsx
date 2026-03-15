@@ -110,7 +110,7 @@ export function ChatSearch({
           variant="ghost"
           size="sm"
           onClick={() => setIsOpen(true)}
-          className="h-9 w-9 rounded-md px-0"
+          className="h-9 w-9 rounded-lg px-0"
           aria-label="Search messages"
         >
           <Search className="h-4 w-4" />

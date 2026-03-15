@@ -446,7 +446,7 @@ export function GPTChatPage() {
       <div className="ml-10 flex min-h-dvh min-w-0 flex-col">
         {/* Header - fixed at top */}
         <header
-          className="theme-surface theme-border fixed left-10 right-0 top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b px-1 sm:px-2"
+          className="theme-surface theme-border fixed left-10 right-0 top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-2 sm:px-3"
           onClick={(e) => {
             if (e.target !== e.currentTarget) {
               return
@@ -454,49 +454,47 @@ export function GPTChatPage() {
             scrollToTop()
           }}
         >
-          <div className="flex items-center gap-2">
-            <div
-              className="flex items-center gap-0.5"
-              title={
-                activeModelName
-                  ? `Active model: ${activeModelName}`
-                  : 'Select a model'
-              }
-            >
-              <ModelSelector
-                label="Chat"
-                categories={[
-                  'OpenAI',
-                  'Anthropic',
-                  'Google',
-                  'Deepseek',
-                  'Others',
-                ]}
-                allowedModels={user?.allowed_models}
-                selectedModel={chatModel}
-                active={!isDrawActive}
-                onModelChange={handleChatModelChange}
-                className="shrink-0 min-w-[70px] rounded-md"
-                compact
-                tone="ghost"
-              />
-              <ModelSelector
-                label="Draw"
-                categories={['Image']}
-                allowedModels={user?.allowed_models}
-                selectedModel={drawModel}
-                active={isDrawActive}
-                onModelChange={handleDrawModelChange}
-                className="shrink-0 min-w-[70px] rounded-md"
-                compact
-                tone="ghost"
-              />
-            </div>
+          <div
+            className="flex min-w-0 items-center gap-2 sm:gap-2.5"
+            title={
+              activeModelName
+                ? `Active model: ${activeModelName}`
+                : 'Select a model'
+            }
+          >
+            <ModelSelector
+              label="Chat"
+              categories={[
+                'OpenAI',
+                'Anthropic',
+                'Google',
+                'Deepseek',
+                'Others',
+              ]}
+              allowedModels={user?.allowed_models}
+              selectedModel={chatModel}
+              active={!isDrawActive}
+              onModelChange={handleChatModelChange}
+              className="h-9 shrink-0 min-w-[3.9rem] rounded-xl bg-background/70 px-2.5 shadow-sm shadow-primary/5 sm:min-w-[4.2rem]"
+              compact
+              tone="ghost"
+            />
+            <ModelSelector
+              label="Draw"
+              categories={['Image']}
+              allowedModels={user?.allowed_models}
+              selectedModel={drawModel}
+              active={isDrawActive}
+              onModelChange={handleDrawModelChange}
+              className="h-9 shrink-0 min-w-[3.9rem] rounded-xl bg-background/70 px-2.5 shadow-sm shadow-primary/5 sm:min-w-[4.2rem]"
+              compact
+              tone="ghost"
+            />
             <TooltipWrapper content="Pay / Top up">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-9 shrink-0 min-w-[70px] rounded-md px-2 text-sm font-semibold"
+                className="h-9 shrink-0 rounded-xl bg-background/70 px-2.5 text-sm font-semibold shadow-sm shadow-primary/5 sm:min-w-[4.5rem]"
                 onClick={() =>
                   window.open(
                     'https://wiki.laisky.com/projects/gpt/pay/#page_gpt_pay',
@@ -510,17 +508,17 @@ export function GPTChatPage() {
             </TooltipWrapper>
           </div>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <ChatSearch messages={messages} onSelectMessage={scrollToMessage} />
             <div className="hidden sm:block">
-              <ThemeToggle />
+              <ThemeToggle className="h-9 w-9" />
             </div>
             <TooltipWrapper content="Settings">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setConfigOpen(true)}
-                className="h-9 w-9 rounded-md px-0"
+                className="h-9 w-9 rounded-lg px-0"
                 aria-label="Settings"
               >
                 <Settings className="h-4 w-4" />

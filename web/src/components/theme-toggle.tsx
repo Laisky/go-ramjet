@@ -2,6 +2,7 @@ import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { Button } from '@/components/ui/button'
+import { cn } from '@/utils/cn'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +10,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+export interface ThemeToggleProps {
+  className?: string
+}
+
 /**
  * ThemeToggle provides a three-way theme switch: system, light, and dark.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme, resolvedTheme } = useTheme()
 
   const icon = (() => {
@@ -26,7 +31,12 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label="Toggle theme">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn('rounded-lg px-0', className)}
+          aria-label="Toggle theme"
+        >
           {icon}
           <span className="sr-only">Theme</span>
         </Button>
