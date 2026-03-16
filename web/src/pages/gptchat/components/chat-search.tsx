@@ -3,6 +3,7 @@
  */
 import { Check, ChevronDown, Command, Filter, Search } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -326,7 +327,7 @@ export function ChatSearch({
         </Button>
       </TooltipWrapper>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10dvh] backdrop-blur-[2px]">
           <div className="fixed inset-0" onClick={() => setIsOpen(false)} />
           <Card
@@ -518,7 +519,8 @@ export function ChatSearch({
               </div>
             </div>
           </Card>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
