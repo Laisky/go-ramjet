@@ -334,10 +334,13 @@ export function ChatSearch({
       </TooltipWrapper>
 
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setIsOpen(false)} />
         <DialogPrimitive.Content
           className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[10dvh]"
           aria-label="Search messages"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsOpen(false)
+          }}
         >
           <Card
             className="theme-surface relative z-10 w-full max-w-xl overflow-hidden rounded-xl border border-primary/25 shadow-2xl shadow-primary/10"
