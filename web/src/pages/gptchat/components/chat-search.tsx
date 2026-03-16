@@ -1,9 +1,9 @@
 /**
  * ChatSearch component for fuzzy searching messages across sessions.
  */
+import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Check, ChevronDown, Command, Filter, Search } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -313,23 +313,32 @@ export function ChatSearch({
     ? 'All sessions'
     : `${selectedSessionIds.size} session${selectedSessionIds.size > 1 ? 's' : ''}`
 
+  const activeResultId =
+    results.length > 0
+      ? `search-result-${results[selectedIndex]?.message.chatID}-${results[selectedIndex]?.message.role}`
+      : undefined
+
   return (
-    <>
+    <DialogPrimitive.Root open={isOpen} onOpenChange={setIsOpen}>
       <TooltipWrapper content="Search messages (Ctrl+K / Ctrl+F)">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsOpen(true)}
-          className="h-9 w-9 rounded-lg px-0"
-          aria-label="Search messages"
-        >
-          <Search className="h-4 w-4" />
-        </Button>
+        <DialogPrimitive.Trigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 rounded-lg px-0"
+            aria-label="Search messages"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        </DialogPrimitive.Trigger>
       </TooltipWrapper>
 
-      {isOpen && createPortal(
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10dvh] backdrop-blur-[2px]">
-          <div className="fixed inset-0" onClick={() => setIsOpen(false)} />
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[10dvh]"
+          aria-label="Search messages"
+        >
           <Card
             className="theme-surface relative z-10 w-full max-w-xl overflow-hidden rounded-xl border border-primary/25 shadow-2xl shadow-primary/10"
             style={{ borderTopColor: 'var(--primary)', borderTopWidth: '2px' }}
@@ -343,6 +352,11 @@ export function ChatSearch({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search messages..."
+                role="combobox"
+                aria-expanded={results.length > 0}
+                aria-controls="search-results-listbox"
+                aria-activedescendant={activeResultId}
+                aria-autocomplete="list"
                 className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               />
               <div className="flex items-center gap-1.5 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
@@ -444,10 +458,17 @@ export function ChatSearch({
             {/* Results */}
             <div className="max-h-[60dvh] overflow-y-auto p-2">
               {results.length > 0 ? (
-                <div className="space-y-1">
+                <div
+                  className="space-y-1"
+                  role="listbox"
+                  id="search-results-listbox"
+                >
                   {results.map((item, i) => (
                     <div
                       key={`${item.message.chatID}-${item.message.role}-${item.sessionId}`}
+                      id={`search-result-${item.message.chatID}-${item.message.role}`}
+                      role="option"
+                      aria-selected={i === selectedIndex}
                       className={cn(
                         'flex cursor-pointer flex-col rounded-md px-3 py-2 transition-colors',
                         i === selectedIndex
@@ -519,9 +540,8 @@ export function ChatSearch({
               </div>
             </div>
           </Card>
-        </div>,
-        document.body,
-      )}
-    </>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }

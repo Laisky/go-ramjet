@@ -33,17 +33,17 @@ export function SessionDock({
   )
 
   return (
-    <div className="flex flex-1 flex-col py-1">
-      <div className="flex w-full flex-1 flex-col overflow-y-auto no-scrollbar">
-        {visibleSessions.map((session) => (
-          <TooltipProvider key={session.id}>
-            <Tooltip>
+    <TooltipProvider>
+      <div className="flex flex-1 flex-col py-1">
+        <div className="flex w-full flex-1 flex-col overflow-y-auto">
+          {visibleSessions.map((session) => (
+            <Tooltip key={session.id}>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onSwitchSession(session.id)}
                   aria-label={`Switch to session ${session.name}`}
                   className={cn(
-                    'flex h-9 w-full items-center justify-center border-b border-border text-[11px] font-bold transition-colors',
+                    'flex h-11 w-full items-center justify-center border-b border-border text-[11px] font-bold transition-colors',
                     session.id === activeSessionId
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-transparent text-foreground hover:bg-muted',
@@ -56,15 +56,14 @@ export function SessionDock({
                 <p>{session.name}</p>
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-        ))}
+          ))}
 
-        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={onCreateSession}
-                className="flex h-9 w-full items-center justify-center border-b border-dashed border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="New Session"
+                className="flex h-11 w-full items-center justify-center border-b border-dashed border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -73,24 +72,24 @@ export function SessionDock({
               <p>New Session</p>
             </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
-      </div>
+        </div>
 
-      <div className="flex w-full flex-col border-t border-border">
-        <ConfirmAction
-          action="clear-chat-history"
-          onConfirm={onClearChats}
-          trigger={
-            <button
-              className="flex h-9 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
-              aria-label="Clear Chat History"
-              title="Clear Chat History"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          }
-        />
+        <div className="flex w-full flex-col border-t border-border">
+          <ConfirmAction
+            action="clear-chat-history"
+            onConfirm={onClearChats}
+            trigger={
+              <button
+                className="flex h-11 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
+                aria-label="Clear Chat History"
+                title="Clear Chat History"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            }
+          />
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

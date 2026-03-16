@@ -55,6 +55,7 @@ export function ChatInput({
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [inputError, setInputError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
@@ -250,10 +251,11 @@ export function ChatInput({
   const transcribeBlob = useCallback(
     async (blob: Blob) => {
       if (!config.api_token) {
-        alert('API token is required for voice transcription.')
+        setInputError('API token is required for voice transcription.')
         return
       }
       setIsTranscribing(true)
+      setInputError(null)
       try {
         const file = new File([blob], `voice-${Date.now()}.webm`, {
           type: blob.type || 'audio/webm',
@@ -262,9 +264,7 @@ export function ChatInput({
         updateMessage((prev) => (prev ? `${prev}\n${text}` : text))
       } catch (err) {
         console.error('Failed to transcribe audio:', err)
-        alert(
-          'Failed to transcribe audio. Please check the console for details.',
-        )
+        setInputError('Failed to transcribe audio. Please try again.')
       } finally {
         setIsTranscribing(false)
       }
@@ -284,7 +284,7 @@ export function ChatInput({
   const startRecording = useCallback(async () => {
     if (isRecording) return
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert('Your browser does not support audio recording.')
+      setInputError('Your browser does not support audio recording.')
       return
     }
     try {
@@ -308,7 +308,7 @@ export function ChatInput({
       setIsRecording(true)
     } catch (err) {
       console.error('Unable to access microphone:', err)
-      alert('Unable to access microphone. Please check permissions.')
+      setInputError('Unable to access microphone. Please check permissions.')
     }
   }, [isRecording, transcribeBlob])
 
@@ -398,6 +398,22 @@ export function ChatInput({
             )}
           </div>
         </div>
+
+        {inputError && (
+          <div
+            role="alert"
+            className="mt-1 flex items-center justify-between rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive"
+          >
+            <span>{inputError}</span>
+            <button
+              onClick={() => setInputError(null)}
+              className="ml-2 shrink-0 text-destructive/70 hover:text-destructive"
+              aria-label="Dismiss error"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           <ToggleButton

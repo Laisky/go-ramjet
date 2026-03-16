@@ -452,7 +452,7 @@ export function GPTChatPage() {
   return (
     <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
       {/* Session Dock (Fixed Left Sidebar) */}
-      <aside className="fixed left-0 top-0 z-40 flex h-dvh w-10 shrink-0 flex-col border-r border-primary/20 bg-primary/5 dark:bg-primary/8">
+      <aside className="fixed left-0 top-0 z-40 flex h-dvh w-12 shrink-0 flex-col border-r border-primary/20 bg-primary/5 dark:bg-primary/8">
         {/* Dock header area */}
         <div className="flex h-12 shrink-0 items-center justify-center border-b border-primary/20">
           <span className="text-base">💬</span>
@@ -468,10 +468,10 @@ export function GPTChatPage() {
       </aside>
 
       {/* Main Content Area - offset by sidebar width */}
-      <div className="ml-10 flex min-h-dvh min-w-0 flex-col">
+      <div className="ml-12 flex min-h-dvh min-w-0 flex-col">
         {/* Header - fixed at top */}
         <header
-          className="theme-surface theme-border fixed left-10 right-0 top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-2 sm:px-3"
+          className="theme-surface theme-border fixed left-12 right-0 top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b px-2 sm:px-3"
           onClick={(e) => {
             if (e.target !== e.currentTarget) {
               return
@@ -541,9 +541,7 @@ export function GPTChatPage() {
               onSelectMessage={scrollToMessage}
               onSwitchAndSelect={handleSearchSwitchAndSelect}
             />
-            <div className="hidden sm:block">
-              <ThemeToggle className="h-9 w-9" />
-            </div>
+            <ThemeToggle className="h-9 w-9" />
             <TooltipWrapper content="Settings">
               <Button
                 variant="ghost"
@@ -658,7 +656,7 @@ export function GPTChatPage() {
         {/* Input (fixed to bottom of viewport) */}
         <footer
           ref={footerRef}
-          className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0"
+          className="theme-surface theme-border fixed bottom-0 left-12 right-0 z-30 border-t p-0"
         >
           {/* Scroll up button – always visible */}
           <button

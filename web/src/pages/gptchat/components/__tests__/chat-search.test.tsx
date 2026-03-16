@@ -11,6 +11,22 @@ vi.mock('@/components/ui/tooltip-wrapper', () => ({
   ),
 }))
 
+// Mock Radix Dialog to render children always (state managed by ChatSearch itself)
+vi.mock('@radix-ui/react-dialog', () => ({
+  Root: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Trigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Portal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Overlay: () => null,
+  Content: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  Title: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  Description: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  Close: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 describe('ChatSearch', () => {
   const mockMessages: ChatMessageData[] = [
     { chatID: '1', role: 'user', content: 'apple pie', timestamp: Date.now() },
@@ -33,7 +49,12 @@ describe('ChatSearch', () => {
     const onSelectMessage = vi.fn()
 
     render(
-      <ChatSearch messages={mockMessages} onSelectMessage={onSelectMessage} />,
+      <ChatSearch
+        messages={mockMessages}
+        sessions={[{ id: 1, name: 'Default', visible: true }]}
+        currentSessionId={1}
+        onSelectMessage={onSelectMessage}
+      />,
     )
 
     // Open the search dialog

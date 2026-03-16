@@ -1,3 +1,5 @@
+import { Paperclip } from 'lucide-react'
+
 import { Textarea } from '@/components/ui/textarea'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { uploadFile } from '@/utils/api'
@@ -73,6 +75,7 @@ export function MessageInput({
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editorFile, setEditorFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
 
   // Auto-resize textarea
   useEffect(() => {
@@ -93,6 +96,7 @@ export function MessageInput({
     async (files: File[]) => {
       if (!files.length) return
 
+      setFileError(null)
       const newAttachments = [...attachments]
       let newContent = value
 
@@ -110,7 +114,7 @@ export function MessageInput({
             })
           } catch (err) {
             console.error('Failed to process image:', err)
-            alert(`Failed to process image ${file.name}`)
+            setFileError(`Failed to process image ${file.name}`)
           }
         } else if (SUPPORTED_DOC_EXTS.has(ext)) {
           setIsUploading(true)
@@ -126,12 +130,12 @@ export function MessageInput({
             newContent = url + '\n' + (newContent || '')
           } catch (err) {
             console.error('Failed to upload file:', err)
-            alert(`Failed to upload file ${file.name}`)
+            setFileError(`Failed to upload file ${file.name}`)
           } finally {
             setIsUploading(false)
           }
         } else {
-          alert(`Unsupported file type: ${file.name}`)
+          setFileError(`Unsupported file type: ${file.name}`)
         }
       }
 
@@ -263,6 +267,22 @@ export function MessageInput({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
+      {fileError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive"
+        >
+          <span>{fileError}</span>
+          <button
+            onClick={() => setFileError(null)}
+            className="ml-2 shrink-0 text-destructive/70 hover:text-destructive"
+            aria-label="Dismiss error"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {attachments.map((att, i) => (
@@ -316,19 +336,7 @@ export function MessageInput({
             className="absolute right-2 bottom-2 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
             aria-label="Attach files"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-            </svg>
+            <Paperclip className="h-5 w-5" />
           </button>
         </TooltipWrapper>
       </div>

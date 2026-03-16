@@ -48,32 +48,6 @@ export function useMessageNavigation({
   }, [displayedMessages])
 
   /**
-   * findLastVisibleMessageIndex finds the index of the last message
-   * that is currently visible in the viewport.
-   */
-  const findLastVisibleMessageIndex = useCallback((): number => {
-    if (displayedMessages.length === 0) return -1
-
-    const headerHeight = 48
-    const viewportBottom = window.innerHeight
-
-    for (let i = displayedMessages.length - 1; i >= 0; i--) {
-      const msg = displayedMessages[i]
-      const el = document.getElementById(
-        `chat-message-${msg.chatID}-${msg.role}`,
-      )
-      if (el) {
-        const rect = el.getBoundingClientRect()
-        if (rect.bottom > headerHeight && rect.top < viewportBottom) {
-          return i
-        }
-      }
-    }
-
-    return displayedMessages.length - 1
-  }, [displayedMessages])
-
-  /**
    * isMessageVisible checks whether the message at the given index
    * is currently (at least partially) visible in the viewport.
    */

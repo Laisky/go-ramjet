@@ -108,7 +108,7 @@ export function FloatingMessageHeader({
     <div
       onClick={handleHeaderClick}
       className={cn(
-        'fixed left-10 right-0 top-12 z-20 border-b shadow-md backdrop-blur-sm transition-all duration-300 ease-in-out',
+        'fixed left-12 right-0 top-12 z-20 border-b shadow-md backdrop-blur-sm transition-all duration-300 ease-in-out',
         visible
           ? 'translate-y-0 opacity-100'
           : '-translate-y-full opacity-0 pointer-events-none',

@@ -266,15 +266,16 @@ export const ChatMessage = memo(function ChatMessage({
             </Markdown>
           ) : isStreaming && !message.reasoningContent ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden" />
               <div
-                className="h-2 w-2 animate-bounce rounded-full bg-current"
+                className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden"
                 style={{ animationDelay: '0.1s' }}
               />
               <div
-                className="h-2 w-2 animate-bounce rounded-full bg-current"
+                className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden"
                 style={{ animationDelay: '0.2s' }}
               />
+              <span className="hidden motion-reduce:inline">Generating…</span>
             </div>
           ) : null}
 

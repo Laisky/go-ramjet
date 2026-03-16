@@ -1,8 +1,9 @@
 /**
  * Configuration sidebar for chat settings.
  */
+import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Eye, EyeOff, Settings, Trash2, User, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
@@ -76,440 +77,433 @@ export function ConfigSidebar({
   onExportSession,
 }: ConfigSidebarProps) {
   const [showApiKey, setShowApiKey] = useState(false)
-  const sidebarRef = useRef<HTMLDivElement>(null)
 
   const { user } = useUser(config.api_token)
 
-  // Close on Escape key
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
-
-  // Focus sidebar when opened
-  useEffect(() => {
-    if (isOpen) {
-      sidebarRef.current?.focus()
-    }
-  }, [isOpen])
-
-  if (!isOpen) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Settings"
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+        <DialogPrimitive.Content
+          className="fixed inset-y-0 right-0 z-50 ml-auto w-full max-w-md overflow-y-auto bg-card text-card-foreground p-4 shadow-lg outline-none"
+          aria-label="Settings"
+        >
+          {/* Header */}
+          <div className="mb-4 flex items-center justify-between">
+            <DialogPrimitive.Title className="flex items-center gap-2 text-lg font-semibold">
+              <Settings className="h-5 w-5" />
+              Configuration
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close asChild>
+              <Button variant="ghost" size="sm" aria-label="Close settings">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogPrimitive.Close>
+          </div>
 
-      {/* Sidebar */}
-      <div
-        ref={sidebarRef}
-        tabIndex={-1}
-        className="bg-card text-card-foreground relative ml-auto w-full max-w-md overflow-y-auto p-4 shadow-lg outline-none"
-      >
-        {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Settings className="h-5 w-5" />
-            Configuration
-          </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            aria-label="Close settings"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Session Manager */}
-          {onSwitchSession &&
-            onCreateSession &&
-            onDeleteSession &&
-            onRenameSession && (
-              <section className="space-y-3 pb-4 border-b border-border">
-                <SessionManager
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  onSwitchSession={onSwitchSession}
-                  onCreateSession={onCreateSession}
-                  onDeleteSession={onDeleteSession}
-                  onRenameSession={onRenameSession}
-                  onUpdateSessionVisibility={onUpdateSessionVisibility}
-                  onDuplicateSession={onDuplicateSession}
-                  onReorderSessions={onReorderSessions}
-                  onExportSession={onExportSession}
-                />
-              </section>
-            )}
-
-          {/* User Profile */}
-          {user && (
-            <div className="flex items-center gap-3 rounded-lg border p-3 border-border">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                {user.image_url && !user.image_url.includes('openai.com') ? (
-                  <img
-                    src={user.image_url}
-                    alt={user.user_name}
-                    className="h-10 w-10 rounded-full"
+          <div className="p-4 space-y-6">
+            {/* Session Manager */}
+            {onSwitchSession &&
+              onCreateSession &&
+              onDeleteSession &&
+              onRenameSession && (
+                <section className="space-y-3 pb-4 border-b border-border">
+                  <SessionManager
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    onSwitchSession={onSwitchSession}
+                    onCreateSession={onCreateSession}
+                    onDeleteSession={onDeleteSession}
+                    onRenameSession={onRenameSession}
+                    onUpdateSessionVisibility={onUpdateSessionVisibility}
+                    onDuplicateSession={onDuplicateSession}
+                    onReorderSessions={onReorderSessions}
+                    onExportSession={onExportSession}
                   />
-                ) : (
-                  <User className="h-6 w-6 text-primary" />
-                )}
-              </div>
-              <div className="overflow-hidden">
-                <div className="truncate font-medium">{user.user_name}</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {user.is_free ? 'Free Tier' : 'Pro User'}
-                  {user.no_limit_expensive_models && ' • Unlimited'}
+                </section>
+              )}
+
+            {/* User Profile */}
+            {user && (
+              <div className="flex items-center gap-3 rounded-lg border p-3 border-border">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                  {user.image_url && !user.image_url.includes('openai.com') ? (
+                    <img
+                      src={user.image_url}
+                      alt={user.user_name}
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      className="h-10 w-10 rounded-full"
+                    />
+                  ) : (
+                    <User className="h-6 w-6 text-primary" />
+                  )}
+                </div>
+                <div className="overflow-hidden">
+                  <div className="truncate font-medium">{user.user_name}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {user.is_free ? 'Free Tier' : 'Pro User'}
+                    {user.no_limit_expensive_models && ' • Unlimited'}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* API Token */}
-          <div>
-            <label
-              htmlFor="cfg-api-key"
-              className="mb-1 block text-sm font-medium"
-            >
-              API Key
-            </label>
-            <div className="relative">
-              <Input
-                id="cfg-api-key"
-                type={showApiKey ? 'text' : 'password'}
-                value={config.api_token}
-                onChange={(e) => onConfigChange({ api_token: e.target.value })}
-                placeholder="sk-..."
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
-                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+            {/* API Token */}
+            <div>
+              <label
+                htmlFor="cfg-api-key"
+                className="mb-1 block text-sm font-medium"
               >
-                {showApiKey ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
+                API Key
+              </label>
+              <div className="relative">
+                <Input
+                  id="cfg-api-key"
+                  type={showApiKey ? 'text' : 'password'}
+                  value={config.api_token}
+                  onChange={(e) =>
+                    onConfigChange({ api_token: e.target.value })
+                  }
+                  placeholder="sk-..."
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
+                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                >
+                  {showApiKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Model Selection */}
-          <div className="space-y-2">
-            <label className="mb-1 block text-sm font-medium">Models</label>
-            <div className="flex flex-col gap-2">
-              <ModelSelector
-                label="Chat"
-                categories={[
-                  'OpenAI',
-                  'Anthropic',
-                  'Google',
-                  'Deepseek',
-                  'Others',
-                ]}
-                allowedModels={user?.allowed_models}
-                selectedModel={
-                  config.selected_chat_model || config.selected_model
-                }
-                active={
-                  !config.selected_model ||
-                  config.selected_model === config.selected_chat_model
-                }
-                onModelChange={(model) =>
-                  onConfigChange({
-                    selected_model: model,
-                    selected_chat_model: model,
-                  })
-                }
-              />
-              <ModelSelector
-                label="Draw"
-                categories={['Image']}
-                allowedModels={user?.allowed_models}
-                selectedModel={
-                  config.selected_draw_model || config.selected_model
-                }
-                active={config.selected_model === config.selected_draw_model}
-                onModelChange={(model) =>
-                  onConfigChange({
-                    selected_model: model,
-                    selected_draw_model: model,
-                  })
-                }
-              />
+            {/* Model Selection */}
+            <div className="space-y-2">
+              <label className="mb-1 block text-sm font-medium">Models</label>
+              <div className="flex flex-col gap-2">
+                <ModelSelector
+                  label="Chat"
+                  categories={[
+                    'OpenAI',
+                    'Anthropic',
+                    'Google',
+                    'Deepseek',
+                    'Others',
+                  ]}
+                  allowedModels={user?.allowed_models}
+                  selectedModel={
+                    config.selected_chat_model || config.selected_model
+                  }
+                  active={
+                    !config.selected_model ||
+                    config.selected_model === config.selected_chat_model
+                  }
+                  onModelChange={(model) =>
+                    onConfigChange({
+                      selected_model: model,
+                      selected_chat_model: model,
+                    })
+                  }
+                />
+                <ModelSelector
+                  label="Draw"
+                  categories={['Image']}
+                  allowedModels={user?.allowed_models}
+                  selectedModel={
+                    config.selected_draw_model || config.selected_model
+                  }
+                  active={config.selected_model === config.selected_draw_model}
+                  onModelChange={(model) =>
+                    onConfigChange({
+                      selected_model: model,
+                      selected_draw_model: model,
+                    })
+                  }
+                />
+              </div>
             </div>
-          </div>
 
-          {/* N Images */}
-          <div>
-            <label
-              htmlFor="cfg-n-images"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>N Images</span>
-              <span className="text-muted-foreground">
-                {config.chat_switch.draw_n_images}
-              </span>
-            </label>
-            <input
-              id="cfg-n-images"
-              type="range"
-              min={1}
-              max={4}
-              step={1}
-              value={config.chat_switch.draw_n_images}
-              onChange={(e) =>
-                onConfigChange({
-                  chat_switch: {
-                    ...config.chat_switch,
-                    draw_n_images: parseInt(e.target.value, 10),
-                  },
-                })
-              }
-              className="w-full"
-            />
-          </div>
-
-          {/* Context Count */}
-          <div>
-            <label
-              htmlFor="cfg-contexts"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>Contexts</span>
-              <span className="text-muted-foreground">{config.n_contexts}</span>
-            </label>
-            <input
-              id="cfg-contexts"
-              type="range"
-              min={1}
-              max={30}
-              step={1}
-              value={config.n_contexts}
-              onChange={(e) =>
-                onConfigChange({ n_contexts: parseInt(e.target.value, 10) })
-              }
-              className="w-full"
-            />
-          </div>
-
-          {/* Max Tokens */}
-          <div>
-            <label
-              htmlFor="cfg-max-tokens"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>Max Tokens</span>
-              <span className="text-muted-foreground">{config.max_tokens}</span>
-            </label>
-            <input
-              id="cfg-max-tokens"
-              type="range"
-              min={1000}
-              max={100000}
-              step={1000}
-              value={config.max_tokens}
-              onChange={(e) =>
-                onConfigChange({ max_tokens: parseInt(e.target.value, 10) })
-              }
-              className="w-full"
-            />
-          </div>
-
-          {/* Temperature */}
-          <div>
-            <label
-              htmlFor="cfg-temperature"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>Temperature</span>
-              <span className="text-muted-foreground">
-                {config.temperature.toFixed(1)}
-              </span>
-            </label>
-            <input
-              id="cfg-temperature"
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={config.temperature}
-              onChange={(e) =>
-                onConfigChange({ temperature: parseFloat(e.target.value) })
-              }
-              className="w-full"
-            />
-          </div>
-
-          {/* Presence Penalty */}
-          <div>
-            <label
-              htmlFor="cfg-presence-penalty"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>Presence Penalty</span>
-              <span className="text-muted-foreground">
-                {config.presence_penalty.toFixed(1)}
-              </span>
-            </label>
-            <input
-              id="cfg-presence-penalty"
-              type="range"
-              min={-2}
-              max={2}
-              step={0.1}
-              value={config.presence_penalty}
-              onChange={(e) =>
-                onConfigChange({ presence_penalty: parseFloat(e.target.value) })
-              }
-              className="w-full"
-            />
-          </div>
-
-          {/* Frequency Penalty */}
-          <div>
-            <label
-              htmlFor="cfg-frequency-penalty"
-              className="mb-1 flex items-center justify-between text-sm font-medium"
-            >
-              <span>Frequency Penalty</span>
-              <span className="text-muted-foreground">
-                {config.frequency_penalty.toFixed(1)}
-              </span>
-            </label>
-            <input
-              id="cfg-frequency-penalty"
-              type="range"
-              min={-2}
-              max={2}
-              step={0.1}
-              value={config.frequency_penalty}
-              onChange={(e) =>
-                onConfigChange({
-                  frequency_penalty: parseFloat(e.target.value),
-                })
-              }
-              className="w-full"
-            />
-          </div>
-
-          <PromptShortcutManager
-            config={config}
-            onConfigChange={onConfigChange}
-            promptShortcuts={promptShortcuts}
-            onSavePrompt={onSavePrompt}
-            onEditPrompt={onEditPrompt}
-            onDeletePrompt={onDeletePrompt}
-          />
-
-          <div className="h-px bg-border" />
-
-          <DatasetManager config={config} />
-
-          <div className="h-px bg-border" />
-
-          {/* MCP Servers */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Enable MCP Support</label>
-              <Switch
-                checked={config.chat_switch.enable_mcp}
-                onCheckedChange={(checked) =>
+            {/* N Images */}
+            <div>
+              <label
+                htmlFor="cfg-n-images"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>N Images</span>
+                <span className="text-muted-foreground">
+                  {config.chat_switch.draw_n_images}
+                </span>
+              </label>
+              <input
+                id="cfg-n-images"
+                type="range"
+                min={1}
+                max={4}
+                step={1}
+                value={config.chat_switch.draw_n_images}
+                aria-valuetext={`${config.chat_switch.draw_n_images} images`}
+                onChange={(e) =>
                   onConfigChange({
                     chat_switch: {
                       ...config.chat_switch,
-                      enable_mcp: checked,
+                      draw_n_images: parseInt(e.target.value, 10),
                     },
                   })
                 }
+                className="w-full"
               />
             </div>
 
-            {config.chat_switch.enable_mcp && (
-              <McpServerManager
-                servers={config.mcp_servers || []}
-                onChange={(servers) => onConfigChange({ mcp_servers: servers })}
+            {/* Context Count */}
+            <div>
+              <label
+                htmlFor="cfg-contexts"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>Contexts</span>
+                <span className="text-muted-foreground">
+                  {config.n_contexts}
+                </span>
+              </label>
+              <input
+                id="cfg-contexts"
+                type="range"
+                min={1}
+                max={30}
+                step={1}
+                value={config.n_contexts}
+                aria-valuetext={`${config.n_contexts} contexts`}
+                onChange={(e) =>
+                  onConfigChange({ n_contexts: parseInt(e.target.value, 10) })
+                }
+                className="w-full"
               />
-            )}
-          </div>
+            </div>
 
-          <div className="h-px bg-border" />
+            {/* Max Tokens */}
+            <div>
+              <label
+                htmlFor="cfg-max-tokens"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>Max Tokens</span>
+                <span className="text-muted-foreground">
+                  {config.max_tokens}
+                </span>
+              </label>
+              <input
+                id="cfg-max-tokens"
+                type="range"
+                min={1000}
+                max={100000}
+                step={1000}
+                value={config.max_tokens}
+                aria-valuetext={`${config.max_tokens} tokens`}
+                onChange={(e) =>
+                  onConfigChange({ max_tokens: parseInt(e.target.value, 10) })
+                }
+                className="w-full"
+              />
+            </div>
 
-          <DataSyncManager
-            config={config}
-            onConfigChange={onConfigChange}
-            onExportData={onExportData}
-            onImportData={onImportData}
-          />
+            {/* Temperature */}
+            <div>
+              <label
+                htmlFor="cfg-temperature"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>Temperature</span>
+                <span className="text-muted-foreground">
+                  {config.temperature.toFixed(1)}
+                </span>
+              </label>
+              <input
+                id="cfg-temperature"
+                type="range"
+                min={0}
+                max={2}
+                step={0.1}
+                value={config.temperature}
+                aria-valuetext={`Temperature ${config.temperature.toFixed(1)}`}
+                onChange={(e) =>
+                  onConfigChange({ temperature: parseFloat(e.target.value) })
+                }
+                className="w-full"
+              />
+            </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 border-t border-border pt-4">
-            <ConfirmAction
-              action="clear-chat-history"
-              onConfirm={onClearChats}
-              trigger={
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Clear Chats
-                </Button>
-              }
+            {/* Presence Penalty */}
+            <div>
+              <label
+                htmlFor="cfg-presence-penalty"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>Presence Penalty</span>
+                <span className="text-muted-foreground">
+                  {config.presence_penalty.toFixed(1)}
+                </span>
+              </label>
+              <input
+                id="cfg-presence-penalty"
+                type="range"
+                min={-2}
+                max={2}
+                step={0.1}
+                value={config.presence_penalty}
+                aria-valuetext={`Presence penalty ${config.presence_penalty.toFixed(1)}`}
+                onChange={(e) =>
+                  onConfigChange({
+                    presence_penalty: parseFloat(e.target.value),
+                  })
+                }
+                className="w-full"
+              />
+            </div>
+
+            {/* Frequency Penalty */}
+            <div>
+              <label
+                htmlFor="cfg-frequency-penalty"
+                className="mb-1 flex items-center justify-between text-sm font-medium"
+              >
+                <span>Frequency Penalty</span>
+                <span className="text-muted-foreground">
+                  {config.frequency_penalty.toFixed(1)}
+                </span>
+              </label>
+              <input
+                id="cfg-frequency-penalty"
+                type="range"
+                min={-2}
+                max={2}
+                step={0.1}
+                value={config.frequency_penalty}
+                aria-valuetext={`Frequency penalty ${config.frequency_penalty.toFixed(1)}`}
+                onChange={(e) =>
+                  onConfigChange({
+                    frequency_penalty: parseFloat(e.target.value),
+                  })
+                }
+                className="w-full"
+              />
+            </div>
+
+            <PromptShortcutManager
+              config={config}
+              onConfigChange={onConfigChange}
+              promptShortcuts={promptShortcuts}
+              onSavePrompt={onSavePrompt}
+              onEditPrompt={onEditPrompt}
+              onDeletePrompt={onDeletePrompt}
             />
 
-            <ConfirmDialog
-              title="Reset Settings"
-              description="Are you sure you want to reset all settings to defaults? This will not delete your chat history."
-              onConfirm={onReset}
-              trigger={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
-                  Reset All
-                </Button>
-              }
+            <div className="h-px bg-border" />
+
+            <DatasetManager config={config} />
+
+            <div className="h-px bg-border" />
+
+            {/* MCP Servers */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Enable MCP Support
+                </label>
+                <Switch
+                  checked={config.chat_switch.enable_mcp}
+                  onCheckedChange={(checked) =>
+                    onConfigChange({
+                      chat_switch: {
+                        ...config.chat_switch,
+                        enable_mcp: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+
+              {config.chat_switch.enable_mcp && (
+                <McpServerManager
+                  servers={config.mcp_servers || []}
+                  onChange={(servers) =>
+                    onConfigChange({ mcp_servers: servers })
+                  }
+                />
+              )}
+            </div>
+
+            <div className="h-px bg-border" />
+
+            <DataSyncManager
+              config={config}
+              onConfigChange={onConfigChange}
+              onExportData={onExportData}
+              onImportData={onImportData}
             />
 
-            {onPurgeAllSessions && (
+            {/* Actions */}
+            <div className="flex gap-2 border-t border-border pt-4">
               <ConfirmAction
-                action="purge-all-sessions"
-                onConfirm={onPurgeAllSessions}
+                action="clear-chat-history"
+                onConfirm={onClearChats}
+                trigger={
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Clear Chats
+                  </Button>
+                }
+              />
+
+              <ConfirmDialog
+                title="Reset Settings"
+                description="Are you sure you want to reset all settings to defaults? This will not delete your chat history."
+                onConfirm={onReset}
                 trigger={
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex items-center gap-1 text-destructive border-destructive/50 hover:bg-destructive/10"
+                    className="flex items-center gap-1"
                   >
-                    Purge All
+                    Reset All
                   </Button>
                 }
               />
-            )}
+
+              {onPurgeAllSessions && (
+                <ConfirmAction
+                  action="purge-all-sessions"
+                  onConfirm={onPurgeAllSessions}
+                  trigger={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1 text-destructive border-destructive/50 hover:bg-destructive/10"
+                    >
+                      Purge All
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }
