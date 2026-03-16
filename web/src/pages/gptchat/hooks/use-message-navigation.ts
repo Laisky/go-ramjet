@@ -28,7 +28,7 @@ export function useMessageNavigation({
   const findFirstVisibleMessageIndex = useCallback((): number => {
     if (displayedMessages.length === 0) return -1
 
-    const viewportTop = 0
+    const headerHeight = 48 // fixed header h-12
     const viewportBottom = window.innerHeight
 
     for (let i = 0; i < displayedMessages.length; i++) {
@@ -38,7 +38,8 @@ export function useMessageNavigation({
       )
       if (el) {
         const rect = el.getBoundingClientRect()
-        if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+        // Message is visible if its bottom is below the header and its top is above viewport bottom
+        if (rect.bottom > headerHeight && rect.top < viewportBottom) {
           return i
         }
       }
@@ -53,7 +54,7 @@ export function useMessageNavigation({
   const findLastVisibleMessageIndex = useCallback((): number => {
     if (displayedMessages.length === 0) return -1
 
-    const viewportTop = 0
+    const headerHeight = 48
     const viewportBottom = window.innerHeight
 
     for (let i = displayedMessages.length - 1; i >= 0; i--) {
@@ -63,7 +64,7 @@ export function useMessageNavigation({
       )
       if (el) {
         const rect = el.getBoundingClientRect()
-        if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+        if (rect.bottom > headerHeight && rect.top < viewportBottom) {
           return i
         }
       }
@@ -72,6 +73,25 @@ export function useMessageNavigation({
     return displayedMessages.length - 1
   }, [displayedMessages])
 
+  /**
+   * isMessageVisible checks whether the message at the given index
+   * is currently (at least partially) visible in the viewport.
+   */
+  const isMessageVisible = useCallback(
+    (index: number): boolean => {
+      if (index < 0 || index >= displayedMessages.length) return false
+      const msg = displayedMessages[index]
+      const el = document.getElementById(
+        `chat-message-${msg.chatID}-${msg.role}`,
+      )
+      if (!el) return false
+      const headerHeight = 48
+      const rect = el.getBoundingClientRect()
+      return rect.bottom > headerHeight && rect.top < window.innerHeight
+    },
+    [displayedMessages],
+  )
+
   const handleMessageSelect = useCallback((index: number) => {
     isKeyboardSelectRef.current = false
     setSelectedMessageIndex((prev) => (prev === index ? -1 : index))
@@ -79,20 +99,20 @@ export function useMessageNavigation({
 
   /**
    * navigateMessageUp moves the current selection up by one message.
-   * It starts from the first visible message when no message is selected.
-   * It returns no value.
+   * If no message is selected, or the selected message has scrolled out of
+   * the viewport, it resets to the first visible message.
    */
   const navigateMessageUp = useCallback(() => {
     setSelectedMessageIndex((prev) => {
       isKeyboardSelectRef.current = true
-      if (prev === -1) {
-        const visibleIdx = findLastVisibleMessageIndex()
-        return visibleIdx >= 0 ? visibleIdx : displayedMessages.length - 1
+      if (prev === -1 || !isMessageVisible(prev)) {
+        const visibleIdx = findFirstVisibleMessageIndex()
+        return visibleIdx >= 0 ? visibleIdx : 0
       }
 
       return Math.max(0, prev - 1)
     })
-  }, [displayedMessages.length, findLastVisibleMessageIndex])
+  }, [findFirstVisibleMessageIndex, isMessageVisible])
 
   // Keyboard shortcuts for message navigation
   useEffect(() => {
@@ -127,7 +147,7 @@ export function useMessageNavigation({
         e.preventDefault()
         setSelectedMessageIndex((prev) => {
           isKeyboardSelectRef.current = true
-          if (prev === -1) {
+          if (prev === -1 || !isMessageVisible(prev)) {
             const visibleIdx = findFirstVisibleMessageIndex()
             return visibleIdx >= 0 ? visibleIdx : 0
           }
@@ -141,9 +161,14 @@ export function useMessageNavigation({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [displayedMessages, findFirstVisibleMessageIndex, navigateMessageUp])
+  }, [
+    displayedMessages,
+    findFirstVisibleMessageIndex,
+    isMessageVisible,
+    navigateMessageUp,
+  ])
 
-  // Scroll selected message into view
+  // Scroll selected message into view, accounting for the fixed header (48px)
   useEffect(() => {
     if (
       selectedMessageIndex >= 0 &&
@@ -155,7 +180,19 @@ export function useMessageNavigation({
         `chat-message-${msg.chatID}-${msg.role}`,
       )
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        const headerHeight = 48
+        const rect = el.getBoundingClientRect()
+
+        if (rect.top < headerHeight) {
+          // Element is above or behind the fixed header – scroll it just below the header
+          window.scrollBy({ top: rect.top - headerHeight, behavior: 'smooth' })
+        } else if (rect.bottom > window.innerHeight) {
+          // Element is below the viewport – scroll it into view from the bottom
+          window.scrollBy({
+            top: rect.bottom - window.innerHeight,
+            behavior: 'smooth',
+          })
+        }
       }
     }
   }, [selectedMessageIndex, displayedMessages])

@@ -28,6 +28,27 @@ import {
   SessionDock,
   UpgradeNotification,
 } from './components'
+import { useChat } from './hooks/use-chat'
+import { useChatScroll } from './hooks/use-chat-scroll'
+import { useConfig } from './hooks/use-config'
+import { useDraft } from './hooks/use-draft'
+import { useFloatingHeader } from './hooks/use-floating-header'
+import { useMcpSync } from './hooks/use-mcp-sync'
+import { useMessageNavigation } from './hooks/use-message-navigation'
+import { usePromptShortcuts } from './hooks/use-prompt-shortcuts'
+import { useSelection } from './hooks/use-selection'
+import { useTTS } from './hooks/use-tts'
+import { useUser } from './hooks/use-user'
+import { useVersionCheck } from './hooks/use-version-check'
+import { ImageModelFluxDev, isImageModel } from './models'
+import type {
+  ChatAttachment,
+  ChatMessageData,
+  SelectionData,
+  SessionConfig,
+} from './types'
+import { DefaultSessionConfig } from './types'
+import { exportSessionToXml } from './utils/session-export'
 
 // Lazy load heavy sidebar & modal components - only needed on user interaction
 const ConfigSidebar = lazy(() =>
@@ -40,27 +61,6 @@ const EditMessageModal = lazy(() =>
     default: m.EditMessageModal,
   })),
 )
-import { useChat } from './hooks/use-chat'
-import { useChatScroll } from './hooks/use-chat-scroll'
-import { useConfig } from './hooks/use-config'
-import { useDraft } from './hooks/use-draft'
-import { useFloatingHeader } from './hooks/use-floating-header'
-import { useMcpSync } from './hooks/use-mcp-sync'
-import { useMessageNavigation } from './hooks/use-message-navigation'
-import { usePromptShortcuts } from './hooks/use-prompt-shortcuts'
-import { useSelection } from './hooks/use-selection'
-import { useTTS } from './hooks/use-tts'
-import { useVersionCheck } from './hooks/use-version-check'
-import { useUser } from './hooks/use-user'
-import { ImageModelFluxDev, isImageModel } from './models'
-import type {
-  ChatAttachment,
-  ChatMessageData,
-  SelectionData,
-  SessionConfig,
-} from './types'
-import { DefaultSessionConfig } from './types'
-import { exportSessionToXml } from './utils/session-export'
 
 const MESSAGE_PAGE_SIZE = 40
 
@@ -131,6 +131,31 @@ export function GPTChatPage() {
     sessionId,
     contentRef: messagesContainerRef,
   })
+
+  // Cross-session search: when a result from another session is selected,
+  // switch session and then scroll to the message once it loads.
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<{
+    chatId: string
+    role: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (!pendingScrollTarget) return
+    const { chatId, role } = pendingScrollTarget
+    const exists = messages.some((m) => m.chatID === chatId && m.role === role)
+    if (exists) {
+      setPendingScrollTarget(null)
+      scrollToMessage(chatId, role)
+    }
+  }, [messages, pendingScrollTarget, scrollToMessage])
+
+  const handleSearchSwitchAndSelect = useCallback(
+    (targetSessionId: number, chatId: string, role: string) => {
+      setPendingScrollTarget({ chatId, role })
+      switchSession(targetSessionId)
+    },
+    [switchSession],
+  )
 
   const { upgradeInfo, setUpgradeInfo, ignoreVersion } = useVersionCheck()
   const [prefillDraft, setPrefillDraft] = useState<
@@ -509,7 +534,13 @@ export function GPTChatPage() {
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-            <ChatSearch messages={messages} onSelectMessage={scrollToMessage} />
+            <ChatSearch
+              messages={messages}
+              sessions={sessions}
+              currentSessionId={sessionId}
+              onSelectMessage={scrollToMessage}
+              onSwitchAndSelect={handleSearchSwitchAndSelect}
+            />
             <div className="hidden sm:block">
               <ThemeToggle className="h-9 w-9" />
             </div>
@@ -629,15 +660,10 @@ export function GPTChatPage() {
           ref={footerRef}
           className="theme-surface theme-border fixed bottom-0 left-10 right-0 z-30 border-t p-0"
         >
-          {/* Scroll up button */}
+          {/* Scroll up button – always visible */}
           <button
             onClick={navigateMessageUp}
-            className={cn(
-              'absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20',
-              showScrollButton
-                ? 'translate-y-0 opacity-100'
-                : 'translate-y-4 opacity-0 pointer-events-none',
-            )}
+            className="absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20"
             aria-label="Scroll up by message"
           >
             <ArrowUp className="h-4 w-4" />
