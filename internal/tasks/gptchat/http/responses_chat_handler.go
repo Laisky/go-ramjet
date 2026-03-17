@@ -716,7 +716,7 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 	}
 
 	// Convert to Responses API request.
-	responsesReq, err := convertFrontendToResponsesRequest(frontendReq)
+	responsesReq, err := convertFrontendToResponsesRequest(frontendReq, user.IsFree)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "convert to responses request")
 	}

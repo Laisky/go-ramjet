@@ -385,7 +385,7 @@ func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 			},
 		}
 
-		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 		require.NoError(t, err)
 		require.NotNil(t, respReq)
 		require.NotEmpty(t, respReq.Tools)
@@ -407,7 +407,7 @@ func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 			},
 		}
 
-		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 		require.NoError(t, err)
 		require.NotNil(t, respReq)
 		require.NotEmpty(t, respReq.Tools)
@@ -429,7 +429,7 @@ func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 			},
 		}
 
-		respReq, err := convertFrontendToResponsesRequest(frontendReq)
+		respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 		require.NoError(t, err)
 		require.NotNil(t, respReq)
 		for _, tool := range respReq.Tools {

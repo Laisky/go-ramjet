@@ -100,12 +100,22 @@ export function MessageInput({
       const newAttachments = [...attachments]
       let newContent = value
 
+      const isFreeTier = apiToken.startsWith('FREETIER')
+
       for (const file of files) {
         const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
 
         if (SUPPORTED_IMAGE_EXTS.has(ext) || file.type.startsWith('image/')) {
           try {
             const b64 = await fileToDataUrl(file)
+            if (isFreeTier) {
+              // Free users can only have 1 image — replace any existing images
+              const nonImageAttachments = newAttachments.filter(
+                (att) => att.type !== 'image',
+              )
+              newAttachments.length = 0
+              newAttachments.push(...nonImageAttachments)
+            }
             newAttachments.push({
               filename: file.name,
               type: 'image',

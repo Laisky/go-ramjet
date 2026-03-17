@@ -144,8 +144,87 @@ type OpenAIResponsesInputMessage struct {
 	Content any    `json:"content"`
 }
 
+// stripImagesForFreeTier removes images from all history messages (keeping only the last user message)
+// and limits the last user message to at most 1 image for free-tier users.
+func stripImagesForFreeTier(msgs []OpenAIResponsesInputMessage) []OpenAIResponsesInputMessage {
+	if len(msgs) == 0 {
+		return msgs
+	}
+
+	// Find the last user message index
+	lastUserIdx := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "user" {
+			lastUserIdx = i
+			break
+		}
+	}
+
+	result := make([]OpenAIResponsesInputMessage, 0, len(msgs))
+	for i, msg := range msgs {
+		if i == lastUserIdx {
+			// Last user message: keep only 1 image
+			result = append(result, limitMessageImages(msg, 1))
+		} else {
+			// History messages: strip all images
+			result = append(result, stripMessageImages(msg))
+		}
+	}
+	return result
+}
+
+// stripMessageImages removes all image content parts from a message.
+func stripMessageImages(msg OpenAIResponsesInputMessage) OpenAIResponsesInputMessage {
+	return limitMessageImages(msg, 0)
+}
+
+// limitMessageImages keeps at most n images in a message (0 means remove all).
+// Only the last n images are preserved.
+func limitMessageImages(msg OpenAIResponsesInputMessage, maxImages int) OpenAIResponsesInputMessage {
+	contentArr, ok := msg.Content.([]any)
+	if !ok || len(contentArr) == 0 {
+		return msg
+	}
+
+	var nonImageParts []any
+	var imageParts []any
+	for _, part := range contentArr {
+		partMap, ok := part.(map[string]any)
+		if !ok {
+			nonImageParts = append(nonImageParts, part)
+			continue
+		}
+		partType, _ := partMap["type"].(string)
+		if partType == "input_image" || partType == "image_url" {
+			imageParts = append(imageParts, part)
+		} else {
+			nonImageParts = append(nonImageParts, part)
+		}
+	}
+
+	var filtered []any
+	filtered = append(filtered, nonImageParts...)
+	if maxImages > 0 && len(imageParts) > 0 {
+		// Keep only the last maxImages images
+		start := len(imageParts) - maxImages
+		if start < 0 {
+			start = 0
+		}
+		filtered = append(filtered, imageParts[start:]...)
+	}
+
+	if len(filtered) == 0 {
+		return msg
+	}
+
+	return OpenAIResponsesInputMessage{
+		Role:    msg.Role,
+		Content: filtered,
+	}
+}
+
 // convertFrontendToResponsesRequest builds an upstream OpenAI Responses API request from a frontend request.
-func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIResponsesReq, error) {
+func convertFrontendToResponsesRequest(frontendReq *FrontendReq, isFreeTier bool) (*OpenAIResponsesReq, error) {
 	if frontendReq == nil {
 		return nil, errors.New("empty frontend request")
 	}
@@ -218,6 +297,11 @@ func convertFrontendToResponsesRequest(frontendReq *FrontendReq) (*OpenAIRespons
 		}
 
 		msgs = append(msgs, OpenAIResponsesInputMessage{Role: role, Content: content})
+	}
+
+	// Free-tier: strip images from history and limit current message to 1 image
+	if isFreeTier {
+		msgs = stripImagesForFreeTier(msgs)
 	}
 
 	req.Input = msgs

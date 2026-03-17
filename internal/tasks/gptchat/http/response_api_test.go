@@ -61,7 +61,7 @@ func TestConvertFrontendToResponsesRequest_Mapping(t *testing.T) {
 		},
 	}
 
-	respReq, err := convertFrontendToResponsesRequest(frontendReq)
+	respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 	require.NoError(t, err)
 	require.NotNil(t, respReq)
 
@@ -93,7 +93,7 @@ func TestConvertFrontendToResponsesRequest_Files(t *testing.T) {
 		},
 	}
 
-	respReq, err := convertFrontendToResponsesRequest(frontendReq)
+	respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 	require.NoError(t, err)
 	require.NotNil(t, respReq)
 
@@ -126,7 +126,7 @@ func TestConvertFrontendToResponsesRequest_DisableMCPNoTools(t *testing.T) {
 		},
 	}
 
-	respReq, err := convertFrontendToResponsesRequest(frontendReq)
+	respReq, err := convertFrontendToResponsesRequest(frontendReq, false)
 	require.NoError(t, err)
 	require.NotNil(t, respReq)
 	require.Nil(t, respReq.ToolChoice)

@@ -68,6 +68,7 @@ export function buildApiMessages(
   userContent: string | ContentPart[],
 ): ApiChatMessage[] {
   const apiMessages: ApiChatMessage[] = []
+  const isFreeTier = config.api_token.startsWith('FREETIER')
 
   if (config.system_prompt) {
     apiMessages.push({ role: 'system', content: config.system_prompt })
@@ -148,7 +149,10 @@ export function buildApiMessages(
   for (let i = 0; i < context.length; i++) {
     const msg = context[i]
     let content: string | ContentPart[] = msg.content
-    if (latestContextMediaIdx === i) {
+    if (isFreeTier) {
+      // Free tier: strip all images from history context messages
+      content = stripFileNotes(msg.content, msg.attachments)
+    } else if (latestContextMediaIdx === i) {
       const parts: ContentPart[] = [{ type: 'text', text: msg.content }]
       if (msg.attachments) {
         for (const att of msg.attachments) {
@@ -173,6 +177,15 @@ export function buildApiMessages(
     for (const part of userParts) {
       if (part.type === 'text' || part.type === 'image_url') {
         parts.push(part)
+      }
+    }
+    // Free tier: keep only the last image in the current message
+    if (isFreeTier) {
+      const nonImageParts = parts.filter((p) => p.type !== 'image_url')
+      const imageParts = parts.filter((p) => p.type === 'image_url')
+      if (imageParts.length > 1) {
+        parts.length = 0
+        parts.push(...nonImageParts, imageParts[imageParts.length - 1])
       }
     }
     finalUserContent = parts
