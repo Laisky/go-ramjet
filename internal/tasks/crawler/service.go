@@ -2,7 +2,7 @@ package crawler
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"time"
@@ -141,7 +141,8 @@ func httpGet(ctx context.Context, url string) (string, error) {
 		return "", errors.Errorf("status code %d", resp.StatusCode)
 	}
 
-	cnt, err := ioutil.ReadAll(resp.Body)
+	// Limit response body to 10MB to prevent memory exhaustion from malicious sites
+	cnt, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return "", errors.Wrapf(err, "read body")
 	}

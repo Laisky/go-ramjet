@@ -8,12 +8,12 @@ require (
 	github.com/Laisky/gin-middlewares/v7 v7.0.1
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v6 v6.1.4-0.20260222035153-fc4f81ef5323
+	github.com/Laisky/go-utils/v6 v6.2.3-0.20260318135654-b71f77380c90
 	github.com/Laisky/graphql v1.0.6
 	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20260203192105-459f1a55ea6a
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
-	github.com/Laisky/zap v1.27.1-0.20241010063010-3154c45f2a1f
+	github.com/Laisky/zap v1.27.1-0.20260318034917-6e5a9fb2b3d1
 	github.com/Microsoft/cognitive-services-speech-sdk-go v1.43.0
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/baidubce/bce-sdk-go v0.9.259
@@ -37,8 +37,8 @@ require (
 	github.com/yuin/goldmark v1.7.16
 	go.mongodb.org/mongo-driver v1.17.8
 	golang.org/x/image v0.35.0
-	golang.org/x/net v0.49.0
-	golang.org/x/sync v0.19.0
+	golang.org/x/net v0.51.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/clickhouse v0.7.0
 	gorm.io/gorm v1.31.1
@@ -76,7 +76,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
-	github.com/gammazero/deque v1.2.0 // indirect
+	github.com/gammazero/deque v1.2.1 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -154,7 +154,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.13.0 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
-	github.com/tailscale/hujson v0.0.0-20250605163823-992244df8c5a // indirect
+	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd // indirect
 	github.com/tinylib/msgp v1.6.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
@@ -171,12 +171,12 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.24.0 // indirect
-	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

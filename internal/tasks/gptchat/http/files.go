@@ -2,7 +2,7 @@ package http
 
 import (
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -70,7 +70,7 @@ func UploadFiles(ctx *gin.Context) {
 	}
 	fileBytes := buf.Bytes()
 
-	fileHashBytes := sha1.Sum(fileBytes)
+	fileHashBytes := sha256.Sum256(fileBytes)
 	fileHash := hex.EncodeToString(fileHashBytes[:])
 	objkeyPrefix := fmt.Sprintf("user-files/%s/%s/%s",
 		fileHash[:2], fileHash[2:4], fileHash)

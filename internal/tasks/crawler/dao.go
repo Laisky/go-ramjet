@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"fmt"
+	"html"
 	"regexp"
 	"time"
 
@@ -84,9 +85,9 @@ func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []Search
 		begin := gutils.Max(loc[0]-searchCtxSpan, 0)
 		end := gutils.Min(loc[1]+searchCtxSpan, len(rets[i].Text))
 		rets[i].Context = fmt.Sprintf("%s<mark>%s</mark>%s",
-			rets[i].Text[begin:loc[0]],
-			rets[i].Text[loc[0]:loc[1]],
-			rets[i].Text[loc[1]:end],
+			html.EscapeString(rets[i].Text[begin:loc[0]]),
+			html.EscapeString(rets[i].Text[loc[0]:loc[1]]),
+			html.EscapeString(rets[i].Text[loc[1]:end]),
 		)
 
 		filtered = append(filtered, rets[i])

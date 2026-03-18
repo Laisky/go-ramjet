@@ -5,7 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -192,7 +193,11 @@ func drawFluxByReplicate(ctx context.Context,
 	logger := gmw.GetLogger(ctx)
 	logger.Debug("draw image by replicate")
 
-	req.Input.Seed = rand.Int()
+	seed, err := rand.Int(rand.Reader, big.NewInt(1<<31-1))
+	if err != nil {
+		return nil, errors.Wrap(err, "generate random seed")
+	}
+	req.Input.Seed = int(seed.Int64())
 
 	if model == "flux-kontext-pro" && req.Input.ImagePrompt != nil {
 		req.Input.InputImage = req.Input.ImagePrompt
@@ -217,7 +222,11 @@ func inpaitingFluxByReplicate(ctx context.Context,
 	logger := gmw.GetLogger(ctx)
 	logger.Debug("inpaiting image by replicate")
 
-	req.Input.Seed = rand.Int()
+	seed, err := rand.Int(rand.Reader, big.NewInt(1<<31-1))
+	if err != nil {
+		return nil, errors.Wrap(err, "generate random seed")
+	}
+	req.Input.Seed = int(seed.Int64())
 	req.Input.OutputFormat = "png"
 
 	upstreamReqBody, err := json.Marshal(req)
