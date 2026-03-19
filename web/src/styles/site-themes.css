@@ -1,44 +1,44 @@
 :root[data-site='chat'].dark {
-  --background: oklch(14% 0.008 60);
-  --foreground: oklch(92% 0.008 80);
-  --card: oklch(18% 0.01 60);
-  --card-foreground: oklch(92% 0.008 80);
-  --popover: oklch(14% 0.008 60);
-  --popover-foreground: oklch(92% 0.008 80);
-  --primary: oklch(72% 0.06 70);
-  --primary-foreground: oklch(15% 0.01 60);
-  --secondary: oklch(22% 0.01 60);
-  --secondary-foreground: oklch(90% 0.006 80);
-  --muted: oklch(22% 0.01 60);
-  --muted-foreground: oklch(60% 0.01 70);
-  --accent: oklch(26% 0.02 65);
-  --accent-foreground: oklch(78% 0.04 70);
-  --border: oklch(25% 0.01 60);
-  --input: oklch(25% 0.01 60);
-  --ring: oklch(72% 0.06 70);
-  --surface-user: oklch(24% 0.018 65);
-  --surface-reasoning: oklch(21% 0.015 80);
-  --surface-assistant: oklch(18% 0.01 60);
+  --background: oklch(14% 0.006 250);
+  --foreground: oklch(92% 0.006 248);
+  --card: oklch(18% 0.008 250);
+  --card-foreground: oklch(92% 0.006 248);
+  --popover: oklch(14% 0.006 250);
+  --popover-foreground: oklch(92% 0.006 248);
+  --primary: oklch(70% 0.05 250);
+  --primary-foreground: oklch(15% 0.008 250);
+  --secondary: oklch(22% 0.008 250);
+  --secondary-foreground: oklch(90% 0.005 248);
+  --muted: oklch(22% 0.008 250);
+  --muted-foreground: oklch(58% 0.008 248);
+  --accent: oklch(26% 0.015 250);
+  --accent-foreground: oklch(78% 0.03 248);
+  --border: oklch(25% 0.008 250);
+  --input: oklch(25% 0.008 250);
+  --ring: oklch(70% 0.05 250);
+  --surface-user: oklch(24% 0.012 248);
+  --surface-reasoning: oklch(21% 0.01 250);
+  --surface-assistant: oklch(18% 0.008 250);
 }
 
 :root[data-site='cv']:not(.dark) {
-  --background: #fdfbf6;
+  --background: #f8f9fc;
   --foreground: #0b1020;
   --card: #ffffff;
   --card-foreground: #0b1020;
   --popover: #ffffff;
   --popover-foreground: #0b1020;
-  --primary: #b45309;
+  --primary: #4a5568;
   --primary-foreground: #ffffff;
-  --secondary: #f6f1e8;
+  --secondary: #eef0f5;
   --secondary-foreground: #0b1020;
-  --muted: #f3efe6;
+  --muted: #edf0f4;
   --muted-foreground: #4a5568;
-  --accent: #f3efe6;
+  --accent: #edf0f4;
   --accent-foreground: #0b1020;
-  --border: rgba(15, 23, 42, 0.12);
-  --input: rgba(15, 23, 42, 0.12);
-  --ring: #b45309;
+  --border: rgba(15, 23, 42, 0.1);
+  --input: rgba(15, 23, 42, 0.1);
+  --ring: #4a5568;
 }
 
 :root[data-site='cv'].dark {
@@ -48,7 +48,7 @@
   --card-foreground: #e2e4e9;
   --popover: #1a1c28;
   --popover-foreground: #e2e4e9;
-  --primary: #d97706;
+  --primary: #8b95a8;
   --primary-foreground: #111318;
   --secondary: #1e2030;
   --secondary-foreground: #e2e4e9;
@@ -58,5 +58,5 @@
   --accent-foreground: #e2e4e9;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.1);
-  --ring: #d97706;
+  --ring: #8b95a8;
 }

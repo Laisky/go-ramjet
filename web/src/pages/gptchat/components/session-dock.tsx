@@ -80,7 +80,7 @@ export function SessionDock({
             onConfirm={onClearChats}
             trigger={
               <button
-                className="flex h-11 w-full items-center justify-center bg-warning text-warning-foreground transition-colors hover:bg-warning/90"
+                className="flex h-11 w-full items-center justify-center bg-muted text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
                 aria-label="Clear Chat History"
                 title="Clear Chat History"
               >
