@@ -294,3 +294,114 @@ func TestParseStreamingResponses_ChatCompletionFallback(t *testing.T) {
 	require.Contains(t, out.OutputText, "![Image](data:image/png;base64,AAA)")
 	require.Contains(t, recorder.Body.String(), "![Image](data:image/png;base64,AAA)")
 }
+
+func TestParseStreamingResponses_ForwardsReasoningSummaryEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set(string(gmw.CtxKeyLock), &sync.RWMutex{})
+
+	data1, err := json.Marshal(map[string]any{
+		"type":        "response.reasoning_summary_part.added",
+		"response_id": "resp-summary",
+		"part": map[string]any{
+			"type": "summary_text",
+			"text": "Reflecting on technique\\n\\n",
+		},
+	})
+	require.NoError(t, err)
+
+	data2, err := json.Marshal(map[string]any{
+		"type":        "response.reasoning_summary_text.delta",
+		"response_id": "resp-summary",
+		"delta":       "I should keep pressure on the center.",
+	})
+	require.NoError(t, err)
+
+	data3, err := json.Marshal(map[string]any{
+		"type":        "response.output_text.delta",
+		"response_id": "resp-summary",
+		"delta":       "Final answer.",
+	})
+	require.NoError(t, err)
+
+	data4, err := json.Marshal(map[string]any{
+		"type": "response.completed",
+		"response": &OpenAIResponsesResp{
+			ID: "resp-summary",
+		},
+	})
+	require.NoError(t, err)
+
+	var sse strings.Builder
+	sse.WriteString("data: ")
+	sse.Write(data1)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data2)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data3)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: ")
+	sse.Write(data4)
+	sse.WriteString("\n\n")
+	sse.WriteString("data: [DONE]\n\n")
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(sse.String())),
+	}
+
+	out, err := parseStreamingResponses(ctx, resp)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	require.Equal(t, "resp-summary", out.ID)
+	require.Equal(t, "Final answer.", out.OutputText)
+	require.Contains(t, recorder.Body.String(), "reasoning_content")
+	require.Contains(t, recorder.Body.String(), "Reflecting on technique")
+	require.Contains(t, recorder.Body.String(), "I should keep pressure on the center.")
+	require.Contains(t, recorder.Body.String(), "Final answer.")
+}
+
+func TestExtractResponsesReasoningEventText(t *testing.T) {
+	t.Run("prefers delta", func(t *testing.T) {
+		raw := []byte(`{"type":"response.reasoning_summary_text.delta","delta":"partial"}`)
+		event := struct {
+			Type       string               `json:"type"`
+			ResponseID string               `json:"response_id"`
+			Delta      string               `json:"delta"`
+			Response   *OpenAIResponsesResp `json:"response"`
+			Error      any                  `json:"error"`
+		}{Type: "response.reasoning_summary_text.delta", Delta: "partial"}
+
+		require.Equal(t, "partial", extractResponsesReasoningEventText(raw, event))
+	})
+
+	t.Run("falls back to part text", func(t *testing.T) {
+		raw := []byte(`{"type":"response.reasoning_summary_part.added","part":{"type":"summary_text","text":"summary part"}}`)
+		event := struct {
+			Type       string               `json:"type"`
+			ResponseID string               `json:"response_id"`
+			Delta      string               `json:"delta"`
+			Response   *OpenAIResponsesResp `json:"response"`
+			Error      any                  `json:"error"`
+		}{Type: "response.reasoning_summary_part.added"}
+
+		require.Equal(t, "summary part", extractResponsesReasoningEventText(raw, event))
+	})
+
+	t.Run("falls back to text", func(t *testing.T) {
+		raw := []byte(`{"type":"response.reasoning_summary_text.done","text":"summary done"}`)
+		event := struct {
+			Type       string               `json:"type"`
+			ResponseID string               `json:"response_id"`
+			Delta      string               `json:"delta"`
+			Response   *OpenAIResponsesResp `json:"response"`
+			Error      any                  `json:"error"`
+		}{Type: "response.reasoning_summary_text.done"}
+
+		require.Equal(t, "summary done", extractResponsesReasoningEventText(raw, event))
+	})
+}

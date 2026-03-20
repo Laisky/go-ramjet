@@ -596,8 +596,24 @@ func parseStreamingResponses(
 			markResponseContentStreamed(ctx)
 			streamedContent = true
 			contentBuf.WriteString("refusal: " + event.Delta)
-		case "response.reasoning_text.delta", "response.thought.delta", "response.reasoning.delta":
-			emitThinkingDelta(ctx, true, requestID, event.Delta)
+		case "response.reasoning_text.delta",
+			"response.reasoning_text.done",
+			"response.reasoning.delta",
+			"response.reasoning_summary_text.delta",
+			"response.reasoning_summary_text.done",
+			"response.reasoning_summary_part.added",
+			"response.reasoning_summary_part.done",
+			"response.thought.delta",
+			"response.thought.done":
+			thinkingText := extractResponsesReasoningEventText(data, event)
+			if thinkingText == "" {
+				logger.Debug("responses reasoning event had no text",
+					zap.String("event_type", event.Type),
+					zap.String("request_id", requestID),
+				)
+				continue
+			}
+			emitThinkingDelta(ctx, true, requestID, thinkingText)
 		case "response.function_call_arguments.delta":
 			emitThinkingDelta(ctx, true, requestID, event.Delta)
 		case "response.completed":
@@ -651,6 +667,36 @@ func parseStreamingResponses(
 	}
 
 	return finalResp, nil
+}
+
+// extractResponsesReasoningEventText extracts text from streaming Responses API reasoning events.
+// It accepts both older reasoning delta events and newer reasoning summary event variants.
+func extractResponsesReasoningEventText(raw []byte, event struct {
+	Type       string               `json:"type"`
+	ResponseID string               `json:"response_id"`
+	Delta      string               `json:"delta"`
+	Response   *OpenAIResponsesResp `json:"response"`
+	Error      any                  `json:"error"`
+}) string {
+	if strings.TrimSpace(event.Delta) != "" {
+		return event.Delta
+	}
+
+	var payload struct {
+		Text string `json:"text"`
+		Part struct {
+			Text string `json:"text"`
+		} `json:"part"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return ""
+	}
+
+	if strings.TrimSpace(payload.Text) != "" {
+		return payload.Text
+	}
+
+	return payload.Part.Text
 }
 
 // callUpstreamResponses executes a Responses API request and returns the parsed response.
