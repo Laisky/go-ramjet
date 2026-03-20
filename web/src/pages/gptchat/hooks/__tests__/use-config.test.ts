@@ -1,4 +1,4 @@
-import { kvGet } from '@/utils/storage'
+import { kvGet, kvSet } from '@/utils/storage'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatModelGPT5Mini, DefaultModel } from '../../models'
@@ -177,5 +177,79 @@ describe('useConfig', () => {
     })
 
     expect(result.current.config.sync_key).toBe('sync-updated')
+  })
+
+  it('should preserve the current token when purging all sessions', async () => {
+    const store: Record<string, unknown> = {
+      config_selected_session: 1,
+      config_sync_key: 'sync-existing',
+      chat_user_config_1: {
+        ...DefaultSessionConfig,
+        api_token: 'paid-token-12345',
+        api_base: 'https://proxy.example.com',
+        sync_key: 'sync-existing',
+      },
+    }
+
+    ;(kvGet as Mock).mockImplementation((key: string) => {
+      return Promise.resolve(store[key] ?? null)
+    })
+    ;(kvSet as Mock).mockImplementation(async (key: string, value: unknown) => {
+      store[key] = value
+    })
+
+    const { result } = renderHook(() => useConfig())
+
+    await waitFor(() => {
+      expect(result.current?.isLoading).toBe(false)
+    })
+
+    await act(async () => {
+      await result.current.purgeAllSessions()
+    })
+
+    expect(result.current.config.api_token).toBe('paid-token-12345')
+    expect(result.current.config.api_base).toBe('https://proxy.example.com')
+    expect((store.chat_user_config_1 as typeof DefaultSessionConfig).api_token).toBe(
+      'paid-token-12345',
+    )
+  })
+
+  it('should preserve the current token when switching to a new session', async () => {
+    const store: Record<string, unknown> = {
+      config_selected_session: 1,
+      config_sync_key: 'sync-existing',
+      chat_user_config_1: {
+        ...DefaultSessionConfig,
+        api_token: 'paid-token-12345',
+        sync_key: 'sync-existing',
+      },
+    }
+
+    ;(kvGet as Mock).mockImplementation((key: string) => {
+      return Promise.resolve(store[key] ?? null)
+    })
+    ;(kvSet as Mock).mockImplementation(async (key: string, value: unknown) => {
+      store[key] = value
+    })
+
+    const { result } = renderHook(() => useConfig())
+
+    await waitFor(() => {
+      expect(result.current?.isLoading).toBe(false)
+    })
+
+    await act(async () => {
+      await result.current.switchSession(2)
+    })
+
+    await waitFor(() => {
+      expect(result.current.config.api_token).toBe('paid-token-12345')
+    })
+
+    expect(result.current.sessionId).toBe(2)
+    expect((store.chat_user_config_2 as typeof DefaultSessionConfig).api_token).toBe(
+      'paid-token-12345',
+    )
   })
 })

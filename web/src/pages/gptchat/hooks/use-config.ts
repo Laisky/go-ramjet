@@ -43,6 +43,186 @@ async function setSessionOrderToKv(order: number[]): Promise<void> {
 }
 
 /**
+ * createFreeTierToken builds a random free-tier token for anonymous sessions.
+ */
+function createFreeTierToken(): string {
+  const randomStr =
+    Math.random().toString(36).substring(2, 18) +
+    Math.random().toString(36).substring(2, 18)
+  return `FREETIER-${randomStr}`
+}
+
+/**
+ * describeApiTokenKind summarizes the token shape without exposing secret material.
+ */
+function describeApiTokenKind(token?: string): string {
+  const trimmed = token?.trim() || ''
+  if (!trimmed) return 'missing'
+  if (trimmed === 'DEFAULT_PROXY_TOKEN') return 'legacy-default'
+  if (trimmed.startsWith('FREETIER-')) return 'freetier'
+  if (trimmed.startsWith('sk-') || trimmed.startsWith('laisky-')) {
+    return 'byok'
+  }
+  return 'custom'
+}
+
+interface HydratedSessionConfigResult {
+  config: SessionConfig
+  savedConfig: SessionConfig | null
+  changed: boolean
+}
+
+/**
+ * mergeSessionConfigs overlays the current config onto a loaded config while keeping nested switches intact.
+ */
+function mergeSessionConfigs(
+  baseConfig: SessionConfig,
+  overrideConfig: SessionConfig,
+): SessionConfig {
+  return normalizeConfigNumericFields({
+    ...baseConfig,
+    ...overrideConfig,
+    chat_switch: {
+      ...baseConfig.chat_switch,
+      ...overrideConfig.chat_switch,
+    },
+  })
+}
+
+/**
+ * hydrateSessionConfig reads, normalizes, and repairs a session config before use.
+ */
+async function hydrateSessionConfig(
+  sessionId: number,
+  options?: {
+    fallbackConfig?: SessionConfig
+    applyUrlOverrides?: boolean
+  },
+): Promise<HydratedSessionConfigResult> {
+  const key = getSessionConfigKey(sessionId)
+  const savedConfig = await kvGet<SessionConfig>(key)
+  const fallbackConfig = options?.fallbackConfig
+
+  console.debug(`[useConfig] hydrate session ${sessionId} config`, {
+    hasSavedConfig: !!savedConfig,
+    savedApiTokenKind: describeApiTokenKind(savedConfig?.api_token),
+    fallbackApiTokenKind: describeApiTokenKind(fallbackConfig?.api_token),
+    legacySelectedModel: (savedConfig as Record<string, unknown> | null)
+      ?.selected_model,
+  })
+
+  let finalConfig: SessionConfig = {
+    ...DefaultSessionConfig,
+  }
+
+  if (savedConfig) {
+    finalConfig = normalizeConfigNumericFields({
+      ...finalConfig,
+      ...savedConfig,
+      chat_switch: {
+        ...finalConfig.chat_switch,
+        ...savedConfig.chat_switch,
+      },
+    })
+  }
+
+  let configChanged = false
+
+  const hasSelectedChatModel =
+    savedConfig &&
+    Object.prototype.hasOwnProperty.call(savedConfig, 'selected_chat_model')
+  if (!hasSelectedChatModel) {
+    console.debug(
+      `[useConfig] migrating legacy selected_model to selected_chat_model: ${finalConfig.selected_model}`,
+    )
+    finalConfig.selected_chat_model = isImageModel(finalConfig.selected_model)
+      ? DefaultModel
+      : finalConfig.selected_model || DefaultModel
+    configChanged = true
+  }
+
+  const hasSelectedDrawModel =
+    savedConfig &&
+    Object.prototype.hasOwnProperty.call(savedConfig, 'selected_draw_model')
+  if (!hasSelectedDrawModel) {
+    console.debug(
+      `[useConfig] migrating legacy selected_model to selected_draw_model: ${finalConfig.selected_model}`,
+    )
+    finalConfig.selected_draw_model = isImageModel(finalConfig.selected_model)
+      ? finalConfig.selected_model
+      : ImageModelFluxDev
+    configChanged = true
+  }
+
+  if (!finalConfig.selected_model) {
+    finalConfig.selected_model = finalConfig.selected_chat_model
+    configChanged = true
+  }
+
+  let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
+  if (!globalSyncKey) {
+    if (finalConfig.sync_key) {
+      globalSyncKey = finalConfig.sync_key
+    } else if (fallbackConfig?.sync_key) {
+      globalSyncKey = fallbackConfig.sync_key
+    } else {
+      globalSyncKey =
+        'sync-' +
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15)
+    }
+    await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
+  }
+  finalConfig.sync_key = globalSyncKey
+
+  const fallbackApiToken = fallbackConfig?.api_token?.trim() || ''
+  if (
+    !finalConfig.api_token ||
+    finalConfig.api_token === 'DEFAULT_PROXY_TOKEN'
+  ) {
+    if (fallbackApiToken && fallbackApiToken !== 'DEFAULT_PROXY_TOKEN') {
+      finalConfig.api_token = fallbackApiToken
+      console.debug('[useConfig] preserved fallback API token for session', {
+        sessionId,
+        apiTokenKind: describeApiTokenKind(finalConfig.api_token),
+      })
+    } else {
+      finalConfig.api_token = createFreeTierToken()
+      console.debug('[useConfig] generated FREETIER token for session', {
+        sessionId,
+        apiTokenKind: describeApiTokenKind(finalConfig.api_token),
+      })
+    }
+    configChanged = true
+  }
+
+  if (!finalConfig.api_base) {
+    finalConfig.api_base =
+      fallbackConfig?.api_base || DefaultSessionConfig.api_base
+    configChanged = true
+  }
+
+  if (!finalConfig.session_name) {
+    finalConfig.session_name = `Chat Session ${sessionId}`
+    configChanged = true
+  }
+
+  if (options?.applyUrlOverrides) {
+    const overrideResult = applyUrlOverridesToConfig(finalConfig)
+    if (overrideResult.mutated) {
+      finalConfig = overrideResult.config
+      configChanged = true
+    }
+  }
+
+  return {
+    config: finalConfig,
+    savedConfig,
+    changed: configChanged,
+  }
+}
+
+/**
  * Hook for managing session configuration
  */
 export function useConfig() {
@@ -54,6 +234,7 @@ export function useConfig() {
   const [isLoading, setIsLoading] = useState(true)
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
+  const hydratedRef = useRef(false)
 
   useEffect(() => {
     configRef.current = config
@@ -62,6 +243,20 @@ export function useConfig() {
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
+
+  /**
+   * applySessionState updates refs and React state for the active session atomically.
+   */
+  const applySessionState = useCallback(
+    (nextSessionId: number, nextConfig: SessionConfig) => {
+      sessionIdRef.current = nextSessionId
+      configRef.current = nextConfig
+      setSessionId(nextSessionId)
+      setConfigState(nextConfig)
+      hydratedRef.current = true
+    },
+    [],
+  )
 
   /**
    * Load all available sessions
@@ -130,129 +325,41 @@ export function useConfig() {
         await migrateLegacyData()
 
         const activeSessionId = await getActiveSessionId()
-        const key = getSessionConfigKey(activeSessionId)
-        const savedConfig = await kvGet<SessionConfig>(key)
-        console.debug(`[useConfig] load session ${activeSessionId} config`, {
-          hasSavedConfig: !!savedConfig,
-          legacySelectedModel: (
-            savedConfig as unknown as Record<string, unknown>
-          )?.selected_model,
+        const hydratedConfig = await hydrateSessionConfig(activeSessionId, {
+          fallbackConfig: configRef.current,
+          applyUrlOverrides: true,
         })
+        let finalConfig = hydratedConfig.config
+        const { savedConfig } = hydratedConfig
+        let { changed } = hydratedConfig
 
-        let finalConfig = {
-          ...DefaultSessionConfig,
-        }
-
-        if (savedConfig) {
-          finalConfig = normalizeConfigNumericFields({
-            ...finalConfig,
-            ...savedConfig,
-            chat_switch: {
-              ...finalConfig.chat_switch,
-              ...savedConfig.chat_switch,
-            },
+        const currentConfig = configRef.current
+        const currentUpdatedAt =
+          typeof currentConfig.updated_at === 'number'
+            ? currentConfig.updated_at
+            : 0
+        const loadedUpdatedAt =
+          typeof finalConfig.updated_at === 'number' ? finalConfig.updated_at : 0
+        if (
+          hydratedRef.current &&
+          sessionIdRef.current === activeSessionId &&
+          currentUpdatedAt > loadedUpdatedAt
+        ) {
+          finalConfig = mergeSessionConfigs(finalConfig, currentConfig)
+          changed = true
+          console.debug('[useConfig] keeping newer in-memory config after load', {
+            sessionId: activeSessionId,
+            currentUpdatedAt,
+            loadedUpdatedAt,
+            apiTokenKind: describeApiTokenKind(finalConfig.api_token),
           })
         }
 
-        let configChanged = false
-
-        // Seed split chat/draw model selectors while keeping backwards compatibility
-        // If savedConfig exists but doesn't have the new split model fields,
-        // we must derive them from the legacy selected_model.
-        const hasSelectedChatModel =
-          savedConfig &&
-          Object.prototype.hasOwnProperty.call(
-            savedConfig,
-            'selected_chat_model',
-          )
-        if (!hasSelectedChatModel) {
-          console.debug(
-            `[useConfig] migrating legacy selected_model to selected_chat_model: ${finalConfig.selected_model}`,
-          )
-          finalConfig.selected_chat_model = isImageModel(
-            finalConfig.selected_model,
-          )
-            ? DefaultModel
-            : finalConfig.selected_model || DefaultModel
-          configChanged = true
+        if (changed || !savedConfig) {
+          await kvSet(getSessionConfigKey(activeSessionId), finalConfig)
         }
 
-        const hasSelectedDrawModel =
-          savedConfig &&
-          Object.prototype.hasOwnProperty.call(
-            savedConfig,
-            'selected_draw_model',
-          )
-        if (!hasSelectedDrawModel) {
-          console.debug(
-            `[useConfig] migrating legacy selected_model to selected_draw_model: ${finalConfig.selected_model}`,
-          )
-          finalConfig.selected_draw_model = isImageModel(
-            finalConfig.selected_model,
-          )
-            ? finalConfig.selected_model
-            : ImageModelFluxDev
-          configChanged = true
-        }
-
-        if (!finalConfig.selected_model) {
-          finalConfig.selected_model = finalConfig.selected_chat_model
-          configChanged = true
-        }
-
-        // Generate sync_key if missing
-        let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
-        if (!globalSyncKey) {
-          // migration: if session config has sync_key, use it as global
-          if (finalConfig.sync_key) {
-            globalSyncKey = finalConfig.sync_key
-          } else {
-            globalSyncKey =
-              'sync-' +
-              Math.random().toString(36).substring(2, 15) +
-              Math.random().toString(36).substring(2, 15)
-          }
-          await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
-        }
-        finalConfig.sync_key = globalSyncKey
-
-        // Auto-generate FREETIER token if missing
-        if (
-          !finalConfig.api_token ||
-          finalConfig.api_token === 'DEFAULT_PROXY_TOKEN'
-        ) {
-          const randomStr =
-            Math.random().toString(36).substring(2, 18) +
-            Math.random().toString(36).substring(2, 18)
-          finalConfig.api_token = `FREETIER-${randomStr}`
-          console.debug('Generated new FREETIER token:', finalConfig.api_token)
-          configChanged = true
-        }
-
-        // Ensure api_base is set
-        if (!finalConfig.api_base) {
-          finalConfig.api_base = 'https://api.openai.com'
-          configChanged = true
-        }
-
-        // Ensure session_name is set
-        if (!finalConfig.session_name) {
-          finalConfig.session_name = `Chat Session ${activeSessionId}`
-          configChanged = true
-        }
-
-        const overrideResult = applyUrlOverridesToConfig(finalConfig)
-        if (overrideResult.mutated) {
-          finalConfig = overrideResult.config
-          configChanged = true
-        }
-
-        if (configChanged || !savedConfig || overrideResult.mutated) {
-          await kvSet(key, finalConfig)
-        }
-
-        setConfigState(finalConfig)
-        setSessionId(activeSessionId)
+        applySessionState(activeSessionId, finalConfig)
 
         // Load all sessions
         await loadSessions()
@@ -264,7 +371,7 @@ export function useConfig() {
     }
 
     loadConfig()
-  }, [loadSessions])
+  }, [applySessionState, loadSessions])
 
   /**
    * Apply URL parameter overrides to the current config
@@ -274,6 +381,28 @@ export function useConfig() {
    * Update and persist configuration
    */
   const updateConfig = useCallback(async (updates: Partial<SessionConfig>) => {
+    let activeSessionId = sessionIdRef.current
+    if (!hydratedRef.current) {
+      if (!activeSessionId || activeSessionId === DEFAULT_SESSION_ID) {
+        activeSessionId = await getActiveSessionId()
+      }
+
+      const hydrated = await hydrateSessionConfig(activeSessionId, {
+        fallbackConfig: configRef.current,
+        applyUrlOverrides: false,
+      })
+      configRef.current = hydrated.config
+      sessionIdRef.current = activeSessionId
+      setConfigState(hydrated.config)
+      setSessionId(activeSessionId)
+      hydratedRef.current = true
+
+      console.debug('[useConfig] hydrated config before queued update', {
+        sessionId: activeSessionId,
+        apiTokenKind: describeApiTokenKind(hydrated.config.api_token),
+      })
+    }
+
     const baseConfig = configRef.current
     const newConfig = {
       ...baseConfig,
@@ -317,6 +446,7 @@ export function useConfig() {
         sessionId: sessionIdRef.current,
         updatedAt: newConfig.updated_at,
         updatedKeys: Object.keys(updates),
+        apiTokenKind: describeApiTokenKind(newConfig.api_token),
       })
     } catch (error) {
       console.error('Failed to save config:', error)
@@ -342,36 +472,28 @@ export function useConfig() {
       setIsLoading(true)
       try {
         await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
-        setSessionId(newSessionId)
+        sessionIdRef.current = newSessionId
 
-        const key = getSessionConfigKey(newSessionId)
-        const savedConfig = await kvGet<SessionConfig>(key)
-        const globalSyncKey = (await kvGet<string>(StorageKeys.SYNC_KEY)) || ''
+        const { config: nextConfig, savedConfig, changed } =
+          await hydrateSessionConfig(newSessionId, {
+            fallbackConfig: configRef.current,
+            applyUrlOverrides: false,
+          })
 
-        if (savedConfig) {
-          setConfigState(
-            normalizeConfigNumericFields({
-              ...DefaultSessionConfig,
-              ...savedConfig,
-              //   session_name: savedConfig.session_name || `Chat Session ${newSessionId}`, // Ensure name exists
-              chat_switch: {
-                ...DefaultSessionConfig.chat_switch,
-                ...savedConfig.chat_switch,
-              },
-              sync_key: globalSyncKey || savedConfig.sync_key,
-            }),
-          )
-        } else {
-          const newConf = {
-            ...DefaultSessionConfig,
-            session_name: `Chat Session ${newSessionId}`,
-            updated_at: Date.now(),
-            sync_key: globalSyncKey,
-          }
-          setConfigState(newConf)
-          // Persist if switching to a non-existent session (should rarely happen via UI unless creating)
-          await kvSet(key, newConf)
+        applySessionState(newSessionId, {
+          ...nextConfig,
+          updated_at: nextConfig.updated_at || Date.now(),
+        })
+
+        if (changed || !savedConfig) {
+          await kvSet(getSessionConfigKey(newSessionId), configRef.current)
         }
+
+        console.debug('[useConfig] switched session', {
+          sessionId: newSessionId,
+          hasSavedConfig: !!savedConfig,
+          apiTokenKind: describeApiTokenKind(configRef.current.api_token),
+        })
 
         // Refresh list to ensure names are up to date if we defaulted above
         await loadSessions()
@@ -379,7 +501,7 @@ export function useConfig() {
         setIsLoading(false)
       }
     },
-    [loadSessions],
+    [applySessionState, loadSessions],
   )
 
   /**
@@ -404,6 +526,12 @@ export function useConfig() {
       const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
       const newConfig = {
         ...DefaultSessionConfig,
+        api_token:
+          configRef.current.api_token ||
+          createFreeTierToken(),
+        api_base:
+          configRef.current.api_base ||
+          DefaultSessionConfig.api_base,
         session_name: name || `Chat Session ${newId}`,
         updated_at: Date.now(),
         sync_key: globalSyncKey || '',
@@ -655,8 +783,7 @@ export function useConfig() {
     await kvSet(StorageKeys.SELECTED_SESSION, DEFAULT_SESSION_ID)
     await setSessionOrderToKv([DEFAULT_SESSION_ID])
 
-    setSessionId(DEFAULT_SESSION_ID)
-    setConfigState(newConfig)
+    applySessionState(DEFAULT_SESSION_ID, newConfig)
     setSessions([
       {
         id: DEFAULT_SESSION_ID,
@@ -665,7 +792,7 @@ export function useConfig() {
       },
     ])
     await loadSessions()
-  }, [config.api_base, config.api_token, loadSessions])
+  }, [applySessionState, config.api_base, config.api_token, loadSessions])
 
   /**
    * Rename a session
@@ -685,12 +812,12 @@ export function useConfig() {
 
       // If it's the current session, update state too
       if (targetId === sessionId) {
-        setConfigState(conf)
+        applySessionState(targetId, conf)
       }
 
       await loadSessions()
     },
-    [sessionId, loadSessions],
+    [applySessionState, sessionId, loadSessions],
   )
 
   /**
@@ -710,12 +837,12 @@ export function useConfig() {
 
       // If it's the current session, update state too
       if (targetId === sessionId) {
-        setConfigState(conf)
+        applySessionState(targetId, conf)
       }
 
       await loadSessions()
     },
-    [sessionId, loadSessions],
+    [applySessionState, sessionId, loadSessions],
   )
 
   /**
