@@ -43,10 +43,10 @@ func ChatModel() string {
 }
 
 type LLMConservationReq struct {
-	Model     string               `json:"model" binding:"required,min=1"`
-	MaxTokens uint                 `json:"max_tokens" binding:"required,min=1"`
-	Messages  []FrontendReqMessage `json:"messages" binding:"required,min=1"`
-	Response  string               `json:"response" binding:"required,min=1"`
+	Model     string               `binding:"required,min=1"   json:"model"`
+	MaxTokens uint                 `binding:"required,min=1"   json:"max_tokens"`
+	Messages  []FrontendReqMessage `binding:"required,min=1"   json:"messages"`
+	Response  string               `binding:"required,min=1"   json:"response"`
 	Reasoning string               `json:"reasoning,omitempty"`
 }
 
@@ -66,7 +66,7 @@ type FrontendReq struct {
 	EnableMCP        *bool                `json:"enable_mcp,omitempty"`
 	MCPServers       []MCPServerConfig    `json:"mcp_servers,omitempty"`
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
-	ReasoningEffort string `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
+	ReasoningEffort string `binding:"omitempty,oneof=low medium high" json:"reasoning_effort,omitempty"`
 
 	// -------------------------------------
 	// Anthropic
@@ -89,7 +89,7 @@ type FrontendReq struct {
 // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#implementing-extended-thinking
 type Thinking struct {
 	Type         string `json:"type"`
-	BudgetTokens int    `json:"budget_tokens" binding:"omitempty,min=1024"`
+	BudgetTokens int    `binding:"omitempty,min=1024" json:"budget_tokens"`
 }
 
 // FrontendReqMessage request message from frontend
@@ -149,7 +149,7 @@ func (c *FrontendReqMessageContent) Append(s string) {
 }
 
 type frontendReqMessageFiles struct {
-	Type    string `json:"type" binding:"required,oneof=image"`
+	Type    string `binding:"required,oneof=image" json:"type"`
 	Name    string `json:"name"`
 	Content []byte `json:"content"`
 }
@@ -195,7 +195,7 @@ type OpenaiChatReq[T string | []OpenaiVisionMessageContent] struct {
 	TopP             float64               `json:"top_p,omitempty"`
 	N                *int                  `json:"n,omitempty"`
 	// ReasoningEffort constrains effort on reasoning for reasoning models, reasoning models only.
-	ReasoningEffort string              `json:"reasoning_effort,omitempty" binding:"omitempty,oneof=low medium high"`
+	ReasoningEffort string              `binding:"omitempty,oneof=low medium high" json:"reasoning_effort,omitempty"`
 	Tools           []OpenaiChatReqTool `json:"tools,omitempty"`
 	ToolChoice      any                 `json:"tool_choice,omitempty"`
 
@@ -430,5 +430,5 @@ type ExternalBillingUserResponse struct {
 // OneShotChatRequest request to one-shot chat api
 type OneShotChatRequest struct {
 	SystemPrompt string `json:"system_prompt"`
-	UserPrompt   string `json:"user_prompt" binding:"required,min=1"`
+	UserPrompt   string `binding:"required,min=1" json:"user_prompt"`
 }

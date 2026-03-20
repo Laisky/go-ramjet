@@ -318,9 +318,9 @@ func EditImageHandler(ctx *gin.Context) {
 
 	// The frontend sends JSON with base64-encoded images or URLs
 	var req struct {
-		Prompt string `json:"prompt" binding:"required"`
+		Prompt string `binding:"required" json:"prompt"`
 		Model  string `json:"model"`
-		Image  string `json:"image" binding:"required"`
+		Image  string `binding:"required" json:"image"`
 		Mask   string `json:"mask"`
 	}
 	if err := ctx.BindJSON(&req); web.AbortErr(ctx, err) {

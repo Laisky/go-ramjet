@@ -13,14 +13,14 @@ var Instance *Config
 // Config config
 type Config struct {
 	S3    s3Config      `json:"s3" mapstructure:"s3"`
-	S3Cli *minio.Client `json:"-" mapsructure:"-"`
+	S3Cli *minio.Client `json:"-"  mapsructure:"-"`
 }
 
 type s3Config struct {
-	Endpoint  string `json:"endpoint" mapstructure:"endpoint"`
-	Bucket    string `json:"bucket" mapstructure:"bucket"`
+	Endpoint  string `json:"endpoint"  mapstructure:"endpoint"`
+	Bucket    string `json:"bucket"    mapstructure:"bucket"`
 	AccessID  string `json:"access_id" mapstructure:"access_id"`
-	AccessKey string `json:"-" mapstructure:"access_key"`
+	AccessKey string `json:"-"         mapstructure:"access_key"`
 }
 
 // SetupConfig setup config

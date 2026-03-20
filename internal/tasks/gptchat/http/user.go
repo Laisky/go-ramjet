@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"io"
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,7 +100,7 @@ func isS3NoSuchKey(err error) bool {
 
 	var resp minio.ErrorResponse
 	if errors.As(err, &resp) {
-		if resp.Code == "NoSuchKey" || resp.StatusCode == 404 {
+		if resp.Code == "NoSuchKey" || resp.StatusCode == http.StatusNotFound {
 			return true
 		}
 		msg := strings.ToLower(resp.Message)

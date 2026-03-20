@@ -15,7 +15,7 @@ import (
 const (
 	// BackendRedis persists limiter state in Redis.
 	BackendRedis = "redis"
-	// BackendLegacy keeps limiter state in memory (legacy behaviour).
+	// BackendLegacy keeps limiter state in memory (legacy behavior).
 	BackendLegacy = "legacy"
 	backendMemory = "memory"
 )

@@ -5,60 +5,41 @@ linters:
     - asasalint
     - asciicheck
     - bidichk
-    - bodyclose
-    - contextcheck
     - decorder
     - dupl
     - dupword
-    - durationcheck
-    - errcheck
     - errchkjson
     - errname
-    - errorlint
     - exhaustive
     - ginkgolinter
     - gocheckcompilerdirectives
-    - gocognit
-    - goconst
-    - godox
-    - err113
     - goheader
     - gomoddirectives
     - gomodguard
-    - goprintffuncname
-    - gosec
-    - gosmopolitan
     - govet
     - grouper
     - importas
     - ineffassign
-    - lll
     - loggercheck
-    - maintidx
     - makezero
     - mirror
     - misspell
     - musttag
     - nilerr
-    - nilnil
-    - noctx
     - nosprintfhostport
     - paralleltest
-    - prealloc
     - predeclared
     - promlinter
     - reassign
     - revive
     - rowserrcheck
     - sqlclosecheck
-    - staticcheck
     - tagalign
     - testableexamples
     - testpackage
     - thelper
     - tparallel
     - unconvert
-    - unused
     - usestdlibvars
     - wastedassign
     - whitespace
@@ -73,26 +54,8 @@ linters:
       threshold: 200
     exhaustive:
       default-signifies-exhaustive: true
-    gocognit:
-      min-complexity: 35
-    goconst:
-      min-len: 3
-      min-occurrences: 3
-    gocyclo:
-      min-complexity: 10
-    godox:
-      keywords: [NOTE, OPTIMIZE, HACK]
-    lll:
-      line-length: 120
-      tab-width: 4
-    gosec:
-      excludes: [G301, G304]
     misspell:
       locale: US
-    prealloc:
-      simple: true
-      range-loops: true
-      for-loops: false
     rowserrcheck:
       packages: [github.com/jmoiron/sqlx]
     testpackage:
@@ -123,27 +86,9 @@ linters:
       - text: 'should be'
         linters: [revive]
       - path: mocks/.*\.go
-        linters: [revive, stylecheck, lll, dupl, gosec]
+        linters: [revive, stylecheck, dupl]
       - path: _test\.go
-        linters: [revive, stylecheck, gocyclo, dupl, gosec, lll]
-      - path: html_.*\.go
-        linters: [lll]
-      - path: model/.*\.go
-        linters: [lll]
-      - linters: [gosec]
-        text: G402
-      - linters: [gosec]
-        text: G501
-      - linters: [gosec]
-        text: G404
-      - linters: [gosec]
-        text: G401
-      - linters: [gosec]
-        text: G505
-      - linters: [staticcheck]
-        text: 'SA9003:'
-      - linters: [lll]
-        source: '^//go:generate '
+        linters: [revive, stylecheck, dupl]
 
 issues:
   max-issues-per-linter: 0

@@ -4,8 +4,8 @@ import "time"
 
 // CreateRecordRequest is a request to create record
 type CreateRecordRequest struct {
-	Name   string `json:"name" binding:"required,max=128"`
-	FileID string `json:"file_id" binding:"required,max=128"`
+	Name   string `binding:"required,max=128" json:"name"`
+	FileID string `binding:"required,max=128" json:"file_id"`
 	Owner  *owner `json:"owner,omitempty"`
 }
 

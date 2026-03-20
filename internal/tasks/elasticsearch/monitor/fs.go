@@ -26,8 +26,8 @@ func getNodeFSStatChange(nodeName string, newMetric *FSMetric) *FSMetric {
 		lastFSMetrics := n.(*FSMetric)
 		currentMetric = lastFSMetrics
 		currentMetric.UsageRate = newMetric.UsageRate
-		currentMetric.IOStat.ReadKB = newMetric.IOStat.ReadKB - lastFSMetrics.IOStat.ReadKB
-		currentMetric.IOStat.WriteKB = newMetric.IOStat.WriteKB - lastFSMetrics.IOStat.WriteKB
+		currentMetric.ReadKB = newMetric.ReadKB - lastFSMetrics.ReadKB
+		currentMetric.WriteKB = newMetric.WriteKB - lastFSMetrics.WriteKB
 	} else {
 		currentMetric = &FSMetric{
 			IOStat: &IOStat{

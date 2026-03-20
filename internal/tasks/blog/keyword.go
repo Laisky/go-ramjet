@@ -62,7 +62,7 @@ func FilterDiscardWords(c *chaining.Chain) (interface{}, error) {
 
 func FilterFmt(c *chaining.Chain) (interface{}, error) {
 	ret := discardFmtRegex.ReplaceAllString(c.GetString(), "")
-	return strings.Replace(ret, " ", "", -1), nil
+	return strings.ReplaceAll(ret, " ", ""), nil
 }
 
 func Convert2WrodsMap(c *chaining.Chain) (interface{}, error) {

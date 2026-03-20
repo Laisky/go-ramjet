@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -158,7 +159,7 @@ func s3ObjectExists(ctx context.Context, s cfgS3, bucket, key string) (bool, err
 		return true, nil
 	}
 	resp := minio.ToErrorResponse(err)
-	if resp.StatusCode == 404 || strings.EqualFold(resp.Code, "NoSuchKey") {
+	if resp.StatusCode == http.StatusNotFound || strings.EqualFold(resp.Code, "NoSuchKey") {
 		logger.Debug("s3 object not found", zap.String("bucket", bucket), zap.String("key", key))
 		return false, nil
 	}
@@ -289,7 +290,8 @@ func dumpAndGzipToWriter(ctx context.Context, db cfgDB, w io.Writer) error {
 
 	if err := cmd.Wait(); err != nil {
 		// add exit code if possible
-		if ee, ok := err.(*exec.ExitError); ok {
+		ee := &exec.ExitError{}
+		if errors.As(err, &ee) {
 			logger.Error("pg_dump exited with error", zap.Int("exit_code", ee.ExitCode()))
 		}
 		return errors.Wrap(err, "wait pg_dump")

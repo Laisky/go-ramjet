@@ -37,7 +37,7 @@ import (
 // 	}()
 // 	user, err := getUserByAuthHeader(ctx)
 // 	if err != nil {
-// 		return nil, nil, errors.Wrap(err, "get user")
+// 		return nil, errors.Wrap(err, "get user")
 // 	}
 
 // 	newUrl := fmt.Sprintf("%s/%s", user.APIBase, "v1/chat/completions")
@@ -49,7 +49,7 @@ import (
 // 	if gutils.Contains([]string{http.MethodPost, http.MethodPut}, ctx.Request.Method) {
 // 		frontendReq, err = bodyChecker(ctx.Request.Body)
 // 		if err != nil {
-// 			return nil, nil, errors.Wrap(err, "request is illegal")
+// 			return nil, errors.Wrap(err, "request is illegal")
 // 		}
 
 // 		// enhance user query
@@ -65,7 +65,7 @@ import (
 // 			if user.IsFree {
 // 				ratelimitCost := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
 // 				if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
-// 					return nil, nil, errors.New("web search is limited for free users" +
+// 					return nil, errors.New("web search is limited for free users"
 // 						"you need upgrade to a paid membership to enable this feature unlimitedly, " +
 // 						"more info at https://wiki.laisky.com/projects/gpt/pay/")
 // 				}
@@ -78,7 +78,7 @@ import (
 // 		frontendReq.LaiskyExtra = nil
 
 // 		if err := IsModelAllowed(ctx, user, frontendReq); err != nil {
-// 			return nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
+// 			return nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
 // 		}
 
 // 		if frontendReq != nil && len(frontendReq.Messages) > 0 {
@@ -93,7 +93,7 @@ import (
 // 						}
 // 						ctx.Header("Retry-After", strconv.Itoa(secs))
 // 					}
-// 					return nil, nil, errors.Errorf(
+// 					return nil, errors.Errorf(
 // 						"Free-tier quota exceeded: you can use up to %d tokens every 10-minute window, you have used %d tokens. Please wait about %s before trying again, or upgrade to a paid membership at https://wiki.laisky.com/projects/gpt/pay/.",
 // 						quotaErr.Limit,
 // 						quotaErr.Used,
@@ -101,7 +101,7 @@ import (
 // 					)
 // 				}
 
-// 				return nil, nil, errors.Wrap(reserveErr, "reserve token quota")
+// 				return nil, errors.Wrap(reserveErr, "reserve token quota")
 // 			}
 
 // 			quotaReservation = reservation
@@ -162,13 +162,13 @@ import (
 // 			"gemini-pro":
 // 			req := new(OpenaiChatReq[string])
 // 			if err := copier.Copy(req, frontendReq); err != nil {
-// 				return nil, nil, errors.Wrap(err, "copy to chat req")
+// 				return nil, errors.Wrap(err, "copy to chat req")
 // 			}
 
 // 			openaiReq = req
 // 		case "claude-3.7-sonnet-thinking":
 // 			if frontendReq.MaxTokens <= 1024 {
-// 				return nil, nil, errors.Errorf("max tokens should be greater than 1024")
+// 				return nil, errors.Errorf("max tokens should be greater than 1024")
 // 			}
 // 			frontendReq.TopP = 0
 // 			frontendReq.Model = strings.TrimSuffix(frontendReq.Model, "-thinking")
@@ -183,7 +183,7 @@ import (
 // 			if nImages == 0 {
 // 				req := new(OpenaiChatReq[string])
 // 				if err := copier.Copy(req, frontendReq); err != nil {
-// 					return nil, nil, errors.Wrap(err, "copy to chat req")
+// 					return nil, errors.Wrap(err, "copy to chat req")
 // 				}
 
 // 				openaiReq = req
@@ -192,7 +192,7 @@ import (
 
 // 			openaiReq, err = processVisionRequest(user, frontendReq)
 // 			if err != nil {
-// 				return nil, nil, errors.Wrap(err, "process vision request")
+// 				return nil, errors.Wrap(err, "process vision request")
 // 			}
 // 		case "claude-3-opus", // support text and vision at the same time
 // 			"claude-3.5-sonnet",
@@ -239,7 +239,7 @@ import (
 // 			if nImages == 0 { // no images, text only
 // 				req := new(OpenaiChatReq[string])
 // 				if err := copier.Copy(req, frontendReq); err != nil {
-// 					return nil, nil, errors.Wrap(err, "copy to chat req")
+// 					return nil, errors.Wrap(err, "copy to chat req")
 // 				}
 // 				openaiReq = req
 // 				break MODEL_SWITCH
@@ -247,32 +247,32 @@ import (
 
 // 			openaiReq, err = processVisionRequest(user, frontendReq)
 // 			if err != nil {
-// 				return nil, nil, errors.Wrap(err, "process vision request")
+// 				return nil, errors.Wrap(err, "process vision request")
 // 			}
 // 		case "gpt-4-vision-preview", // only support vision
 // 			"gemini-pro-vision":
 // 			openaiReq, err = processVisionRequest(user, frontendReq)
 // 			if err != nil {
-// 				return nil, nil, errors.Wrap(err, "process vision request")
+// 				return nil, errors.Wrap(err, "process vision request")
 // 			}
 // 		case "text-davinci-003":
 // 			newUrl = fmt.Sprintf("%s/%s", user.APIBase, "v1/completions")
 // 			openaiReq = new(OpenaiCompletionReq)
 // 			if err := copier.Copy(openaiReq, frontendReq); err != nil {
-// 				return nil, nil, errors.Wrap(err, "copy to completion req")
+// 				return nil, errors.Wrap(err, "copy to completion req")
 // 			}
 // 		default:
-// 			// return nil, nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
+// return nil, errors.Errorf("unsupport chat model %q", frontendReq.Model)
 // 			req := new(OpenaiChatReq[string])
 // 			if err := copier.Copy(req, frontendReq); err != nil {
-// 				return nil, nil, errors.Wrap(err, "copy to chat req")
+// 				return nil, errors.Wrap(err, "copy to chat req")
 // 			}
 
 // 			openaiReq = req
 // 		}
 
 // 		if reqBody, err = json.Marshal(openaiReq); err != nil {
-// 			return nil, nil, errors.Wrap(err, "marshal new body")
+// 			return nil, errors.Wrap(err, "marshal new body")
 // 		}
 
 // 		logger.Debug("prepare request to upstream server") // zap.ByteString("payload", reqBody),
@@ -289,7 +289,7 @@ import (
 // 	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
 // 		ctx.Request.Method, newUrl, bytes.NewReader(reqBody))
 // 	if err != nil {
-// 		return nil, nil, errors.Wrap(err, "new request")
+// 		return nil, errors.Wrap(err, "new request")
 // 	}
 // 	CopyHeader(req.Header, ctx.Request.Header)
 // 	req.Header.Set("authorization", "Bearer "+user.OpenaiToken)
@@ -400,7 +400,6 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 			logger.Debug("failed to unlock context", zap.Error(err))
 			return
 		}
-
 	}
 
 	// Request context monitor channel
@@ -447,7 +446,6 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 					logger.Debug("failed to unlock context", zap.Error(err))
 					return
 				}
-
 			}
 		}
 	}()

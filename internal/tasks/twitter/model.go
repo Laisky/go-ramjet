@@ -7,7 +7,7 @@ import (
 )
 
 type Media struct {
-	ID  int64  `bson:"id" json:"id"`
+	ID  int64  `bson:"id"              json:"id"`
 	URL string `bson:"media_url_https" json:"media_url_https"`
 }
 
@@ -17,7 +17,7 @@ type Entities struct {
 
 type Tweet struct {
 	MongoID primitive.ObjectID `bson:"_id,omitempty" json:"mongo_id,omitempty"`
-	ID      string             `bson:"id_str" json:"id"`
+	ID      string             `bson:"id_str"        json:"id"`
 	// CreatedAt       *time.Time         `bson:"created_at" json:"created_at"`
 	Text string `bson:"text" json:"text"`
 	// Topics          []string           `bson:"topics" json:"topics"`
@@ -32,16 +32,16 @@ type Tweet struct {
 }
 
 type User struct {
-	ID         string `bson:"id_str" json:"id"`
+	ID         string `bson:"id_str"      json:"id"`
 	ScreenName string `bson:"screen_name" json:"screen_name"`
-	Name       string `bson:"name" json:"name"`
-	Dscription string `bson:"dscription" json:"dscription"`
+	Name       string `bson:"name"        json:"name"`
+	Dscription string `bson:"dscription"  json:"dscription"`
 }
 
 type ClickhouseTweet struct {
-	TweetID   string     `gorm:"column:tweet_id" json:"tweet_id"`
-	Text      string     `gorm:"column:text" json:"text"`
-	UserID    string     `gorm:"column:user_id" json:"user_id"`
+	TweetID   string     `gorm:"column:tweet_id"   json:"tweet_id"`
+	Text      string     `gorm:"column:text"       json:"text"`
+	UserID    string     `gorm:"column:user_id"    json:"user_id"`
 	CreatedAt *time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

@@ -96,7 +96,7 @@ func IsIdxShouldDelete(now time.Time,
 	dateStr string,
 	expires time.Duration) (bool, error) {
 	layout := "2006.01.02 -0700"
-	t, err := time.Parse(layout, strings.Replace(dateStr, "-", ".", -1)+" +0800")
+	t, err := time.Parse(layout, strings.ReplaceAll(dateStr, "-", ".")+" +0800")
 	//t, err := time.Parse(layout, dateStr+" +0800")
 	if err != nil {
 		return false, errors.Wrapf(err, "parse date %v with layout %v error", dateStr, layout)

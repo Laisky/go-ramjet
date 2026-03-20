@@ -15,7 +15,7 @@ import (
 
 // CreateDeepresearchRequest deepresearch request
 type CreateDeepresearchRequest struct {
-	Prompt string `json:"prompt" binding:"required,min=1"`
+	Prompt string `binding:"required,min=1" json:"prompt"`
 }
 
 // CreateDeepResearchHandler deepresearch handler

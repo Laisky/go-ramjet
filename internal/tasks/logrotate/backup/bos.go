@@ -10,6 +10,7 @@ package backup
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 
 	"github.com/Laisky/errors/v2"
@@ -65,7 +66,7 @@ func (u *bosUploader) loadRemoteFileLength(objName string) (int64, error) {
 	meta, err := u.cli.GetObjectMeta(u.args.Bucket, objName)
 	if err != nil {
 		if realErr, ok := err.(*bce.BceServiceError); ok &&
-			realErr.StatusCode == 404 {
+			realErr.StatusCode == http.StatusNotFound {
 			return 0, nil
 		}
 

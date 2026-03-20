@@ -58,8 +58,8 @@ type AzureCreateImageResponse struct {
 
 // DrawImageByTextRequest draw image by text and prompt
 type DrawImageByTextRequest struct {
-	Prompt string `json:"prompt" binding:"required,min=1"`
-	Model  string `json:"model" binding:"required,min=1"`
+	Prompt string `binding:"required,min=1" json:"prompt"`
+	Model  string `binding:"required,min=1" json:"model"`
 	N      int    `json:"n"`
 	Size   string `json:"size"`
 }
@@ -69,32 +69,32 @@ type DrawImageByTextRequest struct {
 // https://www.segmind.com/models/flux-schnell/api
 type DrawImageByFluxSegmind struct {
 	// Prompt is the text prompt for generating the image
-	Prompt string `json:"prompt" binding:"required"`
+	Prompt string `binding:"required" json:"prompt"`
 
 	// Steps is the number of inference steps for image generation
 	// min: 1, max: 100
-	Steps int `json:"steps" binding:"required,min=1,max=100"`
+	Steps int `binding:"required,min=1,max=100" json:"steps"`
 
 	// Seed is the seed for random number generation
 	Seed int `json:"seed"`
 
 	// SamplerName is the sampler for the image generation process
-	SamplerName string `json:"sampler_name" binding:"required"`
+	SamplerName string `binding:"required" json:"sampler_name"`
 
 	// Scheduler is the scheduler for the image generation process
-	Scheduler string `json:"scheduler" binding:"required"`
+	Scheduler string `binding:"required" json:"scheduler"`
 
 	// Samples is the number of samples to generate
-	Samples int `json:"samples" binding:"required"`
+	Samples int `binding:"required" json:"samples"`
 
 	// Width is the image width, can be between 512 and 2048 in multiples of 8
-	Width int `json:"width" binding:"required,min=512,max=2048"`
+	Width int `binding:"required,min=512,max=2048" json:"width"`
 
 	// Height is the image height, can be between 512 and 2048 in multiples of 8
-	Height int `json:"height" binding:"required,min=512,max=2048"`
+	Height int `binding:"required,min=512,max=2048" json:"height"`
 
 	// Denoise is the denoise level for the generated image
-	Denoise float64 `json:"denoise" binding:"required"`
+	Denoise float64 `binding:"required" json:"denoise"`
 }
 
 // DrawImageByFluxReplicateRequest draw image by fluxpro
@@ -108,20 +108,20 @@ type DrawImageByFluxReplicateRequest struct {
 //
 // https://replicate.com/black-forest-labs/flux-1.1-pro/api/schema
 type FluxInput struct {
-	Steps  int    `json:"steps" binding:"required,min=1"`
-	Prompt string `json:"prompt" binding:"required,min=1"`
+	Steps  int    `binding:"required,min=1" json:"steps"`
+	Prompt string `binding:"required,min=1" json:"prompt"`
 	// ImagePrompt is the image prompt, only works for flux-1.1-pro
 	ImagePrompt *string `json:"image_prompt,omitempty"`
 	// InputImage is the input image, only works for flux-kontext-pro
 	InputImage      *string `json:"input_image,omitempty"`
-	Guidance        int     `json:"guidance" binding:"required,min=2,max=5"`
-	Interval        int     `json:"interval" binding:"required,min=1,max=4"`
-	AspectRatio     string  `json:"aspect_ratio" binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16"`
-	SafetyTolerance int     `json:"safety_tolerance" binding:"required,min=1,max=5"`
+	Guidance        int     `binding:"required,min=2,max=5"                         json:"guidance"`
+	Interval        int     `binding:"required,min=1,max=4"                         json:"interval"`
+	AspectRatio     string  `binding:"required,oneof=1:1 16:9 2:3 3:2 4:5 5:4 9:16" json:"aspect_ratio"`
+	SafetyTolerance int     `binding:"required,min=1,max=5"                         json:"safety_tolerance"`
 	Seed            int     `json:"seed"`
-	NImages         int     `json:"n_images" binding:"required,min=1,max=8"`
-	Width           int     `json:"width" binding:"required,min=256,max=1440"`
-	Height          int     `json:"height" binding:"required,min=256,max=1440"`
+	NImages         int     `binding:"required,min=1,max=8"                         json:"n_images"`
+	Width           int     `binding:"required,min=256,max=1440"                    json:"width"`
+	Height          int     `binding:"required,min=256,max=1440"                    json:"height"`
 }
 
 // InpaintingImageByFlusReplicateRequest is request to inpainting image by flux pro
@@ -135,14 +135,14 @@ type InpaintingImageByFlusReplicateRequest struct {
 //
 // https://replicate.com/black-forest-labs/flux-fill-pro/api/schema
 type FluxInpaintingInput struct {
-	Mask             string `json:"mask" binding:"required"`
-	Image            string `json:"image" binding:"required"`
+	Mask             string `binding:"required"             json:"mask"`
+	Image            string `binding:"required"             json:"image"`
 	Seed             int    `json:"seed"`
-	Steps            int    `json:"steps" binding:"required,min=1"`
-	Prompt           string `json:"prompt" binding:"required,min=5"`
-	Guidance         int    `json:"guidance" binding:"required,min=2,max=5"`
+	Steps            int    `binding:"required,min=1"       json:"steps"`
+	Prompt           string `binding:"required,min=5"       json:"prompt"`
+	Guidance         int    `binding:"required,min=2,max=5" json:"guidance"`
 	OutputFormat     string `json:"output_format"`
-	SafetyTolerance  int    `json:"safety_tolerance" binding:"required,min=1,max=5"`
+	SafetyTolerance  int    `binding:"required,min=1,max=5" json:"safety_tolerance"`
 	PromptUnsampling bool   `json:"prompt_unsampling"`
 }
 
@@ -207,9 +207,9 @@ type FluxURLs struct {
 
 // DrawImageByImageRequest draw image by image and prompt
 type DrawImageByImageRequest struct {
-	Prompt      string `json:"prompt" binding:"required,min=1"`
-	Model       string `json:"model" binding:"required,min=1"`
-	ImageBase64 string `json:"image_base64" binding:"required,min=1"`
+	Prompt      string `binding:"required,min=1" json:"prompt"`
+	Model       string `binding:"required,min=1" json:"model"`
+	ImageBase64 string `binding:"required,min=1" json:"image_base64"`
 }
 
 // DrawImageByLcmRequest draw image by image and prompt with lcm
@@ -227,9 +227,9 @@ type DrawImageByLcmRequest struct {
 
 // DrawImageBySdxlturboRequest draw image by image and prompt with sdxlturbo
 type DrawImageBySdxlturboRequest struct {
-	Model string `json:"model" binding:"required,min=1"`
+	Model string `binding:"required,min=1" json:"model"`
 	// Text prompt
-	Text           string `json:"text" binding:"required,min=1"`
+	Text           string `binding:"required,min=1" json:"text"`
 	NegativePrompt string `json:"negative_prompt"`
 	ImageB64       string `json:"image"`
 	// N how many images to generate

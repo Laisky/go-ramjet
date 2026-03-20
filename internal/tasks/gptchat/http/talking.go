@@ -18,8 +18,8 @@ import (
 
 // TranscriptRequest is the request struct for speech to text
 type TranscriptRequest struct {
-	File  multipart.File `form:"file" binding:"required"`
-	Model string         `form:"model" binding:"required"`
+	File  multipart.File `binding:"required" form:"file"`
+	Model string         `binding:"required" form:"model"`
 }
 
 type transcriptionSegment struct {

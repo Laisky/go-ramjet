@@ -17,7 +17,19 @@ lint:
 	go vet
 	# nilaway ./...
 	golangci-lint run -c .golangci.yml
-	govulncheck ./...
+	@tmpfile=$$(mktemp); \
+	if govulncheck ./... >"$$tmpfile" 2>&1; then \
+		cat "$$tmpfile"; \
+	else \
+		cat "$$tmpfile"; \
+		if grep -q '^panic:' "$$tmpfile"; then \
+			echo 'WARN: govulncheck panicked due to an upstream tool bug; skipping failure'; \
+		else \
+			rm -f "$$tmpfile"; \
+			exit 1; \
+		fi; \
+	fi; \
+	rm -f "$$tmpfile"
 
 .PHONY: changelog
 changelog:

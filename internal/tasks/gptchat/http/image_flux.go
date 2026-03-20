@@ -3,9 +3,9 @@ package http
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
-	"crypto/rand"
 	"math/big"
 	"net/http"
 	"strings"

@@ -15,9 +15,9 @@ import (
 type Docu struct {
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
-	Text      string    `bson:"text" json:"text"`
-	Title     string    `bson:"title" json:"title"`
-	URL       string    `bson:"url" json:"url"`
+	Text      string    `bson:"text"       json:"text"`
+	Title     string    `bson:"title"      json:"title"`
+	URL       string    `bson:"url"        json:"url"`
 }
 
 // BBT database for basebit

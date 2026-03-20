@@ -366,9 +366,7 @@ func ListReocrds(ctx *gin.Context) {
 			}
 
 			mu.Lock()
-			for _, recordItem := range record.Records {
-				records = append(records, recordItem)
-			}
+			records = append(records, record.Records...)
 			mu.Unlock()
 
 			return nil

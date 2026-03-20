@@ -183,7 +183,7 @@ type OpenAI struct {
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
 	S3           s3Config `json:"s3" mapstructure:"s3"`
-	NvidiaApikey string   `json:"-" mapstructure:"nvidia_apikey"`
+	NvidiaApikey string   `json:"-"  mapstructure:"nvidia_apikey"`
 	// ReplicateApikey is the api key for flux pro
 	//
 	// https://replicate.com/account/api-tokens
@@ -261,16 +261,16 @@ type azureConfig struct {
 }
 
 type qaChatModel struct {
-	Name    string `json:"name" mapstructure:"name"`
-	URL     string `json:"url" mapstructure:"url"`
+	Name    string `json:"name"    mapstructure:"name"`
+	URL     string `json:"url"     mapstructure:"url"`
 	Project string `json:"project" mapstructure:"project"`
 }
 
 type s3Config struct {
-	Endpoint  string `json:"endpoint" mapstructure:"endpoint"`
-	Bucket    string `json:"bucket" mapstructure:"bucket"`
+	Endpoint  string `json:"endpoint"  mapstructure:"endpoint"`
+	Bucket    string `json:"bucket"    mapstructure:"bucket"`
 	AccessID  string `json:"access_id" mapstructure:"access_id"`
-	AccessKey string `json:"-" mapstructure:"access_key"`
+	AccessKey string `json:"-"         mapstructure:"access_key"`
 }
 
 // ImageTokenType image token type
@@ -301,7 +301,7 @@ type UserConfig struct {
 	ImageUrl string `json:"-" mapstructure:"image_url"`
 
 	// ImageTokenType (optional) token type, default is global default image token type
-	// ImageTokenType ImageTokenType `json:"-" mapstructure:"image_token_type"`
+	// ImageTokenType `json:"-" mapstructure:"image_token_type"`
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`

@@ -18,14 +18,14 @@ import (
 	rutils "github.com/Laisky/go-ramjet/library/redis"
 )
 
-// Limiter defines the behaviour shared by all rate limiters in this project.
+// Limiter defines the behavior shared by all rate limiters in this project.
 type Limiter interface {
 	Allow() bool
 	AllowN(n int) bool
 	Len() int
 }
 
-// Args describes how a limiter should be initialised.
+// Args describes how a limiter should be initialized.
 type Args struct {
 	// Max is the bucket capacity.
 	Max int

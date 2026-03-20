@@ -50,9 +50,9 @@ type OpenAIResponsesReq struct {
 // OpenAIResponseReasoning defines reasoning options for the Responses API.
 type OpenAIResponseReasoning struct {
 	// Effort defines the reasoning effort level
-	Effort *string `json:"effort,omitempty" binding:"omitempty,oneof=low medium high"`
+	Effort *string `binding:"omitempty,oneof=low medium high" json:"effort,omitempty"`
 	// Summary defines whether to include a summary of the reasoning
-	Summary *string `json:"summary,omitempty" binding:"omitempty,oneof=auto concise detailed"`
+	Summary *string `binding:"omitempty,oneof=auto concise detailed" json:"summary,omitempty"`
 }
 
 // OpenAIResponsesResp is a subset of the OpenAI Responses API response schema.

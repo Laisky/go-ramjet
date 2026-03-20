@@ -11,11 +11,11 @@ type OpenaiMessage struct {
 
 // OpenaiConservation save each conservation of openai
 type OpenaiConservation struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Model      string             `bson:"model" json:"model"`
-	MaxTokens  uint               `bson:"max_tokens" json:"max_tokens"`
-	Prompt     []OpenaiMessage    `bson:"prompt" json:"prompt"`
-	Completion string             `bson:"completion" json:"completion"`
+	ID         primitive.ObjectID `bson:"_id,omitempty"       json:"id,omitempty"`
+	Model      string             `bson:"model"               json:"model"`
+	MaxTokens  uint               `bson:"max_tokens"          json:"max_tokens"`
+	Prompt     []OpenaiMessage    `bson:"prompt"              json:"prompt"`
+	Completion string             `bson:"completion"          json:"completion"`
 	Reasoning  string             `bson:"reasoning,omitempty" json:"reasoning,omitempty"`
 }
 
@@ -61,8 +61,8 @@ const (
 // Billing billing for user
 type Billing struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	BillingType BillingType        `bson:"type" json:"type"`
-	Username    string             `bson:"username" json:"username"`
+	BillingType BillingType        `bson:"type"          json:"type"`
+	Username    string             `bson:"username"      json:"username"`
 	// UsedQuota how many quotes used totally, 1usd = 500000 quotes
 	UsedQuota Price `bson:"used_quota" json:"used_quota"`
 }

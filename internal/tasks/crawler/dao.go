@@ -32,11 +32,11 @@ func NewDao(ctx context.Context, addr, dbName, user, pwd, docusColName string) (
 
 type SearchResult struct {
 	Context string `bson:"context" json:"context"`
-	URL     string `bson:"url" json:"url"`
-	Title   string `bson:"title" json:"title"`
+	URL     string `bson:"url"     json:"url"`
+	Title   string `bson:"title"   json:"title"`
 
 	ID   primitive.ObjectID `bson:"_id,omitempty" json:"-"`
-	Text string             `bson:"text" json:"-"`
+	Text string             `bson:"text"          json:"-"`
 }
 
 // Search search text in title and content

@@ -94,14 +94,14 @@ var (
 
 type searchMutation struct {
 	WebSearch struct {
-		Results []searchResults `json:"results" graphql:"results"`
+		Results []searchResults `graphql:"results" json:"results"`
 	} `graphql:"WebSearch(query: $query)"`
 }
 
 type searchResults struct {
-	Name    graphql.String `json:"name" graphql:"name"`
-	URL     graphql.String `json:"url" graphql:"url"`
-	Snippet graphql.String `json:"snippet" graphql:"snippet"`
+	Name    graphql.String `graphql:"name"    json:"name"`
+	URL     graphql.String `graphql:"url"     json:"url"`
+	Snippet graphql.String `graphql:"snippet" json:"snippet"`
 }
 
 func webSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {

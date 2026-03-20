@@ -1,4 +1,4 @@
-// Package store store all tasks
+// Package store all tasks
 package store
 
 import (

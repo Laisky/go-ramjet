@@ -61,7 +61,7 @@ func getMongoDao(ctx context.Context, addr, dbName, user, pwd string) (*mongoDao
 	defer twitterDaoMu.Unlock()
 
 	if twitterDao != nil && twitterDaoCfg == cfg {
-		if !(cachePingFailed && twitterDao == cacheDao) {
+		if !cachePingFailed || twitterDao != cacheDao {
 			if err := pingMongoDao(ctx, twitterDao); err == nil {
 				return twitterDao, nil
 			} else {

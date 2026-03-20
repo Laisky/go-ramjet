@@ -150,10 +150,8 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	defer clearTokenReservation(ctx)
 
 	// If MCP is enabled (api keys present), skip cache to avoid persisting secrets.
-	cacheAllowed := true
-	if config.Config != nil && config.Config.EnableMemory {
-		cacheAllowed = false
-	}
+	cacheAllowed := !(config.Config != nil && config.Config.EnableMemory)
+
 	for _, srv := range frontendReq.MCPServers {
 		if strings.TrimSpace(srv.APIKey) != "" {
 			cacheAllowed = false

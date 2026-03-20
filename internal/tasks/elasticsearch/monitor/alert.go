@@ -21,11 +21,11 @@ func monitorNodeMetrics(st *ClusterSt, alertSt *AlertSt, metrics []*NodeMetric) 
 	isNeedAlert := false
 
 	for _, m := range metrics {
-		if m.FSMetric.UsageRate > alertSt.Conditions["fs_storage_rate"].(float64) {
+		if m.UsageRate > alertSt.Conditions["fs_storage_rate"].(float64) {
 			isNeedAlert = true
 
 			store.TaskStore.Trigger(NodeStorageAlertEvt, map[string]interface{}{"node": m, "cluster": st}, nil, nil)
-			cnt += fmt.Sprintf("%v's storage is at: %v\n", m.NodeName, m.FSMetric.UsageRate)
+			cnt += fmt.Sprintf("%v's storage is at: %v\n", m.NodeName, m.UsageRate)
 		}
 	}
 

@@ -65,7 +65,7 @@ func prepareDB(ctx context.Context) (db *Blog, err error) {
 	defer blogDBMu.Unlock()
 
 	if blogDB != nil && blogDBCfg == cfg {
-		if !(cachePingFailed && blogDB == cacheDB) {
+		if !cachePingFailed || blogDB != cacheDB {
 			if err := pingBlogDB(ctx, blogDB); err == nil {
 				return blogDB, nil
 			} else {

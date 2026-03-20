@@ -38,25 +38,25 @@ func getNodeOpsStatChange(nodeName string, newMetric *OperatorsMetric) *Operator
 	if n, ok := nodeOperatorStats.Load(nodeName); ok {
 		lastOperatorsMetrics := n.(*OperatorsMetric)
 		currentMetric = lastOperatorsMetrics
-		currentMetric.IndexingMetric.Index =
-			newMetric.IndexingMetric.Index -
-				lastOperatorsMetrics.IndexingMetric.Index
-		currentMetric.IndexingMetric.Delete =
+		currentMetric.Index =
+			newMetric.Index -
+				lastOperatorsMetrics.Index
+		currentMetric.Delete =
 
-			newMetric.IndexingMetric.Delete -
-				lastOperatorsMetrics.IndexingMetric.Delete
-		currentMetric.GetMetric.Get =
-			newMetric.GetMetric.Get -
-				lastOperatorsMetrics.GetMetric.Get
-		currentMetric.SearchMetric.Query =
-			newMetric.SearchMetric.Query -
-				lastOperatorsMetrics.SearchMetric.Query
-		currentMetric.SearchMetric.Fetch =
-			newMetric.SearchMetric.Fetch -
-				lastOperatorsMetrics.SearchMetric.Fetch
-		currentMetric.SearchMetric.Scroll =
-			newMetric.SearchMetric.Scroll -
-				lastOperatorsMetrics.SearchMetric.Scroll
+			newMetric.Delete -
+				lastOperatorsMetrics.Delete
+		currentMetric.Get =
+			newMetric.Get -
+				lastOperatorsMetrics.Get
+		currentMetric.Query =
+			newMetric.Query -
+				lastOperatorsMetrics.Query
+		currentMetric.Fetch =
+			newMetric.Fetch -
+				lastOperatorsMetrics.Fetch
+		currentMetric.Scroll =
+			newMetric.Scroll -
+				lastOperatorsMetrics.Scroll
 	} else {
 		currentMetric = &OperatorsMetric{
 			IndexingMetric: &IndexingMetric{Index: 0, Delete: 0},
