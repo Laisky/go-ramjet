@@ -210,9 +210,9 @@ describe('useConfig', () => {
 
     expect(result.current.config.api_token).toBe('paid-token-12345')
     expect(result.current.config.api_base).toBe('https://proxy.example.com')
-    expect((store.chat_user_config_1 as typeof DefaultSessionConfig).api_token).toBe(
-      'paid-token-12345',
-    )
+    expect(
+      (store.chat_user_config_1 as typeof DefaultSessionConfig).api_token,
+    ).toBe('paid-token-12345')
   })
 
   it('should preserve the current token when switching to a new session', async () => {
@@ -248,8 +248,8 @@ describe('useConfig', () => {
     })
 
     expect(result.current.sessionId).toBe(2)
-    expect((store.chat_user_config_2 as typeof DefaultSessionConfig).api_token).toBe(
-      'paid-token-12345',
-    )
+    expect(
+      (store.chat_user_config_2 as typeof DefaultSessionConfig).api_token,
+    ).toBe('paid-token-12345')
   })
 })

@@ -6,6 +6,8 @@ interface UseChatScrollOptions {
   pageSize: number
   sessionId: string | number
   contentRef?: React.RefObject<HTMLElement | null>
+  /** Height of the fixed footer in pixels, used to cap scroll position. */
+  footerHeight?: number
 }
 
 /**
@@ -16,6 +18,7 @@ export function useChatScroll({
   pageSize,
   sessionId,
   contentRef,
+  footerHeight = 112,
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -47,11 +50,12 @@ export function useChatScroll({
         doc.scrollTop ||
         body.scrollTop ||
         0
-      const scrollHeight = Math.max(
-        doc.scrollHeight,
-        body?.scrollHeight || 0,
-        scrollElement.scrollHeight || 0,
-      )
+      // Use the scrolling element's own scrollHeight rather than
+      // Math.max across multiple sources.  During DOM transitions
+      // (e.g. session switching) body.scrollHeight can retain a stale
+      // larger value from previous content, causing scrollToBottom to
+      // overshoot and leave a large blank space below the last message.
+      const scrollHeight = scrollElement.scrollHeight
       const clientHeight = window.innerHeight || doc.clientHeight
 
       return { scrollTop, scrollHeight, clientHeight }
@@ -100,10 +104,34 @@ export function useChatScroll({
     [getScrollElement],
   )
 
+  /**
+   * getContentMaxScroll computes the tightest upper-bound scroll position
+   * based on the actual content-end marker (messagesEndRef).  When the marker
+   * is available it returns a scroll position that places the marker just
+   * above the fixed footer; otherwise it falls back to scrollHeight-based max.
+   */
+  const getContentMaxScroll = useCallback(() => {
+    const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
+    const docMax = Math.max(scrollHeight - clientHeight, 0)
+
+    const endEl = messagesEndRef.current
+    if (!endEl) return docMax
+
+    // Absolute document-Y of the content-end marker.
+    const endAbsoluteY = scrollTop + endEl.getBoundingClientRect().top
+    // Place the marker at (clientHeight - footerHeight) from the viewport top
+    // so it sits just above the fixed footer.
+    const contentMax = Math.max(
+      endAbsoluteY - clientHeight + footerHeight + 8,
+      0,
+    )
+    return Math.min(docMax, contentMax)
+  }, [getScrollMetrics, footerHeight])
+
   const clampScrollPosition = useCallback(
     (reason: string) => {
-      const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
-      const maxScrollTop = Math.max(scrollHeight - clientHeight, 0)
+      const { scrollTop } = getScrollMetrics()
+      const maxScrollTop = getContentMaxScroll()
       if (scrollTop > maxScrollTop) {
         scrollToPosition(maxScrollTop, 'auto')
         console.debug('[useChatScroll] clamped scroll position', {
@@ -115,7 +143,13 @@ export function useChatScroll({
         })
       }
     },
-    [getScrollMetrics, scrollToPosition, sessionId, messages.length],
+    [
+      getScrollMetrics,
+      getContentMaxScroll,
+      scrollToPosition,
+      sessionId,
+      messages.length,
+    ],
   )
 
   // Reset state when session changes
@@ -168,16 +202,25 @@ export function useChatScroll({
         return
       }
 
-      // Always prefer calculating the absolute bottom because we have a
-      // fixed footer and rely on document padding to push content above it.
+      // Scroll to the bottom of the content.  We prefer the content-end
+      // marker (messagesEndRef) to compute the target so we never overshoot
+      // past the actual messages, even if scrollHeight is temporarily stale.
       requestAnimationFrame(() => {
+        const contentMax = getContentMaxScroll()
         const { scrollHeight, clientHeight } = getScrollMetrics()
-        const targetScrollTop = Math.max(0, scrollHeight - clientHeight)
+        const docMax = Math.max(0, scrollHeight - clientHeight)
+        const targetScrollTop = Math.min(docMax, Math.max(contentMax, 0))
 
         scrollToPosition(targetScrollTop, options?.behavior || 'smooth')
       })
     },
-    [isNearBottom, getScrollMetrics, scrollToPosition, sessionId],
+    [
+      isNearBottom,
+      getScrollMetrics,
+      getContentMaxScroll,
+      scrollToPosition,
+      sessionId,
+    ],
   )
 
   useEffect(() => {

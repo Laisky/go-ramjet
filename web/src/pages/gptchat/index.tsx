@@ -114,6 +114,8 @@ export function GPTChatPage() {
     handleDeletePrompt,
   } = usePromptShortcuts(configLoading)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const footerRef = useRef<HTMLDivElement>(null)
+  const [footerHeight, setFooterHeight] = useState(112) // Default pb-28 is 112px
   const {
     messagesEndRef,
     showScrollButton,
@@ -130,6 +132,7 @@ export function GPTChatPage() {
     pageSize: MESSAGE_PAGE_SIZE,
     sessionId,
     contentRef: messagesContainerRef,
+    footerHeight,
   })
 
   // Cross-session search: when a result from another session is selected,
@@ -172,9 +175,6 @@ export function GPTChatPage() {
     content: string
     attachments?: ChatAttachment[]
   } | null>(null)
-
-  const footerRef = useRef<HTMLDivElement>(null)
-  const [footerHeight, setFooterHeight] = useState(112) // Default pb-28 is 112px
 
   // Monitor footer height to adjust main content padding
   useEffect(() => {

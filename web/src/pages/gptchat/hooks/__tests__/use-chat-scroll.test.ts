@@ -6,6 +6,7 @@ import { useChatScroll } from '../use-chat-scroll'
 
 let scrollTopValue = 0
 let scrollHeightValue = 0
+let bodyScrollHeightValue = 0
 let clientHeightValue = 0
 let resizeObserverCallback: ResizeObserverCallback | null = null
 let resizeObserverInstance: ResizeObserver | null = null
@@ -28,9 +29,11 @@ const setScrollMetrics = (
   scrollTop: number,
   scrollHeight: number,
   clientHeight: number,
+  bodyScrollHeight?: number,
 ) => {
   scrollTopValue = scrollTop
   scrollHeightValue = scrollHeight
+  bodyScrollHeightValue = bodyScrollHeight ?? scrollHeight
   clientHeightValue = clientHeight
 }
 
@@ -89,7 +92,7 @@ describe('useChatScroll', () => {
       configurable: true,
     })
     Object.defineProperty(document.body, 'scrollHeight', {
-      get: () => scrollHeightValue,
+      get: () => bodyScrollHeightValue,
       configurable: true,
     })
     Object.defineProperty(document.documentElement, 'clientHeight', {
@@ -354,6 +357,72 @@ describe('useChatScroll', () => {
       // Should auto-scroll to bottom of the new messages
       expect(scrollToSpy).toHaveBeenCalled()
       expect(result.current.autoScrollRef.current).toBe(true)
+    })
+  })
+
+  it('does not overshoot when body.scrollHeight is stale after session switch', async () => {
+    // Regression: switching sessions could cause body.scrollHeight to retain
+    // a stale larger value from the previous session, making scrollToBottom
+    // overshoot past the actual content.
+    const { rerender } = renderHook(
+      ({ sessionId, messages }) =>
+        useChatScroll({ messages, pageSize: 40, sessionId }),
+      {
+        initialProps: {
+          sessionId: 1,
+          messages: buildMessages(50),
+        },
+      },
+    )
+
+    // Session 1 had a tall document.
+    // documentElement.scrollHeight = 800 (new session), but body.scrollHeight
+    // is stale at 5000 (old session).
+    setScrollMetrics(0, 800, 500, /* bodyScrollHeight */ 5000)
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    // Switch to session 2 with fewer messages.
+    rerender({ sessionId: 2, messages: [] })
+    setScrollMetrics(0, 800, 500, 5000)
+    rerender({ sessionId: 2, messages: buildMessages(3) })
+
+    await waitFor(() => {
+      // The scroll position should be based on the actual scrollHeight (800),
+      // not the stale body.scrollHeight (5000).
+      // Max scroll = 800 - 500 = 300.  Must never exceed this.
+      const calls = scrollToSpy.mock.calls as Array<[{ top: number }]>
+      const maxTopSeen = Math.max(...calls.map((c) => c[0]?.top ?? 0))
+      expect(maxTopSeen).toBeLessThanOrEqual(300)
+    })
+  })
+
+  it('clamps scroll when content-end marker is above viewport', async () => {
+    // Regression: if scrollHeight is inflated, scrollToBottom might place
+    // the content-end marker above the visible viewport, showing blank
+    // space.  The clampScrollPosition should bring it back.
+
+    const { rerender } = renderHook(
+      ({ sessionId, messages }) =>
+        useChatScroll({ messages, pageSize: 40, sessionId }),
+      {
+        initialProps: {
+          sessionId: 1,
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    // Simulate switching to a shorter session.
+    setScrollMetrics(0, 600, 500)
+    rerender({ sessionId: 2, messages: [] })
+    rerender({ sessionId: 2, messages: buildMessages(2) })
+
+    await waitFor(() => {
+      // scrollHeight (600) - clientHeight (500) = 100.
+      // Scroll must not exceed 100.
+      expect(window.scrollY).toBeLessThanOrEqual(100)
     })
   })
 })

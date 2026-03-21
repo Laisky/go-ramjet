@@ -29,39 +29,45 @@ export default defineConfig({
     global: 'window',
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
+        manualChunks(id: string) {
           // React core - cached long-term, rarely changes
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          if (
+            /node_modules\/(react|react-dom|react-router|react-router-dom)\//.test(
+              id,
+            )
+          ) {
+            return 'vendor-react'
+          }
           // Markdown rendering pipeline - heavy, only needed for chat messages
-          'vendor-markdown': [
-            'react-markdown',
-            'remark-gfm',
-            'remark-math',
-            'rehype-katex',
-            'rehype-raw',
-          ],
+          if (
+            /node_modules\/(react-markdown|remark-gfm|remark-math|rehype-katex|rehype-raw)\//.test(
+              id,
+            )
+          ) {
+            return 'vendor-markdown'
+          }
           // Syntax highlighting
-          'vendor-hljs': ['highlight.js'],
+          if (id.includes('node_modules/highlight.js/')) {
+            return 'vendor-hljs'
+          }
           // KaTeX CSS + fonts
-          'vendor-katex': ['katex'],
+          if (id.includes('node_modules/katex/')) {
+            return 'vendor-katex'
+          }
           // Local database layer
-          'vendor-pouchdb': ['pouchdb-browser'],
+          if (id.includes('node_modules/pouchdb-browser/')) {
+            return 'vendor-pouchdb'
+          }
           // Radix UI primitives
-          'vendor-radix': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-scroll-area',
-            '@radix-ui/react-select',
-            '@radix-ui/react-separator',
-            '@radix-ui/react-slider',
-            '@radix-ui/react-switch',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-tooltip',
-          ],
+          if (id.includes('node_modules/@radix-ui/')) {
+            return 'vendor-radix'
+          }
           // Payment - rarely used
-          'vendor-stripe': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+          if (id.includes('node_modules/@stripe/')) {
+            return 'vendor-stripe'
+          }
         },
       },
     },

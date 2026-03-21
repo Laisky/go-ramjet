@@ -29,5 +29,12 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/App.tsx"]
+  "exclude": [
+    "src/App.tsx",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/__tests__"
+  ]
 }

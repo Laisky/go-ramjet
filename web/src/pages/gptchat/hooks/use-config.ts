@@ -339,7 +339,9 @@ export function useConfig() {
             ? currentConfig.updated_at
             : 0
         const loadedUpdatedAt =
-          typeof finalConfig.updated_at === 'number' ? finalConfig.updated_at : 0
+          typeof finalConfig.updated_at === 'number'
+            ? finalConfig.updated_at
+            : 0
         if (
           hydratedRef.current &&
           sessionIdRef.current === activeSessionId &&
@@ -347,12 +349,15 @@ export function useConfig() {
         ) {
           finalConfig = mergeSessionConfigs(finalConfig, currentConfig)
           changed = true
-          console.debug('[useConfig] keeping newer in-memory config after load', {
-            sessionId: activeSessionId,
-            currentUpdatedAt,
-            loadedUpdatedAt,
-            apiTokenKind: describeApiTokenKind(finalConfig.api_token),
-          })
+          console.debug(
+            '[useConfig] keeping newer in-memory config after load',
+            {
+              sessionId: activeSessionId,
+              currentUpdatedAt,
+              loadedUpdatedAt,
+              apiTokenKind: describeApiTokenKind(finalConfig.api_token),
+            },
+          )
         }
 
         if (changed || !savedConfig) {
@@ -474,11 +479,14 @@ export function useConfig() {
         await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
         sessionIdRef.current = newSessionId
 
-        const { config: nextConfig, savedConfig, changed } =
-          await hydrateSessionConfig(newSessionId, {
-            fallbackConfig: configRef.current,
-            applyUrlOverrides: false,
-          })
+        const {
+          config: nextConfig,
+          savedConfig,
+          changed,
+        } = await hydrateSessionConfig(newSessionId, {
+          fallbackConfig: configRef.current,
+          applyUrlOverrides: false,
+        })
 
         applySessionState(newSessionId, {
           ...nextConfig,
@@ -526,12 +534,8 @@ export function useConfig() {
       const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
       const newConfig = {
         ...DefaultSessionConfig,
-        api_token:
-          configRef.current.api_token ||
-          createFreeTierToken(),
-        api_base:
-          configRef.current.api_base ||
-          DefaultSessionConfig.api_base,
+        api_token: configRef.current.api_token || createFreeTierToken(),
+        api_base: configRef.current.api_base || DefaultSessionConfig.api_base,
         session_name: name || `Chat Session ${newId}`,
         updated_at: Date.now(),
         sync_key: globalSyncKey || '',
