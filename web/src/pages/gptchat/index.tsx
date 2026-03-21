@@ -464,6 +464,8 @@ export function GPTChatPage() {
           onSwitchSession={switchSession}
           onCreateSession={() => createSession()}
           onClearChats={handleClearChats}
+          onReorderSessions={reorderSessions}
+          onRenameSession={renameSession}
         />
       </aside>
 

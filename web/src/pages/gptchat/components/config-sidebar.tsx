@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmAction } from './confirm-action'
 import { DataSyncManager } from './data-sync-manager'
-import { DatasetManager } from './dataset-manager'
 import { McpServerManager } from './mcp-server-manager'
 import { ModelSelector } from './model-selector'
 import { PromptShortcutManager } from './prompt-shortcut-manager'
@@ -411,7 +410,9 @@ export function ConfigSidebar({
 
             <div className="h-px bg-border" />
 
-            <DatasetManager config={config} />
+            {/* TODO: Private Dataset feature is temporarily disabled.
+                Uncomment to re-enable when ready. */}
+            {/* <DatasetManager config={config} /> */}
 
             <div className="h-px bg-border" />
 
