@@ -149,7 +149,7 @@ export function PromptShortcutManager({
             Prompt Shortcuts
           </label>
           <div className="flex flex-wrap gap-1">
-            {promptShortcuts.map((shortcut, index) => (
+            {promptShortcuts.filter((s) => s.name?.trim()).map((shortcut, index) => (
               <Badge
                 key={index}
                 variant="secondary"

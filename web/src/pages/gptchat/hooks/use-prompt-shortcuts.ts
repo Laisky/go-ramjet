@@ -20,6 +20,11 @@ export function usePromptShortcuts(configLoading: boolean) {
       shortcuts = raw.data
     }
 
+    // Filter out entries with missing or empty name
+    shortcuts = shortcuts.filter(
+      (s) => s && typeof s.name === 'string' && s.name.trim() !== '',
+    )
+
     // If no shortcuts found (or empty array), use defaults
     if (!shortcuts || shortcuts.length === 0) {
       const { DefaultPrompts } = await import('../data/prompts')
