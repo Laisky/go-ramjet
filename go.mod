@@ -36,7 +36,7 @@ require (
 	github.com/yanyiwu/gojieba v1.4.6
 	github.com/yuin/goldmark v1.7.16
 	go.mongodb.org/mongo-driver v1.17.9
-	golang.org/x/image v0.35.0
+	golang.org/x/image v0.38.0
 	golang.org/x/net v0.52.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/protobuf v1.36.11
