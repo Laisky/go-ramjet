@@ -256,10 +256,15 @@ export function useChatScroll({
     return scrollHeight - scrollTop - clientHeight <= 8
   }, [getScrollMetrics])
 
-  // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom
+  // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom.
+  // Skip entirely when the user (or edit/regenerate) has engaged manual-scroll mode
+  // so that streaming updates don't fight viewport-stable operations.
   useEffect(() => {
     if (suppressAutoScrollOnceRef.current) {
       suppressAutoScrollOnceRef.current = false
+      return
+    }
+    if (manualScrollRef.current) {
       return
     }
     if (autoScrollRef.current || isNearBottom()) {
@@ -451,6 +456,7 @@ export function useChatScroll({
     visibleCount,
     autoScrollRef,
     suppressAutoScrollOnceRef,
+    manualScrollRef,
     scrollToBottom,
     scrollToTop,
     resetScroll,

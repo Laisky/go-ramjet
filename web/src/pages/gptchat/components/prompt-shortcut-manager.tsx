@@ -149,46 +149,48 @@ export function PromptShortcutManager({
             Prompt Shortcuts
           </label>
           <div className="flex flex-wrap gap-1">
-            {promptShortcuts.filter((s) => s.name?.trim()).map((shortcut, index) => (
-              <Badge
-                key={index}
-                variant="secondary"
-                className={cn(
-                  'cursor-pointer transition-colors hover:bg-primary hover:text-primary-foreground pr-1',
-                  config.system_prompt === shortcut.prompt &&
-                    'bg-primary text-primary-foreground',
-                )}
-                onClick={() => handleSelectPrompt(shortcut.prompt)}
-              >
-                {shortcut.name}
-                <div className="ml-1 flex items-center gap-0.5">
-                  <button
-                    className="rounded-full p-0.5 hover:bg-muted"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setEditingPrompt({
-                        oldName: shortcut.name,
-                        name: shortcut.name,
-                        prompt: shortcut.prompt,
-                      })
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  {onDeletePrompt && (
+            {promptShortcuts
+              .filter((s) => s.name?.trim())
+              .map((shortcut, index) => (
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className={cn(
+                    'cursor-pointer transition-colors hover:bg-primary hover:text-primary-foreground pr-1',
+                    config.system_prompt === shortcut.prompt &&
+                      'bg-primary text-primary-foreground',
+                  )}
+                  onClick={() => handleSelectPrompt(shortcut.prompt)}
+                >
+                  {shortcut.name}
+                  <div className="ml-1 flex items-center gap-0.5">
                     <button
                       className="rounded-full p-0.5 hover:bg-muted"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onDeletePrompt(shortcut.name)
+                        setEditingPrompt({
+                          oldName: shortcut.name,
+                          name: shortcut.name,
+                          prompt: shortcut.prompt,
+                        })
                       }}
                     >
-                      <X className="h-3 w-3" />
+                      <Pencil className="h-3 w-3" />
                     </button>
-                  )}
-                </div>
-              </Badge>
-            ))}
+                    {onDeletePrompt && (
+                      <button
+                        className="rounded-full p-0.5 hover:bg-muted"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeletePrompt(shortcut.name)
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </Badge>
+              ))}
           </div>
         </div>
       )}

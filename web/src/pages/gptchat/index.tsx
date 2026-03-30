@@ -122,6 +122,7 @@ export function GPTChatPage() {
     visibleCount,
     autoScrollRef,
     suppressAutoScrollOnceRef,
+    manualScrollRef,
     scrollToBottom,
     scrollToTop,
     resetScroll,
@@ -327,10 +328,16 @@ export function GPTChatPage() {
     async (chatId: string) => {
       // Do not auto-scroll on regenerate; keep viewport stable.
       autoScrollRef.current = false
+      manualScrollRef.current = true
       suppressAutoScrollOnceRef.current = true
       await regenerateMessage(chatId)
     },
-    [regenerateMessage, autoScrollRef, suppressAutoScrollOnceRef],
+    [
+      regenerateMessage,
+      autoScrollRef,
+      manualScrollRef,
+      suppressAutoScrollOnceRef,
+    ],
   )
 
   const handleFork = useCallback(
@@ -354,6 +361,7 @@ export function GPTChatPage() {
       attachments?: ChatAttachment[]
     }) => {
       autoScrollRef.current = false
+      manualScrollRef.current = true
       suppressAutoScrollOnceRef.current = true
       setEditingMessage({
         chatId: payload.chatId,
@@ -361,7 +369,7 @@ export function GPTChatPage() {
         attachments: payload.attachments,
       })
     },
-    [autoScrollRef, suppressAutoScrollOnceRef],
+    [autoScrollRef, manualScrollRef, suppressAutoScrollOnceRef],
   )
 
   const handleConfirmEdit = useCallback(
@@ -369,10 +377,17 @@ export function GPTChatPage() {
       if (!editingMessage) return
       setEditingMessage(null)
       autoScrollRef.current = false
+      manualScrollRef.current = true
       suppressAutoScrollOnceRef.current = true
       await editAndRetry(editingMessage.chatId, newContent, attachments)
     },
-    [editAndRetry, editingMessage, autoScrollRef, suppressAutoScrollOnceRef],
+    [
+      editAndRetry,
+      editingMessage,
+      autoScrollRef,
+      manualScrollRef,
+      suppressAutoScrollOnceRef,
+    ],
   )
 
   const handleClearChats = useCallback(async () => {
@@ -662,7 +677,12 @@ export function GPTChatPage() {
         >
           {/* Scroll up button – always visible */}
           <button
-            onClick={navigateMessageUp}
+            onClick={() => {
+              // Engage manual-scroll mode so auto-scroll doesn't fight navigation
+              manualScrollRef.current = true
+              autoScrollRef.current = false
+              navigateMessageUp()
+            }}
             className="absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20"
             aria-label="Scroll up by message"
           >
