@@ -4,6 +4,8 @@ import type { ChatMessageData } from '../types'
 interface UseMessageNavigationOptions {
   displayedMessages: ChatMessageData[]
   sessionId: number
+  /** Called before a navigation scroll to lock the viewport against auto-scroll. */
+  onNavigate?: () => void
 }
 
 /**
@@ -12,6 +14,7 @@ interface UseMessageNavigationOptions {
 export function useMessageNavigation({
   displayedMessages,
   sessionId,
+  onNavigate,
 }: UseMessageNavigationOptions) {
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(-1)
   const isKeyboardSelectRef = useRef(false)
@@ -77,6 +80,7 @@ export function useMessageNavigation({
    * the viewport, it resets to the first visible message.
    */
   const navigateMessageUp = useCallback(() => {
+    onNavigate?.()
     setSelectedMessageIndex((prev) => {
       isKeyboardSelectRef.current = true
       if (prev === -1 || !isMessageVisible(prev)) {
@@ -86,7 +90,7 @@ export function useMessageNavigation({
 
       return Math.max(0, prev - 1)
     })
-  }, [findFirstVisibleMessageIndex, isMessageVisible])
+  }, [findFirstVisibleMessageIndex, isMessageVisible, onNavigate])
 
   // Keyboard shortcuts for message navigation
   useEffect(() => {
@@ -119,6 +123,7 @@ export function useMessageNavigation({
         }
 
         e.preventDefault()
+        onNavigate?.()
         setSelectedMessageIndex((prev) => {
           isKeyboardSelectRef.current = true
           if (prev === -1 || !isMessageVisible(prev)) {
@@ -140,6 +145,7 @@ export function useMessageNavigation({
     findFirstVisibleMessageIndex,
     isMessageVisible,
     navigateMessageUp,
+    onNavigate,
   ])
 
   // Scroll selected message into view, accounting for the fixed header (48px)

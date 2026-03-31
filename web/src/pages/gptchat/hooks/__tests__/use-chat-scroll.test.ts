@@ -141,7 +141,8 @@ describe('useChatScroll', () => {
 
     setScrollMetrics(800, 2000, 500)
 
-    result.current.suppressAutoScrollOnceRef.current = true
+    // Lock viewport to simulate being in a non-auto-follow state
+    result.current.lockViewport()
 
     rerender({ sessionId: 2, messages: buildMessages(3) })
 
@@ -162,8 +163,8 @@ describe('useChatScroll', () => {
       },
     )
 
-    result.current.autoScrollRef.current = false
-    result.current.suppressAutoScrollOnceRef.current = true
+    // Put in viewport-locked mode so auto-scroll doesn't interfere
+    result.current.lockViewport()
 
     setScrollMetrics(900, 1000, 400)
 
@@ -217,9 +218,10 @@ describe('useChatScroll', () => {
 
     scrollToSpy.mockClear()
 
+    // Wheel event transitions from auto-follow to user-scrolled
     window.dispatchEvent(new Event('wheel'))
 
-    expect(result.current.autoScrollRef.current).toBe(false)
+    expect(result.current.scrollModeRef.current).toBe('user-scrolled')
 
     rerender({ messages: buildMessages(3) })
 
@@ -238,14 +240,14 @@ describe('useChatScroll', () => {
       },
     )
 
-    result.current.autoScrollRef.current = false
+    result.current.scrollModeRef.current = 'user-scrolled'
 
     const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollToSpy.mockClear()
 
     result.current.scrollToBottom({ force: true, behavior: 'auto' })
 
-    expect(result.current.autoScrollRef.current).toBe(true)
+    expect(result.current.scrollModeRef.current).toBe('auto-follow')
 
     setScrollMetrics(0, 1500, 500)
     rerender({ messages: buildMessages(3) })
@@ -315,9 +317,9 @@ describe('useChatScroll', () => {
       },
     )
 
-    // Simulate being scrolled down and auto-follow disabled
+    // Simulate being scrolled down and in user-scrolled mode
     setScrollMetrics(800, 2000, 500)
-    result.current.autoScrollRef.current = false
+    result.current.scrollModeRef.current = 'user-scrolled'
 
     const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollToSpy.mockClear()
@@ -327,7 +329,7 @@ describe('useChatScroll', () => {
 
     await waitFor(() => {
       expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
-      expect(result.current.autoScrollRef.current).toBe(true)
+      expect(result.current.scrollModeRef.current).toBe('auto-follow')
     })
   })
 
@@ -345,7 +347,7 @@ describe('useChatScroll', () => {
     rerender({ messages: [] })
 
     // Check if auto-follow is enabled
-    expect(result.current.autoScrollRef.current).toBe(true)
+    expect(result.current.scrollModeRef.current).toBe('auto-follow')
 
     const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
     scrollToSpy.mockClear()
@@ -356,7 +358,7 @@ describe('useChatScroll', () => {
     await waitFor(() => {
       // Should auto-scroll to bottom of the new messages
       expect(scrollToSpy).toHaveBeenCalled()
-      expect(result.current.autoScrollRef.current).toBe(true)
+      expect(result.current.scrollModeRef.current).toBe('auto-follow')
     })
   })
 
@@ -424,5 +426,77 @@ describe('useChatScroll', () => {
       // Scroll must not exceed 100.
       expect(window.scrollY).toBeLessThanOrEqual(100)
     })
+  })
+
+  it('viewport-locked mode survives content-change scroll events', async () => {
+    // Core regression test: after edit/regenerate, content changes should
+    // NOT re-enable auto-scroll. This was the root cause of the positioning bug.
+    const { result, rerender } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+
+    // Simulate edit/regenerate: lock viewport
+    result.current.lockViewport()
+    expect(result.current.scrollModeRef.current).toBe('viewport-locked')
+
+    scrollToSpy.mockClear()
+
+    // Simulate content change (assistant message cleared then streaming)
+    setScrollMetrics(0, 800, 500) // Content shrunk, now at bottom
+    rerender({ messages: buildMessages(9) }) // Message removed
+
+    // Dispatch a passive scroll event (as would happen from clamp/resize)
+    window.dispatchEvent(new Event('scroll'))
+
+    // Mode must still be viewport-locked
+    expect(result.current.scrollModeRef.current).toBe('viewport-locked')
+
+    // No auto-scroll should have happened
+    expect(scrollToSpy).not.toHaveBeenCalled()
+  })
+
+  it('viewport-locked mode transitions to user-scrolled on wheel', async () => {
+    const { result } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    result.current.lockViewport()
+    expect(result.current.scrollModeRef.current).toBe('viewport-locked')
+
+    // User takes control via wheel
+    window.dispatchEvent(new Event('wheel'))
+
+    expect(result.current.scrollModeRef.current).toBe('user-scrolled')
+  })
+
+  it('viewport-locked mode transitions to auto-follow on force scroll', async () => {
+    const { result } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    result.current.lockViewport()
+    expect(result.current.scrollModeRef.current).toBe('viewport-locked')
+
+    // Force scroll (send message / click scroll-to-bottom)
+    result.current.scrollToBottom({ force: true })
+
+    expect(result.current.scrollModeRef.current).toBe('auto-follow')
   })
 })

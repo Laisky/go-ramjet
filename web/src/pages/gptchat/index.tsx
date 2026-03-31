@@ -120,9 +120,8 @@ export function GPTChatPage() {
     messagesEndRef,
     showScrollButton,
     visibleCount,
-    autoScrollRef,
-    suppressAutoScrollOnceRef,
-    manualScrollRef,
+    scrollModeRef,
+    lockViewport,
     scrollToBottom,
     scrollToTop,
     resetScroll,
@@ -208,6 +207,7 @@ export function GPTChatPage() {
     useMessageNavigation({
       displayedMessages,
       sessionId,
+      onNavigate: lockViewport,
     })
 
   const { selectionData, setSelectionData } = useSelection(messagesContainerRef)
@@ -246,10 +246,10 @@ export function GPTChatPage() {
   // Scroll to bottom when footer height changes (e.g. typing long prompt)
   // to prevent messages from being covered.
   useEffect(() => {
-    if (autoScrollRef.current) {
+    if (scrollModeRef.current === 'auto-follow') {
       scrollToBottom({ force: false, behavior: 'auto' })
     }
-  }, [footerHeight, scrollToBottom, autoScrollRef])
+  }, [footerHeight, scrollToBottom, scrollModeRef])
 
   const currentDraftMessage = globalDraft
 
@@ -317,27 +317,20 @@ export function GPTChatPage() {
 
   const handleSend = useCallback(
     async (content: string, attachments?: ChatAttachment[]) => {
-      autoScrollRef.current = true
+      scrollModeRef.current = 'auto-follow'
       await sendMessage(content, attachments)
       requestAnimationFrame(() => scrollToBottom({ force: true }))
     },
-    [scrollToBottom, sendMessage, autoScrollRef],
+    [scrollToBottom, sendMessage, scrollModeRef],
   )
 
   const handleRegenerate = useCallback(
     async (chatId: string) => {
-      // Do not auto-scroll on regenerate; keep viewport stable.
-      autoScrollRef.current = false
-      manualScrollRef.current = true
-      suppressAutoScrollOnceRef.current = true
+      // Lock viewport so streaming response doesn't auto-scroll.
+      lockViewport()
       await regenerateMessage(chatId)
     },
-    [
-      regenerateMessage,
-      autoScrollRef,
-      manualScrollRef,
-      suppressAutoScrollOnceRef,
-    ],
+    [regenerateMessage, lockViewport],
   )
 
   const handleFork = useCallback(
@@ -360,34 +353,24 @@ export function GPTChatPage() {
       content: string
       attachments?: ChatAttachment[]
     }) => {
-      autoScrollRef.current = false
-      manualScrollRef.current = true
-      suppressAutoScrollOnceRef.current = true
+      lockViewport()
       setEditingMessage({
         chatId: payload.chatId,
         content: payload.content,
         attachments: payload.attachments,
       })
     },
-    [autoScrollRef, manualScrollRef, suppressAutoScrollOnceRef],
+    [lockViewport],
   )
 
   const handleConfirmEdit = useCallback(
     async (newContent: string, attachments?: ChatAttachment[]) => {
       if (!editingMessage) return
       setEditingMessage(null)
-      autoScrollRef.current = false
-      manualScrollRef.current = true
-      suppressAutoScrollOnceRef.current = true
+      lockViewport()
       await editAndRetry(editingMessage.chatId, newContent, attachments)
     },
-    [
-      editAndRetry,
-      editingMessage,
-      autoScrollRef,
-      manualScrollRef,
-      suppressAutoScrollOnceRef,
-    ],
+    [editAndRetry, editingMessage, lockViewport],
   )
 
   const handleClearChats = useCallback(async () => {
@@ -678,9 +661,7 @@ export function GPTChatPage() {
           {/* Scroll up button – always visible */}
           <button
             onClick={() => {
-              // Engage manual-scroll mode so auto-scroll doesn't fight navigation
-              manualScrollRef.current = true
-              autoScrollRef.current = false
+              lockViewport()
               navigateMessageUp()
             }}
             className="absolute bottom-full right-2 mb-14 z-40 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary shadow-lg ring-1 ring-primary/30 backdrop-blur transition-all hover:bg-primary/20"

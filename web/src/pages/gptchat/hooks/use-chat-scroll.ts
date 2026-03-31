@@ -1,6 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessageData } from '../types'
 
+/**
+ * ScrollMode represents the current scroll behavior state.
+ *
+ * State machine transitions:
+ *
+ *   AUTO_FOLLOW  ──wheel/touch/kbd──▶  USER_SCROLLED
+ *        │                                   │
+ *        │ edit/regenerate/navigate           │ edit/regenerate/navigate
+ *        ▼                                   ▼
+ *   VIEWPORT_LOCKED  ◀──────────────  VIEWPORT_LOCKED
+ *
+ * Exit VIEWPORT_LOCKED:
+ *   → user sends message / clicks scroll-to-bottom → AUTO_FOLLOW
+ *   → user wheel/touch scrolls → USER_SCROLLED
+ *
+ * Exit USER_SCROLLED:
+ *   → user actively scrolls near bottom (wheel/touch) → AUTO_FOLLOW
+ *   → user sends message / clicks scroll-to-bottom → AUTO_FOLLOW
+ *   → session change → AUTO_FOLLOW
+ */
+export type ScrollMode = 'auto-follow' | 'user-scrolled' | 'viewport-locked'
+
 interface UseChatScrollOptions {
   messages: ChatMessageData[]
   pageSize: number
@@ -23,10 +45,23 @@ export function useChatScroll({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [visibleCount, setVisibleCount] = useState(pageSize)
-  const autoScrollRef = useRef(true)
-  const suppressAutoScrollOnceRef = useRef(false)
-  const manualScrollRef = useRef(false)
   const pendingSessionScrollRef = useRef(false)
+
+  /**
+   * Single source of truth for scroll behavior.
+   * Replaces the previous autoScrollRef / manualScrollRef / suppressAutoScrollOnceRef
+   * triple which had race conditions between content-change-induced scroll events
+   * and the manual-mode reset logic.
+   */
+  const scrollModeRef = useRef<ScrollMode>('auto-follow')
+
+  /**
+   * Set to true by wheel / touch / keyboard handlers (real user interaction).
+   * Checked by the scroll event handler to distinguish "user scrolled to bottom"
+   * from "content change pushed viewport to bottom".
+   * Cleared after the scroll handler processes it.
+   */
+  const userScrollIntentRef = useRef(false)
 
   const getScrollElement = useCallback(() => {
     return document.scrollingElement || document.documentElement
@@ -155,9 +190,8 @@ export function useChatScroll({
   // Reset state when session changes
   useEffect(() => {
     setVisibleCount(pageSize) // eslint-disable-line react-hooks/set-state-in-effect -- reset on session change
-    autoScrollRef.current = true
-    suppressAutoScrollOnceRef.current = false
-    manualScrollRef.current = false
+    scrollModeRef.current = 'auto-follow'
+    userScrollIntentRef.current = false
     pendingSessionScrollRef.current = true
     // Immediately scroll to top when switching sessions to prevent
     // being stuck at the bottom of the previous (possibly longer) session.
@@ -182,8 +216,8 @@ export function useChatScroll({
   const scrollToBottom = useCallback(
     (options?: { force?: boolean; behavior?: ScrollBehavior }) => {
       if (options?.force) {
-        autoScrollRef.current = true
-        manualScrollRef.current = false
+        scrollModeRef.current = 'auto-follow'
+        userScrollIntentRef.current = false
         console.debug('[useChatScroll] auto-follow enabled', {
           sessionId,
           reason: 'force-scroll',
@@ -242,11 +276,26 @@ export function useChatScroll({
    */
   const resetScroll = useCallback(() => {
     setVisibleCount(pageSize)
-    autoScrollRef.current = true
-    suppressAutoScrollOnceRef.current = false
-    manualScrollRef.current = false
+    scrollModeRef.current = 'auto-follow'
+    userScrollIntentRef.current = false
     scrollToPosition(0, 'auto')
   }, [pageSize, scrollToPosition])
+
+  /**
+   * lockViewport transitions to viewport-locked mode.
+   * Use this before operations that change content but should keep the viewport stable
+   * (e.g., edit-and-retry, regenerate, message navigation).
+   *
+   * The lock persists until explicitly released by:
+   * - scrollToBottom({ force: true }) (send message, click scroll-to-bottom button)
+   * - User wheel/touch scroll (transitions to user-scrolled)
+   * - Session change (resets to auto-follow)
+   */
+  const lockViewport = useCallback(() => {
+    scrollModeRef.current = 'viewport-locked'
+    userScrollIntentRef.current = false
+    console.debug('[useChatScroll] viewport locked', { sessionId })
+  }, [sessionId])
 
   /**
    * isAtBottom checks whether the viewport is effectively at the bottom.
@@ -256,21 +305,14 @@ export function useChatScroll({
     return scrollHeight - scrollTop - clientHeight <= 8
   }, [getScrollMetrics])
 
-  // Auto-scroll only when auto-follow is enabled (e.g., new send) or near bottom.
-  // Skip entirely when the user (or edit/regenerate) has engaged manual-scroll mode
-  // so that streaming updates don't fight viewport-stable operations.
+  // Auto-scroll only when in auto-follow mode.
+  // In user-scrolled or viewport-locked mode, the user/operation controls the viewport.
   useEffect(() => {
-    if (suppressAutoScrollOnceRef.current) {
-      suppressAutoScrollOnceRef.current = false
+    if (scrollModeRef.current !== 'auto-follow') {
       return
     }
-    if (manualScrollRef.current) {
-      return
-    }
-    if (autoScrollRef.current || isNearBottom()) {
-      scrollToBottom({ force: true, behavior: 'auto' })
-    }
-  }, [messages, scrollToBottom, isNearBottom])
+    scrollToBottom({ force: true, behavior: 'auto' })
+  }, [messages, scrollToBottom])
 
   useEffect(() => {
     setVisibleCount((prev) => {
@@ -298,49 +340,70 @@ export function useChatScroll({
     const handleScroll = () => {
       const near = isNearBottom()
       setShowScrollButton(!near)
-      // Disable auto-follow as soon as user scrolls away
-      if (!near) {
-        autoScrollRef.current = false
+
+      const mode = scrollModeRef.current
+
+      if (mode === 'viewport-locked') {
+        // Viewport-locked mode is immune to scroll events.
+        // Only explicit user actions (wheel/touch → user-scrolled, or
+        // force-scroll → auto-follow) can exit this state.
         return
       }
 
-      if (manualScrollRef.current) {
-        if (isAtBottom()) {
-          manualScrollRef.current = false
-          autoScrollRef.current = true
+      if (mode === 'user-scrolled') {
+        // Only re-enable auto-follow if the user ACTIVELY scrolled near the bottom.
+        // Content-change scroll events (clamp, resize) have userScrollIntentRef=false
+        // and must NOT re-enable auto-follow.
+        if (near && userScrollIntentRef.current) {
+          scrollModeRef.current = 'auto-follow'
+          userScrollIntentRef.current = false
           console.debug('[useChatScroll] auto-follow enabled', {
             sessionId,
             reason: 'user-returned-to-bottom',
           })
-        } else {
-          autoScrollRef.current = false
         }
         return
       }
 
-      autoScrollRef.current = true
+      // mode === 'auto-follow'
+      if (!near) {
+        // Scrolled away from bottom without explicit user intent
+        // (e.g., content prepended above). Stay in auto-follow;
+        // the next messages-change effect will scroll back to bottom.
+        // If the user intended to scroll away, the wheel/touch handler
+        // already transitioned to user-scrolled before this fires.
+      }
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [isNearBottom, isAtBottom, sessionId])
 
-  // Detect explicit user scroll intent (wheel/touch/keyboard) to stop auto-follow immediately.
+  // Detect explicit user scroll intent (wheel/touch/keyboard) to transition modes.
   useEffect(() => {
-    // markManualScroll disables auto-follow based on explicit user scroll intent.
-    const markManualScroll = (source: string) => {
-      if (!manualScrollRef.current) {
-        manualScrollRef.current = true
-        autoScrollRef.current = false
-        console.debug('[useChatScroll] auto-follow disabled', {
+    const handleUserScroll = (source: string) => {
+      userScrollIntentRef.current = true
+      const mode = scrollModeRef.current
+
+      if (mode === 'auto-follow') {
+        scrollModeRef.current = 'user-scrolled'
+        console.debug('[useChatScroll] user-scrolled (from auto-follow)', {
+          sessionId,
+          source,
+        })
+      } else if (mode === 'viewport-locked') {
+        // User is taking back control from the locked state.
+        scrollModeRef.current = 'user-scrolled'
+        console.debug('[useChatScroll] user-scrolled (from viewport-locked)', {
           sessionId,
           source,
         })
       }
+      // If already user-scrolled, just update the intent flag.
     }
 
-    const handleWheel = () => markManualScroll('wheel')
-    const handleTouchMove = () => markManualScroll('touchmove')
+    const handleWheel = () => handleUserScroll('wheel')
+    const handleTouchMove = () => handleUserScroll('touchmove')
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (target?.isContentEditable) return
@@ -357,7 +420,7 @@ export function useChatScroll({
         ' ',
       ])
       if (keys.has(event.key)) {
-        markManualScroll('keyboard')
+        handleUserScroll('keyboard')
       }
     }
 
@@ -384,7 +447,7 @@ export function useChatScroll({
   useEffect(() => {
     if (messages.length === 0 && !pendingSessionScrollRef.current) {
       scrollToPosition(0, 'auto')
-      autoScrollRef.current = true
+      scrollModeRef.current = 'auto-follow'
     }
   }, [messages.length, scrollToPosition])
 
@@ -454,9 +517,8 @@ export function useChatScroll({
     messagesEndRef,
     showScrollButton,
     visibleCount,
-    autoScrollRef,
-    suppressAutoScrollOnceRef,
-    manualScrollRef,
+    scrollModeRef,
+    lockViewport,
     scrollToBottom,
     scrollToTop,
     resetScroll,
