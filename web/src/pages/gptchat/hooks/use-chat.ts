@@ -428,7 +428,10 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      const contextMessages = messages.slice(-config.n_contexts * 2)
+      const contextMessages =
+        config.n_contexts >= 31
+          ? messages
+          : messages.slice(-config.n_contexts * 2)
       const apiMessages = buildApiMessages(
         config,
         contextMessages,
@@ -507,7 +510,10 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       })
 
       const priorMessages = messages.slice(0, userIndex)
-      const contextMessages = priorMessages.slice(-config.n_contexts * 2)
+      const contextMessages =
+        config.n_contexts >= 31
+          ? priorMessages
+          : priorMessages.slice(-config.n_contexts * 2)
 
       // Reconstruct content parts if there are attachments
       let userContent: string | ContentPart[] = userMsg.content
@@ -631,7 +637,10 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       })
 
       const priorMessages = messages.slice(0, userIndex)
-      const contextMessages = priorMessages.slice(-config.n_contexts * 2)
+      const contextMessages =
+        config.n_contexts >= 31
+          ? priorMessages
+          : priorMessages.slice(-config.n_contexts * 2)
 
       // Reconstruct content parts if there are attachments
       let userContent: string | ContentPart[] = trimmed

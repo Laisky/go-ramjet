@@ -273,17 +273,21 @@ export function ConfigSidebar({
               >
                 <span>Contexts</span>
                 <span className="text-muted-foreground">
-                  {config.n_contexts}
+                  {config.n_contexts >= 31 ? 'All' : config.n_contexts}
                 </span>
               </label>
               <input
                 id="cfg-contexts"
                 type="range"
                 min={1}
-                max={30}
+                max={31}
                 step={1}
                 value={config.n_contexts}
-                aria-valuetext={`${config.n_contexts} contexts`}
+                aria-valuetext={
+                  config.n_contexts >= 31
+                    ? 'All contexts'
+                    : `${config.n_contexts} contexts`
+                }
                 onChange={(e) =>
                   onConfigChange({ n_contexts: parseInt(e.target.value, 10) })
                 }

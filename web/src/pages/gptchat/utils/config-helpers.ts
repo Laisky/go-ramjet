@@ -160,6 +160,15 @@ function coerceConfigValue(
     return parsed === null ? currentValue : parsed
   }
   if (UrlConfigIntegerFields.has(field)) {
+    // Support "all" for n_contexts (maps to 31, meaning all history)
+    if (
+      field === 'n_contexts' &&
+      String(rawValue ?? '')
+        .trim()
+        .toLowerCase() === 'all'
+    ) {
+      return 31
+    }
     const parsed = parseIntegerParamValue(rawValue)
     return parsed === null ? currentValue : parsed
   }
