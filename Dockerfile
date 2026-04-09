@@ -11,7 +11,7 @@ RUN pnpm -C web build
 
 # =====================================
 
-FROM golang:1.25.4-bookworm AS gobuild
+FROM golang:1.26.2-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \

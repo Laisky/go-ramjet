@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap');
 
 html {
   scroll-behavior: smooth;
@@ -10,7 +10,11 @@ html {
   overflow-x: hidden;
   overflow-x: clip;
   color: var(--cv-ink);
-  font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-weight: 420;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background:
     radial-gradient(circle at top left, rgba(251, 191, 36, 0.08), transparent 55%),
     radial-gradient(circle at 80% 20%, rgba(14, 116, 144, 0.08), transparent 45%),
@@ -74,7 +78,8 @@ html {
 
 .cv-kicker {
   display: inline-block;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.4em;
   color: var(--cv-muted);
@@ -90,7 +95,8 @@ html {
 
 .cv-subtitle {
   margin-top: 10px;
-  font-size: 1rem;
+  font-size: 1.02rem;
+  font-weight: 450;
   color: var(--cv-muted);
 }
 
@@ -111,7 +117,7 @@ html {
   border: 1px solid var(--cv-border);
   border-radius: 999px;
   padding: 6px 14px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--cv-ink);
   background: var(--cv-panel);
@@ -192,7 +198,7 @@ html {
 }
 
 .cv-card-title {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -211,7 +217,7 @@ html {
   align-items: center;
   gap: 8px;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 550;
   color: var(--cv-ink);
 }
 
@@ -312,7 +318,8 @@ html {
 }
 
 .cv-link-item {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 450;
   color: var(--cv-accent);
   min-height: 36px;
   display: inline-flex;
@@ -360,7 +367,8 @@ html {
 }
 
 .cv-recommendation-label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--cv-muted);
@@ -379,7 +387,8 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 450;
   color: var(--cv-ink);
   transition: color 0.2s ease;
   min-height: 36px;
@@ -402,7 +411,8 @@ html {
 
 
 .cv-meta {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 450;
   color: var(--cv-muted);
 }
 
@@ -431,6 +441,7 @@ html {
 .cv-loading {
   color: var(--cv-muted);
   font-size: 0.95rem;
+  font-weight: 450;
 }
 
 
@@ -473,7 +484,8 @@ html {
 }
 
 .cv-modal-description {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 450;
   color: var(--cv-muted);
 }
 
@@ -499,7 +511,8 @@ html {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 450;
   color: var(--cv-muted);
 }
 
@@ -508,7 +521,8 @@ html {
   border-radius: 12px;
   background: var(--cv-alert-bg);
   color: var(--cv-alert);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 450;
 }
 
 .cv-editor-textarea {
