@@ -59,7 +59,8 @@ export async function runMaskInpainting({
   const assistantMessage: ChatMessageData = {
     chatID: chatId,
     role: 'assistant',
-    content: 'Editing image...',
+    content: '',
+    loadingLabel: 'Editing image…',
     model: config.selected_model,
     timestamp: Date.now(),
   }
@@ -101,6 +102,7 @@ export async function runMaskInpainting({
     const finalAssist: ChatMessageData = {
       ...assistantMessage,
       content: imgContent,
+      loadingLabel: undefined,
     }
 
     setMessages((prev) =>
@@ -150,7 +152,8 @@ export async function runImageModelFlow({
   const assistantMessage: ChatMessageData = {
     chatID: chatId,
     role: 'assistant',
-    content: 'Generating image...',
+    content: '',
+    loadingLabel: 'Generating image…',
     model: selectedModel,
     timestamp: Date.now(),
   }
@@ -192,6 +195,7 @@ export async function runImageModelFlow({
     const finalAssistant: ChatMessageData = {
       ...assistantMessage,
       content: newContent,
+      loadingLabel: undefined,
     }
 
     setMessages((prev) =>

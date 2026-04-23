@@ -265,7 +265,11 @@ export const ChatMessage = memo(function ChatMessage({
               {message.content}
             </Markdown>
           ) : isStreaming && !message.reasoningContent ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div
+              aria-live="polite"
+              aria-busy="true"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
               <div className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden" />
               <div
                 className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden"
@@ -275,7 +279,9 @@ export const ChatMessage = memo(function ChatMessage({
                 className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden"
                 style={{ animationDelay: '0.2s' }}
               />
-              <span className="hidden motion-reduce:inline">Generating…</span>
+              <span className={message.loadingLabel ? '' : 'hidden motion-reduce:inline'}>
+                {message.loadingLabel || 'Generating…'}
+              </span>
             </div>
           ) : null}
 

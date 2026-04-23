@@ -30,6 +30,16 @@ interface UseChatScrollOptions {
   contentRef?: React.RefObject<HTMLElement | null>
   /** Height of the fixed footer in pixels, used to cap scroll position. */
   footerHeight?: number
+  /**
+   * chatID of the message that is currently being streamed or reloaded.
+   * When provided, auto-follow scrolling anchors to that message's BOTTOM
+   * instead of the end-of-list marker.  This ensures regenerating or
+   * editing a mid-conversation message keeps its streaming content visible
+   * rather than scrolling past it to the (unchanged) final message.
+   */
+  streamingChatId?: string | null
+  /** Role of the streaming message. Defaults to 'assistant'. */
+  streamingRole?: string
 }
 
 /**
@@ -41,11 +51,40 @@ export function useChatScroll({
   sessionId,
   contentRef,
   footerHeight = 112,
+  streamingChatId = null,
+  streamingRole = 'assistant',
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const pendingSessionScrollRef = useRef(false)
+
+  /**
+   * Ref mirror of streamingChatId so scroll callbacks stay stable while still
+   * observing the latest value.  The value changes every time a new message
+   * starts streaming, and rebuilding every useCallback would churn the scroll
+   * effect deps unnecessarily.
+   */
+  const streamingChatIdRef = useRef<string | null>(streamingChatId)
+  const streamingRoleRef = useRef<string>(streamingRole)
+  // eslint-disable-next-line react-hooks/refs -- keep the anchor identifiers in sync without churning scroll callback deps
+  streamingChatIdRef.current = streamingChatId
+  // eslint-disable-next-line react-hooks/refs -- same reason as above
+  streamingRoleRef.current = streamingRole
+
+  /**
+   * Tracks the most recent scrollTop observed in the scroll handler so we can
+   * detect user-initiated upward movement (scrollbar drag, momentum) that the
+   * wheel/touch/keyboard listeners do not surface.
+   */
+  const lastScrollTopRef = useRef(0)
+
+  /**
+   * Target of the last programmatic scrollToPosition call.  When the next
+   * scroll event matches this value (within a few pixels), we treat it as
+   * our own scroll and do not interpret it as user intent.
+   */
+  const lastProgrammaticTargetRef = useRef<number | null>(null)
 
   /**
    * Single source of truth for scroll behavior.
@@ -105,6 +144,10 @@ export function useChatScroll({
 
   const scrollToPosition = useCallback(
     (top: number, behavior: ScrollBehavior) => {
+      // Record the target so the scroll event handler can recognise this as
+      // a programmatic scroll and avoid mis-attributing it to the user.
+      lastProgrammaticTargetRef.current = top
+
       const scrollElement = getScrollElement()
 
       // Use window.scrollTo for the main document to ensure consistent behavior across browsers
@@ -140,24 +183,51 @@ export function useChatScroll({
   )
 
   /**
-   * getContentMaxScroll computes the tightest upper-bound scroll position
-   * based on the actual content-end marker (messagesEndRef).  When the marker
-   * is available it returns a scroll position that places the marker just
-   * above the fixed footer; otherwise it falls back to scrollHeight-based max.
+   * getContentMaxScroll computes the tightest upper-bound scroll position.
+   *
+   * When a message is currently being streamed/reloaded (streamingChatId is
+   * provided and its DOM element is mounted), the target is calculated so the
+   * BOTTOM of that message sits just above the fixed footer.  This is critical
+   * for regenerating or editing a mid-conversation message: anchoring on the
+   * end-of-list marker would scroll past the streaming content to the
+   * (unchanged) final message, which the user would perceive as "auto-scroll
+   * went to the wrong place".
+   *
+   * When no streaming anchor is available, the content-end marker
+   * (messagesEndRef) is used as the anchor instead.  Both paths are capped at
+   * scrollHeight - clientHeight so we never request a scroll past the page end.
    */
   const getContentMaxScroll = useCallback(() => {
     const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics()
     const docMax = Math.max(scrollHeight - clientHeight, 0)
 
-    const endEl = messagesEndRef.current
-    if (!endEl) return docMax
+    const streamingId = streamingChatIdRef.current
+    const streamingMsgRole = streamingRoleRef.current || 'assistant'
 
-    // Absolute document-Y of the content-end marker.
-    const endAbsoluteY = scrollTop + endEl.getBoundingClientRect().top
-    // Place the marker at (clientHeight - footerHeight) from the viewport top
-    // so it sits just above the fixed footer.
+    let anchorAbsoluteY: number | null = null
+
+    if (streamingId && typeof document !== 'undefined') {
+      const el = document.getElementById(
+        `chat-message-${streamingId}-${streamingMsgRole}`,
+      )
+      if (el) {
+        // Use the streaming message's BOTTOM so its latest content stays
+        // visible while it grows, regardless of how many messages follow it
+        // or how their heights have changed from prior edits/reloads.
+        anchorAbsoluteY = scrollTop + el.getBoundingClientRect().bottom
+      }
+    }
+
+    if (anchorAbsoluteY === null) {
+      const endEl = messagesEndRef.current
+      if (!endEl) return docMax
+      anchorAbsoluteY = scrollTop + endEl.getBoundingClientRect().top
+    }
+
+    // Place the anchor at (clientHeight - footerHeight - 8) from the viewport
+    // top so it sits just above the fixed footer with a small buffer.
     const contentMax = Math.max(
-      endAbsoluteY - clientHeight + footerHeight + 8,
+      anchorAbsoluteY - clientHeight + footerHeight + 8,
       0,
     )
     return Math.min(docMax, contentMax)
@@ -214,7 +284,18 @@ export function useChatScroll({
   }, [getScrollMetrics])
 
   const scrollToBottom = useCallback(
-    (options?: { force?: boolean; behavior?: ScrollBehavior }) => {
+    (options?: {
+      force?: boolean
+      behavior?: ScrollBehavior
+      /**
+       * When true, bypass the isNearBottom short-circuit.  Used by the
+       * streaming auto-follow effect so content growth doesn't drop us out of
+       * auto-follow just because the page became taller than the viewport.
+       * Unlike `force: true`, this does NOT reset the scroll mode, so a
+       * concurrent user scroll still takes precedence inside the rAF.
+       */
+      ignoreNearBottom?: boolean
+    }) => {
       if (options?.force) {
         scrollModeRef.current = 'auto-follow'
         userScrollIntentRef.current = false
@@ -224,7 +305,7 @@ export function useChatScroll({
         })
       }
 
-      if (!options?.force && !isNearBottom()) {
+      if (!options?.force && !options?.ignoreNearBottom && !isNearBottom()) {
         const metrics = getScrollMetrics()
         console.debug('[useChatScroll] skip auto-scroll', {
           sessionId,
@@ -236,10 +317,20 @@ export function useChatScroll({
         return
       }
 
-      // Scroll to the bottom of the content.  We prefer the content-end
-      // marker (messagesEndRef) to compute the target so we never overshoot
-      // past the actual messages, even if scrollHeight is temporarily stale.
+      // Scroll to the bottom of the content.  We prefer an anchor element
+      // (the streaming message, falling back to the content-end marker) so we
+      // never overshoot past the meaningful point of interest, even if
+      // scrollHeight is temporarily stale.
       requestAnimationFrame(() => {
+        // Re-check the scroll mode inside the rAF: a concurrent user scroll
+        // between scheduling and firing this callback should still win.
+        // `force: true` is the only caller allowed to bypass this — it
+        // represents an explicit user action (send message, click scroll-to-
+        // bottom) which re-asserts auto-follow regardless of prior state.
+        if (!options?.force && scrollModeRef.current !== 'auto-follow') {
+          return
+        }
+
         const contentMax = getContentMaxScroll()
         const { scrollHeight, clientHeight } = getScrollMetrics()
         const docMax = Math.max(0, scrollHeight - clientHeight)
@@ -307,11 +398,17 @@ export function useChatScroll({
 
   // Auto-scroll only when in auto-follow mode.
   // In user-scrolled or viewport-locked mode, the user/operation controls the viewport.
+  //
+  // We intentionally do NOT use `force: true` here: force would blindly reset
+  // scroll mode to auto-follow even if the user had just scrolled away in the
+  // interval between this effect being scheduled and the rAF running, making
+  // it impossible to stop mid-stream auto-scroll via scrollbar drag or any
+  // other scroll input that fires between renders.
   useEffect(() => {
     if (scrollModeRef.current !== 'auto-follow') {
       return
     }
-    scrollToBottom({ force: true, behavior: 'auto' })
+    scrollToBottom({ ignoreNearBottom: true, behavior: 'auto' })
   }, [messages, scrollToBottom])
 
   useEffect(() => {
@@ -335,49 +432,75 @@ export function useChatScroll({
     })
   }, [messages.length, pageSize])
 
-  // Track scroll position for scroll-to-bottom button (using window scroll)
+  // Track scroll position for scroll-to-bottom button (using window scroll).
+  // Also detects user-initiated upward scroll that does NOT come through
+  // wheel / touch / keyboard (e.g. scrollbar drag, trackpad inertia) so we
+  // can honour the requirement that any manual scroll during loading hands
+  // control back to the user.
   useEffect(() => {
     const handleScroll = () => {
+      const { scrollTop } = getScrollMetrics()
       const near = isNearBottom()
       setShowScrollButton(!near)
 
       const mode = scrollModeRef.current
+      const prev = lastScrollTopRef.current
+      lastScrollTopRef.current = scrollTop
+
+      const progTarget = lastProgrammaticTargetRef.current
+      const isProgrammatic =
+        progTarget !== null && Math.abs(scrollTop - progTarget) <= 4
+      if (isProgrammatic) {
+        lastProgrammaticTargetRef.current = null
+      }
+
+      // Significant upward movement that isn't our own scrollToPosition call
+      // is always treated as user intent — this is the only way to catch
+      // scrollbar drags and touchpad momentum without wheel/touch events.
+      const isUserUpward = !isProgrammatic && scrollTop < prev - 4
 
       if (mode === 'viewport-locked') {
-        // Viewport-locked mode is immune to scroll events.
-        // Only explicit user actions (wheel/touch → user-scrolled, or
-        // force-scroll → auto-follow) can exit this state.
+        if (isUserUpward) {
+          scrollModeRef.current = 'user-scrolled'
+          userScrollIntentRef.current = true
+          console.debug(
+            '[useChatScroll] user-scrolled (from viewport-locked via scroll event)',
+            { sessionId, scrollTop, prev },
+          )
+        }
+        // Otherwise viewport-locked is immune to scroll events.
         return
       }
 
-      if (mode === 'user-scrolled') {
-        // Only re-enable auto-follow if the user ACTIVELY scrolled near the bottom.
-        // Content-change scroll events (clamp, resize) have userScrollIntentRef=false
-        // and must NOT re-enable auto-follow.
-        if (near && userScrollIntentRef.current) {
-          scrollModeRef.current = 'auto-follow'
-          userScrollIntentRef.current = false
-          console.debug('[useChatScroll] auto-follow enabled', {
-            sessionId,
-            reason: 'user-returned-to-bottom',
-          })
+      if (mode === 'auto-follow') {
+        if (isUserUpward) {
+          scrollModeRef.current = 'user-scrolled'
+          userScrollIntentRef.current = true
+          console.debug(
+            '[useChatScroll] user-scrolled (from auto-follow via scroll event)',
+            { sessionId, scrollTop, prev },
+          )
         }
         return
       }
 
-      // mode === 'auto-follow'
-      if (!near) {
-        // Scrolled away from bottom without explicit user intent
-        // (e.g., content prepended above). Stay in auto-follow;
-        // the next messages-change effect will scroll back to bottom.
-        // If the user intended to scroll away, the wheel/touch handler
-        // already transitioned to user-scrolled before this fires.
+      // mode === 'user-scrolled'
+      // Only re-enable auto-follow if the user ACTIVELY scrolled near the bottom.
+      // Content-change scroll events (clamp, resize) have userScrollIntentRef=false
+      // and must NOT re-enable auto-follow.
+      if (near && userScrollIntentRef.current) {
+        scrollModeRef.current = 'auto-follow'
+        userScrollIntentRef.current = false
+        console.debug('[useChatScroll] auto-follow enabled', {
+          sessionId,
+          reason: 'user-returned-to-bottom',
+        })
       }
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [isNearBottom, isAtBottom, sessionId])
+  }, [getScrollMetrics, isNearBottom, isAtBottom, sessionId])
 
   // Detect explicit user scroll intent (wheel/touch/keyboard) to transition modes.
   useEffect(() => {

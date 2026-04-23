@@ -133,6 +133,11 @@ export function GPTChatPage() {
     sessionId,
     contentRef: messagesContainerRef,
     footerHeight,
+    // Anchor auto-follow scrolling on the message currently being streamed
+    // or reloaded.  Without this, regenerating/editing a mid-conversation
+    // message would scroll to messagesEndRef (the last message) instead of
+    // tracking the growing streaming content.
+    streamingChatId: loadingChatId,
   })
 
   // Cross-session search: when a result from another session is selected,
@@ -326,11 +331,14 @@ export function GPTChatPage() {
 
   const handleRegenerate = useCallback(
     async (chatId: string) => {
-      // Lock viewport so streaming response doesn't auto-scroll.
-      lockViewport()
+      // Don't force viewport-locked here: auto-follow mode already anchors
+      // on the streaming message (via streamingChatId) so regenerating a
+      // mid-conversation message correctly tracks its growing content.
+      // If the user had scrolled away manually, user-scrolled mode already
+      // suppresses auto-scroll so their position stays undisturbed.
       await regenerateMessage(chatId)
     },
-    [regenerateMessage, lockViewport],
+    [regenerateMessage],
   )
 
   const handleFork = useCallback(
@@ -353,24 +361,30 @@ export function GPTChatPage() {
       content: string
       attachments?: ChatAttachment[]
     }) => {
-      lockViewport()
+      // Opening the modal doesn't change any message content yet, so there's
+      // nothing for auto-scroll to react to.  Let the current scroll mode
+      // persist untouched.
       setEditingMessage({
         chatId: payload.chatId,
         content: payload.content,
         attachments: payload.attachments,
       })
     },
-    [lockViewport],
+    [],
   )
 
   const handleConfirmEdit = useCallback(
     async (newContent: string, attachments?: ChatAttachment[]) => {
       if (!editingMessage) return
       setEditingMessage(null)
-      lockViewport()
+      // The streamingChatId anchor in useChatScroll keeps the edited message's
+      // regenerated content visible when auto-follow is active, and leaves the
+      // viewport alone when the user has scrolled away.  Forcing viewport-lock
+      // here would instead strand the user with no auto-follow even if they
+      // explicitly triggered this edit from the bottom of the conversation.
       await editAndRetry(editingMessage.chatId, newContent, attachments)
     },
-    [editAndRetry, editingMessage, lockViewport],
+    [editAndRetry, editingMessage],
   )
 
   const handleClearChats = useCallback(async () => {

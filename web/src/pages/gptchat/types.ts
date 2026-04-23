@@ -17,6 +17,12 @@ export interface ChatMessageData {
   requestid?: string
   costUsd?: number
   error?: string
+  /**
+   * Transient label shown alongside the loading animation while a non-streaming
+   * flow (image generation, mask inpainting, deep research) is in progress.
+   * Not persisted — cleared once the final content arrives.
+   */
+  loadingLabel?: string
 }
 
 export interface ChatAttachment {

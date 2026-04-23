@@ -499,4 +499,224 @@ describe('useChatScroll', () => {
 
     expect(result.current.scrollModeRef.current).toBe('auto-follow')
   })
+
+  it('transitions to user-scrolled when the user drags the scrollbar upward', async () => {
+    // Regression: scrollbar drag emits a `scroll` event but no wheel / touch /
+    // keyboard event, so the hook used to stay in auto-follow and keep
+    // auto-scrolling back to the bottom on every streaming update.  After the
+    // fix, the scroll handler itself detects the unexplained upward scroll
+    // and hands control back to the user.
+    const { result, rerender } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(2),
+        },
+      },
+    )
+
+    setScrollMetrics(800, 2000, 500)
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+
+    // Baseline the internal lastScrollTop tracker to 800 via an initial scroll
+    // event (simulates an earlier programmatic or user scroll settling there).
+    window.dispatchEvent(new Event('scroll'))
+    expect(result.current.scrollModeRef.current).toBe('auto-follow')
+
+    // Now the user drags the scrollbar upward: scrollTop decreases without
+    // any wheel / touch / keyboard event firing.
+    setScrollMetrics(400, 2000, 500)
+    window.dispatchEvent(new Event('scroll'))
+
+    expect(result.current.scrollModeRef.current).toBe('user-scrolled')
+
+    scrollToSpy.mockClear()
+
+    // Subsequent streaming updates must NOT force us back to the bottom.
+    rerender({ messages: buildMessages(3) })
+    await waitFor(() => {
+      expect(scrollToSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not treat programmatic scrolls as user upward scrolls', async () => {
+    // When the hook itself scrolls (session switch, clamp after resize), the
+    // scroll event that follows must not flip the mode to user-scrolled just
+    // because scrollTop decreased.
+    const { result, rerender } = renderHook(
+      ({ sessionId, messages }) =>
+        useChatScroll({ messages, pageSize: 40, sessionId }),
+      {
+        initialProps: {
+          sessionId: 1,
+          messages: buildMessages(10),
+        },
+      },
+    )
+
+    setScrollMetrics(600, 1200, 500)
+    window.dispatchEvent(new Event('scroll'))
+
+    // Switch to a new session: the hook programmatically scrolls to 0.  The
+    // ensuing scroll event observes a large downward delta, which must NOT
+    // be interpreted as user intent.
+    rerender({ sessionId: 2, messages: buildMessages(2) })
+    // Simulate the browser's scroll event post-scrollTo.
+    window.dispatchEvent(new Event('scroll'))
+
+    expect(result.current.scrollModeRef.current).toBe('auto-follow')
+  })
+
+  it('respects a concurrent user scroll that fires between scheduling and running the auto-follow rAF', async () => {
+    // Regression: the old implementation used `{ force: true }` inside the
+    // messages-change auto-scroll effect, which unconditionally reset mode to
+    // auto-follow even if the user had just wheeled away.  The rAF would then
+    // scroll to bottom anyway.
+    const { result, rerender } = renderHook(
+      ({ messages }) => useChatScroll({ messages, pageSize: 40, sessionId: 1 }),
+      {
+        initialProps: {
+          messages: buildMessages(2),
+        },
+      },
+    )
+
+    setScrollMetrics(0, 2000, 500)
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    // After the initial render settles, switch rAF to a queued implementation
+    // so we can interleave a user scroll before the rAF fires.
+    const rafCallbacks: FrameRequestCallback[] = []
+    ;(
+      window.requestAnimationFrame as unknown as ReturnType<typeof vi.fn>
+    ).mockImplementation((cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb)
+      return 0
+    })
+
+    // Trigger the messages-change effect, which schedules an auto-scroll rAF.
+    rerender({ messages: buildMessages(3) })
+
+    // Before the rAF runs, the user wheels (transitions to user-scrolled).
+    window.dispatchEvent(new Event('wheel'))
+    expect(result.current.scrollModeRef.current).toBe('user-scrolled')
+
+    // Now drain any queued rAFs.  They must detect the mode change and skip
+    // the programmatic scroll.
+    while (rafCallbacks.length > 0) {
+      const cb = rafCallbacks.shift()!
+      cb(0)
+    }
+
+    expect(scrollToSpy).not.toHaveBeenCalled()
+  })
+
+  it('anchors auto-follow scrolling to the streaming message element', async () => {
+    // The "reload/edit causes wrong scroll position" bug: when a mid-
+    // conversation message is being streamed/regenerated, auto-scrolling to
+    // messagesEndRef (the end of the list) overshoots past the growing
+    // content to the unchanged final message.  With streamingChatId, the
+    // anchor is the streaming message's bottom.
+    const streamingId = 'streaming-target'
+    const otherId = 'final-message'
+    const streamingEl = document.createElement('div')
+    streamingEl.id = `chat-message-${streamingId}-assistant`
+    Object.defineProperty(streamingEl, 'getBoundingClientRect', {
+      value: () => ({
+        top: 100,
+        bottom: 300,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 200,
+        x: 0,
+        y: 100,
+        toJSON: () => ({}),
+      }),
+      configurable: true,
+    })
+    document.body.appendChild(streamingEl)
+
+    // The messagesEndRef would point well past the streaming message, since
+    // there's another (unchanged) message after it.  If the hook used that
+    // anchor it would scroll to a much larger target.
+    const endEl = document.createElement('div')
+    endEl.id = `chat-message-${otherId}-assistant`
+    document.body.appendChild(endEl)
+
+    try {
+      // Viewport: clientHeight 500, scrollTop 0, footer 100.
+      // Streaming message bottom is at document-Y 0 + 300 = 300.
+      // Expected contentMax = 300 - 500 + 100 + 8 = max(-92, 0) = 0.
+      setScrollMetrics(0, 2000, 500)
+
+      const { rerender } = renderHook(
+        ({ messages }) =>
+          useChatScroll({
+            messages,
+            pageSize: 40,
+            sessionId: 1,
+            streamingChatId: streamingId,
+            footerHeight: 100,
+          }),
+        {
+          initialProps: {
+            messages: buildMessages(10),
+          },
+        },
+      )
+
+      const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+      scrollToSpy.mockClear()
+
+      // Simulate a streaming content update.
+      rerender({ messages: buildMessages(11) })
+
+      await waitFor(() => {
+        expect(scrollToSpy).toHaveBeenCalled()
+      })
+
+      // The target must be computed from the streaming message's bottom (300)
+      // and clamped to the docMax window, NOT the unchanged tail (2000-500=1500).
+      const calls = scrollToSpy.mock.calls as Array<[{ top: number }]>
+      const maxTopSeen = Math.max(...calls.map((c) => c[0]?.top ?? 0))
+      expect(maxTopSeen).toBeLessThanOrEqual(8)
+    } finally {
+      streamingEl.remove()
+      endEl.remove()
+    }
+  })
+
+  it('falls back to messagesEndRef when streamingChatId element is not mounted', async () => {
+    // If streamingChatId refers to a message that hasn't yet been rendered,
+    // the hook falls back to the end-of-list marker so the user still sees
+    // auto-follow behaviour during normal (end-of-list) streaming.
+    setScrollMetrics(0, 1200, 500)
+
+    const { rerender } = renderHook(
+      ({ messages }) =>
+        useChatScroll({
+          messages,
+          pageSize: 40,
+          sessionId: 1,
+          streamingChatId: 'not-mounted',
+        }),
+      {
+        initialProps: {
+          messages: buildMessages(1),
+        },
+      },
+    )
+
+    const scrollToSpy = window.scrollTo as unknown as ReturnType<typeof vi.fn>
+    scrollToSpy.mockClear()
+
+    setScrollMetrics(0, 1400, 500)
+    rerender({ messages: buildMessages(2) })
+
+    await waitFor(() => {
+      expect(scrollToSpy).toHaveBeenCalled()
+    })
+  })
 })

@@ -41,20 +41,31 @@ export async function runDeepResearch({
   const assistantMessage: ChatMessageData = {
     chatID: chatId,
     role: 'assistant',
-    content: 'Researching... ⏳',
+    content: '',
+    loadingLabel: 'Researching…',
     model: config.selected_model,
     timestamp: Date.now(),
   }
-  setMessages((prev) => [...prev, assistantMessage])
+  setMessages((prev) => {
+    const existing = prev.find(
+      (m) => m.chatID === chatId && m.role === 'assistant',
+    )
+    if (existing) {
+      return prev.map((m) =>
+        m.chatID === chatId && m.role === 'assistant' ? assistantMessage : m,
+      )
+    }
+    return [...prev, assistantMessage]
+  })
 
   const apiBase =
     config.api_base !== 'https://api.openai.com' ? config.api_base : undefined
 
-  const updateAssistant = (text: string) => {
+  const updateLoadingLabel = (label: string) => {
     setMessages((prev) =>
       prev.map((m) =>
         m.chatID === chatId && m.role === 'assistant'
-          ? { ...m, content: text }
+          ? { ...m, loadingLabel: label }
           : m,
       ),
     )
@@ -97,7 +108,7 @@ export async function runDeepResearch({
         throw new Error(`Deep research failed: ${status.status}`)
       }
 
-      updateAssistant(`Researching... (${status.status || 'pending'})`)
+      updateLoadingLabel(`Researching… (${status.status || 'pending'})`)
       await new Promise((resolve) => setTimeout(resolve, 3000))
     }
 
@@ -107,6 +118,7 @@ export async function runDeepResearch({
         finalText ||
         'Research completed but no content was returned by the service.',
       timestamp: Date.now(),
+      loadingLabel: undefined,
     }
 
     setMessages((prev) =>
