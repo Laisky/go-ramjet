@@ -1,7 +1,7 @@
 import { kvGet, kvSet } from '@/utils/storage'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChatModelGPT5Mini, DefaultModel } from '../../models'
+import { ChatModelGPT5Dot4Mini, DefaultModel } from '../../models'
 import { DefaultSessionConfig } from '../../types'
 import { useConfig } from '../use-config'
 
@@ -55,7 +55,7 @@ describe('useConfig', () => {
 
   it('should migrate legacy selected_model to selected_chat_model', async () => {
     const legacyConfig = {
-      selected_model: ChatModelGPT5Mini,
+      selected_model: ChatModelGPT5Dot4Mini,
       // selected_chat_model is missing
     }
 
@@ -74,8 +74,8 @@ describe('useConfig', () => {
       { timeout: 3000 },
     )
 
-    expect(result.current.config.selected_model).toBe(ChatModelGPT5Mini)
-    expect(result.current.config.selected_chat_model).toBe(ChatModelGPT5Mini)
+    expect(result.current.config.selected_model).toBe(ChatModelGPT5Dot4Mini)
+    expect(result.current.config.selected_chat_model).toBe(ChatModelGPT5Dot4Mini)
   })
 
   it('should use DefaultModel if no saved config exists', async () => {
