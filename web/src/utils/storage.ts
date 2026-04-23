@@ -1,10 +1,28 @@
 /**
- * PouchDB-based key-value storage for chat data.
- * Maintains compatibility with legacy chat.js storage keys.
+ * Public facade for key-value storage. Wraps the native IndexedDB backend in
+ * `./storage/idb-kv.ts` and runs a one-time migration from the legacy
+ * PouchDB store on first use.
+ *
+ * Every exported symbol here matches the pre-migration PouchDB API exactly
+ * so existing callers remain drop-in compatible.
  */
-import PouchDB from 'pouchdb-browser'
+import {
+  kvAddListener as _kvAddListener,
+  kvClear as _kvClear,
+  kvDel as _kvDel,
+  kvEstimate as _kvEstimate,
+  kvExists as _kvExists,
+  kvGet as _kvGet,
+  kvList as _kvList,
+  kvRemoveListener as _kvRemoveListener,
+  kvRename as _kvRename,
+  kvSet as _kvSet,
+  type KvListener,
+  type KvOperation as _KvOperation,
+} from './storage/idb-kv'
+import { migrateFromPouchDB } from './storage/migration'
 
-// Storage key constants - must match legacy keys from chat.js
+// Storage key constants — must match legacy keys from chat.js
 export const StorageKeys = {
   PINNED_MATERIALS: 'config_api_pinned_materials',
   ALLOWED_MODELS: 'config_chat_models',
@@ -23,334 +41,93 @@ export const StorageKeys = {
   DELETED_CHAT_IDS: 'deleted_chat_ids',
 } as const
 
-export type KvOperation = 'set' | 'del'
+export type KvOperation = _KvOperation
 
-type KvListener = (
-  key: string,
-  op: KvOperation,
-  oldVal: unknown,
-  newVal: unknown,
-) => void
+// ---------------------------------------------------------------------------
+// Migration bootstrap — run exactly once, cached across callers.
+// ---------------------------------------------------------------------------
 
-interface KvListenerEntry {
-  name?: string
-  callback: KvListener
-}
+let migrationPromise: Promise<void> | null = null
 
-// Singleton database instance
-let db: PouchDB.Database | null = null
-let dbInitializing = false
-let dbInitialized = false
-
-// Listener registry
-const listeners: Map<string, KvListenerEntry[]> = new Map()
-
-/**
- * Sleep for a specified duration
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/**
- * Execute a database operation with retry logic
- */
-async function executeWithRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries = 3,
-): Promise<T> {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await operation()
-    } catch (err: unknown) {
-      const error = err as { name?: string }
-      if (error.name === 'InvalidStateError' && attempt < maxRetries - 1) {
-        console.warn('Database connection closing, retrying operation...')
-        await sleep(300)
-        dbInitialized = false
-        await initDb()
-      } else {
-        throw err
-      }
-    }
-  }
-  throw new Error('Max retries exceeded')
-}
-
-/**
- * Initialize the PouchDB database connection
- */
-async function initDb(): Promise<PouchDB.Database> {
-  if (dbInitialized && db) {
-    return db
-  }
-
-  if (dbInitializing) {
-    // Wait for initialization to complete
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (dbInitialized && db) {
-          clearInterval(checkInterval)
-          resolve(db)
-        }
-      }, 100)
+function ensureMigrated(): Promise<void> {
+  if (!migrationPromise) {
+    migrationPromise = migrateFromPouchDB().catch((err) => {
+      console.error(
+        'PouchDB -> IndexedDB migration failed; continuing with empty store',
+        err,
+      )
     })
   }
-
-  dbInitializing = true
-
-  try {
-    db = new PouchDB('mydatabase')
-    dbInitialized = true
-    return db
-  } finally {
-    dbInitializing = false
-  }
+  return migrationPromise
 }
 
-/**
- * Add a listener for a key prefix
- */
+// Test-only: drop the cached migration promise so the next facade call
+// re-runs migration. Not part of the public API.
+export function __resetMigrationForTests(): void {
+  migrationPromise = null
+}
+
+// ---------------------------------------------------------------------------
+// Public API — each method awaits ensureMigrated() before delegating.
+// ---------------------------------------------------------------------------
+
+export async function kvSet<T>(key: string, val: T): Promise<void> {
+  await ensureMigrated()
+  return _kvSet(key, val)
+}
+
+export async function kvGet<T>(key: string): Promise<T | null> {
+  await ensureMigrated()
+  return _kvGet<T>(key)
+}
+
+export async function kvExists(key: string): Promise<boolean> {
+  await ensureMigrated()
+  return _kvExists(key)
+}
+
+export async function kvRename(oldKey: string, newKey: string): Promise<void> {
+  await ensureMigrated()
+  return _kvRename(oldKey, newKey)
+}
+
+export async function kvDel(key: string): Promise<void> {
+  await ensureMigrated()
+  return _kvDel(key)
+}
+
+export async function kvList(): Promise<string[]> {
+  await ensureMigrated()
+  return _kvList()
+}
+
+export async function kvClear(): Promise<void> {
+  await ensureMigrated()
+  return _kvClear()
+}
+
 export async function kvAddListener(
   keyPrefix: string,
   callback: KvListener,
   callbackName?: string,
 ): Promise<void> {
-  await initDb()
-
-  if (!listeners.has(keyPrefix)) {
-    listeners.set(keyPrefix, [])
-  }
-
-  const prefixListeners = listeners.get(keyPrefix)!
-
-  if (callbackName) {
-    // Check if a listener with this name already exists
-    const existingIndex = prefixListeners.findIndex(
-      (l) => l.name === callbackName,
-    )
-    if (existingIndex >= 0) {
-      prefixListeners[existingIndex].callback = callback
-    } else {
-      prefixListeners.push({ name: callbackName, callback })
-    }
-  } else {
-    // Check if callback already exists
-    const exists = prefixListeners.some((l) => l.callback === callback)
-    if (!exists) {
-      prefixListeners.push({ callback })
-    }
-  }
+  await ensureMigrated()
+  return _kvAddListener(keyPrefix, callback, callbackName)
 }
 
-/**
- * Remove a listener by callback name
- */
 export function kvRemoveListener(
   keyPrefix: string,
   callbackName: string,
 ): void {
-  const prefixListeners = listeners.get(keyPrefix)
-  if (!prefixListeners) return
-
-  const index = prefixListeners.findIndex((l) => l.name === callbackName)
-  if (index >= 0) {
-    prefixListeners.splice(index, 1)
-  }
+  // Synchronous — matches legacy signature. Listener registry lives in
+  // idb-kv; no migration dependency here.
+  _kvRemoveListener(keyPrefix, callbackName)
 }
 
-/**
- * Notify all listeners for a key
- */
-function notifyListeners(
-  key: string,
-  op: KvOperation,
-  oldVal: unknown,
-  newVal: unknown,
-): void {
-  listeners.forEach((prefixListeners, keyPrefix) => {
-    if (key.startsWith(keyPrefix)) {
-      prefixListeners.forEach((entry) => {
-        try {
-          entry.callback(key, op, oldVal, newVal)
-        } catch (err) {
-          console.error('Listener error:', err)
-        }
-      })
-    }
-  })
-}
-
-/**
- * Set a value in the database
- */
-export async function kvSet<T>(key: string, val: T): Promise<void> {
-  await initDb()
-  console.debug(`kvSet: ${key}`)
-
-  const marshaledVal = JSON.stringify(val)
-  let oldVal: unknown = null
-
-  try {
-    await executeWithRetry(async () => {
-      let oldDoc: PouchDB.Core.ExistingDocument<{ val: string }> | null = null
-
-      try {
-        oldDoc = await db!.get<{ val: string }>(key)
-        oldVal = oldDoc ? JSON.parse(oldDoc.val) : null
-      } catch (error: unknown) {
-        const pouchError = error as { status?: number }
-        if (pouchError.status !== 404) {
-          throw error
-        }
-      }
-
-      await db!.put({
-        _id: key,
-        _rev: oldDoc?._rev,
-        val: marshaledVal,
-      })
-    })
-  } catch (error: unknown) {
-    const pouchError = error as { status?: number }
-    if (pouchError.status === 409) {
-      console.warn(`Conflict detected for key ${key}, ignoring`)
-      return
-    }
-    console.error(`kvSet for key ${key} failed:`, error)
-    throw error
-  }
-
-  notifyListeners(key, 'set', oldVal, val)
-}
-
-/**
- * Get a value from the database
- */
-export async function kvGet<T>(key: string): Promise<T | null> {
-  await initDb()
-  console.debug(`kvGet: ${key}`)
-
-  return executeWithRetry(async () => {
-    try {
-      const doc = await db!.get<{ val: string }>(key)
-      if (!doc || !doc.val) {
-        return null
-      }
-      return JSON.parse(doc.val) as T
-    } catch (error: unknown) {
-      const pouchError = error as { status?: number }
-      if (pouchError.status === 404) {
-        return null
-      }
-      throw error
-    }
-  })
-}
-
-/**
- * Check if a key exists
- */
-export async function kvExists(key: string): Promise<boolean> {
-  await initDb()
-  console.debug(`kvExists: ${key}`)
-
-  return executeWithRetry(async () => {
-    try {
-      await db!.get(key)
-      return true
-    } catch (error: unknown) {
-      const pouchError = error as { status?: number }
-      if (pouchError.status === 404) {
-        return false
-      }
-      throw error
-    }
-  })
-}
-
-/**
- * Rename a key
- */
-export async function kvRename(oldKey: string, newKey: string): Promise<void> {
-  await initDb()
-  console.debug(`kvRename: ${oldKey} -> ${newKey}`)
-
-  const oldVal = await kvGet(oldKey)
-  if (oldVal === null) {
-    return
-  }
-
-  await kvSet(newKey, oldVal)
-  await kvDel(oldKey)
-}
-
-/**
- * Delete a key from the database
- */
-export async function kvDel(key: string): Promise<void> {
-  await initDb()
-  console.debug(`kvDel: ${key}`)
-
-  return executeWithRetry(async () => {
-    let oldVal: unknown = null
-
-    try {
-      const doc = await db!.get<{ val: string }>(key)
-      oldVal = JSON.parse(doc.val)
-      await db!.remove(doc)
-
-      notifyListeners(key, 'del', oldVal, null)
-    } catch (error: unknown) {
-      const pouchError = error as { status?: number }
-      if (pouchError.status !== 404) {
-        throw error
-      }
-    }
-  })
-}
-
-/**
- * List all keys in the database
- */
-export async function kvList(): Promise<string[]> {
-  await initDb()
-  console.debug('kvList')
-
-  const docs = await db!.allDocs({ include_docs: true })
-  return docs.rows.map((row) => row.id)
-}
-
-/**
- * Clear all data from the database
- */
-export async function kvClear(): Promise<void> {
-  if (!dbInitialized || !db) return
-
-  console.debug('kvClear')
-  dbInitialized = false
-
-  try {
-    const keys = await kvList()
-
-    // Notify listeners before destroying
-    for (const key of keys) {
-      try {
-        const oldVal = await kvGet(key)
-        notifyListeners(key, 'del', oldVal, null)
-      } catch (error) {
-        console.warn(`Failed to notify listeners for key ${key}:`, error)
-      }
-    }
-
-    await db.destroy()
-    db = null
-
-    await sleep(500)
-    await initDb()
-  } finally {
-    if (!dbInitialized) {
-      await initDb()
-    }
-  }
+export async function kvEstimate(): Promise<{
+  usage: number
+  quota: number
+} | null> {
+  await ensureMigrated()
+  return _kvEstimate()
 }
