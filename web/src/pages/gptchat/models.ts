@@ -32,8 +32,8 @@ export const ChatModelGPTO3Deepresearch = 'o3-deepresearch'
 export const ChatModelGPTO3Mini = 'o3-mini'
 export const ChatModelGPTO4Mini = 'o4-mini'
 export const ChatModelGPTO4MiniDeepresearch = 'o4-mini-deepresearch'
-export const ChatModelDeepSeekChat = 'deepseek-chat'
-export const ChatModelDeepSeekResoner = 'deepseek-reasoner'
+export const ChatModelDeepV4Flash = 'deepseek-v4-flash'
+export const ChatModelDeepSeekV4Pro = 'deepseek-v4-pro'
 export const ChatModelClaude47Opus = 'claude-opus-4-7'
 export const ChatModelClaude46Opus = 'claude-opus-4-6'
 export const ChatModelClaude46Sonnet = 'claude-sonnet-4-6'
@@ -107,8 +107,8 @@ export const ChatModels = [
   ChatModelGPTO3Mini,
   ChatModelGPTO4Mini,
   ChatModelGPTO4MiniDeepresearch,
-  ChatModelDeepSeekChat,
-  ChatModelDeepSeekResoner,
+  ChatModelDeepV4Flash,
+  ChatModelDeepSeekV4Pro,
   ChatModelClaude46Opus,
   ChatModelClaude47Opus,
   ChatModelClaude46Sonnet,
@@ -200,7 +200,7 @@ export const FreeModels = [
   ChatModelGPT5Dot4Nano,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
-  ChatModelDeepSeekChat,
+  ChatModelDeepV4Flash,
   ChatModelGemini31FlashLite,
   QAModelBasebit,
   QAModelSecurity,
@@ -259,7 +259,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGemini31FlashLite,
     ChatModelGemini31FlashImage,
   ],
-  Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
+  Deepseek: [ChatModelDeepV4Flash, ChatModelDeepSeekV4Pro],
   Others: [
     ChatModelDeepResearch,
     ChatModelGroqllama3With70B,
