@@ -22,7 +22,7 @@ describe('ModelSelector allowed-model filtering', () => {
     await user.click(screen.getByRole('button', { name: /chat/i }))
 
     expect(screen.getAllByText('gpt-4o-mini').length).toBeGreaterThan(0)
-    expect(screen.queryByText('gpt-5.4')).not.toBeInTheDocument()
+    expect(screen.queryByText('gpt-5.5')).not.toBeInTheDocument()
   })
 
   it('keeps full model list when wildcard allowlist is used', async () => {
@@ -41,6 +41,6 @@ describe('ModelSelector allowed-model filtering', () => {
     await user.click(screen.getByRole('button', { name: /chat/i }))
 
     expect(screen.getAllByText('gpt-4o-mini').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('gpt-5.4').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('gpt-5.5').length).toBeGreaterThan(0)
   })
 })

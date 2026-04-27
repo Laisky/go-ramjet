@@ -10,7 +10,7 @@ import { buildApiMessages } from '../use-chat'
 describe('buildApiMessages', () => {
   const config: SessionConfig = {
     ...DefaultSessionConfig,
-    selected_model: 'gpt-4o',
+    selected_model: 'gpt-4o-mini',
     n_contexts: 5,
     system_prompt: 'You are a helpful assistant',
     api_token: 'test-token',

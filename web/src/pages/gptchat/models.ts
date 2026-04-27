@@ -8,10 +8,7 @@
 export const ChatModelGPT41 = 'gpt-4.1'
 // export const ChatModelGPT41Mini = 'gpt-4.1-mini'
 // export const ChatModelGPT41Nano = 'gpt-4.1-nano'
-export const ChatModelGPT5Dot2 = 'gpt-5.2'
-export const ChatModelGPT5Dot4 = 'gpt-5.4'
-// export const ChatModelGPT5Dot2 = 'gpt-5.2'
-// export const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro'
+export const ChatModelGPT5Dot5 = 'gpt-5.5'
 export const ChatModelGPT5Dot4Pro = 'gpt-5.4-pro'
 // export const ChatModelGPT5Dot1 = 'gpt-5.1'
 // export const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex'
@@ -19,7 +16,6 @@ export const ChatModelGPT5Dot3Codex = 'gpt-5.3-codex'
 export const ChatModelGPT5Dot4Mini = 'gpt-5.4-mini'
 export const ChatModelGPT5Dot4Nano = 'gpt-5.4-nano'
 // export const ChatModelGPT5Pro = 'gpt-5-pro'
-export const ChatModelGPT4O = 'gpt-4o'
 export const ChatModelGPT4OSearch = 'gpt-4o-search-preview'
 export const ChatModelGPT4OMini = 'gpt-4o-mini'
 export const ChatModelGPT4OMiniSearch = 'gpt-4o-mini-search-preview'
@@ -83,17 +79,13 @@ export const ChatModels = [
   // ChatModelGPT41Mini,
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
-  ChatModelGPT5Dot2,
-  // ChatModelGPT5Dot2Pro,
-  ChatModelGPT5Dot4,
+  ChatModelGPT5Dot5,
   ChatModelGPT5Dot4Pro,
-  // ChatModelGPT5Dot2,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   ChatModelGPT5Dot4Mini,
   ChatModelGPT5Dot4Nano,
   // ChatModelGPT5Pro,
-  ChatModelGPT4O,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
@@ -129,17 +121,13 @@ export const VisionModels = [
   // ChatModelGPT41Mini,
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
-  ChatModelGPT5Dot2,
-  // ChatModelGPT5Dot2Pro,
-  ChatModelGPT5Dot4,
+  ChatModelGPT5Dot5,
   ChatModelGPT5Dot4Pro,
-  // ChatModelGPT5Dot2,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   ChatModelGPT5Dot4Mini,
   ChatModelGPT5Dot4Nano,
   // ChatModelGPT5Pro,
-  ChatModelGPT4O,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
@@ -219,7 +207,6 @@ export const AllModels = [
 export const ModelCategories: Record<string, string[]> = {
   OpenAI: [
     ChatModelGPT4OMini,
-    ChatModelGPT4O,
     ChatModelGPT4OMiniSearch,
     ChatModelGPTOSS120B,
     ChatModelGPTOSS20B,
@@ -228,11 +215,8 @@ export const ModelCategories: Record<string, string[]> = {
     // ChatModelGPT41Mini,
     // ChatModelGPT41Nano,
     // ChatModelGPT5Dot1,
-    ChatModelGPT5Dot2,
-    // ChatModelGPT5Dot2Pro,
-    ChatModelGPT5Dot4,
+    ChatModelGPT5Dot5,
     ChatModelGPT5Dot4Pro,
-    // ChatModelGPT5Dot2,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot3Codex,
     ChatModelGPT5Dot4Mini,

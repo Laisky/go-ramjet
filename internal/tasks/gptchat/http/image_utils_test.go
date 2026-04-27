@@ -14,7 +14,7 @@ func Test_isImageModel(t *testing.T) {
 		{"dall-e-3", true},
 		{"black-forest-labs/flux-dev", true},
 		{"flux-schnell", true},
-		{"gpt-4o", false},
+		{"gpt-4o-mini", false},
 		{"gpt-3.5-turbo", false},
 		{"google/imagen-3", true},
 	}

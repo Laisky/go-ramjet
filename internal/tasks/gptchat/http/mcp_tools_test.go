@@ -373,7 +373,7 @@ func TestMCPAuthCandidates(t *testing.T) {
 func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 	t.Run("EnableMCP is nil (backward compatibility)", func(t *testing.T) {
 		frontendReq := &FrontendReq{
-			Model:     "gpt-4o",
+			Model:     "gpt-4o-mini",
 			EnableMCP: nil,
 			MCPServers: []MCPServerConfig{
 				{
@@ -395,7 +395,7 @@ func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 	t.Run("EnableMCP is true", func(t *testing.T) {
 		enable := true
 		frontendReq := &FrontendReq{
-			Model:     "gpt-4o",
+			Model:     "gpt-4o-mini",
 			EnableMCP: &enable,
 			MCPServers: []MCPServerConfig{
 				{
@@ -417,7 +417,7 @@ func TestConvertFrontendToResponsesRequest_MCP_Enablement(t *testing.T) {
 	t.Run("EnableMCP is false", func(t *testing.T) {
 		enable := false
 		frontendReq := &FrontendReq{
-			Model:     "gpt-4o",
+			Model:     "gpt-4o-mini",
 			EnableMCP: &enable,
 			MCPServers: []MCPServerConfig{
 				{
