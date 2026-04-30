@@ -191,6 +191,7 @@ export function CVPage() {
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const [pageMeta, setPageMeta] = useState(() => resolveCVPageMeta())
   const copyTimeoutRef = useRef<number | null>(null)
+  const cvPageRef = useRef<HTMLDivElement>(null)
 
   const parsed = useMemo(() => parseCvContent(content), [content])
   const emailValue = parsed.email ?? FALLBACK_EMAIL
@@ -449,7 +450,7 @@ export function CVPage() {
   ])
 
   return (
-    <div className="cv-page">
+    <div className="cv-page" ref={cvPageRef}>
       <div className="cv-shell">
         <header className="cv-hero cv-animate-in">
           <div className="cv-hero-text">
@@ -522,7 +523,7 @@ export function CVPage() {
                     Edit
                   </Button>
                 </Dialog.Trigger>
-                <Dialog.Portal>
+                <Dialog.Portal container={cvPageRef.current}>
                   <Dialog.Overlay className="cv-modal-overlay" />
                   <Dialog.Content className="cv-modal-content">
                     <div className="cv-modal-header">
