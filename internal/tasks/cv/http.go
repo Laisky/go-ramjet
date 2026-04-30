@@ -35,6 +35,18 @@ type pageMetaResponse struct {
 	OGImage string `json:"og_image"`
 }
 
+// contentHistoryResponse represents the response payload for recent CV content revisions.
+type contentHistoryResponse struct {
+	Items []ContentHistoryEntry `json:"items"`
+}
+
+// contentVersionResponse represents the response payload for a selected CV content revision.
+type contentVersionResponse struct {
+	Content   string     `json:"content"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	VersionID string     `json:"version_id,omitempty"`
+}
+
 // handler provides HTTP handlers for the CV task.
 type handler struct {
 	store      ContentRepository
@@ -72,6 +84,8 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 	grp := web.Server.Group(cvSitePathPrefix)
 	grp.GET("/meta", h.getPageMeta)
 	grp.GET("/content", h.getContent)
+	grp.GET("/content/history", auth.AuthMw, h.listContentHistory)
+	grp.GET("/content/version", auth.AuthMw, h.getContentVersion)
 	grp.PUT("/content", auth.AuthMw, h.saveContent)
 	grp.GET("/pdf", h.downloadPDF)
 }
@@ -106,6 +120,46 @@ func (h *handler) getContent(c *gin.Context) {
 		zap.Int("bytes", len(payload.Content)),
 		zap.Bool("is_default", payload.IsDefault))
 	c.JSON(http.StatusOK, payload)
+}
+
+// listContentHistory returns the latest persisted CV content revisions for the editor.
+func (h *handler) listContentHistory(c *gin.Context) {
+	logger := gmw.GetLogger(c)
+
+	items, err := h.store.ListHistory(gmw.Ctx(c), cvContentHistoryLimit)
+	if web.AbortErr(c, err) {
+		return
+	}
+
+	logger.Debug("cv content history listed", zap.Int("count", len(items)))
+	c.JSON(http.StatusOK, contentHistoryResponse{Items: items})
+}
+
+// getContentVersion returns one persisted CV content revision selected from the history list.
+func (h *handler) getContentVersion(c *gin.Context) {
+	logger := gmw.GetLogger(c)
+	versionID := strings.TrimSpace(c.Query("version_id"))
+
+	payload, err := h.store.LoadVersion(gmw.Ctx(c), versionID)
+	if err != nil {
+		if errors.Is(err, ErrContentVersionNotFound) {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		if web.AbortErr(c, err) {
+			return
+		}
+	}
+
+	logger.Debug("cv content version loaded",
+		zap.Int("bytes", len(payload.Content)),
+		zap.Bool("is_current", versionID == ""),
+		zap.String("version_id", versionID))
+	c.JSON(http.StatusOK, contentVersionResponse{
+		Content:   payload.Content,
+		UpdatedAt: payload.UpdatedAt,
+		VersionID: versionID,
+	})
 }
 
 // saveContent updates the stored CV markdown content.

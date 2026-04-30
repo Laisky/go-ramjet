@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -206,12 +207,187 @@ func (s *S3ContentStore) Save(ctx context.Context, content string) (ContentPaylo
 		}
 	}
 
+	if err := s.pruneContentHistory(ctx, cvContentHistoryLimit); err != nil {
+		logger.Warn("cv content history prune failed",
+			zap.String("bucket", s.bucket),
+			zap.String("key", s.contentKey),
+			zap.Int("limit", cvContentHistoryLimit),
+			zap.Error(err))
+	}
+
 	updatedAt := time.Now().UTC()
 	return ContentPayload{
 		Content:   content,
 		UpdatedAt: &updatedAt,
 		IsDefault: false,
 	}, nil
+}
+
+// ListHistory returns the most recent persisted CV content revisions from S3.
+func (s *S3ContentStore) ListHistory(ctx context.Context, limit int) ([]ContentHistoryEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context done")
+	}
+	if limit <= 0 {
+		return []ContentHistoryEntry{}, nil
+	}
+
+	versions, err := s.listContentVersionObjects(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "list content versions")
+	}
+
+	entries := make([]ContentHistoryEntry, 0, len(versions)+1)
+	hasLatest := false
+	for _, obj := range versions {
+		versionID := strings.TrimSpace(obj.VersionID)
+		if versionID == "" && !obj.IsLatest {
+			continue
+		}
+
+		entry := ContentHistoryEntry{
+			VersionID: versionID,
+			UpdatedAt: obj.LastModified.UTC(),
+			IsLatest:  obj.IsLatest,
+		}
+		if entry.IsLatest {
+			hasLatest = true
+		}
+		entries = append(entries, entry)
+	}
+
+	if !hasLatest {
+		payload, err := s.Load(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "load current content for history fallback")
+		}
+		if !payload.IsDefault && payload.UpdatedAt != nil {
+			entries = append(entries, ContentHistoryEntry{
+				UpdatedAt: payload.UpdatedAt.UTC(),
+				IsLatest:  true,
+			})
+		}
+	}
+
+	sort.Slice(entries, func(i int, j int) bool {
+		if entries[i].UpdatedAt.Equal(entries[j].UpdatedAt) {
+			if entries[i].IsLatest != entries[j].IsLatest {
+				return entries[i].IsLatest
+			}
+			return entries[i].VersionID > entries[j].VersionID
+		}
+		return entries[i].UpdatedAt.After(entries[j].UpdatedAt)
+	})
+
+	if len(entries) > limit {
+		entries = entries[:limit]
+	}
+
+	return entries, nil
+}
+
+// LoadVersion loads one persisted CV content revision from S3 by version identifier.
+func (s *S3ContentStore) LoadVersion(ctx context.Context, versionID string) (ContentPayload, error) {
+	if err := ctx.Err(); err != nil {
+		return ContentPayload{}, errors.Wrap(err, "context done")
+	}
+
+	trimmedVersionID := strings.TrimSpace(versionID)
+	if trimmedVersionID == "" {
+		return s.Load(ctx)
+	}
+
+	reader, err := s.client.GetObject(ctx, s.bucket, s.contentKey, minio.GetObjectOptions{VersionID: trimmedVersionID})
+	if err != nil {
+		if isS3NoSuchVersion(err) || isS3NoSuchKey(err) {
+			return ContentPayload{}, errors.WithStack(ErrContentVersionNotFound)
+		}
+		return ContentPayload{}, errors.Wrap(err, "get s3 content version")
+	}
+	defer func() {
+		if cerr := reader.Close(); cerr != nil {
+			gmw.GetLogger(ctx).Warn("close cv content version reader", zap.Error(cerr))
+		}
+	}()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return ContentPayload{}, errors.Wrap(err, "read s3 content version")
+	}
+
+	return ContentPayload{
+		Content:   string(body),
+		IsDefault: false,
+	}, nil
+}
+
+// listContentVersionObjects lists all S3 object versions for the configured CV content key.
+func (s *S3ContentStore) listContentVersionObjects(ctx context.Context) ([]minio.ObjectInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Wrap(err, "context done")
+	}
+
+	versions := make([]minio.ObjectInfo, 0, cvContentHistoryLimit)
+	for obj := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{
+		Prefix:       s.contentKey,
+		Recursive:    true,
+		WithVersions: true,
+	}) {
+		if obj.Err != nil {
+			return nil, errors.Wrap(obj.Err, "list content versions")
+		}
+		if obj.Key != s.contentKey {
+			continue
+		}
+		versions = append(versions, obj)
+	}
+
+	return versions, nil
+}
+
+// pruneContentHistory removes persisted CV content revisions older than the configured history limit.
+func (s *S3ContentStore) pruneContentHistory(ctx context.Context, limit int) error {
+	if err := ctx.Err(); err != nil {
+		return errors.Wrap(err, "context done")
+	}
+	if limit <= 0 {
+		return nil
+	}
+
+	versions, err := s.listContentVersionObjects(ctx)
+	if err != nil {
+		return errors.Wrap(err, "list content history")
+	}
+
+	removable := make([]minio.ObjectInfo, 0, len(versions))
+	for _, obj := range versions {
+		if strings.TrimSpace(obj.VersionID) == "" {
+			continue
+		}
+		removable = append(removable, obj)
+	}
+
+	sort.Slice(removable, func(i int, j int) bool {
+		if removable[i].LastModified.Equal(removable[j].LastModified) {
+			if removable[i].IsLatest != removable[j].IsLatest {
+				return removable[i].IsLatest
+			}
+			return removable[i].VersionID > removable[j].VersionID
+		}
+		return removable[i].LastModified.After(removable[j].LastModified)
+	})
+
+	if len(removable) <= limit {
+		return nil
+	}
+
+	for _, obj := range removable[limit:] {
+		if err := s.client.RemoveObject(ctx, s.bucket, s.contentKey, minio.RemoveObjectOptions{VersionID: obj.VersionID}); err != nil {
+			return errors.Wrap(err, "remove stale content version")
+		}
+	}
+
+	return nil
 }
 
 // putContentObject uploads the markdown payload to S3.
@@ -521,6 +697,27 @@ func isS3NoSuchKey(err error) bool {
 
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "no such key")
+}
+
+// isS3NoSuchVersion checks whether an error represents a missing S3 object version.
+func isS3NoSuchVersion(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) {
+		if resp.Code == "NoSuchVersion" || resp.StatusCode == http.StatusNotFound {
+			return true
+		}
+		msg := strings.ToLower(resp.Message)
+		if strings.Contains(msg, "no such version") || strings.Contains(msg, "version not found") {
+			return true
+		}
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such version") || strings.Contains(msg, "version not found")
 }
 
 // isS3AccessDenied checks whether an error represents an S3 access-denied response.

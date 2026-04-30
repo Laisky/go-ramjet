@@ -7,6 +7,11 @@ import (
 	"github.com/Laisky/errors/v2"
 )
 
+const cvContentHistoryLimit = 10
+
+// ErrContentVersionNotFound indicates the requested CV content version does not exist.
+var ErrContentVersionNotFound = errors.New("content version not found")
+
 // ContentPayload represents the persisted CV content and metadata.
 type ContentPayload struct {
 	Content   string     `json:"content"`
@@ -14,13 +19,24 @@ type ContentPayload struct {
 	IsDefault bool       `json:"is_default"`
 }
 
+// ContentHistoryEntry represents one persisted CV content revision.
+type ContentHistoryEntry struct {
+	VersionID string    `json:"version_id,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	IsLatest  bool      `json:"is_latest"`
+}
+
 // ContentRepository defines the storage behavior for CV content.
 //
 // Load returns the persisted content with metadata.
 // Save persists the content and returns updated metadata.
+// ListHistory returns the most recent persisted content revisions.
+// LoadVersion loads one persisted content revision by version identifier.
 type ContentRepository interface {
 	Load(ctx context.Context) (ContentPayload, error)
 	Save(ctx context.Context, content string) (ContentPayload, error)
+	ListHistory(ctx context.Context, limit int) ([]ContentHistoryEntry, error)
+	LoadVersion(ctx context.Context, versionID string) (ContentPayload, error)
 }
 
 // CompositeContentStore coordinates multiple content repositories.
@@ -93,6 +109,57 @@ func (s *CompositeContentStore) Save(ctx context.Context, content string) (Conte
 	}
 
 	if saved {
+		return payload, nil
+	}
+
+	return ContentPayload{}, errors.WithStack(errors.New("no content repository available"))
+}
+
+// ListHistory returns the most recent content revisions from the primary repository, falling back to secondary.
+func (s *CompositeContentStore) ListHistory(ctx context.Context, limit int) ([]ContentHistoryEntry, error) {
+	if limit <= 0 {
+		return []ContentHistoryEntry{}, nil
+	}
+
+	if s.primary != nil {
+		history, err := s.primary.ListHistory(ctx, limit)
+		if err != nil {
+			return nil, errors.Wrap(err, "list primary content history")
+		}
+		if len(history) > 0 {
+			return history, nil
+		}
+	}
+
+	if s.secondary != nil {
+		history, err := s.secondary.ListHistory(ctx, limit)
+		if err != nil {
+			return nil, errors.Wrap(err, "list secondary content history")
+		}
+		return history, nil
+	}
+
+	return nil, errors.WithStack(errors.New("no content repository available"))
+}
+
+// LoadVersion loads one persisted content revision from the primary repository, falling back to secondary.
+func (s *CompositeContentStore) LoadVersion(ctx context.Context, versionID string) (ContentPayload, error) {
+	if s.primary != nil {
+		payload, err := s.primary.LoadVersion(ctx, versionID)
+		if err != nil {
+			if !errors.Is(err, ErrContentVersionNotFound) {
+				return ContentPayload{}, errors.Wrap(err, "load primary content version")
+			}
+		} else {
+			return payload, nil
+		}
+	}
+
+	if s.secondary != nil {
+		payload, err := s.secondary.LoadVersion(ctx, versionID)
+		if err != nil {
+			return ContentPayload{}, errors.Wrap(err, "load secondary content version")
+		}
 		return payload, nil
 	}
 

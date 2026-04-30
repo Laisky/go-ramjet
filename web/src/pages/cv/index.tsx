@@ -35,8 +35,26 @@ type CvContentPayload = {
   updated_at?: string
   is_default: boolean
 }
+
+type CvContentHistoryEntry = {
+  version_id?: string
+  updated_at: string
+  is_latest: boolean
+}
+
+type CvContentHistoryPayload = {
+  items: CvContentHistoryEntry[]
+}
+
+type CvContentVersionPayload = {
+  content: string
+  updated_at?: string
+  version_id?: string
+}
+
 const AUTH_TOKEN_STORAGE_KEY = 'cv_sso_token'
 const FALLBACK_EMAIL = 'job@laisky.com'
+const HISTORY_EDITOR_VALUE = '__editor__'
 
 type PersonalLink = {
   label: string
@@ -176,6 +194,27 @@ function buildPdfURL(lastSavedAt: string | null): string {
 }
 
 /**
+ * buildHistoryVersionURL creates the history version API URL for the selected version.
+ */
+function buildHistoryVersionURL(versionID: string): string {
+  const trimmed = versionID.trim()
+  if (!trimmed) {
+    return '/cv/content/version'
+  }
+
+  const params = new URLSearchParams({ version_id: trimmed })
+  return `/cv/content/version?${params.toString()}`
+}
+
+/**
+ * buildHistoryLabel formats one saved history entry for the editor dropdown.
+ */
+function buildHistoryLabel(entry: CvContentHistoryEntry): string {
+  const timestamp = new Date(entry.updated_at).toLocaleString()
+  return entry.is_latest ? `Latest saved - ${timestamp}` : timestamp
+}
+
+/**
  * CVPage renders the CV presentation with an editor modal.
  */
 export function CVPage() {
@@ -188,6 +227,14 @@ export function CVPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
+  const [historyEntries, setHistoryEntries] = useState<CvContentHistoryEntry[]>(
+    [],
+  )
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyMessage, setHistoryMessage] = useState<string | null>(null)
+  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState(
+    HISTORY_EDITOR_VALUE,
+  )
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const [pageMeta, setPageMeta] = useState(() => resolveCVPageMeta())
   const copyTimeoutRef = useRef<number | null>(null)
@@ -199,6 +246,7 @@ export function CVPage() {
   const isEmpty = content.trim().length === 0
   const canEdit = Boolean(authToken)
   const pdfURL = useMemo(() => buildPdfURL(lastSavedAt), [lastSavedAt])
+  const modalMessage = authMessage ?? historyMessage
 
   // loadContent fetches CV markdown from the backend API.
   const loadContent = useCallback(
@@ -281,12 +329,124 @@ export function CVPage() {
     }
   }, [authToken, content, saving])
 
+  // loadHistory fetches the latest persisted CV revisions for the editor history dropdown.
+  const loadHistory = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!authToken) {
+        setHistoryEntries([])
+        setHistoryMessage(null)
+        return
+      }
+
+      setHistoryLoading(true)
+      setHistoryMessage(null)
+      try {
+        const response = await fetch('/cv/content/history', {
+          signal,
+          headers: buildAuthHeaders(authToken),
+        })
+        if (response.status === 401) {
+          throw new Error('Unauthorized')
+        }
+        if (!response.ok) {
+          console.debug(
+            `[CV] History load failed: ${response.status} ${response.statusText} ${response.url}`,
+          )
+          throw new Error('Failed to load CV history')
+        }
+
+        const payload = (await response.json()) as CvContentHistoryPayload
+        setHistoryEntries(payload.items)
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return
+        }
+        if (err instanceof Error && err.message === 'Unauthorized') {
+          clearAuthToken()
+          setAuthToken(null)
+          setAuthMessage('SSO token expired. Please sign in again.')
+          setHistoryEntries([])
+          console.warn('[CV] Unauthorized SSO token while loading history')
+          return
+        }
+        if (err instanceof Error) {
+          console.error(`[CV] Failed to load history: ${err.message}`)
+        } else {
+          console.error('[CV] Failed to load history')
+        }
+        setHistoryMessage('Failed to load saved history.')
+      } finally {
+        setHistoryLoading(false)
+      }
+    },
+    [authToken],
+  )
+
   // handleCancelEdit discards draft changes and closes the editor.
   const handleCancelEdit = useCallback(() => {
     setContent(savedContent)
     setEditorOpen(false)
     setAuthMessage(null)
+    setHistoryMessage(null)
+    setSelectedHistoryVersion(HISTORY_EDITOR_VALUE)
   }, [savedContent])
+
+  // handleHistoryChange loads one persisted CV revision into the editor.
+  const handleHistoryChange = useCallback(
+    async (versionID: string) => {
+      if (!authToken) {
+        setAuthMessage('SSO token required to edit this CV.')
+        return
+      }
+
+      setSelectedHistoryVersion(versionID)
+      if (versionID === HISTORY_EDITOR_VALUE) {
+        return
+      }
+
+      setHistoryMessage(null)
+      try {
+        const response = await fetch(buildHistoryVersionURL(versionID), {
+          headers: buildAuthHeaders(authToken),
+        })
+        if (response.status === 401) {
+          throw new Error('Unauthorized')
+        }
+        if (response.status === 404) {
+          throw new Error('VersionNotFound')
+        }
+        if (!response.ok) {
+          console.debug(
+            `[CV] History version load failed: ${response.status} ${response.statusText} ${response.url}`,
+          )
+          throw new Error('Failed to load CV history version')
+        }
+
+        const payload = (await response.json()) as CvContentVersionPayload
+        setContent(payload.content)
+      } catch (err) {
+        setSelectedHistoryVersion(HISTORY_EDITOR_VALUE)
+        if (err instanceof Error && err.message === 'Unauthorized') {
+          clearAuthToken()
+          setAuthToken(null)
+          setAuthMessage('SSO token expired. Please sign in again.')
+          console.warn('[CV] Unauthorized SSO token while loading history version')
+          return
+        }
+        if (err instanceof Error && err.message === 'VersionNotFound') {
+          setHistoryMessage('The selected history version is no longer available.')
+          return
+        }
+        if (err instanceof Error) {
+          console.error(`[CV] Failed to load history version: ${err.message}`)
+        } else {
+          console.error('[CV] Failed to load history version')
+        }
+        setHistoryMessage('Failed to load the selected history version.')
+      }
+    },
+    [authToken],
+  )
 
   // handleDownloadPdf downloads the PDF asset or falls back to print.
   const handleDownloadPdf = useCallback(async () => {
@@ -351,6 +511,8 @@ export function CVPage() {
       if (!open) {
         setContent(savedContent)
         setAuthMessage(null)
+        setHistoryMessage(null)
+        setSelectedHistoryVersion(HISTORY_EDITOR_VALUE)
       }
     },
     [savedContent],
@@ -383,6 +545,16 @@ export function CVPage() {
     loadContent(controller.signal)
     return () => controller.abort()
   }, [loadContent])
+
+  useEffect(() => {
+    if (!editorOpen || !authToken) {
+      return
+    }
+
+    const controller = new AbortController()
+    loadHistory(controller.signal)
+    return () => controller.abort()
+  }, [authToken, editorOpen, loadHistory])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -556,13 +728,45 @@ export function CVPage() {
                           : 'No saved data yet'}
                       </span>
                     </div>
-                    {authMessage ? (
-                      <div className="cv-modal-alert">{authMessage}</div>
+                    {modalMessage ? (
+                      <div className="cv-modal-alert">{modalMessage}</div>
                     ) : null}
+                    <div className="cv-history-field">
+                      <label
+                        className="cv-history-label"
+                        htmlFor="cv-history-select"
+                      >
+                        Saved history
+                      </label>
+                      <select
+                        id="cv-history-select"
+                        className="cv-history-select"
+                        value={selectedHistoryVersion}
+                        onChange={(event) => {
+                          void handleHistoryChange(event.target.value)
+                        }}
+                        disabled={loading || saving || historyLoading}
+                      >
+                        <option value={HISTORY_EDITOR_VALUE}>
+                          Current editor content
+                        </option>
+                        {historyEntries.map((entry) => (
+                          <option
+                            key={`${entry.version_id ?? 'current'}-${entry.updated_at}`}
+                            value={entry.version_id ?? ''}
+                          >
+                            {buildHistoryLabel(entry)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <Textarea
                       className="cv-editor-textarea"
                       value={content}
-                      onChange={(event) => setContent(event.target.value)}
+                      onChange={(event) => {
+                        setContent(event.target.value)
+                        setSelectedHistoryVersion(HISTORY_EDITOR_VALUE)
+                      }}
                       spellCheck={false}
                       disabled={loading}
                       placeholder={

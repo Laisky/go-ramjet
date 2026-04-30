@@ -105,7 +105,9 @@ func TestDownloadPDFSetsNoCacheHeaders(t *testing.T) {
 
 // fakeContentStore is a content repository stub that returns predetermined content.
 type fakeContentStore struct {
-	payload ContentPayload
+	payload  ContentPayload
+	history  []ContentHistoryEntry
+	versions map[string]ContentPayload
 }
 
 // Load returns the configured payload for ctx and returns an error when ctx is done.
@@ -122,6 +124,36 @@ func (f *fakeContentStore) Save(ctx context.Context, _ string) (ContentPayload, 
 		return ContentPayload{}, err
 	}
 	return f.payload, nil
+}
+
+// ListHistory returns the configured content history, truncated to the requested limit.
+func (f *fakeContentStore) ListHistory(ctx context.Context, limit int) ([]ContentHistoryEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		return []ContentHistoryEntry{}, nil
+	}
+
+	history := append([]ContentHistoryEntry(nil), f.history...)
+	if len(history) > limit {
+		history = history[:limit]
+	}
+	return history, nil
+}
+
+// LoadVersion returns the configured version payload or the current payload when no version is requested.
+func (f *fakeContentStore) LoadVersion(ctx context.Context, versionID string) (ContentPayload, error) {
+	if err := ctx.Err(); err != nil {
+		return ContentPayload{}, err
+	}
+	if versionID == "" {
+		return f.payload, nil
+	}
+	if payload, ok := f.versions[versionID]; ok {
+		return payload, nil
+	}
+	return ContentPayload{}, ErrContentVersionNotFound
 }
 
 type trackingPDFRenderer struct {
@@ -242,6 +274,83 @@ func TestDownloadPDFUsesStoredPDF(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(body), "%PDF-1.4")
 	require.False(t, renderer.called)
+}
+
+// TestListContentHistory verifies the history endpoint returns the latest persisted versions for the editor.
+func TestListContentHistory(t *testing.T) {
+	t.Parallel()
+
+	history := []ContentHistoryEntry{
+		{VersionID: "v3", UpdatedAt: time.Unix(300, 0).UTC(), IsLatest: true},
+		{VersionID: "v2", UpdatedAt: time.Unix(200, 0).UTC(), IsLatest: false},
+	}
+	h := &handler{store: &fakeContentStore{history: history}}
+	ctx, recorder := newCVTestContext(http.MethodGet, "/cv/content/history")
+
+	h.listContentHistory(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload contentHistoryResponse
+	err := json.NewDecoder(resp.Body).Decode(&payload)
+	require.NoError(t, err)
+	require.Equal(t, history, payload.Items)
+}
+
+// TestGetContentVersion verifies the version endpoint returns the selected persisted revision content.
+func TestGetContentVersion(t *testing.T) {
+	t.Parallel()
+
+	updatedAt := time.Unix(200, 0).UTC()
+	h := &handler{store: &fakeContentStore{
+		versions: map[string]ContentPayload{
+			"v2": {
+				Content:   "revision-2",
+				UpdatedAt: &updatedAt,
+				IsDefault: false,
+			},
+		},
+	}}
+	ctx, recorder := newCVTestContext(http.MethodGet, "/cv/content/version?version_id=v2")
+
+	h.getContentVersion(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload contentVersionResponse
+	err := json.NewDecoder(resp.Body).Decode(&payload)
+	require.NoError(t, err)
+	require.Equal(t, "revision-2", payload.Content)
+	require.Equal(t, "v2", payload.VersionID)
+	require.NotNil(t, payload.UpdatedAt)
+	require.Equal(t, updatedAt, payload.UpdatedAt.UTC())
+}
+
+// TestGetContentVersionNotFound verifies the version endpoint returns 404 for a missing persisted revision.
+func TestGetContentVersionNotFound(t *testing.T) {
+	t.Parallel()
+
+	h := &handler{store: &fakeContentStore{versions: map[string]ContentPayload{}}}
+	ctx, recorder := newCVTestContext(http.MethodGet, "/cv/content/version?version_id=missing")
+
+	h.getContentVersion(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 // TestDownloadPDFMissingTriggersAsyncRender verifies missing PDFs trigger a background render.

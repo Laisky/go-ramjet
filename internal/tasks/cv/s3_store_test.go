@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -18,26 +19,40 @@ type fakeS3Object struct {
 	content    []byte
 	updatedAt  time.Time
 	objectName string
+	versionID  string
+	isLatest   bool
 }
 
 type fakeS3Client struct {
 	mu            sync.Mutex
 	objects       map[string]fakeS3Object
+	versions      map[string][]fakeS3Object
 	putObjectOpts map[string]minio.PutObjectOptions
+	versionSeq    int
 }
 
 // newFakeS3Client creates an in-memory S3 client for tests.
 func newFakeS3Client() *fakeS3Client {
 	return &fakeS3Client{
 		objects:       make(map[string]fakeS3Object),
+		versions:      make(map[string][]fakeS3Object),
 		putObjectOpts: make(map[string]minio.PutObjectOptions),
 	}
 }
 
 // GetObject returns a reader for an object stored in memory.
-func (f *fakeS3Client) GetObject(_ context.Context, _ string, objectName string, _ minio.GetObjectOptions) (io.ReadCloser, error) {
+func (f *fakeS3Client) GetObject(_ context.Context, _ string, objectName string, opts minio.GetObjectOptions) (io.ReadCloser, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	if opts.VersionID != "" {
+		for _, version := range f.versions[objectName] {
+			if version.versionID == opts.VersionID {
+				return io.NopCloser(bytes.NewReader(version.content)), nil
+			}
+		}
+		return nil, minio.ErrorResponse{Code: "NoSuchVersion", StatusCode: 404}
+	}
 
 	obj, ok := f.objects[objectName]
 	if !ok {
@@ -56,14 +71,32 @@ func (f *fakeS3Client) PutObject(_ context.Context, _ string, objectName string,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	f.versionSeq++
+	versionID := fmt.Sprintf("v%d", f.versionSeq)
+	updatedAt := time.Now().UTC()
+	versions := f.versions[objectName]
+	for idx := range versions {
+		versions[idx].isLatest = false
+	}
+	obj := fakeS3Object{
+		content:    payload,
+		updatedAt:  updatedAt,
+		objectName: objectName,
+		versionID:  versionID,
+		isLatest:   true,
+	}
+	versions = append(versions, obj)
+	f.versions[objectName] = versions
 	f.objects[objectName] = fakeS3Object{
 		content:    payload,
-		updatedAt:  time.Now().UTC(),
+		updatedAt:  updatedAt,
 		objectName: objectName,
+		versionID:  versionID,
+		isLatest:   true,
 	}
 	f.putObjectOpts[objectName] = opts
 
-	return minio.UploadInfo{Key: objectName}, nil
+	return minio.UploadInfo{Key: objectName, VersionID: versionID}, nil
 }
 
 // StatObject returns metadata for an in-memory object.
@@ -83,28 +116,78 @@ func (f *fakeS3Client) StatObject(_ context.Context, _ string, objectName string
 	}, nil
 }
 
-// RemoveObject deletes an object from the in-memory store.
-func (f *fakeS3Client) RemoveObject(_ context.Context, _ string, objectName string, _ minio.RemoveObjectOptions) error {
+// RemoveObject deletes an object or one specific version from the in-memory store.
+func (f *fakeS3Client) RemoveObject(_ context.Context, _ string, objectName string, opts minio.RemoveObjectOptions) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	delete(f.objects, objectName)
-	delete(f.putObjectOpts, objectName)
+	if opts.VersionID == "" {
+		delete(f.objects, objectName)
+		delete(f.putObjectOpts, objectName)
+		delete(f.versions, objectName)
+		return nil
+	}
+
+	versions := f.versions[objectName]
+	filtered := make([]fakeS3Object, 0, len(versions))
+	for _, version := range versions {
+		if version.versionID == opts.VersionID {
+			continue
+		}
+		filtered = append(filtered, version)
+	}
+	for idx := range filtered {
+		filtered[idx].isLatest = false
+	}
+	if len(filtered) > 0 {
+		filtered[len(filtered)-1].isLatest = true
+		latest := filtered[len(filtered)-1]
+		f.objects[objectName] = latest
+	} else {
+		delete(f.objects, objectName)
+	}
+	f.versions[objectName] = filtered
 	return nil
 }
 
 // ListObjects streams object info for keys matching the prefix.
 func (f *fakeS3Client) ListObjects(_ context.Context, _ string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
-	ch := make(chan minio.ObjectInfo, len(f.objects))
-	f.mu.Lock()
-	for key, obj := range f.objects {
-		if opts.Prefix != "" && key != opts.Prefix && !strings.HasPrefix(key, opts.Prefix) {
-			continue
+	total := len(f.objects)
+	if opts.WithVersions {
+		total = 0
+		for _, versions := range f.versions {
+			total += len(versions)
 		}
-		ch <- minio.ObjectInfo{
-			Key:          obj.objectName,
-			Size:         int64(len(obj.content)),
-			LastModified: obj.updatedAt,
+	}
+	ch := make(chan minio.ObjectInfo, total)
+	f.mu.Lock()
+	if opts.WithVersions {
+		for key, versions := range f.versions {
+			if opts.Prefix != "" && key != opts.Prefix && !strings.HasPrefix(key, opts.Prefix) {
+				continue
+			}
+			for _, obj := range versions {
+				ch <- minio.ObjectInfo{
+					Key:          obj.objectName,
+					Size:         int64(len(obj.content)),
+					LastModified: obj.updatedAt,
+					VersionID:    obj.versionID,
+					IsLatest:     obj.isLatest,
+				}
+			}
+		}
+	} else {
+		for key, obj := range f.objects {
+			if opts.Prefix != "" && key != opts.Prefix && !strings.HasPrefix(key, opts.Prefix) {
+				continue
+			}
+			ch <- minio.ObjectInfo{
+				Key:          obj.objectName,
+				Size:         int64(len(obj.content)),
+				LastModified: obj.updatedAt,
+				VersionID:    obj.versionID,
+				IsLatest:     obj.isLatest,
+			}
 		}
 	}
 	f.mu.Unlock()
@@ -453,6 +536,54 @@ func TestS3ContentStorePrecleanNonCurrentVersions(t *testing.T) {
 	require.Equal(t, 0, client.listCalls)
 	require.Equal(t, 0, client.removeCalls)
 	require.Empty(t, client.removedVersionIDs)
+}
+
+// TestS3ContentStoreListHistoryReturnsLatestTen verifies the content history keeps the latest ten saved revisions.
+func TestS3ContentStoreListHistoryReturnsLatestTen(t *testing.T) {
+	t.Parallel()
+
+	client := newFakeS3Client()
+	store, err := NewS3ContentStore(client, "bucket", "cv.md", "default")
+	require.NoError(t, err)
+
+	for idx := range 12 {
+		_, err = store.Save(context.Background(), fmt.Sprintf("revision-%02d", idx))
+		require.NoError(t, err)
+	}
+
+	history, err := store.ListHistory(context.Background(), 20)
+	require.NoError(t, err)
+	require.Len(t, history, cvContentHistoryLimit)
+	require.True(t, history[0].IsLatest)
+
+	for idx := 1; idx < len(history); idx++ {
+		require.False(t, history[idx].UpdatedAt.After(history[idx-1].UpdatedAt))
+	}
+
+	latest, err := store.LoadVersion(context.Background(), history[0].VersionID)
+	require.NoError(t, err)
+	require.Equal(t, "revision-11", latest.Content)
+
+	oldest, err := store.LoadVersion(context.Background(), history[len(history)-1].VersionID)
+	require.NoError(t, err)
+	require.Equal(t, "revision-02", oldest.Content)
+
+	client.mu.Lock()
+	versionCount := len(client.versions["cv.md"])
+	client.mu.Unlock()
+	require.Equal(t, cvContentHistoryLimit, versionCount)
+}
+
+// TestS3ContentStoreLoadVersionMissing verifies missing history versions map to the shared not-found sentinel.
+func TestS3ContentStoreLoadVersionMissing(t *testing.T) {
+	t.Parallel()
+
+	client := newFakeS3Client()
+	store, err := NewS3ContentStore(client, "bucket", "cv.md", "default")
+	require.NoError(t, err)
+
+	_, err = store.LoadVersion(context.Background(), "missing-version")
+	require.ErrorIs(t, err, ErrContentVersionNotFound)
 }
 
 // TestS3PDFStorePrecleanNonCurrentVersions verifies non-current pdf versions are removed before upload.
