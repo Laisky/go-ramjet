@@ -8,6 +8,7 @@ This task performs automated PostgreSQL backups and uploads them to S3-compatibl
 - Compresses the stream with gzip
 - Uploads the object to S3 (MinIO-compatible)
 - Skips uploading if today’s object already exists (idempotent per day)
+- Starts a background retention cleanup after each successful upload
 
 Default per-DB timeout: 30 minutes.
 
@@ -44,6 +45,7 @@ tasks:
 			bucket: "private"
 			access_key: "readwrite"
 			access_secret: "xxx"
+			keep_last: 14        # keep the latest 14 backups, including the new upload
 
 		# Optional
 		use_temp_file: false    # if true, write dump->gzip to a temp file, then upload
@@ -158,6 +160,7 @@ zcat oneapi-20250909.gz | psql -h 127.0.0.1 -U postgres -d oneapi
 - Password is passed via `PGPASSWORD` env var for non-interactive auth
 - Output is compressed via `gzip` and then uploaded to S3
 - If an object with the computed key already exists for today, the run is skipped for that DB
+- After a successful upload, the task lists objects with the same managed key prefix and deletes the oldest ones beyond `s3.keep_last`
 
 ---
 
@@ -183,7 +186,7 @@ zcat oneapi-20250909.gz | psql -h 127.0.0.1 -U postgres -d oneapi
 ## Notes and limitations
 
 - Dumps are per-database and plain SQL; global objects (roles, tablespaces) are not included
-- No retention policy is enforced by this task; manage retention on the bucket side
+- Retention is enforced per managed backup series and keeps the latest `s3.keep_last` objects (default: 14)
 - No built-in encryption of artifacts; rely on S3 server-side encryption, bucket policies, or network security
 - Object naming is date-based (YYYYMMDD) and computed from `backup_file_prefix` and the DB name (see rules above)
 

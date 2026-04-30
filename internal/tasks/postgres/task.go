@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,12 +27,19 @@ import (
 
 var logger = log.Logger.Named("postgres-backup")
 
+const (
+	defaultBackupHistoryLimit     = 14
+	backupObjectDateLayout        = "20060102"
+	backupRetentionCleanupTimeout = 10 * time.Minute
+)
+
 type cfgS3 struct {
 	Enable       bool
 	Endpoint     string
 	AccessKey    string
 	AccessSecret string
 	Bucket       string
+	KeepLast     int `mapstructure:"keep_last"`
 }
 
 type cfgDB struct {
@@ -63,6 +71,7 @@ type cfgBackup struct {
 	TempDir string `mapstructure:"temp_dir"`
 }
 
+// loadCfg loads the postgres backup task configuration and applies local defaults.
 func loadCfg() *cfgBackup {
 	cfg := &cfgBackup{
 		Enable:      gconfig.Shared.GetBool("tasks.postgres.enable"),
@@ -73,6 +82,7 @@ func loadCfg() *cfgBackup {
 			AccessKey:    gconfig.Shared.GetString("tasks.postgres.s3.access_key"),
 			AccessSecret: gconfig.Shared.GetString("tasks.postgres.s3.access_secret"),
 			Bucket:       gconfig.Shared.GetString("tasks.postgres.s3.bucket"),
+			KeepLast:     normalizeBackupHistoryLimit(gconfig.Shared.GetInt("tasks.postgres.s3.keep_last")),
 		},
 		UseTempFile: gconfig.Shared.GetBool("tasks.postgres.use_temp_file"),
 		TempDir:     gconfig.Shared.GetString("tasks.postgres.temp_dir"),
@@ -80,10 +90,23 @@ func loadCfg() *cfgBackup {
 
 	// Load multiple databases: tasks.postgres.dbs: [ {host,port,user,password,database,backup_file_prefix}, ... ]
 	var dbs []cfgDB
-	if err := gconfig.Shared.UnmarshalKey("tasks.postgres.dbs", &dbs); err == nil && len(dbs) > 0 {
+	if err := gconfig.Shared.UnmarshalKey("tasks.postgres.dbs", &dbs); err != nil {
+		return cfg
+	}
+
+	if len(dbs) > 0 {
 		cfg.DBs = dbs
 	}
 	return cfg
+}
+
+// normalizeBackupHistoryLimit clamps the backup history limit to a supported default.
+func normalizeBackupHistoryLimit(limit int) int {
+	if limit < 1 {
+		return defaultBackupHistoryLimit
+	}
+
+	return limit
 }
 
 // s3KeyFor builds the object key.
@@ -102,6 +125,39 @@ func cleanS3Path(p string) string {
 	return p
 }
 
+// buildKeyPrefixAndBase derives the managed S3 key prefix and basename for one database backup series.
+func buildKeyPrefixAndBase(db cfgDB) (keyPrefix string, base string) {
+	pfx := strings.TrimSpace(db.BackupFilePrefix)
+	if strings.HasSuffix(pfx, "/") {
+		dir := cleanS3Path(pfx)
+		base = strings.TrimSpace(db.Database)
+		if base == "" {
+			base = "pg-backup"
+		}
+
+		if dir == "" {
+			return base + "-", base
+		}
+
+		return dir + "/" + base + "-", base
+	}
+
+	cleaned := cleanS3Path(pfx)
+	dir, base := path.Split(cleaned)
+	if strings.TrimSpace(base) == "" {
+		base = strings.TrimSpace(db.Database)
+		if base == "" {
+			base = "pg-backup"
+		}
+	}
+
+	if dir == "" {
+		return base + "-", base
+	}
+
+	return path.Clean(dir) + "/" + base + "-", base
+}
+
 // buildKeyAndFilename computes the final S3 object key and a local filename (no slashes).
 // Rules:
 //   - If BackupFilePrefix ends with '/', treat it as directory prefix and use
@@ -110,40 +166,112 @@ func cleanS3Path(p string) string {
 //     '-YYYYMMDD.gz'.
 //   - Local filename never contains '/'.
 func buildKeyAndFilename(db cfgDB, date string) (key string, filename string) {
-	pfx := db.BackupFilePrefix
-	if strings.HasSuffix(pfx, "/") {
-		// Directory-like prefix
-		dir := cleanS3Path(pfx)
-		base := db.Database
-		if strings.TrimSpace(base) == "" {
-			base = "pg-backup"
-		}
-		filename = fmt.Sprintf("%s-%s.gz", base, date)
-		if dir == "" {
-			key = filename
-		} else {
-			key = dir + "/" + filename
-		}
-		return
+	keyPrefix, base := buildKeyPrefixAndBase(db)
+	filename = fmt.Sprintf("%s-%s.gz", base, date)
+	return keyPrefix + date + ".gz", filename
+}
+
+// isManagedBackupKey reports whether key belongs to the configured backup series and naming scheme.
+func isManagedBackupKey(keyPrefix, key string) bool {
+	if !strings.HasPrefix(key, keyPrefix) || !strings.HasSuffix(key, ".gz") {
+		return false
 	}
 
-	// Filename-like prefix (may include directories)
-	cleaned := cleanS3Path(pfx)
-	dir, base := path.Split(cleaned)
-	if base == "" {
-		// No usable base in prefix; fall back to database name
-		base = db.Database
-		if strings.TrimSpace(base) == "" {
-			base = "pg-backup"
+	datePart := strings.TrimSuffix(strings.TrimPrefix(key, keyPrefix), ".gz")
+	if len(datePart) != len(backupObjectDateLayout) {
+		return false
+	}
+
+	if _, err := time.Parse(backupObjectDateLayout, datePart); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// selectExpiredBackupKeys picks the oldest managed backup keys that exceed keepLast.
+func selectExpiredBackupKeys(keyPrefix string, keys []string, keepLast int) []string {
+	keepLast = normalizeBackupHistoryLimit(keepLast)
+
+	managedKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if isManagedBackupKey(keyPrefix, key) {
+			managedKeys = append(managedKeys, key)
 		}
 	}
-	filename = fmt.Sprintf("%s-%s.gz", base, date)
-	if dir == "" {
-		key = filename
-	} else {
-		key = path.Clean(dir) + "/" + filename
+
+	if len(managedKeys) <= keepLast {
+		return nil
 	}
-	return
+
+	slices.Sort(managedKeys)
+	slices.Reverse(managedKeys)
+
+	expiredKeys := make([]string, 0, len(managedKeys)-keepLast)
+	expiredKeys = append(expiredKeys, managedKeys[keepLast:]...)
+	return expiredKeys
+}
+
+// cleanupExpiredBackups removes managed S3 backup objects that exceed the configured history limit.
+func cleanupExpiredBackups(ctx context.Context, s cfgS3, keyPrefix string) error {
+	s3cli, err := s3.GetCli(s.Endpoint, s.AccessKey, s.AccessSecret)
+	if err != nil {
+		return errors.Wrap(err, "new s3 client")
+	}
+
+	keys := make([]string, 0, s.KeepLast+1)
+	for obj := range s3cli.ListObjects(ctx, s.Bucket, minio.ListObjectsOptions{Prefix: keyPrefix, Recursive: true}) {
+		if obj.Err != nil {
+			return errors.Wrapf(obj.Err, "list objects with prefix %q", keyPrefix)
+		}
+
+		keys = append(keys, obj.Key)
+	}
+
+	expiredKeys := selectExpiredBackupKeys(keyPrefix, keys, s.KeepLast)
+	if len(expiredKeys) == 0 {
+		logger.Debug("postgres backup retention within limit",
+			zap.String("bucket", s.Bucket),
+			zap.String("key_prefix", keyPrefix),
+			zap.Int("keep_last", s.KeepLast),
+			zap.Int("objects", len(keys)))
+		return nil
+	}
+
+	logger.Info("cleanup expired postgres backups",
+		zap.String("bucket", s.Bucket),
+		zap.String("key_prefix", keyPrefix),
+		zap.Int("keep_last", s.KeepLast),
+		zap.Int("delete_count", len(expiredKeys)))
+	for _, expiredKey := range expiredKeys {
+		if err := s3cli.RemoveObject(ctx, s.Bucket, expiredKey, minio.RemoveObjectOptions{}); err != nil {
+			return errors.Wrapf(err, "remove object %q", expiredKey)
+		}
+
+		logger.Info("deleted expired postgres backup",
+			zap.String("bucket", s.Bucket),
+			zap.String("object", expiredKey))
+	}
+
+	return nil
+}
+
+// startBackupRetentionCleanup launches background retention cleanup for one backup series.
+func startBackupRetentionCleanup(db cfgDB, s cfgS3, uploadedKey string) {
+	keyPrefix, _ := buildKeyPrefixAndBase(db)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), backupRetentionCleanupTimeout)
+		defer cancel()
+
+		if err := cleanupExpiredBackups(ctx, s, keyPrefix); err != nil {
+			logger.Warn("postgres backup retention cleanup failed",
+				zap.String("bucket", s.Bucket),
+				zap.String("uploaded_object", uploadedKey),
+				zap.String("key_prefix", keyPrefix),
+				zap.Int("keep_last", s.KeepLast),
+				zap.Error(err))
+		}
+	}()
 }
 
 // s3ObjectExists checks if object already exists.
@@ -187,12 +315,13 @@ func runBackup() {
 		return
 	}
 
-	today := time.Now().Format("20060102")
+	today := time.Now().UTC().Format(backupObjectDateLayout)
 	logger.Info("postgres backup run start",
 		zap.Bool("use_temp_file", cfg.UseTempFile),
 		zap.String("temp_dir", cfg.TempDir),
 		zap.String("s3_endpoint", cfg.S3.Endpoint),
 		zap.String("s3_bucket", cfg.S3.Bucket),
+		zap.Int("s3_keep_last", cfg.S3.KeepLast),
 		zap.Int("dbs", len(dbs)))
 	perBackupTimeout := 30 * time.Minute
 
@@ -231,6 +360,8 @@ func runBackup() {
 				logger.Error("backup failed", zap.String("object", key), zap.Error(err))
 				return
 			}
+
+			startBackupRetentionCleanup(db, cfg.S3, key)
 			logger.Info("uploaded to s3", zap.String("object", key), zap.String("cost", gutils.CostSecs(time.Since(start))))
 		}()
 	}
@@ -414,6 +545,7 @@ func backupViaTempFile(ctx context.Context, db cfgDB, s cfgS3, fname, key, tempD
 	return nil
 }
 
+// bindPostgresBackupTask registers the scheduled postgres backup task when enabled.
 func bindPostgresBackupTask() {
 	logger.Info("bind postgres backup task...")
 	cfg := loadCfg()
@@ -431,11 +563,13 @@ func bindPostgresBackupTask() {
 		zap.Bool("use_temp_file", cfg.UseTempFile),
 		zap.String("temp_dir", cfg.TempDir),
 		zap.Bool("s3_enable", cfg.S3.Enable),
+		zap.Int("s3_keep_last", cfg.S3.KeepLast),
 		zap.String("s3_endpoint", cfg.S3.Endpoint),
 		zap.String("s3_bucket", cfg.S3.Bucket))
 	go store.TaskStore.TickerAfterRun(time.Duration(interval)*time.Second, runBackup)
 }
 
+// init registers the postgres backup task in the shared task store.
 func init() {
 	store.TaskStore.Store("postgres", bindPostgresBackupTask)
 }

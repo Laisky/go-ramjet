@@ -26,6 +26,7 @@ tasks:
       access_key: 'minio-access-key'
       access_secret: 'minio-secret-key'
       bucket: 'backups'
+      keep_last: 14 # keep the latest 14 backups for each configured backup series
   cv:
     # s3 storage for CV content and pdf
     s3:
