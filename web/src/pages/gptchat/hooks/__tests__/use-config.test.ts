@@ -75,7 +75,9 @@ describe('useConfig', () => {
     )
 
     expect(result.current.config.selected_model).toBe(ChatModelGPT5Dot4Mini)
-    expect(result.current.config.selected_chat_model).toBe(ChatModelGPT5Dot4Mini)
+    expect(result.current.config.selected_chat_model).toBe(
+      ChatModelGPT5Dot4Mini,
+    )
   })
 
   it('should use DefaultModel if no saved config exists', async () => {

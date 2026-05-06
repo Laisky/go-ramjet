@@ -13,7 +13,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/utils/cn'
-import { ModelCategories, isFreeModel } from '../models'
+import {
+  ModelCategories,
+  getFirstAllowedModel,
+  isFreeModel,
+  isModelAllowed,
+} from '../models'
 
 /**
  * ModelSelectorProps describes the configuration for rendering a model picker dropdown.
@@ -48,33 +53,31 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
 
-  const allowAll =
-    !allowedModels || allowedModels.length === 0 || allowedModels.includes('*')
-  const allowedSet = new Set(allowedModels || [])
-
   const filteredCategories = categories?.length
     ? Object.entries(ModelCategories).filter(([category]) =>
         categories.includes(category),
       )
     : Object.entries(ModelCategories)
 
-  const visibleCategories = filteredCategories
-    .map(([category, models]) => {
-      if (allowAll) {
-        return [category, models] as const
-      }
+  const visibleCategories = filteredCategories.filter(
+    ([, models]) => models.length > 0,
+  )
 
-      const visibleModels = models.filter((model) => allowedSet.has(model))
-      return [category, visibleModels] as const
-    })
-    .filter(([, models]) => models.length > 0)
+  const fallbackModel = getFirstAllowedModel(
+    visibleCategories.flatMap(([, models]) => models),
+    allowedModels,
+  )
 
-  const displayModel =
-    selectedModel || visibleCategories[0]?.[1]?.[0] || 'Select a model'
+  const displayModel = selectedModel || fallbackModel || 'Select a model'
+  const displayModelAllowed = isModelAllowed(displayModel, allowedModels)
 
   const triggerLabel = label || 'Model'
 
   const handleSelect = (model: string) => {
+    if (disabled || !isModelAllowed(model, allowedModels)) {
+      return
+    }
+
     onModelChange(model)
     setOpen(false)
   }
@@ -108,7 +111,14 @@ export function ModelSelector({
                 </span>
               )}
               <span className="flex items-center gap-2 truncate">
-                <span className="truncate">{displayModel}</span>
+                <span
+                  className={cn(
+                    'truncate',
+                    !displayModelAllowed && 'text-muted-foreground',
+                  )}
+                >
+                  {displayModel}
+                </span>
                 {isFreeModel(displayModel) && (
                   <Badge variant="success" className="text-[10px]">
                     Free
@@ -129,25 +139,43 @@ export function ModelSelector({
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               {category}
             </div>
-            {models.map((model) => (
-              <DropdownMenuItem
-                key={model}
-                onClick={() => handleSelect(model)}
-                className={cn(
-                  'flex cursor-pointer items-center justify-between',
-                  selectedModel === model && 'bg-muted',
-                )}
-              >
-                <span className="truncate">{model}</span>
-                <span className="flex gap-1">
-                  {isFreeModel(model) && (
-                    <Badge variant="success" className="text-[10px]">
-                      Free
-                    </Badge>
+            {models.map((model) => {
+              const modelAllowed = isModelAllowed(model, allowedModels)
+              const itemDisabled = disabled || !modelAllowed
+
+              return (
+                <DropdownMenuItem
+                  key={model}
+                  disabled={itemDisabled}
+                  onSelect={(event) => {
+                    if (itemDisabled) {
+                      event.preventDefault()
+                      return
+                    }
+
+                    handleSelect(model)
+                  }}
+                  className={cn(
+                    'flex items-center justify-between',
+                    !itemDisabled && 'cursor-pointer',
+                    selectedModel === model && 'bg-muted',
+                    itemDisabled &&
+                      'cursor-not-allowed text-muted-foreground opacity-100',
                   )}
-                </span>
-              </DropdownMenuItem>
-            ))}
+                >
+                  <span className="truncate">{model}</span>
+                  <span
+                    className={cn('flex gap-1', itemDisabled && 'opacity-60')}
+                  >
+                    {isFreeModel(model) && (
+                      <Badge variant="success" className="text-[10px]">
+                        Free
+                      </Badge>
+                    )}
+                  </span>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
         ))}
       </DropdownMenuContent>

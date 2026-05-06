@@ -40,7 +40,14 @@ import { useSelection } from './hooks/use-selection'
 import { useTTS } from './hooks/use-tts'
 import { useUser } from './hooks/use-user'
 import { useVersionCheck } from './hooks/use-version-check'
-import { ImageModelFluxDev, isImageModel } from './models'
+import {
+  ChatModels,
+  ImageModelFluxDev,
+  ImageModels,
+  getFirstAllowedModel,
+  isImageModel,
+  isModelAllowed,
+} from './models'
 import type {
   ChatAttachment,
   ChatMessageData,
@@ -238,6 +245,59 @@ export function GPTChatPage() {
   const messagePlaceholder = config.api_token
     ? activeModelName || 'Message...'
     : 'Enter your API key in Settings to start chatting'
+
+  useEffect(() => {
+    const allowedModels = user?.allowed_models
+    if (
+      !allowedModels ||
+      allowedModels.length === 0 ||
+      allowedModels.includes('*')
+    ) {
+      return
+    }
+
+    const nextChatModel = isModelAllowed(chatModel, allowedModels)
+      ? chatModel
+      : getFirstAllowedModel(ChatModels, allowedModels)
+    const nextDrawModel = isModelAllowed(drawModel, allowedModels)
+      ? drawModel
+      : getFirstAllowedModel(ImageModels, allowedModels)
+
+    const nextUpdates: Partial<SessionConfig> = {}
+
+    if (nextChatModel && nextChatModel !== config.selected_chat_model) {
+      nextUpdates.selected_chat_model = nextChatModel
+    }
+
+    if (nextDrawModel && nextDrawModel !== config.selected_draw_model) {
+      nextUpdates.selected_draw_model = nextDrawModel
+    }
+
+    if (!isModelAllowed(config.selected_model, allowedModels)) {
+      const fallbackSelectedModel = isImageModel(config.selected_model)
+        ? nextDrawModel || nextChatModel
+        : nextChatModel || nextDrawModel
+
+      if (
+        fallbackSelectedModel &&
+        fallbackSelectedModel !== config.selected_model
+      ) {
+        nextUpdates.selected_model = fallbackSelectedModel
+      }
+    }
+
+    if (Object.keys(nextUpdates).length > 0) {
+      updateConfig(nextUpdates)
+    }
+  }, [
+    chatModel,
+    config.selected_chat_model,
+    config.selected_draw_model,
+    config.selected_model,
+    drawModel,
+    updateConfig,
+    user?.allowed_models,
+  ])
 
   // Load messages when session changes
   useEffect(() => {

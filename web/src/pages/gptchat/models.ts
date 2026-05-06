@@ -294,6 +294,34 @@ export function isFreeModel(model: string): boolean {
 }
 
 /**
+ * isModelAllowed reports whether the current user may select and use the model.
+ */
+export function isModelAllowed(
+  model: string,
+  allowedModels?: string[],
+): boolean {
+  if (!allowedModels || allowedModels.length === 0) {
+    return true
+  }
+
+  if (allowedModels.includes('*')) {
+    return true
+  }
+
+  return allowedModels.includes(model)
+}
+
+/**
+ * getFirstAllowedModel returns the first permitted model from an ordered list.
+ */
+export function getFirstAllowedModel(
+  models: string[],
+  allowedModels?: string[],
+): string | undefined {
+  return models.find((model) => isModelAllowed(model, allowedModels))
+}
+
+/**
  * Get the category for a model
  */
 export function getModelCategory(model: string): string | undefined {

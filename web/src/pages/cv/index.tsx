@@ -232,9 +232,8 @@ export function CVPage() {
   )
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyMessage, setHistoryMessage] = useState<string | null>(null)
-  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState(
-    HISTORY_EDITOR_VALUE,
-  )
+  const [selectedHistoryVersion, setSelectedHistoryVersion] =
+    useState(HISTORY_EDITOR_VALUE)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const [pageMeta, setPageMeta] = useState(() => resolveCVPageMeta())
   const copyTimeoutRef = useRef<number | null>(null)
@@ -430,11 +429,15 @@ export function CVPage() {
           clearAuthToken()
           setAuthToken(null)
           setAuthMessage('SSO token expired. Please sign in again.')
-          console.warn('[CV] Unauthorized SSO token while loading history version')
+          console.warn(
+            '[CV] Unauthorized SSO token while loading history version',
+          )
           return
         }
         if (err instanceof Error && err.message === 'VersionNotFound') {
-          setHistoryMessage('The selected history version is no longer available.')
+          setHistoryMessage(
+            'The selected history version is no longer available.',
+          )
           return
         }
         if (err instanceof Error) {

@@ -279,7 +279,11 @@ export const ChatMessage = memo(function ChatMessage({
                 className="h-2 w-2 animate-bounce rounded-full bg-current motion-reduce:hidden"
                 style={{ animationDelay: '0.2s' }}
               />
-              <span className={message.loadingLabel ? '' : 'hidden motion-reduce:inline'}>
+              <span
+                className={
+                  message.loadingLabel ? '' : 'hidden motion-reduce:inline'
+                }
+              >
                 {message.loadingLabel || 'Generating…'}
               </span>
             </div>
