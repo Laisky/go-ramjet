@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -445,6 +446,103 @@ func TestDownloadPDFAccessDeniedMissingTriggersAsyncRender(t *testing.T) {
 	}
 
 	waitForPDFStore(t, pdfStore, 2*time.Second)
+}
+
+// TestRenderPDFPreviewReturnsPDFWithoutPersisting verifies the preview endpoint renders
+// markdown to PDF bytes and never writes the result to the configured PDF store.
+func TestRenderPDFPreviewReturnsPDFWithoutPersisting(t *testing.T) {
+	t.Parallel()
+
+	client := newFakeS3Client()
+	pdfStore, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	renderer := &trackingPDFRenderer{}
+	pdfService, err := NewPDFService(renderer, pdfStore)
+	require.NoError(t, err)
+
+	h := &handler{pdfService: pdfService}
+	body := strings.NewReader(`{"content":"# Tailored CV\nbody"}`)
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/cv/pdf/preview", body)
+	req.Header.Set("Content-Type", "application/json")
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = req
+
+	h.renderPDFPreview(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "application/pdf", resp.Header.Get("Content-Type"))
+	require.Equal(t, cvPDFCacheControl, resp.Header.Get("Cache-Control"))
+	require.True(t, renderer.called)
+
+	payload, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "PDF:# Tailored CV\nbody", string(payload))
+
+	_, _, openErr := pdfStore.Open(context.Background())
+	require.ErrorIs(t, openErr, ErrObjectNotFound)
+}
+
+// TestRenderPDFPreviewRejectsEmptyContent verifies the preview endpoint refuses
+// blank markdown payloads.
+func TestRenderPDFPreviewRejectsEmptyContent(t *testing.T) {
+	t.Parallel()
+
+	client := newFakeS3Client()
+	pdfStore, err := NewS3PDFStore(client, "bucket", "cv.pdf")
+	require.NoError(t, err)
+
+	renderer := &trackingPDFRenderer{}
+	pdfService, err := NewPDFService(renderer, pdfStore)
+	require.NoError(t, err)
+
+	h := &handler{pdfService: pdfService}
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/cv/pdf/preview", strings.NewReader(`{"content":"   "}`))
+	req.Header.Set("Content-Type", "application/json")
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = req
+
+	h.renderPDFPreview(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.NotEqual(t, http.StatusOK, resp.StatusCode)
+	require.False(t, renderer.called)
+}
+
+// TestRenderPDFPreviewWithoutServiceReturns503 verifies the endpoint signals
+// service unavailability when the PDF service is not configured.
+func TestRenderPDFPreviewWithoutServiceReturns503(t *testing.T) {
+	t.Parallel()
+
+	h := &handler{}
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/cv/pdf/preview", strings.NewReader(`{"content":"# CV"}`))
+	req.Header.Set("Content-Type", "application/json")
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = req
+
+	h.renderPDFPreview(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
 
 // waitForPDFStore waits for the PDF to appear in the store within the timeout.

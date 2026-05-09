@@ -6,17 +6,26 @@ import {
   Copy,
   Cpu,
   Download,
+  FileText,
   FileUser,
   Mail,
   Megaphone,
   MessageSquare,
   Pencil,
+  RotateCcw,
   Save,
   Server,
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -53,6 +62,7 @@ type CvContentVersionPayload = {
 }
 
 const AUTH_TOKEN_STORAGE_KEY = 'cv_sso_token'
+const TAILOR_DRAFT_STORAGE_KEY = 'cv_tailor_draft'
 const FALLBACK_EMAIL = 'job@laisky.com'
 const HISTORY_EDITOR_VALUE = '__editor__'
 
@@ -147,6 +157,34 @@ function clearAuthToken() {
 }
 
 /**
+ * readTailorDraft returns the locally cached tailored CV markdown draft.
+ */
+function readTailorDraft(): string | null {
+  try {
+    const value = window.localStorage.getItem(TAILOR_DRAFT_STORAGE_KEY)
+    return value && value.length > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * persistTailorDraft saves the tailored CV markdown draft to localStorage.
+ */
+function persistTailorDraft(content: string) {
+  try {
+    if (content.length === 0) {
+      window.localStorage.removeItem(TAILOR_DRAFT_STORAGE_KEY)
+      return
+    }
+    window.localStorage.setItem(TAILOR_DRAFT_STORAGE_KEY, content)
+  } catch {
+    // localStorage may be unavailable (private mode, quota); ignore.
+  }
+}
+
+
+/**
  * buildAuthHeaders creates an Authorization header when a token is available.
  */
 function buildAuthHeaders(token: string | null): HeadersInit {
@@ -236,6 +274,10 @@ export function CVPage() {
     useState(HISTORY_EDITOR_VALUE)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
   const [pageMeta, setPageMeta] = useState(() => resolveCVPageMeta())
+  const [tailorOpen, setTailorOpen] = useState(false)
+  const [tailorContent, setTailorContent] = useState('')
+  const [tailorBusy, setTailorBusy] = useState(false)
+  const [tailorMessage, setTailorMessage] = useState<string | null>(null)
   const copyTimeoutRef = useRef<number | null>(null)
   const cvPageRef = useRef<HTMLDivElement>(null)
 
@@ -521,6 +563,104 @@ export function CVPage() {
     [savedContent],
   )
 
+  // handleTailorOpenChange syncs the tailored PDF modal state and seeds the draft on open.
+  const handleTailorOpenChange = useCallback(
+    (open: boolean) => {
+      setTailorOpen(open)
+      if (open) {
+        setTailorMessage(null)
+        const cached = readTailorDraft()
+        setTailorContent(cached ?? savedContent)
+      }
+    },
+    [savedContent],
+  )
+
+  // handleTailorContentChange updates the tailored draft and persists it locally.
+  const handleTailorContentChange = useCallback((next: string) => {
+    setTailorContent(next)
+    persistTailorDraft(next)
+  }, [])
+
+  // handleTailorReset replaces the tailored draft with the persisted CV content.
+  const handleTailorReset = useCallback(() => {
+    setTailorContent(savedContent)
+    persistTailorDraft(savedContent)
+    setTailorMessage(null)
+  }, [savedContent])
+
+  // handleDownloadTailored renders the tailored markdown into a PDF without persisting it.
+  const handleDownloadTailored = useCallback(async () => {
+    if (tailorBusy) {
+      return
+    }
+    if (!authToken) {
+      setTailorMessage('SSO token required to render a tailored PDF.')
+      return
+    }
+    const trimmed = tailorContent.trim()
+    if (trimmed.length === 0) {
+      setTailorMessage('Markdown content is empty.')
+      return
+    }
+
+    setTailorBusy(true)
+    setTailorMessage(null)
+    try {
+      const response = await fetch('/cv/pdf/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders(authToken),
+        },
+        body: JSON.stringify({ content: tailorContent }),
+      })
+      if (response.status === 401) {
+        throw new Error('Unauthorized')
+      }
+      if (!response.ok) {
+        console.debug(
+          `[CV] Tailored PDF render failed: ${response.status} ${response.statusText} ${response.url}`,
+        )
+        throw new Error('RenderFailed')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${parsed.title.replace(/\s+/g, '-')}-CV-tailored.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Unauthorized') {
+        clearAuthToken()
+        setAuthToken(null)
+        setTailorMessage('SSO token expired. Please sign in again.')
+        console.warn('[CV] Unauthorized SSO token while rendering tailored PDF')
+        return
+      }
+      setTailorMessage('Failed to render the tailored PDF. Please try again.')
+      if (err instanceof Error) {
+        console.error(`[CV] Tailored PDF render error: ${err.message}`)
+      } else {
+        console.error('[CV] Tailored PDF render error')
+      }
+    } finally {
+      setTailorBusy(false)
+    }
+  }, [authToken, parsed.title, tailorBusy, tailorContent])
+
+  // handleTailorKeyDown wires Cmd/Ctrl+Enter inside the textarea to trigger download.
+  const handleTailorKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault()
+        void handleDownloadTailored()
+      }
+    },
+    [handleDownloadTailored],
+  )
+
   useEffect(() => {
     const tokenFromURL = readAuthTokenFromURL()
     if (tokenFromURL) {
@@ -682,6 +822,92 @@ export function CVPage() {
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
+            {canEdit ? (
+              <Dialog.Root
+                open={tailorOpen}
+                onOpenChange={handleTailorOpenChange}
+              >
+                <Dialog.Trigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cv-edit-button"
+                    title="Render a tailored PDF without overwriting the live CV"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Tailor PDF
+                  </Button>
+                </Dialog.Trigger>
+                <Dialog.Portal container={cvPageRef.current}>
+                  <Dialog.Overlay className="cv-modal-overlay" />
+                  <Dialog.Content className="cv-modal-content">
+                    <div className="cv-modal-header">
+                      <div>
+                        <Dialog.Title className="cv-modal-title">
+                          Tailor PDF
+                        </Dialog.Title>
+                        <Dialog.Description className="cv-modal-description">
+                          Render a one-off PDF from custom markdown. The live
+                          CV and saved history are not modified.
+                        </Dialog.Description>
+                      </div>
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="cv-modal-close"
+                          aria-label="Close"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </Dialog.Close>
+                    </div>
+                    <div className="cv-modal-status">
+                      <span>Draft is local to this browser.</span>
+                      <span>
+                        Press {navigator.platform.toLowerCase().includes('mac')
+                          ? 'Cmd'
+                          : 'Ctrl'}
+                        +Enter to download.
+                      </span>
+                    </div>
+                    {tailorMessage ? (
+                      <div className="cv-modal-alert">{tailorMessage}</div>
+                    ) : null}
+                    <Textarea
+                      className="cv-editor-textarea"
+                      value={tailorContent}
+                      onChange={(event) =>
+                        handleTailorContentChange(event.target.value)
+                      }
+                      onKeyDown={handleTailorKeyDown}
+                      spellCheck={false}
+                      disabled={tailorBusy}
+                      placeholder="Paste or edit the markdown to render"
+                    />
+                    <div className="cv-modal-actions">
+                      <Button
+                        variant="outline"
+                        onClick={handleTailorReset}
+                        disabled={tailorBusy}
+                        title="Replace the draft with the current saved CV"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Reset to current CV
+                      </Button>
+                      <Button
+                        onClick={handleDownloadTailored}
+                        disabled={
+                          tailorBusy || tailorContent.trim().length === 0
+                        }
+                      >
+                        <Download className="h-4 w-4" />
+                        {tailorBusy ? 'Rendering' : 'Download PDF'}
+                      </Button>
+                    </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+            ) : null}
             {canEdit ? (
               <Dialog.Root
                 open={editorOpen}

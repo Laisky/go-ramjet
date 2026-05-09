@@ -88,6 +88,7 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 	grp.GET("/content/version", auth.AuthMw, h.getContentVersion)
 	grp.PUT("/content", auth.AuthMw, h.saveContent)
 	grp.GET("/pdf", h.downloadPDF)
+	grp.POST("/pdf/preview", auth.AuthMw, h.renderPDFPreview)
 }
 
 // getPageMeta returns resolved CV page metadata for the current request host/path.
@@ -192,6 +193,42 @@ func (h *handler) saveContent(c *gin.Context) {
 		zap.Int("bytes", len(payload.Content)),
 		zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 	c.JSON(http.StatusOK, payload)
+}
+
+// renderPDFPreview renders ad-hoc markdown into a PDF without persisting it,
+// allowing authenticated users to preview tailored CV variants.
+func (h *handler) renderPDFPreview(c *gin.Context) {
+	logger := gmw.GetLogger(c)
+
+	if h.pdfService == nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return
+	}
+
+	var req contentRequest
+	if err := c.ShouldBindJSON(&req); web.AbortErr(c, err) {
+		return
+	}
+
+	if strings.TrimSpace(req.Content) == "" {
+		web.AbortErr(c, errors.WithStack(errors.New("content is empty")))
+		return
+	}
+
+	pdfBytes, err := h.pdfService.Render(gmw.Ctx(c), req.Content)
+	if web.AbortErr(c, err) {
+		return
+	}
+
+	logger.Debug("cv pdf preview rendered",
+		zap.Int("content_bytes", len(req.Content)),
+		zap.Int("pdf_bytes", len(pdfBytes)))
+	c.Header("Cache-Control", cvPDFCacheControl)
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
+	c.Header("Content-Disposition", "attachment; filename=\"cv-tailored.pdf\"")
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 // downloadPDF streams the CV PDF file if configured.
