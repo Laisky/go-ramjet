@@ -11,6 +11,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -31,13 +32,26 @@ const cvPDFTemplate = `<!doctype html>
     <title>{{ .Title }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&family=Noto+Serif+TC:wght@400;600&family=Noto+Serif+JP:wght@400;600&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet" />
     <style>
       :root {
         --cv-ink: #0b1020;
         --cv-muted: #4b5366;
         --cv-accent: #8f2d14;
         --cv-border: #d6d2c6;
+        /* CJK + Latin unified stacks: per-glyph fallback walks the list. */
+        --cv-font-serif: "Newsreader", "Times New Roman",
+          "Noto Serif SC", "Noto Serif TC", "Noto Serif JP", "Noto Serif KR",
+          "Noto Serif CJK SC", "Noto Serif CJK TC", "Noto Serif CJK JP", "Noto Serif CJK KR",
+          "Source Han Serif SC", "Source Han Serif TC", "Source Han Serif",
+          "PingFang SC", "PingFang TC", "Hiragino Mincho ProN", "Yu Mincho", "Songti SC",
+          "Microsoft YaHei", "SimSun", serif;
+        --cv-font-sans: "Space Grotesk", "Segoe UI",
+          "Noto Sans SC", "Noto Sans TC", "Noto Sans JP", "Noto Sans KR",
+          "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Source Han Sans SC", "Source Han Sans TC", "Source Han Sans",
+          "PingFang SC", "PingFang TC", "Hiragino Sans", "Yu Gothic", "Heiti SC",
+          "Microsoft YaHei", sans-serif;
       }
 
       @page {
@@ -54,7 +68,7 @@ const cvPDFTemplate = `<!doctype html>
         padding: 0;
         background: #ffffff;
         color: var(--cv-ink);
-        font-family: "Newsreader", "Times New Roman", serif;
+        font-family: var(--cv-font-serif);
         font-size: 12pt;
         line-height: 1.55;
       }
@@ -63,7 +77,7 @@ const cvPDFTemplate = `<!doctype html>
       h2,
       h3,
       h4 {
-        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        font-family: var(--cv-font-sans);
         letter-spacing: -0.01em;
       }
 
@@ -345,6 +359,22 @@ func renderHTMLToPDF(ctx context.Context, htmlContent string) ([]byte, error) {
 		chromeCtx,
 		chromedp.Navigate(dataURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			// Wait for web fonts (Google Fonts CDN, including Noto CJK families) to
+			// finish loading before printing. Without this the renderer can race
+			// and emit tofu/mojibake for any glyph that depends on a still-loading
+			// font face, e.g. Chinese characters served via Noto Sans/Serif SC.
+			_, exp, err := runtime.Evaluate(`document.fonts.ready.then(() => true)`).
+				WithAwaitPromise(true).
+				Do(ctx)
+			if err != nil {
+				return errors.Wrap(err, "await document.fonts.ready")
+			}
+			if exp != nil {
+				return errors.WithStack(errors.New(exp.Error()))
+			}
+			return nil
+		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			pdfData, _, err = page.PrintToPDF().

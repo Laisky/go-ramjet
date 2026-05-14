@@ -73,6 +73,13 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y --no-install-recommends google-chrome-stable
 
+# install CJK + emoji + general Unicode fonts so headless Chrome can render
+# non-Latin scripts (Chinese / Japanese / Korean) in generated PDFs. Without
+# fonts-noto-cjk Chrome falls back to tofu/replacement glyphs for any CJK
+# character regardless of the page's @font-face declarations.
+RUN apt-get install -y --no-install-recommends \
+    fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core
+
 # install pg_dump from PGDG
 # Use the Debian bookworm codename directly to avoid needing lsb_release
 RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \

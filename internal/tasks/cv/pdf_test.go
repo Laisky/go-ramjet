@@ -71,6 +71,52 @@ func TestCVPDFTemplateStyling(t *testing.T) {
 	require.Contains(t, cvPDFTemplate, "break-inside: auto;")
 }
 
+// TestCVPDFTemplateCJKFontStack verifies the PDF HTML template ships a font
+// stack that covers CJK scripts. Without these fallbacks headless Chrome
+// renders Chinese / Japanese / Korean characters as tofu in the output PDF.
+// It takes a testing.T and returns no values.
+func TestCVPDFTemplateCJKFontStack(t *testing.T) {
+	t.Parallel()
+
+	// Web font families served from Google Fonts CDN — required for dev or any
+	// environment that lacks system CJK fonts.
+	require.Contains(t, cvPDFTemplate, "Noto+Sans+SC")
+	require.Contains(t, cvPDFTemplate, "Noto+Sans+TC")
+	require.Contains(t, cvPDFTemplate, "Noto+Sans+JP")
+	require.Contains(t, cvPDFTemplate, "Noto+Sans+KR")
+	require.Contains(t, cvPDFTemplate, "Noto+Serif+SC")
+
+	// CSS family names — what Chromium matches against once the font is
+	// available (either from CDN above or from fonts-noto-cjk in the image).
+	require.Contains(t, cvPDFTemplate, `"Noto Sans SC"`)
+	require.Contains(t, cvPDFTemplate, `"Noto Serif SC"`)
+	require.Contains(t, cvPDFTemplate, `"Noto Sans CJK SC"`)
+	require.Contains(t, cvPDFTemplate, `"Noto Serif CJK SC"`)
+}
+
+// TestCVPDFRendererPreservesCJK verifies the markdown → HTML stage emits raw
+// CJK code points unchanged, ruling out byte mangling upstream of Chromium.
+// It takes a testing.T and returns no values.
+func TestCVPDFRendererPreservesCJK(t *testing.T) {
+	t.Parallel()
+
+	renderer, err := NewCVPDFRenderer()
+	require.NoError(t, err)
+
+	const cjk = "# 张三的简历\n\n你好世界。これは履歴書です。안녕하세요。"
+	htmlBody, err := renderer.renderMarkdown(cjk)
+	require.NoError(t, err)
+	require.Contains(t, htmlBody, "张三的简历")
+	require.Contains(t, htmlBody, "你好世界")
+	require.Contains(t, htmlBody, "これは履歴書です")
+	require.Contains(t, htmlBody, "안녕하세요")
+
+	doc, err := renderer.buildHTML(extractMarkdownTitle(cjk), htmlBody)
+	require.NoError(t, err)
+	require.Contains(t, doc, "<title>张三的简历</title>")
+	require.Contains(t, doc, "你好世界")
+}
+
 // buildTestPNG creates a solid PNG image for tests.
 // It takes a testing.T plus width/height and returns the PNG bytes.
 func buildTestPNG(t *testing.T, width int, height int) []byte {
