@@ -75,6 +75,30 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 		zap.String("tool", name),
 		zap.Any("args_truncated", truncateMapForLog(parsedArgs, maxLogValueLen)))
 
+	// Fast path: a previous successful call pinned a transport+endpoint
+	// for this server.URL. Avoid re-probing the 8 REST URLs and JSON-RPC
+	// fallbacks (~2s wasted per call against servers like mcp.laisky.com).
+	if cached, ok := loadMCPTransport(server.URL); ok {
+		switch cached.Transport {
+		case mcpTransportREST:
+			if result, err, hit := tryCachedREST(ctx, server, cached.Endpoint, headers, auths, bodyBytes); hit {
+				if err == nil {
+					return result, nil
+				}
+				return "", err
+			}
+		case mcpTransportJSONRPC:
+			result, rpcErr := callMCPToolJSONRPCAt(ctx, server, headers, auths, body, []string{cached.Endpoint})
+			if rpcErr == nil {
+				return result, nil
+			}
+			invalidateMCPTransport(server.URL)
+			logger.Debug("cached json-rpc endpoint failed; falling back to full discovery",
+				zap.String("endpoint", cached.Endpoint),
+				zap.Error(rpcErr))
+		}
+	}
+
 	var lastRestErr error
 
 	// 1) Try REST-ish endpoints.
@@ -109,6 +133,7 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 				zap.Error(mcpErr))
 			return "", mcpErr
 		}
+		storeMCPTransport(server.URL, mcpTransportREST, endpoint)
 		return result, nil
 	}
 
@@ -124,9 +149,64 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 	return result, nil
 }
 
-func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeaders http.Header, auths []string, params map[string]any) (string, error) {
+// tryCachedREST executes a single cached REST endpoint. The third return
+// distinguishes "endpoint reached server (cache still valid)" from
+// "transport-level failure that should invalidate the cache". When hit is
+// false the cache has been dropped and the caller must re-probe.
+func tryCachedREST(ctx context.Context, server *MCPServerConfig, endpoint string, headers http.Header, auths []string, bodyBytes []byte) (string, error, bool) {
 	logger := gmw.GetLogger(ctx)
-	endpointCandidates := guessJSONRPCEndpoints(server)
+	resp, callErr := doMCPPost(ctx, endpoint, headers, auths, bodyBytes)
+	if callErr != nil {
+		invalidateMCPTransport(server.URL)
+		logger.Debug("cached rest endpoint failed; falling back to full discovery",
+			zap.String("endpoint", endpoint),
+			zap.Error(callErr))
+		return "", nil, false
+	}
+	defer resp.Body.Close()
+	obj, parseErr := fetchJSONOrSSE(resp)
+	if parseErr != nil {
+		return "", errors.Wrapf(parseErr, "parse mcp response from %s", endpoint), true
+	}
+	logger.Debug("mcp rest call response (cached)",
+		zap.String("endpoint", endpoint),
+		zap.Any("response_truncated", truncateMapForLog(obj, maxLogValueLen)))
+	result, mcpErr := processMCPResponse(obj)
+	if mcpErr != nil {
+		logger.Debug("mcp tool returned error",
+			zap.String("endpoint", endpoint),
+			zap.Error(mcpErr))
+		return "", mcpErr, true
+	}
+	return result, nil, true
+}
+
+func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeaders http.Header, auths []string, params map[string]any) (string, error) {
+	// Direct invocations (no REST attempt first) still benefit from the
+	// cache: skip the endpoint sweep when we already know which one works.
+	if cached, ok := loadMCPTransport(server.URL); ok && cached.Transport == mcpTransportJSONRPC {
+		result, err := callMCPToolJSONRPCAt(ctx, server, baseHeaders, auths, params, []string{cached.Endpoint})
+		if err == nil {
+			return result, nil
+		}
+		invalidateMCPTransport(server.URL)
+		gmw.GetLogger(ctx).Debug("cached json-rpc endpoint failed; falling back to full discovery",
+			zap.String("endpoint", cached.Endpoint),
+			zap.Error(err))
+	}
+	return callMCPToolJSONRPCAt(ctx, server, baseHeaders, auths, params, nil)
+}
+
+// callMCPToolJSONRPCAt is the actual JSON-RPC call worker. When
+// endpoints is nil it falls back to the full guessJSONRPCEndpoints sweep;
+// when non-nil it walks only the supplied candidates (used by the
+// transport cache fast path).
+func callMCPToolJSONRPCAt(ctx context.Context, server *MCPServerConfig, baseHeaders http.Header, auths []string, params map[string]any, endpoints []string) (string, error) {
+	logger := gmw.GetLogger(ctx)
+	endpointCandidates := endpoints
+	if endpointCandidates == nil {
+		endpointCandidates = guessJSONRPCEndpoints(server)
+	}
 	if len(endpointCandidates) == 0 {
 		return "", errors.New("no json-rpc endpoints")
 	}
@@ -195,6 +275,7 @@ func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeader
 					resultObj = resMap
 				} else {
 					// Non-map result, stringify directly
+					storeMCPTransport(server.URL, mcpTransportJSONRPC, endpoint)
 					return stringifyMCPResult(res), nil
 				}
 			}
@@ -207,6 +288,7 @@ func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeader
 					zap.Error(mcpErr))
 				return "", mcpErr
 			}
+			storeMCPTransport(server.URL, mcpTransportJSONRPC, endpoint)
 			return result, nil
 		}
 	}
@@ -251,7 +333,15 @@ func DiscoverMCPTools(ctx context.Context, server *MCPServerConfig, opts *MCPCal
 	baseHeaders.Set("content-type", "application/json")
 	baseHeaders.Set("accept", "application/json, text/event-stream")
 
-	endpointCandidates := guessJSONRPCEndpoints(server)
+	// Prefer the cached JSON-RPC endpoint when one is known, otherwise
+	// sweep the candidate list. REST cache hits don't apply here because
+	// tools/list has no REST equivalent in this client.
+	var endpointCandidates []string
+	if cached, ok := loadMCPTransport(server.URL); ok && cached.Transport == mcpTransportJSONRPC {
+		endpointCandidates = []string{cached.Endpoint}
+	} else {
+		endpointCandidates = guessJSONRPCEndpoints(server)
+	}
 	if len(endpointCandidates) == 0 {
 		return nil, errors.New("no json-rpc endpoints derivable from server url")
 	}
@@ -310,11 +400,17 @@ func DiscoverMCPTools(ctx context.Context, server *MCPServerConfig, opts *MCPCal
 				zap.String("endpoint", endpoint),
 				zap.String("method", method),
 				zap.Int("tool_count", len(tools)))
+			storeMCPTransport(server.URL, mcpTransportJSONRPC, endpoint)
 			return tools, nil
 		}
 	}
 
 	if lastErr != nil {
+		// If we got here via the cached fast path, drop the entry so a
+		// retry re-discovers the working endpoint.
+		if len(endpointCandidates) == 1 {
+			invalidateMCPTransport(server.URL)
+		}
 		return nil, errors.Wrap(lastErr, "failed to discover mcp tools")
 	}
 	return nil, errors.New("failed to discover mcp tools")

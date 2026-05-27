@@ -12,11 +12,62 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/go-utils/v6/json"
 )
+
+// Transport kinds recorded in mcpTransportCache.
+const (
+	mcpTransportREST    = "rest"
+	mcpTransportJSONRPC = "jsonrpc"
+)
+
+// mcpTransportCacheEntry records which endpoint+transport last succeeded
+// for a given server.URL. We cache because endpoint discovery probes up
+// to 8 REST URLs and several JSON-RPC paths per call, wasting ~2s every
+// time when the working endpoint is already known.
+type mcpTransportCacheEntry struct {
+	Transport string
+	Endpoint  string
+}
+
+// mcpTransportCache is a process-lifetime cache keyed by server.URL.
+// MCPServerConfig values are copied through the request pipeline
+// (see agentx/handler.go forceMCPEnabledWithCuratedServer), so the cache
+// cannot live on the struct itself.
+var mcpTransportCache sync.Map // map[string]mcpTransportCacheEntry
+
+func loadMCPTransport(serverURL string) (mcpTransportCacheEntry, bool) {
+	key := strings.TrimSpace(serverURL)
+	if key == "" {
+		return mcpTransportCacheEntry{}, false
+	}
+	v, ok := mcpTransportCache.Load(key)
+	if !ok {
+		return mcpTransportCacheEntry{}, false
+	}
+	e, ok := v.(mcpTransportCacheEntry)
+	return e, ok
+}
+
+func storeMCPTransport(serverURL, transport, endpoint string) {
+	key := strings.TrimSpace(serverURL)
+	if key == "" || transport == "" || endpoint == "" {
+		return
+	}
+	mcpTransportCache.Store(key, mcpTransportCacheEntry{Transport: transport, Endpoint: endpoint})
+}
+
+func invalidateMCPTransport(serverURL string) {
+	key := strings.TrimSpace(serverURL)
+	if key == "" {
+		return
+	}
+	mcpTransportCache.Delete(key)
+}
 
 const (
 	// maxLogValueLen is the maximum length for logged string values.

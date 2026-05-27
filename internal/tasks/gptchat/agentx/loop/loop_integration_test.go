@@ -822,3 +822,131 @@ func TestRun_NextRoundInputCarriesFunctionCallID(t *testing.T) {
 	require.True(t, foundFC,
 		"round 2 input must contain at least one function_call item")
 }
+
+// TestRun_PreservesAssistantTextAcrossRounds asserts that the model's free
+// assistant text emitted alongside function_calls in round 1 is appended to
+// the round-2 inputItems as an assistant-role message BEFORE the
+// function_call/function_call_output pair. This is the ReAct "Thought"
+// preservation fix — without it the model has to re-derive its plan every
+// round, which empirically causes gpt-5-class models to repeat search calls
+// rather than progress to fetch.
+func TestRun_PreservesAssistantTextAcrossRounds(t *testing.T) {
+	t.Parallel()
+	web := newFakeTool("web_search", 0, "[]")
+	scripts := [][]model.StreamChunk{
+		// Round 1: model emits free text THEN a function_call. The text is
+		// the ReAct "Thought" we expect to carry into round 2.
+		scriptedRound{
+			textChunks: []string{"planning to search and then fetch"},
+			functionCalls: []model.FunctionCall{{
+				CallID:    "call_round1",
+				Name:      "web_search",
+				Arguments: rawArgs(t, map[string]any{"q": "go"}),
+			}},
+		}.chunks(),
+		// Round 2: model exits via send_to_user.
+		sendToUserBatch(t, "done"),
+	}
+	h := newHarness(t, scripts, []tool.Tool{web})
+
+	var roundInputs [][]model.InputItem
+	h.bus.OnContext(func(_ context.Context, ev hook.ContextEvent) (hook.ContextEvent, error) {
+		snap := make([]model.InputItem, len(ev.Input))
+		copy(snap, ev.Input)
+		roundInputs = append(roundInputs, snap)
+		return ev, nil
+	})
+
+	require.NoError(t, h.run(t, context.Background(), "search go"))
+	require.GreaterOrEqual(t, len(roundInputs), 2,
+		"loop should reach at least 2 rounds (web_search then send_to_user)")
+
+	round2 := roundInputs[1]
+
+	// Locate the assistant-text message and the function_call/output pair;
+	// the assistant text MUST appear BEFORE the function_call.
+	assistantTextIdx := -1
+	functionCallIdx := -1
+	functionCallOutputIdx := -1
+	for i, it := range round2 {
+		m, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		if role, _ := m["role"].(string); role == "assistant" {
+			if content, _ := m["content"].(string); strings.Contains(
+				content, "planning to search and then fetch") {
+				assistantTextIdx = i
+			}
+		}
+		if m["type"] == "function_call" {
+			if callID, _ := m["call_id"].(string); callID == "call_round1" {
+				functionCallIdx = i
+			}
+		}
+		if m["type"] == "function_call_output" {
+			if callID, _ := m["call_id"].(string); callID == "call_round1" {
+				functionCallOutputIdx = i
+			}
+		}
+	}
+
+	require.NotEqual(t, -1, assistantTextIdx,
+		"round 2 input must contain an assistant-role message carrying the round-1 thought")
+	require.NotEqual(t, -1, functionCallIdx,
+		"round 2 input must contain the round-1 function_call")
+	require.NotEqual(t, -1, functionCallOutputIdx,
+		"round 2 input must contain the round-1 function_call_output")
+	require.Less(t, assistantTextIdx, functionCallIdx,
+		"assistant text must precede the function_call so the ordering matches what the model emitted")
+	require.Less(t, functionCallIdx, functionCallOutputIdx,
+		"function_call must precede its matching function_call_output")
+}
+
+// TestRun_NoAssistantMessage_WhenRoundEmitsOnlyFunctionCalls asserts that
+// when a round emits NO free text (only function_calls), the loop does not
+// inject an empty assistant-role message into the next round's input —
+// keeping the transcript minimal and avoiding empty-content messages that
+// some upstreams reject.
+func TestRun_NoAssistantMessage_WhenRoundEmitsOnlyFunctionCalls(t *testing.T) {
+	t.Parallel()
+	web := newFakeTool("web_search", 0, "[]")
+	scripts := [][]model.StreamChunk{
+		// Round 1: NO text, only a function_call.
+		scriptedRound{functionCalls: []model.FunctionCall{{
+			CallID:    "call_round1",
+			Name:      "web_search",
+			Arguments: rawArgs(t, map[string]any{"q": "go"}),
+		}}}.chunks(),
+		sendToUserBatch(t, "done"),
+	}
+	h := newHarness(t, scripts, []tool.Tool{web})
+
+	var roundInputs [][]model.InputItem
+	h.bus.OnContext(func(_ context.Context, ev hook.ContextEvent) (hook.ContextEvent, error) {
+		snap := make([]model.InputItem, len(ev.Input))
+		copy(snap, ev.Input)
+		roundInputs = append(roundInputs, snap)
+		return ev, nil
+	})
+
+	require.NoError(t, h.run(t, context.Background(), "search go"))
+	require.GreaterOrEqual(t, len(roundInputs), 2)
+
+	// Round 2 must not contain an empty assistant message that the loop
+	// itself injected. The only assistant-role messages allowed here are
+	// those the caller seeded via deps.Input (none in this test).
+	for i, it := range roundInputs[1] {
+		m, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		role, _ := m["role"].(string)
+		if role != "assistant" {
+			continue
+		}
+		content, _ := m["content"].(string)
+		require.NotEmpty(t, strings.TrimSpace(content),
+			"round 2 input[%d] is an empty assistant message — the loop should skip the append when roundText is empty", i)
+	}
+}

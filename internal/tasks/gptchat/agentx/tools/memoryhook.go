@@ -136,8 +136,23 @@ var defaultMemoryAfterTurn = memoryx.AfterTurnHook
 // condition. (The bus would otherwise translate the error into either a
 // synthesized IsError result or, for ErrAskUser, a loop exit.)
 func NewMemoryBeforeTurnHook(deps *MemoryDeps) func(context.Context, hook.ContextEvent) (hook.ContextEvent, error) {
+	round := 0
 	return func(ctx context.Context, ev hook.ContextEvent) (hook.ContextEvent, error) {
 		if !memoryDepsActive(deps) {
+			return ev, nil
+		}
+
+		// Only run on the opening round. memoryx.BeforeTurnHook funnels
+		// the input through selectLatestUserMessageItems, which drops
+		// every function_call / function_call_output the agent loop has
+		// accumulated. Letting that fire on round > 0 wipes the in-flight
+		// tool transcript and the model keeps re-emitting the same
+		// queries because it never sees its prior calls. The Before hook
+		// is meant to seed the opening turn with memory context, not
+		// compress the live transcript, so subsequent rounds are skipped.
+		currentRound := round
+		round++
+		if currentRound > 0 {
 			return ev, nil
 		}
 

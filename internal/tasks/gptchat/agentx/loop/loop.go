@@ -177,13 +177,13 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 	parallelToolCalls := caps.SupportsParallelToolCalls && deps.Caps.MaxParallelToolCalls > 1
 
 	var (
-		finalText       string
-		finalCitations  []session.Citation
-		finalOrigin     string
-		terminatedBy    string
-		runErr          error
-		iterationsDone  int
-		finalStepID     string
+		finalText      string
+		finalCitations []session.Citation
+		finalOrigin    string
+		terminatedBy   string
+		runErr         error
+		iterationsDone int
+		finalStepID    string
 	)
 
 	// Helper to emit a Final + RunFinished pair under a given step.
@@ -345,10 +345,10 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 		}
 
 		var (
-			roundCalls   []model.FunctionCall
-			roundText    strings.Builder
+			roundCalls     []model.FunctionCall
+			roundText      strings.Builder
 			roundStreamErr error
-			roundUsage   *model.Usage
+			roundUsage     *model.Usage
 		)
 
 		// Consume chunks.
@@ -500,6 +500,15 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 		_ = sink.Emit(stepFinished)
 
 		// 4.i: feed results back into the input for the next round.
+		// Preserve the model's free assistant text (the ReAct "Thought") so
+		// it carries into the next round as plan continuity. Standalone
+		// function_call items are a separate transcript shape per the
+		// Responses API; text rides in its own assistant-role message,
+		// emitted BEFORE the function_call/function_call_output pairs that
+		// it preceded on the wire.
+		if text := roundText.String(); text != "" {
+			inputItems = append(inputItems, assistantMessage(text))
+		}
 		for i, call := range roundCalls {
 			inputItems = appendFunctionCallAndOutput(inputItems, call, outputs[i])
 		}
@@ -606,6 +615,17 @@ func userMessage(text string) model.InputItem {
 func systemMessage(text string) model.InputItem {
 	return map[string]any{
 		"role":    "system",
+		"content": text,
+	}
+}
+
+// assistantMessage carries the model's free text (the ReAct "Thought") from
+// one round into the next so the model sees its own plan continuity rather
+// than re-deriving it. Phase 1 uses the same map shape as user/system
+// helpers; the coercing model client converts it at the boundary.
+func assistantMessage(text string) model.InputItem {
+	return map[string]any{
+		"role":    "assistant",
 		"content": text,
 	}
 }

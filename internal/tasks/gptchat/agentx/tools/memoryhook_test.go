@@ -659,3 +659,108 @@ func jsonEscape(s string) string {
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	return s
 }
+
+// Round 0: a clean input with only the user message must trigger
+// memoryx.BeforeTurnHook and the resulting PreparedInput must replace
+// ev.Input. This is the happy path for the opening turn.
+func TestMemoryHooks_BeforeFiresOnFirstRound(t *testing.T) {
+	prepared := []any{
+		httppkg.OpenAIResponsesInputMessage{Role: "system", Content: "remembered:..."},
+		httppkg.OpenAIResponsesInputMessage{Role: "user", Content: "hi"},
+	}
+	calls := 0
+	restoreBefore := installFakeMemoryBefore(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ http.Header, _ []any, _ int) (memoryx.BeforeTurnResult, error) {
+		calls++
+		return fakeBeforeResult(prepared), nil
+	})
+	defer restoreBefore()
+
+	state := NewMemoryState()
+	deps := &MemoryDeps{
+		Enabled:        true,
+		Config:         &config.OpenAI{EnableMemory: true},
+		User:           &config.UserConfig{UserName: "u1"},
+		MaxInputTokens: 1000,
+		State:          state,
+	}
+	before := NewMemoryBeforeTurnHook(deps)
+
+	in := hook.ContextEvent{Input: []model.InputItem{
+		httppkg.OpenAIResponsesInputMessage{Role: "user", Content: "hi"},
+	}}
+	out, err := before(context.Background(), in)
+	require.NoError(t, err)
+	require.Equal(t, 1, calls, "round 0 must invoke memoryx.BeforeTurnHook exactly once")
+	require.Len(t, out.Input, 2, "PreparedInput must replace ev.Input on round 0")
+
+	user, ok := out.Input[1].(httppkg.OpenAIResponsesInputMessage)
+	require.True(t, ok)
+	require.Equal(t, "user", user.Role)
+	require.Equal(t, "hi", user.Content)
+}
+
+// Round 1+: when the closure is invoked a second time (the loop is past
+// its opening round), the hook must short-circuit before calling
+// memoryx.BeforeTurnHook. Otherwise selectLatestUserMessageItems would
+// drop the accumulated function_call / function_call_output transcript
+// and the model would re-emit the same tool queries forever. The
+// presence of a function_call_output in ev.Input is the canonical
+// "we're past round 0" signal — the test uses it as a realistic shape.
+func TestMemoryHooks_BeforeSkipsOnLaterRounds(t *testing.T) {
+	calls := 0
+	restoreBefore := installFakeMemoryBefore(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ http.Header, _ []any, _ int) (memoryx.BeforeTurnResult, error) {
+		calls++
+		return fakeBeforeResult([]any{
+			httppkg.OpenAIResponsesInputMessage{Role: "user", Content: "should not be applied"},
+		}), nil
+	})
+	defer restoreBefore()
+
+	state := NewMemoryState()
+	deps := &MemoryDeps{
+		Enabled:        true,
+		Config:         &config.OpenAI{EnableMemory: true},
+		User:           &config.UserConfig{UserName: "u1"},
+		MaxInputTokens: 1000,
+		State:          state,
+	}
+	before := NewMemoryBeforeTurnHook(deps)
+
+	// Round 0: clean input, hook fires.
+	in0 := hook.ContextEvent{Input: []model.InputItem{
+		httppkg.OpenAIResponsesInputMessage{Role: "user", Content: "hi"},
+	}}
+	_, err := before(context.Background(), in0)
+	require.NoError(t, err)
+	require.Equal(t, 1, calls, "round 0 must call memoryx.BeforeTurnHook")
+
+	// Round 1: simulate what the loop accumulates after one tool call.
+	// ev.Input now carries the user message + function_call +
+	// function_call_output. The hook must NOT touch this.
+	in1 := hook.ContextEvent{Input: []model.InputItem{
+		httppkg.OpenAIResponsesInputMessage{Role: "user", Content: "hi"},
+		httppkg.OpenAIResponsesFunctionCall{
+			Type:      "function_call",
+			CallID:    "c1",
+			Name:      "web_search",
+			Arguments: `{"q":"x"}`,
+		},
+		httppkg.OpenAIResponsesFunctionCallOutput{
+			Type:   "function_call_output",
+			CallID: "c1",
+			Output: `{"hits":3}`,
+		},
+	}}
+	out1, err := before(context.Background(), in1)
+	require.NoError(t, err)
+	require.Equal(t, 1, calls,
+		"round > 0 must NOT call memoryx.BeforeTurnHook; otherwise the function_call transcript is wiped")
+	require.Equal(t, in1, out1,
+		"round > 0 must return ev unchanged so the loop's accumulated function_call transcript survives")
+
+	// And again, to make sure the counter does not somehow re-arm.
+	out2, err := before(context.Background(), in1)
+	require.NoError(t, err)
+	require.Equal(t, 1, calls, "subsequent rounds must continue to skip the memory hook")
+	require.Equal(t, in1, out2)
+}
