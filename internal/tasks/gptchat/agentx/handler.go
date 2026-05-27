@@ -15,6 +15,7 @@ package agentx
 
 import (
 	"context"
+	stdjson "encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -180,16 +181,32 @@ func handleAgentWithDeps(
 		Logger:         logger,
 		Enabled:        memoryEnabled,
 		State:          memState,
+		// Defensive cap on the assistant final text handed to memoryx
+		// so the MCP file_write JSONL append stays well below its
+		// PAYLOAD_TOO_LARGE threshold. Zero falls back to the package
+		// default (64 KiB); we set it explicitly for clarity at the
+		// call site.
+		FinalTextMaxBytes: tools.DefaultMemoryFinalTextMaxBytes,
 	}
 
 	// 4. Curated tool belt. We expose the LegacyDepsProvider through a
 	//    closure that always reports `EnableMCP=true` on the FrontendReq
 	//    copy it hands the dispatch path — never mutate the caller's
-	//    request (decision §4.2 #3 / U13).
+	//    request (decision §4.2 #3 / U13). The closure also injects the
+	//    curated MCP server into FrontendReq.MCPServers so the legacy
+	//    dispatcher's `findMCPServerForToolName` can resolve curated tool
+	//    names even when the user-supplied request carries no MCP servers
+	//    (the "MCP" UI toggle is independent from "Agent" and may be off).
+	//
+	//    curatedServer is built up-front with the URL/Enabled fields and a
+	//    pointer is captured by the closure; we populate Tools after
+	//    BuildCuratedBelt returns (the registry now knows which curated
+	//    names the upstream MCP server actually advertised).
+	curatedServer := resolveCuratedMCP(inputs.AgentCfg)
 	depsProvider := tools.LegacyDepsFunc(func(ctx context.Context, _ string, _ string) (httppkg.LegacyDeps, error) {
 		return httppkg.LegacyDeps{
 			User:         inputs.User,
-			FrontendReq:  forceMCPEnabled(inputs.FrontendReq),
+			FrontendReq:  forceMCPEnabledWithCuratedServer(inputs.FrontendReq, curatedServer),
 			RawUserToken: httppkg.GetRawUserToken(gctx),
 			Logger:       logger,
 		}, nil
@@ -201,7 +218,7 @@ func handleAgentWithDeps(
 	} else {
 		built, regErr := tools.BuildCuratedBelt(gmw.Ctx(gctx), tools.BeltDeps{
 			Logger:           logger,
-			MCPServer:        resolveCuratedMCP(inputs.AgentCfg),
+			MCPServer:        curatedServer,
 			DepsProvider:     depsProvider,
 			SubagentEnabled:  inputs.AgentCfg.Subagent.Enabled,
 			SubagentMaxDepth: inputs.AgentCfg.Subagent.MaxDepth,
@@ -212,6 +229,10 @@ func handleAgentWithDeps(
 		}
 		registry = built
 	}
+	// Populate curatedServer.Tools so findMCPServerForToolName can resolve
+	// the curated belt against this server. Done after BuildCuratedBelt so
+	// the list reflects only the tools the MCP catalog actually advertised.
+	populateCuratedServerTools(curatedServer, registry)
 
 	// 5. Hook bus. Registration order is the firing order (verified by
 	//    hook U21); ordering here is load-bearing.
@@ -237,6 +258,15 @@ func handleAgentWithDeps(
 	//    fake. The model's StreamSink is intentionally nil because the
 	//    OneAPI adapter consumes typed events itself; the SSE writer
 	//    below is the only path that touches the gin response.
+	//
+	//    The client is wrapped in a coercingModelClient (see coerce.go)
+	//    so any map-shaped InputItem (emitted by the loop's userMessage /
+	//    appendFunctionCallAndOutput helpers, or arriving via the memory
+	//    enrichment hook's PreparedInput at responses_chat_handler.go:789)
+	//    is converted to the three concrete structs the OneAPI adapter's
+	//    validateInputItem accepts. The wrap is applied to overridden
+	//    clients too so tests exercising mixed-shape inputs see the same
+	//    boundary contract as production.
 	var modelClient model.Client
 	if override.ModelClient != nil {
 		modelClient = override.ModelClient
@@ -251,6 +281,7 @@ func handleAgentWithDeps(
 			Logger: logger,
 		})
 	}
+	modelClient = newCoercingModelClient(modelClient)
 
 	// 7. Session, SSE writer, and the consumer goroutine.
 	sess := session.NewSession(session.Config{Logger: logger, BufferSize: 256})
@@ -282,7 +313,18 @@ func handleAgentWithDeps(
 	//    history (from `convert2UpstreamResponsesRequest` it is already
 	//    in Responses-API shape). The loop appends the user prompt on
 	//    top before the first model call.
-	inputItems := flattenInputForLoop(inputs.ResponsesReq)
+	//
+	//    The seed is coerced once at the handler boundary so that even
+	//    map-shaped items injected by the memory enrichment hook (see
+	//    responses_chat_handler.go:789 — `responsesReq.Input =
+	//    beforeResult.PreparedInput`, a []any of map[string]any) land in
+	//    the loop as the three concrete struct shapes. The coercingModel
+	//    wrapper above re-runs the same coercion just before each Stream
+	//    call to catch any maps the loop appends afterwards.
+	inputItems, coerceErr := coerceInputItems(inputAsAnySlice(inputs.ResponsesReq.Input))
+	if coerceErr != nil {
+		return errors.Wrap(coerceErr, "coerce responses input for agent loop")
+	}
 	runErr := loop.Run(loopCtx, sess, loop.RunDeps{
 		Bus:             bus,
 		Registry:        registry,
@@ -371,6 +413,93 @@ func forceMCPEnabled(req *httppkg.FrontendReq) *httppkg.FrontendReq {
 	on := true
 	cp.EnableMCP = &on
 	return &cp
+}
+
+// forceMCPEnabledWithCuratedServer extends forceMCPEnabled by also
+// ensuring the returned copy's MCPServers slice includes the curated MCP
+// server descriptor. This is what makes the legacy dispatcher's
+// findMCPServerForToolName lookup succeed for curated belt tools —
+// without it the lookup walks the caller's (possibly empty) MCPServers
+// slice and rejects the call with "tool X not found in enabled MCP
+// servers" (Bug 1).
+//
+// Dedupe rule: if the caller already supplied a server with the same
+// URL as curatedServer (e.g. the user enabled MCP from the UI and
+// pointed at the same backend), we leave the caller's entry in place
+// and do NOT add a second copy. We still build a fresh MCPServers slice
+// (never mutating the caller's slice) so the U13 isolation contract
+// holds: the caller's FrontendReq is untouched on return.
+//
+// When curatedServer is nil the function degrades to forceMCPEnabled.
+func forceMCPEnabledWithCuratedServer(
+	req *httppkg.FrontendReq,
+	curatedServer *httppkg.MCPServerConfig,
+) *httppkg.FrontendReq {
+	cp := forceMCPEnabled(req)
+	if cp == nil || curatedServer == nil {
+		return cp
+	}
+	// Build a fresh slice so we never mutate the caller's request — U13.
+	merged := make([]httppkg.MCPServerConfig, 0, len(cp.MCPServers)+1)
+	curatedURL := strings.TrimSpace(curatedServer.URL)
+	seenCurated := false
+	for _, s := range cp.MCPServers {
+		merged = append(merged, s)
+		if curatedURL != "" && strings.TrimSpace(s.URL) == curatedURL {
+			seenCurated = true
+		}
+	}
+	if !seenCurated {
+		merged = append(merged, *curatedServer)
+	}
+	cp.MCPServers = merged
+	return cp
+}
+
+// populateCuratedServerTools sets curatedServer.Tools to a
+// []json.RawMessage carrying one `{"name": "..."}` entry per curated
+// MCP tool registered in reg. findMCPServerForToolName resolves a tool
+// by walking each server's Tools slice and reading the `name` field, so
+// this is the minimum payload we must surface for the lookup to find
+// the curated server when the legacy dispatcher routes a curated call.
+//
+// We filter the registry by Source so only tools that actually live
+// behind the curated MCP server are listed — local tools
+// (send_to_user, spawn_agent) must not be claimed by the server.
+func populateCuratedServerTools(curatedServer *httppkg.MCPServerConfig, reg tool.Registry) {
+	if curatedServer == nil || reg == nil {
+		return
+	}
+	descriptors := reg.Descriptors()
+	if len(descriptors) == 0 {
+		return
+	}
+	tools := make([]stdjson.RawMessage, 0, len(descriptors))
+	for _, d := range descriptors {
+		if d.Source != tool.SourceCuratedMCP {
+			continue
+		}
+		raw, err := stdjson.Marshal(map[string]string{"name": d.Name})
+		if err != nil {
+			// Marshalling a static map cannot realistically fail; fall
+			// back to a hand-rolled JSON literal so the lookup still
+			// finds the name even on the unreachable error path.
+			raw = stdjson.RawMessage(`{"name":` + quoteJSONString(d.Name) + `}`)
+		}
+		tools = append(tools, raw)
+	}
+	curatedServer.Tools = tools
+}
+
+// quoteJSONString is a tiny helper that hands back a JSON-escaped form
+// of s suitable for splicing into a manual JSON literal. Used only in
+// the unreachable error path of populateCuratedServerTools.
+func quoteJSONString(s string) string {
+	b, err := stdjson.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
 }
 
 // resolveCuratedMCP returns the curated MCP server descriptor or nil
@@ -469,29 +598,6 @@ func upstreamRequestID(h http.Header) string {
 		return rid
 	}
 	return h.Get("x-request-id")
-}
-
-// flattenInputForLoop reduces ResponsesReq.Input (which may be a typed
-// []OpenAIResponsesInputMessage or already a []any) to a []model.InputItem
-// the loop can append to. model.InputItem is an alias for any so the
-// translation is shape-only.
-func flattenInputForLoop(req *httppkg.OpenAIResponsesReq) []model.InputItem {
-	if req == nil || req.Input == nil {
-		return nil
-	}
-	if msgs, ok := req.Input.([]httppkg.OpenAIResponsesInputMessage); ok {
-		out := make([]model.InputItem, 0, len(msgs))
-		for _, m := range msgs {
-			out = append(out, m)
-		}
-		return out
-	}
-	if arr, ok := req.Input.([]any); ok {
-		out := make([]model.InputItem, len(arr))
-		copy(out, arr)
-		return out
-	}
-	return nil
 }
 
 // buildEmitFunc wraps the gin-side stream sink + chat-completion chunk

@@ -76,6 +76,7 @@ export interface ChatSwitch {
   enable_talk: boolean
   enable_mcp: boolean
   enable_memory: boolean
+  agent_mode: boolean
   draw_n_images: number
 }
 
@@ -139,6 +140,7 @@ export const DefaultSessionConfig: SessionConfig = {
     enable_talk: false,
     enable_mcp: false,
     enable_memory: false,
+    agent_mode: false,
     draw_n_images: 1,
   },
   mcp_servers: [

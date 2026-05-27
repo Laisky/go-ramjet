@@ -316,6 +316,13 @@ func TestU13_EnableMCPIsolation(t *testing.T) {
 	off := false
 	on := true
 	req := frontendReqAgent(&on, "hello", &off)
+	// Caller also supplied one MCP server up-front (e.g. they had the
+	// "MCP" UI toggle on). The agent path must not mutate this slice
+	// even though it later injects the curated server into its own
+	// dispatch-path copy.
+	req.MCPServers = []httppkg.MCPServerConfig{
+		{URL: "https://user-mcp.test", Enabled: true},
+	}
 
 	// Single-round model: immediate send_to_user.
 	scripts := [][]model.StreamChunk{{
@@ -346,6 +353,13 @@ func TestU13_EnableMCPIsolation(t *testing.T) {
 	require.NotNil(t, req.EnableMCP, "caller's EnableMCP pointer must survive")
 	require.False(t, *req.EnableMCP,
 		"caller's EnableMCP value must not be flipped to true")
+
+	// Caller's MCPServers slice must be untouched even though the
+	// agent dispatch-path copy gets the curated server appended.
+	require.Len(t, req.MCPServers, 1,
+		"caller's MCPServers slice must not be mutated")
+	require.Equal(t, "https://user-mcp.test", req.MCPServers[0].URL,
+		"caller's MCPServers entry must be unchanged")
 
 	// Verify the LegacyDepsProvider closure (which the belt builder
 	// would have called) sees an EnableMCP=true copy. We re-derive the
@@ -506,64 +520,292 @@ func TestI6_HookComposition_Redaction(t *testing.T) {
 	require.Contains(t, body, "tool_call: web_fetch")
 }
 
+// (I1 — proxy invariance — lives in the http package's
+// agent_invariance_test.go because it needs access to unexported
+// sendChatWithResponsesToolLoop and the ctxKeyAgentMode constant.
+// Keeping it here would require leaking that surface into agentx.)
+
 // -----------------------------------------------------------------------------
-// I1 — proxy invariance: request without agent_mode does not invoke the
-// agent dispatcher.
+// Coercion end-to-end — feed responsesReq.Input with a mixed-shape slice
+// (some typed OpenAIResponsesInputMessage, some bare map[string]any items
+// — the exact symptom from the live e2e repro after the memory hook
+// overwrote Input with PreparedInput at responses_chat_handler.go:789)
+// and assert the agent loop reaches Stream with every item already
+// coerced into one of the three concrete typed structs the OneAPI
+// adapter accepts.
 // -----------------------------------------------------------------------------
-//
-// We swap the registered dispatcher with a tripwire and call
-// sendChatWithResponsesToolLoop's flag check through the public branch.
-// The cleanest test surface: directly invoke the http package's
-// RegisterAgentDispatcher with a counter, then build a frontend
-// request whose JSON omits agent_mode, and route it through
-// ChatHandler. The tripwire must not fire.
 
-func TestI1_ProxyInvariance_NoAgentMode_DispatcherNotCalled(t *testing.T) {
-	setupTestConfig(t, defaultAgentCfg())
-
-	// Replace the dispatcher with a tripwire. Restore on cleanup so
-	// subsequent tests get the production one back.
-	originalDispatcher := dispatcherSnapshot()
-	t.Cleanup(func() { httppkg.RegisterAgentDispatcher(originalDispatcher) })
-
-	var tripped atomic.Int32
-	httppkg.RegisterAgentDispatcher(func(
-		ctx *gin.Context,
-		fr *httppkg.FrontendReq,
-		u *config.UserConfig,
-		rr *httppkg.OpenAIResponsesReq,
-		hdr http.Header,
-	) error {
-		tripped.Add(1)
-		return originalDispatcher(ctx, fr, u, rr, hdr)
-	})
-
-	// Build a frontend payload WITHOUT agent_mode. We are not running
-	// the full proxy here — the test asserts only that the dispatcher
-	// was not invoked. The proxy path itself remains exercised by the
-	// http package's existing tests (TestSendChatWithResponsesToolLoop*).
-	ctx, _, _ := newTestGinCtx(t,
-		`{"model":"gpt-test","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`)
-	_ = ctx // already authenticated through the helper
-
-	// The agent dispatch branch lives inside sendChatWithResponsesToolLoop;
-	// we cannot easily call that from this package due to unexported access.
-	// Instead we assert via the ctx flag pathway: without agent_mode set,
-	// no path will store ctxKeyAgentMode. Therefore the dispatcher is not
-	// invoked. The trip counter remains 0 unless someone broke the gate.
-	// (Production-path coverage of "without flag → proxy path runs" is
-	// handled by the http package's existing chat_test.go suite, which
-	// runs against a real upstream stub.)
-	require.Equal(t, int32(0), tripped.Load(),
-		"agent dispatcher must not fire for non-agent requests; got %d trip(s)",
-		tripped.Load())
+// recordingModelClient captures the Request.Input it observes on every
+// Stream call so the test can assert the wrapper coerced maps to typed
+// structs before they reached the model boundary.
+type recordingModelClient struct {
+	mu       sync.Mutex
+	inputs   [][]model.InputItem
+	scripts  [][]model.StreamChunk
+	calls    int
+	caps     model.Capabilities
 }
 
-// dispatcherSnapshot returns the currently registered dispatcher; it
-// reaches through the public symbol so the test stays self-contained.
-// (Calling httppkg.RegisterAgentDispatcher(nil) and then restoring is
-// risky because nil → ChatHandler returns 409. We instead capture the
-// init-registered HandleAgent directly.)
-func dispatcherSnapshot() func(ctx *gin.Context, fr *httppkg.FrontendReq, u *config.UserConfig, rr *httppkg.OpenAIResponsesReq, hdr http.Header) error {
-	return HandleAgent
+func newRecordingModelClient(scripts [][]model.StreamChunk) *recordingModelClient {
+	return &recordingModelClient{
+		scripts: scripts,
+		caps:    model.Capabilities{SupportsParallelToolCalls: true},
+	}
+}
+
+func (r *recordingModelClient) Stream(ctx context.Context, req model.Request) (<-chan model.StreamChunk, error) {
+	r.mu.Lock()
+	idx := r.calls
+	r.calls++
+	snap := make([]model.InputItem, len(req.Input))
+	copy(snap, req.Input)
+	r.inputs = append(r.inputs, snap)
+	var batch []model.StreamChunk
+	if idx < len(r.scripts) {
+		batch = r.scripts[idx]
+	} else {
+		batch = []model.StreamChunk{{Kind: model.ChunkText, Text: ""}, {Kind: model.ChunkDone}}
+	}
+	r.mu.Unlock()
+
+	ch := make(chan model.StreamChunk, len(batch)+1)
+	go func() {
+		defer close(ch)
+		for _, c := range batch {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- c:
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (r *recordingModelClient) Capabilities() model.Capabilities { return r.caps }
+
+func (r *recordingModelClient) snapshotInputs() [][]model.InputItem {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([][]model.InputItem, len(r.inputs))
+	for i, slot := range r.inputs {
+		cp := make([]model.InputItem, len(slot))
+		copy(cp, slot)
+		out[i] = cp
+	}
+	return out
+}
+
+func TestI_AgentLoop_CoercesMixedInputBeforeStream(t *testing.T) {
+	setupTestConfig(t, defaultAgentCfg())
+
+	ctx, _, user := newTestGinCtx(t, "{}")
+	on := true
+	req := frontendReqAgent(&on, "hi", nil)
+
+	// Seed responsesReq.Input with the mixed shape that the live e2e
+	// repro produces after the memory hook overwrites it: a typed input
+	// message (left over from convert2UpstreamResponsesRequest) followed
+	// by a map[string]any (the memory hook's PreparedInput shape).
+	responsesReq := &httppkg.OpenAIResponsesReq{
+		Model: "gpt-test",
+		Input: []any{
+			httppkg.OpenAIResponsesInputMessage{Role: "system", Content: "be brief"},
+			map[string]any{"role": "user", "content": "previous turn"},
+		},
+	}
+
+	// One-round model: immediately send_to_user. We only need to verify
+	// the loop reaches Stream without a model_stream_error.
+	scripts := [][]model.StreamChunk{{
+		{Kind: model.ChunkFunction, FunctionCall: &model.FunctionCall{
+			CallID:    "fc-send-1",
+			Name:      "send_to_user",
+			Arguments: rawArgs(t, map[string]any{"final_answer": "ok"}),
+		}},
+		{Kind: model.ChunkDone},
+	}}
+	rec := newRecordingModelClient(scripts)
+	registry := buildRegistry(t)
+
+	err := handleAgentWithDeps(ctx, agentRunInputs{
+		FrontendReq:    req,
+		User:           user,
+		ResponsesReq:   responsesReq,
+		UpstreamHeader: http.Header{},
+		AgentCfg:       defaultAgentCfg(),
+	}, busOverride{
+		ModelClient: rec,
+		Registry:    registry,
+	})
+	require.NoError(t, err)
+
+	// At least one Stream call must have landed — i.e. the loop got past
+	// step 0, which is the original repro symptom.
+	snaps := rec.snapshotInputs()
+	require.GreaterOrEqual(t, len(snaps), 1,
+		"agent loop should have made at least one upstream call")
+
+	// Every item across every recorded call must be one of the three
+	// typed concrete structs the OneAPI validator accepts. The loop
+	// itself emits map-shaped userMessage / systemMessage entries — the
+	// coercingModelClient wrapper is what converts them.
+	for round, items := range snaps {
+		for i, it := range items {
+			switch it.(type) {
+			case httppkg.OpenAIResponsesInputMessage,
+				*httppkg.OpenAIResponsesInputMessage,
+				httppkg.OpenAIResponsesFunctionCall,
+				*httppkg.OpenAIResponsesFunctionCall,
+				httppkg.OpenAIResponsesFunctionCallOutput,
+				*httppkg.OpenAIResponsesFunctionCallOutput:
+				// OK — matches one of the validator's accepted shapes.
+			default:
+				t.Fatalf("round %d Input[%d] is %T; want one of the three "+
+					"typed structs accepted by validateInputItem", round, i, it)
+			}
+		}
+	}
+
+	// Spot-check the first call: the seed's typed system message must
+	// survive verbatim, the map "previous turn" user message must have
+	// been converted to a typed struct, and the loop's userMessage("hi")
+	// (a map[string]any inside the loop) must reach the model boundary
+	// as a typed struct too. The exact slot order depends on the
+	// OnContext hook chain (the React renderer prepends its own system
+	// message) so we scan-by-content rather than asserting indices.
+	first := snaps[0]
+	require.GreaterOrEqual(t, len(first), 3,
+		"first call should carry: react prompt + seed system + prior user + loop's userMessage")
+
+	var foundSeed, foundPriorUser, foundLoopUser bool
+	for _, it := range first {
+		msg, ok := it.(httppkg.OpenAIResponsesInputMessage)
+		if !ok {
+			continue
+		}
+		content, _ := msg.Content.(string)
+		switch {
+		case msg.Role == "system" && content == "be brief":
+			foundSeed = true
+		case msg.Role == "user" && content == "previous turn":
+			foundPriorUser = true
+		case msg.Role == "user" && content == "hi":
+			foundLoopUser = true
+		}
+	}
+	require.True(t, foundSeed,
+		"seed typed system message ('be brief') must survive the coercion")
+	require.True(t, foundPriorUser,
+		"map-shaped prior user turn must be coerced into a typed input message")
+	require.True(t, foundLoopUser,
+		"loop-emitted userMessage('hi') must reach the model as a typed input message")
+}
+
+// -----------------------------------------------------------------------------
+// Bug 1 (curated belt MCP resolution) — the LegacyDeps the agent dispatch
+// path hands to ExecuteToolCallCtx must carry the curated MCP server in
+// FrontendReq.MCPServers; without it findMCPServerForToolName returns nil
+// and the legacy dispatcher rejects every curated belt call with
+// "tool X not found in enabled MCP servers".
+// -----------------------------------------------------------------------------
+
+// TestForceMCPEnabledWithCuratedServer_AddsCuratedServer asserts the
+// helper appends the curated server to a fresh MCPServers slice when the
+// caller's request carries none, leaving the caller's request untouched.
+func TestForceMCPEnabledWithCuratedServer_AddsCuratedServer(t *testing.T) {
+	off := false
+	req := &httppkg.FrontendReq{EnableMCP: &off}
+	curated := &httppkg.MCPServerConfig{
+		URL:     "https://mcp.curated.test",
+		Enabled: true,
+	}
+
+	cp := forceMCPEnabledWithCuratedServer(req, curated)
+	require.NotNil(t, cp)
+	require.NotSame(t, req, cp, "copy must not alias the caller's request")
+	require.NotNil(t, cp.EnableMCP)
+	require.True(t, *cp.EnableMCP, "copy must force EnableMCP=true")
+
+	require.Len(t, cp.MCPServers, 1, "curated server must be appended")
+	require.Equal(t, "https://mcp.curated.test", cp.MCPServers[0].URL)
+	require.True(t, cp.MCPServers[0].Enabled)
+
+	// Caller's request untouched.
+	require.Nil(t, req.MCPServers, "caller's MCPServers must stay nil")
+	require.NotNil(t, req.EnableMCP)
+	require.False(t, *req.EnableMCP,
+		"caller's EnableMCP must stay false")
+}
+
+// TestForceMCPEnabledWithCuratedServer_DedupesByURL asserts that when
+// the caller already supplies a server with the same URL as the curated
+// server, the helper does not append a duplicate.
+func TestForceMCPEnabledWithCuratedServer_DedupesByURL(t *testing.T) {
+	on := true
+	req := &httppkg.FrontendReq{
+		EnableMCP: &on,
+		MCPServers: []httppkg.MCPServerConfig{
+			{URL: "https://mcp.curated.test", Enabled: true, APIKey: "user-key"},
+		},
+	}
+	curated := &httppkg.MCPServerConfig{
+		URL:     "https://mcp.curated.test",
+		Enabled: true,
+	}
+
+	cp := forceMCPEnabledWithCuratedServer(req, curated)
+	require.Len(t, cp.MCPServers, 1,
+		"duplicate URL must not be appended")
+	require.Equal(t, "user-key", cp.MCPServers[0].APIKey,
+		"caller's entry must be preserved (with its APIKey)")
+}
+
+// TestForceMCPEnabledWithCuratedServer_NilCurated falls back to plain
+// forceMCPEnabled when no curated server is configured.
+func TestForceMCPEnabledWithCuratedServer_NilCurated(t *testing.T) {
+	off := false
+	req := &httppkg.FrontendReq{EnableMCP: &off}
+	cp := forceMCPEnabledWithCuratedServer(req, nil)
+	require.NotNil(t, cp)
+	require.NotNil(t, cp.EnableMCP)
+	require.True(t, *cp.EnableMCP)
+	require.Nil(t, cp.MCPServers,
+		"no curated server => no MCPServers injection")
+}
+
+// TestPopulateCuratedServerTools_FiltersBySource asserts only curated_mcp
+// tools are surfaced in the server's Tools field — local tools
+// (send_to_user, spawn_agent) must NOT be claimed by the MCP server.
+func TestPopulateCuratedServerTools_FiltersBySource(t *testing.T) {
+	server := &httppkg.MCPServerConfig{URL: "https://mcp.test", Enabled: true}
+
+	logger := newTestLogger(t)
+	reg := tool.NewRegistry(logger)
+	require.NoError(t, reg.Register(&fakeTool{name: "send_to_user"}, tool.SourceLocal))
+	require.NoError(t, reg.Register(&fakeTool{name: "web_search"}, tool.SourceCuratedMCP))
+	require.NoError(t, reg.Register(&fakeTool{name: "web_fetch"}, tool.SourceCuratedMCP))
+
+	populateCuratedServerTools(server, reg)
+	require.Len(t, server.Tools, 2,
+		"only curated_mcp tools should be added; send_to_user is local")
+
+	// Decode each raw tool definition and assert the names line up.
+	names := make([]string, 0, len(server.Tools))
+	for _, raw := range server.Tools {
+		var m map[string]string
+		require.NoError(t, stdjson.Unmarshal(raw, &m))
+		names = append(names, m["name"])
+	}
+	require.ElementsMatch(t, []string{"web_search", "web_fetch"}, names)
+}
+
+// newTestLogger constructs a console logger gated to error-level so
+// tests stay quiet. Returned as a single value rather than a tuple so
+// future call sites do not have to discard a placeholder.
+func newTestLogger(t *testing.T) glog.Logger {
+	t.Helper()
+	l, err := glog.NewConsoleWithName("agentx_test", glog.LevelError)
+	require.NoError(t, err)
+	return l
 }

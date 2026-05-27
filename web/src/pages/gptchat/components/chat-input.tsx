@@ -1,7 +1,16 @@
 /**
  * Chat input component with file attachments and feature toggles.
  */
-import { Brain, Image, Link, Loader2, Mic, Send, Square } from 'lucide-react'
+import {
+  Bot,
+  Brain,
+  Image,
+  Link,
+  Loader2,
+  Mic,
+  Send,
+  Square,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -449,6 +458,14 @@ export function ChatInput({
           />
 
           <ToggleButton
+            active={config.chat_switch.agent_mode}
+            onClick={() => toggleSwitch('agent_mode')}
+            icon={<Bot className="h-3 w-3" />}
+            label="Agent"
+            title="Run a server-side ReAct agent loop with auto-injected tools (web search/fetch, file I/O, memory). The model iterates with tools until it has enough information, then sends the final answer."
+          />
+
+          <ToggleButton
             active={config.chat_switch.enable_talk}
             onClick={() => toggleSwitch('enable_talk')}
             icon={<Mic className="h-3 w-3" />}
@@ -516,10 +533,10 @@ function ToggleButton({
         aria-checked={active}
         aria-label={label}
         className={cn(
-          'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] transition-colors',
+          'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors',
           active
-            ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-            : 'bg-muted text-muted-foreground hover:bg-muted/80',
+            ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary hover:bg-primary/90'
+            : 'border border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
         )}
       >
         {icon}

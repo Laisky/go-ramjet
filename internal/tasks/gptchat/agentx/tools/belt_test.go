@@ -40,15 +40,6 @@ func installFakeDiscoverer(t *testing.T, fn mcpDiscoverer) func() {
 	return func() { defaultMCPDiscoverer = orig }
 }
 
-// curatedNamesFixture returns the 11 curated names (10 curated + 1 known
-// missing in some tests). The function is used to drive U12's "10 in
-// belt + 5 extras" setup deterministically.
-func curatedNamesFixture() []string {
-	out := make([]string, len(CuratedBeltNames))
-	copy(out, CuratedBeltNames)
-	return out
-}
-
 func TestBuildCuratedBelt_NoMCPServer_RegistersSendToUserOnly(t *testing.T) {
 	t.Parallel()
 	logger, _ := newObservedLogger(t)
@@ -88,32 +79,30 @@ func TestBuildCuratedBelt_U20_SubagentReservation(t *testing.T) {
 	require.Equal(t, SubAgentToolPhase1Error, res.Content)
 }
 
-// U12 — Tool belt construction. Discovery returns 15 tools (10 curated +
-// 5 extras like system_exec). The resulting registry's Names() contains
-// exactly the curated subset + send_to_user.
-func TestBuildCuratedBelt_U12_FiltersToCuratedSet(t *testing.T) {
+// U12 — Tool belt construction (fail-OPEN policy). Discovery returns 15
+// tools spanning curated, memory, and operator names. The resulting
+// registry's Names() must contain ALL discovered tools plus send_to_user,
+// because the belt no longer filters by an include-list. The live MCP
+// catalog at https://mcp.laisky.com advertises 17 tools and the prior
+// whitelist silently dropped 6 of them; the regression fix is to
+// register everything except an opt-out list (currently empty).
+func TestBuildCuratedBelt_U12_RegistersEveryDiscoveredTool(t *testing.T) {
 	// Cannot t.Parallel: mutates defaultMCPDiscoverer.
-	curated := curatedNamesFixture()
-	// Build a set of 10 curated tools (drop one to exercise the
-	// missing-curated-tool warning path too).
-	const dropped = "memory_after_turn"
-	provided := make([]httppkg.MCPToolDescriptor, 0, 15)
-	for _, n := range curated {
-		if n == dropped {
-			continue
-		}
+	discoveredNames := []string{
+		"web_search", "web_fetch",
+		"file_list", "file_stat", "file_read", "file_search",
+		"file_write", "file_delete", "file_rename",
+		"memory_before_turn", "memory_after_turn",
+		// Names that the old whitelist would have silently dropped — these
+		// are exactly the kind of tool the regression hides from the model.
+		"find_tool", "get_user_request", "mcp_pipe", "extract_key_info",
+	}
+	provided := make([]httppkg.MCPToolDescriptor, 0, len(discoveredNames))
+	for _, n := range discoveredNames {
 		provided = append(provided, httppkg.MCPToolDescriptor{
 			Name:        n,
-			Description: "curated " + n,
+			Description: "discovered " + n,
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"q":{"type":"string"}}}`),
-		})
-	}
-	// Add 5 extras that must be filtered out.
-	for _, extra := range []string{"system_exec", "shell_run", "git_log", "kube_apply", "ssh_exec"} {
-		provided = append(provided, httppkg.MCPToolDescriptor{
-			Name:        extra,
-			Description: "extra " + extra,
-			InputSchema: json.RawMessage(`{"type":"object"}`),
 		})
 	}
 	require.Len(t, provided, 15, "test fixture must have 15 tools")
@@ -132,29 +121,117 @@ func TestBuildCuratedBelt_U12_FiltersToCuratedSet(t *testing.T) {
 	require.NoError(t, err)
 
 	names := reg.Names()
-	// Expected: send_to_user (local) + all curated names provided.
-	wantSet := make([]string, 0, len(curated))
-	wantSet = append(wantSet, SendToUserName)
-	for _, n := range curated {
-		if n == dropped {
-			continue
-		}
-		wantSet = append(wantSet, n)
-	}
+	// Expected: every discovered name + send_to_user, no drops.
+	wantSet := append([]string{SendToUserName}, discoveredNames...)
 	sort.Strings(wantSet)
 	gotSorted := append([]string(nil), names...)
 	sort.Strings(gotSorted)
 	require.Equal(t, wantSet, gotSorted)
+	require.Len(t, names, len(discoveredNames)+1,
+		"belt must register all discovered tools + send_to_user")
 
-	// Spot-check that an extra was NOT registered.
-	_, ok := reg.Get("system_exec")
-	require.False(t, ok, "extras outside CuratedBeltNames must be dropped")
+	// Specifically guard the previously-silenced tools: web_search and
+	// web_fetch are the live regression that triggered this fix; the
+	// rest were never advertised under the old whitelist.
+	for _, n := range []string{"web_search", "web_fetch", "find_tool", "mcp_pipe"} {
+		_, ok := reg.Get(n)
+		require.True(t, ok, "discovered tool %q must be registered", n)
+	}
 
-	// Missing-curated-tool warning fires once with the dropped name.
-	missingLogs := logs.FilterMessage("agent_curated_belt_missing_tools").All()
-	require.Len(t, missingLogs, 1)
-	missingField := missingLogs[0].ContextMap()["missing"]
-	require.Contains(t, missingField, dropped)
+	// No exclude warning should fire on the empty-exclude default.
+	require.Empty(t, logs.FilterMessage("agent_curated_belt_excluded_tools").All())
+	// No missing-tool warning either — the old key must be gone.
+	require.Empty(t, logs.FilterMessage("agent_curated_belt_missing_tools").All())
+}
+
+// CuratedBeltExcludes acts as an opt-out filter. When the exclude list
+// contains a name and the MCP catalog advertises it, the registry must
+// not register that tool and a single warning line must fire.
+func TestBuildCuratedBelt_RespectsCuratedBeltExcludes(t *testing.T) {
+	// Cannot t.Parallel: mutates defaultMCPDiscoverer AND CuratedBeltExcludes.
+	originalExcludes := CuratedBeltExcludes
+	CuratedBeltExcludes = []string{"shell_exec"}
+	defer func() { CuratedBeltExcludes = originalExcludes }()
+
+	provided := []httppkg.MCPToolDescriptor{
+		{Name: "web_search", Description: "search", InputSchema: json.RawMessage(`{}`)},
+		{Name: "shell_exec", Description: "danger", InputSchema: json.RawMessage(`{}`)},
+		{Name: "file_read", Description: "read", InputSchema: json.RawMessage(`{}`)},
+	}
+	restore := installFakeDiscoverer(t, func(_ context.Context, _ *httppkg.MCPServerConfig, _ *httppkg.MCPCallOption) ([]httppkg.MCPToolDescriptor, error) {
+		return provided, nil
+	})
+	defer restore()
+
+	logger, logs := newObservedLogger(t)
+	reg, err := BuildCuratedBelt(context.Background(), BeltDeps{
+		Logger:       logger,
+		MCPServer:    &httppkg.MCPServerConfig{URL: "https://mcp.laisky.com"},
+		DepsProvider: LegacyDepsFunc(func(_ context.Context, _, _ string) (httppkg.LegacyDeps, error) { return httppkg.LegacyDeps{}, nil }),
+	})
+	require.NoError(t, err)
+
+	_, ok := reg.Get("web_search")
+	require.True(t, ok, "non-excluded tool must remain")
+	_, ok = reg.Get("file_read")
+	require.True(t, ok, "non-excluded tool must remain")
+	_, ok = reg.Get("shell_exec")
+	require.False(t, ok, "excluded tool must be dropped")
+
+	excludedLogs := logs.FilterMessage("agent_curated_belt_excluded_tools").All()
+	require.Len(t, excludedLogs, 1, "exclude warning must fire once")
+	excludedField := excludedLogs[0].ContextMap()["excluded"]
+	require.Contains(t, excludedField, "shell_exec")
+}
+
+// Determinism: shuffling the discovery response must produce the same
+// registry order across runs (the registry sorts on Names()/Descriptors(),
+// and the belt also sorts inputs by name before registering). Updated U19
+// per the new fail-open contract.
+func TestBuildCuratedBelt_DeterministicAcrossShuffledDiscovery(t *testing.T) {
+	// Cannot t.Parallel: mutates defaultMCPDiscoverer.
+	names := []string{
+		"web_search", "web_fetch",
+		"file_list", "file_stat", "file_read", "file_search",
+		"file_write", "file_delete", "file_rename",
+		"memory_before_turn", "memory_after_turn",
+		"find_tool", "get_user_request", "mcp_pipe", "extract_key_info",
+	}
+	require.Len(t, names, 15)
+	makeTools := func(order []string) []httppkg.MCPToolDescriptor {
+		out := make([]httppkg.MCPToolDescriptor, 0, len(order))
+		for _, n := range order {
+			out = append(out, httppkg.MCPToolDescriptor{
+				Name:        n,
+				Description: "d " + n,
+				InputSchema: json.RawMessage(`{"type":"object"}`),
+			})
+		}
+		return out
+	}
+	// Build two distinct permutations of the same name set.
+	rotated := append(append([]string{}, names[7:]...), names[:7]...)
+	require.ElementsMatch(t, names, rotated)
+	require.NotEqual(t, names, rotated)
+
+	run := func(order []string) []string {
+		restore := installFakeDiscoverer(t, func(_ context.Context, _ *httppkg.MCPServerConfig, _ *httppkg.MCPCallOption) ([]httppkg.MCPToolDescriptor, error) {
+			return makeTools(order), nil
+		})
+		defer restore()
+		logger, _ := newObservedLogger(t)
+		reg, err := BuildCuratedBelt(context.Background(), BeltDeps{
+			Logger:       logger,
+			MCPServer:    &httppkg.MCPServerConfig{URL: "https://mcp.laisky.com"},
+			DepsProvider: LegacyDepsFunc(func(_ context.Context, _, _ string) (httppkg.LegacyDeps, error) { return httppkg.LegacyDeps{}, nil }),
+		})
+		require.NoError(t, err)
+		return reg.Names()
+	}
+	first := run(names)
+	second := run(rotated)
+	require.Equal(t, first, second, "registry order must be invariant under discovery shuffles")
+	require.Len(t, first, len(names)+1, "all 15 + send_to_user must be registered")
 }
 
 // Fallback belt on MCP failure. Stub DiscoverMCPTools returning an error;

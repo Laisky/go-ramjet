@@ -615,14 +615,25 @@ func systemMessage(text string) model.InputItem {
 // the items as plain maps so the loop stays decoupled from the upstream
 // adapter's concrete shapes — the OneAPI adapter recognises both the
 // httppkg.* concrete types and these map-shaped equivalents.
+//
+// The function_call item carries BOTH an `id` and a `call_id`. The
+// Responses API strict-validates `input[*].id` to be a non-empty string
+// of `[A-Za-z0-9_\-]+`; an empty id (the prior shape) earned us a 400
+// `invalid_value` from the upstream. The two fields can share the same
+// value (the upstream emits them as such on output_item.added — see the
+// OneAPI adapter's pendingCall accumulator). When the upstream omitted
+// CallID (defensive: never observed in production) we synthesize an id
+// in the `fc_<ULID>` form so the regex still matches.
 func appendFunctionCallAndOutput(
 	items []model.InputItem,
 	call model.FunctionCall,
 	out model.FunctionCallOutput,
 ) []model.InputItem {
+	id := callIDForFunctionCall(call)
 	items = append(items,
 		map[string]any{
 			"type":      "function_call",
+			"id":        id,
 			"call_id":   call.CallID,
 			"name":      call.Name,
 			"arguments": string(call.Arguments),
@@ -634,6 +645,24 @@ func appendFunctionCallAndOutput(
 		},
 	)
 	return items
+}
+
+// callIDForFunctionCall returns the `id` value to stamp on a
+// function_call input item. The OpenAI Responses API requires this
+// field to (a) be non-empty and (b) begin with the `fc` prefix —
+// distinct from `call_id` (which uses the `call_` prefix). The two
+// fields live in DIFFERENT namespaces even though some intermediate
+// SSE events stream them side-by-side. Reusing `call.CallID` verbatim
+// triggers a 400 `Expected an ID that begins with 'fc'.` from the
+// upstream, so we always synthesize `fc_<ULID>` for the id slot. The
+// `call_id` field on the function_call (and on its matching
+// function_call_output) is what binds the pair together for tool-call
+// dispatch; that field continues to carry `call.CallID` verbatim.
+func callIDForFunctionCall(call model.FunctionCall) string {
+	if id := strings.TrimSpace(call.CallID); id != "" && strings.HasPrefix(id, "fc") {
+		return id
+	}
+	return "fc_" + session.NewEventID()
 }
 
 // buildDescriptors converts the per-session registry into the model-facing

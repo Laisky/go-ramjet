@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -17,6 +18,23 @@ import (
 	httppkg "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/memoryx"
 )
+
+// DefaultMemoryFinalTextMaxBytes is the default cap, in bytes, on the
+// assistant final-text (and, defensively, user prompt) payload handed
+// to memoryx.AfterTurnHook. The MCP-backed JSONL file_write rejects
+// payloads above its server-side limit with PAYLOAD_TOO_LARGE; a 64 KiB
+// cap on each field keeps the JSONL envelope well within range while
+// preserving enough head+tail context for the memory engine to dedupe
+// and embed against future prompts.
+const DefaultMemoryFinalTextMaxBytes = 64 * 1024
+
+// memoryPayloadTooLargeMarker is the substring AfterTurnHook treats as
+// proof that even the truncated payload tripped the MCP file_write size
+// guard. The MCP layer wraps the upstream error so errors.Is against a
+// sentinel does not work; the literal substring is contractually stable
+// (mcp_legacy.go translates it from the server reply), so strings.Contains
+// is the correct mechanism here.
+const memoryPayloadTooLargeMarker = "PAYLOAD_TOO_LARGE"
 
 // MemoryState is the shared mutable bridge between the Before and After
 // memory hooks. The Before hook (OnContext) populates Keys after a
@@ -88,6 +106,12 @@ type MemoryDeps struct {
 	// case. A nil pointer with Enabled=true is treated as Enabled=false
 	// for safety.
 	State *MemoryState
+	// FinalTextMaxBytes caps the byte length of the assistant final
+	// text (and defensively the user prompt) handed to
+	// memoryx.AfterTurnHook. Defaults to DefaultMemoryFinalTextMaxBytes
+	// when zero. Set to a negative value to disable truncation entirely
+	// (not recommended for production paths).
+	FinalTextMaxBytes int
 }
 
 // defaultMemoryBeforeTurn is the package-level seam for memoryx.BeforeTurnHook.
@@ -194,10 +218,28 @@ func NewMemoryAfterTurnHook(deps *MemoryDeps) func(context.Context, hook.Session
 			return ev, nil
 		}
 
+		// Defensive size guard before invoking memoryx: the MCP-backed
+		// JSONL file_write rejects payloads above its server-side cap
+		// with PAYLOAD_TOO_LARGE. We middle-truncate both the prompt
+		// (defensively — usually small) and the assistant final text so
+		// the JSONL envelope stays well within range while keeping
+		// enough head + tail context for the memory engine.
+		maxBytes := deps.FinalTextMaxBytes
+		if maxBytes == 0 {
+			maxBytes = DefaultMemoryFinalTextMaxBytes
+		}
+		truncatedPrompt, _ := truncateMiddle(ev.UserPrompt, maxBytes)
+		truncatedFinal, finalWasTruncated := truncateMiddle(ev.FinalText, maxBytes)
+
 		// U15 / acceptance #12 — minimal payload: exactly the prompt +
 		// final-text pair, dressed as Responses-API input messages so
 		// memoryx.ResponsesInputToMemoryItems can pick up the roles.
-		minimal := minimalMemoryInput(ev.UserPrompt, ev.FinalText)
+		// The truncated text is what gets persisted in BOTH the input
+		// slice (used by ResponsesInputToMemoryItems) and the trailing
+		// finalText argument (used by the runtime-context appender);
+		// keeping them in sync avoids drift between the memory items
+		// and the appended JSONL row.
+		minimal := minimalMemoryInput(truncatedPrompt, truncatedFinal)
 
 		if err := defaultMemoryAfterTurn(
 			ctx,
@@ -205,9 +247,24 @@ func NewMemoryAfterTurnHook(deps *MemoryDeps) func(context.Context, hook.Session
 			deps.User,
 			keys,
 			minimal,
-			ev.FinalText,
+			truncatedFinal,
 		); err != nil {
-			if deps.Logger != nil {
+			// Best-effort recovery: PAYLOAD_TOO_LARGE may surface as a
+			// wrapped tool-error string rather than a sentinel (the MCP
+			// layer wraps the upstream error). errors.Is is therefore
+			// not viable here; strings.Contains on the stable substring
+			// is the contractual escape hatch.
+			if isPayloadTooLarge(err) && deps.Logger != nil {
+				// Concise WARN, NO zap.Error — the full stacktrace is
+				// not actionable and pollutes structured logs. The
+				// truncated length is the only signal worth keeping.
+				deps.Logger.Warn("agent_memory_after_turn_skipped_too_large",
+					zap.String("terminated_by", ev.TerminatedBy),
+					zap.Int("final_text_bytes", len(ev.FinalText)),
+					zap.Int("final_text_truncated_bytes", len(truncatedFinal)),
+					zap.Bool("final_text_truncation_applied", finalWasTruncated),
+				)
+			} else if deps.Logger != nil {
 				deps.Logger.Warn("agent_memory_after_turn_failed",
 					zap.String("terminated_by", ev.TerminatedBy),
 					zap.Error(err),
@@ -217,6 +274,106 @@ func NewMemoryAfterTurnHook(deps *MemoryDeps) func(context.Context, hook.Session
 
 		return ev, nil
 	}
+}
+
+// isPayloadTooLarge returns true when err is or wraps the MCP server's
+// "PAYLOAD_TOO_LARGE" signal. The MCP transport wraps upstream errors
+// behind tool-error strings (so errors.Is against a sentinel does not
+// work); the literal substring is contractually stable in mcp_legacy.go
+// and the MCP server's reply, so strings.Contains is the correct match
+// mechanism here.
+func isPayloadTooLarge(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), memoryPayloadTooLargeMarker)
+}
+
+// truncateMiddle preserves the first and last half of s when len(s)
+// exceeds max bytes, inserting a Unicode-ellipsis marker between them.
+// The marker is plain ASCII inside the marker brackets so it round-trips
+// cleanly through json.Marshal without invoking any control-char
+// escaping. Returns (truncatedString, wasTruncated).
+//
+// The middle-cut strategy is intentional: it preserves both the opening
+// context (which the memory engine often uses for topical features) and
+// the closing summary (typically the most useful payload for future
+// recall), while only sacrificing intermediate detail. Head-only or
+// tail-only would discard half of that signal.
+//
+// max <= 0 disables truncation (returns s unchanged).
+// For inputs already at or below max bytes, s is returned unchanged.
+// For inputs above max but shorter than (max + marker overhead), the
+// function still emits a marker — the result may be marginally larger
+// than max, but never larger than the original.
+func truncateMiddle(s string, max int) (string, bool) {
+	if max <= 0 || len(s) <= max {
+		return s, false
+	}
+	// Reserve room for the marker; allocate halves from what remains.
+	// The marker length is bounded by the size-of-int decimal repr,
+	// so we recompute it after we know the dropped byte count.
+	dropped := len(s) - max
+	// Two halves split roughly evenly; favour the head so the
+	// opening sentence remains intact when max is odd.
+	headLen := max / 2
+	tailLen := max - headLen
+	head := s[:headLen]
+	tail := s[len(s)-tailLen:]
+	// Trim partial multi-byte runes at the cut points so the result
+	// is always valid UTF-8 (important: json.Marshal would otherwise
+	// replace bad bytes with U+FFFD silently).
+	head = trimUTF8Tail(head)
+	tail = trimUTF8Head(tail)
+	marker := fmt.Sprintf("…[truncated %d bytes]…", dropped)
+	return head + marker + tail, true
+}
+
+// trimUTF8Tail walks back from the end of s to drop any bytes that
+// form a partial multi-byte UTF-8 sequence, ensuring the slice ends on
+// a complete rune boundary.
+func trimUTF8Tail(s string) string {
+	for i := len(s) - 1; i >= 0; i-- {
+		b := s[i]
+		// ASCII byte — clean boundary.
+		if b < 0x80 {
+			return s[:i+1]
+		}
+		// Trail byte: keep walking back.
+		if b&0xC0 == 0x80 {
+			continue
+		}
+		// Lead byte. Check whether the sequence it starts is complete
+		// within the slice; if not, drop it and any trail bytes after.
+		switch {
+		case b&0xE0 == 0xC0: // 2-byte lead
+			if len(s)-i >= 2 {
+				return s
+			}
+		case b&0xF0 == 0xE0: // 3-byte lead
+			if len(s)-i >= 3 {
+				return s
+			}
+		case b&0xF8 == 0xF0: // 4-byte lead
+			if len(s)-i >= 4 {
+				return s
+			}
+		}
+		return s[:i]
+	}
+	return ""
+}
+
+// trimUTF8Head walks forward from the start of s, dropping any leading
+// trail bytes so the slice begins on a complete rune boundary.
+func trimUTF8Head(s string) string {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b < 0x80 || b&0xC0 != 0x80 {
+			return s[i:]
+		}
+	}
+	return ""
 }
 
 // memoryDepsActive returns true when both Enabled is on and the shared

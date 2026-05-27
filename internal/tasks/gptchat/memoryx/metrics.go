@@ -9,6 +9,12 @@ var (
 	memoryBeforeTurnFail     = expvar.NewInt("memory_before_turn_fail_total")
 	memoryAfterTurnTotal     = expvar.NewInt("memory_after_turn_total")
 	memoryAfterTurnFail      = expvar.NewInt("memory_after_turn_fail_total")
+	// memoryAfterTurnPayloadTooLarge counts AfterTurn calls that hit the
+	// MCP server's per-file size limit (PAYLOAD_TOO_LARGE). Use with
+	// memoryAfterTurnPayloadTooLargeRecovered to see how often the
+	// maintenance-and-retry fallback succeeds.
+	memoryAfterTurnPayloadTooLarge          = expvar.NewInt("memory_after_turn_payload_too_large_total")
+	memoryAfterTurnPayloadTooLargeRecovered = expvar.NewInt("memory_after_turn_payload_too_large_recovered_total")
 	memoryRecallFactCount    = expvar.NewInt("memory_recall_fact_count")
 	memoryBeforeLatencyMs    = expvar.NewMap("memory_before_latency_ms")
 	memoryAfterLatencyMs     = expvar.NewMap("memory_after_latency_ms")

@@ -175,14 +175,34 @@ func AfterTurnHook(
 		return errors.Wrap(err, "responses input to memory items")
 	}
 
-	if err = engine.AfterTurn(ctx, memory.AfterTurnInput{
+	input := memory.AfterTurnInput{
 		Project:     keys.Project,
 		SessionID:   keys.SessionID,
 		UserID:      keys.UserID,
 		TurnID:      keys.TurnID,
 		InputItems:  memoryInputs,
 		OutputItems: BuildAssistantOutputItems(finalText),
-	}); err != nil {
+	}
+	if err = engine.AfterTurn(ctx, input); err != nil {
+		// runtime/context/current.jsonl grows append-only every turn and
+		// upstream only compacts it during BeforeTurn when the assembled
+		// item budget crosses ~80% of MaxInputTok. The MCP server's
+		// per-file size cap can be hit before that threshold, so we
+		// react to PAYLOAD_TOO_LARGE here by running maintenance (which
+		// compacts the runtime context) and retrying once.
+		if isMemoryPayloadTooLarge(err) {
+			memoryAfterTurnPayloadTooLarge.Add(1)
+			if mErr := runMemoryMaintenance(ctx, engine, keys); mErr != nil {
+				err = errors.Wrap(err, "run memory maintenance: "+mErr.Error())
+			} else if retryErr := engine.AfterTurn(ctx, input); retryErr != nil {
+				err = retryErr
+			} else {
+				memoryAfterTurnPayloadTooLargeRecovered.Add(1)
+				observeLatencyHistogram(memoryAfterLatencyMs, time.Since(startedAt).Milliseconds())
+				memoryAfterLatencyCount.Add(1)
+				return nil
+			}
+		}
 		memoryAfterTurnFail.Add(1)
 		observeLatencyHistogram(memoryAfterLatencyMs, time.Since(startedAt).Milliseconds())
 		memoryAfterLatencyCount.Add(1)
@@ -191,6 +211,45 @@ func AfterTurnHook(
 
 	observeLatencyHistogram(memoryAfterLatencyMs, time.Since(startedAt).Milliseconds())
 	memoryAfterLatencyCount.Add(1)
+
+	return nil
+}
+
+// isMemoryPayloadTooLarge reports whether the error unwraps to an MCP
+// PAYLOAD_TOO_LARGE tool error.
+//
+// Parameters:
+//   - err: The error returned by the memory engine.
+//
+// Returns:
+//   - bool: True when the underlying ToolError carries ErrorCodePayloadTooLarge.
+func isMemoryPayloadTooLarge(err error) bool {
+	var toolErr *files.ToolError
+	if !errors.As(err, &toolErr) {
+		return false
+	}
+
+	return toolErr.Code == files.ErrorCodePayloadTooLarge
+}
+
+// runMemoryMaintenance invokes RunMaintenance on the engine when supported.
+//
+// Parameters:
+//   - ctx: Request context.
+//   - engine: Active memory engine (may or may not implement Management).
+//   - keys: Runtime identifiers locating the session.
+//
+// Returns:
+//   - error: Non-nil when the engine lacks maintenance support or maintenance fails.
+func runMemoryMaintenance(ctx context.Context, engine memory.Engine, keys RuntimeKeys) error {
+	mgmt, ok := engine.(memory.Management)
+	if !ok {
+		return errors.New("memory engine does not support maintenance")
+	}
+
+	if err := mgmt.RunMaintenance(ctx, keys.Project, keys.SessionID); err != nil {
+		return errors.Wrap(err, "run maintenance")
+	}
 
 	return nil
 }

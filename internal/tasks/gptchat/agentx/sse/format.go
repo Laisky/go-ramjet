@@ -57,15 +57,24 @@ func chunkString(s string, n int) []string {
 // could prematurely close the `<tool_result trust="untrusted">…</tool_result>`
 // envelope established by the system prompt and smuggle text out of the
 // untrusted region.
-const untrustedDelimiterReplacement = "</tool_result-escaped>"
+//
+// The marker is kept in sync with the wrap hook's closeTagEscape
+// (agentx/loop/wrap.go) so the SSE trace surfaces the SAME token the
+// model sees when the wrap hook escapes tool content. Two different
+// escape symbols across the two layers would surface a confusing
+// artifact in the user-facing trace (where the wrap's own outer close
+// tag would be substituted with one symbol while inner-content close
+// tags use another). Keeping them identical makes the trace a faithful
+// rendering of the model-facing escape.
+const untrustedDelimiterReplacement = "<tool_result_close/>"
 
 // escapeUntrustedDelimiter replaces literal `</tool_result>` with a
 // sanitized marker so any tool that returns text containing the close
 // tag cannot break the system-prompt guard. The wrap hook in
-// agentx/loop is expected to perform the same escape upstream of the
-// event emit; the function lives here as well because the sse layer
-// renders ToolResult content into the trace and must preserve the
-// invariant even if a future caller bypasses the wrap hook.
+// agentx/loop performs the same escape on the content the model sees;
+// this function is the defense-in-depth pass for trace lines, in case
+// a future caller bypasses the wrap hook or the trace renders content
+// the wrap hook never wrapped (e.g. a synthesized error string).
 func escapeUntrustedDelimiter(s string) string {
 	if s == "" {
 		return s

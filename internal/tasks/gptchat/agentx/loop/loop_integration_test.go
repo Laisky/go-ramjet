@@ -680,3 +680,145 @@ func TestU17_GoldenReproducible(t *testing.T) {
 		})
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Bug 2 — function_call input items must carry a non-empty `id` that matches
+// the Responses API regex [A-Za-z0-9_\-]+, otherwise the upstream rejects
+// the next round's request with 400 invalid_value on input[*].id.
+// -----------------------------------------------------------------------------
+
+// TestCallIDForFunctionCall_AlwaysSynthesizesFCPrefix asserts that the
+// helper always returns an `fc`-prefixed id, even when CallID carries a
+// `call_` prefix. The upstream Responses API validates the function_call
+// item's `id` against the `fc` prefix specifically — reusing CallID
+// verbatim (e.g. `call_abc123`) triggers a 400 `Expected an ID that
+// begins with 'fc'.` Live regression observed 2026-05-27.
+func TestCallIDForFunctionCall_AlwaysSynthesizesFCPrefix(t *testing.T) {
+	t.Parallel()
+	got := callIDForFunctionCall(model.FunctionCall{CallID: "call_abc123"})
+	require.True(t, strings.HasPrefix(got, "fc_"),
+		"id must always begin with the fc_ prefix; got %q", got)
+	require.NotEqual(t, "call_abc123", got,
+		"helper must not echo the call_ CallID into the id slot")
+}
+
+// TestCallIDForFunctionCall_PassThroughFCPrefixedCallID asserts that if
+// the upstream itself supplies an already-fc-prefixed CallID (e.g. on
+// some adapters where the two namespaces collapse), the helper trusts it
+// and passes through. This keeps the test seam open for future provider
+// adapters without forcing a re-synthesize.
+func TestCallIDForFunctionCall_PassThroughFCPrefixedCallID(t *testing.T) {
+	t.Parallel()
+	got := callIDForFunctionCall(model.FunctionCall{CallID: "fc_already_prefixed"})
+	require.Equal(t, "fc_already_prefixed", got)
+}
+
+// TestCallIDForFunctionCall_SynthesizesWhenEmpty asserts that when CallID
+// is missing, the helper mints an `fc_<token>` value that satisfies the
+// Responses API id regex.
+func TestCallIDForFunctionCall_SynthesizesWhenEmpty(t *testing.T) {
+	t.Parallel()
+	got := callIDForFunctionCall(model.FunctionCall{})
+	require.True(t, strings.HasPrefix(got, "fc_"),
+		"synthesized id must carry the fc_ prefix; got %q", got)
+	require.Regexp(t, `^fc_[A-Za-z0-9_\-]+$`, got)
+	require.NotEqual(t, "fc_", got, "must include a non-empty suffix")
+}
+
+// TestAppendFunctionCallAndOutput_StampsID asserts the function_call map
+// item carries a non-empty id matching the Responses API regex. Without
+// this field the upstream rejects the next round's request with
+// 400 invalid_value (Bug 2 live repro).
+func TestAppendFunctionCallAndOutput_StampsID(t *testing.T) {
+	t.Parallel()
+	items := appendFunctionCallAndOutput(nil,
+		model.FunctionCall{
+			CallID:    "call_xyz",
+			Name:      "web_search",
+			Arguments: rawArgs(t, map[string]any{"q": "go"}),
+		},
+		model.FunctionCallOutput{
+			CallID: "call_xyz",
+			Output: "[]",
+		},
+	)
+	require.Len(t, items, 2)
+	fc, ok := items[0].(map[string]any)
+	require.True(t, ok, "first item must be the function_call map")
+	require.Equal(t, "function_call", fc["type"])
+	require.Equal(t, "call_xyz", fc["call_id"])
+	id, idOK := fc["id"].(string)
+	require.True(t, idOK, "function_call must carry an `id` string field")
+	require.NotEmpty(t, id, "function_call.id must be non-empty")
+	require.Regexp(t, `^[A-Za-z0-9_\-]+$`, id,
+		"function_call.id must satisfy the Responses API id regex")
+
+	// The function_call_output side does not need an id; the upstream
+	// validates call_id only on that item.
+	fco, ok := items[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "function_call_output", fco["type"])
+	require.Equal(t, "call_xyz", fco["call_id"])
+}
+
+// TestRun_NextRoundInputCarriesFunctionCallID drives an end-to-end
+// two-round loop and asserts every function_call item the loop appends
+// to inputItems before the second model.Stream call has a non-empty
+// id that satisfies the Responses API id regex. This is the integration
+// counterpart of TestAppendFunctionCallAndOutput_StampsID — without
+// the id stamp the upstream would reject the round-2 request.
+func TestRun_NextRoundInputCarriesFunctionCallID(t *testing.T) {
+	t.Parallel()
+	web := newFakeTool("web_search", 0, "[]")
+	scripts := [][]model.StreamChunk{
+		scriptedRound{functionCalls: []model.FunctionCall{{
+			CallID:    "call_round1",
+			Name:      "web_search",
+			Arguments: rawArgs(t, map[string]any{"q": "go"}),
+		}}}.chunks(),
+		sendToUserBatch(t, "done"),
+	}
+	h := newHarness(t, scripts, []tool.Tool{web})
+
+	// Snapshot the inputItems passed to the model on every round; we
+	// capture from the OnContext hook because that fires AFTER the
+	// loop has appended function_call / function_call_output items
+	// from the prior round.
+	var roundInputs [][]model.InputItem
+	h.bus.OnContext(func(_ context.Context, ev hook.ContextEvent) (hook.ContextEvent, error) {
+		snap := make([]model.InputItem, len(ev.Input))
+		copy(snap, ev.Input)
+		roundInputs = append(roundInputs, snap)
+		return ev, nil
+	})
+
+	require.NoError(t, h.run(t, context.Background(), "search go"))
+	require.GreaterOrEqual(t, len(roundInputs), 2,
+		"loop should reach at least 2 rounds (web_search then send_to_user)")
+
+	// Round 2's input must include the function_call from round 1.
+	round2 := roundInputs[1]
+	idRegex := `^[A-Za-z0-9_\-]+$`
+	foundFC := false
+	for i, it := range round2 {
+		m, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["type"] != "function_call" {
+			continue
+		}
+		foundFC = true
+		id, ok := m["id"].(string)
+		require.True(t, ok,
+			"round 2 input[%d] (function_call) must carry an `id` string field; got %T",
+			i, m["id"])
+		require.NotEmpty(t, id,
+			"round 2 input[%d] (function_call).id must be non-empty", i)
+		require.Regexp(t, idRegex, id,
+			"round 2 input[%d] (function_call).id must satisfy %s; got %q",
+			i, idRegex, id)
+	}
+	require.True(t, foundFC,
+		"round 2 input must contain at least one function_call item")
+}

@@ -2,10 +2,13 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Laisky/errors/v2"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/hook"
@@ -422,4 +425,237 @@ func TestMemoryHooks_InputItemConversionRoundTrip(t *testing.T) {
 
 	require.Nil(t, inputItemsToAny(nil))
 	require.Nil(t, anyToInputItems(nil))
+}
+
+// Truncation happy path: a 200 KB final text must be truncated below the
+// 64 KiB cap, must contain the `[truncated <N> bytes]` marker, and the
+// AfterTurnHook fake must observe the truncated payload (not the raw
+// 200 KB).
+func TestMemoryHooks_AfterTruncatesOversizedFinalText(t *testing.T) {
+	restoreBefore := installFakeMemoryBefore(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ http.Header, _ []any, _ int) (memoryx.BeforeTurnResult, error) {
+		return fakeBeforeResult(nil), nil
+	})
+	defer restoreBefore()
+
+	rec := &recordedAfter{}
+	restoreAfter := installFakeMemoryAfter(t, rec.record)
+	defer restoreAfter()
+
+	state := NewMemoryState()
+	deps := &MemoryDeps{
+		Enabled: true,
+		Config:  &config.OpenAI{EnableMemory: true},
+		User:    &config.UserConfig{UserName: "u1"},
+		State:   state,
+		// Leave FinalTextMaxBytes=0 so the default kicks in. Explicit
+		// reliance on the package default is part of the contract.
+	}
+	bus := hook.NewBus(nil)
+	bus.OnContext(NewMemoryBeforeTurnHook(deps))
+	bus.OnSessionEnd(NewMemoryAfterTurnHook(deps))
+	_, err := bus.DispatchContext(context.Background(), hook.ContextEvent{})
+	require.NoError(t, err)
+
+	const oversize = 200 * 1024 // 200 KB
+	bigFinal := strings.Repeat("X", oversize)
+	_, err = bus.DispatchSessionEnd(context.Background(), hook.SessionEndEvent{
+		SessionID:    "sess",
+		TerminatedBy: session.TerminatedBySendToUser,
+		UserPrompt:   "summarise the doc",
+		FinalText:    bigFinal,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, rec.called)
+	require.Equal(t, 2, len(rec.input))
+
+	assistantMsg, ok := rec.input[1].(httppkg.OpenAIResponsesInputMessage)
+	require.True(t, ok)
+	assistantContent, ok := assistantMsg.Content.(string)
+	require.True(t, ok, "assistant Content must be a string after truncation")
+	require.Less(t, len(assistantContent), DefaultMemoryFinalTextMaxBytes+512,
+		"truncated final text must fit within the default cap plus a small marker overhead")
+	require.Contains(t, assistantContent, "[truncated ")
+	require.Contains(t, assistantContent, " bytes]")
+	require.True(t, strings.HasPrefix(assistantContent, "X"),
+		"head fragment must be preserved")
+	require.True(t, strings.HasSuffix(assistantContent, "X"),
+		"tail fragment must be preserved")
+
+	// The finalText argument forwarded to memoryx must mirror the
+	// truncated assistant content so the JSONL runtime-context row
+	// matches what ResponsesInputToMemoryItems persisted.
+	require.Equal(t, assistantContent, rec.finalText)
+
+	// JSON round-trip: the truncated payload (with the ellipsis marker)
+	// must marshal/unmarshal cleanly — the JSONL appender on the other
+	// end depends on this.
+	encoded, jerr := json.Marshal(assistantContent)
+	require.NoError(t, jerr)
+	var back string
+	require.NoError(t, json.Unmarshal(encoded, &back))
+	require.Equal(t, assistantContent, back)
+}
+
+// No truncation under threshold: a 1 KB final text must be passed
+// through untouched and never carry the marker.
+func TestMemoryHooks_AfterDoesNotTruncateSmallPayloads(t *testing.T) {
+	restoreBefore := installFakeMemoryBefore(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ http.Header, _ []any, _ int) (memoryx.BeforeTurnResult, error) {
+		return fakeBeforeResult(nil), nil
+	})
+	defer restoreBefore()
+
+	rec := &recordedAfter{}
+	restoreAfter := installFakeMemoryAfter(t, rec.record)
+	defer restoreAfter()
+
+	state := NewMemoryState()
+	deps := &MemoryDeps{
+		Enabled: true,
+		Config:  &config.OpenAI{EnableMemory: true},
+		User:    &config.UserConfig{UserName: "u1"},
+		State:   state,
+	}
+	bus := hook.NewBus(nil)
+	bus.OnContext(NewMemoryBeforeTurnHook(deps))
+	bus.OnSessionEnd(NewMemoryAfterTurnHook(deps))
+	_, err := bus.DispatchContext(context.Background(), hook.ContextEvent{})
+	require.NoError(t, err)
+
+	const small = 1024 // 1 KB
+	finalText := strings.Repeat("Y", small)
+	_, err = bus.DispatchSessionEnd(context.Background(), hook.SessionEndEvent{
+		SessionID:    "sess",
+		TerminatedBy: session.TerminatedBySendToUser,
+		UserPrompt:   "say Y a thousand times",
+		FinalText:    finalText,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, rec.called)
+
+	assistantMsg, ok := rec.input[1].(httppkg.OpenAIResponsesInputMessage)
+	require.True(t, ok)
+	require.Equal(t, finalText, assistantMsg.Content, "1 KB final text must pass through untouched")
+	require.NotContains(t, assistantMsg.Content, "[truncated ")
+	require.Equal(t, finalText, rec.finalText)
+}
+
+// PAYLOAD_TOO_LARGE fallback: even after truncation, if the
+// AfterTurnHook returns a PAYLOAD_TOO_LARGE-flavoured error the hook
+// emits the concise `agent_memory_after_turn_skipped_too_large` WARN
+// (no verbose stacktrace) and returns the event unchanged.
+func TestMemoryHooks_AfterRecoversFromPayloadTooLarge(t *testing.T) {
+	restoreBefore := installFakeMemoryBefore(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ http.Header, _ []any, _ int) (memoryx.BeforeTurnResult, error) {
+		return fakeBeforeResult(nil), nil
+	})
+	defer restoreBefore()
+
+	// Simulate the MCP file_write wrap: an Errors.v2 stack-augmented
+	// error whose message contains "PAYLOAD_TOO_LARGE" deep in the
+	// wrap chain. The hook must catch the substring even through
+	// errors.Wrap layers.
+	innerErr := errors.New("PAYLOAD_TOO_LARGE: file exceeds max size")
+	wrappedErr := errors.Wrap(errors.Wrap(innerErr, "call file_write"), "append jsonl")
+
+	restoreAfter := installFakeMemoryAfter(t, func(_ context.Context, _ *config.OpenAI, _ *config.UserConfig, _ memoryx.RuntimeKeys, _ []any, _ string) error {
+		return wrappedErr
+	})
+	defer restoreAfter()
+
+	logger, lerr := glog.NewConsoleWithName("test_memhook", glog.LevelError)
+	require.NoError(t, lerr)
+
+	state := NewMemoryState()
+	deps := &MemoryDeps{
+		Enabled: true,
+		Config:  &config.OpenAI{EnableMemory: true},
+		User:    &config.UserConfig{UserName: "u1"},
+		State:   state,
+		Logger:  logger,
+	}
+	bus := hook.NewBus(nil)
+	bus.OnContext(NewMemoryBeforeTurnHook(deps))
+	bus.OnSessionEnd(NewMemoryAfterTurnHook(deps))
+	_, err := bus.DispatchContext(context.Background(), hook.ContextEvent{})
+	require.NoError(t, err)
+
+	in := hook.SessionEndEvent{
+		SessionID:    "sess",
+		TerminatedBy: session.TerminatedBySendToUser,
+		UserPrompt:   "x",
+		FinalText:    strings.Repeat("Z", 200*1024),
+	}
+	out, err := bus.DispatchSessionEnd(context.Background(), in)
+	// The hook MUST NOT propagate the error — the loop should
+	// continue. The PAYLOAD_TOO_LARGE branch is best-effort recovery.
+	require.NoError(t, err)
+	// The event itself is returned unchanged.
+	require.Equal(t, in, out)
+}
+
+// isPayloadTooLarge must catch the substring through arbitrary error
+// wrapping levels.
+func TestMemoryHooks_IsPayloadTooLargeMatchesThroughWraps(t *testing.T) {
+	t.Parallel()
+	require.False(t, isPayloadTooLarge(nil))
+	require.False(t, isPayloadTooLarge(errors.New("some other error")))
+
+	inner := errors.New("PAYLOAD_TOO_LARGE: file exceeds max size")
+	require.True(t, isPayloadTooLarge(inner))
+	require.True(t, isPayloadTooLarge(errors.Wrap(inner, "outer1")))
+	require.True(t, isPayloadTooLarge(errors.Wrap(errors.Wrap(inner, "outer1"), "outer2")))
+}
+
+// truncateMiddle preserves head and tail and emits a UTF-8 safe marker.
+func TestMemoryHooks_TruncateMiddleSemantics(t *testing.T) {
+	t.Parallel()
+
+	// max=0 disables.
+	out, trimmed := truncateMiddle("hello", 0)
+	require.Equal(t, "hello", out)
+	require.False(t, trimmed)
+
+	// Under threshold: untouched.
+	out, trimmed = truncateMiddle("hello", 1024)
+	require.Equal(t, "hello", out)
+	require.False(t, trimmed)
+
+	// Exactly at threshold: untouched.
+	out, trimmed = truncateMiddle("hello", 5)
+	require.Equal(t, "hello", out)
+	require.False(t, trimmed)
+
+	// Over threshold: marker present, head + tail preserved.
+	src := strings.Repeat("A", 100) + strings.Repeat("B", 100)
+	out, trimmed = truncateMiddle(src, 64)
+	require.True(t, trimmed)
+	require.Contains(t, out, "[truncated ")
+	require.Contains(t, out, " bytes]")
+	require.True(t, strings.HasPrefix(out, "A"), "head must be preserved")
+	require.True(t, strings.HasSuffix(out, "B"), "tail must be preserved")
+
+	// Round-trip through JSON: the literal Unicode ellipsis must
+	// survive marshal/unmarshal without corruption.
+	encoded, err := json.Marshal(out)
+	require.NoError(t, err)
+	var back string
+	require.NoError(t, json.Unmarshal(encoded, &back))
+	require.Equal(t, out, back)
+
+	// UTF-8 safety: a multi-byte rune straddling the cut point must
+	// not produce invalid UTF-8.
+	utf8src := strings.Repeat("文", 200) // 600 bytes
+	out, trimmed = truncateMiddle(utf8src, 64)
+	require.True(t, trimmed)
+	require.True(t, json.Valid([]byte(`"`+jsonEscape(out)+`"`)),
+		"truncated UTF-8 string must encode as valid JSON")
+}
+
+// jsonEscape minimally escapes a string so it can be wrapped in JSON
+// quotes for the json.Valid assertion above. Only the double-quote and
+// backslash need escaping for this narrow purpose; the truncateMiddle
+// output never contains either.
+func jsonEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }

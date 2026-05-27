@@ -290,3 +290,89 @@ func TestAfterTurnHookDisabledForFreeUser(t *testing.T) {
 	err := AfterTurnHook(context.Background(), conf, user, RuntimeKeys{}, []any{}, "hi")
 	require.NoError(t, err)
 }
+
+// stubManagedEngine returns a configurable AfterTurn error sequence and counts
+// RunMaintenance invocations, so tests can verify the PAYLOAD_TOO_LARGE
+// maintenance-and-retry fallback.
+type stubManagedEngine struct {
+	afterErrs        []error
+	afterCalls       int
+	maintenanceCalls int
+	maintenanceErr   error
+}
+
+func (e *stubManagedEngine) BeforeTurn(_ context.Context, _ memory.BeforeTurnInput) (memory.BeforeTurnOutput, error) {
+	return memory.BeforeTurnOutput{}, nil
+}
+
+func (e *stubManagedEngine) AfterTurn(_ context.Context, _ memory.AfterTurnInput) error {
+	defer func() { e.afterCalls++ }()
+	if e.afterCalls < len(e.afterErrs) {
+		return e.afterErrs[e.afterCalls]
+	}
+	return nil
+}
+
+func (e *stubManagedEngine) RunMaintenance(_ context.Context, _, _ string) error {
+	e.maintenanceCalls++
+	return e.maintenanceErr
+}
+
+func (e *stubManagedEngine) RunConsolidation(_ context.Context, _, _ string) error { return nil }
+
+func (e *stubManagedEngine) ListDirWithAbstract(
+	_ context.Context, _, _, _ string, _, _ int,
+) ([]memory.DirectorySummary, error) {
+	return nil, nil
+}
+
+func validRuntimeKeys() RuntimeKeys {
+	return RuntimeKeys{Project: "gptchat", SessionID: "sess", UserID: "alice", TurnID: "turn-1"}
+}
+
+func TestAfterTurnHookRecoversFromPayloadTooLarge(t *testing.T) {
+	conf := &config.OpenAI{EnableMemory: true, MemoryProject: "gptchat", MemoryStorageMCPURL: "https://mcp.example.com"}
+	user := &config.UserConfig{UserName: "alice", APIBase: "https://oneapi.laisky.com", OpenaiToken: "sk-abc"}
+	cacheKey := buildEngineCacheKey(conf, user)
+
+	st := &stubManagedEngine{
+		afterErrs: []error{errors.Wrap(
+			&files.ToolError{Code: files.ErrorCodePayloadTooLarge, Message: "file exceeds max size"},
+			"append runtime context events",
+		)},
+	}
+
+	engineCacheMu.Lock()
+	engineCache = map[string]memory.Engine{cacheKey: st}
+	engineCacheMu.Unlock()
+
+	err := AfterTurnHook(context.Background(), conf, user, validRuntimeKeys(), []any{
+		map[string]any{"role": "user", "content": []any{map[string]any{"type": "input_text", "text": "hi"}}},
+	}, "hello")
+	require.NoError(t, err)
+	require.Equal(t, 2, st.afterCalls, "AfterTurn should be retried once after maintenance")
+	require.Equal(t, 1, st.maintenanceCalls, "RunMaintenance should fire once for PAYLOAD_TOO_LARGE")
+}
+
+func TestAfterTurnHookSurfacesPayloadTooLargeWhenRetryFails(t *testing.T) {
+	conf := &config.OpenAI{EnableMemory: true, MemoryProject: "gptchat", MemoryStorageMCPURL: "https://mcp.example.com"}
+	user := &config.UserConfig{UserName: "alice", APIBase: "https://oneapi.laisky.com", OpenaiToken: "sk-abc"}
+	cacheKey := buildEngineCacheKey(conf, user)
+
+	tooLarge := errors.Wrap(
+		&files.ToolError{Code: files.ErrorCodePayloadTooLarge, Message: "file exceeds max size"},
+		"append runtime context events",
+	)
+	st := &stubManagedEngine{afterErrs: []error{tooLarge, tooLarge}}
+
+	engineCacheMu.Lock()
+	engineCache = map[string]memory.Engine{cacheKey: st}
+	engineCacheMu.Unlock()
+
+	err := AfterTurnHook(context.Background(), conf, user, validRuntimeKeys(), []any{
+		map[string]any{"role": "user", "content": []any{map[string]any{"type": "input_text", "text": "hi"}}},
+	}, "hello")
+	require.Error(t, err)
+	require.Equal(t, 2, st.afterCalls)
+	require.Equal(t, 1, st.maintenanceCalls)
+}

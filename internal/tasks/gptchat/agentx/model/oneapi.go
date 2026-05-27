@@ -193,11 +193,35 @@ func validateInputItem(item any) (any, error) {
 // OneAPI Responses stream emits the call shell on output_item.added, the
 // arguments incrementally on function_call_arguments.delta, and the
 // terminal event on function_call_arguments.done or output_item.done.
+//
+// Some upstreams interleave the events such that response.output_item.done
+// arrives BEFORE function_call_arguments.done, carrying empty or partial
+// arguments. Eagerly emitting on output_item.done in that case ships an
+// empty-args ChunkFunction to the agent loop and the later (authoritative)
+// args.done is dropped by the cross-path dedup guard. To prevent that, the
+// adapter only emits at:
+//
+//  1. function_call_arguments.done (authoritative when streamed)
+//  2. response.output_item.done WHEN no pending registration exists for
+//     the call (i.e. the upstream skipped per-item streaming and only sent
+//     output_item.done with the full payload), provided the event carries
+//     non-empty Arguments
+//  3. defensive flushes on stream-end / response.completed for anything
+//     still pending (a truncated stream, or an upstream that batches into
+//     response.completed without per-item done events)
+//
+// itemDone is set when response.output_item.done arrived; argsDone is set
+// when function_call_arguments.done arrived. Either one alone is not a
+// trigger for emission while the other side might still arrive — the
+// emission decision lives in args.done (it has the authoritative args
+// payload) and in the stream-end flush.
 type pendingCall struct {
 	itemID    string
 	callID    string
 	name      string
 	argBuffer strings.Builder
+	itemDone  bool
+	argsDone  bool
 	emitted   bool
 }
 
@@ -282,9 +306,19 @@ func (c *oneAPIClient) runStreaming(
 			}
 			_ = json.Unmarshal(ev.Raw, &d)
 			if p, ok := byItemID[d.ItemID]; ok && ev.Delta != "" {
-				p.argBuffer.WriteString(ev.Delta)
+				// Late deltas after emission are ignored — the call has
+				// already been dispatched downstream with its final args.
+				if !p.emitted {
+					p.argBuffer.WriteString(ev.Delta)
+				}
 			}
 		case "response.function_call_arguments.done":
+			// args.done is the authoritative finalization point for a
+			// streamed function_call. We always emit here, using the
+			// event's Arguments field as the source of truth (it carries
+			// the complete payload regardless of how the upstream batched
+			// the deltas); we only fall back to the accumulated buffer
+			// when the event itself didn't include the field.
 			var d struct {
 				ItemID    string `json:"item_id"`
 				Arguments string `json:"arguments"`
@@ -295,21 +329,68 @@ func (c *oneAPIClient) runStreaming(
 						p.argBuffer.Reset()
 						p.argBuffer.WriteString(d.Arguments)
 					}
-					emitFunction(p.callID, p.name, p.argBuffer.String())
-					p.emitted = true
+					p.argsDone = true
+					if !p.emitted {
+						emitFunction(p.callID, p.name, p.argBuffer.String())
+						p.emitted = true
+					}
 				}
 			}
 		case "response.output_item.done":
+			// CRITICAL: output_item.done is NOT a safe trigger for
+			// emission when the call is being streamed via
+			// function_call_arguments.delta — some upstreams interleave
+			// this event BEFORE the args.done with empty or partial
+			// arguments. Emitting here in that case ships an empty-args
+			// ChunkFunction to the agent loop, and the later args.done
+			// emission is suppressed by the cross-path dedup guard.
+			//
+			// Rules:
+			//
+			//   - If a pending call is registered (output_item.added was
+			//     seen), mark it itemDone and DO NOT emit. The args.done
+			//     event (or the stream-end flush) will emit with the
+			//     correct args. If output_item.done happens to carry
+			//     non-empty Arguments, seed the buffer with them only when
+			//     no delta-text has accumulated and args.done has not
+			//     fired — this keeps the flush authoritative in the rare
+			//     case where the upstream sends everything via
+			//     output_item.done and skips args.done entirely.
+			//
+			//   - If NO pending call is registered (the upstream skipped
+			//     output_item.added and per-item streaming entirely),
+			//     emit immediately using the event's Arguments — this
+			//     covers the path where output_item.done carries the
+			//     complete payload as the only signal for this call.
 			var d struct {
 				Item httppkg.OpenAIResponsesFunctionCall `json:"item"`
 			}
 			if err := json.Unmarshal(ev.Raw, &d); err == nil && d.Item.Type == "function_call" {
-				emitFunction(d.Item.CallID, d.Item.Name, d.Item.Arguments)
-				if p, ok := byItemID[d.Item.ID]; ok {
-					p.emitted = true
+				key := d.Item.ID
+				if key == "" {
+					key = d.Item.CallID
 				}
-				if p, ok := byItemID[d.Item.CallID]; ok {
-					p.emitted = true
+				p, ok := byItemID[key]
+				if !ok && d.Item.CallID != "" {
+					p, ok = byItemID[d.Item.CallID]
+				}
+				if ok {
+					p.itemDone = true
+					// Seed the buffer from the event's Arguments only if
+					// nothing else has been accumulated yet AND args.done
+					// has not yet finalized the buffer. This defends
+					// against an upstream that batches the full args
+					// into output_item.done while still emitting an
+					// (eventual) empty args.done.
+					if !p.argsDone && p.argBuffer.Len() == 0 && d.Item.Arguments != "" {
+						p.argBuffer.WriteString(d.Item.Arguments)
+					}
+					// Intentionally do NOT emit here — args.done or the
+					// stream-end flush owns emission for pending calls.
+				} else if d.Item.Arguments != "" {
+					// No pending registration: this is the only signal
+					// we'll get for this call. Emit now.
+					emitFunction(d.Item.CallID, d.Item.Name, d.Item.Arguments)
 				}
 			}
 		case "response.completed":
