@@ -12,6 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v76"
 
+	// Blank-import the agent-mode entrypoint so its init() side-effect
+	// registers the dispatcher into the http package's table. Without
+	// this import the ChatHandler's agent-mode branch always returns
+	// HTTP 409 because no dispatcher is registered. See
+	// docs/proposals/2026-05-26-gptchat-react-agent-mode.md §5.2.
+	_ "github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	ihttp "github.com/Laisky/go-ramjet/internal/tasks/gptchat/http"
 	"github.com/Laisky/go-ramjet/library/log"

@@ -1,0 +1,6 @@
+reasoning	thinking… 
+reasoning	step 2.
+function	call_a	web_search	{"query":"hello"}
+text	Hello 
+text	world.
+done

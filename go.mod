@@ -26,6 +26,7 @@ require (
 	github.com/gorilla/feeds v1.2.0
 	github.com/jinzhu/copier v0.4.0
 	github.com/minio/minio-go/v7 v7.0.98
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/phpdave11/gofpdf v1.4.3
 	github.com/pkoukk/tiktoken-go v0.1.8

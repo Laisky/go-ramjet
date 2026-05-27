@@ -1,21 +1,17 @@
 package http
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	stdjson "encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
-	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/go-utils/v6/json"
-	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -45,6 +41,11 @@ type OpenAIResponsesReq struct {
 	Tools           []OpenAIResponsesTool    `json:"tools,omitempty"`
 	ToolChoice      any                      `json:"tool_choice,omitempty"`
 	Store           *bool                    `json:"store,omitempty"`
+	// ParallelToolCalls, when non-nil, sets the upstream's parallel_tool_calls
+	// flag (see docs/proposals/2026-05-26-gptchat-react-agent-mode.md §3.8).
+	// The proxy path leaves this nil; the agentx model adapter sets it based
+	// on the model's published capabilities and the caller's request.
+	ParallelToolCalls *bool `json:"parallel_tool_calls,omitempty"`
 }
 
 // OpenAIResponseReasoning defines reasoning options for the Responses API.
@@ -505,168 +506,24 @@ func responseContentStreamed(ctx *gin.Context) bool {
 	return ctx.GetBool(llmResponseContentStreamedKey)
 }
 
-// parseStreamingResponses parses a streaming Responses API response and emits deltas to the UI.
+// parseStreamingResponses parses a streaming Responses API response and emits
+// deltas to the gin response writer.
+//
+// The implementation is a thin wrapper around parseStreamingResponsesViaSink.
+// Both paths share the same parser/encoder so byte output on the wire is
+// guaranteed identical to the prior implementation.
 func parseStreamingResponses(
 	ctx *gin.Context,
 	resp *http.Response,
 ) (*OpenAIResponsesResp, error) {
-	logger := gmw.GetLogger(ctx)
-	scanner := bufio.NewScanner(resp.Body)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, responsesStreamMaxLineBytes)
-	finalResp := new(OpenAIResponsesResp)
-	var contentBuf strings.Builder
-	streamedContent := false
-	loggedChatFallback := false
-
-	requestID := resp.Header.Get("x-oneapi-request-id")
-	if requestID == "" {
-		requestID = resp.Header.Get("x-request-id")
-	}
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		if !bytes.HasPrefix(line, []byte("data: ")) {
-			continue
-		}
-		data := bytes.TrimPrefix(line, []byte("data: "))
-		if bytes.Equal(data, []byte("[DONE]")) {
-			break
-		}
-
-		var event struct {
-			Type       string               `json:"type"`
-			ResponseID string               `json:"response_id"`
-			Delta      string               `json:"delta"`
-			Response   *OpenAIResponsesResp `json:"response"`
-			Error      any                  `json:"error"`
-		}
-		if err := json.Unmarshal(data, &event); err != nil {
-			logger.Warn("unmarshal responses event", zap.Error(err), zap.ByteString("data", data))
-			continue
-		}
-
-		if event.Error != nil {
-			return nil, errors.Errorf("upstream responses error: %v", event.Error)
-		}
-
-		if event.ResponseID != "" {
-			requestID = event.ResponseID
-		}
-
-		if event.Type == "" && event.Delta == "" && event.Response == nil {
-			var chunk OpenaiCompletionStreamResp
-			if err := json.Unmarshal(data, &chunk); err == nil && chunk.Object == "chat.completion.chunk" {
-				if !loggedChatFallback {
-					logger.Debug("responses stream received chat completion chunks",
-						zap.String("request_id", requestID),
-					)
-					loggedChatFallback = true
-				}
-				if chunk.ID != "" {
-					requestID = chunk.ID
-				}
-				for _, choice := range chunk.Choices {
-					content, reasoning := extractChatCompletionDeltaContent(choice.Delta)
-					if reasoning != "" {
-						emitThinkingDelta(ctx, true, requestID, reasoning)
-					}
-					if content != "" {
-						emitTextDelta(ctx, true, requestID, content)
-						markResponseContentStreamed(ctx)
-						streamedContent = true
-						contentBuf.WriteString(content)
-					}
-				}
-				continue
-			}
-		}
-
-		switch event.Type {
-		case "response.output_text.delta":
-			emitTextDelta(ctx, true, requestID, event.Delta)
+	deps := UpstreamDeps{
+		Logger:     gmw.GetLogger(ctx),
+		StreamSink: GinStreamSink(ctx),
+		OnContentStreamed: func() {
 			markResponseContentStreamed(ctx)
-			streamedContent = true
-			contentBuf.WriteString(event.Delta)
-		case "response.refusal.delta":
-			emitTextDelta(ctx, true, requestID, "refusal: "+event.Delta)
-			markResponseContentStreamed(ctx)
-			streamedContent = true
-			contentBuf.WriteString("refusal: " + event.Delta)
-		case "response.reasoning_text.delta",
-			"response.reasoning_text.done",
-			"response.reasoning.delta",
-			"response.reasoning_summary_text.delta",
-			"response.reasoning_summary_text.done",
-			"response.reasoning_summary_part.added",
-			"response.reasoning_summary_part.done",
-			"response.thought.delta",
-			"response.thought.done":
-			thinkingText := extractResponsesReasoningEventText(data, event)
-			if thinkingText == "" {
-				logger.Debug("responses reasoning event had no text",
-					zap.String("event_type", event.Type),
-					zap.String("request_id", requestID),
-				)
-				continue
-			}
-			emitThinkingDelta(ctx, true, requestID, thinkingText)
-		case "response.function_call_arguments.delta":
-			emitThinkingDelta(ctx, true, requestID, event.Delta)
-		case "response.completed":
-			if event.Response != nil {
-				finalResp = event.Response
-				imageMarkdown := extractOutputImageMarkdownFromResponses(event.Response)
-				if !streamedContent {
-					finalContent := extractOutputTextFromResponses(event.Response)
-					if finalContent != "" {
-						emitTextDelta(ctx, true, requestID, finalContent)
-						markResponseContentStreamed(ctx)
-						streamedContent = true
-						contentBuf.WriteString(finalContent)
-						logger.Debug("responses stream emitted final content fallback",
-							zap.Int("chars", len(finalContent)),
-							zap.String("request_id", requestID),
-						)
-					}
-				} else if imageMarkdown != "" {
-					emitTextDelta(ctx, true, requestID, imageMarkdown)
-					merged := appendMarkdownBlock(contentBuf.String(), imageMarkdown)
-					contentBuf.Reset()
-					contentBuf.WriteString(merged)
-				}
-
-				if imageMarkdown != "" {
-					logger.Debug("responses stream output images",
-						zap.Int("image_count", countMarkdownImages(imageMarkdown)),
-						zap.Int("markdown_chars", len(imageMarkdown)),
-						zap.String("request_id", requestID),
-					)
-				}
-			}
-		}
+		},
 	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Debug("responses stream scanner error",
-			zap.Error(err),
-			zap.Int("max_line_bytes", responsesStreamMaxLineBytes),
-			zap.String("request_id", requestID),
-		)
-		return nil, errors.Wrap(err, "scanner error")
-	}
-
-	if finalResp.ID == "" {
-		finalResp.ID = requestID
-	}
-	if strings.TrimSpace(finalResp.OutputText) == "" && contentBuf.Len() > 0 {
-		finalResp.OutputText = contentBuf.String()
-	}
-
-	return finalResp, nil
+	return parseStreamingResponsesViaSink(gmw.Ctx(ctx), deps, resp)
 }
 
 // extractResponsesReasoningEventText extracts text from streaming Responses API reasoning events.
@@ -700,88 +557,31 @@ func extractResponsesReasoningEventText(raw []byte, event struct {
 }
 
 // callUpstreamResponses executes a Responses API request and returns the parsed response.
+//
+// This is a thin wrapper over CallUpstreamResponsesCtx that adapts the gin
+// context into UpstreamDeps. The body lives in agent_bridge.go so that the
+// agent loop (Phase 1B) can call the same code path without depending on
+// gin. Behavior is byte-identical to the pre-refactor implementation.
 func callUpstreamResponses(
 	ctx *gin.Context,
 	user *config.UserConfig,
 	req *OpenAIResponsesReq,
 ) (*OpenAIResponsesResp, http.Header, error) {
-	logger := gmw.GetLogger(ctx)
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "marshal responses req")
+	deps := UpstreamDeps{
+		User:          user,
+		Logger:        gmw.GetLogger(ctx),
+		RequestHeader: ctx.Request.Header,
+		RawQuery:      ctx.Request.URL.RawQuery,
+		StreamSink:    GinStreamSink(ctx),
+		OnContentStreamed: func() {
+			markResponseContentStreamed(ctx)
+		},
+		SetStreamHeaders: func(hdr http.Header) {
+			setStreamHeaders(ctx, hdr)
+			ctx.Set("llm_response_streamed", true)
+		},
 	}
-
-	logger.Debug("send responses request to upstream",
-		zap.String("model", req.Model),
-		zap.Int("payload_bytes", len(body)),
-		zap.Any("request", sanitizePayloadForLog(req)),
-	)
-
-	upReq, err := buildResponsesHTTPRequest(ctx, user, body)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "build responses http request")
-	}
-
-	resp, err := httpcli.Do(upReq) //nolint:bodyclose
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "do upstream request")
-	}
-	defer gutils.LogErr(resp.Body.Close, logger)
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, resp.Header, errors.Errorf(
-			"upstream responses returned [%d] %s",
-			resp.StatusCode,
-			truncateBytesForLog(data, 2048),
-		)
-	}
-
-	if req.Stream {
-		setStreamHeaders(ctx, resp.Header)
-		ctx.Set("llm_response_streamed", true)
-		out, err := parseStreamingResponses(ctx, resp)
-		return out, resp.Header, err
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.Header, errors.Wrap(err, "read upstream responses")
-	}
-
-	out := new(OpenAIResponsesResp)
-	if err := json.Unmarshal(data, out); err != nil {
-		return nil, resp.Header, errors.Wrapf(
-			err,
-			"unmarshal upstream responses: %s",
-			truncateBytesForLog(data, 2048),
-		)
-	}
-
-	// Safe debug log: only shapes/lengths, no raw content.
-	types := make([]string, 0, len(out.Output))
-	for _, it := range out.Output {
-		if it.Type != "" {
-			types = append(types, it.Type)
-		}
-	}
-	raType := ""
-	if out.RequiredAction != nil {
-		raType = out.RequiredAction.Type
-	}
-	logger.Debug("upstream responses received",
-		zap.String("id", out.ID),
-		zap.Int("output_items", len(out.Output)),
-		zap.Strings("output_types", types),
-		zap.Int("output_text_len", len(out.OutputText)),
-		zap.String("required_action", raType),
-	)
-
-	if out.Error != nil {
-		return nil, resp.Header, errors.Errorf("upstream responses error: %v", out.Error)
-	}
-
-	return out, resp.Header, nil
+	return CallUpstreamResponsesCtx(gmw.Ctx(ctx), deps, req)
 }
 
 // truncateBytesForLog truncates raw bytes into a safe string for error messages.

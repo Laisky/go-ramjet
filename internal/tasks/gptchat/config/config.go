@@ -63,6 +63,20 @@ func SetupConfig() (err error) {
 	Config.MemoryModel = gutils.OptionalVal(&Config.MemoryModel, "openai/gpt-oss-120b")
 	Config.MemoryLLMTimeoutSeconds = gutils.OptionalVal(&Config.MemoryLLMTimeoutSeconds, 15)
 	Config.MemoryLLMMaxOutputTokens = gutils.OptionalVal(&Config.MemoryLLMMaxOutputTokens, 512)
+	if Config.AgentLoop != nil {
+		Config.AgentLoop.MaxIterations = gutils.OptionalVal(&Config.AgentLoop.MaxIterations, 20)
+		Config.AgentLoop.MaxToolCalls = gutils.OptionalVal(&Config.AgentLoop.MaxToolCalls, 40)
+		Config.AgentLoop.MaxParallelToolCalls = gutils.OptionalVal(&Config.AgentLoop.MaxParallelToolCalls, 8)
+		Config.AgentLoop.WallClockSeconds = gutils.OptionalVal(&Config.AgentLoop.WallClockSeconds, 480)
+		Config.AgentLoop.CircuitBreakerRepeats = gutils.OptionalVal(&Config.AgentLoop.CircuitBreakerRepeats, 3)
+		Config.AgentLoop.ErrorBudget = gutils.OptionalVal(&Config.AgentLoop.ErrorBudget, 6)
+		Config.AgentLoop.WriteGate = strings.ToLower(strings.TrimSpace(
+			gutils.OptionalVal(&Config.AgentLoop.WriteGate, "ask")))
+		Config.AgentLoop.WebFetchMaxTokens = gutils.OptionalVal(&Config.AgentLoop.WebFetchMaxTokens, 25000)
+		Config.AgentLoop.DefaultFileProject = strings.TrimSpace(gutils.OptionalVal(
+			&Config.AgentLoop.DefaultFileProject, "go-ramjet"))
+		Config.AgentLoop.Subagent.MaxDepth = gutils.OptionalVal(&Config.AgentLoop.Subagent.MaxDepth, 2)
+	}
 	Config.WebFetch.Jina.Prefix = normalizeWebFetchPrefix(
 		gutils.OptionalVal(&Config.WebFetch.Jina.Prefix, "https://r.jina.ai/"))
 	Config.WebFetch.Defuddle.Prefix = normalizeWebFetchPrefix(
@@ -214,11 +228,68 @@ type OpenAI struct {
 	MemoryLLMTimeoutSeconds int `json:"memory_llm_timeout_seconds" mapstructure:"memory_llm_timeout_seconds"`
 	// MemoryLLMMaxOutputTokens limits output tokens for heuristic memory LLM calls.
 	MemoryLLMMaxOutputTokens int `json:"memory_llm_max_output_tokens" mapstructure:"memory_llm_max_output_tokens"`
+	// AgentLoop configures the opt-in server-side ReAct agent loop.
+	// See docs/proposals/2026-05-26-gptchat-react-agent-mode.md §5.4.
+	// When nil the agent loop is disabled — `agent_mode=true` requests
+	// receive HTTP 409 agent_mode_disabled.
+	AgentLoop *AgentLoopConfig `json:"agent_loop" mapstructure:"agent_loop"`
 	// WebFetch configures markdown-oriented web fetch proxy providers.
 	WebFetch WebFetchConfig `json:"web_fetch" mapstructure:"web_fetch"`
 
 	// Azure (optional) azure config
 	Azure azureConfig `json:"azure" mapstructure:"azure"`
+}
+
+// AgentLoopConfig captures the per-server runtime knobs for the Phase 1
+// server-side ReAct agent loop (proposal §5.4). When the top-level
+// `openai.agent_loop` block is absent from the config file the entire
+// feature is disabled and any inbound `agent_mode=true` request is
+// rejected with HTTP 409 `agent_mode_disabled`.
+//
+// Defaults applied in SetupConfig when AgentLoop != nil but individual
+// fields are zero. See proposal §4.2 for the rationale behind the chosen
+// 2026-conservative defaults.
+type AgentLoopConfig struct {
+	// Enabled is the per-instance kill switch. When false the handler
+	// returns ErrAgentLoopDisabled (HTTP 409) for agent_mode=true requests.
+	Enabled bool `json:"enabled" mapstructure:"enabled"`
+	// MaxIterations bounds the ReAct loop rounds. Default 20.
+	MaxIterations int `json:"max_iterations" mapstructure:"max_iterations"`
+	// MaxToolCalls bounds total tool calls across the whole run.
+	// Default 40.
+	MaxToolCalls int `json:"max_tool_calls" mapstructure:"max_tool_calls"`
+	// MaxParallelToolCalls bounds bounded-fan-out per round. Default 8.
+	// Setting to 1 forces sequential execution.
+	MaxParallelToolCalls int `json:"max_parallel_tool_calls" mapstructure:"max_parallel_tool_calls"`
+	// WallClockSeconds bounds run wall-clock time. Default 480.
+	WallClockSeconds int `json:"wall_clock_seconds" mapstructure:"wall_clock_seconds"`
+	// CircuitBreakerRepeats trips the breaker after N identical tool calls
+	// in a row. Default 3.
+	CircuitBreakerRepeats int `json:"circuit_breaker_repeats" mapstructure:"circuit_breaker_repeats"`
+	// ErrorBudget bounds total tool errors before termination. Default 6.
+	ErrorBudget int `json:"error_budget" mapstructure:"error_budget"`
+	// WriteGate is one of ask | allow | deny (proposal §3.7). Default ask.
+	WriteGate string `json:"write_gate" mapstructure:"write_gate"`
+	// MCPServer identifies the curated MCP catalog. May be either an
+	// alias of an MCP server known to the deployment (Phase 2) or a
+	// direct URL.
+	MCPServer string `json:"mcp_server" mapstructure:"mcp_server"`
+	// WebFetchMaxTokens bounds the per-call web_fetch output. Default
+	// 25000 (proposal §4.3 / Morph MCP guidance).
+	WebFetchMaxTokens int `json:"web_fetch_max_tokens" mapstructure:"web_fetch_max_tokens"`
+	// DefaultFileProject is the project namespace forwarded to file_*
+	// MCP tools when the model omits one. Default "go-ramjet".
+	DefaultFileProject string `json:"default_file_project" mapstructure:"default_file_project"`
+	// Subagent configures the Phase 1 stub subagent tool.
+	Subagent AgentLoopSubagentConfig `json:"subagent" mapstructure:"subagent"`
+}
+
+// AgentLoopSubagentConfig configures the (Phase-1 stub) subagent tool.
+// Per proposal §3.6 the type is reserved but the tool is not registered
+// unless Enabled is true.
+type AgentLoopSubagentConfig struct {
+	Enabled  bool `json:"enabled" mapstructure:"enabled"`
+	MaxDepth int  `json:"max_depth" mapstructure:"max_depth"`
 }
 
 // WebFetchConfig configures available web fetch proxy providers.

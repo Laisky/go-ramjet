@@ -24,6 +24,34 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+// agentDispatcher is the indirection through which sendChatWithResponsesToolLoop
+// delegates an `agent_mode=true` request to the agentx package. The
+// agentx import would create a cycle (agentx already depends on http),
+// so it is registered at init time via RegisterAgentDispatcher.
+type agentDispatcher func(
+	ctx *gin.Context,
+	frontendReq *FrontendReq,
+	user *config.UserConfig,
+	responsesReq *OpenAIResponsesReq,
+	upstreamHeader http.Header,
+) error
+
+var (
+	registeredAgentDispatcher agentDispatcher
+	// ErrAgentDispatcherDisabled is the sentinel agentDispatcher returns
+	// when the global config disables agent mode but the request asked
+	// for it. The wrapper at the call site converts this into HTTP 409.
+	ErrAgentDispatcherDisabled = errors.New("agent_mode_disabled")
+)
+
+// RegisterAgentDispatcher installs the agent-mode entrypoint. Called
+// once from agentx.init() — there is no public unregister; production
+// callers register and forget. Tests that want to install a stub call
+// this directly.
+func RegisterAgentDispatcher(d agentDispatcher) {
+	registeredAgentDispatcher = d
+}
+
 // defaultToolLoopMaxRounds defines the default maximum number of tool loop rounds.
 const defaultToolLoopMaxRounds = 5
 
@@ -31,6 +59,11 @@ const toolStepMarker = "[[TOOLS]] "
 
 const (
 	ctxKeyMemoryTurn = "ctx_memory_turn"
+	// ctxKeyAgentMode caches the inbound `agent_mode` switch before
+	// convert2UpstreamResponsesRequest clears LaiskyExtra to keep the
+	// upstream payload clean. The dispatch branch below reads it from
+	// the gin context instead of the FrontendReq.
+	ctxKeyAgentMode = "ctx_agent_mode"
 )
 
 type memoryTurnContext struct {
@@ -144,6 +177,37 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 		}
 
 		return writeFinalToUI(ctx, frontendReq, nil, strings.TrimSpace(markdownText), "", nil)
+	}
+
+	// Agent mode: delegate to the server-side ReAct loop in agentx.
+	//
+	// Image generation wins above (the existing block returns early), so we
+	// only get here for normal text models. Agent mode is opt-in via the
+	// LaiskyExtra.ChatSwitch.AgentMode pointer — absent ≡ proxy path,
+	// keeping the existing tool-relay behaviour bit-identical for every
+	// request that does not flip the switch (acceptance criterion #5,
+	// proposal §4.2 decision #1).
+	if ctx.GetBool(ctxKeyAgentMode) {
+		if registeredAgentDispatcher == nil {
+			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{
+				"error": "agent_mode_disabled",
+			})
+			return ErrAgentDispatcherDisabled
+		}
+		dispatchErr := registeredAgentDispatcher(ctx, frontendReq, user, responsesReq, http.Header{})
+		if errors.Is(dispatchErr, ErrAgentDispatcherDisabled) {
+			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{
+				"error": "agent_mode_disabled",
+			})
+			return dispatchErr
+		}
+		if dispatchErr != nil {
+			if web.AbortErr(ctx, dispatchErr) {
+				return dispatchErr
+			}
+			return dispatchErr
+		}
+		return nil
 	}
 
 	reservation := getTokenReservation(ctx)
@@ -426,70 +490,24 @@ func writeFinalToUI(
 	return err
 }
 
+// executeToolCall dispatches a single function call originating from the
+// upstream Responses API. It is a thin wrapper over ExecuteToolCallCtx
+// (agent_bridge.go) that builds the LegacyDeps from the gin context. The
+// agent loop (Phase 1B) calls ExecuteToolCallCtx directly with its own
+// context.
 func executeToolCall(
 	ctx *gin.Context,
 	user *config.UserConfig,
 	frontendReq *FrontendReq,
 	fc OpenAIResponsesFunctionCall,
 ) (string, string, error) {
-	// 1) Try local tools.
-	if out, err := Call(fc.Name, fc.Arguments); err == nil {
-		capped, changed, capErr := capToolOutput(gmw.Ctx(ctx), user, frontendReq, fc.Name, fc.Arguments, out)
-		info := "exec local tool: " + fc.Name
-		if changed {
-			info += " (output capped)"
-		}
-		if capErr != nil {
-			info += " (cap warn: " + capErr.Error() + ")"
-		}
-		return capped, info, nil
+	deps := LegacyDeps{
+		User:         user,
+		FrontendReq:  frontendReq,
+		RawUserToken: GetRawUserToken(ctx),
+		Logger:       gmw.GetLogger(ctx),
 	}
-
-	// 2) Try MCP.
-	if frontendReq.EnableMCP != nil && !*frontendReq.EnableMCP {
-		gmw.GetLogger(ctx).Warn("prevent MCP tool call because it's disabled", zap.String("tool", fc.Name))
-		return "", "", errors.Errorf("MCP is disabled, but tool %q was called", fc.Name)
-	}
-
-	server := findMCPServerForToolName(frontendReq.MCPServers, fc.Name)
-	if server == nil {
-		return "", "", errors.Errorf("tool %q not found in enabled MCP servers", fc.Name)
-	}
-
-	// Rate limit MCP tools for freetier users.
-	// Only applies to users whose API key begins with "FREETIER-".
-	if strings.HasPrefix(getRawUserToken(ctx), "FREETIER-") {
-		if expensiveModelRateLimiter == nil {
-			onceLimiter.Do(setupRateLimiter)
-		}
-		ratelimitCost := config.Config.RateLimitExpensiveModelsIntervalSeconds
-		if ratelimitCost <= 0 {
-			ratelimitCost = 600
-		}
-		if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
-			return "", "", errors.New("MCP tools are rate limited for freetier users; please try again later")
-		}
-	}
-
-	info := "exec MCP tool: " + fc.Name + " @ " + strings.TrimSpace(server.URL)
-
-	// Use session API key as fallback when MCP server has no configured key
-	mcpOpts := &MCPCallOption{
-		FallbackAPIKey: getRawUserToken(ctx),
-	}
-	out, err := callMCPTool(gmw.Ctx(ctx), server, fc.Name, fc.Arguments, mcpOpts)
-	if err != nil {
-		return out, info, err
-	}
-	// Cap MCP output before passing to upstream.
-	capped, changed, capErr := capToolOutput(gmw.Ctx(ctx), user, frontendReq, fc.Name, fc.Arguments, out)
-	if changed {
-		info += " (output capped)"
-	}
-	if capErr != nil {
-		info += " (cap warn: " + capErr.Error() + ")"
-	}
-	return capped, info, nil
+	return ExecuteToolCallCtx(gmw.Ctx(ctx), deps, fc)
 }
 
 func findMCPServerForToolName(servers []MCPServerConfig, toolName string) *MCPServerConfig {
@@ -687,6 +705,15 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 
 		if frontendReq.LaiskyExtra != nil && frontendReq.LaiskyExtra.ChatSwitch.EnableMemory != nil {
 			requestMemoryEnabled = *frontendReq.LaiskyExtra.ChatSwitch.EnableMemory
+		}
+
+		// Cache the agent_mode switch before clearing LaiskyExtra; the
+		// dispatch branch in sendChatWithResponsesToolLoop reads it
+		// from the gin context.
+		if frontendReq.LaiskyExtra != nil &&
+			frontendReq.LaiskyExtra.ChatSwitch.AgentMode != nil &&
+			*frontendReq.LaiskyExtra.ChatSwitch.AgentMode {
+			ctx.Set(ctxKeyAgentMode, true)
 		}
 
 		// never forward app-specific config to upstream.

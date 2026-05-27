@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	stdjson "encoding/json"
 	"net/http"
 	"strings"
 
@@ -214,4 +215,133 @@ func callMCPToolJSONRPC(ctx context.Context, server *MCPServerConfig, baseHeader
 		return "", errors.Wrap(lastErr, "failed to call mcp tool via json-rpc")
 	}
 	return "", errors.New("failed to call mcp tool via json-rpc")
+}
+
+// MCPToolDescriptor is one entry in an MCP server's tool list.
+//
+// Field names match the MCP spec (camelCase) so JSON unmarshal works
+// directly against tools/list responses. InputSchema is held as raw JSON
+// because it is forwarded verbatim to the upstream LLM's tool catalog.
+type MCPToolDescriptor struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description,omitempty"`
+	InputSchema stdjson.RawMessage `json:"inputSchema,omitempty"`
+}
+
+// DiscoverMCPTools fetches the tool catalog from an MCP server via the
+// JSON-RPC `tools/list` method (with a `tools.list` fallback for older
+// servers). It mirrors the call-side authentication and endpoint-guessing
+// of callMCPTool so identical credentials and URL forms work for both.
+//
+// Consumed by the agent loop's curated-belt builder (agentx/tools); see
+// proposal §3.2 and §5.1. The proxy path does not call this.
+func DiscoverMCPTools(ctx context.Context, server *MCPServerConfig, opts *MCPCallOption) ([]MCPToolDescriptor, error) {
+	logger := gmw.GetLogger(ctx)
+	if server == nil {
+		return nil, errors.New("nil mcp server")
+	}
+
+	effectiveAPIKey := strings.TrimSpace(server.APIKey)
+	if effectiveAPIKey == "" && opts != nil {
+		effectiveAPIKey = strings.TrimSpace(opts.FallbackAPIKey)
+	}
+
+	auths := mcpAuthCandidates(effectiveAPIKey)
+	baseHeaders := http.Header{}
+	baseHeaders.Set("content-type", "application/json")
+	baseHeaders.Set("accept", "application/json, text/event-stream")
+
+	endpointCandidates := guessJSONRPCEndpoints(server)
+	if len(endpointCandidates) == 0 {
+		return nil, errors.New("no json-rpc endpoints derivable from server url")
+	}
+
+	var lastErr error
+	methods := []string{"tools/list", "tools.list"}
+	for _, endpoint := range endpointCandidates {
+		if err := ensureMCPSession(ctx, server, endpoint, baseHeaders, auths); err != nil {
+			logger.Debug("mcp session init failed for discovery",
+				zap.String("endpoint", endpoint),
+				zap.Error(err))
+			lastErr = err
+			continue
+		}
+
+		for _, method := range methods {
+			payload := map[string]any{
+				"jsonrpc": "2.0",
+				"id":      randomID("rpc_", 8),
+				"method":  method,
+				"params":  map[string]any{"_meta": map[string]any{"progressToken": 1}},
+			}
+			body, err := json.Marshal(payload)
+			if err != nil {
+				return nil, errors.Wrap(err, "marshal tools/list payload")
+			}
+
+			resp, err := doMCPPost(ctx, endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
+			if err != nil {
+				logger.Debug("mcp tools/list post failed",
+					zap.String("endpoint", endpoint),
+					zap.String("method", method),
+					zap.Error(err))
+				lastErr = err
+				continue
+			}
+			//nolint:errcheck // best-effort close; the helper drains on error paths
+			defer resp.Body.Close()
+
+			obj, err := fetchJSONOrSSE(resp)
+			if err != nil {
+				return nil, errors.Wrap(err, "parse tools/list response")
+			}
+
+			if e, ok := obj["error"]; ok && e != nil {
+				lastErr = errors.Errorf("mcp tools/list rpc error: %v", e)
+				continue
+			}
+
+			tools, perr := extractToolListFromResponse(obj)
+			if perr != nil {
+				lastErr = perr
+				continue
+			}
+			logger.Debug("mcp tools/list ok",
+				zap.String("endpoint", endpoint),
+				zap.String("method", method),
+				zap.Int("tool_count", len(tools)))
+			return tools, nil
+		}
+	}
+
+	if lastErr != nil {
+		return nil, errors.Wrap(lastErr, "failed to discover mcp tools")
+	}
+	return nil, errors.New("failed to discover mcp tools")
+}
+
+// extractToolListFromResponse normalizes the multiple shapes MCP servers
+// return for tools/list: { result: { tools: [...] } }, { tools: [...] },
+// or a bare array. Mirrors the frontend's normalizeMCPToolListResponse.
+func extractToolListFromResponse(obj map[string]any) ([]MCPToolDescriptor, error) {
+	var raw any = obj
+	if res, ok := obj["result"]; ok && res != nil {
+		raw = res
+	}
+	if m, isMap := raw.(map[string]any); isMap {
+		if t, ok := m["tools"]; ok {
+			raw = t
+		}
+	}
+
+	// Re-marshal then unmarshal — the simplest way to type a heterogeneous slice.
+	buf, err := json.Marshal(raw)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal tool list intermediate")
+	}
+	var tools []MCPToolDescriptor
+	if err := json.Unmarshal(buf, &tools); err != nil {
+		return nil, errors.Wrap(err, "unmarshal tool list (unexpected shape)")
+	}
+	return tools, nil
 }

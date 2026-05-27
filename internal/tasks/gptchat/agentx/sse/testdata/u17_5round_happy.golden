@@ -1,0 +1,21 @@
+reasoning|req-u17|[[TOOLS]] agent run started (model=gpt-5, iter_cap=20)\n
+reasoning|req-u17|[[TOOLS]] -- step 0 --\n
+reasoning|req-u17|[[TOOLS]] [call00] tool_call: web_search\n
+reasoning|req-u17|[[TOOLS]] [call00] args: {"query":"anthropic"}\n
+reasoning|req-u17|[[TOOLS]] [call00] tool ok (1234B)\n
+reasoning|req-u17|[[TOOLS]] -- step 1 --\n
+reasoning|req-u17|[[TOOLS]] [call01] tool_call: web_fetch\n
+reasoning|req-u17|[[TOOLS]] [call01] args: {"url":"https://example.com/a"}\n
+reasoning|req-u17|[[TOOLS]] [call01] tool ok (4567B)\n
+reasoning|req-u17|[[TOOLS]] -- step 2 --\n
+reasoning|req-u17|[[TOOLS]] [call02] tool_call: file_read\n
+reasoning|req-u17|[[TOOLS]] [call02] args: {"path":"/tmp/notes.md"}\n
+reasoning|req-u17|[[TOOLS]] [call02] tool ok (2048B)\n
+reasoning|req-u17|[[TOOLS]] -- step 3 --\n
+reasoning|req-u17|[[TOOLS]] [call03] tool_call: web_search\n
+reasoning|req-u17|[[TOOLS]] [call03] args: {"query":"claude"}\n
+reasoning|req-u17|[[TOOLS]] [call03] tool ok (9000B)\n
+reasoning|req-u17|[[TOOLS]] -- step 4 --\n
+content|req-u17|The final answer to the user is here.
+reasoning|req-u17|[[TOOLS]] run finished (terminated_by=send_to_user)\n
+finish|req-u17|

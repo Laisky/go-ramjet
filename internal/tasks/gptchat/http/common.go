@@ -20,10 +20,10 @@ const (
 	ctxKeyUserAuth string = "ctx_user_auth"
 )
 
-// getRawUserToken returns the original user token from Authorization header.
+// GetRawUserToken returns the original user token from the Authorization header.
 //
-// It is cached into gin context by getUserByAuthHeader.
-func getRawUserToken(gctx *gin.Context) string {
+// It is cached into the gin context by getUserByAuthHeader.
+func GetRawUserToken(gctx *gin.Context) string {
 	if gctx == nil {
 		return ""
 	}
@@ -31,6 +31,9 @@ func getRawUserToken(gctx *gin.Context) string {
 		if s, ok := v.(string); ok {
 			return strings.TrimSpace(s)
 		}
+	}
+	if gctx.Request == nil {
+		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(gctx.Request.Header.Get("authorization"), "Bearer "))
 }

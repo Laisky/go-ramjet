@@ -82,6 +82,10 @@ type FrontendReq struct {
 			EnableGoogleSearch bool `json:"enable_google_search"`
 			// EnableMemory enables memory hooks for this request.
 			EnableMemory *bool `json:"enable_memory,omitempty"`
+			// AgentMode opts the request into the server-side ReAct agent
+			// loop (proposal §4.1). Absent or nil leaves the existing proxy
+			// tool-relay path bit-identical to the pre-change baseline.
+			AgentMode *bool `json:"agent_mode,omitempty"`
 		} `json:"chat_switch"`
 	} `json:"laisky_extra,omitempty"`
 }

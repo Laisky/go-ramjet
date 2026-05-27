@@ -46,12 +46,15 @@ primitives; section 4 specifies the small Phase 1 wiring on top of them.
 
 ### 1.3 Reference implementations we are stealing from
 
-- **OpenAI Codex CLI** (`github.com/openai/codex`, Rust). Submit/event split,
-  unified `ToolRegistry`/`ToolRouter` covering local + MCP tools, approval
-  modes paired with platform sandboxes, declarative *retry-with-escalation*
-  on permission denials, JSON-RPC streaming protocol with typed events
-  (`TurnStarted`, `ExecCommandBegin/End`, `PatchApplied`, `TokensUsed`,
-  `TurnFinished`). Compaction in
+- **OpenAI Codex CLI** (`github.com/openai/codex`, Rust). We steal:
+  submit/event split, unified `ToolRegistry`/`ToolRouter` covering
+  local + MCP tools, JSON-RPC streaming protocol with typed events
+  (their event taxonomy informs ours). We deliberately **diverge** on
+  approval semantics (§3.7) — Codex retries with escalation inside the
+  loop, we exit the loop and let the next user turn be the approval
+  gate, because mid-stream confirmation contradicts §4.5's seamless-SSE
+  contract. Codex events: `TurnStarted`, `ExecCommandBegin/End`,
+  `PatchApplied`, `TokensUsed`, `TurnFinished`. Compaction in
   [`codex-rs/core/src/codex/compact.rs`](https://github.com/openai/codex/blob/main/codex-rs/core/src/codex/compact.rs).
 - **pi-agent** (`earendil-works/pi`, TypeScript). Three-package monorepo
   (`pi-ai` / `pi-agent-core` / `pi-coding-agent`). The killer features for
@@ -110,6 +113,15 @@ In addition to the two implementation references:
     hooks rather than inline calls.
   - **`SubAgentTool` interface defined** (no implementation in Phase 1) so
     delegation lands without an API break later.
+  - **`ErrAskUser` sentinel** — any hook can terminate the loop with a
+    user-facing message instead of executing the in-flight tool call.
+    The next user chat turn is the natural approval/redirect signal; no
+    mid-stream confirmation protocol (§3.7).
+  - **Bounded parallel tool execution** — when the model returns multiple
+    `function_call` items in one round, the loop fans them out via a
+    bounded executor (default `max_parallel_tool_calls=8`), preserves
+    result order for the upstream, and cancels siblings on the first
+    `ErrAskUser` (§3.8).
   - Loop caps, circuit breaker, error budget, write-gate — all enforced by
     hooks, not by core-loop conditionals.
 - **Proxy invariance**: with `agent_mode=false`, the handler's externally
@@ -231,6 +243,31 @@ synthetic `send_to_user` tool. Each request constructs a per-session
 `Subset` to enforce the curated belt. Future local-only tools, sandboxed
 tools, and user-supplied MCP tools all register through the same path.
 
+**Deterministic resolution rule (invariant, not an open question).**
+The model is **never** shown two tools with the same name. The registry
+maintains a single fixed source-priority order:
+
+```
+1. Local / synthesized tools  (e.g. send_to_user)
+2. Curated MCP belt           (configured server in openai.agent_loop)
+3. Future user-supplied MCP   (frontendReq.MCPServers, not used in Phase 1)
+```
+
+Within a given source, tools are ordered by `(server_id, tool_name)`
+lexicographically. On registration, if a new tool's name already exists,
+**the higher-priority tool wins; the lower-priority registration is
+silently skipped** with a single structured warning log
+(`agent_tool_shadowed`, fields: `name`, `kept_source`, `dropped_source`).
+The same input always produces the same belt — there is no
+non-determinism (no map iteration order, no first-seen-wins). `Names()`
+returns the de-duplicated, sorted list; `Get(name)` returns exactly one
+tool. This is enforced by unit test (U19 was extended; see §6.1).
+
+We deliberately do **not** invent rename/disambiguate mechanics now — if
+a future user-supplied tool collides with a curated one, the curated one
+wins; if that becomes a pain point we revisit. The point of the rule is
+reproducibility, not policy.
+
 **Wrapping existing dispatch.** The existing `executeToolCall()` at
 [responses_chat_handler.go:429-493](internal/tasks/gptchat/http/responses_chat_handler.go#L429-L493)
 is wrapped as `tool.fromLegacyDispatch(name)` so Phase 1 reuses the local
@@ -269,7 +306,7 @@ Event types defined in Phase 1:
 | `ToolCallEnd`         | CallID, DurationMS                                      |
 | `ToolResult`          | CallID, ContentPreview, BytesTotal, IsError             |
 | `StepFinished`        | StepID, TokensIn, TokensOut                             |
-| `Final`               | FinalText, Citations                                    |
+| `Final`               | FinalText, Citations, Origin (`send_to_user` \| `implicit` \| `ask_user`) |
 | `RunFinished`         | RunID, TerminatedBy, TotalUsage                         |
 | `Error`               | Code, Message                                           |
 
@@ -401,33 +438,216 @@ In Phase 1, `SubAgentTool.Execute` returns
 `errors.New("subagent execution not enabled in this build")` and the tool
 is **not** registered. The type exists so callers can compile against it.
 
-### 3.7 Approval as retry-with-escalation *(from Codex)*
+### 3.7 Approval = loop exit, not mid-stream confirmation
 
-The naive write-gate design (return "denied", done) is brittle: models
-just try a different destructive path. Codex's pattern is better — denial
-returns a **structured prompt** suggesting alternatives or asking the
-agent to explain why it needs the write, and the agent can either
-re-issue with justification or take a different route. We model this as
-a special `Result` shape, not a Go panic/error:
+We deliberately **diverge** from Codex's mid-stream retry-with-escalation
+pattern. Mid-loop user confirmation requires synchronous client
+round-trips, new ops (`OpApproval`), bidirectional SSE, and stateful
+streaming — all of which contradict the "seamless integration"
+contract from §4.5. Instead, we use the **conversation turn boundary**
+as the natural approval gate: any hook that wants user approval just
+**terminates the loop early** with a structured prompt to the user, and
+the user's next chat message becomes the approval (or correction, or
+redirection). No intermediate states, no special ops, no protocol
+extensions.
+
+Mechanism: a typed sentinel error returned from any hook causes the loop
+to skip the in-flight tool call and emit a hook-driven `Final` event
+whose text is the hook's user-facing message.
+
+```go
+package hook // lives in agentx/hook/errors.go to avoid the loop→hook→loop cycle
+
+// ErrAskUser, returned from any hook, exits the loop and produces a
+// Final event whose text is `Message`. Equivalent to the model calling
+// send_to_user with that message — same wire format, same UX. The loop
+// detects it via errors.As(err, &hook.ErrAskUser{}).
+type ErrAskUser struct {
+    Code    string // structured code for telemetry: "write_gate" | "circuit_breaker" | ...
+    Message string // user-facing prompt; rendered as the assistant message
+    Details map[string]any // optional structured context (proposed tool call, args, etc.)
+}
+
+func (e *ErrAskUser) Error() string { return e.Code + ": " + e.Message }
+```
+
+The `Result` struct stays minimal — no `NeedsEscalation` field, no
+`EscalationCode`:
 
 ```go
 type Result struct {
-    Content   string
-    Details   json.RawMessage
-    IsError   bool
-
-    // NeedsEscalation, when true, signals the agent to either request
-    // user confirmation (via a future ApprovalTool) or change strategy.
-    // The model sees Content; the UI sees Details.
-    NeedsEscalation bool
-    EscalationCode  string  // "write_blocked" | "untrusted_origin" | etc.
+    Content string
+    Details json.RawMessage
+    IsError bool
 }
 ```
 
-In Phase 1 with `write_gate=deny`, `before_tool_call` returns a Result
-with `IsError=true` *and* `NeedsEscalation=true`, `Content` explaining
-the policy. Phase ≥ 2 adds a real user-confirmation flow without
-changing the result shape.
+#### How hooks use it
+
+A hook decides "this needs user approval" and returns `ErrAskUser`
+instead of a `Result`. The loop catches it in `RunFinished` with
+`TerminatedBy="ask_user"` and emits:
+
+1. `emitThinkingDelta` — one `[[TOOLS]] ask_user(code=write_gate): blocked by policy\n` line for the trace.
+2. `emitTextDelta` — the `Message` text, chunked, lands in `delta.content`.
+3. Finish chunk with `finish_reason: "stop"`.
+
+The user sees a normal assistant message. They reply naturally:
+
+- "Yes, proceed with that file write." → next loop run reads the prior turn's `ask_user` Final as context and the model retries (now with implicit human approval in the transcript).
+- "No, do it differently." → model picks a new strategy.
+- "Actually, write to `/tmp/foo` instead." → model uses the corrected target.
+
+No special user UI, no buttons, no out-of-band approval channel. The
+conversation **is** the approval mechanism.
+
+#### Phase 1 hook that uses this
+
+Write-gate (`OnBeforeToolCall` for `file_write` / `file_delete` /
+`file_rename`) with default mode `ask`:
+
+```go
+func writeGateAsk(ctx context.Context, ev hook.ToolCallEvent) (hook.ToolCallEvent, error) {
+    if !isWriteTool(ev.ToolName) { return ev, nil }
+    return ev, &loop.ErrAskUser{
+        Code:    "write_gate",
+        Message: fmt.Sprintf(
+            "I want to call `%s` with arguments:\n\n```json\n%s\n```\n\nShould I proceed? Reply 'yes' to confirm, or tell me a different approach.",
+            ev.ToolName, prettyJSON(ev.Args)),
+        Details: map[string]any{"tool": ev.ToolName, "args": ev.Args},
+    }
+}
+```
+
+#### Other future hooks that can use it
+
+- **Untrusted-origin write** — `web_fetch` result contains a path that
+  the model now wants to `file_write` to without the user naming it.
+- **Sensitive-content scanner** — a future PII / secret-detector hook
+  finds API keys in the tool output and refuses to feed it back.
+- **Budget-aware advisor** — a hook that fires when iteration count is
+  high and tool calls are still escalating; surfaces "I've used 18/20
+  steps. Should I stop and summarize what I have?"
+
+All of these use the same `ErrAskUser` mechanism — no new code paths.
+
+#### What we lose vs. Codex's pattern
+
+In Codex's retry-with-escalation, the model can sometimes recover
+*within* the same loop without bothering the user (re-issuing with
+justification that satisfies a heuristic gate). We don't get that. We
+accept the cost because: (a) the alternative is protocol complexity
+we'd carry forever, (b) for high-stakes operations (file writes), one
+extra user turn is the right friction, (c) low-stakes recovery still
+works because the *model* can recover by choosing a different tool —
+the gate only fires on the high-stakes ones we configured.
+
+### 3.8 Parallel tool execution within a round
+
+The OpenAI Responses API can return multiple `function_call` items in a
+single `required_action`. Modern frontier models actively exploit this
+to dispatch independent reads (e.g., three parallel `web_fetch`s on
+different URLs) and the latency win is substantial. We support it from
+Phase 1.
+
+```go
+package loop
+
+type parallelExecutor struct {
+    bus      *hook.Bus
+    registry tool.Registry
+    sink     session.EventSink
+    maxConc  int           // bounded — default 8, from agent_loop.max_parallel_tool_calls
+    budget   *budget.Counter // global error/call counter, atomic
+}
+
+// ExecuteAll dispatches the calls concurrently, preserves input order
+// in the returned outputs (so the upstream sees a stable mapping), and
+// returns ErrAskUser if any sibling hook requested user approval.
+func (p *parallelExecutor) ExecuteAll(
+    ctx context.Context,
+    calls []model.FunctionCall,
+) ([]model.FunctionCallOutput, error) { … }
+```
+
+#### Invariants
+
+1. **Bounded concurrency.** A semaphore of size `max_parallel_tool_calls`
+   limits in-flight goroutines. Default 8. Set to `1` to force the
+   sequential execution path (useful for repro / debugging /
+   conservatively-configured deployments). Single source of truth for
+   the cap is `openai.agent_loop.max_parallel_tool_calls`.
+2. **Stable upstream order.** Results are written into a pre-allocated
+   `[]FunctionCallOutput` slice keyed by the call's input index. The
+   upstream LLM sees outputs in the same order it emitted the calls,
+   regardless of which goroutine finished first. This is what keeps
+   model behavior deterministic from one rerun to the next.
+3. **First-ask-user wins; siblings cancelled.** If any concurrent call's
+   `OnBeforeToolCall` or `OnAfterToolCall` hook returns `ErrAskUser`,
+   the executor immediately cancels the shared context, drains
+   outstanding goroutines (best effort — they observe `ctx.Err()` and
+   return), and surfaces that single `ErrAskUser` upward. Already-
+   completed sibling results are discarded — they do **not** appear in
+   the transcript, because the loop is about to exit with the
+   ask-user prompt as the Final. This avoids a half-applied tool call
+   showing up as historical context if the user later declines.
+4. **Concurrency-safe primitives.**
+   - Circuit-breaker state: `sync.Mutex` around the
+     `(tool_name, normalized_args)` repeat counter.
+   - Error budget: `atomic.Int64`.
+   - HookBus: hooks are registered once at startup (read-only at
+     runtime); each call's hook chain runs through its own goroutine
+     reading the immutable hook slice — no locks needed on the bus
+     itself.
+   - SSE writer: already serialized by `gmw.CtxLock` on the gin
+     context, so writes from parallel goroutines interleave safely at
+     the chunk boundary.
+5. **Trace disambiguation in the existing SSE channel.** Per §4.5, tool
+   trace lines stream as `[[TOOLS]] …\n` deltas on
+   `delta.reasoning_content`. With concurrent calls, lines from
+   different tools interleave. The Phase 1 formatter prefixes every
+   line with the 6-char short call ID:
+
+   ```
+   [[TOOLS]] [a1b2c3] tool_call: web_search
+   [[TOOLS]] [d4e5f6] tool_call: web_fetch
+   [[TOOLS]] [a1b2c3] args: {"query":"…"}
+   [[TOOLS]] [d4e5f6] args: {"url":"…"}
+   [[TOOLS]] [d4e5f6] tool ok (8421B)
+   [[TOOLS]] [a1b2c3] tool ok (12345B)
+   ```
+
+   Readable to humans (pair by ID), and trivially threadable by the
+   Phase 2 typed-event UI which gets the full call_id on every event.
+6. **Model capability gate.** `ModelClient.Capabilities()` reports
+   `SupportsParallelToolCalls`. When the upstream is configured against
+   a model that does not (older Anthropic 3.x, some local Llamas), the
+   loop sets `parallel_tool_calls: false` on the request and the
+   executor's input is naturally a single-element slice — fan-out
+   becomes a no-op without code-path divergence.
+7. **Per-call hooks fire normally.** Each parallel call runs the full
+   `OnBeforeToolCall` → execute → `OnAfterToolCall` chain
+   independently. No "batch hook" notion. Hook authors do not need to
+   know about parallelism.
+
+#### Interaction with existing freetier rate limiter
+
+The existing `expensiveModelRateLimiter` at
+[responses_chat_handler.go:461-471](internal/tasks/gptchat/http/responses_chat_handler.go#L461-L471)
+is global and per-call. Concurrent calls from a single freetier session
+will naturally serialize through it — bounded parallelism interacts
+correctly with the limiter without changes. We do **not** loosen the
+limiter for agent mode; if a freetier user trips it mid-batch, the
+affected call gets an `IsError` result and the model sees it on the
+next round.
+
+#### Why default = 8, not unbounded
+
+A bounded executor with size 8 captures ~95% of the practical
+latency win (most parallel batches are 2-5 calls) while preventing a
+runaway model that emits 30 `function_call`s in one round from
+saturating the MCP backend or the freetier limiter. The cap is
+configurable so deployments with beefier MCP fanout can raise it.
 
 ---
 
@@ -465,12 +685,14 @@ ChatHandler (existing)
         │     ├── extract function_calls
         │     ├── if send_to_user → emit Final, break
         │     ├── if no tool_calls → implicit-final fallback, break
-        │     ├── for each call:
+        │     ├── parallelExecutor.ExecuteAll(calls) — bounded fan-out
+        │     │     concurrently for each call:
         │     │     ├── hook.PointBeforeToolCall (circuit, write-gate)
         │     │     ├── tool.Execute (wraps existing executeToolCall)
         │     │     ├── hook.PointAfterToolCall (cap, wrap, budget)
-        │     │     └── append function_call_output to next iteration's input
-        │     └── if NeedsEscalation: feed escalation Result back, continue
+        │     │     └── store function_call_output[i] (preserves order)
+        │     ├── append all outputs to next iteration's input
+        │     └── if any hook returned ErrAskUser: emit Final{Message}, break
         │
         ├── hook.PointSessionEnd fires (memory persist)
         └── emit RunFinished{TerminatedBy: …}
@@ -516,7 +738,7 @@ ChatHandler (existing)
 | `web_fetch`                                  | MCP (`laisky`)         | Output capped to 25 k tokens. |
 | `file_list`, `file_stat`, `file_read`        | MCP (`laisky`)         | Default project `go-ramjet`. |
 | `file_search`                                | MCP (`laisky`)         | Hybrid retrieval. |
-| `file_write`, `file_delete`, `file_rename`   | MCP (`laisky`)         | Gated by `write_gate` (default `deny`). |
+| `file_write`, `file_delete`, `file_rename`   | MCP (`laisky`)         | Gated by `write_gate` (default `ask` — exits loop with a confirmation prompt; see §3.7). |
 | `send_to_user`                               | Local (synthesized)    | Exit tool. Args: `{ final_answer: string, citations?: Citation[] }`. |
 
 Schemas are discovered once at startup, cached, and re-emitted into the
@@ -581,9 +803,9 @@ internal event to one of the existing emitters:
 | `StepStarted{i}`            | `emitThinkingDelta("[[TOOLS]] -- step " + i + " --\n")`                                                 |
 | `AssistantReasoningDelta`   | `emitThinkingDelta(delta)` — the model's own reasoning, streamed as-is                                  |
 | `AssistantTextDelta`        | **dropped during loop iterations** (model's intermediate prose is not the final answer); see note      |
-| `ToolCallStart{name, args}` | `emitThinkingDelta("[[TOOLS]] tool_call: " + name + "\n[[TOOLS]] args: " + args + "\n")`                |
+| `ToolCallStart{call_id, name, args}` | `emitThinkingDelta("[[TOOLS]] [" + short(call_id) + "] tool_call: " + name + "\n[[TOOLS]] [" + short(call_id) + "] args: " + args + "\n")` — 6-char ID prefix disambiguates parallel calls |
 | `ToolCallEnd{duration}`     | (no emit — folded into `ToolResult`)                                                                    |
-| `ToolResult{ok, preview}`   | `emitThinkingDelta("[[TOOLS]] tool ok (" + bytes + "B)\n" or "tool error: " + msg + "\n")`              |
+| `ToolResult{call_id, ok}`   | `emitThinkingDelta("[[TOOLS]] [" + short(call_id) + "] tool ok (" + bytes + "B)\n" or "tool error: " + msg + "\n")` |
 | `StepFinished`              | (no emit in Phase 1 — only logged)                                                                      |
 | `Final{text}`               | `emitTextDelta(chunk)` — token-by-token over a small `chunkString` window, lands in `delta.content`     |
 | `RunFinished`               | One final `writeChatCompletionChunk` with `finish_reason="stop"`                                        |
@@ -670,7 +892,8 @@ becomes the source of truth for that channel without code refactors.
 | `internal/tasks/gptchat/agentx/hook/bus.go` | `Bus`, `Point`, event types per point. |
 | `internal/tasks/gptchat/agentx/loop/loop.go` | `Run(session) error`. The actual ReAct loop. |
 | `internal/tasks/gptchat/agentx/loop/circuit.go` | Circuit-breaker hook. |
-| `internal/tasks/gptchat/agentx/loop/budget.go` | Iteration / call / wall-clock / error counters. |
+| `internal/tasks/gptchat/agentx/loop/budget.go` | Iteration / call / wall-clock / error counters (atomic-safe for parallel use). |
+| `internal/tasks/gptchat/agentx/loop/parallel.go` | Bounded parallel executor (§3.8). Fan-out with semaphore, order-preserving fan-in, first-ask-wins cancellation. |
 | `internal/tasks/gptchat/agentx/loop/writegate.go` | Write-class tool denial hook. |
 | `internal/tasks/gptchat/agentx/loop/wrap.go` | Untrusted-content delimiter hook. |
 | `internal/tasks/gptchat/agentx/tools/send_to_user.go` | Synthetic exit tool. |
@@ -724,10 +947,17 @@ openai:
     enabled: true                  # global kill-switch
     max_iterations: 20
     max_tool_calls: 40
+    max_parallel_tool_calls: 8     # bounded fan-out within a round (§3.8)
+                                   # set to 1 to force sequential execution
     wall_clock_seconds: 480
     circuit_breaker_repeats: 3
     error_budget: 6
-    write_gate: deny               # one of: confirm | allow | deny (Phase 1 ships deny)
+    write_gate: ask                # one of: ask | allow | deny
+                                   # ask  — exits loop with a confirmation prompt; user's
+                                   #         next chat message is the approval (default)
+                                   # allow — write tools execute unconditionally
+                                   # deny  — write tools always return IsError to the model
+                                   #         (loop continues, model picks another approach)
     mcp_server: laisky             # alias of an entry in openai.mcp_servers
     web_fetch_max_tokens: 25000
     default_file_project: go-ramjet
@@ -751,7 +981,7 @@ HTTP 409 `agent_mode_disabled` (a recoverable state surfaced in the UI).
 | U2 | Multi-round | Mock returns `web_search` → `web_fetch` → `send_to_user` | Three `StepStarted`/`StepFinished`, two `ToolResult`, final equals round-3 answer. |
 | U3 | Iteration cap | Mock never calls `send_to_user` | `RunFinished{TerminatedBy: iteration_cap}` at round 20; the loop-cap hook injects the "summarize now" tool output before final iteration. |
 | U4 | Wall-clock cap | `wall_clock_seconds=1`, tool sleeps 2 s | `RunFinished{TerminatedBy: timeout}`. |
-| U5 | Circuit breaker | Mock returns identical `web_search` 3× in a row | Third call denied by `OnBeforeToolCall` with `EscalationCode=circuit_breaker`; loop continues; eventual `error_budget` or model recovery. |
+| U5 | Circuit breaker | Mock returns identical `web_search` 3× in a row | Third call denied by `OnBeforeToolCall` with a synthetic `IsError` result (`Content="repeated tool call detected"`); loop continues; if pattern persists, eventual `error_budget` termination. |
 | U6 | Tool error recovery | Round 1 tool errors; round 2 different tool; round 3 `send_to_user` | Loop succeeds; error budget at 1. |
 | U7 | Error budget | 7 consecutive errored tools | `RunFinished{TerminatedBy: error_budget}`. |
 | U8 | Implicit final | Mock returns assistant message, no tool calls | Loop emits `Final` with that text; `TerminatedBy: implicit_final`. |
@@ -762,13 +992,20 @@ HTTP 409 `agent_mode_disabled` (a recoverable state surfaced in the UI).
 | U13 | EnableMCP isolation | Request `enable_mcp=false`, `agent_mode=true` | Loop's internal copy has `EnableMCP=true`; original `frontendReq` untouched after loop returns. |
 | U14 | Memory disabled | `EnableMemory=false` | `OnContext` memory hook is a no-op; loop runs. |
 | U15 | Memory enabled | Paid tier, `EnableMemory=true` | `OnSessionEnd` calls `AfterTurnHook` once with `(user_prompt, final_answer)` only; intermediate tool turns NOT in the payload. |
-| U16 | Write-gate `deny` | Model calls `file_write` | `OnBeforeToolCall` returns `NeedsEscalation=true`; `Content` explains the policy; loop continues. |
+| U16 | Write-gate `ask` exits loop | `write_gate=ask`, model calls `file_write` | Hook returns `ErrAskUser{Code: "write_gate"}`; loop emits Final with the confirmation prompt as message body, then `RunFinished{TerminatedBy: "ask_user"}`. The `file_write` tool is never invoked. SSE wire format matches `send_to_user` exactly (delta.content + finish_reason=stop). |
+| U16b | Write-gate `deny` (alternate mode) | `write_gate=deny`, model calls `file_write` | Hook returns a synthetic `Result{IsError: true, Content: "write tools are disabled in this session"}`; loop continues; error budget +1; model picks another path. |
+| U16c | Write-gate `allow` (alternate mode) | `write_gate=allow`, model calls `file_write` | No gate fires; tool executes normally. |
 | U17 | Streaming order | Five-round happy path | Strict event order: `RunStarted → (StepStarted → AssistantTextDelta* → ToolCallStart → ToolResult → StepFinished)* → Final → RunFinished`. Verified by golden file. |
 | U18 | Transcript append-only | Direct test of `Transcript.Append` | Second append with same `EventID` returns error; no events are removed across loop lifecycle. |
-| U19 | Registry `Subset` | Subset with unknown tool name | Returns error; Phase 1 startup boots without registering belt if any name fails (fail-loud). |
+| U19 | Registry `Subset` & deterministic resolution | (a) Subset with unknown tool name. (b) Register two tools named `web_search` from different sources, repeat 100 times with shuffled input order. | (a) Returns error; startup fails-loud if any curated name is missing. (b) `Get("web_search")` returns the higher-priority tool on every run; `Names()` returns the same de-duplicated sorted list every run; the shadow warning log fires exactly once per duplicate. |
 | U20 | `SubAgentTool` reservation | Resolve tool by name `spawn_agent` | Tool exists in registry only when `subagent.enabled=true`. With default config, name resolves to `(nil, false)`. |
 | U21 | HookBus ordering | Register two `OnContext` hooks A then B | B receives A's output; output passed to model is B's transformation. |
 | U22 | HookBus deny | `OnBeforeToolCall` returns an error | Tool not executed; loop receives a synthetic `Result{IsError: true}`; error budget +1. |
+| U23 | Parallel fan-out happy path | Mock model returns 4 parallel `function_call` items in one round; tools sleep [200ms, 50ms, 150ms, 100ms] | All four `Execute` calls run concurrently (verified by start-time delta < 30ms); upstream sees outputs in original input order; total round latency ≈ 200ms (not 500ms). |
+| U24 | Parallel bounded concurrency | `max_parallel_tool_calls=2`, 6 calls in one round | At most 2 goroutines in-flight at any instant (verified by atomic counter peak); all 6 outputs returned in input order. |
+| U25 | Parallel first-ask-wins | 3 parallel calls; 2nd hook returns `ErrAskUser` after a 100ms delay; others would take 300ms | Loop emits Final with the `ErrAskUser` message; surviving siblings observe `ctx.Err()` and return; their already-completed outputs are NOT appended to the transcript; `RunFinished{TerminatedBy: ask_user}`. |
+| U26 | Parallel deterministic result order | Run U23 100 times with randomized tool sleep durations | The upstream receives outputs in the same input order every run, regardless of completion order. |
+| U27 | Parallel capability gate | `ModelClient.Capabilities().SupportsParallelToolCalls=false` | Loop sets `parallel_tool_calls: false` on the request; mock model returns only one call per round; executor still runs correctly with effective parallelism=1. |
 
 ### 6.2 Integration tests
 
@@ -809,7 +1046,7 @@ Merge gates — all must hold:
 3. **All integration tests** in §6.2 pass against the stub upstream in CI.
 4. **Manual UAT** M1-M6 confirmed on the dev server.
 5. **Structured termination logs.** Every loop emits one line with
-   `agent_loop_terminated_by={send_to_user|implicit_final|iteration_cap|timeout|circuit_breaker|error_budget|cancelled|error}`.
+   `agent_loop_terminated_by={send_to_user|implicit_final|ask_user|iteration_cap|timeout|circuit_breaker|error_budget|cancelled|error}`.
 6. **Streaming protocol end-to-end.** The trace card in the UI renders
    real tool-call cards for at least one real prompt.
 7. **`SubAgentTool` interface compiles, ships unregistered.** A unit test
@@ -870,7 +1107,7 @@ Merge gates — all must hold:
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Prompt injection from `web_fetch` triggers destructive `file_write` | Medium | High | Untrusted delimiter; `write_gate=deny` default; refuse new-path writes whose target wasn't named by the user. |
+| Prompt injection from `web_fetch` triggers destructive `file_write` | Medium | High | Untrusted delimiter; `write_gate=ask` default surfaces the proposed write to the human for explicit confirmation; refuse new-path writes whose target wasn't named by the user. |
 | Cost blowup from runaway loops | Medium | Medium | Iteration + tool + wall-clock + error budgets; structured termination logs. |
 | Model fails to call `send_to_user` and produces garbage final | Low | Low | Implicit-final fallback; trace surfaces the issue. |
 | MCP discovery flaky at startup | Low | Medium | Cache the curated belt with TTL; on cache miss, fall back to a hard-coded minimal belt (`web_search`, `web_fetch`, `file_read`, `send_to_user`). |
@@ -882,25 +1119,15 @@ Merge gates — all must hold:
 
 ## 10. Open questions
 
-1. **Tool-name collisions.** If a user-supplied MCP server (via
-   `frontendReq.MCPServers`) ships a `web_search`, do we prefer curated,
-   user, or refuse?
-   **Proposal:** curated wins; log a warning. *Decide before Phase 1B.*
-2. **Write-gate UX.** `confirm` needs a synchronous client round-trip
-   mid-stream.
-   **Proposal:** Phase 1 ships `deny`. Design `confirm` flow as a
-   follow-up that adds an `ApprovalTool` plus a new `Op` (`OpApproval`).
-3. **Trace persistence.** Should the trace live in chat history?
+1. **Trace persistence.** Should the trace live in chat history?
    **Proposal:** yes for the current session (`agentTrace` field on the
    message), no for long-term memory.
-4. **Parallel tool calls.** The Responses API can return multiple
-   `function_call` items per round.
-   **Proposal:** Phase 1 executes sequentially. Phase 2 enables
-   parallelism behind `model.Capabilities.SupportsParallelToolCalls`.
-5. **HookBus error semantics.** Should a hook returning a non-nil error
+2. **HookBus error semantics.** Should a hook returning a non-nil error
    abort the run or just the current step?
    **Proposal:** abort current step (synthesize `IsError` result), not
-   the run. Avoids one buggy hook from killing a session.
+   the run, **except** for the typed `ErrAskUser` sentinel (§3.7)
+   which is the documented way to terminate the loop with a user-facing
+   prompt. Avoids one buggy hook from killing a session.
 
 ---
 
