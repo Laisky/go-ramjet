@@ -88,3 +88,4 @@ diff.txt
 patch
 errlog
 /.claude
+/internal/tasks/gptchat/agentx/testdata/

@@ -644,6 +644,322 @@ func TestStream_Streaming_UsageEvent(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// Function-call streaming order / accumulator regression tests
+//
+// These cover the live OneAPI streaming bug observed on 2026-05-26 where the
+// upstream emits response.output_item.done BEFORE
+// response.function_call_arguments.done, with the item carrying empty (or
+// partial) arguments. The naive accumulator emitted on output_item.done with
+// empty args and the later args.done was silently dropped by the cross-path
+// dedup guard. The agent loop then dispatched tools with `{` (or `""`) for
+// arguments and the tool returned "<empty query>".
+//
+// The contract the adapter MUST uphold:
+//
+//   1. Each function_call is emitted exactly once.
+//   2. The args attached to that single emission are the FINAL args (the
+//      concatenated deltas OR the args.done event's Arguments field, never
+//      the empty/partial echo that output_item.done can carry).
+//   3. If args.done never fires (truncated stream), the partial buffer is
+//      still flushed on stream end.
+// -----------------------------------------------------------------------------
+
+// collectFunctionCalls is a tiny helper that returns only the ChunkFunctions
+// from a stream, preserving order. Tests use this to assert on call args
+// without caring about interleaved text/reasoning chunks.
+func collectFunctionCalls(chunks []StreamChunk) []*FunctionCall {
+	out := make([]*FunctionCall, 0)
+	for _, c := range chunks {
+		if c.Kind == ChunkFunction && c.FunctionCall != nil {
+			out = append(out, c.FunctionCall)
+		}
+	}
+	return out
+}
+
+// TestStream_FunctionCall_HappyPathStreamingOrder covers the canonical
+// streaming order: output_item.added → args.delta × 3 → args.done →
+// output_item.done. The adapter must emit exactly one ChunkFunction whose
+// arguments equal the concatenated deltas.
+func TestStream_FunctionCall_HappyPathStreamingOrder(t *testing.T) {
+	events := []recordedSSEEvent{
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"query":"`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"query\":\""}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `weather Ottawa`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"weather Ottawa"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   ` Canada today"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":" Canada today\"}"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.done",
+			RawJSON: `{"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\"query\":\"weather Ottawa Canada today\"}"}`,
+		},
+		{
+			Type:    "response.output_item.done",
+			RawJSON: `{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"weather Ottawa Canada today\"}"}}`,
+		},
+		{
+			Type:     "response.completed",
+			RawJSON:  `{"type":"response.completed","response":{"id":"resp_1"}}`,
+			Response: makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`),
+		},
+	}
+	withFakeUpstream(t, fakeStreamFn(events, makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`), nil), nil)
+
+	ch, err := NewOneAPIClient(OneAPIDeps{}).Stream(context.Background(), Request{Model: "m", Stream: true})
+	require.NoError(t, err)
+	chunks := drainChunks(ch)
+
+	calls := collectFunctionCalls(chunks)
+	require.Len(t, calls, 1, "exactly one ChunkFunction must be emitted")
+	require.Equal(t, "call_a", calls[0].CallID)
+	require.Equal(t, "web_search", calls[0].Name)
+	require.JSONEq(t, `{"query":"weather Ottawa Canada today"}`, string(calls[0].Arguments))
+}
+
+// TestStream_FunctionCall_InterleavedOrder_LiveBug pins the live regression:
+// some upstreams emit output_item.done BEFORE function_call_arguments.done,
+// with the item carrying empty (or partial) arguments. The naive
+// accumulator emitted on output_item.done with empty args and the later
+// args.done was suppressed by the cross-path dedup guard, shipping empty
+// JSON to the tool dispatcher.
+//
+// Event order in this test: output_item.added → output_item.done (args="")
+// → args.delta × 3 → args.done. Expected: exactly one ChunkFunction with
+// the args from args.done, NOT the empty args from output_item.done.
+func TestStream_FunctionCall_InterleavedOrder_LiveBug(t *testing.T) {
+	events := []recordedSSEEvent{
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		// The bug-causing event: output_item.done arrives BEFORE the deltas,
+		// echoing the empty args from the running buffer state.
+		{
+			Type:    "response.output_item.done",
+			RawJSON: `{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"query":"`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"query\":\""}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `weather Ottawa`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"weather Ottawa"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   ` Canada today"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":" Canada today\"}"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.done",
+			RawJSON: `{"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\"query\":\"weather Ottawa Canada today\"}"}`,
+		},
+		{
+			Type:     "response.completed",
+			RawJSON:  `{"type":"response.completed","response":{"id":"resp_1"}}`,
+			Response: makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`),
+		},
+	}
+	withFakeUpstream(t, fakeStreamFn(events, makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`), nil), nil)
+
+	ch, err := NewOneAPIClient(OneAPIDeps{}).Stream(context.Background(), Request{Model: "m", Stream: true})
+	require.NoError(t, err)
+	chunks := drainChunks(ch)
+
+	calls := collectFunctionCalls(chunks)
+	require.Len(t, calls, 1, "exactly one ChunkFunction must be emitted even with interleaved item.done/args.done")
+	require.Equal(t, "call_a", calls[0].CallID)
+	require.Equal(t, "web_search", calls[0].Name)
+	args := string(calls[0].Arguments)
+	require.NotEmpty(t, args, "args must not be empty — that's the live bug")
+	require.NotEqual(t, "", strings.TrimSpace(args), "args must not be whitespace-only")
+	require.JSONEq(t, `{"query":"weather Ottawa Canada today"}`, args)
+}
+
+// TestStream_FunctionCall_StreamEndsWithoutArgsDone covers the truncated /
+// defensive flush path: output_item.added → args.delta × 2 → (stream ends,
+// no args.done, no output_item.done, no response.completed). The adapter
+// must flush the partial buffer on stream-end so the loop is not blocked
+// waiting for a finalizer that never arrives.
+func TestStream_FunctionCall_StreamEndsWithoutArgsDone(t *testing.T) {
+	events := []recordedSSEEvent{
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"query":"`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"query\":\""}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `weather"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"weather\"}"}`,
+		},
+		// No args.done. No output_item.done. No response.completed. The
+		// stream just ends.
+	}
+	withFakeUpstream(t, fakeStreamFn(events, nil, nil), nil)
+
+	ch, err := NewOneAPIClient(OneAPIDeps{}).Stream(context.Background(), Request{Model: "m", Stream: true})
+	require.NoError(t, err)
+	chunks := drainChunks(ch)
+
+	calls := collectFunctionCalls(chunks)
+	require.Len(t, calls, 1, "the partial accumulator must be flushed on stream-end")
+	require.Equal(t, "call_a", calls[0].CallID)
+	require.Equal(t, "web_search", calls[0].Name)
+	require.JSONEq(t, `{"query":"weather"}`, string(calls[0].Arguments))
+}
+
+// TestStream_FunctionCall_MultipleParallelCalls exercises parallel
+// function_calls with interleaved deltas across two distinct call_ids.
+// Each call's deltas land in its own buffer; on args.done each call emits
+// its own ChunkFunction with the correct concatenated args.
+func TestStream_FunctionCall_MultipleParallelCalls(t *testing.T) {
+	events := []recordedSSEEvent{
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_2","call_id":"call_b","name":"web_fetch","arguments":""}}`,
+		},
+		// Interleaved deltas across the two pending calls.
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"query":"`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"query\":\""}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"url":"https`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_2","delta":"{\"url\":\"https"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `weather"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"weather\"}"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `://example.com"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_2","delta":"://example.com\"}"}`,
+		},
+		// args.done for the second call before the first — exercises that
+		// dones land on the right pending entry regardless of order.
+		{
+			Type:    "response.function_call_arguments.done",
+			RawJSON: `{"type":"response.function_call_arguments.done","item_id":"fc_2","arguments":"{\"url\":\"https://example.com\"}"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.done",
+			RawJSON: `{"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\"query\":\"weather\"}"}`,
+		},
+		// Trailing output_item.done events should NOT trigger any more
+		// emissions (args.done already finalized each call).
+		{
+			Type:    "response.output_item.done",
+			RawJSON: `{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"weather\"}"}}`,
+		},
+		{
+			Type:    "response.output_item.done",
+			RawJSON: `{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_2","call_id":"call_b","name":"web_fetch","arguments":"{\"url\":\"https://example.com\"}"}}`,
+		},
+		{
+			Type:     "response.completed",
+			RawJSON:  `{"type":"response.completed","response":{"id":"resp_1"}}`,
+			Response: makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`),
+		},
+	}
+	withFakeUpstream(t, fakeStreamFn(events, makeOpenAPIResp(t, `{"id":"resp_1","output":[]}`), nil), nil)
+
+	ch, err := NewOneAPIClient(OneAPIDeps{}).Stream(context.Background(), Request{Model: "m", Stream: true})
+	require.NoError(t, err)
+	chunks := drainChunks(ch)
+
+	calls := collectFunctionCalls(chunks)
+	require.Len(t, calls, 2, "two ChunkFunctions for two distinct call_ids")
+
+	// Build a lookup keyed by CallID — order between calls is allowed to
+	// follow either delta interleaving or args.done ordering.
+	byCall := make(map[string]*FunctionCall, len(calls))
+	for _, fc := range calls {
+		byCall[fc.CallID] = fc
+	}
+	require.Contains(t, byCall, "call_a")
+	require.Contains(t, byCall, "call_b")
+	require.Equal(t, "web_search", byCall["call_a"].Name)
+	require.Equal(t, "web_fetch", byCall["call_b"].Name)
+	require.JSONEq(t, `{"query":"weather"}`, string(byCall["call_a"].Arguments))
+	require.JSONEq(t, `{"url":"https://example.com"}`, string(byCall["call_b"].Arguments))
+}
+
+// TestStream_FunctionCall_NoDoubleEmit_ArgsDoneThenItemDone confirms that
+// the (well-ordered) sequence args.done → output_item.done emits exactly
+// once. output_item.done MUST be a no-op for the args once args.done has
+// already finalized the call.
+func TestStream_FunctionCall_NoDoubleEmit_ArgsDoneThenItemDone(t *testing.T) {
+	events := []recordedSSEEvent{
+		{
+			Type:    "response.output_item.added",
+			RawJSON: `{"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":""}}`,
+		},
+		{
+			Type:    "response.function_call_arguments.delta",
+			Delta:   `{"query":"x"}`,
+			RawJSON: `{"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"query\":\"x\"}"}`,
+		},
+		{
+			Type:    "response.function_call_arguments.done",
+			RawJSON: `{"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\"query\":\"x\"}"}`,
+		},
+		// output_item.done arrives AFTER args.done — must not re-emit.
+		{
+			Type:    "response.output_item.done",
+			RawJSON: `{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"x\"}"}}`,
+		},
+		{
+			Type:    "response.completed",
+			RawJSON: `{"type":"response.completed","response":{"id":"resp_1","output":[{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"x\"}"}]}}`,
+			Response: makeOpenAPIResp(t, `{"id":"resp_1","output":[
+				{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"x\"}"}
+			]}`),
+		},
+	}
+	withFakeUpstream(t, fakeStreamFn(events, makeOpenAPIResp(t, `{"id":"resp_1","output":[
+		{"type":"function_call","id":"fc_1","call_id":"call_a","name":"web_search","arguments":"{\"query\":\"x\"}"}
+	]}`), nil), nil)
+
+	ch, err := NewOneAPIClient(OneAPIDeps{}).Stream(context.Background(), Request{Model: "m", Stream: true})
+	require.NoError(t, err)
+	chunks := drainChunks(ch)
+
+	calls := collectFunctionCalls(chunks)
+	require.Len(t, calls, 1, "args.done + output_item.done + response.completed for same call must emit exactly once")
+	require.Equal(t, "call_a", calls[0].CallID)
+	require.JSONEq(t, `{"query":"x"}`, string(calls[0].Arguments))
+}
+
+// -----------------------------------------------------------------------------
 // Capabilities
 // -----------------------------------------------------------------------------
 
