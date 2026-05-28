@@ -69,6 +69,7 @@ export interface ChatRequest {
       enable_google_search?: boolean
       all_in_one?: boolean
       enable_memory?: boolean
+      agent_mode?: boolean
     }
   }
 }
