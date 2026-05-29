@@ -76,6 +76,10 @@ func SetupConfig() (err error) {
 		Config.AgentLoop.DefaultFileProject = strings.TrimSpace(gutils.OptionalVal(
 			&Config.AgentLoop.DefaultFileProject, "go-ramjet"))
 		Config.AgentLoop.Subagent.MaxDepth = gutils.OptionalVal(&Config.AgentLoop.Subagent.MaxDepth, 2)
+		Config.AgentLoop.DistillerModel = strings.TrimSpace(gutils.OptionalVal(
+			&Config.AgentLoop.DistillerModel, "openai/gpt-oss-120b"))
+		Config.AgentLoop.DistillThresholdTokens = gutils.OptionalVal(&Config.AgentLoop.DistillThresholdTokens, 1600)
+		Config.AgentLoop.DistillTimeoutSeconds = gutils.OptionalVal(&Config.AgentLoop.DistillTimeoutSeconds, 8)
 	}
 	Config.WebFetch.Jina.Prefix = normalizeWebFetchPrefix(
 		gutils.OptionalVal(&Config.WebFetch.Jina.Prefix, "https://r.jina.ai/"))
@@ -282,6 +286,21 @@ type AgentLoopConfig struct {
 	DefaultFileProject string `json:"default_file_project" mapstructure:"default_file_project"`
 	// Subagent configures the Phase 1 stub subagent tool.
 	Subagent AgentLoopSubagentConfig `json:"subagent" mapstructure:"subagent"`
+	// DistillerModel is the upstream model identifier used by the
+	// Observation distiller (see internal/tasks/gptchat/agentx/distiller).
+	// Default `openai/gpt-oss-120b` — cheap and fast, plenty for the
+	// summarisation job; the summariser does not need the reasoning
+	// budget the main loop does. Override to share the main loop's
+	// model when running locally without a separate cheap deployment.
+	DistillerModel string `json:"distiller_model" mapstructure:"distiller_model"`
+	// DistillThresholdTokens is the estimated-token threshold above
+	// which a raw tool output is routed through the summariser. Outputs
+	// at or below the threshold pass through unchanged. Default 800.
+	DistillThresholdTokens int `json:"distill_threshold_tokens" mapstructure:"distill_threshold_tokens"`
+	// DistillTimeoutSeconds bounds each summariser model call. On
+	// timeout the distiller falls back to deterministic head/tail
+	// truncation so the parent ReAct round is not stalled. Default 8.
+	DistillTimeoutSeconds int `json:"distill_timeout_seconds" mapstructure:"distill_timeout_seconds"`
 }
 
 // AgentLoopSubagentConfig configures the (Phase-1 stub) subagent tool.

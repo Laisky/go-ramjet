@@ -25,6 +25,7 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/distiller"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/hook"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/loop"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/model"
@@ -234,27 +235,7 @@ func handleAgentWithDeps(
 	// the list reflects only the tools the MCP catalog actually advertised.
 	populateCuratedServerTools(curatedServer, registry)
 
-	// 5. Hook bus. Registration order is the firing order (verified by
-	//    hook U21); ordering here is load-bearing.
-	caps := capsFromConfig(inputs.AgentCfg)
-	bus := hook.NewBus(logger)
-	if !override.DisableDefaults {
-		// Prompt comes BEFORE memory so the memory hook sees the
-		// system directive in its input — the memory engine often
-		// uses surrounding context as feature material; if it ran
-		// first the ReAct directive would never reach it.
-		bus.OnContext(prompt.NewReactRenderer(caps.MaxIterations).AsContextHook())
-		bus.OnContext(tools.NewMemoryBeforeTurnHook(memDeps))
-		bus.OnBeforeToolCall(loop.NewCircuitHook(caps.CircuitBreakerRepeats))
-		bus.OnBeforeToolCall(loop.NewWriteGateHook(inputs.AgentCfg.WriteGate))
-		bus.OnAfterToolCall(loop.NewWrapHook())
-		bus.OnSessionEnd(tools.NewMemoryAfterTurnHook(memDeps))
-	}
-	if override.PreRegister != nil {
-		override.PreRegister(bus)
-	}
-
-	// 6. Model client (OneAPI wrapper) — unless a test override forces a
+	// 5. Model client (OneAPI wrapper) — unless a test override forces a
 	//    fake. The model's StreamSink is intentionally nil because the
 	//    OneAPI adapter consumes typed events itself; the SSE writer
 	//    below is the only path that touches the gin response.
@@ -267,6 +248,9 @@ func handleAgentWithDeps(
 	//    validateInputItem accepts. The wrap is applied to overridden
 	//    clients too so tests exercising mixed-shape inputs see the same
 	//    boundary contract as production.
+	//
+	//    Built BEFORE the hook bus so the distill hook can capture it as
+	//    the summariser backend.
 	var modelClient model.Client
 	if override.ModelClient != nil {
 		modelClient = override.ModelClient
@@ -282,6 +266,48 @@ func handleAgentWithDeps(
 		})
 	}
 	modelClient = newCoercingModelClient(modelClient)
+
+	// 5b. Observation distiller. Falls back to the request's model when
+	//     openai.agent_loop.distiller_model is unset. The raw-stash is
+	//     per-request, captured by the distill hook closure for both
+	//     writes (every oversize observation) and future JIT reads.
+	distillerModelID := strings.TrimSpace(inputs.AgentCfg.DistillerModel)
+	if distillerModelID == "" {
+		distillerModelID = inputs.ResponsesReq.Model
+	}
+	rawStash := session.NewRawStash()
+	llmDistiller := distiller.NewLLMDistiller(modelClient, distillerModelID, distiller.NewCache())
+	if secs := inputs.AgentCfg.DistillTimeoutSeconds; secs > 0 {
+		llmDistiller.Timeout = time.Duration(secs) * time.Second
+	}
+	distillThreshold := inputs.AgentCfg.DistillThresholdTokens
+	if distillThreshold <= 0 {
+		distillThreshold = distiller.DefaultThresholdTokens
+	}
+
+	// 6. Hook bus. Registration order is the firing order (verified by
+	//    hook U21); ordering here is load-bearing.
+	caps := capsFromConfig(inputs.AgentCfg)
+	bus := hook.NewBus(logger)
+	if !override.DisableDefaults {
+		// Prompt comes BEFORE memory so the memory hook sees the
+		// system directive in its input — the memory engine often
+		// uses surrounding context as feature material; if it ran
+		// first the ReAct directive would never reach it.
+		bus.OnContext(prompt.NewReactRenderer(caps.MaxIterations).AsContextHook())
+		bus.OnContext(tools.NewMemoryBeforeTurnHook(memDeps))
+		bus.OnBeforeToolCall(loop.NewCircuitHook(caps.CircuitBreakerRepeats))
+		bus.OnBeforeToolCall(loop.NewWriteGateHook(inputs.AgentCfg.WriteGate))
+		// Distill BEFORE Wrap: the trust-delimiter encloses the
+		// summarised observation, not the raw bytes. See
+		// loop/distill.go godoc for the rationale.
+		bus.OnAfterToolCall(loop.NewDistillHook(llmDistiller, distillThreshold, rawStash, userPrompt))
+		bus.OnAfterToolCall(loop.NewWrapHook())
+		bus.OnSessionEnd(tools.NewMemoryAfterTurnHook(memDeps))
+	}
+	if override.PreRegister != nil {
+		override.PreRegister(bus)
+	}
 
 	// 7. Session, SSE writer, and the consumer goroutine.
 	sess := session.NewSession(session.Config{Logger: logger, BufferSize: 256})
