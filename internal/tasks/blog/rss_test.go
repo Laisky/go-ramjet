@@ -11,6 +11,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/s3"
 )
 
 type fakeS3Client struct {
@@ -120,8 +121,8 @@ func TestKeepLatestS3ObjectVersions(t *testing.T) {
 	cli := newFakeS3Client("rss.xml", 0).seedVersions(5)
 	logger := log.Logger.Named("test-keep-latest")
 
-	if err := keepLatestS3ObjectVersions(ctx, logger, cli, "bucket", "rss.xml", 2); err != nil {
-		t.Fatalf("keepLatestS3ObjectVersions returned error: %v", err)
+	if err := s3.KeepLatestObjectVersions(ctx, logger, cli, "bucket", "rss.xml", 2); err != nil {
+		t.Fatalf("KeepLatestObjectVersions returned error: %v", err)
 	}
 
 	if got := cli.versionCount(); got != 2 {

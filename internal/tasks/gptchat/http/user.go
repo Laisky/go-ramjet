@@ -28,6 +28,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	"github.com/Laisky/go-ramjet/library/log"
 	rlimiter "github.com/Laisky/go-ramjet/library/ratelimit"
+	s3lib "github.com/Laisky/go-ramjet/library/s3"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -172,14 +173,16 @@ func UploadUserConfig(ctx *gin.Context) {
 	}
 
 	logger.Debug("try to upload user config", zap.Int("cipher_len", len(cipher)))
-	if _, err := s3cli.PutObject(gmw.Ctx(ctx),
+	if _, err := s3lib.PutObjectCappingVersions(gmw.Ctx(ctx),
+		logger,
+		s3cli,
 		config.Config.S3.Bucket,
 		userConfigS3Key(apikey),
 		bytes.NewReader(cipher),
 		int64(len(cipher)),
-		minio.PutObjectOptions{
-			ContentType: "text/plain",
-		}); web.AbortErr(ctx, err) {
+		minio.PutObjectOptions{ContentType: "text/plain"},
+		s3lib.DefaultVersionsToKeep,
+	); web.AbortErr(ctx, errors.Wrap(err, "upload user config")) {
 		return
 	}
 

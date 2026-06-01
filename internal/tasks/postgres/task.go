@@ -448,10 +448,10 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 
 	// Size -1 enables streaming multipart upload
 	logger.Info("s3 put (stream)", zap.String("bucket", s.Bucket), zap.String("key", key))
-	info, putErr := s3cli.PutObject(ctx, s.Bucket, key, pr, -1, minio.PutObjectOptions{
+	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, pr, -1, minio.PutObjectOptions{
 		ContentType:     "application/gzip",
 		ContentEncoding: "gzip",
-	})
+	}, s3.DefaultVersionsToKeep)
 
 	dumpErr := <-errCh // wait producer
 	if putErr != nil {
@@ -534,10 +534,10 @@ func backupViaTempFile(ctx context.Context, db cfgDB, s cfgS3, fname, key, tempD
 	defer rf.Close()
 
 	logger.Info("s3 put (file)", zap.String("bucket", s.Bucket), zap.String("key", key), zap.String("file", finalPath), zap.Int64("size", size))
-	info, putErr := s3cli.PutObject(ctx, s.Bucket, key, rf, size, minio.PutObjectOptions{
+	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, rf, size, minio.PutObjectOptions{
 		ContentType:     "application/gzip",
 		ContentEncoding: "gzip",
-	})
+	}, s3.DefaultVersionsToKeep)
 	if putErr != nil {
 		return errors.Wrap(putErr, "put object")
 	}

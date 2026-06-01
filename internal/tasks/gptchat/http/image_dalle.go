@@ -22,6 +22,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
+	s3lib "github.com/Laisky/go-ramjet/library/s3"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -120,14 +121,18 @@ func DrawByDalleHandler(ctx *gin.Context) {
 			logger.Error("get s3 client", zap.Error(errS3))
 		}
 
-		if _, errS3 := s3cli.PutObject(taskCtx,
+		if _, errS3 := s3lib.PutObjectCappingVersions(taskCtx,
+			logger,
+			s3cli,
 			config.Config.S3.Bucket,
 			objkey,
 			bytes.NewReader(msg),
 			int64(len(msg)),
 			minio.PutObjectOptions{
 				ContentType: "text/plain",
-			}); errS3 != nil {
+			},
+			s3lib.DefaultVersionsToKeep,
+		); errS3 != nil {
 			logger.Error("upload error msg", zap.Error(errS3))
 		}
 

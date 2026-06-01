@@ -23,6 +23,7 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/s3"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -186,7 +187,9 @@ func CreateRecord(ctx *gin.Context) {
 		return
 	}
 
-	_, err = config.Instance.S3Cli.PutObject(gmw.Ctx(ctx),
+	_, err = s3.PutObjectCappingVersions(gmw.Ctx(ctx),
+		logger,
+		config.Instance.S3Cli,
 		config.Instance.S3.Bucket,
 		objpath,
 		bytes.NewReader(body),
@@ -194,6 +197,7 @@ func CreateRecord(ctx *gin.Context) {
 		minio.PutObjectOptions{
 			ContentType: "application/json",
 		},
+		s3.DefaultVersionsToKeep,
 	)
 	if web.AbortErr(ctx, errors.Wrap(err, "put record")) {
 		return
