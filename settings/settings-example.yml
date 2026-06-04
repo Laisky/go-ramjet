@@ -1,3 +1,6 @@
+server:
+  addr: 0.0.0.0:24456
+  jwt_secret: CHANGE_TO_YOUR_OWN_JWT_SECRET
 tasks:
   heartbeat:
     interval: 60
