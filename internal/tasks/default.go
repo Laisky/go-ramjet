@@ -15,6 +15,8 @@ import (
 	_ "github.com/Laisky/go-ramjet/internal/tasks/logrotate/backup"
 	// general monitor
 	_ "github.com/Laisky/go-ramjet/internal/tasks/monitor"
+	// pieverse health-check alert (disabled by default, enable with `-t pieverse_alert`)
+	_ "github.com/Laisky/go-ramjet/internal/tasks/pieverse"
 	// sites ssl monitor
 	_ "github.com/Laisky/go-ramjet/internal/tasks/sites"
 	// zipkin routine works
