@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"math/rand"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -49,20 +52,179 @@ func init() {
 	log.Logger.Info("init chromedp sema", zap.Int("limit", defaultChromedpSemaLimit))
 }
 
+const (
+	// crawlerPollBaseBackoff is the floor delay between crawler poll retries.
+	crawlerPollBaseBackoff = 200 * time.Millisecond
+	// crawlerPollMaxBackoff caps the backoff. A Redis dataset load (LOADING) can
+	// last minutes, so the cap is in the tens-of-seconds range.
+	crawlerPollMaxBackoff = 30 * time.Second
+	// crawlerDegradedWarnEvery throttles the "still unavailable" WARN heartbeat so
+	// a prolonged outage stays visible at INFO level without a log storm.
+	crawlerDegradedWarnEvery = time.Minute
+)
+
 // RunDynamicWebCrawler is the entry for dynamic web crawler
 func RunDynamicWebCrawler() {
 	for range defaultChromedpSemaLimit {
 		go func() {
-			log.Logger.Named("dynamic_web_crawler").Info("start")
+			logger := log.Logger.Named("dynamic_web_crawler")
+			logger.Info("start")
+
+			var (
+				attempt       int
+				degradedSince time.Time
+				lastWarn      time.Time
+			)
 			for {
-				if err := runDynamicWebCrawler(); err != nil {
-					log.Logger.Error("run dynamic web crawler", zap.Error(err))
+				err := runDynamicWebCrawler()
+				if err == nil {
+					if attempt > 0 {
+						logger.Info("redis recovered, resume crawling",
+							zap.Int("after_attempts", attempt),
+							zap.Duration("degraded_for", time.Since(degradedSince)))
+					}
+					attempt = 0
+					// BLPop already blocks up to 5s, so polling again immediately
+					// does not busy-loop when the queue is empty.
+					continue
 				}
 
-				time.Sleep(time.Second)
+				if isTransientRedisErr(err) {
+					// Expected, self-healing Redis condition (restart / failover /
+					// network blip). Avoid the ERROR-level stack-trace storm: warn
+					// once when the outage starts, then throttle to a heartbeat.
+					now := time.Now()
+					switch {
+					case attempt == 0:
+						degradedSince = now
+						lastWarn = now
+						logger.Warn("redis unavailable, backing off",
+							zap.String("error", err.Error()))
+					case now.Sub(lastWarn) >= crawlerDegradedWarnEvery:
+						lastWarn = now
+						logger.Warn("redis still unavailable",
+							zap.Int("attempt", attempt),
+							zap.Duration("degraded_for", now.Sub(degradedSince)),
+							zap.String("error", err.Error()))
+					default:
+						logger.Debug("redis still unavailable",
+							zap.Int("attempt", attempt),
+							zap.String("error", err.Error()))
+					}
+				} else {
+					// Unexpected, actionable error: keep the ERROR + stack trace.
+					logger.Error("run dynamic web crawler", zap.Error(err))
+				}
+
+				time.Sleep(crawlerPollBackoff(attempt))
+				attempt++
 			}
 		}()
 	}
+}
+
+// crawlerPollBackoff returns an exponentially increasing, fully-jittered retry
+// delay capped at crawlerPollMaxBackoff. attempt is 0-based.
+func crawlerPollBackoff(attempt int) time.Duration {
+	return crawlerPollBackoffWithRand(attempt, rand.Int63n)
+}
+
+// crawlerPollBackoffWithRand is the testable core of crawlerPollBackoff with an
+// injectable random source. The returned delay is in [crawlerPollBaseBackoff,
+// min(crawlerPollMaxBackoff, base<<attempt)].
+func crawlerPollBackoffWithRand(attempt int, int63n func(int64) int64) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+
+	// Cap the shift to avoid overflowing the duration.
+	shift := min(attempt, 16)
+
+	ceil := crawlerPollBaseBackoff << uint(shift)
+	if ceil <= 0 || ceil > crawlerPollMaxBackoff {
+		ceil = crawlerPollMaxBackoff
+	}
+
+	span := int64(ceil - crawlerPollBaseBackoff)
+	if span <= 0 {
+		return crawlerPollBaseBackoff
+	}
+
+	return crawlerPollBaseBackoff + time.Duration(int63n(span+1))
+}
+
+// transientRedisServerReplies are Redis server error-reply prefixes that signal
+// an expected, self-healing condition. They are matched via redis.HasErrorPrefix,
+// which is wrap-aware and only matches values implementing the redis.Error
+// interface, so an unrelated application error that merely contains one of these
+// words is never misclassified as transient.
+var transientRedisServerReplies = []string{
+	"LOADING ",
+	"READONLY ",
+	"CLUSTERDOWN ",
+	"TRYAGAIN ",
+	"MASTERDOWN ",
+	"NOREPLICAS ",
+}
+
+// isTransientRedisErr reports whether err is an expected, self-healing Redis
+// infrastructure condition (restart / LOADING / failover / network blip) that
+// the worker should retry quietly with backoff rather than log as an ERROR.
+//
+// Unknown errors default to non-transient (fail loud) so genuine bugs are never
+// silently swallowed.
+func isTransientRedisErr(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Deliberate cancellation/shutdown and the empty-queue/timeout poll results
+	// are handled by the caller and are not infra blips.
+	if errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, redis.Nil) {
+		return false
+	}
+
+	// Connection torn down mid-flight.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	// Socket / dial / blocking-command timeouts and other net failures
+	// (connection refused / reset, etc.).
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	// Typed Redis server replies (wrap-aware).
+	if redis.IsLoadingError(err) ||
+		redis.IsReadOnlyError(err) ||
+		redis.IsClusterDownError(err) ||
+		redis.IsTryAgainError(err) ||
+		redis.IsMasterDownError(err) ||
+		redis.IsNoReplicasError(err) ||
+		redis.IsMaxClientsError(err) ||
+		redis.IsOOMError(err) {
+		return true
+	}
+
+	// Server-reply fallback for redis.Error values whose typed helper above did
+	// not match. redis.HasErrorPrefix is wrap-aware and requires the redis.Error
+	// interface, so it never false-positives on a plain error that merely
+	// contains one of these words (which would silently swallow a real bug).
+	for _, prefix := range transientRedisServerReplies {
+		if redis.HasErrorPrefix(err, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func runDynamicWebCrawler() error {
@@ -71,11 +233,15 @@ func runDynamicWebCrawler() error {
 
 	task, err := popHTMLCrawlerTask(ctxCrawler)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, redis.Nil) {
+			// Empty queue / poll timeout: nothing to do this round.
 			return nil
 		}
-		if errors.Is(err, redis.Nil) {
-			return nil
+		if isTransientRedisErr(err) {
+			// Expected infra blip (Redis restart / failover / network). Return the
+			// raw error so the worker loop backs off quietly instead of emitting an
+			// ERROR with a full stack trace.
+			return err
 		}
 
 		return errors.Wrap(err, "get html crawler task")
@@ -141,12 +307,22 @@ func runDynamicWebCrawler() error {
 	return nil
 }
 
-func popHTMLCrawlerTask(ctx context.Context) (*rlibs.HTMLCrawlerTask, error) {
+// popHTMLCrawlerTask pops the next pending crawler task.
+//
+// It is a package-level seam (mirroring fetchDynamicHTMLContent) so tests can
+// inject transient/fatal Redis errors without a live Redis instance.
+var popHTMLCrawlerTask = popHTMLCrawlerTaskFromRedis
+
+func popHTMLCrawlerTaskFromRedis(ctx context.Context) (*rlibs.HTMLCrawlerTask, error) {
 	client := rutils.GetCli().GetDB().Client
 
 	vals, err := client.BLPop(ctx, 5*time.Second, rlibs.KeyTaskHTMLCrawlerPending).Result()
 	if err != nil {
-		return nil, errors.WithStack(err)
+		// Return the raw error so callers can classify transient infrastructure
+		// errors (LOADING / timeout / connection reset) by type. Wrapping with a
+		// stack trace here is exactly what turned expected Redis restarts into an
+		// ERROR-level stack-trace storm.
+		return nil, err
 	}
 	if len(vals) != 2 {
 		return nil, errors.Errorf("invalid blpop response size %d", len(vals))
