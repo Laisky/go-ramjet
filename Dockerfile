@@ -26,9 +26,17 @@ ENV SPEECHSDK_ROOT=/opt/azure/speech
 ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
 ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
 ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-RUN mkdir -p $SPEECHSDK_ROOT
-RUN wget -O SpeechSDK-Linux.tar.gz https://s3.laisky.com/public/SpeechSDK-Linux.tar.gz \
-    && tar --strip 1 -xzf SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
+# The native Speech SDK version MUST match the Go binding version in go.mod
+# (github.com/Microsoft/cognitive-services-speech-sdk-go). A stale native lib
+# causes cgo build errors like:
+#   could not determine what C.phrase_list_grammar_set_weight refers to
+# Use Microsoft's official, immutable, versioned drop so the two never drift.
+ARG SPEECHSDK_VERSION=1.50.0
+RUN mkdir -p $SPEECHSDK_ROOT \
+    && wget -O SpeechSDK-Linux.tar.gz \
+        "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz" \
+    && tar --strip 1 -xzf SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT" \
+    && rm -f SpeechSDK-Linux.tar.gz
 
 ENV GO111MODULE=on
 WORKDIR /goapp
