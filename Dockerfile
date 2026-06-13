@@ -113,7 +113,7 @@ RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
-COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.6 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.6
+COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
 COPY --from=gobuild /goapp/web/dist /app/web/dist
 
