@@ -19,7 +19,14 @@ import (
 const (
 	crawlerURLLatestKeyPrefix = "ramjet:gptchat:crawler:html:latest:"
 	crawlerRecordKeyPrefix    = "ramjet:gptchat:crawler:html:record:"
+	crawlerDataTTL            = 3 * time.Hour
 )
+
+// redisSetter stores a value in Redis with an expiration.
+// It takes a context, key, value, and retention duration, and returns the Redis status command.
+type redisSetter interface {
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
+}
 
 // CrawlRecord is the persisted crawl result for a URL.
 //
@@ -47,15 +54,18 @@ func apiKeyPrefix(apiKey string) string {
 	return apiKey[:9]
 }
 
+// urlHash takes a URL string and returns a stable SHA-1 hash for Redis cache keys.
 func urlHash(url string) string {
 	h := sha1.Sum([]byte(url))
 	return hex.EncodeToString(h[:])
 }
 
+// crawlerLatestKey takes a URL and returns the Redis key that stores its latest crawl record.
 func crawlerLatestKey(url string) string {
 	return crawlerURLLatestKeyPrefix + urlHash(url)
 }
 
+// crawlerRecordKey takes a task ID and returns the Redis key that stores its crawl record.
 func crawlerRecordKey(taskID string) string {
 	return crawlerRecordKeyPrefix + taskID
 }
@@ -107,15 +117,24 @@ func SaveCrawlRecord(ctx context.Context, record *CrawlRecord) error {
 	}
 
 	client := rutils.GetCli().GetDB().Client
-	if err := client.Set(ctx, crawlerRecordKey(record.TaskID), payload, 0).Err(); err != nil {
-		return errors.Wrap(err, "save crawl record")
-	}
-
-	// Keep latest cache for 7 days to limit unbounded growth.
-	if err := client.Set(ctx, crawlerLatestKey(record.URL), payload, 7*24*time.Hour).Err(); err != nil {
-		return errors.Wrap(err, "save latest crawl record")
+	if err := saveCrawlRecordPayload(ctx, client, record, payload); err != nil {
+		return errors.Wrap(err, "save crawl record payload")
 	}
 
 	logger.Debug("saved crawl record", zap.Int("raw_len", len(record.RawBody)))
+	return nil
+}
+
+// saveCrawlRecordPayload stores the task-specific and latest crawl records with bounded retention.
+// It takes a Redis setter, crawl record, and serialized payload, and returns an error when either write fails.
+func saveCrawlRecordPayload(ctx context.Context, client redisSetter, record *CrawlRecord, payload []byte) error {
+	if err := client.Set(ctx, crawlerRecordKey(record.TaskID), payload, crawlerDataTTL).Err(); err != nil {
+		return errors.Wrap(err, "save crawl record")
+	}
+
+	if err := client.Set(ctx, crawlerLatestKey(record.URL), payload, crawlerDataTTL).Err(); err != nil {
+		return errors.Wrap(err, "save latest crawl record")
+	}
+
 	return nil
 }

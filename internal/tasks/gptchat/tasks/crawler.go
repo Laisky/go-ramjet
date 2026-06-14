@@ -351,7 +351,7 @@ func setHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	defer cancelPublish()
 
 	key := crawlerResultKey(task.TaskID)
-	if err := rutils.GetCli().GetDB().Client.Set(ctxPublish, key, payload, 7*24*time.Hour).Err(); err != nil {
+	if err := rutils.GetCli().GetDB().Client.Set(ctxPublish, key, payload, crawlerDataTTL).Err(); err != nil {
 		return errors.Wrapf(err, "set task result %q", key)
 	}
 
@@ -773,7 +773,7 @@ func addHTMLCrawlerTask(ctx context.Context, url, apiKey string, outputMarkdown 
 	}
 
 	client := rutils.GetCli().GetDB().Client
-	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, 7*24*time.Hour).Err(); err != nil {
+	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, crawlerDataTTL).Err(); err != nil {
 		return "", errors.Wrap(err, "init task result")
 	}
 	if err := client.RPush(ctx, rlibs.KeyTaskHTMLCrawlerPending, payload).Err(); err != nil {
