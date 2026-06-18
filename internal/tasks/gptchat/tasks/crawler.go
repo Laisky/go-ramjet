@@ -469,7 +469,7 @@ func fallbackDynamicFetchWithProxy(
 	)
 	logger.Debug("attempt web fetch proxy fallback")
 
-	proxyBody, err := fetchByWebFetchProxyRace(ctx, targetURL)
+	proxyBody, err := fetchByWebFetchProxyPriority(ctx, targetURL)
 	if err != nil {
 		fields := []zap.Field{zap.Error(err)}
 		if primaryErr != nil {
@@ -630,7 +630,7 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 
 	// 2) fallback to web fetch proxies
 	if targetURL != "" {
-		proxyMarkdown, proxyErr := fetchByWebFetchProxyRace(ctx, targetURL)
+		proxyMarkdown, proxyErr := fetchByWebFetchProxyPriority(ctx, targetURL)
 		if proxyErr == nil {
 			proxyMarkdown = strings.TrimSpace(proxyMarkdown)
 			if proxyMarkdown != "" {

@@ -22,6 +22,9 @@ func TestSetupConfigMemoryDefaults(t *testing.T) {
 	gconfig.Shared.Set("openai.web_fetch.scrapeless.proxy_country", "")
 	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
 	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.api", "")
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "")
 
 	err := SetupConfig()
 	require.NoError(t, err)
@@ -34,6 +37,7 @@ func TestSetupConfigMemoryDefaults(t *testing.T) {
 	require.Equal(t, "https://api.scrapeless.com/api/v2/unlocker/request", Config.WebFetch.Scrapeless.API)
 	require.Equal(t, "unlocker.webunlocker", Config.WebFetch.Scrapeless.Actor)
 	require.Equal(t, "ANY", Config.WebFetch.Scrapeless.ProxyCountry)
+	require.Equal(t, "https://api.firecrawl.dev/v2/scrape", Config.WebFetch.Firecrawl.API)
 }
 
 // TestSetupConfigMemoryValidation verifies blank memory storage URL is rejected when memory is enabled.
@@ -62,8 +66,34 @@ func TestSetupConfigScrapelessValidation(t *testing.T) {
 	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 512)
 	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", true)
 	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "   ")
+	t.Cleanup(func() {
+		gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
+		gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
+	})
 
 	err := SetupConfig()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "scrapeless.api_key")
+}
+
+// TestSetupConfigFirecrawlValidation verifies firecrawl requires an API key when enabled.
+func TestSetupConfigFirecrawlValidation(t *testing.T) {
+	gconfig.Shared.Set("openai.token", "srv-token")
+	gconfig.Shared.Set("openai.enable_memory", false)
+	gconfig.Shared.Set("openai.memory_project", "go-ramjet-memory")
+	gconfig.Shared.Set("openai.memory_storage_mcp_url", "https://mcp.example.com")
+	gconfig.Shared.Set("openai.memory_llm_timeout_seconds", 15)
+	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 512)
+	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
+	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", true)
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "   ")
+	t.Cleanup(func() {
+		gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
+		gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "")
+	})
+
+	err := SetupConfig()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "firecrawl.api_key")
 }

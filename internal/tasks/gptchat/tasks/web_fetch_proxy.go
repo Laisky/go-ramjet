@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -22,14 +24,17 @@ import (
 type webFetchProxy interface {
 	// Name returns the proxy identifier used in logs and errors.
 	Name() string
+	// Priority returns the selection priority; higher runs first, ties are random.
+	Priority() int
 	// Fetch retrieves targetURL through the proxy and returns the response body.
 	Fetch(ctx context.Context, targetURL string) (string, error)
 }
 
 // prefixedWebFetchProxy proxies requests by prefixing the target URL.
 type prefixedWebFetchProxy struct {
-	name   string
-	prefix string
+	name     string
+	prefix   string
+	priority int
 }
 
 // scrapelessWebFetchProxy calls the Scrapeless universal scraping API.
@@ -38,6 +43,7 @@ type scrapelessWebFetchProxy struct {
 	apiKey       string
 	actor        string
 	proxyCountry string
+	priority     int
 }
 
 // scrapelessRequestPayload is the request body sent to Scrapeless.
@@ -60,6 +66,39 @@ type scrapelessRequestProxy struct {
 	Country string `json:"country"`
 }
 
+// firecrawlWebFetchProxy calls the Firecrawl scrape API.
+type firecrawlWebFetchProxy struct {
+	apiURL   string
+	apiKey   string
+	priority int
+}
+
+// firecrawlRequestPayload is the request body sent to Firecrawl.
+type firecrawlRequestPayload struct {
+	URL     string   `json:"url"`
+	Formats []string `json:"formats"`
+}
+
+// firecrawlResponse is the response body returned by the Firecrawl scrape API.
+type firecrawlResponse struct {
+	Success bool                  `json:"success"`
+	Error   string                `json:"error"`
+	Data    firecrawlResponseData `json:"data"`
+}
+
+// firecrawlResponseData carries the scraped content and target metadata.
+type firecrawlResponseData struct {
+	Markdown string            `json:"markdown"`
+	Metadata firecrawlMetadata `json:"metadata"`
+}
+
+// firecrawlMetadata carries metadata about the scraped target.
+type firecrawlMetadata struct {
+	// StatusCode is the HTTP status the target site returned. It is distinct from
+	// the Firecrawl API's own status, which stays 200 even when the target failed.
+	StatusCode int `json:"statusCode"`
+}
+
 var (
 	newCrawlerHTTPClient = gutils.NewHTTPClient
 	webFetchProxies      []webFetchProxy
@@ -70,6 +109,11 @@ func (p prefixedWebFetchProxy) Name() string {
 	return p.name
 }
 
+// Priority returns the proxy selection priority.
+func (p prefixedWebFetchProxy) Priority() int {
+	return p.priority
+}
+
 // Fetch retrieves targetURL through the prefixed proxy endpoint.
 func (p prefixedWebFetchProxy) Fetch(ctx context.Context, targetURL string) (string, error) {
 	return fetchByWebFetchProxyPrefix(ctx, p.name, p.prefix, targetURL)
@@ -78,6 +122,11 @@ func (p prefixedWebFetchProxy) Fetch(ctx context.Context, targetURL string) (str
 // Name returns the proxy name.
 func (p scrapelessWebFetchProxy) Name() string {
 	return "scrapeless"
+}
+
+// Priority returns the proxy selection priority.
+func (p scrapelessWebFetchProxy) Priority() int {
+	return p.priority
 }
 
 // Fetch retrieves targetURL through the Scrapeless API.
@@ -138,11 +187,67 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 	return content, nil
 }
 
-// webFetchProxyResult carries a single proxy fetch attempt result.
-type webFetchProxyResult struct {
-	name string
-	body string
-	err  error
+// Name returns the proxy name.
+func (p firecrawlWebFetchProxy) Name() string {
+	return "firecrawl"
+}
+
+// Priority returns the proxy selection priority.
+func (p firecrawlWebFetchProxy) Priority() int {
+	return p.priority
+}
+
+// Fetch retrieves targetURL through the Firecrawl scrape API.
+func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (string, error) {
+	if strings.TrimSpace(targetURL) == "" {
+		return "", errors.New("targetURL is empty")
+	}
+	if strings.TrimSpace(p.apiKey) == "" {
+		return "", errors.New("firecrawl api key is empty")
+	}
+
+	payload := firecrawlRequestPayload{
+		URL:     targetURL,
+		Formats: []string{"markdown"},
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", errors.Wrap(err, "marshal firecrawl payload")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.apiURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", errors.Wrap(err, "new firecrawl request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	cli, err := newCrawlerHTTPClient()
+	if err != nil {
+		return "", errors.Wrap(err, "new firecrawl http client")
+	}
+
+	resp, err := cli.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "firecrawl request")
+	}
+	defer gutils.LogErr(resp.Body.Close, log.Logger)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "read firecrawl body")
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", errors.Errorf("firecrawl request failed: %d body=%s", resp.StatusCode, truncateForLog(string(body), 256))
+	}
+
+	content, err := extractFirecrawlContent(body)
+	if err != nil {
+		return "", errors.Wrap(err, "extract firecrawl content")
+	}
+
+	return content, nil
 }
 
 // registeredWebFetchProxies returns a snapshot of configured web fetch proxies.
@@ -163,8 +268,13 @@ func registeredWebFetchProxies() ([]webFetchProxy, error) {
 	return proxies, nil
 }
 
-// fetchByWebFetchProxyRace returns the first successful proxy response body.
-func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, error) {
+// fetchByWebFetchProxyPriority returns the first successful proxy response body.
+//
+// Providers are tried sequentially in descending priority order; providers that
+// share a priority are tried in random order so load spreads across them, while
+// lower-priority providers act only as fallbacks. The first success wins, and a
+// provider is only attempted once the higher-priority ones have failed.
+func fetchByWebFetchProxyPriority(ctx context.Context, targetURL string) (string, error) {
 	if strings.TrimSpace(targetURL) == "" {
 		return "", errors.New("targetURL is empty")
 	}
@@ -177,82 +287,77 @@ func fetchByWebFetchProxyRace(ctx context.Context, targetURL string) (string, er
 		return "", errors.New("no web fetch proxies configured")
 	}
 
-	logger := gmw.GetLogger(ctx).Named("fetch_by_web_fetch_proxy_race").With(
+	orderWebFetchProxiesByPriority(proxies)
+
+	logger := gmw.GetLogger(ctx).Named("fetch_by_web_fetch_proxy_priority").With(
 		zap.String("url", targetURL),
 		zap.Int("n_proxy", len(proxies)),
 	)
-	resultCh := make(chan webFetchProxyResult, len(proxies))
-	raceFns := make([]func(context.Context) error, 0, len(proxies)+1)
-	result := webFetchProxyResult{}
 
+	errMsgs := make([]string, 0, len(proxies))
 	for _, proxy := range proxies {
-		proxy := proxy
-		raceFns = append(raceFns, func(ctx context.Context) error {
-			logger.Debug("start web fetch proxy request", zap.String("proxy", proxy.Name()))
-			body, err := proxy.Fetch(ctx, targetURL)
-			if err != nil {
-				logger.Debug("web fetch proxy request failed", zap.String("proxy", proxy.Name()), zap.Error(err))
-			} else {
-				logger.Debug("web fetch proxy request succeeded",
-					zap.String("proxy", proxy.Name()),
-					zap.Int("len", len(body)))
-			}
-			select {
-			case resultCh <- webFetchProxyResult{name: proxy.Name(), body: body, err: err}:
-			case <-ctx.Done():
-			}
-
-			<-ctx.Done()
-			return nil
-		})
-	}
-
-	raceFns = append(raceFns, func(ctx context.Context) error {
-		errMsgs := make([]string, 0, len(proxies))
-		for range len(proxies) {
-			select {
-			case <-ctx.Done():
-				return errors.WithStack(ctx.Err())
-			case result = <-resultCh:
-				if result.err == nil {
-					return nil
-				}
-
-				errMsgs = append(errMsgs, fmt.Sprintf("%s: %v", result.name, result.err))
-			}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", errors.Wrap(ctxErr, "web fetch proxy context done")
 		}
 
-		return errors.Errorf("all web fetch proxies failed: %s", strings.Join(errMsgs, "; "))
-	})
+		logger.Debug("start web fetch proxy request",
+			zap.String("proxy", proxy.Name()),
+			zap.Int("priority", proxy.Priority()))
+		body, ferr := proxy.Fetch(ctx, targetURL)
+		if ferr != nil {
+			logger.Debug("web fetch proxy request failed",
+				zap.String("proxy", proxy.Name()),
+				zap.Error(ferr))
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %v", proxy.Name(), ferr))
+			continue
+		}
 
-	if err = gutils.RaceErrWithCtx(ctx, raceFns...); err != nil {
-		return "", errors.Wrap(err, "race web fetch proxies")
+		logger.Info("web fetch proxy succeeded",
+			zap.String("proxy", proxy.Name()),
+			zap.Int("priority", proxy.Priority()),
+			zap.Int("len", len(body)))
+		return body, nil
 	}
 
-	logger.Info("web fetch proxy succeeded",
-		zap.String("proxy", result.name),
-		zap.Int("len", len(result.body)))
+	return "", errors.Errorf("all web fetch proxies failed: %s", strings.Join(errMsgs, "; "))
+}
 
-	return result.body, nil
+// orderWebFetchProxiesByPriority sorts proxies in place by descending priority,
+// shuffling first so providers sharing a priority are ordered randomly.
+func orderWebFetchProxiesByPriority(proxies []webFetchProxy) {
+	rand.Shuffle(len(proxies), func(i, j int) {
+		proxies[i], proxies[j] = proxies[j], proxies[i]
+	})
+	sort.SliceStable(proxies, func(i, j int) bool {
+		return proxies[i].Priority() > proxies[j].Priority()
+	})
 }
 
 // buildConfiguredWebFetchProxies builds providers from GPTChat config.
 func buildConfiguredWebFetchProxies() ([]webFetchProxy, error) {
-	providers := make([]webFetchProxy, 0, 3)
+	providers := make([]webFetchProxy, 0, 4)
 	webFetchConfig := currentWebFetchConfig()
 
 	if webFetchProviderEnabled(webFetchConfig.Jina.Enabled, true) {
 		if webFetchConfig.Jina.Prefix == "" {
 			return nil, errors.New("jina prefix is empty")
 		}
-		providers = append(providers, prefixedWebFetchProxy{name: "jina", prefix: webFetchConfig.Jina.Prefix})
+		providers = append(providers, prefixedWebFetchProxy{
+			name:     "jina",
+			prefix:   webFetchConfig.Jina.Prefix,
+			priority: webFetchProviderPriority(webFetchConfig.Jina.Priority, 100),
+		})
 	}
 
 	if webFetchProviderEnabled(webFetchConfig.Defuddle.Enabled, true) {
 		if webFetchConfig.Defuddle.Prefix == "" {
 			return nil, errors.New("defuddle prefix is empty")
 		}
-		providers = append(providers, prefixedWebFetchProxy{name: "defuddle", prefix: webFetchConfig.Defuddle.Prefix})
+		providers = append(providers, prefixedWebFetchProxy{
+			name:     "defuddle",
+			prefix:   webFetchConfig.Defuddle.Prefix,
+			priority: webFetchProviderPriority(webFetchConfig.Defuddle.Priority, 100),
+		})
 	}
 
 	if webFetchProviderEnabled(webFetchConfig.Scrapeless.Enabled, false) {
@@ -267,6 +372,21 @@ func buildConfiguredWebFetchProxies() ([]webFetchProxy, error) {
 			apiKey:       webFetchConfig.Scrapeless.APIKey,
 			actor:        webFetchConfig.Scrapeless.Actor,
 			proxyCountry: webFetchConfig.Scrapeless.ProxyCountry,
+			priority:     webFetchProviderPriority(webFetchConfig.Scrapeless.Priority, 50),
+		})
+	}
+
+	if webFetchProviderEnabled(webFetchConfig.Firecrawl.Enabled, false) {
+		if webFetchConfig.Firecrawl.API == "" {
+			return nil, errors.New("firecrawl api is empty")
+		}
+		if strings.TrimSpace(webFetchConfig.Firecrawl.APIKey) == "" {
+			return nil, errors.New("firecrawl api key is empty")
+		}
+		providers = append(providers, firecrawlWebFetchProxy{
+			apiURL:   webFetchConfig.Firecrawl.API,
+			apiKey:   webFetchConfig.Firecrawl.APIKey,
+			priority: webFetchProviderPriority(webFetchConfig.Firecrawl.Priority, 50),
 		})
 	}
 
@@ -282,6 +402,16 @@ func webFetchProviderEnabled(enabled *bool, defaultValue bool) bool {
 	return *enabled
 }
 
+// webFetchProviderPriority returns the configured priority or the provided default
+// when unset (nil). An explicit value, including 0 or negative, is honored as-is.
+func webFetchProviderPriority(priority *int, defaultValue int) int {
+	if priority == nil {
+		return defaultValue
+	}
+
+	return *priority
+}
+
 // currentWebFetchConfig returns the configured web fetch providers or zero values when config is unavailable.
 func currentWebFetchConfig() iconfig.WebFetchConfig {
 	if iconfig.Config == nil {
@@ -293,10 +423,47 @@ func currentWebFetchConfig() iconfig.WebFetchConfig {
 				Actor:        "unlocker.webunlocker",
 				ProxyCountry: "ANY",
 			},
+			Firecrawl: iconfig.FirecrawlWebFetchProxyConfig{
+				API: "https://api.firecrawl.dev/v2/scrape",
+			},
 		}
 	}
 
 	return iconfig.Config.WebFetch
+}
+
+// extractFirecrawlContent extracts the markdown payload from a Firecrawl scrape response.
+func extractFirecrawlContent(body []byte) (string, error) {
+	var resp firecrawlResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", errors.Wrap(err, "unmarshal firecrawl body")
+	}
+	if !resp.Success {
+		if resp.Error != "" {
+			return "", errors.Errorf("firecrawl returned error: %s", truncateForLog(resp.Error, 256))
+		}
+
+		return "", errors.New("firecrawl returned unsuccessful response")
+	}
+
+	// Firecrawl keeps its own HTTP status at 200 / success:true even when the
+	// target page itself failed; the target status lives in data.metadata.statusCode.
+	// Reject non-2xx targets so the race falls through to other proxies instead of
+	// surfacing a soft-failure (error or challenge page) as a successful fetch.
+	if code := resp.Data.Metadata.StatusCode; code != 0 &&
+		(code < http.StatusOK || code >= http.StatusMultipleChoices) {
+		return "", errors.Errorf("firecrawl target returned status %d", code)
+	}
+
+	content := strings.TrimSpace(resp.Data.Markdown)
+	if content == "" {
+		return "", errors.New("firecrawl returned empty content")
+	}
+	if isCloudflareChallenge(content) {
+		return "", errors.New("firecrawl returned cloudflare challenge")
+	}
+
+	return content, nil
 }
 
 // extractScrapelessContent extracts the first useful string payload from a Scrapeless response.

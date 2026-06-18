@@ -5,8 +5,8 @@
 //   - the response body is valid JSON;
 //   - the JSON field `state` equals "master".
 //
-// When any of these checks fail, an alert email is sent to the configured
-// receiver.
+// When any of these checks fail, an ERROR log is emitted; the alert log pusher
+// forwards ERROR logs automatically, so no email is sent from here.
 //
 // The task is DISABLED by default; it only runs when it is explicitly enabled
 // via the CMD flag `-t pieverse_alert` (or the env `TASKS=pieverse_alert`).
@@ -16,7 +16,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -30,7 +29,6 @@ import (
 	"github.com/Laisky/zap"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
-	"github.com/Laisky/go-ramjet/library/alert"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -40,8 +38,6 @@ const (
 	defaultInterval    = time.Minute
 	defaultHTTPTimeout = 10 * time.Second
 	defaultURL         = "https://blacknova-enclave-cipherforge-wallet-relay.pieverse.io:8443/health"
-	defaultReceiver    = "pieverse-tee@laisky.com"
-	receiverName       = "Pieverse Tee"
 	expectedState      = "master"
 )
 
@@ -75,14 +71,6 @@ func taskInterval() time.Duration {
 	}
 
 	return defaultInterval
-}
-
-func taskReceiver() string {
-	if v := gconfig.Shared.GetString("tasks.pieverse_alert.receiver"); v != "" {
-		return v
-	}
-
-	return defaultReceiver
 }
 
 // checkHealth performs the HTTP request and validates the response.
@@ -136,33 +124,12 @@ func runTask() {
 	defer cancel()
 
 	if err := checkHealth(ctx, url); err != nil {
-		log.Logger.Warn("pieverse health check failed", zap.String("url", url), zap.Error(err))
-		sendAlertEmail(url, err)
+		// Emit ERROR so the alert log pusher forwards it; no email is sent here.
+		log.Logger.Error("pieverse health check failed", zap.String("url", url), zap.Error(err))
 		return
 	}
 
 	log.Logger.Debug("pieverse health check ok", zap.String("url", url))
-}
-
-func sendAlertEmail(url string, checkErr error) {
-	receiver := taskReceiver()
-	hostname, _ := os.Hostname()
-	subject := "[pieverse] health check alert"
-	content := fmt.Sprintf(
-		"%s\ntested from: %s\n\npieverse health check failed\nurl: %s\nreason: %+v\n",
-		time.Now().Format(time.RFC3339),
-		hostname,
-		url,
-		checkErr,
-	)
-
-	if err := alert.Email.Send(receiver, receiverName, subject, content); err != nil {
-		log.Logger.Error("send pieverse alert email",
-			zap.String("receiver", receiver), zap.Error(err))
-		return
-	}
-
-	log.Logger.Info("sent pieverse alert email", zap.String("receiver", receiver))
 }
 
 // explicitlyEnabled reports whether the task is explicitly selected via the

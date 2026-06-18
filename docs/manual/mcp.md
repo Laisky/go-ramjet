@@ -187,17 +187,34 @@ openai:
   # Rate limiting for freetier users (seconds between MCP calls)
   rate_limit_expensive_models_interval_secs: 600
 
-  # Optional markdown-oriented web fetch fallbacks used by GPTChat crawling
+  # Optional markdown-oriented web fetch fallbacks used by GPTChat crawling.
+  # Providers are tried by priority (higher first); providers sharing a priority
+  # are tried in random order, and lower-priority providers act only as fallbacks.
+  # An omitted priority defaults to 100 for jina/defuddle and 50 for the paid
+  # providers, so the free providers run ahead of the paid ones and the paid APIs
+  # are only hit when the free tier fails. An explicit priority (including 0 or a
+  # negative value, e.g. for "always last") is honored as written.
   web_fetch:
     jina:
       enabled: true
       prefix: https://r.jina.ai/
+      priority: 100
+    defuddle:
+      enabled: true
+      prefix: https://defuddle.md/
+      priority: 100
     scrapeless:
       enabled: true
       api: https://api.scrapeless.com/api/v2/unlocker/request
       api_key: ${SCRAPELESS_API_KEY}
       actor: unlocker.webunlocker
       proxy_country: ANY
+      priority: 50
+    firecrawl:
+      enabled: true
+      api: https://api.firecrawl.dev/v2/scrape
+      api_key: ${FIRECRAWL_API_KEY}
+      priority: 50
 ```
 
 **Backend behavior:**

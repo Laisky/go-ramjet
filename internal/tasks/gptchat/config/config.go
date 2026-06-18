@@ -92,6 +92,9 @@ func SetupConfig() (err error) {
 		&Config.WebFetch.Scrapeless.Actor, "unlocker.webunlocker"))
 	Config.WebFetch.Scrapeless.ProxyCountry = strings.ToUpper(strings.TrimSpace(gutils.OptionalVal(
 		&Config.WebFetch.Scrapeless.ProxyCountry, "ANY")))
+	Config.WebFetch.Firecrawl.API = trimUrl(gutils.OptionalVal(
+		&Config.WebFetch.Firecrawl.API, "https://api.firecrawl.dev/v2/scrape"))
+	Config.WebFetch.Firecrawl.APIKey = strings.TrimSpace(Config.WebFetch.Firecrawl.APIKey)
 	// Config.DefaultOpenaiToken = gutils.OptionalVal(
 	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
@@ -122,6 +125,10 @@ func SetupConfig() (err error) {
 
 	if webFetchEnabled(Config.WebFetch.Scrapeless.Enabled, false) && Config.WebFetch.Scrapeless.APIKey == "" {
 		return errors.New("openai.web_fetch.scrapeless.api_key is required when scrapeless is enabled")
+	}
+
+	if webFetchEnabled(Config.WebFetch.Firecrawl.Enabled, false) && Config.WebFetch.Firecrawl.APIKey == "" {
+		return errors.New("openai.web_fetch.firecrawl.api_key is required when firecrawl is enabled")
 	}
 
 	return nil
@@ -319,6 +326,8 @@ type WebFetchConfig struct {
 	Defuddle PrefixWebFetchProxyConfig `json:"defuddle" mapstructure:"defuddle"`
 	// Scrapeless configures the Scrapeless universal scraping provider.
 	Scrapeless ScrapelessWebFetchProxyConfig `json:"scrapeless" mapstructure:"scrapeless"`
+	// Firecrawl configures the Firecrawl scraping provider.
+	Firecrawl FirecrawlWebFetchProxyConfig `json:"firecrawl" mapstructure:"firecrawl"`
 }
 
 // PrefixWebFetchProxyConfig configures a prefix-based web fetch proxy.
@@ -327,6 +336,10 @@ type PrefixWebFetchProxyConfig struct {
 	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled"`
 	// Prefix is prepended to the target URL.
 	Prefix string `json:"prefix" mapstructure:"prefix"`
+	// Priority selects the provider tier; higher runs first, ties are picked at
+	// random. Nil means use the code default; an explicit value (including 0 or
+	// negative) is honored as-is.
+	Priority *int `json:"priority,omitempty" mapstructure:"priority"`
 }
 
 // ScrapelessWebFetchProxyConfig configures the Scrapeless provider.
@@ -341,6 +354,24 @@ type ScrapelessWebFetchProxyConfig struct {
 	Actor string `json:"actor" mapstructure:"actor"`
 	// ProxyCountry selects the regional proxy pool.
 	ProxyCountry string `json:"proxy_country" mapstructure:"proxy_country"`
+	// Priority selects the provider tier; higher runs first, ties are picked at
+	// random. Nil means use the code default; an explicit value (including 0 or
+	// negative) is honored as-is.
+	Priority *int `json:"priority,omitempty" mapstructure:"priority"`
+}
+
+// FirecrawlWebFetchProxyConfig configures the Firecrawl provider.
+type FirecrawlWebFetchProxyConfig struct {
+	// Enabled toggles the provider. Nil means use the code default.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled"`
+	// API is the Firecrawl scrape endpoint.
+	API string `json:"api" mapstructure:"api"`
+	// APIKey authenticates requests to Firecrawl.
+	APIKey string `json:"-" mapstructure:"api_key"`
+	// Priority selects the provider tier; higher runs first, ties are picked at
+	// random. Nil means use the code default; an explicit value (including 0 or
+	// negative) is honored as-is.
+	Priority *int `json:"priority,omitempty" mapstructure:"priority"`
 }
 
 type azureConfig struct {

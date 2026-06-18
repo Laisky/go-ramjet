@@ -3,7 +3,7 @@ package cv
 
 const defaultCVMarkdown = `# Zhonghua (Laisky) Cai
 Ottawa, ON, Canada · Open to remote (Canada/US)
-job@laisky.com · LinkedIn: https://www.linkedin.com/in/zhonghua-cai-14237926/
+job@laisky.com · LinkedIn: https://www.linkedin.com/in/laisky-cai-14237926/
 GitHub: https://github.com/Laisky · Blog: https://blog.laisky.com/
 
 ## Summary

@@ -7,12 +7,11 @@ tasks:
   pieverse_alert:
     # The pieverse_alert task is DISABLED by default. Enable it with the CMD
     # flag `-t pieverse_alert`. It requests `url` every `interval` seconds and
-    # alerts `receiver` by email when the response is not HTTP 200, not valid
-    # JSON, or its `state` field is not "master". All fields are optional and
-    # fall back to the built-in defaults shown below.
+    # logs an ERROR (forwarded by the alert log pusher) when the response is not
+    # HTTP 200, not valid JSON, or its `state` field is not "master". All fields
+    # are optional and fall back to the built-in defaults shown below.
     url: 'https://blacknova-enclave-cipherforge-wallet-relay.pieverse.io:8443/health'
     interval: 60 # seconds
-    receiver: 'pieverse-tee@laisky.com'
   postgres:
     # enable/disable the postgres backup task
     enable: true
