@@ -36,3 +36,4 @@
 - **Completeness:** Exhaustively incorporate all requirements/options; don’t prematurely discard low-probability causes; ask the user only when missing info is truly required for the next step.
 - **Persistence:** Don’t give up early; on transient errors, retry until an explicit retry limit is reached; on non-transient errors, change strategy rather than repeating.
 - **Action finality:** Only act after reasoning is complete—once you take an action, you can’t take it back.
+- **Sub Agents:** Actively use sub-agents for **parallelism** (dispatch independent subtasks concurrently in a single batch, not sequentially) and **context isolation** (offload searches/sweeps/lookups so their intermediate context never pollutes the main thread); each must follow the same instructions, stay scoped to a well-defined subtask, and return only the **distilled key information** for integration — not raw tool output or full file dumps.
