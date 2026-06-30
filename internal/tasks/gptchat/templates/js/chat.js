@@ -195,25 +195,25 @@ function mergeReasoningForStorage(thinking, toolEvents) {
 // const ChatModelTurbo35_0613 = "gpt-3.5-turbo-0613";
 // const ChatModelTurbo35_0613_16K = "gpt-3.5-turbo-16k-0613";
 // const ChatModelGPT4 = "gpt-4";
-const ChatModelGPT4Turbo = 'gpt-4-turbo';
+// const ChatModelGPT4Turbo = 'gpt-4-turbo';
 const ChatModelGPT41 = 'gpt-4.1';
-const ChatModelGPT41Mini = 'gpt-4.1-mini';
-const ChatModelGPT41Nano = 'gpt-4.1-nano';
+// const ChatModelGPT41Mini = 'gpt-4.1-mini';
+// const ChatModelGPT41Nano = 'gpt-4.1-nano';
 // const ChatModelGPT5 = 'gpt-5';
 const ChatModelGPT5Dot5 = 'gpt-5.5';
-const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro';
-const ChatModelGPT5Dot1 = 'gpt-5.1';
-const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex';
-const ChatModelGPT5Mini = 'gpt-5-mini';
-const ChatModelGPT5Nano = 'gpt-5-nano';
-const ChatModelGPT5Pro = 'gpt-5-pro';
-const ChatModelGPT4OSearch = 'gpt-4o-search-preview';
+// const ChatModelGPT5Dot2Pro = 'gpt-5.2-pro';
+// const ChatModelGPT5Dot1 = 'gpt-5.1';
+// const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex';
+// const ChatModelGPT5Mini = 'gpt-5-mini';
+// const ChatModelGPT5Nano = 'gpt-5-nano';
+// const ChatModelGPT5Pro = 'gpt-5-pro';
+// const ChatModelGPT4OSearch = 'gpt-4o-search-preview';
 const ChatModelGPT4OMini = 'gpt-4o-mini';
 const ChatModelGPT4OMiniSearch = 'gpt-4o-mini-search-preview';
 // const ChatModelGPTO1Preview = 'o1-preview';
 const ChatModelGPTOSS120B = 'openai/gpt-oss-120b';
 const ChatModelGPTOSS20B = 'openai/gpt-oss-20b';
-const ChatModelGPTO1 = 'o1';
+// const ChatModelGPTO1 = 'o1';
 // const ChatModelGPTO1Mini = 'o1-mini';
 const ChatModelGPTO3 = 'o3';
 const ChatModelGPTO3Pro = 'o3-pro';
@@ -232,13 +232,13 @@ const ChatModelDeepSeekResoner = 'deepseek-reasoner';
 // const ChatModelClaude3Opus = 'claude-3-opus';
 // const ChatModelClaude4Opus = 'claude-4-opus';
 // const ChatModelClaude41Opus = 'claude-opus-4-1';
-const ChatModelClaude45Opus = 'claude-opus-4-5';
+const ChatModelClaude48Opus = 'claude-opus-4-8';
 // const ChatModelClaude3Sonnet = 'claude-3-sonnet';
 // const ChatModelClaude35Sonnet = 'claude-3.5-sonnet';
 // const ChatModelClaude37Sonnet = 'claude-3.7-sonnet';
 // const ChatModelClaude37SonnetThinking = 'claude-3.7-sonnet-thinking';
 // const ChatModelClaude4Sonnet = 'claude-4-sonnet';
-const ChatModelClaude45Sonnet = 'claude-sonnet-4-5';
+const ChatModelClaude46Sonnet = 'claude-sonnet-4-6';
 // const ChatModelClaude35Sonnet8K = 'claude-3.5-sonnet-8k';
 // const ChatModelClaude3Haiku = 'claude-3-haiku';
 // const ChatModelClaude35Haiku = 'claude-3.5-haiku';
@@ -247,14 +247,15 @@ const ChatModelClaude45Haiku = 'claude-haiku-4-5';
 // const ChatModelGPT4_32K = "gpt-4-32k";
 // const ChatModelGPT4_0613_32K = "gpt-4-32k-0613";
 // const ChatModelGemini2Pro = 'gemini-2.0-pro';
-const ChatModelGemini25Pro = 'gemini-2.5-pro';
-const ChatModelGemini3Pro = 'gemini-3-pro-preview';
+const ChatModelGemini31Pro = 'gemini-3.1-pro-preview';
+// const ChatModelGemini3Pro = 'gemini-3-pro-preview';
 // const ChatModelGeminiProVision = 'gemini-pro-vision';
-const ChatModelGemini25Flash = 'gemini-2.5-flash';
+const ChatModelGemini35Flash = 'gemini-3.5-flash';
 // const ChatModelGemini2Flash = 'gemini-2.0-flash';
 // const ChatModelGemini2FlashThinking = 'gemini-2.0-flash-thinking';
 // const ChatModelGemini2FlahExpImage = 'gemini-2.0-flash-exp-image-generation';
-const ChatModelGemini25FlashImage = 'gemini-2.5-flash-image-preview';
+const ChatModelGemini31FlashImage = 'gemini-3.1-flash-image';
+const ChatModelGemini3ProImage = 'gemini-3-pro-image';
 // const ChatModelGroqLlama2With70B4K = 'llama2-70b-4096';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 // const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
@@ -306,24 +307,24 @@ const ChatModels = [
   // ChatModelTurbo35V0125,
   // ChatModelGPT4,
   ChatModelGPT41,
-  ChatModelGPT41Mini,
-  ChatModelGPT41Nano,
+  // ChatModelGPT41Mini,
+  // ChatModelGPT41Nano,
   // ChatModelGPT5,
-  ChatModelGPT5Dot1,
+  // ChatModelGPT5Dot1,
   ChatModelGPT5Dot5,
-  ChatModelGPT5Dot2Pro,
-  ChatModelGPT5Dot1Codex,
-  ChatModelGPT5Mini,
-  ChatModelGPT5Nano,
-  ChatModelGPT5Pro,
-  ChatModelGPT4OSearch,
+  // ChatModelGPT5Dot2Pro,
+  // ChatModelGPT5Dot1Codex,
+  // ChatModelGPT5Mini,
+  // ChatModelGPT5Nano,
+  // ChatModelGPT5Pro,
+  // ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
-  ChatModelGPT4Turbo,
+  // ChatModelGPT4Turbo,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
   // ChatModelGPTO1Preview,
-  ChatModelGPTO1,
+  // ChatModelGPTO1,
   ChatModelGPTO3,
   ChatModelGPTO3Pro,
   ChatModelGPTO3Deepresearch,
@@ -343,12 +344,12 @@ const ChatModels = [
   // ChatModelClaude3Opus,
   // ChatModelClaude4Opus,
   // ChatModelClaude41Opus,
-  ChatModelClaude45Opus,
+  ChatModelClaude48Opus,
   // ChatModelClaude35Sonnet,
   // ChatModelClaude37Sonnet,
   // ChatModelClaude37SonnetThinking,
   // ChatModelClaude4Sonnet,
-  ChatModelClaude45Sonnet,
+  ChatModelClaude46Sonnet,
   // ChatModelClaude35Sonnet8K,
   // ChatModelClaude3Haiku,
   // ChatModelClaude35Haiku,
@@ -368,13 +369,14 @@ const ChatModels = [
   // ChatModelGeminiPro,
   // ChatModelGeminiProVision,
   // ChatModelGemini2Pro,
-  ChatModelGemini25Pro,
-  ChatModelGemini3Pro,
+  ChatModelGemini31Pro,
+  // ChatModelGemini3Pro,
   // ChatModelGemini2Flash,
-  ChatModelGemini25Flash,
+  ChatModelGemini35Flash,
   // ChatModelGemini2FlashThinking,
   // ChatModelGemini2FlahExpImage
-  ChatModelGemini25FlashImage,
+  ChatModelGemini31FlashImage,
+  ChatModelGemini3ProImage
   // ChatModelTurbo35_16K,
   // ChatModelTurbo35_0613,
   // ChatModelTurbo35_0613_16K,
@@ -383,45 +385,46 @@ const ChatModels = [
   // ChatModelGPT4_0613_32K,
 ];
 const VisionModels = [
-  ChatModelGPT4Turbo,
+  // ChatModelGPT4Turbo,
   ChatModelGPT41,
-  ChatModelGPT41Mini,
-  ChatModelGPT41Nano,
+  // ChatModelGPT41Mini,
+  // ChatModelGPT41Nano,
   // ChatModelGPT5,
-  ChatModelGPT5Dot1,
+  // ChatModelGPT5Dot1,
   ChatModelGPT5Dot5,
-  ChatModelGPT5Dot2Pro,
-  ChatModelGPT5Dot1Codex,
-  ChatModelGPT5Mini,
-  ChatModelGPT5Nano,
-  ChatModelGPT5Pro,
-  ChatModelGPT4OSearch,
+  // ChatModelGPT5Dot2Pro,
+  // ChatModelGPT5Dot1Codex,
+  // ChatModelGPT5Mini,
+  // ChatModelGPT5Nano,
+  // ChatModelGPT5Pro,
+  // ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
   ChatModelGPT4OMiniSearch,
   // ChatModelGeminiProVision,
   // ChatModelGemini2Pro,
-  ChatModelGemini25Pro,
-  ChatModelGemini3Pro,
+  ChatModelGemini31Pro,
+  // ChatModelGemini3Pro,
   // ChatModelGemini2Flash,
-  ChatModelGemini25Flash,
+  ChatModelGemini35Flash,
   // ChatModelGemini2FlashThinking,
   // ChatModelGemini2FlahExpImage,
-  ChatModelGemini25FlashImage,
+  ChatModelGemini31FlashImage,
+  ChatModelGemini3ProImage,
   // ChatModelClaude3Opus,
   // ChatModelClaude4Opus,
   // ChatModelClaude41Opus,
-  ChatModelClaude45Opus,
+  ChatModelClaude48Opus,
   // ChatModelClaude35Sonnet,
   // ChatModelClaude37Sonnet,
   // ChatModelClaude37SonnetThinking,
   // ChatModelClaude4Sonnet,
-  ChatModelClaude45Sonnet,
+  ChatModelClaude46Sonnet,
   // ChatModelClaude35Sonnet8K,
   // ChatModelClaude3Haiku,
   // ChatModelClaude35Haiku,
   ChatModelClaude45Haiku,
   // ChatModelGPTO1Preview,
-  ChatModelGPTO1,
+  // ChatModelGPTO1,
   ChatModelGPTO3,
   ChatModelGPTO3Pro,
   ChatModelGPTO3Deepresearch,
@@ -475,13 +478,13 @@ const FreeModels = [
   // ChatModelGeminiPro,
   // ChatModelGeminiProVision,
   // ChatModelGemini2Flash,
-  ChatModelGemini25Flash,
+  ChatModelGemini35Flash,
   QAModelBasebit,
   QAModelSecurity,
   QAModelImmigrate,
   ImageModelSdxlTurbo,
   ChatModelGPTOSS120B,
-  ChatModelGPTOSS20B,
+  ChatModelGPTOSS20B
   // ImageModelImg2Img
 ];
 const AllModels = [].concat(ChatModels, QaModels, ImageModels, CompletionModels);
@@ -492,26 +495,26 @@ const ModelCategories = {
     ChatModelGPT4OMiniSearch,
     ChatModelGPTOSS120B,
     ChatModelGPTOSS20B,
-    ChatModelGPT4OSearch,
+    // ChatModelGPT4OSearch,
     ChatModelGPT41,
-    ChatModelGPT41Mini,
-    ChatModelGPT41Nano,
+    // ChatModelGPT41Mini,
+    // ChatModelGPT41Nano,
     // ChatModelGPT5,
-    ChatModelGPT5Dot1,
+    // ChatModelGPT5Dot1,
     ChatModelGPT5Dot5,
-    ChatModelGPT5Dot2Pro,
-    ChatModelGPT5Dot1Codex,
-    ChatModelGPT5Mini,
-    ChatModelGPT5Nano,
-    ChatModelGPT5Pro,
-    ChatModelGPT4Turbo,
-    ChatModelGPTO1,
+    // ChatModelGPT5Dot2Pro,
+    // ChatModelGPT5Dot1Codex,
+    // ChatModelGPT5Mini,
+    // ChatModelGPT5Nano,
+    // ChatModelGPT5Pro,
+    // ChatModelGPT4Turbo,
+    // ChatModelGPTO1,
     ChatModelGPTO3,
     ChatModelGPTO3Mini,
     ChatModelGPTO3Pro,
     ChatModelGPTO3Deepresearch,
     ChatModelGPTO4Mini,
-    ChatModelGPTO4MiniDeepresearch,
+    ChatModelGPTO4MiniDeepresearch
   ],
   Anthropic: [
     // ChatModelClaude35Haiku,
@@ -519,22 +522,23 @@ const ModelCategories = {
     // ChatModelClaude3Opus,
     // ChatModelClaude4Opus,
     // ChatModelClaude41Opus,
-    ChatModelClaude45Opus,
+    ChatModelClaude48Opus,
     // ChatModelClaude35Sonnet,
     // ChatModelClaude37Sonnet,
     // ChatModelClaude37SonnetThinking,
     // ChatModelClaude4Sonnet
-    ChatModelClaude45Sonnet,
+    ChatModelClaude46Sonnet
   ],
   Google: [
     // ChatModelGemini2Pro,
-    ChatModelGemini25Pro,
-    ChatModelGemini3Pro,
+    ChatModelGemini31Pro,
+    // ChatModelGemini3Pro,
     // ChatModelGemini2Flash,
-    ChatModelGemini25Flash,
+    ChatModelGemini35Flash,
     // ChatModelGemini2FlashThinking,
     // ChatModelGemini2FlahExpImage,
-    ChatModelGemini25FlashImage,
+    ChatModelGemini31FlashImage,
+    ChatModelGemini3ProImage
     // ChatModelGroqGemma3With27B
   ],
   Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
@@ -545,7 +549,7 @@ const ModelCategories = {
     ChatModelGroqLlama4,
     // ChatModelQwenQwq32B,
     ChatModelQwen332B,
-    ChatModelKimiK2,
+    ChatModelKimiK2
   ],
 };
 
