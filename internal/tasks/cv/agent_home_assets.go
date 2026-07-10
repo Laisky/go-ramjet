@@ -16,11 +16,13 @@ func buildCVSiteHeadHTML() string {
 <script type="application/ld+json">%s</script>
 <script type="application/ld+json">%s</script>
 <script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>
 <script type="application/ld+json">%s</script>`,
 		cvProfileJSONLD(),
 		cvOrganizationJSONLD(),
 		cvSoftwareApplicationJSONLD(),
 		cvProductJSONLD(),
+		cvServiceJSONLD(),
 		cvFAQJSONLD())
 }
 
@@ -108,6 +110,7 @@ func buildCVAgentHTML(agentMode bool) string {
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
+  <script type="application/ld+json">%s</script>
 </head>
 <body>
   <header><nav><a href="/">CV</a> <a href="/developer">Developer</a> <a href="/about">About</a> <a href="/contact">Contact</a> <a href="/privacy">Privacy</a></nav></header>
@@ -133,7 +136,7 @@ func buildCVAgentHTML(agentMode bool) string {
     <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>
   </main>
 </body>
-</html>`, cvPublicIcon, cvProfileJSONLD(), cvOrganizationJSONLD(), cvSoftwareApplicationJSONLD(), cvProductJSONLD(), cvFAQJSONLD(), html.EscapeString(modeNote), agentBlock)
+</html>`, cvPublicIcon, cvProfileJSONLD(), cvOrganizationJSONLD(), cvSoftwareApplicationJSONLD(), cvProductJSONLD(), cvServiceJSONLD(), cvFAQJSONLD(), html.EscapeString(modeNote), agentBlock)
 }
 
 // cvProfileJSONLD returns the ProfilePage JSON-LD for the CV homepage.
@@ -158,6 +161,12 @@ func cvSoftwareApplicationJSONLD() string {
 // It takes no parameters and returns a compact JSON string.
 func cvProductJSONLD() string {
 	return `{"@context":"https://schema.org","@type":"Product","name":"Zhonghua (Laisky) Cai CV","description":"Public resume and recruiting API for Zhonghua (Laisky) Cai.","brand":{"@type":"Brand","name":"Laisky"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock"}}`
+}
+
+// cvServiceJSONLD returns Service JSON-LD for recruiting-oriented CV access.
+// It takes no parameters and returns a compact JSON string.
+func cvServiceJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"Service","name":"Zhonghua (Laisky) Cai recruiting CV access","serviceType":"Professional resume and recruiting contact API","provider":{"@type":"Person","name":"Zhonghua (Laisky) Cai"},"areaServed":["Canada","United States"],"availableChannel":{"@type":"ServiceChannel","serviceUrl":"https://cv.laisky.com/api/v1/cv"}}`
 }
 
 // cvFAQJSONLD returns FAQPage JSON-LD for common agent questions.

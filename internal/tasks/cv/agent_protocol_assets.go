@@ -94,8 +94,89 @@ func serveCVWebhookDocs(c *gin.Context) {
 	setCVAPIDiscoveryHeaders(c)
 	c.JSON(http.StatusOK, gin.H{
 		"name":        "CV webhooks",
-		"description": "Public CV content rarely changes; webhook registration is owner-approved and currently supports cv.content.updated events.",
+		"description": "Public CV content rarely changes; webhook registration is owner-approved and currently supports cv.content.updated events. Webhook payloads are signed with HMAC-SHA256 in the X-CV-Signature header over the raw request body; verify the signature before processing.",
 		"events":      []string{"cv.content.updated"},
 		"register":    "POST /api/v1/webhooks",
+		"signing": gin.H{
+			"algorithm": "HMAC-SHA256",
+			"header":    "X-CV-Signature",
+			"format":    "sha256=<hex digest>",
+		},
+	})
+}
+
+// serveCVVersioningPolicy returns the public CV API versioning and deprecation policy.
+// It takes a Gin request context and returns no values.
+func serveCVVersioningPolicy(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV API Versioning Policy
+
+The stable public API uses URL versioning under /api/v1.
+
+Deprecation signals:
+- Deprecation: false means the version is active.
+- Sunset declares the earliest retirement timestamp.
+- Breaking changes will use a new URL version such as /api/v2.
+
+Agents may safely retry read operations with Idempotency-Key. Public read endpoints are free and require no authentication.
+`))
+}
+
+// serveCVSandboxDocs returns sandbox documentation for non-destructive agent testing.
+// It takes a Gin request context and returns no values.
+func serveCVSandboxDocs(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.JSON(http.StatusOK, gin.H{
+		"name":        "CV API sandbox",
+		"description": "Use /api/v1/sandbox/cv for non-destructive agent tests. It returns the same public CV shape as production read endpoints and does not mutate data.",
+		"endpoint":    "https://cv.laisky.com/api/v1/sandbox/cv",
+		"auth":        "none",
+	})
+}
+
+// serveCVMCPRPC returns minimal JSON-RPC responses for WebMCP-style discovery probes.
+// It takes a Gin request context and returns no values.
+func serveCVMCPRPC(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	var req struct {
+		ID     any    `json:"id"`
+		Method string `json:"method"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"jsonrpc": "2.0",
+			"id":      nil,
+			"result": gin.H{
+				"protocolVersion": "2025-06-18",
+				"serverInfo":      gin.H{"name": "Laisky CV MCP discovery", "version": "1.0.0"},
+				"capabilities":    gin.H{"tools": gin.H{}},
+			},
+		})
+		return
+	}
+	if req.Method == "tools/list" {
+		c.JSON(http.StatusOK, gin.H{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result": gin.H{
+				"tools": []gin.H{
+					{
+						"name":        "read_cv",
+						"description": "Read Zhonghua (Laisky) Cai's public CV.",
+						"inputSchema": gin.H{"type": "object", "properties": gin.H{}},
+					},
+				},
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"jsonrpc": "2.0",
+		"id":      req.ID,
+		"result": gin.H{
+			"protocolVersion": "2025-06-18",
+			"serverInfo":      gin.H{"name": "Laisky CV MCP discovery", "version": "1.0.0"},
+			"capabilities":    gin.H{"tools": gin.H{}},
+		},
 	})
 }
