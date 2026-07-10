@@ -28,7 +28,9 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/llms.md", serveCVLLMs)
 	router.GET("/agents.md", serveCVAgents)
 	router.GET("/AGENTS.md", serveCVAgents)
+	router.GET("/agents.txt", serveCVAgents)
 	router.GET("/agent.md", serveCVAgents)
+	router.GET("/agent-instructions", serveCVAgents)
 	router.GET("/agent-instructions.md", serveCVAgents)
 	router.GET("/auth.md", serveCVAuth)
 	router.GET("/index.md", serveCVIndexMarkdown)
@@ -46,10 +48,16 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/api/v1", serveCVAPIRoot)
 	router.GET("/v1", serveCVAPIRoot)
 	router.GET("/api/llms.txt", serveCVSectionLLMs)
+	router.GET("/cv/llms.txt", serveCVSectionLLMs)
 	router.GET("/docs/llms.txt", serveCVSectionLLMs)
 	router.GET("/developer/llms.txt", serveCVSectionLLMs)
+	router.GET("/api/versioning", serveCVVersioningPolicy)
 	router.GET("/api/versioning.md", serveCVVersioningPolicy)
+	router.GET("/cli", serveCVCLIDocs)
+	router.GET("/cli.md", serveCVCLIDocs)
 	router.GET("/sandbox", serveCVSandboxDocs)
+	router.GET("/sandbox.md", serveCVSandboxDocs)
+	router.GET("/api/v1/sandbox", serveCVSandboxDocs)
 	router.GET("/api/v1/sandbox/cv", h.getContent)
 	router.GET("/api/v1/cv", h.getContent)
 	router.GET("/api/v1/cv.md", serveCVIndexMarkdown)
@@ -68,6 +76,7 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/mcp", serveCVMCPMetadata)
 	router.POST("/mcp", serveCVMCPRPC)
 	router.GET("/webhooks", serveCVWebhookDocs)
+	router.GET("/webhooks.md", serveCVWebhookMarkdown)
 	router.GET("/agent/auth", serveCVAgentAuthChallenge)
 	router.GET("/.well-known/ai-catalog.json", serveCVAICatalog)
 	router.GET("/.well-known/api-catalog", serveCVAPICatalog)
@@ -75,8 +84,13 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/.well-known/api-catalog.md", serveCVAPICatalogMarkdown)
 	router.GET("/.well-known/agent-card.json", serveCVA2AAgentCard)
 	router.GET("/.well-known/agents.md", serveCVAgents)
+	router.GET("/.well-known/agents.txt", serveCVAgents)
+	router.GET("/.well-known/agent-instructions", serveCVAgents)
 	router.GET("/.well-known/agent-instructions.md", serveCVAgents)
+	router.GET("/.well-known/cli.md", serveCVCLIDocs)
 	router.GET("/.well-known/llms.txt", serveCVLLMs)
+	router.GET("/.well-known/llms/api.txt", serveCVSectionLLMs)
+	router.GET("/.well-known/llms/cv.txt", serveCVSectionLLMs)
 	router.GET("/.well-known/mcp.json", serveCVMCPMetadata)
 	router.GET("/.well-known/oauth-protected-resource", serveCVOAuthProtectedResource)
 	router.GET("/.well-known/oauth-authorization-server", serveCVOAuthAuthorizationServer)
@@ -324,6 +338,12 @@ func serveCVOpenAPI(c *gin.Context) {
 			},
 		},
 		"servers": []gin.H{{"url": "https://cv.laisky.com"}},
+		"x-api-versioning-policy": gin.H{
+			"style":       "url",
+			"stable":      "/api/v1",
+			"deprecation": "Breaking changes use a new URL version. Active versions send Deprecation: false and Sunset headers.",
+			"docs":        "https://cv.laisky.com/api/versioning.md",
+		},
 		"paths": gin.H{
 			"/api/v1/cv": gin.H{
 				"get": gin.H{
@@ -347,6 +367,14 @@ func serveCVOpenAPI(c *gin.Context) {
 						},
 					},
 					"responses": cvOpenAPIContentResponses(),
+				},
+			},
+			"/api/v1/sandbox/cv": gin.H{
+				"get": gin.H{
+					"summary":     "Read sandbox CV markdown.",
+					"description": "Non-destructive sandbox endpoint with the same response shape as the public CV read API.",
+					"operationId": "getSandboxCVV1",
+					"responses":   cvOpenAPIContentResponses(),
 				},
 			},
 			"/cv/content": gin.H{
@@ -452,13 +480,35 @@ func serveCVOpenAPI(c *gin.Context) {
 					},
 				},
 			},
+			"/api/v1/webhooks": gin.H{
+				"get": gin.H{
+					"summary":     "Read webhook documentation.",
+					"description": "Returns supported events and signing metadata for owner-approved webhook registration.",
+					"operationId": "getCVWebhookDocsV1",
+					"responses": gin.H{
+						"200": gin.H{"description": "Webhook metadata.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/WebhookMetadata"}}}},
+					},
+				},
+				"post": gin.H{
+					"summary":     "Register a CV webhook.",
+					"description": "Owner-approved webhook registration endpoint. Public read agents should treat this as discovery-only unless explicitly authorized.",
+					"operationId": "registerCVWebhookV1",
+					"requestBody": gin.H{
+						"required": true,
+						"content":  gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/WebhookRegistration"}}},
+					},
+					"responses": gin.H{
+						"200": gin.H{"description": "Webhook metadata.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/WebhookMetadata"}}}},
+					},
+				},
+			},
 			"/ask": gin.H{
 				"post": gin.H{
 					"summary":     "Ask a natural-language CV question.",
 					"description": "NLWeb-compatible endpoint for simple CV question answering.",
 					"operationId": "askCVNLWeb",
 					"responses": gin.H{
-						"200": gin.H{"description": "NLWeb answer."},
+						"200": gin.H{"description": "NLWeb answer.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/NLWebAnswer"}}}},
 					},
 				},
 			},
@@ -527,6 +577,34 @@ func serveCVOpenAPI(c *gin.Context) {
 					"properties": gin.H{
 						"job_id": gin.H{"type": "string"},
 						"status": gin.H{"type": "string", "enum": []string{"queued", "running", "succeeded", "failed"}},
+					},
+				},
+				"NLWebAnswer": gin.H{
+					"type":     "object",
+					"required": []string{"answer", "sources"},
+					"properties": gin.H{
+						"query":   gin.H{"type": "string"},
+						"answer":  gin.H{"type": "string"},
+						"sources": gin.H{"type": "array", "items": gin.H{"type": "object", "required": []string{"url", "title"}, "properties": gin.H{"url": gin.H{"type": "string", "format": "uri"}, "title": gin.H{"type": "string"}}}},
+					},
+				},
+				"WebhookRegistration": gin.H{
+					"type":     "object",
+					"required": []string{"url", "events"},
+					"properties": gin.H{
+						"url":    gin.H{"type": "string", "format": "uri"},
+						"events": gin.H{"type": "array", "items": gin.H{"type": "string", "enum": []string{"cv.content.updated"}}},
+						"secret": gin.H{"type": "string", "writeOnly": true},
+					},
+				},
+				"WebhookMetadata": gin.H{
+					"type":     "object",
+					"required": []string{"name", "events", "signing"},
+					"properties": gin.H{
+						"name":     gin.H{"type": "string"},
+						"events":   gin.H{"type": "array", "items": gin.H{"type": "string"}},
+						"register": gin.H{"type": "string"},
+						"signing":  gin.H{"type": "object"},
 					},
 				},
 			},
@@ -637,102 +715,5 @@ func serveCVAPIRoot(c *gin.Context) {
 			{"method": "GET", "path": "/api/v1/cv", "auth": "none", "description": "Read current CV markdown."},
 			{"method": "GET", "path": "/cv/pdf", "auth": "none", "description": "Download current CV PDF."},
 		},
-	})
-}
-
-// serveCVA2AAgentCard returns an agent card for direct CV question-answering.
-// It takes a Gin request context and returns no values.
-func serveCVA2AAgentCard(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"name":        "Laisky CV Agent",
-		"description": "Answers questions about Zhonghua (Laisky) Cai's public CV using read-only public data.",
-		"url":         cvPublicURL,
-		"version":     "1.0.0",
-		"capabilities": gin.H{
-			"streaming":              false,
-			"pushNotifications":      false,
-			"stateTransitionHistory": false,
-		},
-		"defaultInputModes":  []string{"text/plain", "text/markdown"},
-		"defaultOutputModes": []string{"text/plain", "text/markdown"},
-		"skills": []gin.H{
-			{
-				"id":          "read_cv",
-				"name":        "Read public CV",
-				"description": "Fetch and summarize Zhonghua (Laisky) Cai's public resume.",
-			},
-		},
-	})
-}
-
-// serveCVMCPMetadata returns MCP discovery metadata for the CV domain.
-// It takes a Gin request context and returns no values.
-func serveCVMCPMetadata(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"name":        "Laisky MCP Server",
-		"description": "Public MCP server associated with Laisky services and agent workflows.",
-		"url":         cvPublicMCPServer,
-		"icon":        cvPublicIcon,
-		"transport":   "streamable-http",
-		"auth":        "server-dependent; public discovery available",
-		"related": gin.H{
-			"cv":      cvPublicURL,
-			"openapi": cvPublicOpenAPI,
-			"contact": cvPublicContact,
-		},
-	})
-}
-
-// serveCVOAuthProtectedResource returns OAuth protected resource metadata for agents.
-// It takes a Gin request context and returns no values.
-func serveCVOAuthProtectedResource(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"resource":                 "https://cv.laisky.com",
-		"authorization_servers":    []string{"https://sso.laisky.com"},
-		"bearer_methods_supported": []string{"header"},
-		"scopes_supported":         []string{"cv:read", "cv:write"},
-		"agent_auth": gin.H{
-			"register_uri":             "https://sso.laisky.com/",
-			"identity_types_supported": []string{"anonymous", "user"},
-		},
-	})
-}
-
-// serveCVOAuthAuthorizationServer returns OAuth authorization server metadata for agents.
-// It takes a Gin request context and returns no values.
-func serveCVOAuthAuthorizationServer(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"issuer":                                "https://sso.laisky.com",
-		"authorization_endpoint":                "https://sso.laisky.com/",
-		"token_endpoint":                        "https://sso.laisky.com/oauth/token",
-		"agent_auth_register_endpoint":          "https://sso.laisky.com/",
-		"agent_auth_registration_endpoint":      "https://sso.laisky.com/",
-		"code_challenge_methods_supported":      []string{"S256"},
-		"response_types_supported":              []string{"code"},
-		"grant_types_supported":                 []string{"authorization_code"},
-		"scopes_supported":                      []string{"cv:read", "cv:write"},
-		"token_endpoint_auth_methods_supported": []string{"client_secret_post", "none"},
-	})
-}
-
-// serveCVHTTPSignatureDirectory returns a web bot auth directory placeholder.
-// It takes a Gin request context and returns no values.
-func serveCVHTTPSignatureDirectory(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"name":        "Zhonghua (Laisky) Cai CV",
-		"description": "Public read endpoints do not require HTTP message signatures.",
-		"policy":      "allow-public-read",
-		"keys": []gin.H{
-			{
-				"kty": "OKP",
-				"crv": "Ed25519",
-				"kid": "cv-public-read-placeholder-2026",
-				"use": "sig",
-				"x":   "11qYAYKxCrfVS_3XNvgc7vB8Z50to6dc0O3s6zK-T0Y",
-				"nbf": 1767225600,
-				"exp": 2114380799,
-			},
-		},
-		"resources": []string{cvPublicURL, cvPublicContent, cvPublicOpenAPI},
 	})
 }

@@ -198,6 +198,16 @@ func TestServeCVOpenAPI(t *testing.T) {
 	require.Contains(t, paths, "/cv/pdf")
 	require.Contains(t, paths, "/cv/meta")
 	require.Contains(t, paths, "/api/v1/batch")
+	require.Contains(t, paths, "/api/v1/sandbox/cv")
+	require.Contains(t, paths, "/api/v1/webhooks")
+	require.Contains(t, paths, "/ask")
+
+	components, ok := payload["components"].(map[string]any)
+	require.True(t, ok)
+	schemas, ok := components["schemas"].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, schemas, "NLWebAnswer")
+	require.Contains(t, schemas, "WebhookMetadata")
 }
 
 // TestServeCVAICatalog verifies agent catalog metadata links docs, APIs, and MCP.
@@ -223,6 +233,94 @@ func TestServeCVAICatalog(t *testing.T) {
 	entries, ok := payload["entries"].([]any)
 	require.True(t, ok)
 	require.Len(t, entries, 3)
+}
+
+// TestServeCVAPICatalog verifies the API catalog uses linkset JSON for RFC 9727 discovery.
+// It takes a testing.T and returns no values.
+func TestServeCVAPICatalog(t *testing.T) {
+	t.Parallel()
+
+	ctx, recorder := newCVTestContext(http.MethodGet, "/.well-known/api-catalog")
+
+	serveCVAPICatalog(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	var payload map[string]any
+	err := json.NewDecoder(resp.Body).Decode(&payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, resp.Header.Get("Content-Type"), "application/linkset+json")
+	require.Contains(t, payload, "linkset")
+}
+
+// TestServeCVProtocolDocs verifies CLI, webhook, and sandbox docs are crawlable.
+// It takes a testing.T and returns no values.
+func TestServeCVProtocolDocs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		handler  gin.HandlerFunc
+		contains string
+	}{
+		{name: "cli", path: "/cli.md", handler: serveCVCLIDocs, contains: "curl -fsSL https://cv.laisky.com/api/v1/cv"},
+		{name: "webhooks", path: "/webhooks.md", handler: serveCVWebhookMarkdown, contains: "X-CV-Signature"},
+		{name: "sandbox", path: "/sandbox", handler: serveCVSandboxDocs, contains: "api/v1/sandbox/cv"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, recorder := newCVTestContext(http.MethodGet, tt.path)
+
+			tt.handler(ctx)
+
+			resp := recorder.Result()
+			t.Cleanup(func() {
+				_ = resp.Body.Close()
+			})
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Contains(t, string(body), tt.contains)
+		})
+	}
+}
+
+// TestServeCVHTTPSignatureDirectory verifies Web Bot Auth key lifetimes are numeric.
+// It takes a testing.T and returns no values.
+func TestServeCVHTTPSignatureDirectory(t *testing.T) {
+	t.Parallel()
+
+	ctx, recorder := newCVTestContext(http.MethodGet, "/.well-known/http-message-signatures-directory")
+
+	serveCVHTTPSignatureDirectory(ctx)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	var payload map[string]any
+	err := json.NewDecoder(resp.Body).Decode(&payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	keys, ok := payload["keys"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, keys)
+	key, ok := keys[0].(map[string]any)
+	require.True(t, ok)
+	require.IsType(t, float64(0), key["nbf"])
+	require.IsType(t, float64(0), key["exp"])
 }
 
 // TestServeCVMCPMetadata verifies MCP discovery metadata includes the public server.

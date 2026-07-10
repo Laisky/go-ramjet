@@ -98,11 +98,35 @@ func serveCVWebhookDocs(c *gin.Context) {
 		"events":      []string{"cv.content.updated"},
 		"register":    "POST /api/v1/webhooks",
 		"signing": gin.H{
-			"algorithm": "HMAC-SHA256",
-			"header":    "X-CV-Signature",
-			"format":    "sha256=<hex digest>",
+			"algorithm":        "HMAC-SHA256",
+			"signature_header": "X-CV-Signature",
+			"timestamp_header": "X-CV-Timestamp",
+			"format":           "sha256=<hex digest>",
+			"verification":     "Compute HMAC-SHA256 over '<unix timestamp>.<raw request body>' using the shared webhook secret and compare with X-CV-Signature in constant time.",
 		},
+		"docs": "https://cv.laisky.com/webhooks.md",
 	})
+}
+
+// serveCVWebhookMarkdown returns webhook signing documentation for agent scanners.
+// It takes a Gin request context and returns no values.
+func serveCVWebhookMarkdown(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV Webhooks
+
+Webhook registration is owner-approved. Public CV readers do not need webhooks.
+
+Supported event:
+- cv.content.updated
+
+Signing policy:
+- Algorithm: HMAC-SHA256.
+- Signature header: X-CV-Signature.
+- Timestamp header: X-CV-Timestamp.
+- Format: sha256=<hex digest>.
+- Verification: compute HMAC-SHA256 over "<unix timestamp>.<raw request body>" with the shared webhook secret and compare the digest in constant time.
+- Replay window: reject timestamps older than five minutes.
+`))
 }
 
 // serveCVVersioningPolicy returns the public CV API versioning and deprecation policy.
@@ -119,6 +143,26 @@ Deprecation signals:
 - Breaking changes will use a new URL version such as /api/v2.
 
 Agents may safely retry read operations with Idempotency-Key. Public read endpoints are free and require no authentication.
+`))
+}
+
+// serveCVCLIDocs returns CLI integration notes for agent-oriented CV access.
+// It takes a Gin request context and returns no values.
+func serveCVCLIDocs(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV CLI
+
+The CV API is HTTP-first and can be used from standard CLI tools.
+
+Examples:
+- curl -fsSL https://cv.laisky.com/api/v1/cv
+- curl -fsSL https://cv.laisky.com/openapi.json
+- curl -fsSL https://cv.laisky.com/cv/pdf -o laisky-cv.pdf
+
+Source project:
+- https://github.com/Laisky/go-ramjet
+
+No API key is required for public read endpoints.
 `))
 }
 
