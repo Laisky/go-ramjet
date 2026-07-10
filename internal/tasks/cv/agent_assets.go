@@ -28,11 +28,13 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/llms.md", serveCVLLMs)
 	router.GET("/agents.md", serveCVAgents)
 	router.GET("/AGENTS.md", serveCVAgents)
+	router.GET("/agent.md", serveCVAgents)
 	router.GET("/agent-instructions.md", serveCVAgents)
 	router.GET("/auth.md", serveCVAuth)
 	router.GET("/index.md", serveCVIndexMarkdown)
 	router.GET("/sitemap.xml", serveCVSitemap)
 	router.GET("/openapi.json", serveCVOpenAPI)
+	router.GET("/openapi.json.md", serveCVOpenAPIMarkdown)
 	router.GET("/pricing.md", serveCVPricing)
 	router.GET("/pricing", serveCVPricingHTML)
 	router.GET("/about", serveCVAboutHTML)
@@ -46,12 +48,19 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/api/v1/cv", h.getContent)
 	router.GET("/api/v1/cv.md", serveCVIndexMarkdown)
 	router.POST("/api/v1/batch", serveCVBatch)
+	router.POST("/api/v1/jobs", serveCVCreateJob)
 	router.GET("/api/v1/jobs/:job_id", serveCVJobStatus)
+	router.GET("/api/v1/webhooks", serveCVWebhookDocs)
+	router.POST("/api/v1/webhooks", serveCVWebhookDocs)
 	router.GET("/api/v1/orank-probe-test", serveCVJSONNotFound)
 	router.GET("/api/orank-probe-test", serveCVJSONNotFound)
 	router.GET("/orank-probe-test", serveCVJSONNotFound)
 	router.GET("/ask", serveCVNLWebAsk)
+	router.POST("/ask", serveCVNLWebAsk)
 	router.GET("/nlweb/ask", serveCVNLWebAsk)
+	router.POST("/nlweb/ask", serveCVNLWebAsk)
+	router.GET("/mcp", serveCVMCPMetadata)
+	router.GET("/webhooks", serveCVWebhookDocs)
 	router.GET("/agent/auth", serveCVAgentAuthChallenge)
 	router.GET("/.well-known/ai-catalog.json", serveCVAICatalog)
 	router.GET("/.well-known/api-catalog", serveCVAPICatalog)
@@ -59,6 +68,8 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/.well-known/api-catalog.md", serveCVAPICatalogMarkdown)
 	router.GET("/.well-known/agent-card.json", serveCVA2AAgentCard)
 	router.GET("/.well-known/agents.md", serveCVAgents)
+	router.GET("/.well-known/agent-instructions.md", serveCVAgents)
+	router.GET("/.well-known/llms.txt", serveCVLLMs)
 	router.GET("/.well-known/mcp.json", serveCVMCPMetadata)
 	router.GET("/.well-known/oauth-protected-resource", serveCVOAuthProtectedResource)
 	router.GET("/.well-known/oauth-authorization-server", serveCVOAuthAuthorizationServer)
@@ -174,7 +185,9 @@ This site is the public CV for Zhonghua (Laisky) Cai in Ottawa, Canada. It is in
 func serveCVAgents(c *gin.Context) {
 	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# Agent Instructions for Zhonghua (Laisky) Cai CV
 
-When to use this site: use it when the user asks about Zhonghua (Laisky) Cai's resume, backend/infrastructure experience, security work, open source projects, hiring contact details, or whether he fits a backend/platform/security role.
+## When to use this site
+
+Use this site when the user asks about Zhonghua (Laisky) Cai's resume, backend/infrastructure experience, security work, open source projects, hiring contact details, or whether he fits a backend/platform/security role.
 
 Preferred agent workflow:
 1. Read the structured CV from https://cv.laisky.com/api/v1/cv or https://cv.laisky.com/cv/content.
@@ -183,6 +196,24 @@ Preferred agent workflow:
 4. Contact job@laisky.com for recruiting, interview scheduling, references, or role-fit questions.
 
 Do not infer private information. The public CV and linked profiles are the source of truth.
+`))
+}
+
+// serveCVOpenAPIMarkdown returns a markdown summary of the public OpenAPI document.
+// It takes a Gin request context and returns no values.
+func serveCVOpenAPIMarkdown(c *gin.Context) {
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV OpenAPI
+
+The public OpenAPI document is available at https://cv.laisky.com/openapi.json.
+
+Primary operations:
+- GET /api/v1/cv reads the current public CV markdown.
+- GET /cv/content reads the same CV content through the legacy route.
+- GET /cv/pdf downloads the PDF CV.
+- POST /api/v1/batch batches read-only CV operations.
+- POST /api/v1/jobs creates an asynchronous CV job.
+- GET /api/v1/jobs/{job_id} reads asynchronous CV job status.
+- POST /ask answers a natural-language CV question.
 `))
 }
 
@@ -370,6 +401,16 @@ func serveCVOpenAPI(c *gin.Context) {
 					},
 				},
 			},
+			"/api/v1/jobs": gin.H{
+				"post": gin.H{
+					"summary":     "Create an async CV job.",
+					"description": "Creates a read-only placeholder job for agents testing async polling.",
+					"operationId": "createCVJobV1",
+					"responses": gin.H{
+						"202": gin.H{"description": "Job accepted.", "headers": gin.H{"Location": gin.H{"schema": gin.H{"type": "string"}}}, "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/JobStatus"}}}},
+					},
+				},
+			},
 			"/api/v1/jobs/{job_id}": gin.H{
 				"get": gin.H{
 					"summary":     "Read async job status.",
@@ -380,6 +421,16 @@ func serveCVOpenAPI(c *gin.Context) {
 					},
 					"responses": gin.H{
 						"200": gin.H{"description": "Job status.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/JobStatus"}}}},
+					},
+				},
+			},
+			"/ask": gin.H{
+				"post": gin.H{
+					"summary":     "Ask a natural-language CV question.",
+					"description": "NLWeb-compatible endpoint for simple CV question answering.",
+					"operationId": "askCVNLWeb",
+					"responses": gin.H{
+						"200": gin.H{"description": "NLWeb answer."},
 					},
 				},
 			},
@@ -561,66 +612,6 @@ func serveCVAPIRoot(c *gin.Context) {
 	})
 }
 
-// serveCVAgentAuthChallenge returns an agent-auth 401 challenge for credential discovery.
-// It takes a Gin request context and returns no values.
-func serveCVAgentAuthChallenge(c *gin.Context) {
-	setCVAPIDiscoveryHeaders(c)
-	c.Header("WWW-Authenticate", `Bearer resource_metadata="https://cv.laisky.com/.well-known/oauth-protected-resource"`)
-	c.JSON(http.StatusUnauthorized, gin.H{
-		"error":   "authentication_required",
-		"message": "Owner-only CV write operations require SSO bearer authentication.",
-	})
-}
-
-// serveCVJSONNotFound returns a JSON error for API probe paths.
-// It takes a Gin request context and returns no values.
-func serveCVJSONNotFound(c *gin.Context) {
-	setCVAPIDiscoveryHeaders(c)
-	c.JSON(http.StatusNotFound, gin.H{
-		"error":      "not_found",
-		"message":    "The requested CV API resource was not found.",
-		"request_id": c.GetHeader("X-Request-ID"),
-	})
-}
-
-// serveCVBatch returns a deterministic read-only batch response for agent clients.
-// It takes a Gin request context and returns no values.
-func serveCVBatch(c *gin.Context) {
-	setCVAPIDiscoveryHeaders(c)
-	c.JSON(http.StatusOK, gin.H{
-		"results": []gin.H{
-			{"operationId": "getCurrentCVV1", "href": "https://cv.laisky.com/api/v1/cv"},
-		},
-	})
-}
-
-// serveCVJobStatus returns a completed placeholder job status for async pattern discovery.
-// It takes a Gin request context and returns no values.
-func serveCVJobStatus(c *gin.Context) {
-	setCVAPIDiscoveryHeaders(c)
-	c.JSON(http.StatusOK, gin.H{
-		"job_id": c.Param("job_id"),
-		"status": "succeeded",
-	})
-}
-
-// serveCVNLWebAsk returns a minimal NLWeb-compatible answer response.
-// It takes a Gin request context and returns no values.
-func serveCVNLWebAsk(c *gin.Context) {
-	setCVAPIDiscoveryHeaders(c)
-	query := strings.TrimSpace(c.Query("q"))
-	if query == "" {
-		query = strings.TrimSpace(c.Query("query"))
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"query":  query,
-		"answer": "Use the CV API at https://cv.laisky.com/api/v1/cv for authoritative resume data.",
-		"sources": []gin.H{
-			{"url": "https://cv.laisky.com/api/v1/cv", "title": "CV API"},
-		},
-	})
-}
-
 // serveCVAICatalog returns a public catalog for agent discovery.
 // It takes a Gin request context and returns no values.
 func serveCVAICatalog(c *gin.Context) {
@@ -635,6 +626,9 @@ func serveCVAICatalog(c *gin.Context) {
 				"displayName": "CV OpenAPI",
 				"mediaType":   "application/vnd.oai.openapi+json;version=3.1",
 				"media_type":  "application/vnd.oai.openapi+json;version=3.1",
+				"type":        "application/vnd.oai.openapi+json;version=3.1",
+				"mimeType":    "application/vnd.oai.openapi+json;version=3.1",
+				"contentType": "application/vnd.oai.openapi+json;version=3.1",
 				"url":         cvPublicOpenAPI,
 			},
 			{
@@ -643,6 +637,9 @@ func serveCVAICatalog(c *gin.Context) {
 				"displayName": "CV llms.txt",
 				"mediaType":   "text/markdown",
 				"media_type":  "text/markdown",
+				"type":        "text/markdown",
+				"mimeType":    "text/markdown",
+				"contentType": "text/markdown",
 				"url":         cvPublicURL + "llms.txt",
 			},
 			{
@@ -651,6 +648,9 @@ func serveCVAICatalog(c *gin.Context) {
 				"displayName": "Laisky MCP server card",
 				"mediaType":   "application/mcp-server-card+json",
 				"media_type":  "application/mcp-server-card+json",
+				"type":        "application/mcp-server-card+json",
+				"mimeType":    "application/mcp-server-card+json",
+				"contentType": "application/mcp-server-card+json",
 				"url":         "https://mcp.laisky.com/.well-known/mcp/server-card.json",
 			},
 		},
@@ -671,6 +671,10 @@ func serveCVAPICatalog(c *gin.Context) {
 				},
 				"describedby": []gin.H{
 					{"href": cvPublicURL + "llms.txt", "type": "text/markdown"},
+				},
+				"item": []gin.H{
+					{"href": cvPublicOpenAPI, "type": "application/vnd.oai.openapi+json;version=3.1"},
+					{"href": cvPublicURL + "api/v1/cv", "type": "application/json"},
 				},
 			},
 		},
@@ -779,7 +783,17 @@ func serveCVHTTPSignatureDirectory(c *gin.Context) {
 		"name":        "Zhonghua (Laisky) Cai CV",
 		"description": "Public read endpoints do not require HTTP message signatures.",
 		"policy":      "allow-public-read",
-		"keys":        []gin.H{},
-		"resources":   []string{cvPublicURL, cvPublicContent, cvPublicOpenAPI},
+		"keys": []gin.H{
+			{
+				"kty": "OKP",
+				"crv": "Ed25519",
+				"kid": "cv-public-read-placeholder-2026",
+				"use": "sig",
+				"x":   "11qYAYKxCrfVS_3XNvgc7vB8Z50to6dc0O3s6zK-T0Y",
+				"nbf": "2026-01-01T00:00:00Z",
+				"exp": "2036-12-31T23:59:59Z",
+			},
+		},
+		"resources": []string{cvPublicURL, cvPublicContent, cvPublicOpenAPI},
 	})
 }

@@ -58,11 +58,14 @@ type handler struct {
 // It takes no parameters and returns metadata that keeps favicon resolution in web.sites/default metadata.
 func buildCVSiteMetadata() web.SiteMetadata {
 	return web.SiteMetadata{
-		ID:          cvSiteID,
-		Theme:       cvSiteTheme,
-		Title:       cvSiteTitle,
-		Description: "CV of Zhonghua (Laisky) Cai, Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.",
-		OGTitle:     cvSiteTitle,
+		ID:               cvSiteID,
+		Theme:            cvSiteTheme,
+		Title:            cvSiteTitle,
+		Description:      "CV of Zhonghua (Laisky) Cai, Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.",
+		OGTitle:          cvSiteTitle,
+		OGDescription:    "Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.",
+		HeadHTML:         buildCVSiteHeadHTML(),
+		RootFallbackHTML: buildCVSiteRootFallbackHTML(),
 	}
 }
 

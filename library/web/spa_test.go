@@ -113,7 +113,7 @@ func TestSiteMetadata(t *testing.T) {
 	<title>Default Title</title>
 	<link rel="icon" href="/default.ico">
 </head>
-<body></body>
+<body><div id="root"></div></body>
 </html>`
 	err = os.WriteFile(indexPath, []byte(htmlContent), 0644)
 	require.NoError(t, err)
@@ -181,5 +181,24 @@ func TestSiteMetadata(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Chat 2</title>")
 		require.Contains(t, w.Body.String(), `name="ramjet-site" content="chat2"`)
+	})
+
+	t.Run("head and root fallback", func(t *testing.T) {
+		RegisterSiteMetadata([]string{"fallback.example.com"}, SiteMetadata{
+			ID:               "fallback",
+			Theme:            "fallback",
+			Title:            "Fallback Site",
+			HeadHTML:         `<link rel="canonical" href="https://fallback.example.com/">`,
+			RootFallbackHTML: `<main><h1>Fallback content</h1></main>`,
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/", nil)
+		req.Host = "fallback.example.com"
+		r.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), `<link rel="canonical" href="https://fallback.example.com/">`)
+		require.Contains(t, w.Body.String(), `<div id="root"><main><h1>Fallback content</h1></main></div>`)
 	})
 }

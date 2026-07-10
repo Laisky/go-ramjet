@@ -8,11 +8,12 @@ import (
 )
 
 var (
-	reTitle       = regexp.MustCompile(`(?i)<title>.*?</title>`)
-	reFavicon     = regexp.MustCompile(`(?i)<link[^>]*?rel="icon"[^>]*?>`)
-	reHref        = regexp.MustCompile(`(?i)href="[^"]*"`)
-	reHeadClose   = regexp.MustCompile(`(?i)</head>`)
-	reMetaContent = regexp.MustCompile(`(?i)content="[^"]*"`)
+	reTitle         = regexp.MustCompile(`(?i)<title>.*?</title>`)
+	reFavicon       = regexp.MustCompile(`(?i)<link[^>]*?rel="icon"[^>]*?>`)
+	reHref          = regexp.MustCompile(`(?i)href="[^"]*"`)
+	reHeadClose     = regexp.MustCompile(`(?i)</head>`)
+	reRootContainer = regexp.MustCompile(`(?i)<div\s+id="root"\s*></div>`)
+	reMetaContent   = regexp.MustCompile(`(?i)content="[^"]*"`)
 )
 
 // applySiteMetadataToHTML injects meta into htmlDoc and returns the updated HTML string.
@@ -38,6 +39,8 @@ func applySiteMetadataToHTML(htmlDoc string, meta SiteMetadata) string {
 	htmlDoc = upsertMetaTag(htmlDoc, "property", "og:title", ogTitle)
 	htmlDoc = upsertMetaTag(htmlDoc, "property", "og:description", ogDescription)
 	htmlDoc = upsertMetaTag(htmlDoc, "property", "og:image", meta.OGImage)
+	htmlDoc = insertHeadHTML(htmlDoc, meta.HeadHTML)
+	htmlDoc = replaceRootFallback(htmlDoc, meta.RootFallbackHTML)
 
 	return htmlDoc
 }
@@ -102,4 +105,23 @@ func insertIntoHead(htmlDoc, snippet string) string {
 		return reHeadClose.ReplaceAllString(htmlDoc, snippet+"</head>")
 	}
 	return snippet + htmlDoc
+}
+
+// insertHeadHTML inserts raw metadata-owned head markup into htmlDoc and returns the updated HTML string.
+func insertHeadHTML(htmlDoc string, snippet string) string {
+	if strings.TrimSpace(snippet) == "" {
+		return htmlDoc
+	}
+	return insertIntoHead(htmlDoc, snippet)
+}
+
+// replaceRootFallback places metadata-owned no-JavaScript fallback content inside the SPA root.
+func replaceRootFallback(htmlDoc string, fallbackHTML string) string {
+	if strings.TrimSpace(fallbackHTML) == "" {
+		return htmlDoc
+	}
+	if reRootContainer.MatchString(htmlDoc) {
+		return reRootContainer.ReplaceAllString(htmlDoc, `<div id="root">`+fallbackHTML+`</div>`)
+	}
+	return htmlDoc
 }

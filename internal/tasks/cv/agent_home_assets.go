@@ -5,6 +5,46 @@ import (
 	"html"
 )
 
+// buildCVSiteHeadHTML builds extra head metadata for the SPA-served CV homepage.
+// It takes no parameters and returns trusted static HTML for crawler metadata.
+func buildCVSiteHeadHTML() string {
+	return fmt.Sprintf(`<link rel="canonical" href="https://cv.laisky.com/">
+<link rel="alternate" type="text/markdown" href="https://cv.laisky.com/index.md">
+<link rel="service-desc" type="application/vnd.oai.openapi+json;version=3.1" href="https://cv.laisky.com/openapi.json">
+<meta property="og:type" content="profile">
+<script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>`,
+		cvProfileJSONLD(),
+		cvOrganizationJSONLD(),
+		cvSoftwareApplicationJSONLD(),
+		cvProductJSONLD(),
+		cvFAQJSONLD())
+}
+
+// buildCVSiteRootFallbackHTML builds pre-JavaScript CV content for the SPA root.
+// It takes no parameters and returns trusted static HTML that React replaces after loading.
+func buildCVSiteRootFallbackHTML() string {
+	return `<main>
+  <h1>Zhonghua (Laisky) Cai</h1>
+  <p>Senior Software Engineer in Ottawa, Canada, focused on backend systems, infrastructure, Linux services, Kubernetes, platform engineering, observability, and security. This is the public CV for recruiting and professional discovery.</p>
+  <section>
+    <h2>Professional Summary</h2>
+    <p>Zhonghua (Laisky) Cai has 10+ years of experience building and operating distributed backend systems, internal platforms, PaaS and SaaS infrastructure, CI/CD systems, monitoring and tracing platforms, and security-oriented services. He is open to remote Canada and United States roles where backend reliability, platform ownership, and security depth matter.</p>
+  </section>
+  <section>
+    <h2>Core Skills</h2>
+    <p>Go, Python, JavaScript, TypeScript, API design, distributed systems, concurrency, performance tuning, Kubernetes, Docker, Linux operations, AWS, Postgres, MongoDB, Redis, MinIO, PKI, KMS, zero-trust architecture, SGX, SEV-SNP, TDX, and TPM.</p>
+  </section>
+  <section>
+    <h2>Agent And Developer Resources</h2>
+    <p>Use the <a href="/api/v1/cv">structured CV API</a>, the <a href="/openapi.json">OpenAPI document</a>, the <a href="/.well-known/api-catalog">API catalog</a>, <a href="/agents.md">agent instructions</a>, the <a href="/auth.md">auth guide</a>, and the <a href="/cv/pdf">PDF CV</a>. Contact <a href="mailto:job@laisky.com">job@laisky.com</a> for recruiting, interviews, references, and role-fit questions.</p>
+  </section>
+</main>`
+}
+
 // buildCVIndexMarkdown builds the markdown homepage body for agents.
 // It takes no parameters and returns markdown text.
 func buildCVIndexMarkdown() string {
@@ -45,10 +85,6 @@ func buildCVAgentHTML(agentMode bool) string {
 	if agentMode {
 		modeNote = "Dedicated agent-mode CV homepage with direct machine-readable resource links."
 	}
-	jsonLD := `{"@context":"https://schema.org","@type":"ProfilePage","name":"Zhonghua (Laisky) Cai CV","url":"https://cv.laisky.com/","description":"Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.","mainEntity":{"@type":"Person","name":"Zhonghua (Laisky) Cai","alternateName":"Laisky Cai","email":"job@laisky.com","jobTitle":"Senior Software Engineer","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]},"speakable":{"@type":"SpeakableSpecification","cssSelector":["h1","main p"]}}`
-	orgLD := `{"@context":"https://schema.org","@type":"Organization","name":"Laisky CV","url":"https://cv.laisky.com/","logo":"https://s3.laisky.com/uploads/2025/12/favicon.ico","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"job@laisky.com","contactType":"recruiting"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]}`
-	appLD := `{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Zhonghua (Laisky) Cai CV API","applicationCategory":"DeveloperApplication","operatingSystem":"Web","url":"https://cv.laisky.com/openapi.json","description":"Read-only public API for Zhonghua (Laisky) Cai's CV.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}`
-	productLD := `{"@context":"https://schema.org","@type":"Product","name":"Zhonghua (Laisky) Cai CV","description":"Public resume and recruiting API for Zhonghua (Laisky) Cai.","brand":{"@type":"Brand","name":"Laisky"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock"}}`
 	agentBlock := ""
 	if agentMode {
 		agentBlock = `<section id="agent-mode"><h2>Agent Mode Active</h2><p>This mode prioritizes direct machine-readable resources over human presentation. Start with /api/v1/cv, /openapi.json, /agents.md, and /auth.md.</p></section>`
@@ -67,6 +103,7 @@ func buildCVAgentHTML(agentMode bool) string {
   <meta property="og:title" content="Zhonghua (Laisky) Cai | CV">
   <meta property="og:description" content="Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.">
   <meta property="og:image" content="%s">
+  <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
@@ -96,5 +133,35 @@ func buildCVAgentHTML(agentMode bool) string {
     <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>
   </main>
 </body>
-</html>`, cvPublicIcon, jsonLD, orgLD, appLD, productLD, html.EscapeString(modeNote), agentBlock)
+</html>`, cvPublicIcon, cvProfileJSONLD(), cvOrganizationJSONLD(), cvSoftwareApplicationJSONLD(), cvProductJSONLD(), cvFAQJSONLD(), html.EscapeString(modeNote), agentBlock)
+}
+
+// cvProfileJSONLD returns the ProfilePage JSON-LD for the CV homepage.
+// It takes no parameters and returns a compact JSON string.
+func cvProfileJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"ProfilePage","name":"Zhonghua (Laisky) Cai CV","url":"https://cv.laisky.com/","description":"Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.","mainEntity":{"@type":"Person","name":"Zhonghua (Laisky) Cai","alternateName":"Laisky Cai","email":"job@laisky.com","jobTitle":"Senior Software Engineer","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]},"speakable":{"@type":"SpeakableSpecification","cssSelector":["h1","main p"]}}`
+}
+
+// cvOrganizationJSONLD returns the Organization JSON-LD for the CV site.
+// It takes no parameters and returns a compact JSON string.
+func cvOrganizationJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"Organization","name":"Laisky CV","url":"https://cv.laisky.com/","logo":"https://s3.laisky.com/uploads/2025/12/favicon.ico","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"job@laisky.com","contactType":"recruiting"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]}`
+}
+
+// cvSoftwareApplicationJSONLD returns the SoftwareApplication JSON-LD for the CV API.
+// It takes no parameters and returns a compact JSON string.
+func cvSoftwareApplicationJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Zhonghua (Laisky) Cai CV API","applicationCategory":"DeveloperApplication","operatingSystem":"Web","url":"https://cv.laisky.com/openapi.json","description":"Read-only public API for Zhonghua (Laisky) Cai's CV.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}`
+}
+
+// cvProductJSONLD returns Product JSON-LD for the public CV surface.
+// It takes no parameters and returns a compact JSON string.
+func cvProductJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"Product","name":"Zhonghua (Laisky) Cai CV","description":"Public resume and recruiting API for Zhonghua (Laisky) Cai.","brand":{"@type":"Brand","name":"Laisky"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock"}}`
+}
+
+// cvFAQJSONLD returns FAQPage JSON-LD for common agent questions.
+// It takes no parameters and returns a compact JSON string.
+func cvFAQJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"When should agents use this CV site?","acceptedAnswer":{"@type":"Answer","text":"Use it when a user asks about Zhonghua (Laisky) Cai's resume, backend and infrastructure experience, security work, open source projects, hiring contact details, or role fit."}},{"@type":"Question","name":"Where is the structured CV API?","acceptedAnswer":{"@type":"Answer","text":"The structured public CV API is available at https://cv.laisky.com/api/v1/cv and documented at https://cv.laisky.com/openapi.json."}}]}`
 }

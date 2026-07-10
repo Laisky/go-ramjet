@@ -15,15 +15,17 @@ const (
 
 // SiteMetadata represents metadata for a specific site, including identity and SEO fields.
 type SiteMetadata struct {
-	ID            string
-	Theme         string
-	Title         string
-	Favicon       string
-	Description   string
-	OGTitle       string
-	OGDescription string
-	OGImage       string
-	ThemeColor    string
+	ID               string
+	Theme            string
+	Title            string
+	Favicon          string
+	Description      string
+	OGTitle          string
+	OGDescription    string
+	OGImage          string
+	ThemeColor       string
+	HeadHTML         string
+	RootFallbackHTML string
 }
 
 var (
@@ -142,6 +144,12 @@ func mergeSiteMetadata(base, override SiteMetadata) SiteMetadata {
 	}
 	if override.ThemeColor != "" {
 		base.ThemeColor = override.ThemeColor
+	}
+	if override.HeadHTML != "" {
+		base.HeadHTML = override.HeadHTML
+	}
+	if override.RootFallbackHTML != "" {
+		base.RootFallbackHTML = override.RootFallbackHTML
 	}
 
 	if overrideTheme == "" && overrideID != "" {
