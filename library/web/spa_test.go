@@ -209,4 +209,25 @@ func TestSiteMetadata(t *testing.T) {
 		require.Contains(t, w.Body.String(), `<link rel="canonical" href="https://fallback.example.com/">`)
 		require.Contains(t, w.Body.String(), `<div id="root"><main><h1>Fallback content</h1></main></div>`)
 	})
+
+	t.Run("later metadata preserves fallback", func(t *testing.T) {
+		RegisterSiteMetadata([]string{"merged-fallback.example.com"}, SiteMetadata{
+			ID:               "fallback",
+			Theme:            "fallback",
+			Title:            "Fallback Site",
+			RootFallbackHTML: `<main><h1>Fallback content</h1></main>`,
+		})
+		RegisterSiteMetadata([]string{"merged-fallback.example.com"}, SiteMetadata{
+			Title: "Config Title",
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/", nil)
+		req.Host = "merged-fallback.example.com"
+		r.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), "<title>Config Title</title>")
+		require.Contains(t, w.Body.String(), `<div id="root"><main><h1>Fallback content</h1></main></div>`)
+	})
 }
