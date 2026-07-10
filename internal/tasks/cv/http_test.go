@@ -37,6 +37,8 @@ func TestBuildCVSiteMetadata(t *testing.T) {
 	require.Equal(t, cvSiteID, meta.ID)
 	require.Equal(t, cvSiteTheme, meta.Theme)
 	require.Equal(t, cvSiteTitle, meta.Title)
+	require.Contains(t, meta.Description, "Senior Software Engineer")
+	require.Equal(t, cvSiteTitle, meta.OGTitle)
 	require.Empty(t, meta.Favicon)
 }
 
@@ -115,6 +117,67 @@ func TestServeCVLLMs(t *testing.T) {
 	require.Contains(t, string(body), "https://cv.laisky.com/cv/content")
 	require.Contains(t, string(body), "https://cv.laisky.com/openapi.json")
 	require.Contains(t, string(body), "https://mcp.laisky.com")
+}
+
+// TestServeCVRootAgentSurfaceLetsBrowserSPAThrough verifies normal browser root requests reach the SPA handler.
+// It takes a testing.T and returns no values.
+func TestServeCVRootAgentSurfaceLetsBrowserSPAThrough(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(serveCVRootAgentSurface)
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "spa cv page")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "cv.laisky.com"
+	req.Header.Set("Accept", "text/html")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "spa cv page", string(body))
+}
+
+// TestServeCVRootAgentSurfaceServesExplicitAgentMode verifies explicit agent mode remains crawlable.
+// It takes a testing.T and returns no values.
+func TestServeCVRootAgentSurfaceServesExplicitAgentMode(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(serveCVRootAgentSurface)
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "spa cv page")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/?mode=agent", nil)
+	req.Host = "cv.laisky.com"
+	req.Header.Set("Accept", "text/html")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	resp := recorder.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, string(body), "Agent Mode Active")
+	require.NotContains(t, string(body), "spa cv page")
 }
 
 // TestServeCVSitemap verifies the sitemap exposes machine-readable CV targets.

@@ -58,16 +58,18 @@ type handler struct {
 // It takes no parameters and returns metadata that keeps favicon resolution in web.sites/default metadata.
 func buildCVSiteMetadata() web.SiteMetadata {
 	return web.SiteMetadata{
-		ID:    cvSiteID,
-		Theme: cvSiteTheme,
-		Title: cvSiteTitle,
+		ID:          cvSiteID,
+		Theme:       cvSiteTheme,
+		Title:       cvSiteTitle,
+		Description: "CV of Zhonghua (Laisky) Cai, Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.",
+		OGTitle:     cvSiteTitle,
 	}
 }
 
 // bindHTTP registers CV routes and metadata.
 func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFService) {
 	siteMeta := buildCVSiteMetadata()
-	web.RegisterSiteMetadata([]string{cvSitePathPrefix}, siteMeta)
+	web.RegisterSiteMetadata([]string{cvSitePathPrefix, "cv.laisky.com"}, siteMeta)
 	log.Logger.Debug("register cv site metadata",
 		zap.String("path_prefix", cvSitePathPrefix),
 		zap.String("site_id", siteMeta.ID),

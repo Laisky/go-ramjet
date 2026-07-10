@@ -1,0 +1,100 @@
+package cv
+
+import (
+	"fmt"
+	"html"
+)
+
+// buildCVIndexMarkdown builds the markdown homepage body for agents.
+// It takes no parameters and returns markdown text.
+func buildCVIndexMarkdown() string {
+	return `# Zhonghua (Laisky) Cai
+
+Senior Software Engineer focused on backend, infrastructure, Linux services, Kubernetes, platform engineering, and security.
+
+## Summary
+Zhonghua (Laisky) Cai is based in Ottawa, Canada and is open to remote Canada/US roles. He has 10+ years of experience building and operating distributed backend systems, internal platforms, PaaS/SaaS infrastructure, CI/CD, observability, and security platforms.
+
+## Core Skills
+- Go, Python, JavaScript, TypeScript
+- Backend API design, distributed systems, concurrency, performance tuning
+- Kubernetes, Docker, Linux operations, CI/CD, tracing, observability
+- AWS, self-hosted infrastructure, Postgres, MongoDB, Redis, MinIO
+- Security engineering, PKI, KMS, zero-trust patterns, SGX, SEV-SNP, TDX, TPM
+
+## Public Resources
+- [CV markdown API](https://cv.laisky.com/api/v1/cv)
+- [OpenAPI](https://cv.laisky.com/openapi.json)
+- [API catalog](https://cv.laisky.com/.well-known/api-catalog)
+- [Agent instructions](https://cv.laisky.com/agents.md)
+- [Auth guide](https://cv.laisky.com/auth.md)
+- [PDF](https://cv.laisky.com/cv/pdf)
+- [GitHub](https://github.com/Laisky)
+- [LinkedIn](https://www.linkedin.com/in/laisky-cai-14237926/)
+- [Blog](https://blog.laisky.com/)
+
+## Contact
+Email job@laisky.com for recruiting, interviews, references, and role-fit questions.
+`
+}
+
+// buildCVAgentHTML builds a crawlable HTML homepage for the CV host.
+// It takes whether agent mode was requested and returns HTML text.
+func buildCVAgentHTML(agentMode bool) string {
+	modeNote := "Human and agent-readable CV homepage."
+	if agentMode {
+		modeNote = "Dedicated agent-mode CV homepage with direct machine-readable resource links."
+	}
+	jsonLD := `{"@context":"https://schema.org","@type":"ProfilePage","name":"Zhonghua (Laisky) Cai CV","url":"https://cv.laisky.com/","description":"Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.","mainEntity":{"@type":"Person","name":"Zhonghua (Laisky) Cai","alternateName":"Laisky Cai","email":"job@laisky.com","jobTitle":"Senior Software Engineer","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]},"speakable":{"@type":"SpeakableSpecification","cssSelector":["h1","main p"]}}`
+	orgLD := `{"@context":"https://schema.org","@type":"Organization","name":"Laisky CV","url":"https://cv.laisky.com/","logo":"https://s3.laisky.com/uploads/2025/12/favicon.ico","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"job@laisky.com","contactType":"recruiting"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]}`
+	appLD := `{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Zhonghua (Laisky) Cai CV API","applicationCategory":"DeveloperApplication","operatingSystem":"Web","url":"https://cv.laisky.com/openapi.json","description":"Read-only public API for Zhonghua (Laisky) Cai's CV.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}`
+	productLD := `{"@context":"https://schema.org","@type":"Product","name":"Zhonghua (Laisky) Cai CV","description":"Public resume and recruiting API for Zhonghua (Laisky) Cai.","brand":{"@type":"Brand","name":"Laisky"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock"}}`
+	agentBlock := ""
+	if agentMode {
+		agentBlock = `<section id="agent-mode"><h2>Agent Mode Active</h2><p>This mode prioritizes direct machine-readable resources over human presentation. Start with /api/v1/cv, /openapi.json, /agents.md, and /auth.md.</p></section>`
+	}
+	return fmt.Sprintf(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zhonghua (Laisky) Cai | CV</title>
+  <link rel="canonical" href="https://cv.laisky.com/">
+  <link rel="alternate" type="text/markdown" href="https://cv.laisky.com/index.md">
+  <link rel="service-desc" type="application/vnd.oai.openapi+json;version=3.1" href="https://cv.laisky.com/openapi.json">
+  <meta name="description" content="CV of Zhonghua (Laisky) Cai, Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.">
+  <meta property="og:type" content="profile">
+  <meta property="og:title" content="Zhonghua (Laisky) Cai | CV">
+  <meta property="og:description" content="Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.">
+  <meta property="og:image" content="%s">
+  <script type="application/ld+json">%s</script>
+  <script type="application/ld+json">%s</script>
+  <script type="application/ld+json">%s</script>
+  <script type="application/ld+json">%s</script>
+</head>
+<body>
+  <header><nav><a href="/">CV</a> <a href="/developer">Developer</a> <a href="/about">About</a> <a href="/contact">Contact</a> <a href="/privacy">Privacy</a></nav></header>
+  <main>
+    <h1>Zhonghua (Laisky) Cai</h1>
+    <p>%s</p>
+    <p>Senior Software Engineer in Ottawa, Canada. Open to remote Canada/US roles. Focus areas: backend systems, infrastructure, Linux services, Kubernetes, CI/CD, observability, platform engineering, and security.</p>
+    <h2>Agent Resources</h2>
+    %s
+    <ul>
+      <li><a href="/api/v1/cv">Versioned CV API</a></li>
+      <li><a href="/cv/content">CV markdown API</a></li>
+      <li><a href="/openapi.json">OpenAPI document</a></li>
+      <li><a href="/.well-known/api-catalog">API catalog</a></li>
+      <li><a href="/.well-known/ai-catalog.json">Agent resource catalog</a></li>
+      <li><a href="/agents.md">Agent instructions</a></li>
+      <li><a href="/auth.md">Auth guide</a></li>
+      <li><a href="/llms.txt">llms.txt</a></li>
+      <li><a href="/pricing.md">Pricing</a></li>
+      <li><a href="/cv/pdf">PDF CV</a></li>
+    </ul>
+    <h2>Contact</h2>
+    <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>
+  </main>
+</body>
+</html>`, cvPublicIcon, jsonLD, orgLD, appLD, productLD, html.EscapeString(modeNote), agentBlock)
+}

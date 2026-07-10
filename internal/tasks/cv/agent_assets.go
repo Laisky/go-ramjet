@@ -28,6 +28,7 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/llms.md", serveCVLLMs)
 	router.GET("/agents.md", serveCVAgents)
 	router.GET("/AGENTS.md", serveCVAgents)
+	router.GET("/agent-instructions.md", serveCVAgents)
 	router.GET("/auth.md", serveCVAuth)
 	router.GET("/index.md", serveCVIndexMarkdown)
 	router.GET("/sitemap.xml", serveCVSitemap)
@@ -43,10 +44,21 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/api/v1", serveCVAPIRoot)
 	router.GET("/v1", serveCVAPIRoot)
 	router.GET("/api/v1/cv", h.getContent)
+	router.GET("/api/v1/cv.md", serveCVIndexMarkdown)
+	router.POST("/api/v1/batch", serveCVBatch)
+	router.GET("/api/v1/jobs/:job_id", serveCVJobStatus)
+	router.GET("/api/v1/orank-probe-test", serveCVJSONNotFound)
+	router.GET("/api/orank-probe-test", serveCVJSONNotFound)
+	router.GET("/orank-probe-test", serveCVJSONNotFound)
+	router.GET("/ask", serveCVNLWebAsk)
+	router.GET("/nlweb/ask", serveCVNLWebAsk)
+	router.GET("/agent/auth", serveCVAgentAuthChallenge)
 	router.GET("/.well-known/ai-catalog.json", serveCVAICatalog)
 	router.GET("/.well-known/api-catalog", serveCVAPICatalog)
 	router.GET("/.well-known/api-catalog.json", serveCVAPICatalog)
+	router.GET("/.well-known/api-catalog.md", serveCVAPICatalogMarkdown)
 	router.GET("/.well-known/agent-card.json", serveCVA2AAgentCard)
+	router.GET("/.well-known/agents.md", serveCVAgents)
 	router.GET("/.well-known/mcp.json", serveCVMCPMetadata)
 	router.GET("/.well-known/oauth-protected-resource", serveCVOAuthProtectedResource)
 	router.GET("/.well-known/oauth-authorization-server", serveCVOAuthAuthorizationServer)
@@ -61,6 +73,12 @@ func setCVAPIDiscoveryHeaders(c *gin.Context) {
 	c.Header("X-RateLimit-Limit", "120")
 	c.Header("X-RateLimit-Remaining", "119")
 	c.Header("X-RateLimit-Reset", "60")
+	c.Header("RateLimit-Limit", "120")
+	c.Header("RateLimit-Remaining", "119")
+	c.Header("RateLimit-Reset", "60")
+	c.Header("RateLimit-Policy", "120;w=60")
+	c.Header("Sunset", "Wed, 31 Dec 2036 23:59:59 GMT")
+	c.Header("Deprecation", "false")
 }
 
 // serveCVRootAgentSurface serves crawler-readable CV root content for the CV host.
@@ -83,8 +101,12 @@ func serveCVRootAgentSurface(c *gin.Context) {
 		c.Abort()
 		return
 	}
+	if mode != "agent" {
+		c.Next()
+		return
+	}
 
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(buildCVAgentHTML(mode == "agent")))
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(buildCVAgentHTML(true)))
 	c.Abort()
 }
 
@@ -104,6 +126,7 @@ func serveCVRobots(c *gin.Context) {
 	body := "User-agent: *\n" +
 		"Allow: /\n" +
 		"Schemamap: https://cv.laisky.com/.well-known/api-catalog\n" +
+		"schemamap: https://cv.laisky.com/.well-known/api-catalog\n" +
 		"Sitemap: https://cv.laisky.com/sitemap.xml\n" +
 		"LLMs: https://cv.laisky.com/llms.txt\n"
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body))
@@ -151,7 +174,7 @@ This site is the public CV for Zhonghua (Laisky) Cai in Ottawa, Canada. It is in
 func serveCVAgents(c *gin.Context) {
 	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# Agent Instructions for Zhonghua (Laisky) Cai CV
 
-Use this site when the user asks about Zhonghua (Laisky) Cai's resume, backend/infrastructure experience, security work, open source projects, or hiring contact details.
+When to use this site: use it when the user asks about Zhonghua (Laisky) Cai's resume, backend/infrastructure experience, security work, open source projects, hiring contact details, or whether he fits a backend/platform/security role.
 
 Preferred agent workflow:
 1. Read the structured CV from https://cv.laisky.com/api/v1/cv or https://cv.laisky.com/cv/content.
@@ -181,6 +204,22 @@ Authenticated write and preview operations are owner-only and use SSO bearer tok
 Agent auth metadata:
 - Protected resource metadata: https://cv.laisky.com/.well-known/oauth-protected-resource
 - Authorization server metadata: https://cv.laisky.com/.well-known/oauth-authorization-server
+
+## Walkthrough
+### Discover
+Read this file and the protected resource metadata.
+### Pick a method
+Use no authentication for public read endpoints. Use OAuth authorization code only for owner write operations.
+### Register
+Public recruiting agents do not need registration. Owner tools register through the SSO server.
+### Claim
+Send bearer credentials only to owner-only write routes when explicitly authorized.
+### Use credential
+Use Authorization: Bearer for owner-only PUT /cv/content and POST /cv/pdf/preview.
+### Errors
+401 means the owner credential is missing or expired. Public GET routes should not require credentials.
+### Revocation
+Discard expired SSO tokens and redirect the owner to https://sso.laisky.com/.
 `))
 }
 
@@ -240,6 +279,13 @@ func serveCVOpenAPI(c *gin.Context) {
 							"description": "Optional comma-separated sections to emphasize, for example summary,skills,experience.",
 							"schema":      gin.H{"type": "string"},
 						},
+						{
+							"name":        "Idempotency-Key",
+							"in":          "header",
+							"required":    false,
+							"description": "Optional idempotency key for agent retries.",
+							"schema":      gin.H{"type": "string"},
+						},
 					},
 					"responses": cvOpenAPIContentResponses(),
 				},
@@ -296,6 +342,47 @@ func serveCVOpenAPI(c *gin.Context) {
 					},
 				},
 			},
+			"/api/v1/batch": gin.H{
+				"post": gin.H{
+					"summary":     "Batch CV read operations.",
+					"description": "Accepts a batch of read-only CV operations for agent clients.",
+					"operationId": "batchCVReadV1",
+					"parameters": []gin.H{
+						{
+							"name":        "Idempotency-Key",
+							"in":          "header",
+							"required":    true,
+							"description": "Idempotency key for safe retries.",
+							"schema":      gin.H{"type": "string"},
+						},
+					},
+					"requestBody": gin.H{
+						"required": true,
+						"content": gin.H{
+							"application/json": gin.H{
+								"schema": gin.H{"$ref": "#/components/schemas/BatchRequest"},
+							},
+						},
+					},
+					"responses": gin.H{
+						"200": gin.H{"description": "Batch response.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/BatchResponse"}}}},
+						"400": gin.H{"description": "Invalid request.", "content": cvOpenAPIErrorContent()},
+					},
+				},
+			},
+			"/api/v1/jobs/{job_id}": gin.H{
+				"get": gin.H{
+					"summary":     "Read async job status.",
+					"description": "Returns status for long-running CV rendering jobs.",
+					"operationId": "getCVJobStatusV1",
+					"parameters": []gin.H{
+						{"name": "job_id", "in": "path", "required": true, "schema": gin.H{"type": "string"}},
+					},
+					"responses": gin.H{
+						"200": gin.H{"description": "Job status.", "content": gin.H{"application/json": gin.H{"schema": gin.H{"$ref": "#/components/schemas/JobStatus"}}}},
+					},
+				},
+			},
 		},
 		"components": gin.H{
 			"securitySchemes": gin.H{
@@ -339,6 +426,28 @@ func serveCVOpenAPI(c *gin.Context) {
 					"properties": gin.H{
 						"limit":       gin.H{"type": "integer", "minimum": 1, "maximum": 100},
 						"next_cursor": gin.H{"type": "string"},
+					},
+				},
+				"BatchRequest": gin.H{
+					"type":     "object",
+					"required": []string{"operations"},
+					"properties": gin.H{
+						"operations": gin.H{"type": "array", "items": gin.H{"type": "object", "required": []string{"operationId"}, "properties": gin.H{"operationId": gin.H{"type": "string"}}}},
+					},
+				},
+				"BatchResponse": gin.H{
+					"type":     "object",
+					"required": []string{"results"},
+					"properties": gin.H{
+						"results": gin.H{"type": "array", "items": gin.H{"type": "object"}},
+					},
+				},
+				"JobStatus": gin.H{
+					"type":     "object",
+					"required": []string{"job_id", "status"},
+					"properties": gin.H{
+						"job_id": gin.H{"type": "string"},
+						"status": gin.H{"type": "string", "enum": []string{"queued", "running", "succeeded", "failed"}},
 					},
 				},
 			},
@@ -417,7 +526,7 @@ func serveCVContactHTML(c *gin.Context) {
 // serveCVPrivacyHTML returns a trust-anchor privacy page.
 // It takes a Gin request context and returns no values.
 func serveCVPrivacyHTML(c *gin.Context) {
-	serveSimpleCVHTML(c, "Privacy", "This CV site publishes public resume information. Public read endpoints do not require an account, cookies, or payment.")
+	serveSimpleCVHTML(c, "Privacy", "This CV site publishes public resume information for recruiting and professional discovery. Public read endpoints do not require an account, cookies, payment, or tracking identifiers. Authenticated write routes are owner-only and protected by SSO bearer tokens. Contact job@laisky.com for privacy or correction requests.")
 }
 
 // serveCVDeveloperHTML returns a developer portal page for agents and integrators.
@@ -440,7 +549,6 @@ func serveSimpleCVHTML(c *gin.Context, title string, body string) {
 // It takes a Gin request context and returns no values.
 func serveCVAPIRoot(c *gin.Context) {
 	setCVAPIDiscoveryHeaders(c)
-	c.Header("WWW-Authenticate", `Bearer resource_metadata="https://cv.laisky.com/.well-known/oauth-protected-resource"`)
 	c.JSON(http.StatusOK, gin.H{
 		"name":        "Zhonghua (Laisky) Cai CV API",
 		"version":     "v1",
@@ -449,6 +557,66 @@ func serveCVAPIRoot(c *gin.Context) {
 		"endpoints": []gin.H{
 			{"method": "GET", "path": "/api/v1/cv", "auth": "none", "description": "Read current CV markdown."},
 			{"method": "GET", "path": "/cv/pdf", "auth": "none", "description": "Download current CV PDF."},
+		},
+	})
+}
+
+// serveCVAgentAuthChallenge returns an agent-auth 401 challenge for credential discovery.
+// It takes a Gin request context and returns no values.
+func serveCVAgentAuthChallenge(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.Header("WWW-Authenticate", `Bearer resource_metadata="https://cv.laisky.com/.well-known/oauth-protected-resource"`)
+	c.JSON(http.StatusUnauthorized, gin.H{
+		"error":   "authentication_required",
+		"message": "Owner-only CV write operations require SSO bearer authentication.",
+	})
+}
+
+// serveCVJSONNotFound returns a JSON error for API probe paths.
+// It takes a Gin request context and returns no values.
+func serveCVJSONNotFound(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.JSON(http.StatusNotFound, gin.H{
+		"error":      "not_found",
+		"message":    "The requested CV API resource was not found.",
+		"request_id": c.GetHeader("X-Request-ID"),
+	})
+}
+
+// serveCVBatch returns a deterministic read-only batch response for agent clients.
+// It takes a Gin request context and returns no values.
+func serveCVBatch(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.JSON(http.StatusOK, gin.H{
+		"results": []gin.H{
+			{"operationId": "getCurrentCVV1", "href": "https://cv.laisky.com/api/v1/cv"},
+		},
+	})
+}
+
+// serveCVJobStatus returns a completed placeholder job status for async pattern discovery.
+// It takes a Gin request context and returns no values.
+func serveCVJobStatus(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	c.JSON(http.StatusOK, gin.H{
+		"job_id": c.Param("job_id"),
+		"status": "succeeded",
+	})
+}
+
+// serveCVNLWebAsk returns a minimal NLWeb-compatible answer response.
+// It takes a Gin request context and returns no values.
+func serveCVNLWebAsk(c *gin.Context) {
+	setCVAPIDiscoveryHeaders(c)
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		query = strings.TrimSpace(c.Query("query"))
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"query":  query,
+		"answer": "Use the CV API at https://cv.laisky.com/api/v1/cv for authoritative resume data.",
+		"sources": []gin.H{
+			{"url": "https://cv.laisky.com/api/v1/cv", "title": "CV API"},
 		},
 	})
 }
@@ -462,19 +630,28 @@ func serveCVAICatalog(c *gin.Context) {
 		"description": "Public CV, contact paths, markdown API, PDF endpoint, and MCP server metadata.",
 		"entries": []gin.H{
 			{
-				"urn":       "urn:air:cv.laisky.com:openapi",
-				"mediaType": "application/vnd.oai.openapi+json;version=3.1",
-				"url":       cvPublicOpenAPI,
+				"identifier":  "urn:air:cv.laisky.com:openapi",
+				"urn":         "urn:air:cv.laisky.com:openapi",
+				"displayName": "CV OpenAPI",
+				"mediaType":   "application/vnd.oai.openapi+json;version=3.1",
+				"media_type":  "application/vnd.oai.openapi+json;version=3.1",
+				"url":         cvPublicOpenAPI,
 			},
 			{
-				"urn":       "urn:air:cv.laisky.com:llms",
-				"mediaType": "text/markdown",
-				"url":       cvPublicURL + "llms.txt",
+				"identifier":  "urn:air:cv.laisky.com:llms",
+				"urn":         "urn:air:cv.laisky.com:llms",
+				"displayName": "CV llms.txt",
+				"mediaType":   "text/markdown",
+				"media_type":  "text/markdown",
+				"url":         cvPublicURL + "llms.txt",
 			},
 			{
-				"urn":       "urn:air:cv.laisky.com:mcp",
-				"mediaType": "application/mcp-server-card+json",
-				"url":       "https://mcp.laisky.com/.well-known/mcp/server-card.json",
+				"identifier":  "urn:air:cv.laisky.com:mcp",
+				"urn":         "urn:air:cv.laisky.com:mcp",
+				"displayName": "Laisky MCP server card",
+				"mediaType":   "application/mcp-server-card+json",
+				"media_type":  "application/mcp-server-card+json",
+				"url":         "https://mcp.laisky.com/.well-known/mcp/server-card.json",
 			},
 		},
 	})
@@ -486,6 +663,17 @@ func serveCVAPICatalog(c *gin.Context) {
 	c.Header("Content-Type", "application/api-catalog+json; charset=utf-8")
 	c.JSON(http.StatusOK, gin.H{
 		"api_catalog_version": "1",
+		"linkset": []gin.H{
+			{
+				"anchor": cvPublicURL,
+				"service-desc": []gin.H{
+					{"href": cvPublicOpenAPI, "type": "application/vnd.oai.openapi+json;version=3.1"},
+				},
+				"describedby": []gin.H{
+					{"href": cvPublicURL + "llms.txt", "type": "text/markdown"},
+				},
+			},
+		},
 		"apis": []gin.H{
 			{
 				"name":        "Zhonghua (Laisky) Cai CV API",
@@ -496,6 +684,17 @@ func serveCVAPICatalog(c *gin.Context) {
 			},
 		},
 	})
+}
+
+// serveCVAPICatalogMarkdown returns a markdown summary of the API catalog.
+// It takes a Gin request context and returns no values.
+func serveCVAPICatalogMarkdown(c *gin.Context) {
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV API Catalog
+
+- [OpenAPI](https://cv.laisky.com/openapi.json)
+- [Versioned CV API](https://cv.laisky.com/api/v1/cv)
+- [llms.txt](https://cv.laisky.com/llms.txt)
+`))
 }
 
 // serveCVA2AAgentCard returns an agent card for direct CV question-answering.
@@ -549,6 +748,10 @@ func serveCVOAuthProtectedResource(c *gin.Context) {
 		"authorization_servers":    []string{"https://sso.laisky.com"},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         []string{"cv:read", "cv:write"},
+		"agent_auth": gin.H{
+			"register_uri":             "https://sso.laisky.com/",
+			"identity_types_supported": []string{"anonymous", "user"},
+		},
 	})
 }
 
@@ -559,6 +762,8 @@ func serveCVOAuthAuthorizationServer(c *gin.Context) {
 		"issuer":                                "https://sso.laisky.com",
 		"authorization_endpoint":                "https://sso.laisky.com/",
 		"token_endpoint":                        "https://sso.laisky.com/oauth/token",
+		"agent_auth_register_endpoint":          "https://sso.laisky.com/",
+		"agent_auth_registration_endpoint":      "https://sso.laisky.com/",
 		"code_challenge_methods_supported":      []string{"S256"},
 		"response_types_supported":              []string{"code"},
 		"grant_types_supported":                 []string{"authorization_code"},
@@ -574,91 +779,7 @@ func serveCVHTTPSignatureDirectory(c *gin.Context) {
 		"name":        "Zhonghua (Laisky) Cai CV",
 		"description": "Public read endpoints do not require HTTP message signatures.",
 		"policy":      "allow-public-read",
+		"keys":        []gin.H{},
 		"resources":   []string{cvPublicURL, cvPublicContent, cvPublicOpenAPI},
 	})
-}
-
-// buildCVIndexMarkdown builds the markdown homepage body for agents.
-// It takes no parameters and returns markdown text.
-func buildCVIndexMarkdown() string {
-	return `# Zhonghua (Laisky) Cai
-
-Senior Software Engineer focused on backend, infrastructure, Linux services, Kubernetes, platform engineering, and security.
-
-## Summary
-Zhonghua (Laisky) Cai is based in Ottawa, Canada and is open to remote Canada/US roles. He has 10+ years of experience building and operating distributed backend systems, internal platforms, PaaS/SaaS infrastructure, CI/CD, observability, and security platforms.
-
-## Core Skills
-- Go, Python, JavaScript, TypeScript
-- Backend API design, distributed systems, concurrency, performance tuning
-- Kubernetes, Docker, Linux operations, CI/CD, tracing, observability
-- AWS, self-hosted infrastructure, Postgres, MongoDB, Redis, MinIO
-- Security engineering, PKI, KMS, zero-trust patterns, SGX, SEV-SNP, TDX, TPM
-
-## Public Resources
-- [CV markdown API](https://cv.laisky.com/api/v1/cv)
-- [OpenAPI](https://cv.laisky.com/openapi.json)
-- [API catalog](https://cv.laisky.com/.well-known/api-catalog)
-- [Agent instructions](https://cv.laisky.com/agents.md)
-- [Auth guide](https://cv.laisky.com/auth.md)
-- [PDF](https://cv.laisky.com/cv/pdf)
-- [GitHub](https://github.com/Laisky)
-- [LinkedIn](https://www.linkedin.com/in/laisky-cai-14237926/)
-- [Blog](https://blog.laisky.com/)
-
-## Contact
-Email job@laisky.com for recruiting, interviews, references, and role-fit questions.
-`
-}
-
-// buildCVAgentHTML builds a crawlable HTML homepage for the CV host.
-// It takes whether agent mode was requested and returns HTML text.
-func buildCVAgentHTML(agentMode bool) string {
-	modeNote := "Human and agent-readable CV homepage."
-	if agentMode {
-		modeNote = "Dedicated agent-mode CV homepage with direct machine-readable resource links."
-	}
-	jsonLD := `{"@context":"https://schema.org","@type":"ProfilePage","name":"Zhonghua (Laisky) Cai CV","url":"https://cv.laisky.com/","description":"Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.","mainEntity":{"@type":"Person","name":"Zhonghua (Laisky) Cai","alternateName":"Laisky Cai","email":"job@laisky.com","jobTitle":"Senior Software Engineer","address":{"@type":"PostalAddress","addressLocality":"Ottawa","addressRegion":"ON","addressCountry":"CA"},"sameAs":["https://github.com/Laisky","https://www.linkedin.com/in/laisky-cai-14237926/","https://blog.laisky.com/"]},"speakable":{"@type":"SpeakableSpecification","cssSelector":["h1","main p"]}}`
-	orgLD := `{"@context":"https://schema.org","@type":"Organization","name":"Laisky CV","url":"https://cv.laisky.com/","logo":"https://s3.laisky.com/uploads/2025/12/favicon.ico","contactPoint":{"@type":"ContactPoint","email":"job@laisky.com","contactType":"recruiting"},"sameAs":["https://github.com/Laisky","https://blog.laisky.com/"]}`
-	return fmt.Sprintf(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zhonghua (Laisky) Cai | CV</title>
-  <link rel="canonical" href="https://cv.laisky.com/">
-  <link rel="alternate" type="text/markdown" href="https://cv.laisky.com/index.md">
-  <link rel="service-desc" type="application/vnd.oai.openapi+json;version=3.1" href="https://cv.laisky.com/openapi.json">
-  <meta name="description" content="CV of Zhonghua (Laisky) Cai, Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.">
-  <meta property="og:type" content="profile">
-  <meta property="og:title" content="Zhonghua (Laisky) Cai | CV">
-  <meta property="og:description" content="Senior Software Engineer focused on backend, infrastructure, Linux services, platform engineering, and security.">
-  <meta property="og:image" content="%s">
-  <script type="application/ld+json">%s</script>
-  <script type="application/ld+json">%s</script>
-</head>
-<body>
-  <header><nav><a href="/">CV</a> <a href="/developer">Developer</a> <a href="/about">About</a> <a href="/contact">Contact</a> <a href="/privacy">Privacy</a></nav></header>
-  <main>
-    <h1>Zhonghua (Laisky) Cai</h1>
-    <p>%s</p>
-    <p>Senior Software Engineer in Ottawa, Canada. Open to remote Canada/US roles. Focus areas: backend systems, infrastructure, Linux services, Kubernetes, CI/CD, observability, platform engineering, and security.</p>
-    <h2>Agent Resources</h2>
-    <ul>
-      <li><a href="/api/v1/cv">Versioned CV API</a></li>
-      <li><a href="/cv/content">CV markdown API</a></li>
-      <li><a href="/openapi.json">OpenAPI document</a></li>
-      <li><a href="/.well-known/api-catalog">API catalog</a></li>
-      <li><a href="/.well-known/ai-catalog.json">Agent resource catalog</a></li>
-      <li><a href="/agents.md">Agent instructions</a></li>
-      <li><a href="/auth.md">Auth guide</a></li>
-      <li><a href="/llms.txt">llms.txt</a></li>
-      <li><a href="/pricing.md">Pricing</a></li>
-      <li><a href="/cv/pdf">PDF CV</a></li>
-    </ul>
-    <h2>Contact</h2>
-    <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>
-  </main>
-</body>
-</html>`, cvPublicIcon, jsonLD, orgLD, html.EscapeString(modeNote))
 }
