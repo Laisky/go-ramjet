@@ -52,7 +52,7 @@ func buildCVSiteRootFallbackHTML() string {
   </section>
   <section>
     <h2>Agent And Developer Resources</h2>
-    <p>Use the <a href="/api/v1/cv">structured CV API</a>, the <a href="/openapi.json">OpenAPI document</a>, the <a href="/.well-known/api-catalog">API catalog</a>, <a href="/agents.md">agent instructions</a>, the <a href="/auth.md">auth guide</a>, and the <a href="/cv/pdf">PDF CV</a>. Contact <a href="mailto:job@laisky.com">job@laisky.com</a> for recruiting, interviews, references, and role-fit questions.</p>
+    <p>Use the <a href="/api/v1/cv">structured CV API</a>, the <a href="/openapi.json">OpenAPI document</a>, the <a href="/.well-known/api-catalog">API catalog</a>, <a href="/agents.md">agent instructions</a>, the <a href="/cli.md">CLI guide</a>, the <a href="/auth.md">auth guide</a>, and the <a href="/cv/pdf">PDF CV</a>. Public source and agent rules are in <a href="https://github.com/Laisky/go-ramjet">github.com/Laisky/go-ramjet</a> and <a href="https://github.com/Laisky/go-ramjet/blob/master/AGENTS.md">AGENTS.md</a>. Contact <a href="mailto:job@laisky.com">job@laisky.com</a> for recruiting, interviews, references, and role-fit questions.</p>
   </section>
   <form hidden toolname="read_cv" tooldescription="Read Zhonghua (Laisky) Cai's public CV through the structured CV API." action="/api/v1/cv" method="get">
     <label for="cv-format">Format</label>
@@ -88,8 +88,11 @@ Zhonghua (Laisky) Cai is based in Ottawa, Canada and is open to remote Canada/US
 - [OpenAPI](https://cv.laisky.com/openapi.json)
 - [API catalog](https://cv.laisky.com/.well-known/api-catalog)
 - [Agent instructions](https://cv.laisky.com/agents.md)
+- [CLI guide](https://cv.laisky.com/cli.md)
 - [Auth guide](https://cv.laisky.com/auth.md)
 - [PDF](https://cv.laisky.com/cv/pdf)
+- [Public repository](https://github.com/Laisky/go-ramjet)
+- [Repository AGENTS.md](https://github.com/Laisky/go-ramjet/blob/master/AGENTS.md)
 - [GitHub](https://github.com/Laisky)
 - [LinkedIn](https://www.linkedin.com/in/laisky-cai-14237926/)
 - [Blog](https://blog.laisky.com/)
@@ -148,10 +151,14 @@ func buildCVAgentHTML(agentMode bool) string {
       <li><a href="/.well-known/api-catalog">API catalog</a></li>
       <li><a href="/.well-known/ai-catalog.json">Agent resource catalog</a></li>
       <li><a href="/agents.md">Agent instructions</a></li>
+      <li><a href="/agent-rules.md">Public agent rules</a></li>
+      <li><a href="/cli.md">CLI guide</a></li>
       <li><a href="/auth.md">Auth guide</a></li>
       <li><a href="/llms.txt">llms.txt</a></li>
       <li><a href="/pricing.md">Pricing</a></li>
       <li><a href="/cv/pdf">PDF CV</a></li>
+      <li><a href="https://github.com/Laisky/go-ramjet">Source repository</a></li>
+      <li><a href="https://github.com/Laisky/go-ramjet/blob/master/AGENTS.md">Repository AGENTS.md</a></li>
     </ul>
     <h2>Contact</h2>
     <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>

@@ -32,6 +32,7 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/agent.md", serveCVAgents)
 	router.GET("/agent-instructions", serveCVAgents)
 	router.GET("/agent-instructions.md", serveCVAgents)
+	router.GET("/agent-rules.md", serveCVAgentRules)
 	router.GET("/auth.md", serveCVAuth)
 	router.GET("/index.md", serveCVIndexMarkdown)
 	router.GET("/sitemap.xml", serveCVSitemap)
@@ -75,6 +76,9 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.POST("/nlweb/ask", serveCVNLWebAsk)
 	router.GET("/mcp", serveCVMCPMetadata)
 	router.POST("/mcp", serveCVMCPRPC)
+	router.GET("/mcp.json", serveCVMCPMetadata)
+	router.GET("/mcp/server-card.json", serveCVMCPMetadata)
+	router.GET("/mcp/sse", serveCVMCPMetadata)
 	router.GET("/webhooks", serveCVWebhookDocs)
 	router.GET("/webhooks.md", serveCVWebhookMarkdown)
 	router.GET("/agent/auth", serveCVAgentAuthChallenge)
@@ -87,11 +91,13 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 	router.GET("/.well-known/agents.txt", serveCVAgents)
 	router.GET("/.well-known/agent-instructions", serveCVAgents)
 	router.GET("/.well-known/agent-instructions.md", serveCVAgents)
+	router.GET("/.well-known/agent-rules.md", serveCVAgentRules)
 	router.GET("/.well-known/cli.md", serveCVCLIDocs)
 	router.GET("/.well-known/llms.txt", serveCVLLMs)
 	router.GET("/.well-known/llms/api.txt", serveCVSectionLLMs)
 	router.GET("/.well-known/llms/cv.txt", serveCVSectionLLMs)
 	router.GET("/.well-known/mcp.json", serveCVMCPMetadata)
+	router.GET("/.well-known/mcp/server-card.json", serveCVMCPMetadata)
 	router.GET("/.well-known/oauth-protected-resource", serveCVOAuthProtectedResource)
 	router.GET("/.well-known/oauth-authorization-server", serveCVOAuthAuthorizationServer)
 	router.GET("/.well-known/http-message-signatures-directory", serveCVHTTPSignatureDirectory)
@@ -186,6 +192,8 @@ This site is the public CV for Zhonghua (Laisky) Cai in Ottawa, Canada. It is in
 - [Agent catalog](https://cv.laisky.com/.well-known/ai-catalog.json)
 - [API catalog](https://cv.laisky.com/.well-known/api-catalog)
 - [Agent instructions](https://cv.laisky.com/agents.md)
+- [Public agent rules](https://github.com/Laisky/go-ramjet/blob/master/AGENTS.md)
+- [CLI](https://cv.laisky.com/cli.md)
 - [Auth guide](https://cv.laisky.com/auth.md)
 - [MCP server](https://mcp.laisky.com)
 
@@ -225,6 +233,22 @@ Preferred agent workflow:
 4. Contact job@laisky.com for recruiting, interview scheduling, references, or role-fit questions.
 
 Do not infer private information. The public CV and linked profiles are the source of truth.
+`))
+}
+
+// serveCVAgentRules returns public repository agent rules and source links.
+// It takes a Gin request context and returns no values.
+func serveCVAgentRules(c *gin.Context) {
+	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# Public Agent Rules Repository
+
+The public source repository for this CV and cron server is https://github.com/Laisky/go-ramjet.
+
+Public agent configuration:
+- Repository AGENTS.md: https://github.com/Laisky/go-ramjet/blob/master/AGENTS.md
+- Source root: https://github.com/Laisky/go-ramjet
+- CV implementation: https://github.com/Laisky/go-ramjet/tree/master/internal/tasks/cv
+
+Use the public CV endpoints for resume data. Do not infer or request private configuration.
 `))
 }
 

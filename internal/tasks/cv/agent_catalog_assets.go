@@ -129,11 +129,19 @@ func serveCVMCPMetadata(c *gin.Context) {
 		"url":         cvPublicMCPServer,
 		"icon":        cvPublicIcon,
 		"transport":   "streamable-http",
+		"transports": []gin.H{
+			{"type": "streamable-http", "url": "https://cv.laisky.com/mcp"},
+			{"type": "server-card", "url": "https://cv.laisky.com/.well-known/mcp/server-card.json"},
+			{"type": "streamable-http", "url": "https://mcp.laisky.com"},
+			{"type": "server-card", "url": "https://mcp.laisky.com/.well-known/mcp/server-card.json"},
+		},
 		"auth":        "server-dependent; public discovery available",
+		"server_card": "https://cv.laisky.com/.well-known/mcp/server-card.json",
 		"related": gin.H{
 			"cv":      cvPublicURL,
 			"openapi": cvPublicOpenAPI,
 			"contact": cvPublicContact,
+			"repo":    "https://github.com/Laisky/go-ramjet",
 		},
 	})
 }
