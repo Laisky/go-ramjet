@@ -152,15 +152,25 @@ func serveCVCLIDocs(c *gin.Context) {
 	setCVAPIDiscoveryHeaders(c)
 	c.Data(http.StatusOK, "text/markdown; charset=utf-8", []byte(`# CV CLI
 
-The CV API is HTTP-first and can be used from standard CLI tools.
+The CV API is HTTP-first and the same repository ships the go-ramjet Cobra CLI.
+
+Install:
+- go install github.com/Laisky/go-ramjet@latest
+
+CLI package:
+- Go module: github.com/Laisky/go-ramjet
+- Binary: go-ramjet
+- Source: https://github.com/Laisky/go-ramjet
+
+CLI commands:
+- go-ramjet --version
+- go-ramjet --help
+- go-ramjet --config /etc/go-ramjet/settings.yml --task cv
 
 Examples:
 - curl -fsSL https://cv.laisky.com/api/v1/cv
 - curl -fsSL https://cv.laisky.com/openapi.json
 - curl -fsSL https://cv.laisky.com/cv/pdf -o laisky-cv.pdf
-
-Source project:
-- https://github.com/Laisky/go-ramjet
 
 No API key is required for public read endpoints.
 `))
@@ -187,15 +197,15 @@ func serveCVMCPRPC(c *gin.Context) {
 		Method string `json:"method"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"jsonrpc": "2.0",
-			"id":      nil,
-			"result": gin.H{
-				"protocolVersion": "2025-06-18",
-				"serverInfo":      gin.H{"name": "Laisky CV MCP discovery", "version": "1.0.0"},
-				"capabilities":    gin.H{"tools": gin.H{}},
-			},
-		})
+		serveCVMCPInitialize(c, nil)
+		return
+	}
+	if req.Method == "initialize" {
+		serveCVMCPInitialize(c, req.ID)
+		return
+	}
+	if req.Method == "notifications/initialized" {
+		c.Status(http.StatusAccepted)
 		return
 	}
 	if req.Method == "tools/list" {
@@ -207,9 +217,26 @@ func serveCVMCPRPC(c *gin.Context) {
 					{
 						"name":        "read_cv",
 						"description": "Read Zhonghua (Laisky) Cai's public CV.",
-						"inputSchema": gin.H{"type": "object", "properties": gin.H{}},
+						"inputSchema": gin.H{
+							"type":       "object",
+							"properties": gin.H{"format": gin.H{"type": "string", "enum": []string{"json", "markdown", "pdf"}}},
+						},
+						"annotations": gin.H{"readOnlyHint": true},
 					},
 				},
+			},
+		})
+		return
+	}
+	if req.Method == "tools/call" {
+		c.JSON(http.StatusOK, gin.H{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result": gin.H{
+				"content": []gin.H{
+					{"type": "text", "text": "Use https://cv.laisky.com/api/v1/cv for authoritative public CV content."},
+				},
+				"isError": false,
 			},
 		})
 		return
@@ -221,6 +248,21 @@ func serveCVMCPRPC(c *gin.Context) {
 			"protocolVersion": "2025-06-18",
 			"serverInfo":      gin.H{"name": "Laisky CV MCP discovery", "version": "1.0.0"},
 			"capabilities":    gin.H{"tools": gin.H{}},
+		},
+	})
+}
+
+// serveCVMCPInitialize returns the MCP initialize handshake response.
+// It takes a Gin request context and JSON-RPC id and returns no values.
+func serveCVMCPInitialize(c *gin.Context, id any) {
+	c.JSON(http.StatusOK, gin.H{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"result": gin.H{
+			"protocolVersion": "2025-06-18",
+			"serverInfo":      gin.H{"name": "Laisky CV MCP discovery", "version": "1.0.0"},
+			"capabilities":    gin.H{"tools": gin.H{"listChanged": false}},
+			"instructions":    "Use read_cv for public resume and recruiting questions about Zhonghua (Laisky) Cai.",
 		},
 	})
 }

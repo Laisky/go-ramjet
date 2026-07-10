@@ -100,8 +100,11 @@ func registerAgentDiscoveryRoutes(router gin.IRouter, h *handler) {
 // setCVAPIDiscoveryHeaders adds stable headers that help agents classify CV API responses.
 // It takes a Gin request context and returns no values.
 func setCVAPIDiscoveryHeaders(c *gin.Context) {
-	c.Header("Link", `<https://cv.laisky.com/openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.1", <https://cv.laisky.com/llms.txt>; rel="describedby"; type="text/markdown"`)
+	c.Header("Link", `<https://cv.laisky.com/openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json;version=3.1", <https://cv.laisky.com/llms.txt>; rel="describedby"; type="text/markdown", <https://cv.laisky.com/api/versioning.md>; rel="deprecation"; type="text/markdown"`)
 	c.Header("Vary", "Accept")
+	c.Header("Cross-Origin-Opener-Policy", "same-origin")
+	c.Header("Cross-Origin-Embedder-Policy", "credentialless")
+	c.Header("Permissions-Policy", "tools=(self)")
 	c.Header("X-RateLimit-Limit", "120")
 	c.Header("X-RateLimit-Remaining", "119")
 	c.Header("X-RateLimit-Reset", "60")
@@ -711,6 +714,14 @@ func serveCVAPIRoot(c *gin.Context) {
 		"version":     "v1",
 		"description": "Public read API for CV content.",
 		"openapi":     cvPublicOpenAPI,
+		"cli":         "https://cv.laisky.com/cli.md",
+		"deprecation_policy": gin.H{
+			"style":       "url versioning",
+			"active":      "/api/v1",
+			"sunset":      "2036-12-31T23:59:59Z",
+			"docs":        "https://cv.laisky.com/api/versioning.md",
+			"replacement": "A future /api/v2 path will be published before breaking changes.",
+		},
 		"endpoints": []gin.H{
 			{"method": "GET", "path": "/api/v1/cv", "auth": "none", "description": "Read current CV markdown."},
 			{"method": "GET", "path": "/cv/pdf", "auth": "none", "description": "Download current CV PDF."},

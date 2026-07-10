@@ -54,6 +54,15 @@ func buildCVSiteRootFallbackHTML() string {
     <h2>Agent And Developer Resources</h2>
     <p>Use the <a href="/api/v1/cv">structured CV API</a>, the <a href="/openapi.json">OpenAPI document</a>, the <a href="/.well-known/api-catalog">API catalog</a>, <a href="/agents.md">agent instructions</a>, the <a href="/auth.md">auth guide</a>, and the <a href="/cv/pdf">PDF CV</a>. Contact <a href="mailto:job@laisky.com">job@laisky.com</a> for recruiting, interviews, references, and role-fit questions.</p>
   </section>
+  <form hidden toolname="read_cv" tooldescription="Read Zhonghua (Laisky) Cai's public CV through the structured CV API." action="/api/v1/cv" method="get">
+    <label for="cv-format">Format</label>
+    <select id="cv-format" name="format" toolparamdescription="Preferred CV response format.">
+      <option value="json">JSON</option>
+      <option value="markdown">Markdown</option>
+      <option value="pdf">PDF</option>
+    </select>
+    <button type="submit">Read CV</button>
+  </form>
 </main>`
 }
 
