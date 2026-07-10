@@ -89,6 +89,8 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 	grp.PUT("/content", auth.AuthMw, h.saveContent)
 	grp.GET("/pdf", h.downloadPDF)
 	grp.POST("/pdf/preview", auth.AuthMw, h.renderPDFPreview)
+
+	registerAgentDiscoveryRoutes(web.Server)
 }
 
 // getPageMeta returns resolved CV page metadata for the current request host/path.
