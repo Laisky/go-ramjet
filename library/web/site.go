@@ -42,10 +42,19 @@ func RegisterSiteMetadata(hostsOrPaths []string, metadata SiteMetadata) {
 
 	for _, hop := range hostsOrPaths {
 		if strings.HasPrefix(hop, "/") {
+			if existing, ok := siteMetadataByPath[hop]; ok {
+				siteMetadataByPath[hop] = mergeSiteMetadata(existing, metadata)
+				continue
+			}
 			siteMetadataByPath[hop] = metadata
 			continue
 		}
-		siteMetadataByHost[normalizeHost(hop)] = metadata
+		host := normalizeHost(hop)
+		if existing, ok := siteMetadataByHost[host]; ok {
+			siteMetadataByHost[host] = mergeSiteMetadata(existing, metadata)
+			continue
+		}
+		siteMetadataByHost[host] = metadata
 	}
 }
 

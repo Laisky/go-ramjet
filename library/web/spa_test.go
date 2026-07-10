@@ -191,6 +191,12 @@ func TestSiteMetadata(t *testing.T) {
 			HeadHTML:         `<link rel="canonical" href="https://fallback.example.com/">`,
 			RootFallbackHTML: `<main><h1>Fallback content</h1></main>`,
 		})
+		RegisterSiteMetadata([]string{"fallback.example.com"}, SiteMetadata{
+			ID:      "fallback",
+			Theme:   "fallback",
+			Title:   "Configured Fallback Site",
+			Favicon: "/configured.ico",
+		})
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/", nil)
@@ -198,6 +204,8 @@ func TestSiteMetadata(t *testing.T) {
 		r.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), "<title>Configured Fallback Site</title>")
+		require.Contains(t, w.Body.String(), `href="/configured.ico"`)
 		require.Contains(t, w.Body.String(), `<link rel="canonical" href="https://fallback.example.com/">`)
 		require.Contains(t, w.Body.String(), `<div id="root"><main><h1>Fallback content</h1></main></div>`)
 	})
