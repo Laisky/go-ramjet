@@ -185,9 +185,10 @@ func TestServeCVAICatalog(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, "Zhonghua (Laisky) Cai CV", payload["name"])
-	require.Contains(t, payload["description"], "markdown API")
-	require.Contains(t, payload, "apis")
-	require.Contains(t, payload, "mcp_servers")
+	require.Equal(t, "0.1", payload["specVersion"])
+	entries, ok := payload["entries"].([]any)
+	require.True(t, ok)
+	require.Len(t, entries, 3)
 }
 
 // TestServeCVMCPMetadata verifies MCP discovery metadata includes the public server.

@@ -90,7 +90,7 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 	grp.GET("/pdf", h.downloadPDF)
 	grp.POST("/pdf/preview", auth.AuthMw, h.renderPDFPreview)
 
-	registerAgentDiscoveryRoutes(web.Server)
+	registerAgentDiscoveryRoutes(web.Server, h)
 }
 
 // getPageMeta returns resolved CV page metadata for the current request host/path.
@@ -113,6 +113,7 @@ func (h *handler) getPageMeta(c *gin.Context) {
 // getContent returns the stored CV markdown content.
 func (h *handler) getContent(c *gin.Context) {
 	logger := gmw.GetLogger(c)
+	setCVAPIDiscoveryHeaders(c)
 
 	payload, err := h.store.Load(gmw.Ctx(c))
 	if web.AbortErr(c, err) {
