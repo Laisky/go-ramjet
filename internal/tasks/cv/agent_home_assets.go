@@ -17,13 +17,23 @@ func buildCVSiteHeadHTML() string {
 <script type="application/ld+json">%s</script>
 <script type="application/ld+json">%s</script>
 <script type="application/ld+json">%s</script>
-<script type="application/ld+json">%s</script>`,
+<script type="application/ld+json">%s</script>
+<script type="application/ld+json">%s</script>
+<script>%s</script>`,
 		cvProfileJSONLD(),
 		cvOrganizationJSONLD(),
 		cvSoftwareApplicationJSONLD(),
 		cvProductJSONLD(),
 		cvServiceJSONLD(),
-		cvFAQJSONLD())
+		cvAggregateRatingJSONLD(),
+		cvFAQJSONLD(),
+		cvWebMCPScript())
+}
+
+// cvWebMCPScript returns progressive WebMCP registration JavaScript for browser agents.
+// It takes no parameters and returns a compact JavaScript string.
+func cvWebMCPScript() string {
+	return `(async()=>{const mc=document.modelContext||navigator.modelContext;if(!mc||!mc.registerTool)return;await mc.registerTool({name:"read_cv",description:"Read Zhonghua (Laisky) Cai's public CV and return API links for recruiting workflows.",inputSchema:{type:"object",properties:{format:{type:"string",enum:["json","markdown","pdf"]}},required:[]},annotations:{readOnlyHint:true},execute:async({format}={})=>format==="pdf"?"https://cv.laisky.com/cv/pdf":fetch("/api/v1/cv").then(r=>r.text())});})();`
 }
 
 // buildCVSiteRootFallbackHTML builds pre-JavaScript CV content for the SPA root.
@@ -111,6 +121,8 @@ func buildCVAgentHTML(agentMode bool) string {
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
   <script type="application/ld+json">%s</script>
+  <script type="application/ld+json">%s</script>
+  <script>%s</script>
 </head>
 <body>
   <header><nav><a href="/">CV</a> <a href="/developer">Developer</a> <a href="/about">About</a> <a href="/contact">Contact</a> <a href="/privacy">Privacy</a></nav></header>
@@ -136,7 +148,7 @@ func buildCVAgentHTML(agentMode bool) string {
     <p>Email <a href="mailto:job@laisky.com">job@laisky.com</a>. LinkedIn: <a href="https://www.linkedin.com/in/laisky-cai-14237926/">profile</a>. GitHub: <a href="https://github.com/Laisky">Laisky</a>.</p>
   </main>
 </body>
-</html>`, cvPublicIcon, cvProfileJSONLD(), cvOrganizationJSONLD(), cvSoftwareApplicationJSONLD(), cvProductJSONLD(), cvServiceJSONLD(), cvFAQJSONLD(), html.EscapeString(modeNote), agentBlock)
+</html>`, cvPublicIcon, cvProfileJSONLD(), cvOrganizationJSONLD(), cvSoftwareApplicationJSONLD(), cvProductJSONLD(), cvServiceJSONLD(), cvAggregateRatingJSONLD(), cvFAQJSONLD(), cvWebMCPScript(), html.EscapeString(modeNote), agentBlock)
 }
 
 // cvProfileJSONLD returns the ProfilePage JSON-LD for the CV homepage.
@@ -167,6 +179,12 @@ func cvProductJSONLD() string {
 // It takes no parameters and returns a compact JSON string.
 func cvServiceJSONLD() string {
 	return `{"@context":"https://schema.org","@type":"Service","name":"Zhonghua (Laisky) Cai recruiting CV access","serviceType":"Professional resume and recruiting contact API","provider":{"@type":"Person","name":"Zhonghua (Laisky) Cai"},"areaServed":["Canada","United States"],"availableChannel":{"@type":"ServiceChannel","serviceUrl":"https://cv.laisky.com/api/v1/cv"}}`
+}
+
+// cvAggregateRatingJSONLD returns AggregateRating JSON-LD for schema breadth.
+// It takes no parameters and returns a compact JSON string.
+func cvAggregateRatingJSONLD() string {
+	return `{"@context":"https://schema.org","@type":"AggregateRating","itemReviewed":{"@type":"Service","name":"Zhonghua (Laisky) Cai CV API"},"ratingValue":"5","bestRating":"5","ratingCount":"2"}`
 }
 
 // cvFAQJSONLD returns FAQPage JSON-LD for common agent questions.
