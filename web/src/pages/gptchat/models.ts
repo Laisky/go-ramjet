@@ -9,12 +9,14 @@ export const ChatModelGPT41 = 'gpt-4.1'
 // export const ChatModelGPT41Mini = 'gpt-4.1-mini'
 // export const ChatModelGPT41Nano = 'gpt-4.1-nano'
 export const ChatModelGPT5Dot5 = 'gpt-5.5'
-export const ChatModelGPT5Dot5Pro = 'gpt-5.5-pro'
+export const ChatModelGPT5Dot6Sol = 'gpt-5.6-sol'
+export const ChatModelGPT5Dot6Terra = 'gpt-5.6-terra'
+export const ChatModelGPT5Dot6Luna = 'gpt-5.6-luna'
 // export const ChatModelGPT5Dot1 = 'gpt-5.1'
 // export const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex'
 export const ChatModelGPT5Dot3Codex = 'gpt-5.3-codex'
-export const ChatModelGPT5Dot4Mini = 'gpt-5.4-mini'
-export const ChatModelGPT5Dot4Nano = 'gpt-5.4-nano'
+// export const ChatModelGPT5Dot4Mini = 'gpt-5.4-mini'
+// export const ChatModelGPT5Dot4Nano = 'gpt-5.4-nano'
 // export const ChatModelGPT5Pro = 'gpt-5-pro'
 export const ChatModelGPT4OSearch = 'gpt-4o-search-preview'
 export const ChatModelGPT4OMini = 'gpt-4o-mini'
@@ -32,6 +34,8 @@ export const ChatModelDeepV4Flash = 'deepseek-v4-flash'
 export const ChatModelDeepSeekV4Pro = 'deepseek-v4-pro'
 export const ChatModelClaude47Opus = 'claude-opus-4-7'
 export const ChatModelClaude48Opus = 'claude-opus-4-8'
+export const ChatModelClaudeFable5 = 'claude-fable-5'
+export const ChatModelClaudeMythos5 = 'claude-mythos-5'
 export const ChatModelClaude46Sonnet = 'claude-sonnet-4-6'
 export const ChatModelClaude45Haiku = 'claude-haiku-4-5'
 // export const ChatModelGemini25Pro = 'gemini-2.5-pro'
@@ -82,11 +86,14 @@ export const ChatModels = [
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
   ChatModelGPT5Dot5,
-  ChatModelGPT5Dot5Pro,
+  ChatModelGPT5Dot5,
+  ChatModelGPT5Dot6Sol,
+  ChatModelGPT5Dot6Terra,
+  ChatModelGPT5Dot6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
-  ChatModelGPT5Dot4Mini,
-  ChatModelGPT5Dot4Nano,
+  // ChatModelGPT5Dot4Mini,
+  // ChatModelGPT5Dot4Nano,
   // ChatModelGPT5Pro,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
@@ -105,6 +112,8 @@ export const ChatModels = [
   ChatModelDeepSeekV4Pro,
   ChatModelClaude47Opus,
   ChatModelClaude48Opus,
+  ChatModelClaudeFable5,
+  ChatModelClaudeMythos5,
   ChatModelClaude46Sonnet,
   ChatModelClaude45Haiku,
   ChatModelGroqllama3With70B,
@@ -126,11 +135,13 @@ export const VisionModels = [
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
   ChatModelGPT5Dot5,
-  ChatModelGPT5Dot5Pro,
+  ChatModelGPT5Dot6Sol,
+  ChatModelGPT5Dot6Terra,
+  ChatModelGPT5Dot6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
-  ChatModelGPT5Dot4Mini,
-  ChatModelGPT5Dot4Nano,
+  // ChatModelGPT5Dot4Mini,
+  // ChatModelGPT5Dot4Nano,
   // ChatModelGPT5Pro,
   ChatModelGPT4OSearch,
   ChatModelGPT4OMini,
@@ -142,6 +153,9 @@ export const VisionModels = [
   ChatModelGemini3ProImage,
   ChatModelClaude47Opus,
   ChatModelClaude48Opus,
+  ChatModelClaude48Opus,
+  ChatModelClaudeFable5,
+  ChatModelClaudeMythos5,
   ChatModelClaude46Sonnet,
   ChatModelClaude45Haiku,
   ChatModelGPTO1,
@@ -190,7 +204,7 @@ export const FreeModels = [
   ChatModelQwen332B,
   ChatModelGPT4OMini,
   // ChatModelGPT41Nano,
-  ChatModelGPT5Dot4Nano,
+  // ChatModelGPT5Dot4Nano,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
   ChatModelDeepV4Flash,
@@ -221,11 +235,13 @@ export const ModelCategories: Record<string, string[]> = {
     // ChatModelGPT41Nano,
     // ChatModelGPT5Dot1,
     ChatModelGPT5Dot5,
-    ChatModelGPT5Dot5Pro,
+    ChatModelGPT5Dot6Sol,
+    ChatModelGPT5Dot6Terra,
+    ChatModelGPT5Dot6Luna,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot3Codex,
-    ChatModelGPT5Dot4Mini,
-    ChatModelGPT5Dot4Nano,
+    // ChatModelGPT5Dot4Mini,
+    // ChatModelGPT5Dot4Nano,
     // ChatModelGPT5Pro,
     // ChatModelGPT4Turbo,
     ChatModelGPTO1,
@@ -240,6 +256,8 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelClaude45Haiku,
     ChatModelClaude47Opus,
     ChatModelClaude48Opus,
+    ChatModelClaudeFable5,
+    ChatModelClaudeMythos5,
     ChatModelClaude46Sonnet,
   ],
   Google: [
