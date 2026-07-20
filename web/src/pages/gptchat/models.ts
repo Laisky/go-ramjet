@@ -49,6 +49,7 @@ export const ChatModelGroqLlama4 = 'meta-llama/llama-guard-4-12b'
 export const ChatModelQwen332B = 'qwen/qwen3-32b'
 export const ChatModelKimiK3 = 'kimi-k3'
 export const ChatModelGlm5Dot2 = 'glm-5.2'
+export const ChatModelGrok4Dot5 = 'grok-4.5'
 
 // QA models
 export const QAModelBasebit = 'qa-bbt-xego'
@@ -121,6 +122,7 @@ export const ChatModels = [
   ChatModelQwen332B,
   ChatModelKimiK3,
   ChatModelGlm5Dot2,
+  ChatModelGrok4Dot5,
   // ChatModelGemini25Pro,
   ChatModelGemini3dot1Pro,
   ChatModelGemini31FlashLite,
@@ -275,6 +277,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelQwen332B,
     ChatModelKimiK3,
     ChatModelGlm5Dot2,
+    ChatModelGrok4Dot5,
   ],
   Image: [
     ImageModelDalle3,
