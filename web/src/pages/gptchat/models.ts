@@ -47,7 +47,7 @@ export const ChatModelDeepResearch = 'deep-research'
 export const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile'
 export const ChatModelGroqLlama4 = 'meta-llama/llama-guard-4-12b'
 export const ChatModelQwen332B = 'qwen/qwen3-32b'
-export const ChatModelKimiK2Dot7 = 'kimi-k2.7-code'
+export const ChatModelKimiK3 = 'kimi-k3'
 export const ChatModelGlm5Dot2 = 'glm-5.2'
 
 // QA models
@@ -119,7 +119,7 @@ export const ChatModels = [
   ChatModelGroqllama3With70B,
   ChatModelGroqLlama4,
   ChatModelQwen332B,
-  ChatModelKimiK2Dot7,
+  ChatModelKimiK3,
   ChatModelGlm5Dot2,
   // ChatModelGemini25Pro,
   ChatModelGemini3dot1Pro,
@@ -273,7 +273,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGroqllama3With70B,
     ChatModelGroqLlama4,
     ChatModelQwen332B,
-    ChatModelKimiK2Dot7,
+    ChatModelKimiK3,
     ChatModelGlm5Dot2,
   ],
   Image: [
