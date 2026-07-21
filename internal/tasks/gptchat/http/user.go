@@ -45,6 +45,8 @@ const (
 
 // GetCurrentUser get current user
 func GetCurrentUser(ctx *gin.Context) {
+	setNoStoreHeaders(ctx)
+
 	user, err := getUserByAuthHeader(ctx)
 	if web.AbortErr(ctx, err) {
 		return
@@ -56,6 +58,20 @@ func GetCurrentUser(ctx *gin.Context) {
 	}
 
 	ctx.Data(200, "application/json", payload)
+}
+
+// setNoStoreHeaders disables browser and intermediary caching for user-specific responses.
+//
+// Parameters:
+//   - ctx: Current gin request context whose response headers will be updated.
+//
+// Returns:
+//   - Nothing.
+func setNoStoreHeaders(ctx *gin.Context) {
+	ctx.Header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate")
+	ctx.Header("Pragma", "no-cache")
+	ctx.Header("Expires", "0")
+	ctx.Header("Surrogate-Control", "no-store")
 }
 
 // func GetCurrentUserQuota(ctx *gin.Context) {

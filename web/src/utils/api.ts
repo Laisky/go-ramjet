@@ -639,9 +639,12 @@ export async function transcribeAudio(
 export async function getCurrentUser(
   apiToken: string,
 ): Promise<{ username: string; is_member: boolean }> {
-  const response = await fetch(`${getApiBase()}/user/me`, {
+  const response = await fetch(`${getApiBase()}/user/me?_=${Date.now()}`, {
+    cache: 'no-store',
     headers: {
       Authorization: `Bearer ${apiToken}`,
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
     },
   })
 

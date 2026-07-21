@@ -47,11 +47,22 @@ async function request<T>(
   }
 }
 
+/**
+ * withCacheBuster returns an endpoint URL that bypasses stale browser/proxy caches.
+ */
+function withCacheBuster(endpoint: string): string {
+  const sep = endpoint.includes('?') ? '&' : '?'
+  return `${endpoint}${sep}_=${Date.now()}`
+}
+
 export const api = {
   fetchCurrentUser: (token: string) => {
-    return request<UserConfig>('/user/me', {
+    return request<UserConfig>(withCacheBuster('/user/me'), {
+      cache: 'no-store',
       headers: {
         Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
       },
     })
   },

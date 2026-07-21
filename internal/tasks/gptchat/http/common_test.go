@@ -1,6 +1,7 @@
 package http
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -64,6 +65,25 @@ func TestGetUserByAuthHeader_FreeTierPrefixedTokenUsesConfiguredAllowedModels(t 
 	require.NoError(t, err)
 	require.True(t, user.IsFree)
 	require.Equal(t, []string{"gpt-4o-mini", "gpt-5-mini"}, user.AllowedModels)
+}
+
+func TestGetCurrentUserDisablesCaching(t *testing.T) {
+	setupTestConfig()
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/gptchat/user/me", nil)
+	ctx.Request.Header.Set("authorization", "Bearer FREETIER-abcdef1234567890")
+
+	GetCurrentUser(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "no-store, no-cache, max-age=0, must-revalidate",
+		recorder.Header().Get("Cache-Control"))
+	require.Equal(t, "no-cache", recorder.Header().Get("Pragma"))
+	require.Equal(t, "0", recorder.Header().Get("Expires"))
+	require.Equal(t, "no-store", recorder.Header().Get("Surrogate-Control"))
 }
 
 func TestGetUserByAuthHeader_LaiskyTokenUsesOwnImageToken(t *testing.T) {
