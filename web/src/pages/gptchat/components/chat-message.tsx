@@ -13,6 +13,7 @@ import { useTTS } from '../hooks/use-tts'
 import type { ChatAttachment, ChatMessageData } from '../types'
 import { formatCostUsd } from '../utils/format'
 import { ChatMessageHeader } from './chat-message-header'
+import { ChatMessageContent } from './chat-message-content'
 import { TTSAudioPlayer } from './tts-audio-player'
 
 export interface ChatMessageProps {
@@ -208,9 +209,11 @@ export const ChatMessage = memo(function ChatMessage({
           {isUser ? (
             <div className="space-y-2">
               {message.content && (
-                <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground opacity-90">
-                  {message.content}
-                </div>
+                <ChatMessageContent content={message.content} variant="user">
+                  <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground opacity-90">
+                    {message.content}
+                  </div>
+                </ChatMessageContent>
               )}
               {!message.content && message.attachments?.length && (
                 <div className="text-[11px] text-muted-foreground italic">
@@ -261,9 +264,15 @@ export const ChatMessage = memo(function ChatMessage({
               )}
             </div>
           ) : message.content ? (
-            <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base text-foreground">
-              {message.content}
-            </Markdown>
+            <ChatMessageContent
+              content={message.content}
+              variant="assistant"
+              isStreaming={isStreaming}
+            >
+              <Markdown className="prose prose-sm max-w-none break-words leading-relaxed dark:prose-invert sm:prose-base text-foreground">
+                {message.content}
+              </Markdown>
+            </ChatMessageContent>
           ) : isStreaming && !message.reasoningContent ? (
             <div
               aria-live="polite"

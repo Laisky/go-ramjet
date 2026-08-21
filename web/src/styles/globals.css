@@ -218,6 +218,24 @@ body {
   background-color: var(--surface-user);
 }
 
+.chat-message-content-fade {
+  background: linear-gradient(
+    to top,
+    var(--chat-message-fade-background) 0%,
+    color-mix(in oklab, var(--chat-message-fade-background) 82%, transparent)
+      48%,
+    transparent 100%
+  );
+}
+
+.chat-message-content-fade-user {
+  --chat-message-fade-background: var(--surface-user);
+}
+
+.chat-message-content-fade-assistant {
+  --chat-message-fade-background: var(--surface-assistant);
+}
+
 .surface-reasoning {
   background-color: var(--surface-reasoning);
   border-color: oklch(82% 0.03 250);

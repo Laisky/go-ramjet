@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ChatMessage } from '../chat-message'
 import type { ChatMessageData } from '../../types'
@@ -75,5 +76,79 @@ describe('ChatMessage UI', () => {
     }
     const { container } = render(<ChatMessage message={message} isStreaming />)
     expect(container.querySelectorAll('.animate-bounce').length).toBe(0)
+  })
+
+  it('collapses long user messages and toggles the full content', async () => {
+    const user = userEvent.setup()
+    const message: ChatMessageData = {
+      chatID: 'long-user-message',
+      role: 'user',
+      content: Array.from(
+        { length: 12 },
+        (_, index) => `Line ${index + 1}`,
+      ).join('\n'),
+    }
+
+    render(<ChatMessage message={message} />)
+
+    const expandButton = screen.getByRole('button', {
+      name: 'Expand full message',
+    })
+    const content = document.getElementById(
+      expandButton.getAttribute('aria-controls') ?? '',
+    )
+
+    expect(content).toBeInTheDocument()
+    expect(expandButton).toHaveAttribute('aria-expanded', 'false')
+    expect(content).toHaveClass('max-h-64')
+
+    await user.click(expandButton)
+
+    const collapseButton = screen.getByRole('button', {
+      name: 'Collapse message',
+    })
+    expect(collapseButton).toHaveAttribute('aria-expanded', 'true')
+    expect(content).not.toHaveClass('max-h-64')
+
+    await user.click(collapseButton)
+    expect(
+      screen.getByRole('button', { name: 'Expand full message' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('keeps a long streaming response expanded while it is generating', () => {
+    const message: ChatMessageData = {
+      chatID: 'streaming-long-message',
+      role: 'assistant',
+      content: Array.from(
+        { length: 12 },
+        (_, index) => `Line ${index + 1}`,
+      ).join('\n'),
+    }
+
+    const { container } = render(<ChatMessage message={message} isStreaming />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Expand full message' }),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('.max-h-64')).not.toBeInTheDocument()
+  })
+
+  it('collapses a completed long assistant response by default', () => {
+    const message: ChatMessageData = {
+      chatID: 'completed-long-message',
+      role: 'assistant',
+      content: Array.from(
+        { length: 12 },
+        (_, index) => `Line ${index + 1}`,
+      ).join('\n'),
+    }
+
+    const { container } = render(<ChatMessage message={message} />)
+
+    expect(
+      screen.getByRole('button', { name: 'Expand full message' }),
+    ).toBeInTheDocument()
+    expect(container.querySelector('.max-h-64')).toBeInTheDocument()
   })
 })
