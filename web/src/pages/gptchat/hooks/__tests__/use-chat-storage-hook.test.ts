@@ -1,4 +1,4 @@
-import { kvGet } from '@/utils/storage'
+import { kvGet, kvSet } from '@/utils/storage'
 import { renderHook } from '@testing-library/react'
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatMessageData } from '../../types'
@@ -55,6 +55,47 @@ describe('useChatStorage hook', () => {
     expect(setMessages).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ content: 'hi' })]),
     )
+  })
+
+  it('should replay messages in persisted role order', async () => {
+    const history = [
+      { chatID: 'old', role: 'user' as const, content: 'old question' },
+      { chatID: 'inserted', role: 'user' as const, content: 'new question' },
+      {
+        chatID: 'inserted',
+        role: 'assistant' as const,
+        content: 'new answer',
+      },
+      { chatID: 'old', role: 'assistant' as const, content: 'old answer' },
+    ]
+    const messages = new Map([
+      ['chat_data_user_old', history[0]],
+      ['chat_data_user_inserted', history[1]],
+      ['chat_data_assistant_inserted', history[2]],
+      ['chat_data_assistant_old', history[3]],
+    ])
+
+    ;(kvGet as Mock).mockImplementation((key: string) => {
+      if (key === 'chat_user_session_1') return Promise.resolve(history)
+      return Promise.resolve(messages.get(key) || null)
+    })
+
+    const { result } = renderHook(() =>
+      useChatStorage({
+        sessionId: 1,
+        setMessages,
+        setError,
+      }),
+    )
+
+    await result.current.loadMessages()
+
+    expect(setMessages).toHaveBeenCalledWith([
+      expect.objectContaining({ chatID: 'old', role: 'user' }),
+      expect.objectContaining({ chatID: 'inserted', role: 'user' }),
+      expect.objectContaining({ chatID: 'inserted', role: 'assistant' }),
+      expect.objectContaining({ chatID: 'old', role: 'assistant' }),
+    ])
   })
 
   it('should abort loading if sessionId changes during fetch (race condition)', async () => {
@@ -280,5 +321,51 @@ describe('useChatStorage hook', () => {
         }),
       ]),
     )
+  })
+
+  it('should insert a pair before the requested history anchor', async () => {
+    const history = [
+      { chatID: 'first', role: 'user' as const, content: 'first' },
+      { chatID: 'first', role: 'assistant' as const, content: 'reply' },
+      { chatID: 'second', role: 'user' as const, content: 'second' },
+    ]
+    ;(kvGet as Mock).mockImplementation((key: string) => {
+      if (key === 'chat_user_session_1') return Promise.resolve(history)
+      return Promise.resolve(null)
+    })
+
+    const { result } = renderHook(() =>
+      useChatStorage({
+        sessionId: 1,
+        setMessages,
+        setError,
+      }),
+    )
+
+    await result.current.insertMessagePair(
+      { chatID: 'inserted', role: 'user', content: 'inserted question' },
+      { chatID: 'inserted', role: 'assistant', content: '' },
+      { chatID: 'second', role: 'user' },
+    )
+
+    expect(kvSet).toHaveBeenLastCalledWith('chat_user_session_1', [
+      history[0],
+      history[1],
+      {
+        chatID: 'inserted',
+        role: 'user',
+        content: 'inserted question',
+        model: undefined,
+        timestamp: undefined,
+      },
+      {
+        chatID: 'inserted',
+        role: 'assistant',
+        content: '',
+        model: undefined,
+        timestamp: undefined,
+      },
+      history[2],
+    ])
   })
 })

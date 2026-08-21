@@ -74,8 +74,34 @@ export interface ChatStorageOptions {
 export interface ChatStorageApi {
   loadMessages: () => Promise<void>
   saveMessage: (message: ChatMessageData) => Promise<void>
+  insertMessagePair: (
+    userMessage: ChatMessageData,
+    assistantMessage: ChatMessageData,
+    before?: SessionHistoryAnchor,
+  ) => Promise<void>
   clearMessages: () => Promise<void>
   deleteMessage: (chatId: string) => Promise<void>
+}
+
+/**
+ * SessionHistoryAnchor identifies the message before which a new message pair should be stored.
+ */
+export interface SessionHistoryAnchor {
+  chatID: string
+  role: 'user' | 'assistant'
+}
+
+/**
+ * toSessionHistoryItem creates the compact history entry used to order persisted messages.
+ */
+function toSessionHistoryItem(message: ChatMessageData): SessionHistoryItem {
+  return {
+    chatID: message.chatID,
+    role: message.role as 'user' | 'assistant',
+    content: message.content.substring(0, 100),
+    model: message.model,
+    timestamp: message.timestamp,
+  }
 }
 
 /**
@@ -144,7 +170,7 @@ export function useChatStorage({
       }
 
       const loadedMessages: ChatMessageData[] = []
-      const seenChatIds = new Set<string>()
+      const seenMessageKeys = new Set<string>()
 
       for (const item of history) {
         if (isStale()) {
@@ -160,16 +186,15 @@ export function useChatStorage({
           return
         }
 
-        if (seenChatIds.has(item.chatID)) {
+        const messageKey = `${item.chatID}:${item.role}`
+        if (seenMessageKeys.has(messageKey)) {
           continue
         }
-        seenChatIds.add(item.chatID)
+        seenMessageKeys.add(messageKey)
 
-        const userKey = getChatDataKey(item.chatID, 'user')
-        const assistantKey = getChatDataKey(item.chatID, 'assistant')
-
-        const userData = await kvGet<ChatMessageData>(userKey)
-        const assistantData = await kvGet<ChatMessageData>(assistantKey)
+        const messageData = await kvGet<ChatMessageData>(
+          getChatDataKey(item.chatID, item.role),
+        )
 
         if (isStale()) {
           console.debug('[useChatStorage] loadMessages dropped as stale', {
@@ -184,15 +209,12 @@ export function useChatStorage({
           return
         }
 
-        if (userData && typeof userData === 'object' && userData.content) {
-          loadedMessages.push(sanitizeChatMessageData(userData))
-        }
         if (
-          assistantData &&
-          typeof assistantData === 'object' &&
-          assistantData.content
+          messageData &&
+          typeof messageData === 'object' &&
+          (messageData.content || messageData.attachments?.length)
         ) {
-          loadedMessages.push(sanitizeChatMessageData(assistantData))
+          loadedMessages.push(sanitizeChatMessageData(messageData))
         }
       }
 
@@ -251,13 +273,7 @@ export function useChatStorage({
         (h) => h.chatID === message.chatID && h.role === message.role,
       )
 
-      const historyItem: SessionHistoryItem = {
-        chatID: toSave.chatID,
-        role: toSave.role as 'user' | 'assistant',
-        content: toSave.content.substring(0, 100),
-        model: toSave.model,
-        timestamp: toSave.timestamp,
-      }
+      const historyItem = toSessionHistoryItem(toSave)
 
       if (existingIndex >= 0) {
         history[existingIndex] = historyItem
@@ -266,6 +282,45 @@ export function useChatStorage({
       }
 
       await kvSet(historyKey, history)
+    },
+    [concurrency, sessionId],
+  )
+
+  const insertMessagePair = useCallback(
+    async (
+      userMessage: ChatMessageData,
+      assistantMessage: ChatMessageData,
+      before?: SessionHistoryAnchor,
+    ) => {
+      concurrency.markMutation(sessionId)
+
+      await kvSet(getChatDataKey(userMessage.chatID, 'user'), userMessage)
+      await kvSet(
+        getChatDataKey(assistantMessage.chatID, 'assistant'),
+        assistantMessage,
+      )
+
+      const historyKey = getSessionHistoryKey(sessionId)
+      const history = (await kvGet<SessionHistoryItem[]>(historyKey)) || []
+      const newChatIds = new Set([userMessage.chatID, assistantMessage.chatID])
+      const existingHistory = history.filter(
+        (item) => !newChatIds.has(item.chatID),
+      )
+      const anchorIndex = before
+        ? existingHistory.findIndex(
+            (item) =>
+              item.chatID === before.chatID && item.role === before.role,
+          )
+        : -1
+      const insertAt = anchorIndex >= 0 ? anchorIndex : existingHistory.length
+
+      existingHistory.splice(
+        insertAt,
+        0,
+        toSessionHistoryItem(userMessage),
+        toSessionHistoryItem(assistantMessage),
+      )
+      await kvSet(historyKey, existingHistory)
     },
     [concurrency, sessionId],
   )
@@ -327,5 +382,11 @@ export function useChatStorage({
     [concurrency, sessionId, setMessages],
   )
 
-  return { loadMessages, saveMessage, clearMessages, deleteMessage }
+  return {
+    loadMessages,
+    saveMessage,
+    insertMessagePair,
+    clearMessages,
+    deleteMessage,
+  }
 }

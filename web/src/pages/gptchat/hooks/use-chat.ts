@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  type ChatMessage as ApiChatMessage,
-  type ContentPart,
-} from '@/utils/api'
+import type { ContentPart } from '@/utils/api'
 import { kvDel } from '@/utils/storage'
 
 import {
@@ -23,6 +20,9 @@ import { runDeepResearch } from './chat-deep-research'
 import { runImageModelFlow, runMaskInpainting } from './chat-media'
 import { useChatStorage } from './chat-storage'
 import { useChatStreaming } from './chat-streaming'
+import { buildApiMessages } from '../utils/build-api-messages'
+
+export { buildApiMessages } from '../utils/build-api-messages'
 
 /**
  * UseChatOptions describes how to configure the useChat hook. The sessionId scopes persisted
@@ -46,6 +46,11 @@ export interface UseChatReturn {
     content: string,
     attachments?: ChatAttachment[],
   ) => Promise<void>
+  insertMessageAt: (
+    insertAt: number,
+    content: string,
+    attachments?: ChatAttachment[],
+  ) => Promise<void>
   stopGeneration: () => void
   clearMessages: () => Promise<void>
   deleteMessage: (chatId: string) => Promise<void>
@@ -56,151 +61,6 @@ export interface UseChatReturn {
     newContent: string,
     attachments?: ChatAttachment[],
   ) => Promise<void>
-}
-
-/**
- * buildApiMessages constructs the chat API payload by applying the system prompt and recent
- * context messages to the current user content.
- */
-export function buildApiMessages(
-  config: SessionConfig,
-  context: ChatMessageData[],
-  userContent: string | ContentPart[],
-): ApiChatMessage[] {
-  const apiMessages: ApiChatMessage[] = []
-  const isFreeTier = config.api_token.startsWith('FREETIER')
-
-  if (config.system_prompt) {
-    apiMessages.push({ role: 'system', content: config.system_prompt })
-  }
-
-  const userParts = Array.isArray(userContent) ? userContent : null
-  const userHasImages = !!userParts?.some((part) => part.type === 'image_url')
-  const fileNotePrefix = '[File uploaded:'
-
-  const contentHasFileNotes = (content: string | ContentPart[]): boolean => {
-    if (typeof content === 'string') {
-      return content.includes(fileNotePrefix)
-    }
-    return content.some(
-      (part) => part.type === 'text' && !!part.text?.includes(fileNotePrefix),
-    )
-  }
-
-  const userHasFileNotes = contentHasFileNotes(userContent)
-  const userHasMedia = userHasImages || userHasFileNotes
-
-  const hasImageAttachment = (msg: ChatMessageData) =>
-    !!msg.attachments?.some((att) => att.type === 'image' && !!att.contentB64)
-
-  const hasFileAttachment = (msg: ChatMessageData) =>
-    !!msg.attachments?.some((att) => att.type === 'file')
-
-  const hasMediaAttachment = (msg: ChatMessageData) =>
-    hasImageAttachment(msg) || hasFileAttachment(msg)
-
-  const stripFileNotes = (
-    text: string,
-    attachments?: ChatAttachment[],
-  ): string => {
-    if (!attachments || attachments.length === 0) {
-      return text
-    }
-
-    let cleaned = text
-    for (const att of attachments) {
-      if (att.type !== 'file') continue
-      const note = att.url
-        ? `[File uploaded: ${att.filename} (url: ${att.url})]`
-        : `[File uploaded: ${att.filename}]`
-      cleaned = cleaned.replaceAll(note, '')
-    }
-
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
-    return cleaned
-  }
-
-  let latestContextMediaIdx: number | null = null
-  if (!userHasMedia) {
-    for (let i = context.length - 1; i >= 0; i--) {
-      const msg = context[i]
-      if (!hasMediaAttachment(msg)) {
-        continue
-      }
-
-      if (msg.role === 'user') {
-        const next = context[i + 1]
-        if (
-          next &&
-          next.role === 'assistant' &&
-          next.chatID === msg.chatID &&
-          hasMediaAttachment(next)
-        ) {
-          latestContextMediaIdx = i + 1
-          break
-        }
-      }
-
-      latestContextMediaIdx = i
-      break
-    }
-  }
-
-  for (let i = 0; i < context.length; i++) {
-    const msg = context[i]
-    let content: string | ContentPart[] = msg.content
-    if (isFreeTier) {
-      // Free tier: strip all images from history context messages
-      content = stripFileNotes(msg.content, msg.attachments)
-    } else if (latestContextMediaIdx === i) {
-      const parts: ContentPart[] = [{ type: 'text', text: msg.content }]
-      if (msg.attachments) {
-        for (const att of msg.attachments) {
-          if (att.type === 'image' && att.contentB64) {
-            parts.push({
-              type: 'image_url',
-              image_url: { url: att.contentB64 },
-            })
-          }
-        }
-      }
-      content = parts
-    } else {
-      content = stripFileNotes(msg.content, msg.attachments)
-    }
-    apiMessages.push({ role: msg.role, content })
-  }
-
-  let finalUserContent = userContent
-  if (userHasImages && userParts) {
-    const parts: ContentPart[] = []
-    for (const part of userParts) {
-      if (part.type === 'text' || part.type === 'image_url') {
-        parts.push(part)
-      }
-    }
-    // Free tier: keep only the last image in the current message
-    if (isFreeTier) {
-      const nonImageParts = parts.filter((p) => p.type !== 'image_url')
-      const imageParts = parts.filter((p) => p.type === 'image_url')
-      if (imageParts.length > 1) {
-        parts.length = 0
-        parts.push(...nonImageParts, imageParts[imageParts.length - 1])
-      }
-    }
-    finalUserContent = parts
-  } else if (userParts) {
-    const textParts = userParts.filter((p) => p.type === 'text')
-    if (textParts.length === 1) {
-      finalUserContent = textParts[0].text || ''
-    } else {
-      finalUserContent = textParts
-    }
-  }
-
-  apiMessages.push({ role: 'user', content: finalUserContent })
-
-  return apiMessages
 }
 
 /**
@@ -224,8 +84,13 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     }
   }, [])
 
-  const { loadMessages, saveMessage, clearMessages, deleteMessage } =
-    useChatStorage({ sessionId, setMessages, setError })
+  const {
+    loadMessages,
+    saveMessage,
+    insertMessagePair,
+    clearMessages,
+    deleteMessage,
+  } = useChatStorage({ sessionId, setMessages, setError })
 
   const { streamAssistantReply } = useChatStreaming({
     config,
@@ -445,6 +310,166 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       currentChatIdRef,
       findMaskPair,
       isDeepResearchModel,
+      messages,
+      saveMessage,
+      setIsLoading,
+      streamAssistantReply,
+    ],
+  )
+
+  /**
+   * insertMessageAt creates a new turn at a conversation boundary and uses only earlier messages as context.
+   */
+  const insertMessageAt = useCallback(
+    async (
+      insertAt: number,
+      content: string,
+      attachments?: ChatAttachment[],
+    ) => {
+      const safeContent = String(content || '').trim()
+      if (!safeContent || isLoading) return
+
+      const boundedIndex = Math.max(0, Math.min(insertAt, messages.length))
+      const chatId = generateChatId()
+      const beforeMessage = messages[boundedIndex]
+      const beforeAnchor =
+        beforeMessage && beforeMessage.role !== 'system'
+          ? { chatID: beforeMessage.chatID, role: beforeMessage.role }
+          : undefined
+      const contentParts: ContentPart[] = [{ type: 'text', text: safeContent }]
+      const attachmentNotes: string[] = []
+      let finalContent = safeContent
+
+      if (attachments && attachments.length > 0) {
+        for (const attachment of attachments) {
+          if (attachment.type === 'image') {
+            const b64 =
+              attachment.contentB64 ||
+              (attachment.file ? await fileToDataUrl(attachment.file) : '')
+            if (b64) {
+              contentParts.push({
+                type: 'image_url',
+                image_url: { url: b64 },
+              })
+            }
+          } else if (attachment.type === 'file') {
+            const note = attachment.url
+              ? `[File uploaded: ${attachment.filename} (url: ${attachment.url})]`
+              : `[File uploaded: ${attachment.filename}]`
+            attachmentNotes.push(note)
+          }
+        }
+      }
+
+      const missingNotes = attachmentNotes.filter(
+        (note) => !finalContent.includes(note),
+      )
+      if (missingNotes.length > 0) {
+        finalContent = `${finalContent}\n\n${missingNotes.join('\n\n')}`.trim()
+      }
+
+      const userMessage: ChatMessageData = {
+        chatID: chatId,
+        role: 'user',
+        content: finalContent,
+        timestamp: Date.now(),
+        attachments,
+      }
+      const assistantMessage: ChatMessageData = {
+        chatID: chatId,
+        role: 'assistant',
+        content: '',
+        model: config.selected_model,
+        timestamp: Date.now(),
+      }
+
+      setLoadingChatId(chatId)
+      setError(null)
+      setMessages((prev) => {
+        const index = Math.max(0, Math.min(boundedIndex, prev.length))
+        return [
+          ...prev.slice(0, index),
+          userMessage,
+          assistantMessage,
+          ...prev.slice(index),
+        ]
+      })
+
+      try {
+        await insertMessagePair(userMessage, assistantMessage, beforeAnchor)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setError(message)
+        setMessages((prev) => prev.filter((item) => item.chatID !== chatId))
+        setIsLoading(false)
+        return
+      }
+
+      const priorMessages = messages.slice(0, boundedIndex)
+      const contextMessages =
+        config.n_contexts >= 31
+          ? priorMessages
+          : priorMessages.slice(-config.n_contexts * 2)
+      const apiMessages = buildApiMessages(
+        config,
+        contextMessages,
+        contentParts.length > 1 ? contentParts : finalContent,
+      )
+
+      const maskPair = findMaskPair(attachments)
+      if (maskPair) {
+        await runMaskInpainting({
+          chatId,
+          prompt: safeContent,
+          maskPair,
+          config,
+          fileToDataUrl,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          currentChatIdRef,
+        })
+        return
+      }
+
+      if (isDeepResearchModel()) {
+        await runDeepResearch({
+          chatId,
+          prompt: safeContent,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          deepResearchAbortRef,
+          currentChatIdRef,
+        })
+        return
+      }
+
+      if (isImageModel(config.selected_model)) {
+        await runImageModelFlow({
+          chatId,
+          prompt: safeContent,
+          config,
+          setMessages,
+          setIsLoading,
+          setError,
+          saveMessage,
+          currentChatIdRef,
+        })
+        return
+      }
+
+      await streamAssistantReply({ chatId, payload: apiMessages })
+    },
+    [
+      config,
+      findMaskPair,
+      insertMessagePair,
+      isDeepResearchModel,
+      isLoading,
       messages,
       saveMessage,
       setIsLoading,
@@ -708,6 +733,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     loadingChatId,
     error,
     sendMessage,
+    insertMessageAt,
     stopGeneration,
     clearMessages,
     deleteMessage,

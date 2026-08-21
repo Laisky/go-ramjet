@@ -9,6 +9,9 @@ interface EditMessageModalProps {
   onClose: () => void
   onConfirm: (newContent: string, attachments?: ChatAttachment[]) => void
   apiToken: string
+  title?: string
+  submitLabel?: string
+  placeholder?: string
 }
 
 /**
@@ -20,6 +23,9 @@ export function EditMessageModal({
   onClose,
   onConfirm,
   apiToken,
+  title = 'Edit Message',
+  submitLabel = 'Retry with Edited Message',
+  placeholder = 'Type a message...',
 }: EditMessageModalProps) {
   const [editedContent, setEditedContent] = useState(content)
   const [editedAttachments, setEditedAttachments] = useState(attachments || [])
@@ -62,7 +68,7 @@ export function EditMessageModal({
         className="mx-4 w-full max-w-2xl rounded-lg border theme-border theme-elevated p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-lg font-semibold">Edit Message</h3>
+        <h3 className="mb-4 text-lg font-semibold">{title}</h3>
 
         <MessageInput
           textareaRef={textareaRef}
@@ -71,6 +77,7 @@ export function EditMessageModal({
           attachments={editedAttachments}
           onAttachmentsChange={setEditedAttachments}
           apiToken={apiToken}
+          placeholder={placeholder}
           onKeyDown={handleKeyDown}
           className="mb-4"
           rows={10}
@@ -84,7 +91,7 @@ export function EditMessageModal({
             onClick={handleSubmit}
             disabled={!String(editedContent || '').trim()}
           >
-            Retry with Edited Message
+            {submitLabel}
           </Button>
         </div>
         <p className="mt-2 text-xs theme-text-muted">

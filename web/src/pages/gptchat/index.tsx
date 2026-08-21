@@ -4,6 +4,7 @@
 import { ArrowDown, ArrowUp, Settings } from 'lucide-react'
 import {
   Suspense,
+  Fragment,
   lazy,
   useCallback,
   useEffect,
@@ -21,6 +22,7 @@ import {
   ChatInput,
   ChatMessage,
   ChatSearch,
+  ConversationInsert,
   FloatingMessageHeader,
   ModelSelector,
   SelectionTTSPlayer,
@@ -99,6 +101,7 @@ export function GPTChatPage() {
     loadingChatId,
     error,
     sendMessage,
+    insertMessageAt,
     stopGeneration,
     clearMessages,
     deleteMessage,
@@ -187,6 +190,7 @@ export function GPTChatPage() {
     content: string
     attachments?: ChatAttachment[]
   } | null>(null)
+  const [insertingAt, setInsertingAt] = useState<number | null>(null)
 
   // Monitor footer height to adjust main content padding
   useEffect(() => {
@@ -214,6 +218,7 @@ export function GPTChatPage() {
     }
     return messages.slice(-visibleCount)
   }, [messages, visibleCount])
+  const displayedStartIndex = messages.length - displayedMessages.length
 
   const { selectedMessageIndex, handleMessageSelect, navigateMessageUp } =
     useMessageNavigation({
@@ -445,6 +450,25 @@ export function GPTChatPage() {
       await editAndRetry(editingMessage.chatId, newContent, attachments)
     },
     [editAndRetry, editingMessage],
+  )
+
+  const handleOpenInsert = useCallback(
+    (insertAt: number) => {
+      if (chatLoading || !config.api_token) return
+      setInsertingAt(insertAt)
+    },
+    [chatLoading, config.api_token],
+  )
+
+  const handleConfirmInsert = useCallback(
+    async (content: string, attachments?: ChatAttachment[]) => {
+      if (insertingAt === null) return
+      const insertIndex = insertingAt
+      setInsertingAt(null)
+      scrollModeRef.current = 'auto-follow'
+      await insertMessageAt(insertIndex, content, attachments)
+    },
+    [insertMessageAt, insertingAt, scrollModeRef],
   )
 
   const handleClearChats = useCallback(async () => {
@@ -702,24 +726,33 @@ export function GPTChatPage() {
                   </div>
                 )}
                 {displayedMessages.map((msg, idx) => (
-                  <ChatMessage
-                    key={`${msg.chatID}-${msg.role}`}
-                    message={msg}
-                    onDelete={deleteMessage}
-                    onRegenerate={handleRegenerate}
-                    onEditResend={handleEditResend}
-                    onFork={handleFork}
-                    pairedUserMessage={userMessageByChatId.get(msg.chatID)}
-                    isSelected={idx === selectedMessageIndex}
-                    onSelect={handleMessageSelect}
-                    messageIndex={idx}
-                    apiToken={config.api_token}
-                    isStreaming={
-                      chatLoading &&
-                      msg.role === 'assistant' &&
-                      msg.chatID === loadingChatId
-                    }
-                  />
+                  <Fragment key={`${msg.chatID}-${msg.role}`}>
+                    {idx > 0 && (
+                      <ConversationInsert
+                        onInsert={() =>
+                          handleOpenInsert(displayedStartIndex + idx)
+                        }
+                        disabled={chatLoading || !config.api_token}
+                      />
+                    )}
+                    <ChatMessage
+                      message={msg}
+                      onDelete={deleteMessage}
+                      onRegenerate={handleRegenerate}
+                      onEditResend={handleEditResend}
+                      onFork={handleFork}
+                      pairedUserMessage={userMessageByChatId.get(msg.chatID)}
+                      isSelected={idx === selectedMessageIndex}
+                      onSelect={handleMessageSelect}
+                      messageIndex={idx}
+                      apiToken={config.api_token}
+                      isStreaming={
+                        chatLoading &&
+                        msg.role === 'assistant' &&
+                        msg.chatID === loadingChatId
+                      }
+                    />
+                  </Fragment>
                 ))}
                 <div ref={messagesEndRef} />
               </div>
@@ -830,6 +863,20 @@ export function GPTChatPage() {
             apiToken={config.api_token}
             onClose={() => setEditingMessage(null)}
             onConfirm={handleConfirmEdit}
+          />
+        </Suspense>
+      )}
+
+      {insertingAt !== null && (
+        <Suspense fallback={null}>
+          <EditMessageModal
+            content=""
+            apiToken={config.api_token}
+            title="Insert into conversation"
+            submitLabel="Send from here"
+            placeholder="Ask something from this point..."
+            onClose={() => setInsertingAt(null)}
+            onConfirm={handleConfirmInsert}
           />
         </Suspense>
       )}
