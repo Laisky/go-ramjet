@@ -116,7 +116,7 @@ describe('ChatMessage UI', () => {
     ).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('keeps a long streaming response expanded while it is generating', () => {
+  it('keeps a long streaming response expanded after generation completes', () => {
     const message: ChatMessageData = {
       chatID: 'streaming-long-message',
       role: 'assistant',
@@ -126,11 +126,23 @@ describe('ChatMessage UI', () => {
       ).join('\n'),
     }
 
-    const { container } = render(<ChatMessage message={message} isStreaming />)
+    const { container, rerender } = render(
+      <ChatMessage message={message} isStreaming />,
+    )
 
     expect(
       screen.queryByRole('button', { name: 'Expand full message' }),
     ).not.toBeInTheDocument()
+    expect(container.querySelector('.max-h-64')).not.toBeInTheDocument()
+
+    rerender(<ChatMessage message={message} />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Expand full message' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse message' }),
+    ).toBeInTheDocument()
     expect(container.querySelector('.max-h-64')).not.toBeInTheDocument()
   })
 
@@ -150,5 +162,23 @@ describe('ChatMessage UI', () => {
       screen.getByRole('button', { name: 'Expand full message' }),
     ).toBeInTheDocument()
     expect(container.querySelector('.max-h-64')).toBeInTheDocument()
+  })
+
+  it('measures only assistant body content, not reasoning and tools', () => {
+    const message: ChatMessageData = {
+      chatID: 'reasoning-only-long-message',
+      role: 'assistant',
+      content: 'A short final answer.',
+      reasoningContent: Array.from(
+        { length: 40 },
+        (_, index) => `Reasoning step ${index + 1}`,
+      ).join('\n'),
+    }
+
+    render(<ChatMessage message={message} />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Expand full message' }),
+    ).not.toBeInTheDocument()
   })
 })

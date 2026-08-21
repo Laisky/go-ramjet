@@ -10,7 +10,6 @@ import { cn } from '@/utils/cn'
 
 const PREVIEW_HEIGHT_REM = 16
 const PREVIEW_LINE_COUNT = 10
-const LONG_MESSAGE_CHARACTER_THRESHOLD = 1200
 const EXPAND_LABEL = 'Show more'
 const EXPAND_ARIA_LABEL = 'Expand full message'
 const COLLAPSE_LABEL = 'Show less'
@@ -27,15 +26,12 @@ export interface ChatMessageContentProps {
 }
 
 /**
- * isLikelyLongMessage provides a layout-independent fallback for environments without rendered dimensions.
+ * isLikelyLongMessage provides a body-line fallback for environments without rendered dimensions.
  * @param content The raw message content.
  * @returns Whether the message is likely to exceed the preview size.
  */
 function isLikelyLongMessage(content: string): boolean {
-  return (
-    content.length > LONG_MESSAGE_CHARACTER_THRESHOLD ||
-    content.split(/\r?\n/).length > PREVIEW_LINE_COUNT
-  )
+  return content.split(/\r?\n/).length > PREVIEW_LINE_COUNT
 }
 
 /**
@@ -71,7 +67,7 @@ export function ChatMessageContent({
   const [hasOverflow, setHasOverflow] = useState(() =>
     isLikelyLongMessage(content),
   )
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(isStreaming)
 
   const measureOverflow = useCallback(() => {
     const element = contentRef.current
