@@ -7,15 +7,32 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: bolt-verify-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  mark-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context=bolt/verification \
+            -f description='Benchmark, tests, lint, frontend, and Docker build are running' \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
   benchmark-and-go-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      benchmark_summary: ${{ steps.benchmark.outputs.status_description }}
     env:
       SPEECHSDK_ROOT: /opt/azure/speech
       CGO_CFLAGS: -I/opt/azure/speech/include/c_api
@@ -50,6 +67,7 @@ jobs:
           lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket'
 
       - name: Benchmark baseline and optimized implementations
+        id: benchmark
         shell: bash
         env:
           BASE_SHA: f5922c0999cfca54413937db771f51a78d05bfc0
@@ -76,6 +94,7 @@ jobs:
             -benchmem -cpu=1 -benchtime=1s -count=10 | tee /tmp/optimized.txt
 
           python3 - <<'PY'
+          import os
           import pathlib
           import re
           import statistics
@@ -114,8 +133,14 @@ jobs:
               f'{alloc_reduction:.2f}% lower |\n'
           )
           print(summary)
-          with pathlib.Path('/tmp/benchmark-summary.md').open('w') as fh:
-              fh.write(summary)
+          pathlib.Path('/tmp/benchmark-summary.md').write_text(summary)
+          status_description = (
+              f'{baseline[0]:.1f}->{optimized[0]:.1f} ns/op; '
+              f'{baseline[1]:.0f}->{optimized[1]:.0f} B/op; '
+              f'{baseline[2]:.0f}->{optimized[2]:.0f} allocs/op'
+          )
+          with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a') as fh:
+              fh.write(f'status_description={status_description}\n')
           PY
           cat /tmp/benchmark-summary.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -230,3 +255,46 @@ jobs:
           tags: go-ramjet:bolt-verify
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  report:
+    if: always()
+    needs:
+      - benchmark-and-go-tests
+      - lint
+      - frontend
+      - docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish aggregate verification status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GO_RESULT: ${{ needs.benchmark-and-go-tests.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          DOCKER_RESULT: ${{ needs.docker-build.result }}
+          BENCHMARK_SUMMARY: ${{ needs.benchmark-and-go-tests.outputs.benchmark_summary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=success
+          for result in "$GO_RESULT" "$LINT_RESULT" "$FRONTEND_RESULT" "$DOCKER_RESULT"; do
+            if [[ "$result" != success ]]; then
+              state=failure
+            fi
+          done
+
+          if [[ "$state" == success && -n "$BENCHMARK_SUMMARY" ]]; then
+            description="$BENCHMARK_SUMMARY; all checks passed"
+          else
+            description="go=$GO_RESULT lint=$LINT_RESULT frontend=$FRONTEND_RESULT docker=$DOCKER_RESULT"
+          fi
+          description=${description:0:140}
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context=bolt/verification \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          [[ "$state" == success ]]
