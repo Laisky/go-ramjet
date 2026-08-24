@@ -1,37 +1,35 @@
 name: sync-go127-tidy
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
+      - bolt/preallocate-react-prompt
 
 permissions:
   contents: write
 
 concurrency:
-  group: sync-go127-tidy-${{ github.event.pull_request.number }}
+  group: sync-go127-tidy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   sync:
-    if: >-
-      github.event.pull_request.number == 67 &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    if: github.repository == 'Laisky/go-ramjet'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR head
+      - name: Checkout branch head
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Patch historical-base normalization and restore this workflow
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          BASE_SHA=$(git rev-parse origin/master)
           python3 - <<'PY'
           from pathlib import Path
 
