@@ -1,0 +1,326 @@
+name: pull-request-validation
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SPEECHSDK_ROOT: /opt/azure/speech
+  SPEECHSDK_VERSION: 1.50.0
+
+jobs:
+  backend:
+    name: Backend tests and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libasound2t64 libssl-dev wget
+          wget -O /tmp/SpeechSDK-Linux.tar.gz \
+            "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
+          sudo mkdir -p "${SPEECHSDK_ROOT}"
+          sudo tar --strip-components=1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "${SPEECHSDK_ROOT}"
+          rm -f /tmp/SpeechSDK-Linux.tar.gz
+          {
+            echo "CGO_CFLAGS=-I${SPEECHSDK_ROOT}/include/c_api"
+            echo "CGO_LDFLAGS=-L${SPEECHSDK_ROOT}/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
+            echo "LD_LIBRARY_PATH=${SPEECHSDK_ROOT}/lib/x64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Verify changed Go formatting
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          go install golang.org/x/tools/cmd/goimports@v0.45.0
+          mapfile -t go_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" \
+              | grep -E '\.go$' \
+              || true
+          )
+          if (( ${#go_files[@]} == 0 )); then
+            echo "No changed Go files require formatting validation"
+            exit 0
+          fi
+
+          gofmt_output="$(gofmt -l "${go_files[@]}")"
+          if [[ -n "${gofmt_output}" ]]; then
+            echo "gofmt is required for:"
+            echo "${gofmt_output}"
+            exit 1
+          fi
+
+          goimports_output="$(goimports -local github.com/Laisky/go-ramjet -l "${go_files[@]}")"
+          if [[ -n "${goimports_output}" ]]; then
+            echo "goimports is required for:"
+            echo "${goimports_output}"
+            exit 1
+          fi
+
+      - name: Generate Go 1.27 module metadata
+        id: tidy
+        shell: bash
+        run: |
+          cp go.mod /tmp/go.mod.before
+          cp go.sum /tmp/go.sum.before
+          go mod tidy
+
+          if cmp -s /tmp/go.mod.before go.mod && cmp -s /tmp/go.sum.before go.sum; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "go.mod and go.sum are tidy"
+            exit 0
+          fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "Go 1.27 changed module metadata:"
+          diff -u /tmp/go.mod.before go.mod || true
+          diff -u /tmp/go.sum.before go.sum || true
+
+      - name: Upload tidied module files
+        if: steps.tidy.outputs.changed == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: go-1.27-tidied-modules
+          path: |
+            go.mod
+            go.sum
+          if-no-files-found: error
+
+      - name: Verify module files are tidy
+        if: steps.tidy.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "go.mod or go.sum is not tidy for Go 1.27"
+          exit 1
+
+      - name: Run Go tests
+        run: go test ./... -count=1
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        shell: bash
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+          golangci-lint run -c .golangci.yml
+
+      - name: Run govulncheck
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          tmpfile="$(mktemp)"
+          if govulncheck ./... >"${tmpfile}" 2>&1; then
+            cat "${tmpfile}"
+          else
+            cat "${tmpfile}"
+            if grep -q '^panic:' "${tmpfile}"; then
+              echo 'WARN: govulncheck panicked because of an upstream tool bug; skipping failure'
+            else
+              rm -f "${tmpfile}"
+              exit 1
+            fi
+          fi
+          rm -f "${tmpfile}"
+
+  frontend:
+    name: Frontend tests, lint, and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          corepack enable
+          pnpm -C web install --frozen-lockfile
+
+      - name: Check changed frontend formatting
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t frontend_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- web \
+              | grep -E '\.(cjs|css|html|js|json|jsx|md|mjs|scss|ts|tsx|yaml|yml)$' \
+              || true
+          )
+          if (( ${#frontend_files[@]} == 0 )); then
+            echo "No changed frontend files require Prettier validation"
+            exit 0
+          fi
+          for index in "${!frontend_files[@]}"; do
+            frontend_files[${index}]="${frontend_files[${index}]#web/}"
+          done
+          pnpm -C web exec prettier --check "${frontend_files[@]}"
+
+      - name: Lint changed frontend files
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t lint_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- web \
+              | grep -E '\.(cjs|js|jsx|mjs|ts|tsx)$' \
+              || true
+          )
+          if (( ${#lint_files[@]} == 0 )); then
+            echo "No changed frontend files require ESLint validation"
+            exit 0
+          fi
+          for index in "${!lint_files[@]}"; do
+            lint_files[${index}]="${lint_files[${index}]#web/}"
+          done
+          pnpm -C web exec eslint "${lint_files[@]}"
+
+      - name: Run tests
+        run: pnpm -C web test
+
+      - name: Build frontend
+        run: pnpm -C web build
+
+  benchmark:
+    name: SPA metadata benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Verify package behavior
+        run: go test ./library/web -count=1
+
+      - name: Measure legacy and optimized implementations
+        shell: bash
+        run: |
+          GOMAXPROCS=1 go test ./library/web \
+            -run '^$' \
+            -bench '^BenchmarkApplySiteMetadataToHTML$' \
+            -benchmem \
+            -benchtime=1s \
+            -count=10 | tee /tmp/spa-metadata-benchmark.txt
+
+          python3 <<'PY'
+          import os
+          import re
+          import statistics
+          from pathlib import Path
+
+          pattern = re.compile(
+              r"^BenchmarkApplySiteMetadataToHTML/(legacy|optimized)(?:-\d+)?\s+"
+              r"\d+\s+([0-9.]+)\s+ns/op\s+.*?\s+(\d+)\s+B/op\s+(\d+)\s+allocs/op$"
+          )
+          samples = {
+              "legacy": {"ns": [], "bytes": [], "allocs": []},
+              "optimized": {"ns": [], "bytes": [], "allocs": []},
+          }
+          for line in Path("/tmp/spa-metadata-benchmark.txt").read_text().splitlines():
+              match = pattern.match(line.strip())
+              if not match:
+                  continue
+              variant, ns_op, bytes_op, allocs_op = match.groups()
+              samples[variant]["ns"].append(float(ns_op))
+              samples[variant]["bytes"].append(float(bytes_op))
+              samples[variant]["allocs"].append(float(allocs_op))
+
+          for variant in samples:
+              if len(samples[variant]["ns"]) != 10:
+                  raise SystemExit(
+                      f"expected 10 {variant} samples, got {len(samples[variant]['ns'])}"
+                  )
+
+          legacy = {key: statistics.median(values) for key, values in samples["legacy"].items()}
+          optimized = {
+              key: statistics.median(values) for key, values in samples["optimized"].items()
+          }
+          runtime_reduction = (legacy["ns"] - optimized["ns"]) / legacy["ns"] * 100
+          bytes_reduction = (legacy["bytes"] - optimized["bytes"]) / legacy["bytes"] * 100
+          allocs_reduction = (legacy["allocs"] - optimized["allocs"]) / legacy["allocs"] * 100
+          throughput_gain = (legacy["ns"] / optimized["ns"] - 1) * 100
+
+          summary = f"""### SPA metadata benchmark
+
+          Median of 10 runs with `GOMAXPROCS=1`, Go from `go.mod`, and identical fixtures:
+
+          | Metric | Legacy | Optimized | Improvement |
+          |---|---:|---:|---:|
+          | Runtime | {legacy['ns']:.0f} ns/op | {optimized['ns']:.0f} ns/op | {runtime_reduction:.2f}% lower |
+          | Heap | {legacy['bytes']:.0f} B/op | {optimized['bytes']:.0f} B/op | {bytes_reduction:.2f}% lower |
+          | Allocations | {legacy['allocs']:.0f} allocs/op | {optimized['allocs']:.0f} allocs/op | {allocs_reduction:.2f}% lower |
+          | Throughput | 1.00x | {legacy['ns'] / optimized['ns']:.2f}x | {throughput_gain:.2f}% higher |
+          """
+          print(summary)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary_file:
+              summary_file.write(summary)
+
+          if runtime_reduction < 5:
+              raise SystemExit(f"runtime improvement is only {runtime_reduction:.2f}%")
+          if bytes_reduction < 10:
+              raise SystemExit(f"heap improvement is only {bytes_reduction:.2f}%")
+          if allocs_reduction < 50:
+              raise SystemExit(f"allocation improvement is only {allocs_reduction:.2f}%")
+          PY
+
+  image:
+    name: Production image build
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+      - benchmark
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha,scope=pr-production-image
+          cache-to: type=gha,mode=max,scope=pr-production-image
