@@ -80,14 +80,41 @@ jobs:
             exit 1
           fi
 
-      - name: Verify module files are tidy
+      - name: Generate Go 1.27 module metadata
+        id: tidy
         shell: bash
         run: |
           cp go.mod /tmp/go.mod.before
           cp go.sum /tmp/go.sum.before
           go mod tidy
-          diff -u /tmp/go.mod.before go.mod
-          diff -u /tmp/go.sum.before go.sum
+
+          if cmp -s /tmp/go.mod.before go.mod && cmp -s /tmp/go.sum.before go.sum; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "go.mod and go.sum are tidy"
+            exit 0
+          fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "Go 1.27 changed module metadata:"
+          diff -u /tmp/go.mod.before go.mod || true
+          diff -u /tmp/go.sum.before go.sum || true
+
+      - name: Upload tidied module files
+        if: steps.tidy.outputs.changed == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: go-1.27-tidied-modules
+          path: |
+            go.mod
+            go.sum
+          if-no-files-found: error
+
+      - name: Verify module files are tidy
+        if: steps.tidy.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "go.mod or go.sum is not tidy for Go 1.27"
+          exit 1
 
       - name: Run Go tests
         run: go test ./... -count=1
