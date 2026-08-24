@@ -15,7 +15,7 @@ concurrency:
 jobs:
   sync:
     if: >-
-      github.event.pull_request.number == 66 &&
+      github.event.pull_request.number == 67 &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
@@ -25,25 +25,76 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
-
-      - name: Tidy and commit module metadata
+      - name: Patch historical-base normalization and restore this workflow
         shell: bash
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          go mod tidy
-          if git diff --quiet -- go.mod go.sum; then
-            echo "Go 1.27 module metadata is already tidy"
-            exit 0
-          fi
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/bolt-verify.yml')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, description: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{description}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '''          git checkout --detach "$BASE_SHA"
+          cp /tmp/react_render_benchmark_test.go "$bench_file"
+''',
+              '''          git checkout --detach "$BASE_SHA"
+          # PR #66 left this historical base with an unrelated module-path typo.
+          # Normalize only dependency metadata; the baseline renderer remains unchanged.
+          sed -i 's#github.com/alexcesar/go-bip39 v1.1.0#github.com/alexvec/go-bip39 v1.1.0#' go.mod
+          grep -Fq 'github.com/alexvec/go-bip39 v1.1.0' go.mod
+          cp /tmp/react_render_benchmark_test.go "$bench_file"
+''',
+              'benchmark base checkout',
+          )
+          replace_once(
+              '''          rm "$bench_file"
+          git checkout --detach "$HEAD_SHA"
+''',
+              '''          rm "$bench_file"
+          git reset --hard
+          git checkout --detach "$HEAD_SHA"
+''',
+              'benchmark head checkout',
+          )
+
+          for function in ('run_suite', 'run_make_lint', 'run_golangci', 'run_vuln'):
+              old = f'''          {function}() {{
+            local ref=$1 label=$2
+            git reset --hard
+            git clean -fd
+            git checkout --detach "$ref"
+'''
+              new = old + '''            # Normalize the unrelated module-path typo in historical base revisions.
+            sed -i 's#github.com/alexcesar/go-bip39 v1.1.0#github.com/alexvec/go-bip39 v1.1.0#' go.mod
+            grep -Fq 'github.com/alexvec/go-bip39 v1.1.0' go.mod
+'''
+              replace_once(old, new, function)
+
+          path.write_text(text)
+          PY
+
+          git show "$BASE_SHA:.github/workflows/sync-go127-tidy.yml" \
+            > .github/workflows/sync-go127-tidy.yml
+          git diff --check
+          grep -Fq 'Normalize only dependency metadata; the baseline renderer remains unchanged.' \
+            .github/workflows/bolt-verify.yml
+          test "$(grep -c 'Normalize the unrelated module-path typo in historical base revisions.' \
+            .github/workflows/bolt-verify.yml)" = 4
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add go.mod go.sum
-          git commit -m "chore: sync Go 1.27 module metadata"
+          git add .github/workflows/bolt-verify.yml .github/workflows/sync-go127-tidy.yml
+          git commit -m "ci: normalize broken historical base metadata"
           git push origin "HEAD:${HEAD_BRANCH}"
