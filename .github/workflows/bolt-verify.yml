@@ -81,30 +81,32 @@ jobs:
           go version
           lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket'
 
-      - name: Benchmark base and optimized revisions
+      - name: Benchmark base and optimized renderer implementations
         if: steps.benchmark_changes.outputs.changed == 'true'
         id: benchmark
         shell: bash
         run: |
           set -euo pipefail
-          bench_file=internal/tasks/gptchat/agentx/prompt/react_render_benchmark_test.go
-          cp "$bench_file" /tmp/react_render_benchmark_test.go
+          render_file=internal/tasks/gptchat/agentx/prompt/react.go
+          cp "$render_file" /tmp/react-head.go
 
-          git checkout --detach "$BASE_SHA"
-          cp /tmp/react_render_benchmark_test.go "$bench_file"
+          # Keep the toolchain, dependencies, benchmark, and test identical. Only swap
+          # the production renderer source so unrelated base metadata cannot skew or
+          # prevent the before/after measurement.
+          git show "$BASE_SHA:$render_file" > "$render_file"
           go test ./internal/tasks/gptchat/agentx/prompt \
             -run '^TestRender_ByteForByteCompatibility$' -count=1
           go test ./internal/tasks/gptchat/agentx/prompt \
             -run '^$' -bench '^BenchmarkReactRendererRender$' \
             -benchmem -cpu=1 -benchtime=1s -count=10 | tee /tmp/baseline.txt
 
-          rm "$bench_file"
-          git checkout --detach "$HEAD_SHA"
+          cp /tmp/react-head.go "$render_file"
           go test ./internal/tasks/gptchat/agentx/prompt \
             -run '^TestRender_ByteForByteCompatibility$' -count=1
           go test ./internal/tasks/gptchat/agentx/prompt \
             -run '^$' -bench '^BenchmarkReactRendererRender$' \
             -benchmem -cpu=1 -benchtime=1s -count=10 | tee /tmp/optimized.txt
+          git diff --exit-code "$HEAD_SHA" -- "$render_file"
 
           python3 - <<'PY'
           import os
@@ -201,6 +203,29 @@ jobs:
           corepack enable
           pnpm -C web install --frozen-lockfile
 
+          cat > /tmp/checkout-bolt-revision <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          ref=$1
+          git reset --hard
+          git clean -fd
+          git checkout --detach "$ref"
+
+          # PR #66 introduced an invalid module path on the historical base.
+          # Commit only that metadata correction in the temporary checkout so all
+          # differential checks compare repository behavior rather than a fetch typo.
+          if grep -Fq 'github.com/alexcesar/go-bip39 v1.1.0' go.mod; then
+            sed -i \
+              's#github.com/alexcesar/go-bip39 v1.1.0#github.com/alexvec/go-bip39 v1.1.0#' \
+              go.mod
+            git add go.mod
+            git -c user.name=bolt-ci -c user.email=bolt-ci@invalid \
+              commit --no-gpg-sign --no-verify -m 'ci: normalize historical module path'
+          fi
+          grep -Fq 'github.com/alexvec/go-bip39 v1.1.0' go.mod
+          SCRIPT
+          chmod +x /tmp/checkout-bolt-revision
+
       - name: Validate Go 1.27 declarations and changed files
         run: |
           test "$(go env GOVERSION)" = "go${GO_VERSION}"
@@ -222,9 +247,7 @@ jobs:
           set -euo pipefail
           run_suite() {
             local ref=$1 label=$2
-            git reset --hard
-            git clean -fd
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             go clean -testcache
             set +e
             go test -json ./... -count=1 >"/tmp/${label}.json" 2>&1
@@ -253,9 +276,7 @@ jobs:
           set -euo pipefail
           run_make_lint() {
             local ref=$1 label=$2
-            git reset --hard
-            git clean -fd
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             set +e
             make lint >"/tmp/${label}-make-lint.log" 2>&1
             echo "$?" >"/tmp/${label}-make-lint.status"
@@ -264,8 +285,6 @@ jobs:
               | grep -Ei '(\.go:[0-9]+:[0-9]+:|error|fatal|panic|failed|not found|unsupported|invalid|make: \*\*\*)' \
               | sed -E 's/1\.26\.4|1\.27\.0/<go-version>/g' \
               | sort -u >"/tmp/${label}-make-lint.signatures" || true
-            git reset --hard
-            git clean -fd
           }
           run_make_lint "$BASE_SHA" baseline
           run_make_lint "$HEAD_SHA" optimized
@@ -281,9 +300,7 @@ jobs:
           set -euo pipefail
           run_golangci() {
             local ref=$1 label=$2
-            git reset --hard
-            git clean -fd
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             set +e
             golangci-lint run -c .golangci.yml >"/tmp/${label}-golangci.log" 2>&1
             echo "$?" >"/tmp/${label}-golangci.status"
@@ -307,9 +324,7 @@ jobs:
           set -euo pipefail
           run_vuln() {
             local ref=$1 label=$2
-            git reset --hard
-            git clean -fd
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             set +e
             govulncheck ./... >"/tmp/${label}-vuln.log" 2>&1
             echo "$?" >"/tmp/${label}-vuln.status"
@@ -328,8 +343,7 @@ jobs:
           set -euo pipefail
           run_frontend() {
             local ref=$1 label=$2
-            git reset --hard
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             set +e
             pnpm -C web test >"/tmp/${label}-frontend.log" 2>&1
             echo "$?" >"/tmp/${label}-frontend.status"
@@ -353,10 +367,9 @@ jobs:
           set -euo pipefail
           run_frontend_static() {
             local ref=$1 label=$2
-            git reset --hard
-            git checkout --detach "$ref"
+            /tmp/checkout-bolt-revision "$ref"
             set +e
-            pnpm -C web exec eslint . --format json >"/tmp/${label}-eslint.json" 2>/tmp/${label}-eslint.stderr
+            pnpm -C web exec eslint . --format json >"/tmp/${label}-eslint.json" 2>"/tmp/${label}-eslint.stderr"
             echo "$?" >"/tmp/${label}-eslint.status"
             pnpm -C web exec prettier --check . >"/tmp/${label}-prettier.log" 2>&1
             echo "$?" >"/tmp/${label}-prettier.status"
@@ -374,8 +387,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git reset --hard
-          git checkout --detach "$HEAD_SHA"
+          /tmp/checkout-bolt-revision "$HEAD_SHA"
           pnpm -C web build
           docker build --tag go-ramjet:bolt-go127 .
 
