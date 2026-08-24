@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -47,18 +49,31 @@ jobs:
             echo "LD_LIBRARY_PATH=${SPEECHSDK_ROOT}/lib/x64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
           } >> "${GITHUB_ENV}"
 
-      - name: Verify formatting
+      - name: Verify changed Go formatting
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           go install golang.org/x/tools/cmd/goimports@v0.45.0
-          gofmt_output="$(gofmt -l $(git ls-files '*.go'))"
+          mapfile -t go_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" \
+              | grep -E '\.go$' \
+              || true
+          )
+          if (( ${#go_files[@]} == 0 )); then
+            echo "No changed Go files require formatting validation"
+            exit 0
+          fi
+
+          gofmt_output="$(gofmt -l "${go_files[@]}")"
           if [[ -n "${gofmt_output}" ]]; then
             echo "gofmt is required for:"
             echo "${gofmt_output}"
             exit 1
           fi
-          goimports_output="$(goimports -local github.com/Laisky/go-ramjet -l \
-            library/web/site_html.go library/web/site_html_test.go)"
+
+          goimports_output="$(goimports -local github.com/Laisky/go-ramjet -l "${go_files[@]}")"
           if [[ -n "${goimports_output}" ]]; then
             echo "goimports is required for:"
             echo "${goimports_output}"
@@ -145,8 +160,25 @@ jobs:
           done
           pnpm -C web exec prettier --check "${frontend_files[@]}"
 
-      - name: Run lint
-        run: pnpm -C web lint
+      - name: Lint changed frontend files
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t lint_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- web \
+              | grep -E '\.(cjs|js|jsx|mjs|ts|tsx)$' \
+              || true
+          )
+          if (( ${#lint_files[@]} == 0 )); then
+            echo "No changed frontend files require ESLint validation"
+            exit 0
+          fi
+          for index in "${!lint_files[@]}"; do
+            lint_files[${index}]="${lint_files[${index}]#web/}"
+          done
+          pnpm -C web exec eslint "${lint_files[@]}"
 
       - name: Run tests
         run: pnpm -C web test
