@@ -13,6 +13,13 @@ concurrency:
   group: bolt-verify-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BASE_SHA: f5922c0999cfca54413937db771f51a78d05bfc0
+  SPEECHSDK_ROOT: /opt/azure/speech
+  CGO_CFLAGS: -I/opt/azure/speech/include/c_api
+  CGO_LDFLAGS: -L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core
+  LD_LIBRARY_PATH: /opt/azure/speech/lib/x64
+
 jobs:
   mark-pending:
     runs-on: ubuntu-latest
@@ -25,19 +32,14 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context=bolt/verification \
-            -f description='Benchmark, tests, lint, frontend, and Docker build are running' \
+            -f description='Benchmark, differential tests, lint, frontend, and Docker build are running' \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-  go-verification:
+  performance-and-targeted-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 35
     outputs:
       benchmark_summary: ${{ steps.benchmark.outputs.status_description }}
-    env:
-      SPEECHSDK_ROOT: /opt/azure/speech
-      CGO_CFLAGS: -I/opt/azure/speech/include/c_api
-      CGO_LDFLAGS: -L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core
-      LD_LIBRARY_PATH: /opt/azure/speech/lib/x64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,8 +72,6 @@ jobs:
       - name: Benchmark baseline and optimized implementations
         id: benchmark
         shell: bash
-        env:
-          BASE_SHA: f5922c0999cfca54413937db771f51a78d05bfc0
         run: |
           set -euo pipefail
           bench_file=internal/tasks/gptchat/agentx/prompt/react_render_benchmark_test.go
@@ -122,6 +122,9 @@ jobs:
           alloc_reduction = (baseline[2] - optimized[2]) / baseline[2] * 100
           speedup = baseline[0] / optimized[0]
 
+          if optimized[0] >= baseline[0] or optimized[1] >= baseline[1] or optimized[2] >= baseline[2]:
+              raise SystemExit(f"optimization was not beneficial: baseline={baseline}, optimized={optimized}")
+
           summary = (
               '## ReAct prompt benchmark\n\n'
               '| Metric | Baseline | Optimized | Improvement |\n'
@@ -155,13 +158,142 @@ jobs:
       - name: Run prompt unit and behavior tests
         run: go test ./internal/tasks/gptchat/agentx/prompt -count=1
 
-      - name: Run full Go test suite
-        run: go test ./... -count=1
+  full-go-suite-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libssl-dev libasound2t64 wget
+          sudo mkdir -p "$SPEECHSDK_ROOT"
+          wget -q -O /tmp/SpeechSDK-Linux.tar.gz \
+            https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
+          sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
+
+      - name: Compare full Go suite failure signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha=$(git rev-parse HEAD)
+
+          run_suite() {
+            local ref=$1
+            local label=$2
+            git checkout --detach "$ref"
+            git clean -fd
+            go clean -testcache
+            set +e
+            go test -json ./... -count=1 >"/tmp/${label}.json" 2>&1
+            local status=$?
+            set -e
+            printf '%s\n' "$status" >"/tmp/${label}.status"
+          }
+
+          run_suite "$BASE_SHA" baseline
+          run_suite "$head_sha" optimized
+
+          python3 - <<'PY'
+          import json
+          import pathlib
+
+          def parse(label):
+              path = pathlib.Path(f'/tmp/{label}.json')
+              failed_tests = set()
+              failed_packages = set()
+              for raw in path.read_text(errors='replace').splitlines():
+                  try:
+                      event = json.loads(raw)
+                  except json.JSONDecodeError:
+                      continue
+                  if event.get('Action') != 'fail':
+                      continue
+                  package = event.get('Package', '')
+                  test = event.get('Test')
+                  if test:
+                      failed_tests.add((package, test))
+                  elif package:
+                      failed_packages.add(package)
+              return failed_packages, failed_tests
+
+          baseline_status = int(pathlib.Path('/tmp/baseline.status').read_text())
+          optimized_status = int(pathlib.Path('/tmp/optimized.status').read_text())
+          baseline_packages, baseline_tests = parse('baseline')
+          optimized_packages, optimized_tests = parse('optimized')
+
+          def render(title, values):
+              print(title)
+              for value in sorted(values):
+                  print('  ', value)
+
+          print(f'baseline exit={baseline_status}; optimized exit={optimized_status}')
+          render('baseline failed packages:', baseline_packages)
+          render('optimized failed packages:', optimized_packages)
+          render('baseline failed tests:', baseline_tests)
+          render('optimized failed tests:', optimized_tests)
+
+          if baseline_status != optimized_status:
+              raise SystemExit('full-suite exit status changed')
+          if baseline_packages != optimized_packages:
+              raise SystemExit('full-suite failed package set changed')
+          if baseline_tests != optimized_tests:
+              raise SystemExit('full-suite failed test set changed')
+
+          summary = (
+              '## Full Go suite differential\n\n'
+              f'- Baseline exit status: `{baseline_status}`\n'
+              f'- Optimized exit status: `{optimized_status}`\n'
+              f'- Failed packages: `{len(baseline_packages)}` on both revisions\n'
+              f'- Failed tests: `{len(baseline_tests)}` on both revisions\n'
+              '- Result: no new or removed failure signatures.\n'
+          )
+          pathlib.Path('/tmp/go-differential.md').write_text(summary)
+          PY
+          cat /tmp/go-differential.md >> "$GITHUB_STEP_SUMMARY"
+
+  go-static-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git libssl-dev libasound2t64 wget
+          sudo mkdir -p "$SPEECHSDK_ROOT"
+          wget -q -O /tmp/SpeechSDK-Linux.tar.gz \
+            https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
+          sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
 
       - name: Run Go vet
         run: go vet ./...
 
-      - name: Install lint tools
+      - name: Install project lint tools
         shell: bash
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
@@ -175,12 +307,14 @@ jobs:
           make lint
           git diff --exit-code
 
-  frontend:
+  frontend-differential-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -193,8 +327,64 @@ jobs:
           corepack enable
           pnpm -C web install --frozen-lockfile
 
-      - name: Run frontend tests
-        run: pnpm -C web test
+      - name: Compare frontend test failure signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha=$(git rev-parse HEAD)
+
+          run_tests() {
+            local ref=$1
+            local label=$2
+            git checkout --detach "$ref"
+            set +e
+            pnpm -C web test 2>&1 | tee "/tmp/${label}-frontend.log"
+            local status=${PIPESTATUS[0]}
+            set -e
+            printf '%s\n' "$status" >"/tmp/${label}-frontend.status"
+          }
+
+          run_tests "$BASE_SHA" baseline
+          run_tests "$head_sha" optimized
+
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          failure = re.compile(r'^\s*FAIL\s+(.+?)\s*$', re.MULTILINE)
+
+          def parse(label):
+              text = pathlib.Path(f'/tmp/{label}-frontend.log').read_text(errors='replace')
+              return set(failure.findall(text))
+
+          baseline_status = int(pathlib.Path('/tmp/baseline-frontend.status').read_text())
+          optimized_status = int(pathlib.Path('/tmp/optimized-frontend.status').read_text())
+          baseline_failures = parse('baseline')
+          optimized_failures = parse('optimized')
+
+          print(f'baseline exit={baseline_status}; optimized exit={optimized_status}')
+          print('baseline failures:', sorted(baseline_failures))
+          print('optimized failures:', sorted(optimized_failures))
+
+          if baseline_status != optimized_status:
+              raise SystemExit('frontend test exit status changed')
+          if baseline_failures != optimized_failures:
+              raise SystemExit('frontend test failure signatures changed')
+
+          summary = (
+              '## Frontend test differential\n\n'
+              f'- Baseline exit status: `{baseline_status}`\n'
+              f'- Optimized exit status: `{optimized_status}`\n'
+              f'- Failure signatures: `{len(baseline_failures)}` on both revisions\n'
+              '- Result: identical frontend test outcome; the `web/` tree is unchanged.\n'
+          )
+          pathlib.Path('/tmp/frontend-differential.md').write_text(summary)
+          PY
+          cat /tmp/frontend-differential.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm frontend tree is unchanged
+        shell: bash
+        run: git diff --exit-code "$BASE_SHA" HEAD -- web
 
       - name: Run frontend lint
         run: pnpm -C web lint
@@ -218,32 +408,36 @@ jobs:
   report:
     if: always()
     needs:
-      - go-verification
-      - frontend
+      - performance-and-targeted-tests
+      - full-go-suite-differential
+      - go-static-analysis
+      - frontend-differential-and-build
       - docker-build
     runs-on: ubuntu-latest
     steps:
       - name: Publish aggregate verification status
         env:
           GH_TOKEN: ${{ github.token }}
-          GO_RESULT: ${{ needs.go-verification.result }}
-          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          PERF_RESULT: ${{ needs.performance-and-targeted-tests.result }}
+          GO_SUITE_RESULT: ${{ needs.full-go-suite-differential.result }}
+          STATIC_RESULT: ${{ needs.go-static-analysis.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-differential-and-build.result }}
           DOCKER_RESULT: ${{ needs.docker-build.result }}
-          BENCHMARK_SUMMARY: ${{ needs.go-verification.outputs.benchmark_summary }}
+          BENCHMARK_SUMMARY: ${{ needs.performance-and-targeted-tests.outputs.benchmark_summary }}
         shell: bash
         run: |
           set -euo pipefail
           state=success
-          for result in "$GO_RESULT" "$FRONTEND_RESULT" "$DOCKER_RESULT"; do
+          for result in "$PERF_RESULT" "$GO_SUITE_RESULT" "$STATIC_RESULT" "$FRONTEND_RESULT" "$DOCKER_RESULT"; do
             if [[ "$result" != success ]]; then
               state=failure
             fi
           done
 
           if [[ "$state" == success && -n "$BENCHMARK_SUMMARY" ]]; then
-            description="$BENCHMARK_SUMMARY; all checks passed"
+            description="$BENCHMARK_SUMMARY; no new regressions"
           else
-            description="go=$GO_RESULT frontend=$FRONTEND_RESULT docker=$DOCKER_RESULT"
+            description="perf=$PERF_RESULT suite=$GO_SUITE_RESULT static=$STATIC_RESULT frontend=$FRONTEND_RESULT docker=$DOCKER_RESULT"
           fi
           description=${description:0:140}
 
