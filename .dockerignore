@@ -1,3 +1,8 @@
-.git
+# Keep repository metadata so go build can stamp vcs.revision and vcs.time.
+# Exclude local Git configuration because it can contain checkout credentials.
+.git/config
+.git/config.worktree
+.git/hooks
+.git/logs
 web/node_modules
 web/dist
