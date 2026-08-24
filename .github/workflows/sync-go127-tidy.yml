@@ -1,0 +1,49 @@
+name: sync-go127-tidy
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-go127-tidy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: >-
+      github.event.pull_request.number == 66 &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Tidy and commit module metadata
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          go mod tidy
+          if git diff --quiet -- go.mod go.sum; then
+            echo "Go 1.27 module metadata is already tidy"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          git commit -m "chore: sync Go 1.27 module metadata"
+          git push origin "HEAD:${HEAD_BRANCH}"
