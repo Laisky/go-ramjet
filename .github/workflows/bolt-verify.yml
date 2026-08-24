@@ -206,9 +206,9 @@ jobs:
           run_suite() {
             local ref=$1
             local label=$2
-            git checkout --detach "$ref"
             git reset --hard
             git clean -fd
+            git checkout --detach "$ref"
             go clean -testcache
             set +e
             go test -json ./... -count=1 >"/tmp/${label}.json" 2>&1
@@ -275,8 +275,9 @@ jobs:
       - name: Install project analysis tools
         shell: bash
         run: |
-          git checkout --detach "$HEAD_SHA"
           git reset --hard
+          git clean -fd
+          git checkout --detach "$HEAD_SHA"
           go install golang.org/x/tools/cmd/goimports@v0.49.0
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
@@ -296,13 +297,16 @@ jobs:
           run_lint() {
             local ref=$1
             local label=$2
-            git checkout --detach "$ref"
             git reset --hard
             git clean -fd
+            git checkout --detach "$ref"
             set +e
             make lint >"/tmp/${label}-lint.log" 2>&1
-            printf '%s\n' "$?" >"/tmp/${label}-lint.status"
+            local status=$?
             set -e
+            printf '%s\n' "$status" >"/tmp/${label}-lint.status"
+            git reset --hard
+            git clean -fd
           }
 
           run_lint "$BASE_SHA" baseline
@@ -365,9 +369,9 @@ jobs:
           run_scan() {
             local ref=$1
             local label=$2
-            git checkout --detach "$ref"
             git reset --hard
             git clean -fd
+            git checkout --detach "$ref"
             set +e
             govulncheck ./... >"/tmp/${label}-vuln.log" 2>&1
             printf '%s\n' "$?" >"/tmp/${label}-vuln.status"
@@ -415,7 +419,7 @@ jobs:
 
   frontend-differential-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 65
     steps:
       - name: Checkout pull request head
         uses: actions/checkout@v4
@@ -445,8 +449,8 @@ jobs:
           run_tests() {
             local ref=$1
             local label=$2
-            git checkout --detach "$ref"
             git reset --hard
+            git checkout --detach "$ref"
             set +e
             pnpm -C web test >"/tmp/${label}-frontend.log" 2>&1
             printf '%s\n' "$?" >"/tmp/${label}-frontend.status"
@@ -488,8 +492,6 @@ jobs:
           print('frontend statuses:', statuses)
           for label in labels:
               print(label, sorted(observed[label]))
-          print('stable baseline:', sorted(stable_baseline))
-          print('stable optimized:', sorted(stable_optimized))
 
           if stable_baseline != stable_optimized:
               raise SystemExit('stable frontend failure signatures changed')
@@ -507,13 +509,99 @@ jobs:
           PY
           cat /tmp/frontend-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run frontend lint, formatting, and build
+      - name: Compare frontend ESLint diagnostics
         shell: bash
         run: |
-          git checkout --detach "$HEAD_SHA"
+          set -euo pipefail
+
+          run_eslint() {
+            local ref=$1
+            local label=$2
+            git reset --hard
+            git checkout --detach "$ref"
+            set +e
+            pnpm -C web exec eslint . --format json \
+              >"/tmp/${label}-eslint.json" 2>"/tmp/${label}-eslint.stderr"
+            printf '%s\n' "$?" >"/tmp/${label}-eslint.status"
+            set -e
+          }
+
+          run_eslint "$BASE_SHA" baseline
+          run_eslint "$HEAD_SHA" optimized
+
+          python3 - <<'PY'
+          import collections
+          import json
+          import pathlib
+
+          def parse(label):
+              results = json.loads(
+                  pathlib.Path(f'/tmp/{label}-eslint.json').read_text(errors='replace')
+              )
+              diagnostics = collections.Counter()
+              for result in results:
+                  path = result.get('filePath', '').replace('\\', '/')
+                  relative = path.split('/web/', 1)[-1]
+                  for message in result.get('messages', []):
+                      diagnostics[(
+                          relative,
+                          message.get('line'),
+                          message.get('column'),
+                          message.get('endLine'),
+                          message.get('endColumn'),
+                          message.get('severity'),
+                          message.get('ruleId'),
+                          message.get('message'),
+                      )] += 1
+              return diagnostics
+
+          statuses = {
+              label: int(pathlib.Path(f'/tmp/{label}-eslint.status').read_text())
+              for label in ('baseline', 'optimized')
+          }
+          baseline = parse('baseline')
+          optimized = parse('optimized')
+          print('ESLint statuses:', statuses)
+          print('ESLint diagnostics:', sum(baseline.values()), sum(optimized.values()))
+
+          if statuses['baseline'] != statuses['optimized']:
+              raise SystemExit('frontend ESLint exit status changed')
+          if baseline != optimized:
+              print('added:', list((optimized - baseline).elements()))
+              print('removed:', list((baseline - optimized).elements()))
+              raise SystemExit('frontend ESLint diagnostics changed')
+          if statuses['optimized'] != 0 and not optimized:
+              raise SystemExit('frontend ESLint failed without parseable diagnostics')
+          PY
+
+      - name: Compare frontend formatting outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_prettier() {
+            local ref=$1
+            local label=$2
+            git reset --hard
+            git checkout --detach "$ref"
+            set +e
+            pnpm -C web exec prettier --check . >"/tmp/${label}-prettier.log" 2>&1
+            printf '%s\n' "$?" >"/tmp/${label}-prettier.status"
+            set -e
+          }
+
+          run_prettier "$BASE_SHA" baseline
+          run_prettier "$HEAD_SHA" optimized
+          baseline_status=$(cat /tmp/baseline-prettier.status)
+          optimized_status=$(cat /tmp/optimized-prettier.status)
+          echo "Prettier statuses: baseline=$baseline_status optimized=$optimized_status"
+          test "$baseline_status" = "$optimized_status"
+
+      - name: Build frontend
+        shell: bash
+        run: |
           git reset --hard
-          pnpm -C web exec eslint .
-          pnpm -C web exec prettier --check .
+          git checkout --detach "$HEAD_SHA"
           pnpm -C web build
 
   docker-build:
