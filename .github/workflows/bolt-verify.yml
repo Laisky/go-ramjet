@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [master]
     paths:
+      - .dockerignore
       - AGENTS.md
       - Dockerfile
       - go.mod
@@ -41,6 +42,24 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      - name: Detect benchmark-relevant changes
+        id: benchmark_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed_files=$(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- \
+              internal/tasks/gptchat/agentx/prompt \
+              | grep -Ev '_test\.go$' || true
+          )
+          if [[ -n "$changed_files" ]]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            printf 'Benchmark-relevant changes:\n%s\n' "$changed_files"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'No benchmark-relevant production changes detected.'
+          fi
+
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -63,6 +82,7 @@ jobs:
           lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket'
 
       - name: Benchmark base and optimized revisions
+        if: steps.benchmark_changes.outputs.changed == 'true'
         id: benchmark
         shell: bash
         run: |
@@ -353,10 +373,21 @@ jobs:
       - name: Build frontend and Go 1.27 Docker image
         shell: bash
         run: |
+          set -euo pipefail
           git reset --hard
           git checkout --detach "$HEAD_SHA"
           pnpm -C web build
           docker build --tag go-ramjet:bolt-go127 .
+
+          container_id=$(docker create go-ramjet:bolt-go127)
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container_id:/app/go-ramjet" /tmp/go-ramjet
+          docker rm "$container_id"
+          trap - EXIT
+
+          go version -m /tmp/go-ramjet | tee /tmp/go-ramjet-build-info.txt
+          grep -Fx $'\tbuild\tvcs.revision='"$HEAD_SHA" /tmp/go-ramjet-build-info.txt
+          grep -E $'^\tbuild\tvcs.time=' /tmp/go-ramjet-build-info.txt
 
   report:
     if: always()
