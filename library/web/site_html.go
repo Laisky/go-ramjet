@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+type metaTagSelector struct {
+	attrKey   string
+	attrValue string
+}
+
 var (
 	reTitle         = regexp.MustCompile(`(?i)<title>.*?</title>`)
 	reFavicon       = regexp.MustCompile(`(?i)<link[^>]*?rel="icon"[^>]*?>`)
@@ -14,6 +19,18 @@ var (
 	reHeadClose     = regexp.MustCompile(`(?i)</head>`)
 	reRootContainer = regexp.MustCompile(`(?i)<div\s+id="root"\s*></div>`)
 	reMetaContent   = regexp.MustCompile(`(?i)content="[^"]*"`)
+
+	// Production SPA metadata uses these fixed selectors on every HTML request.
+	// Compile them once instead of rebuilding seven RE2 programs per response.
+	reMetaTags = map[metaTagSelector]*regexp.Regexp{
+		{attrKey: "name", attrValue: "ramjet-site"}:        compileMetaTagRegexp("name", "ramjet-site"),
+		{attrKey: "name", attrValue: "ramjet-theme"}:       compileMetaTagRegexp("name", "ramjet-theme"),
+		{attrKey: "name", attrValue: "description"}:        compileMetaTagRegexp("name", "description"),
+		{attrKey: "name", attrValue: "theme-color"}:        compileMetaTagRegexp("name", "theme-color"),
+		{attrKey: "property", attrValue: "og:title"}:       compileMetaTagRegexp("property", "og:title"),
+		{attrKey: "property", attrValue: "og:description"}: compileMetaTagRegexp("property", "og:description"),
+		{attrKey: "property", attrValue: "og:image"}:       compileMetaTagRegexp("property", "og:image"),
+	}
 )
 
 // applySiteMetadataToHTML injects meta into htmlDoc and returns the updated HTML string.
@@ -83,8 +100,11 @@ func upsertMetaTag(htmlDoc, attrKey, attrValue, content string) string {
 
 	escapedContent := html.EscapeString(content)
 	escapedAttr := html.EscapeString(attrValue)
-	pattern := fmt.Sprintf(`(?i)<meta[^>]*\b%[1]s="%[2]s"[^>]*>`, attrKey, regexp.QuoteMeta(attrValue))
-	re := regexp.MustCompile(pattern)
+	selector := metaTagSelector{attrKey: attrKey, attrValue: attrValue}
+	re, ok := reMetaTags[selector]
+	if !ok {
+		re = compileMetaTagRegexp(attrKey, attrValue)
+	}
 
 	if re.MatchString(htmlDoc) {
 		return re.ReplaceAllStringFunc(htmlDoc, func(s string) string {
@@ -97,6 +117,12 @@ func upsertMetaTag(htmlDoc, attrKey, attrValue, content string) string {
 
 	snippet := fmt.Sprintf(`<meta %s="%s" content="%s">`, attrKey, escapedAttr, escapedContent)
 	return insertIntoHead(htmlDoc, snippet)
+}
+
+// compileMetaTagRegexp compiles the selector used to find a metadata tag.
+func compileMetaTagRegexp(attrKey, attrValue string) *regexp.Regexp {
+	pattern := fmt.Sprintf(`(?i)<meta[^>]*\b%[1]s="%[2]s"[^>]*>`, attrKey, regexp.QuoteMeta(attrValue))
+	return regexp.MustCompile(pattern)
 }
 
 // insertIntoHead inserts snippet before the closing head tag in htmlDoc and returns the updated HTML string.
