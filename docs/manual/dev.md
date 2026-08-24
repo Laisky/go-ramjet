@@ -103,7 +103,7 @@ In development:
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.27+
 - Node.js 20+
 - pnpm (via corepack)
 - NGINX (for SSL termination in test environments)
