@@ -35,7 +35,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git libasound2 libssl-dev wget
+            build-essential ca-certificates curl git libasound2t64 libssl-dev wget
           wget -O /tmp/SpeechSDK-Linux.tar.gz \
             "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
           sudo mkdir -p "${SPEECHSDK_ROOT}"
@@ -110,6 +110,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -123,8 +125,25 @@ jobs:
           corepack enable
           pnpm -C web install --frozen-lockfile
 
-      - name: Check formatting
-        run: pnpm -C web format
+      - name: Check changed frontend formatting
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t frontend_files < <(
+            git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- web \
+              | grep -E '\.(cjs|css|html|js|json|jsx|md|mjs|scss|ts|tsx|yaml|yml)$' \
+              || true
+          )
+          if (( ${#frontend_files[@]} == 0 )); then
+            echo "No changed frontend files require Prettier validation"
+            exit 0
+          fi
+          for index in "${!frontend_files[@]}"; do
+            frontend_files[${index}]="${frontend_files[${index}]#web/}"
+          done
+          pnpm -C web exec prettier --check "${frontend_files[@]}"
 
       - name: Run lint
         run: pnpm -C web lint
@@ -168,7 +187,7 @@ jobs:
           from pathlib import Path
 
           pattern = re.compile(
-              r"^BenchmarkApplySiteMetadataToHTML/(legacy|optimized)-\d+\s+"
+              r"^BenchmarkApplySiteMetadataToHTML/(legacy|optimized)(?:-\d+)?\s+"
               r"\d+\s+([0-9.]+)\s+ns/op\s+.*?\s+(\d+)\s+B/op\s+(\d+)\s+allocs/op$"
           )
           samples = {
