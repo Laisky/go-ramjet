@@ -1,5 +1,5 @@
-# Keep repository metadata so go build can stamp vcs.revision and vcs.time.
-# Exclude local Git configuration because it can contain checkout credentials.
+# Keep Git objects and refs so Go's default VCS stamping records vcs.revision and vcs.time.
+# Exclude checkout-local configuration, hooks, and logs because they are not build inputs and may contain credentials.
 .git/config
 .git/config.worktree
 .git/hooks
