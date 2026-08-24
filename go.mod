@@ -99,7 +99,7 @@ require (
 	github.com/hhrutter/pkcs7 v0.2.2 // indirect
 	github.com/hhrutter/tiff v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jinzhu/inflection v0.0.0-20170102125226-1c35d901db3d // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
@@ -123,7 +123,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monnand/dhkx v0.0.0-20180522003156-9e5b033f1ac4 // indirect
 	github.com/montanaflynn/stats v0.9.0 // indirect
-	github.com/munnerz/goautoneg v0.0.0-20191010082615-0430e6177b86 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -132,7 +132,7 @@ require (
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-d8f796af33cc // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.68.1 // indirect
