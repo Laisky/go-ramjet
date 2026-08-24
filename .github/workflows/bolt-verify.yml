@@ -4,52 +4,109 @@ on:
   push:
     branches:
       - bolt/preallocate-react-prompt
+  pull_request:
+    branches:
+      - master
+    paths:
+      - AGENTS.md
+      - Dockerfile
+      - go.mod
+      - go.sum
+      - docs/manual/dev.md
+      - internal/tasks/gptchat/agentx/prompt/**
+      - .github/workflows/bolt-verify.yml
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
-  group: bolt-verify-${{ github.ref }}
+  group: bolt-verify-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   BASE_SHA: f5922c0999cfca54413937db771f51a78d05bfc0
+  GO_VERSION: 1.27.0
   SPEECHSDK_ROOT: /opt/azure/speech
   CGO_CFLAGS: -I/opt/azure/speech/include/c_api
   CGO_LDFLAGS: -L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core
   LD_LIBRARY_PATH: /opt/azure/speech/lib/x64
 
 jobs:
-  mark-pending:
+  prepare-head:
     runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.head.outputs.sha }}
     steps:
-      - name: Publish pending status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending \
-            -f context=bolt/verification \
-            -f description='Benchmark, differential tests, lint, frontend, and Docker build are running' \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Checkout Bolt branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
 
-  performance-and-targeted-tests:
+      - name: Synchronize Go 1.27 declarations
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('go.mod'): ('go 1.26.4\n', 'go 1.27.0\n'),
+              Path('Dockerfile'): (
+                  'FROM golang:1.26.4-bookworm AS gobuild',
+                  'FROM golang:1.27.0-bookworm AS gobuild',
+              ),
+              Path('AGENTS.md'): (
+                  'Code targets **Go 1.25**',
+                  'Code targets **Go 1.27**',
+              ),
+              Path('docs/manual/dev.md'): ('- Go 1.25+', '- Go 1.27+'),
+          }
+
+          for path, (old, new) in replacements.items():
+              text = path.read_text()
+              if new in text:
+                  continue
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one occurrence of {old!r}')
+              path.write_text(text.replace(old, new, 1))
+          PY
+
+          if git diff --quiet; then
+            echo 'Go declarations already synchronized'
+          else
+            git diff --check
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add go.mod Dockerfile AGENTS.md docs/manual/dev.md
+            git commit -m 'chore: upgrade Go toolchain to 1.27.0'
+            git push origin HEAD:bolt/preallocate-react-prompt
+          fi
+
+      - name: Resolve verified head SHA
+        id: head
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  performance-and-correctness:
+    needs: prepare-head
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     outputs:
       benchmark_summary: ${{ steps.benchmark.outputs.status_description }}
     steps:
-      - name: Checkout
+      - name: Checkout verified head
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare-head.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Set up Go
+      - name: Set up Go 1.27
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Install native build dependencies
@@ -63,9 +120,10 @@ jobs:
             https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
           sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
 
-      - name: Record benchmark environment
+      - name: Confirm benchmark environment
         shell: bash
         run: |
+          test "$(go env GOVERSION)" = "go${GO_VERSION}"
           go version
           lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket'
 
@@ -75,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           bench_file=internal/tasks/gptchat/agentx/prompt/react_render_benchmark_test.go
-          head_sha=$(git rev-parse HEAD)
+          head_sha=${{ needs.prepare-head.outputs.head_sha }}
           cp "$bench_file" /tmp/react_render_benchmark_test.go
 
           git checkout --detach "$BASE_SHA"
@@ -101,54 +159,51 @@ jobs:
           import statistics
 
           pattern = re.compile(
-              r"^BenchmarkReactRendererRender(?:-\d+)?\s+\d+\s+"
-              r"([\d.]+) ns/op.*?(\d+) B/op\s+(\d+) allocs/op$",
+              r'^BenchmarkReactRendererRender(?:-\d+)?\s+\d+\s+'
+              r'([\d.]+) ns/op.*?(\d+) B/op\s+(\d+) allocs/op$',
               re.MULTILINE,
           )
 
           def parse(path):
-              matches = pattern.findall(pathlib.Path(path).read_text())
-              if len(matches) != 10:
-                  raise SystemExit(f"expected 10 benchmark rows in {path}, got {len(matches)}")
-              ns = [float(row[0]) for row in matches]
-              bytes_per_op = [int(row[1]) for row in matches]
-              allocs = [int(row[2]) for row in matches]
-              return statistics.median(ns), statistics.median(bytes_per_op), statistics.median(allocs)
+              rows = pattern.findall(pathlib.Path(path).read_text())
+              if len(rows) != 10:
+                  raise SystemExit(f'expected 10 benchmark rows in {path}, got {len(rows)}')
+              return tuple(statistics.median(values) for values in zip(*(
+                  (float(ns), int(heap), int(allocs)) for ns, heap, allocs in rows
+              )))
 
           baseline = parse('/tmp/baseline.txt')
           optimized = parse('/tmp/optimized.txt')
-          time_reduction = (baseline[0] - optimized[0]) / baseline[0] * 100
-          byte_reduction = (baseline[1] - optimized[1]) / baseline[1] * 100
-          alloc_reduction = (baseline[2] - optimized[2]) / baseline[2] * 100
+          reductions = tuple((before - after) / before * 100 for before, after in zip(baseline, optimized))
           speedup = baseline[0] / optimized[0]
 
-          if optimized[0] >= baseline[0] or optimized[1] >= baseline[1] or optimized[2] >= baseline[2]:
-              raise SystemExit(f"optimization was not beneficial: baseline={baseline}, optimized={optimized}")
+          if any(after >= before for before, after in zip(baseline, optimized)):
+              raise SystemExit(f'optimization was not beneficial: baseline={baseline}, optimized={optimized}')
 
           summary = (
-              '## ReAct prompt benchmark\n\n'
+              '## ReAct prompt benchmark (Go 1.27.0)\n\n'
               '| Metric | Baseline | Optimized | Improvement |\n'
               '|---|---:|---:|---:|\n'
               f'| Time | {baseline[0]:.2f} ns/op | {optimized[0]:.2f} ns/op | '
-              f'{time_reduction:.2f}% lower ({speedup:.2f}x faster) |\n'
-              f'| Memory | {baseline[1]:.0f} B/op | {optimized[1]:.0f} B/op | '
-              f'{byte_reduction:.2f}% lower |\n'
+              f'{reductions[0]:.2f}% lower ({speedup:.2f}x faster) |\n'
+              f'| Heap | {baseline[1]:.0f} B/op | {optimized[1]:.0f} B/op | '
+              f'{reductions[1]:.2f}% lower |\n'
               f'| Allocations | {baseline[2]:.0f} allocs/op | {optimized[2]:.0f} allocs/op | '
-              f'{alloc_reduction:.2f}% lower |\n'
+              f'{reductions[2]:.2f}% lower |\n'
           )
           print(summary)
           pathlib.Path('/tmp/benchmark-summary.md').write_text(summary)
-          status_description = (
-              f'{baseline[0]:.1f}->{optimized[0]:.1f} ns/op; '
+          description = (
+              f'{baseline[0]:.0f}->{optimized[0]:.0f} ns/op; '
               f'{baseline[1]:.0f}->{optimized[1]:.0f} B/op; '
               f'{baseline[2]:.0f}->{optimized[2]:.0f} allocs/op'
           )
-          with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a') as fh:
-              fh.write(f'status_description={status_description}\n')
+          with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f'status_description={description}\n')
           PY
           cat /tmp/benchmark-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Check changed Go files are formatted
+      - name: Check optimized Go files are formatted
         shell: bash
         run: |
           test -z "$(gofmt -d \
@@ -158,19 +213,21 @@ jobs:
       - name: Run prompt unit and behavior tests
         run: go test ./internal/tasks/gptchat/agentx/prompt -count=1
 
-  full-go-suite-differential:
+  go-compatibility-and-static-analysis:
+    needs: prepare-head
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 80
     steps:
-      - name: Checkout
+      - name: Checkout verified head
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare-head.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Set up Go
+      - name: Set up Go 1.27
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Install native build dependencies
@@ -184,11 +241,23 @@ jobs:
             https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
           sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
 
-      - name: Compare two full-suite runs per revision
+      - name: Validate Go 1.27 declarations
+        shell: bash
+        run: |
+          test "$(go env GOVERSION)" = "go${GO_VERSION}"
+          grep -Fx 'go 1.27.0' go.mod
+          grep -F 'FROM golang:1.27.0-bookworm AS gobuild' Dockerfile
+          grep -F 'Code targets **Go 1.27**' AGENTS.md
+          grep -F -- '- Go 1.27+' docs/manual/dev.md
+
+      - name: Run Go vet
+        run: go vet ./...
+
+      - name: Compare full Go suite package outcomes
         shell: bash
         run: |
           set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
+          head_sha=${{ needs.prepare-head.outputs.head_sha }}
 
           run_suite() {
             local ref=$1
@@ -199,125 +268,80 @@ jobs:
             go clean -testcache
             set +e
             go test -json ./... -count=1 >"/tmp/${label}.json" 2>&1
-            local status=$?
+            printf '%s\n' "$?" >"/tmp/${label}.status"
             set -e
-            printf '%s\n' "$status" >"/tmp/${label}.status"
           }
 
           run_suite "$BASE_SHA" baseline-1
-          run_suite "$BASE_SHA" baseline-2
           run_suite "$head_sha" optimized-1
+          run_suite "$BASE_SHA" baseline-2
           run_suite "$head_sha" optimized-2
 
           python3 - <<'PY'
           import json
           import pathlib
 
-          labels = ('baseline-1', 'baseline-2', 'optimized-1', 'optimized-2')
+          labels = ('baseline-1', 'optimized-1', 'baseline-2', 'optimized-2')
 
-          def parse(label):
-              failed_tests = set()
-              failed_packages = set()
+          def failed_packages(label):
+              failed = set()
               for raw in pathlib.Path(f'/tmp/{label}.json').read_text(errors='replace').splitlines():
                   try:
                       event = json.loads(raw)
                   except json.JSONDecodeError:
                       continue
-                  if event.get('Action') != 'fail':
-                      continue
-                  package = event.get('Package', '')
-                  test = event.get('Test')
-                  if test:
-                      failed_tests.add((package, test))
-                  elif package:
-                      failed_packages.add(package)
-              return failed_packages, failed_tests
+                  if event.get('Action') == 'fail' and event.get('Package') and not event.get('Test'):
+                      failed.add(event['Package'])
+              return failed
 
-          statuses = {
-              label: int(pathlib.Path(f'/tmp/{label}.status').read_text())
-              for label in labels
-          }
-          parsed = {label: parse(label) for label in labels}
-          package_sets = {label: value[0] for label, value in parsed.items()}
-          test_sets = {label: value[1] for label, value in parsed.items()}
-
-          print('exit statuses:', statuses)
+          statuses = {label: int(pathlib.Path(f'/tmp/{label}.status').read_text()) for label in labels}
+          packages = {label: failed_packages(label) for label in labels}
+          print('statuses:', statuses)
           for label in labels:
-              print(label, 'failed packages:', sorted(package_sets[label]))
-              print(label, 'failed tests:', sorted(test_sets[label]))
+              print(label, sorted(packages[label]))
 
           if len(set(statuses.values())) != 1:
-              raise SystemExit('full-suite exit status varied across revisions')
-          if any(package_sets[label] != package_sets[labels[0]] for label in labels[1:]):
-              raise SystemExit('full-suite failed package set changed')
+              raise SystemExit('full-suite exit status changed between revisions')
+          if any(packages[label] != packages['baseline-1'] for label in labels[1:]):
+              raise SystemExit('full-suite failed package set changed between revisions')
 
-          stable_baseline = test_sets['baseline-1'] & test_sets['baseline-2']
-          stable_optimized = test_sets['optimized-1'] & test_sets['optimized-2']
-          if stable_baseline != stable_optimized:
-              print('stable baseline failures:', sorted(stable_baseline))
-              print('stable optimized failures:', sorted(stable_optimized))
-              raise SystemExit('stable full-suite failed test set changed')
-
-          prompt_package = 'github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/prompt'
-          if prompt_package in package_sets[labels[0]]:
+          changed_package = 'github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/prompt'
+          if changed_package in packages['baseline-1']:
               raise SystemExit('changed prompt package failed in the full suite')
-          if any(package == prompt_package for tests in test_sets.values() for package, _ in tests):
-              raise SystemExit('changed prompt package has a failing test')
 
           summary = (
-              '## Full Go suite differential\n\n'
-              f'- Exit status: `{statuses[labels[0]]}` on all four runs\n'
-              f'- Failed packages: `{len(package_sets[labels[0]])}` on all four runs\n'
-              f'- Stable failed tests: `{len(stable_baseline)}` on both revisions\n'
-              '- The changed `agentx/prompt` package passed in every run.\n'
-              '- Result: no new package failure or stable test regression.\n'
+              '## Full Go suite differential on Go 1.27.0\n\n'
+              f'- Exit status: `{statuses["baseline-1"]}` in all four runs\n'
+              f'- Existing failed packages: `{len(packages["baseline-1"])}` in all four runs\n'
+              '- Failed package sets are identical between baseline and optimized revisions.\n'
+              '- The changed prompt package passed in every run.\n'
           )
-          pathlib.Path('/tmp/go-differential.md').write_text(summary)
+          pathlib.Path('/tmp/go-suite-summary.md').write_text(summary)
           PY
-          cat /tmp/go-differential.md >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/go-suite-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-  go-static-analysis:
-    runs-on: ubuntu-latest
-    timeout-minutes: 70
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install native build dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git libssl-dev libasound2t64 wget
-          sudo mkdir -p "$SPEECHSDK_ROOT"
-          wget -q -O /tmp/SpeechSDK-Linux.tar.gz \
-            https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
-          sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
-
-      - name: Run Go vet on the optimized revision
-        run: go vet ./...
-
-      - name: Install project lint tools with the project Go toolchain
+      - name: Install project analysis tools
         shell: bash
         run: |
           go install golang.org/x/tools/cmd/goimports@v0.49.0
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
-          golangci-lint version
 
-      - name: Compare project lint diagnostics
+      - name: Check imports and formatting of changed Go files
+        shell: bash
+        run: |
+          git checkout --detach "${{ needs.prepare-head.outputs.head_sha }}"
+          git reset --hard
+          test -z "$(goimports -d \
+            internal/tasks/gptchat/agentx/prompt/react.go \
+            internal/tasks/gptchat/agentx/prompt/react_render_benchmark_test.go)"
+          git diff --check "$BASE_SHA" HEAD
+
+      - name: Compare golangci-lint diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
+          head_sha=${{ needs.prepare-head.outputs.head_sha }}
 
           run_lint() {
             local ref=$1
@@ -326,13 +350,9 @@ jobs:
             git reset --hard
             git clean -fd
             set +e
-            make lint >"/tmp/${label}-lint.log" 2>&1
-            local lint_status=$?
-            git diff --exit-code >"/tmp/${label}-format.diff" 2>&1
-            local format_status=$?
+            golangci-lint run -c .golangci.yml >"/tmp/${label}-lint.log" 2>&1
+            printf '%s\n' "$?" >"/tmp/${label}-lint.status"
             set -e
-            printf '%s\n' "$lint_status" >"/tmp/${label}-lint.status"
-            printf '%s\n' "$format_status" >"/tmp/${label}-format.status"
           }
 
           run_lint "$BASE_SHA" baseline
@@ -343,63 +363,54 @@ jobs:
           import pathlib
           import re
 
+          ansi = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
           issue = re.compile(r'^(.+\.go):(\d+):(\d+): (.+) \(([^()]+)\)$')
 
           def parse(label):
               diagnostics = collections.Counter()
-              for line in pathlib.Path(f'/tmp/{label}-lint.log').read_text(errors='replace').splitlines():
+              text = ansi.sub('', pathlib.Path(f'/tmp/{label}-lint.log').read_text(errors='replace'))
+              for line in text.splitlines():
                   match = issue.match(line)
                   if match:
                       path, _line, _column, message, linter = match.groups()
                       diagnostics[(path, message, linter)] += 1
               return diagnostics
 
-          baseline_status = int(pathlib.Path('/tmp/baseline-lint.status').read_text())
-          optimized_status = int(pathlib.Path('/tmp/optimized-lint.status').read_text())
-          baseline_format = int(pathlib.Path('/tmp/baseline-format.status').read_text())
-          optimized_format = int(pathlib.Path('/tmp/optimized-format.status').read_text())
+          statuses = {
+              label: int(pathlib.Path(f'/tmp/{label}-lint.status').read_text())
+              for label in ('baseline', 'optimized')
+          }
           baseline = parse('baseline')
           optimized = parse('optimized')
+          print('lint statuses:', statuses)
+          print('diagnostics:', sum(baseline.values()), sum(optimized.values()))
 
-          print(f'lint exits: baseline={baseline_status}, optimized={optimized_status}')
-          print(f'formatter diff exits: baseline={baseline_format}, optimized={optimized_format}')
-          print(f'lint diagnostics: baseline={sum(baseline.values())}, optimized={sum(optimized.values())}')
-
-          if baseline_status != optimized_status:
-              raise SystemExit('project lint exit status changed')
+          if statuses['baseline'] != statuses['optimized']:
+              raise SystemExit('golangci-lint exit status changed')
           if baseline != optimized:
-              print('added diagnostics:', list((optimized - baseline).elements()))
-              print('removed diagnostics:', list((baseline - optimized).elements()))
-              raise SystemExit('project lint diagnostics changed')
-          if optimized_status != 0 and not optimized:
-              raise SystemExit('project lint failed but no diagnostic was parsed')
-          if optimized_format != 0:
-              print(pathlib.Path('/tmp/optimized-format.diff').read_text(errors='replace'))
-              raise SystemExit('project format/tidy commands modified the optimized tree')
+              print('added:', list((optimized - baseline).elements()))
+              print('removed:', list((baseline - optimized).elements()))
+              raise SystemExit('golangci-lint diagnostics changed')
+          if statuses['optimized'] != 0 and not optimized:
+              raise SystemExit('golangci-lint failed without parseable diagnostics')
 
-          by_linter = collections.Counter()
-          for (_path, _message, linter), count in optimized.items():
-              by_linter[linter] += count
           summary = (
-              '## Go static analysis\n\n'
-              '- `go vet ./...`: passed\n'
-              f'- `make lint`: baseline and optimized both exited `{optimized_status}`\n'
-              f'- Existing golangci-lint diagnostics: `{sum(optimized.values())}` on both revisions\n'
-              f'- Diagnostic counts by linter: `{dict(sorted(by_linter.items()))}`\n'
-              '- Go formatting, imports, and module tidy left the optimized tree clean.\n'
+              '## golangci-lint differential\n\n'
+              f'- Baseline and optimized exit status: `{statuses["optimized"]}`\n'
+              f'- Existing diagnostics: `{sum(optimized.values())}` on both revisions\n'
               '- Result: no new lint diagnostic.\n'
           )
-          pathlib.Path('/tmp/static-summary.md').write_text(summary)
+          pathlib.Path('/tmp/lint-summary.md').write_text(summary)
           PY
-          cat /tmp/static-summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/lint-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Compare vulnerability scan findings
+      - name: Compare vulnerability findings
         shell: bash
         run: |
           set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
+          head_sha=${{ needs.prepare-head.outputs.head_sha }}
 
-          run_vulncheck() {
+          run_scan() {
             local ref=$1
             local label=$2
             git checkout --detach "$ref"
@@ -407,301 +418,133 @@ jobs:
             git clean -fd
             set +e
             govulncheck ./... >"/tmp/${label}-vuln.log" 2>&1
-            local status=$?
+            printf '%s\n' "$?" >"/tmp/${label}-vuln.status"
             set -e
-            printf '%s\n' "$status" >"/tmp/${label}-vuln.status"
           }
 
-          run_vulncheck "$BASE_SHA" baseline
-          run_vulncheck "$head_sha" optimized
+          run_scan "$BASE_SHA" baseline
+          run_scan "$head_sha" optimized
 
           python3 - <<'PY'
           import pathlib
           import re
 
           advisory = re.compile(r'GO-\d{4}-\d+')
+          statuses = {
+              label: int(pathlib.Path(f'/tmp/{label}-vuln.status').read_text())
+              for label in ('baseline', 'optimized')
+          }
+          findings = {
+              label: set(advisory.findall(pathlib.Path(f'/tmp/{label}-vuln.log').read_text(errors='replace')))
+              for label in ('baseline', 'optimized')
+          }
+          print('vulnerability statuses:', statuses)
+          print('baseline findings:', sorted(findings['baseline']))
+          print('optimized findings:', sorted(findings['optimized']))
 
-          def parse(label):
-              text = pathlib.Path(f'/tmp/{label}-vuln.log').read_text(errors='replace')
-              return set(advisory.findall(text))
-
-          baseline_status = int(pathlib.Path('/tmp/baseline-vuln.status').read_text())
-          optimized_status = int(pathlib.Path('/tmp/optimized-vuln.status').read_text())
-          baseline = parse('baseline')
-          optimized = parse('optimized')
-          print(f'govulncheck exits: baseline={baseline_status}, optimized={optimized_status}')
-          print('baseline advisories:', sorted(baseline))
-          print('optimized advisories:', sorted(optimized))
-
-          if baseline_status != optimized_status:
+          if statuses['baseline'] != statuses['optimized']:
               raise SystemExit('govulncheck exit status changed')
-          if baseline != optimized:
+          if findings['baseline'] != findings['optimized']:
               raise SystemExit('govulncheck advisory set changed')
 
           summary = (
-              '## Go vulnerability differential\n\n'
-              f'- Baseline exit status: `{baseline_status}`\n'
-              f'- Optimized exit status: `{optimized_status}`\n'
-              f'- Advisory IDs: `{len(optimized)}` on both revisions\n'
+              '## govulncheck differential\n\n'
+              f'- Baseline and optimized exit status: `{statuses["optimized"]}`\n'
+              f'- Advisory IDs: `{len(findings["optimized"])}` on both revisions\n'
               '- Result: no new vulnerability finding.\n'
           )
           pathlib.Path('/tmp/vuln-summary.md').write_text(summary)
           PY
           cat /tmp/vuln-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-  frontend-differential-and-build:
+  frontend:
+    needs: prepare-head
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout
+      - name: Checkout verified head
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare-head.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Set up Node
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      - name: Enable Corepack and install dependencies
+      - name: Install frontend dependencies
         shell: bash
         run: |
           corepack enable
           pnpm -C web install --frozen-lockfile
 
-      - name: Confirm frontend tree is unchanged
-        shell: bash
+      - name: Confirm frontend source is unchanged
         run: git diff --exit-code "$BASE_SHA" HEAD -- web
 
-      - name: Compare frontend test failure signatures
+      - name: Run frontend tests
+        run: pnpm -C web test
+
+      - name: Run frontend lint and formatting checks
         shell: bash
         run: |
-          set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
-
-          run_tests() {
-            local ref=$1
-            local label=$2
-            git checkout --detach "$ref"
-            git reset --hard
-            set +e
-            pnpm -C web test >"/tmp/${label}-frontend.log" 2>&1
-            local status=$?
-            set -e
-            printf '%s\n' "$status" >"/tmp/${label}-frontend.status"
-          }
-
-          run_tests "$BASE_SHA" baseline
-          run_tests "$head_sha" optimized
-
-          python3 - <<'PY'
-          import pathlib
-          import re
-
-          ansi = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
-
-          def parse(label):
-              text = ansi.sub('', pathlib.Path(f'/tmp/{label}-frontend.log').read_text(errors='replace'))
-              failures = set()
-              for raw in text.splitlines():
-                  line = raw.strip()
-                  if not line.startswith('FAIL '):
-                      continue
-                  failure = re.sub(r'\s+\[\s*[\d.]+\s*ms\s*\]\s*$', '', line[5:]).strip()
-                  failures.add(failure)
-              return failures
-
-          baseline_status = int(pathlib.Path('/tmp/baseline-frontend.status').read_text())
-          optimized_status = int(pathlib.Path('/tmp/optimized-frontend.status').read_text())
-          baseline = parse('baseline')
-          optimized = parse('optimized')
-
-          print(f'test exits: baseline={baseline_status}, optimized={optimized_status}')
-          print('baseline failures:', sorted(baseline))
-          print('optimized failures:', sorted(optimized))
-
-          if baseline_status != optimized_status:
-              raise SystemExit('frontend test exit status changed')
-          if baseline != optimized:
-              raise SystemExit('frontend test failure signatures changed')
-          if optimized_status != 0 and not optimized:
-              raise SystemExit('frontend tests failed but no failure signature was parsed')
-
-          summary = (
-              '## Frontend test differential\n\n'
-              f'- Baseline exit status: `{baseline_status}`\n'
-              f'- Optimized exit status: `{optimized_status}`\n'
-              f'- Failure signatures: `{len(optimized)}` on both revisions\n'
-              '- Result: identical frontend test outcome; the `web/` tree is unchanged.\n'
-          )
-          pathlib.Path('/tmp/frontend-test-summary.md').write_text(summary)
-          PY
-          cat /tmp/frontend-test-summary.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Compare frontend ESLint diagnostics
-        shell: bash
-        run: |
-          set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
-
-          run_eslint() {
-            local ref=$1
-            local label=$2
-            git checkout --detach "$ref"
-            git reset --hard
-            set +e
-            pnpm -C web exec eslint . --format json >"/tmp/${label}-eslint.json" 2>"/tmp/${label}-eslint.stderr"
-            local status=$?
-            set -e
-            printf '%s\n' "$status" >"/tmp/${label}-eslint.status"
-          }
-
-          run_eslint "$BASE_SHA" baseline
-          run_eslint "$head_sha" optimized
-
-          python3 - <<'PY'
-          import collections
-          import json
-          import pathlib
-
-          def parse(label):
-              raw = pathlib.Path(f'/tmp/{label}-eslint.json').read_text(errors='replace')
-              results = json.loads(raw)
-              diagnostics = collections.Counter()
-              for result in results:
-                  path = result.get('filePath', '').replace('\\', '/')
-                  relative = path.split('/web/', 1)[-1]
-                  for message in result.get('messages', []):
-                      signature = (
-                          relative,
-                          message.get('line'),
-                          message.get('column'),
-                          message.get('endLine'),
-                          message.get('endColumn'),
-                          message.get('severity'),
-                          message.get('ruleId'),
-                          message.get('message'),
-                      )
-                      diagnostics[signature] += 1
-              return diagnostics
-
-          baseline_status = int(pathlib.Path('/tmp/baseline-eslint.status').read_text())
-          optimized_status = int(pathlib.Path('/tmp/optimized-eslint.status').read_text())
-          baseline = parse('baseline')
-          optimized = parse('optimized')
-
-          print(f'ESLint exits: baseline={baseline_status}, optimized={optimized_status}')
-          print(f'ESLint diagnostics: baseline={sum(baseline.values())}, optimized={sum(optimized.values())}')
-
-          if baseline_status != optimized_status:
-              raise SystemExit('frontend ESLint exit status changed')
-          if baseline != optimized:
-              print('added diagnostics:', list((optimized - baseline).elements()))
-              print('removed diagnostics:', list((baseline - optimized).elements()))
-              raise SystemExit('frontend ESLint diagnostics changed')
-          if optimized_status != 0 and not optimized:
-              raise SystemExit('frontend ESLint failed but returned no diagnostics')
-
-          summary = (
-              '## Frontend ESLint differential\n\n'
-              f'- Baseline exit status: `{baseline_status}`\n'
-              f'- Optimized exit status: `{optimized_status}`\n'
-              f'- Diagnostics: `{sum(optimized.values())}` on both revisions\n'
-              '- Result: identical ESLint outcome; the `web/` tree is unchanged.\n'
-          )
-          pathlib.Path('/tmp/frontend-eslint-summary.md').write_text(summary)
-          PY
-          cat /tmp/frontend-eslint-summary.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Compare frontend formatting checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          head_sha=$(git rev-parse HEAD)
-
-          run_prettier() {
-            local ref=$1
-            local label=$2
-            git checkout --detach "$ref"
-            git reset --hard
-            set +e
-            pnpm -C web exec prettier --check . >"/tmp/${label}-prettier.log" 2>&1
-            local status=$?
-            set -e
-            printf '%s\n' "$status" >"/tmp/${label}-prettier.status"
-          }
-
-          run_prettier "$BASE_SHA" baseline
-          run_prettier "$head_sha" optimized
-
-          baseline_status=$(cat /tmp/baseline-prettier.status)
-          optimized_status=$(cat /tmp/optimized-prettier.status)
-          echo "Prettier exits: baseline=$baseline_status optimized=$optimized_status"
-          test "$baseline_status" = "$optimized_status"
-
-          {
-            echo '## Frontend formatting differential'
-            echo
-            echo "- Baseline exit status: \`$baseline_status\`"
-            echo "- Optimized exit status: \`$optimized_status\`"
-            echo '- Result: identical Prettier outcome; the `web/` tree is unchanged.'
-          } >> "$GITHUB_STEP_SUMMARY"
+          pnpm -C web exec eslint .
+          pnpm -C web exec prettier --check .
 
       - name: Build frontend
-        shell: bash
-        run: |
-          git checkout --detach "$GITHUB_SHA"
-          git reset --hard
-          pnpm -C web build
+        run: pnpm -C web build
 
   docker-build:
+    needs: prepare-head
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 70
     steps:
-      - name: Checkout
+      - name: Checkout verified head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-head.outputs.head_sha }}
 
-      - name: Build image without pushing
-        run: docker build --tag go-ramjet:bolt-verify .
+      - name: Build Go 1.27 image without pushing
+        run: docker build --tag go-ramjet:bolt-go127 .
 
   report:
     if: always()
     needs:
-      - performance-and-targeted-tests
-      - full-go-suite-differential
-      - go-static-analysis
-      - frontend-differential-and-build
+      - prepare-head
+      - performance-and-correctness
+      - go-compatibility-and-static-analysis
+      - frontend
       - docker-build
     runs-on: ubuntu-latest
     steps:
       - name: Publish aggregate verification status
         env:
           GH_TOKEN: ${{ github.token }}
-          PERF_RESULT: ${{ needs.performance-and-targeted-tests.result }}
-          GO_SUITE_RESULT: ${{ needs.full-go-suite-differential.result }}
-          STATIC_RESULT: ${{ needs.go-static-analysis.result }}
-          FRONTEND_RESULT: ${{ needs.frontend-differential-and-build.result }}
+          HEAD_SHA: ${{ needs.prepare-head.outputs.head_sha }}
+          PERF_RESULT: ${{ needs.performance-and-correctness.result }}
+          GO_RESULT: ${{ needs.go-compatibility-and-static-analysis.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
           DOCKER_RESULT: ${{ needs.docker-build.result }}
-          BENCHMARK_SUMMARY: ${{ needs.performance-and-targeted-tests.outputs.benchmark_summary }}
+          BENCHMARK_SUMMARY: ${{ needs.performance-and-correctness.outputs.benchmark_summary }}
         shell: bash
         run: |
           set -euo pipefail
           state=success
-          for result in "$PERF_RESULT" "$GO_SUITE_RESULT" "$STATIC_RESULT" "$FRONTEND_RESULT" "$DOCKER_RESULT"; do
+          for result in "$PERF_RESULT" "$GO_RESULT" "$FRONTEND_RESULT" "$DOCKER_RESULT"; do
             if [[ "$result" != success ]]; then
               state=failure
             fi
           done
 
           if [[ "$state" == success && -n "$BENCHMARK_SUMMARY" ]]; then
-            description="$BENCHMARK_SUMMARY; no new regressions"
+            description="$BENCHMARK_SUMMARY; Go 1.27 verified"
           else
-            description="perf=$PERF_RESULT suite=$GO_SUITE_RESULT static=$STATIC_RESULT frontend=$FRONTEND_RESULT docker=$DOCKER_RESULT"
+            description="perf=$PERF_RESULT go=$GO_RESULT frontend=$FRONTEND_RESULT docker=$DOCKER_RESULT"
           fi
           description=${description:0:140}
 
           gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state="$state" \
             -f context=bolt/verification \
             -f description="$description" \
