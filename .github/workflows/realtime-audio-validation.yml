@@ -1,0 +1,33 @@
+name: Realtime audio validation
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/realtime-audio-validation.yml'
+  push:
+    branches: [feat/gptchat-realtime-audio-plugins]
+
+permissions:
+  contents: read
+
+jobs:
+  audio-behavior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked frontend dependencies
+        run: |
+          corepack enable
+          pnpm -C web install --frozen-lockfile
+      - name: Audio behavior regressions
+        run: pnpm -C web exec vitest run src/pages/gptchat/audio src/pages/gptchat/components/__tests__/chat-input-audio-lifecycle.test.tsx
+      - name: Build frontend
+        run: pnpm -C web build
