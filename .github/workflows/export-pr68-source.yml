@@ -1,0 +1,28 @@
+name: export-pr68-source
+
+on:
+  push:
+    branches:
+      - tmp/export-pr68-source
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: pr68-source
+          path: |
+            web
+            docs
+            .prettierrc
+            .prettierignore
+          include-hidden-files: true
+          retention-days: 1
