@@ -19,7 +19,7 @@
 - **Testing expectations:** Add/extend **unit tests** for new features and fixes; when a new issue arises, update tests during the fix to cover it; avoid temporary one-off scripts; continuously improve the unit test suite.
 - **Test assertions:** Use `github.com/stretchr/testify/require` for assertions in tests.
 - **Comments requirement:** Every function/interface must have a comment explaining purpose, parameters, and return values; comment must start with the function/interface name and be complete sentences.
-- **Go version/style:** Code targets **Go 1.25**; use the newest Go syntax/features where appropriate.
+- **Go version/style:** Code targets **Go 1.27**; use the newest Go syntax/features where appropriate.
 - **Context propagation:** Whenever feasible, use `context.Context` to manage lifecycle across the call chain (thread it through).
 - **Error handling—always handle:** Handle all errors, and handle them as close to the source as possible; never ignore errors.
 - **Error handling—no `err == nil`:** Never use `err == nil` (avoid patterns that risk shadowing/clarity issues).

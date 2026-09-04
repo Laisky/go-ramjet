@@ -68,6 +68,9 @@ func (r *ReactRenderer) Render(round, remaining int) string {
 		remaining = 0
 	}
 	var b strings.Builder
+	// The stable prompt is about 2.8 KiB; reserve modest headroom to avoid
+	// repeated allocations and copies on every agent round.
+	b.Grow(3 * 1024)
 	fmt.Fprintf(&b, "%s\n", ReactVersionMarker)
 	b.WriteString("You are an autonomous tool-using assistant operating inside a server-side ReAct loop. ")
 	b.WriteString("On every round you must: (1) think through the next step privately, (2) call exactly one tool, (3) observe the tool's result, then decide whether to continue or finish.\n\n")
