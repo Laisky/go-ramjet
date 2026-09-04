@@ -52,7 +52,9 @@ export function pcm16ToBase64(samples: Int16Array): string {
 }
 
 /** base64PCM16ToFloat32 decodes Realtime little-endian PCM16 output for playback. */
-export function base64PCM16ToFloat32(encoded: string): Float32Array {
+export function base64PCM16ToFloat32(
+  encoded: string,
+): Float32Array<ArrayBuffer> {
   const binary = atob(encoded)
   if (binary.length % 2 !== 0) {
     throw new Error('PCM16 payload must contain an even number of bytes')
@@ -72,107 +74,104 @@ export function base64PCM16ToFloat32(encoded: string): Float32Array {
   return output
 }
 
-/** PcmAudioPlayer schedules streamed PCM chunks and tracks how much audio was heard. */
+/** PcmAudioPlayer schedules audio, measures heard samples, and cannot reopen after disposal. */
 export class PcmAudioPlayer {
   private context: AudioContext | null = null
-  private nextStartTime = 0
-  private responseStartTime: number | null = null
-  private responseEndTime: number | null = null
-  private readonly activeSources = new Set<AudioBufferSourceNode>()
+  private closed = false
+  private nextStart = 0
+  private segments: { start: number; duration: number }[] = []
+  private readonly sources = new Set<AudioBufferSourceNode>()
+  private readonly drainWaiters = new Set<() => void>()
 
-  /** start prepares the browser audio context from a user gesture. */
+  /** start unlocks output during the original user gesture, before microphone permission awaits. */
   async start(): Promise<void> {
-    if (!this.context) {
-      this.context = new AudioContext()
-    }
-    if (this.context.state === 'suspended') {
-      await this.context.resume()
-    }
-    this.nextStartTime = Math.max(this.nextStartTime, this.context.currentTime)
+    if (this.closed) throw new DOMException('Audio player closed', 'AbortError')
+    const context =
+      this.context ?? new AudioContext({ sampleRate: REALTIME_PCM_SAMPLE_RATE })
+    this.context = context
+    if (context.state === 'suspended') await context.resume()
+    if (this.closed || this.context !== context)
+      throw new DOMException('Audio player closed', 'AbortError')
   }
 
-  /** beginResponse resets playback accounting for a new assistant response. */
-  beginResponse(): void {
-    this.responseStartTime = null
-    this.responseEndTime = null
-  }
-
-  /** append schedules one base64-encoded PCM16 delta for gap-free playback. */
-  async append(encoded: string): Promise<void> {
-    await this.start()
-    if (!this.context) {
+  /** getContext returns the unlocked context shared by capture and playback. */
+  getContext(): AudioContext {
+    if (!this.context || this.closed)
       throw new Error('Audio context is unavailable')
-    }
+    return this.context
+  }
 
+  /** beginResponse resets played-audio accounting after previous output has been stopped. */
+  beginResponse(): void {
+    this.segments = []
+  }
+
+  /** append schedules a native audio delta without an asynchronous restart race. */
+  async append(encoded: string): Promise<void> {
+    const context = this.getContext()
     const samples = base64PCM16ToFloat32(encoded)
-    if (samples.length === 0) {
-      return
-    }
-
-    const buffer = this.context.createBuffer(
+    if (!samples.length) return
+    const buffer = context.createBuffer(
       1,
       samples.length,
       REALTIME_PCM_SAMPLE_RATE,
     )
     buffer.copyToChannel(samples, 0)
-
-    const source = this.context.createBufferSource()
+    const source = context.createBufferSource()
     source.buffer = buffer
-    source.connect(this.context.destination)
-
-    const startTime = Math.max(this.context.currentTime, this.nextStartTime)
-    if (this.responseStartTime === null) {
-      this.responseStartTime = startTime
-    }
-    this.responseEndTime = startTime + buffer.duration
-    this.nextStartTime = this.responseEndTime
-    this.activeSources.add(source)
+    source.connect(context.destination)
+    const start = Math.max(context.currentTime, this.nextStart)
+    this.nextStart = start + buffer.duration
+    this.segments.push({ start, duration: buffer.duration })
+    this.sources.add(source)
     source.onended = () => {
-      this.activeSources.delete(source)
+      source.disconnect()
+      this.sources.delete(source)
+      this.notifyDrain()
     }
-    source.start(startTime)
+    source.start(start)
   }
 
-  /** interrupt stops queued output and returns milliseconds already played. */
+  /** whenDrained resolves after every scheduled audio node has actually ended. */
+  whenDrained(): Promise<void> {
+    if (!this.sources.size) return Promise.resolve()
+    return new Promise((resolve) => this.drainWaiters.add(resolve))
+  }
+
+  /** notifyDrain settles listeners only after playback has fully drained or been stopped. */
+  private notifyDrain(): void {
+    if (this.sources.size) return
+    this.drainWaiters.forEach((resolve) => resolve())
+    this.drainWaiters.clear()
+  }
+
+  /** interrupt stops output and returns heard milliseconds, excluding network gaps. */
   interrupt(): number {
-    if (!this.context) {
-      return 0
-    }
-
-    let playedMilliseconds = 0
-    if (this.responseStartTime !== null && this.responseEndTime !== null) {
-      const playedSeconds = Math.max(
-        0,
-        Math.min(
-          this.context.currentTime - this.responseStartTime,
-          this.responseEndTime - this.responseStartTime,
-        ),
-      )
-      playedMilliseconds = Math.round(playedSeconds * 1000)
-    }
-
-    this.activeSources.forEach((source) => {
-      try {
-        source.stop()
-      } catch {
-        // The source may already have ended between iteration and stop().
-      }
+    const now = this.context?.currentTime ?? 0
+    const heard = this.segments.reduce(
+      (sum, part) =>
+        sum + Math.max(0, Math.min(now - part.start, part.duration)),
+      0,
+    )
+    this.sources.forEach((source) => {
+      source.onended = null
+      source.stop()
+      source.disconnect()
     })
-    this.activeSources.clear()
-    this.nextStartTime = this.context.currentTime
-    this.responseStartTime = null
-    this.responseEndTime = null
-    return playedMilliseconds
+    this.sources.clear()
+    this.segments = []
+    this.nextStart = now
+    this.notifyDrain()
+    return Math.floor(heard * 1000)
   }
 
-  /** close releases every playback resource owned by the player. */
+  /** close synchronously silences audio and permanently disposes this call's context. */
   async close(): Promise<void> {
+    if (this.closed) return
+    this.closed = true
     this.interrupt()
     const context = this.context
     this.context = null
-    this.nextStartTime = 0
-    if (context && context.state !== 'closed') {
-      await context.close()
-    }
+    if (context && context.state !== 'closed') await context.close()
   }
 }

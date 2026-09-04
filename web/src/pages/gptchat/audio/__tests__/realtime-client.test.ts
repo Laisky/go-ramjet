@@ -83,7 +83,7 @@ describe('createRealtimeSessionUpdate', () => {
     expect(event.session.type).toBe('realtime')
     expect(event.session.model).toBe(REALTIME_AUDIO_MODEL)
     expect(event.session.output_modalities).toEqual(['audio'])
-    expect(event.session.instructions).toBe('Be concise.')
+    expect(event.session.instructions).toContain('Be concise.')
     expect(event.session.audio.input.format).toEqual({
       type: 'audio/pcm',
       rate: 24_000,

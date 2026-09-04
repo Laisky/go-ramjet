@@ -1,25 +1,16 @@
 /**
  * Chat input component with file attachments and feature toggles.
  */
-import { Bot, Brain, Image, Link, Mic, Send, Square } from 'lucide-react'
+import { Bot, Brain, Image, Link, Send, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
-import { AudioPluginControl } from '../audio/audio-plugin-control'
-import {
-  AUDIO_PLUGIN_DEFINITIONS,
-  resolveAudioPlugin,
-} from '../audio/plugin-registry'
+import { VoiceControls } from '../audio/voice-controls'
 import { useUser } from '../hooks/use-user'
 import { isImageModel } from '../models'
-import type {
-  AudioPluginID,
-  ChatAttachment,
-  SelectionData,
-  SessionConfig,
-} from '../types'
+import type { ChatAttachment, SelectionData, SessionConfig } from '../types'
 import { MessageInput } from './message-input'
 
 export interface ChatInputProps {
@@ -63,14 +54,12 @@ export function ChatInput({
   const [message, setMessage] = useState(() => draftMessage ?? '')
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [audioBusy, setAudioBusy] = useState(false)
-  const [audioActive, setAudioActive] = useState(false)
+  const [, setAudioActive] = useState(false)
   const [audioStatus, setAudioStatus] = useState<string | null>(null)
   const [inputError, setInputError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastPrefillIdRef = useRef<string | null>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
-  const audioPluginID = config.chat_switch.audio_plugin ?? 'whisper'
-  const audioPlugin = resolveAudioPlugin(audioPluginID)
 
   // Helper to update message and sync to parent
   const updateMessage = useCallback(
@@ -251,19 +240,6 @@ export function ChatInput({
     [config.chat_switch, onConfigChange],
   )
 
-  const handleAudioPluginChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      if (audioActive || !onConfigChange) {
-        return
-      }
-      const pluginID = event.target.value as AudioPluginID
-      onConfigChange({ audio_plugin: pluginID })
-      setInputError(null)
-      setAudioStatus(null)
-    },
-    [audioActive, onConfigChange],
-  )
-
   return (
     <>
       <div className="theme-surface w-full p-1">
@@ -313,23 +289,6 @@ export function ChatInput({
                 </TooltipWrapper>
               )}
             </div>
-
-            {config.chat_switch.enable_talk && (
-              <TooltipWrapper content={audioPlugin.description} side="left">
-                <AudioPluginControl
-                  key={`${sessionId ?? 'session'}:${audioPlugin.id}`}
-                  pluginID={audioPlugin.id}
-                  config={config}
-                  user={user}
-                  disabled={Boolean(disabled || isLoading)}
-                  onDraftText={appendAudioDraft}
-                  onError={setInputError}
-                  onBusyChange={setAudioBusy}
-                  onActivityChange={setAudioActive}
-                  onStatusChange={setAudioStatus}
-                />
-              </TooltipWrapper>
-            )}
           </div>
         </div>
 
@@ -390,34 +349,18 @@ export function ChatInput({
             title="Run a server-side ReAct agent loop with auto-injected tools (web search/fetch, file I/O, memory). The model iterates with tools until it has enough information, then sends the final answer."
           />
 
-          <ToggleButton
-            active={config.chat_switch.enable_talk}
-            onClick={() => toggleSwitch('enable_talk')}
-            icon={<Mic className="h-3 w-3" />}
-            label="Voice"
-            title="Enable a selectable audio plugin"
+          <VoiceControls
+            config={config}
+            user={user}
+            sessionId={sessionId}
+            onConfigChange={onConfigChange}
+            disabled={Boolean(disabled || isLoading)}
+            onDraftText={appendAudioDraft}
+            onError={setInputError}
+            onBusyChange={setAudioBusy}
+            onActivityChange={setAudioActive}
+            onStatusChange={setAudioStatus}
           />
-
-          {config.chat_switch.enable_talk && (
-            <select
-              value={audioPlugin.id}
-              onChange={handleAudioPluginChange}
-              disabled={audioActive}
-              aria-label="Audio plugin"
-              title={audioPlugin.description}
-              className="h-7 cursor-pointer rounded-md border border-border bg-transparent px-2 text-[11px] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {Object.values(AUDIO_PLUGIN_DEFINITIONS).map((definition) => (
-                <option
-                  key={definition.id}
-                  value={definition.id}
-                  disabled={definition.id === 'realtime' && user?.is_free}
-                >
-                  {definition.label}
-                </option>
-              ))}
-            </select>
-          )}
 
           {(isImageModel(config.selected_model) ||
             config.chat_switch.all_in_one) && (

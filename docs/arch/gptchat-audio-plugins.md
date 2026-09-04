@@ -1,111 +1,133 @@
-# GPTChat audio plugins
+# GPTChat voice calls and dictation
 
-## Purpose
+## User contract
 
-GPTChat audio is implemented behind a small frontend plugin boundary. Users can keep the existing record-and-transcribe behavior or opt into a continuous native-audio conversation with OpenAI Realtime.
+Select **Realtime**, then press **Voice** once to start a phone-style conversation.
+The microphone stays open across turns. Users can interrupt the AI, mute/unmute,
+show/hide AI captions, and minimize/restore the call panel without reconnecting.
+The red **Hang up** button ends the call, including while microphone permission
+or the connection handshake is still pending. Reloading saved preferences never
+starts the microphone automatically.
 
-The default remains `whisper`, so existing sessions and saved configurations keep their current behavior.
+Realtime is the default for new configurations. An explicitly saved Whisper
+selection is preserved; unsupported plugin identifiers fall back to Whisper.
+**Whisper** remains the record → transcription → editable draft workflow, with
+the existing normal text-completion and per-message speech controls unchanged.
 
-## Implementations
+## Call ownership and session changes
 
-| Plugin | Input path | Model response path | Intended use |
-|---|---|---|---|
-| `whisper` | `MediaRecorder` → `/v1/audio/transcriptions` → editable draft | Existing GPTChat completion flow; existing per-message speech controls remain available | Backward-compatible, review text before sending |
-| `realtime` | Microphone PCM16 → Realtime WebSocket | Native model PCM16 → browser playback | Low-latency, interruptible speech-to-speech conversation |
+`VoiceControls` hosts the Realtime plugin independently of the text session's
+`enable_talk` preference. Each explicit call captures its initial API token,
+resolved API base, system prompt, and session label. Switching text sessions does
+not mutate, restart, or reroute that live call. Its panel continues showing the
+original session label. The plugin selector is locked during a call. The Voice
+button restores an existing call rather than opening another one.
 
-`ChatInput` depends only on `AudioPluginProps`. A future backend can be registered without adding recording or transport logic back to `ChatInput`.
+Whisper dictation is different: it remains keyed to its text session and is
+cancelled on a session switch, so a late transcription cannot enter another draft.
 
-## Realtime design
+Only user hang-up and the model's completed `end_call` tool are normal call ends.
+Provider closure, quota/session limits, lost devices, failed media/transport, and
+page departure are exceptional ends with explicit feedback. A `beforeunload`
+guard reduces accidental departure but cannot prevent process termination or
+mobile browser suspension. There is no automatic redial or silent context reset.
 
-The Realtime plugin uses the latest general Realtime model selected for this implementation:
-
-- model: `gpt-realtime-2.1`
-- voice: `marin`
-- input and output: signed little-endian PCM16 at 24 kHz
-- turn detection: semantic VAD
-- automatic response creation: enabled
-- response interruption: enabled
+## Native audio path
 
 ```text
-microphone
-   │ browser Web Audio capture
-   ▼
-48 kHz Float32 (normally)
-   │ resample + PCM16 encode
-   ▼
-OpenAI-compatible /v1/realtime WebSocket
-   │ native model audio deltas
-   ▼
-PCM16 playback queue
-   │
-   ▼
-speakers
+Microphone → AudioWorklet → 20 ms / 24 kHz PCM16 frames
+     → authenticated GA Realtime WebSocket → gpt-realtime-2.1
+     → native PCM audio deltas → browser playback
 ```
 
-The plugin does not call GPTChat's transcription endpoint, completion endpoint, or TTS endpoint. The assistant audio transcript emitted by Realtime is used only as compact visual feedback; it is not a separate STT request.
+The call uses `marin`, semantic VAD, automatic responses, and automatic response
+interruption. No GPTChat STT, text-completion, or TTS endpoint is called. AI captions
+come from native output-audio transcript events. User speech is not separately
+transcribed, and the call is not imported into or persisted as text-chat history.
+MCP, web search, memory, images, and the text agent loop are not connected to this
+voice session. This is not full ChatGPT Voice feature parity.
 
-## Why WebSocket
+The output AudioContext is unlocked inside the explicit user gesture, before
+permission awaits, and shared with capture. A bundled AudioWorklet handles capture
+without deprecated ScriptProcessor nodes. Its resampler retains fractional sample
+coverage across blocks. The browser worklet emits silence to the output graph,
+not microphone monitoring audio.
 
-OpenAI recommends WebRTC for browser media when the application talks directly to OpenAI. This deployment already routes and meters Realtime WebSocket sessions through OneAPI, including browser authentication through `Sec-WebSocket-Protocol`. The gateway does not currently expose the newer unified `/v1/realtime/calls` WebRTC bootstrap route.
+This implementation retains the existing deployment's OpenAI-compatible WebSocket
+route. It sends only the user-configured token in the authentication subprotocol;
+no server-owned credential is returned to the browser. It does not request the
+legacy beta protocol while sending GA events. Provider/gateway authorization and
+quota policy are authoritative; stale frontend `is_free`/`byok` labels do not
+prove whether a particular gateway token has access. Direct mode uses its explicit
+API base, rather than accidentally inheriting the account's proxy base.
 
-Using the supported WebSocket route therefore preserves the existing API base, token authorization, model routing, and usage accounting without exposing a server-owned API key or introducing another media proxy.
+For a new direct-to-OpenAI browser deployment, prefer server-issued short-lived
+credentials and WebRTC. This PR does not introduce that bootstrap service or modify
+the OneAPI repository. A custom gateway must support the GA session schema and the
+requested model. No live provider compatibility test is implied by mocked tests.
 
-A future gateway implementation of `/v1/realtime/calls` can be added as another plugin without changing the Whisper plugin or `ChatInput`.
+## Correct lifecycle and interruption
 
-## Authentication and eligibility
+Startup owns a cancellable lifetime. Hang-up settles pending setup immediately;
+any late microphone grant is stopped, and a late worklet-module load cannot create
+a graph. Contexts cannot reopen after disposal. All remote close codes, including
+1000, release media. Configuration must be acknowledged with `session.updated`
+before microphone frames are transmitted. Setup has a 20-second transport timeout.
 
-- The browser uses the API token already configured by the user for GPTChat.
-- The token is sent as the Realtime WebSocket authentication subprotocol supported by OneAPI.
-- Server-owned free-tier credentials are never returned to the browser.
-- Realtime is rejected for free-tier accounts; those accounts continue to use Whisper.
-- Disabling Voice, changing plugin, changing session, or unmounting the input closes the socket, microphone tracks, capture graph, and playback context.
+`response.done` means generation completed, not that audio finished playing and
+not that the call ended. The UI returns to Listening after scheduled audio drains.
+VAD speech-start stops local output, invalidates queued deltas, rejects late output
+from the interrupted response, and sends `conversation.item.truncate`, including
+when zero milliseconds were heard. Heard duration excludes gaps between chunks.
 
-## Interruption behavior
+The model can call `end_call({reason})` after a goodbye or when it must end the
+conversation. Only a completed response with a valid tool call can initiate normal
+AI hang-up; silence and ordinary response completion cannot. The client acknowledges
+the tool, deduplicates its call ID, mutes input, drains goodbye audio, and disposes
+the call exactly once. A 15-second drain deadline handles suspended/stalled playback.
+The user can still hang up immediately while the AI goodbye is draining.
 
-Semantic VAD detects when the user starts speaking while the assistant is playing audio. The client then:
+If WebSocket buffered output exceeds 512 KiB, the call ends with a slow-connection
+error instead of accumulating indefinitely delayed speech. This is an explicit
+transport failure, not a hidden normal hang-up or a claimed seamless recovery.
 
-1. immediately stops queued local playback;
-2. calculates how much assistant audio was actually heard;
-3. sends `conversation.item.truncate` with that playback position.
+## Review reproduction and regression coverage
 
-This keeps the model's conversation state aligned with what the user heard instead of leaving unheard assistant audio in context.
+The review had four actual inline findings. Before fixes, deterministic behavior
+tests reproduced both late-permission microphone leaks (Realtime and Whisper).
+The already-present session-key and normal-remote-close fixes passed their behavior
+checks; those findings were not treated as new failures. The pre-fix TypeScript
+build also reproduced TS2345 at `AudioBuffer.copyToChannel`.
 
-## Conversation scope
+Regression tests now cover those cases plus permission/resume/worklet/handshake
+cancellation, duplicate starts, GA acknowledgement, remote closes, continuous turns,
+mute, backpressure, zero-position truncation, stale events, actual playback drain,
+validated/deduplicated AI hang-up, user override, call UI controls, pinned account
+identity, explicit-start-only behavior, and streaming resampling without drift.
+Tests exercise public socket/media/UI boundaries; the older focused lifecycle tests
+remain as additional regressions. Normal repository frontend CI runs all of them.
 
-A Realtime conversation is owned by the active audio plugin instance. It receives the session system prompt but does not reuse or mutate GPTChat's text-completion history. User speech is not transcribed or persisted by the application. This is intentional: enabling a separate input transcription model would recreate an STT dependency.
+```sh
+pnpm -C web test
+pnpm -C web build
+pnpm -C web exec vitest run src/pages/gptchat/audio src/pages/gptchat/components/__tests__/chat-input-audio-lifecycle.test.tsx
+```
 
-## Failure behavior
+Manual release acceptance still needs a real browser and an authorized provider:
+start with one Voice click; have several turns; interrupt mid-sentence; mute and
+minimize; switch text sessions and verify the call label/account remain unchanged;
+ask the AI to hang up; repeat with manual hang-up while permission is pending.
+Confirm browser microphone release and no STT/TTS/text-completion requests in the
+Realtime path. Mocked tests cannot measure hardware echo, real latency, mobile
+suspension behavior, or actual model decisions.
 
-- Microphone permission, invalid API bases, connection failures, model errors, and playback errors are shown in the existing input error surface.
-- Whisper remains available as an immediate fallback.
-- The plugin selector is locked while an audio session is active.
-- Abnormal socket closure releases local media resources and returns the control to idle.
+## Sources checked on 2026-09-04
 
-## Validation
-
-Automated coverage verifies:
-
-- legacy-safe plugin fallback to Whisper;
-- Realtime plugin selection;
-- API base to WebSocket URL conversion;
-- exact `gpt-realtime-2.1` audio-only session configuration;
-- semantic VAD and interruption settings;
-- 48 kHz to 24 kHz PCM conversion and clipping;
-- little-endian PCM16 base64 round-trip;
-- API-base precedence and status formatting.
-
-Manual acceptance should verify:
-
-1. Whisper recording still writes editable text into the draft.
-2. Realtime starts only after a user gesture and microphone approval.
-3. A spoken turn produces streamed audio without GPTChat STT, completion, or TTS requests.
-4. Speaking over the assistant stops playback quickly and the following response remains coherent.
-5. Turning Voice off releases the microphone indicator.
-6. A free-tier session receives a clear fallback message.
-
-## OpenAI references
-
-- [Realtime API guide](https://developers.openai.com/api/docs/guides/realtime)
-- [GPT-Realtime-2.1 model](https://developers.openai.com/api/docs/models/gpt-realtime-2.1)
-- [Realtime conversations and events](https://developers.openai.com/api/docs/guides/realtime-conversations)
-- [Voice activity detection](https://developers.openai.com/api/docs/guides/realtime-vad)
+- [ChatGPT Voice](https://help.openai.com/en/articles/20001274): explicit voice entry,
+  separate mute/end controls, natural interruptions, and text feedback.
+- [GPT-Realtime-2.1](https://developers.openai.com/api/docs/models/gpt-realtime-2.1).
+- [Realtime conversations](https://developers.openai.com/api/docs/guides/realtime-conversations):
+  session/response separation, GA events, function calls, and client-side truncation.
+  The documented API session maximum is 60 minutes; this is not an unlimited call.
+- [Realtime WebSocket](https://developers.openai.com/api/docs/guides/realtime-websocket):
+  browser authentication and the recommendation for short-lived credentials.

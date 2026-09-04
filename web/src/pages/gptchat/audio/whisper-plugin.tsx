@@ -1,11 +1,11 @@
 import { Loader2, Mic, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-
 import { Button } from '@/components/ui/button'
 import { transcribeAudio } from '@/utils/api'
+import { stopMediaStream } from './media-lifecycle'
 import type { AudioPluginProps } from './plugin-types'
 
-/** WhisperAudioPlugin preserves the legacy record-then-transcribe interaction. */
+/** WhisperAudioPlugin preserves editable dictation and cancels permission/recording work on disposal. */
 export function WhisperAudioPlugin({
   config,
   disabled,
@@ -15,162 +15,164 @@ export function WhisperAudioPlugin({
   onActivityChange,
   onStatusChange,
 }: AudioPluginProps) {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [state, setState] = useState<
+    'idle' | 'starting' | 'recording' | 'transcribing'
+  >('idle')
   const recorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const attemptRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
 
-  const transcribeBlob = useCallback(
-    async (blob: Blob) => {
-      if (!config.api_token) {
-        onError('API token is required for voice transcription.')
-        return
-      }
-
-      setIsTranscribing(true)
-      onBusyChange(true)
-      onActivityChange(true)
-      onStatusChange('Transcribing…')
-      onError(null)
-      try {
-        const file = new File([blob], `voice-${Date.now()}.webm`, {
-          type: blob.type || 'audio/webm',
-        })
-        const text = await transcribeAudio(file, config.api_token)
-        if (mountedRef.current) {
-          onDraftText(text)
-        }
-      } catch {
-        console.error('Failed to transcribe audio')
-        if (mountedRef.current) {
-          onError('Failed to transcribe audio. Please try again.')
-        }
-      } finally {
-        if (mountedRef.current) {
-          setIsTranscribing(false)
-          onBusyChange(false)
-          onActivityChange(false)
-          onStatusChange(null)
-        }
-      }
-    },
-    [
-      config.api_token,
-      onActivityChange,
-      onBusyChange,
-      onDraftText,
-      onError,
-      onStatusChange,
-    ],
-  )
-
-  const stopRecording = useCallback(() => {
+  /** cancel invalidates the attempt before releasing any already acquired media. */
+  const cancel = useCallback(() => {
+    attemptRef.current?.abort()
+    attemptRef.current = null
     const recorder = recorderRef.current
-    if (!recorder) {
-      return
-    }
-
-    if (recorder.state !== 'inactive') {
-      recorder.stop()
-    }
-    recorder.stream.getTracks().forEach((track) => track.stop())
     recorderRef.current = null
-    setIsRecording(false)
-    onStatusChange('Transcribing…')
-  }, [onStatusChange])
+    if (recorder) {
+      recorder.onstop = null
+      recorder.ondataavailable = null
+      if (recorder.state !== 'inactive') recorder.stop()
+      stopMediaStream(recorder.stream)
+    }
+    if (mountedRef.current) setState('idle')
+    onActivityChange(false)
+    onBusyChange(false)
+    onStatusChange(null)
+  }, [onActivityChange, onBusyChange, onStatusChange])
 
+  /** startRecording creates only one owned recorder and rejects late permission results. */
   const startRecording = useCallback(async () => {
-    if (isRecording) {
+    if (attemptRef.current) return
+    if (!config.api_token) {
+      onError('API token is required for voice transcription.')
       return
     }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       onError('Your browser does not support audio recording.')
       return
     }
-
+    const attempt = new AbortController()
+    attemptRef.current = attempt
+    setState('starting')
+    onActivityChange(true)
+    onBusyChange(true)
+    onStatusChange('Waiting for microphone permission…')
     onError(null)
+    let stream: MediaStream | null = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (attempt.signal.aborted || !mountedRef.current) {
+        stopMediaStream(stream)
+        return
+      }
       const recorder = new MediaRecorder(stream)
+      const chunks: Blob[] = []
       recorderRef.current = recorder
-      chunksRef.current = []
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data)
-        }
+        if (event.data.size) chunks.push(event.data)
       }
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
+        if (attempt.signal.aborted) return
+        recorderRef.current = null
+        stopMediaStream(recorder.stream)
+        const blob = new Blob(chunks, {
           type: recorder.mimeType || 'audio/webm',
         })
-        chunksRef.current = []
-        if (mountedRef.current) {
-          void transcribeBlob(blob)
-        }
+        const extension = blob.type.includes('mp4')
+          ? 'mp4'
+          : blob.type.includes('ogg')
+            ? 'ogg'
+            : 'webm'
+        setState('transcribing')
+        onBusyChange(true)
+        onStatusChange('Transcribing…')
+        void transcribeAudio(
+          new File([blob], `voice-${Date.now()}.${extension}`, {
+            type: blob.type,
+          }),
+          config.api_token,
+        )
+          .then((text) => {
+            if (!attempt.signal.aborted && mountedRef.current) onDraftText(text)
+          })
+          .catch(() => {
+            if (!attempt.signal.aborted && mountedRef.current)
+              onError('Failed to transcribe audio. Please try again.')
+          })
+          .finally(() => {
+            if (attemptRef.current === attempt) cancel()
+          })
       }
       recorder.start()
-      setIsRecording(true)
-      onActivityChange(true)
+      setState('recording')
+      onBusyChange(false)
       onStatusChange('Recording…')
     } catch {
-      console.error('Unable to access microphone')
-      onError('Unable to access microphone. Please check permissions.')
-      onActivityChange(false)
-      onStatusChange(null)
+      if (stream) stopMediaStream(stream)
+      if (!attempt.signal.aborted && mountedRef.current) {
+        onError('Unable to access microphone. Please check permissions.')
+        cancel()
+      }
     }
-  }, [isRecording, onActivityChange, onError, onStatusChange, transcribeBlob])
-
-  const handleToggle = useCallback(() => {
-    if (isRecording) {
-      stopRecording()
-      return
-    }
-    void startRecording()
-  }, [isRecording, startRecording, stopRecording])
+  }, [
+    config.api_token,
+    onActivityChange,
+    onBusyChange,
+    onStatusChange,
+    onError,
+    onDraftText,
+    cancel,
+  ])
 
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      const recorder = recorderRef.current
-      recorderRef.current = null
-      if (recorder) {
-        recorder.onstop = null
-        if (recorder.state !== 'inactive') {
-          recorder.stop()
-        }
-        recorder.stream.getTracks().forEach((track) => track.stop())
-      }
-      chunksRef.current = []
-      onBusyChange(false)
-      onActivityChange(false)
-      onStatusChange(null)
+      cancel()
     }
-  }, [onActivityChange, onBusyChange, onStatusChange])
+  }, [cancel])
 
   return (
     <Button
       type="button"
-      onClick={handleToggle}
-      disabled={isTranscribing || (disabled && !isRecording)}
-      variant={isRecording ? 'destructive' : 'outline'}
-      className="w-10 rounded-md p-0 shadow-sm"
+      onClick={() => {
+        if (state === 'starting') cancel()
+        else if (state === 'recording') {
+          setState('transcribing')
+          onBusyChange(true)
+          recorderRef.current?.stop()
+        } else if (state === 'idle') void startRecording()
+      }}
+      disabled={state === 'transcribing' || (disabled && state === 'idle')}
+      variant={
+        state === 'recording' || state === 'starting'
+          ? 'destructive'
+          : 'outline'
+      }
       aria-label={
-        isRecording
-          ? 'Stop recording'
-          : isTranscribing
-            ? 'Transcribing'
-            : 'Start Whisper recording'
+        state === 'starting'
+          ? 'Cancel microphone request'
+          : state === 'recording'
+            ? 'Stop recording'
+            : state === 'transcribing'
+              ? 'Transcribing'
+              : 'Start Whisper recording'
       }
     >
-      {isRecording ? (
-        <Square className="h-5 w-5" />
-      ) : isTranscribing ? (
-        <Loader2 className="h-5 w-5 animate-spin" />
+      {state === 'recording' ? (
+        <Square className="h-4 w-4" />
+      ) : state === 'starting' || state === 'transcribing' ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
-        <Mic className="h-5 w-5" />
+        <Mic className="h-4 w-4" />
       )}
+      {state === 'starting'
+        ? 'Cancel'
+        : state === 'recording'
+          ? 'Stop recording'
+          : state === 'transcribing'
+            ? 'Transcribing'
+            : 'Dictate'}
     </Button>
   )
 }

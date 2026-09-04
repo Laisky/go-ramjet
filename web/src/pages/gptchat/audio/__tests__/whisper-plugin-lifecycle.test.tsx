@@ -43,7 +43,15 @@ describe('WhisperAudioPlugin lifecycle regressions', () => {
         getUserMedia: vi.fn(() => permission.promise),
       },
     })
-    const mediaRecorderConstructor = vi.fn()
+    const mediaRecorderConstructor = vi.fn(function (
+      this: Record<string, unknown>,
+      input: MediaStream,
+    ) {
+      this.stream = input
+      this.state = 'inactive'
+      this.start = vi.fn()
+      this.stop = vi.fn()
+    })
     vi.stubGlobal('MediaRecorder', mediaRecorderConstructor)
 
     const rendered = render(

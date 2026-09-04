@@ -1,9 +1,11 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, Ref } from 'react'
 
 import type { AudioPluginID, SessionConfig, UserConfig } from '../types'
 
 /** AudioPluginProps defines the stable boundary between ChatInput and an audio backend. */
 export interface AudioPluginProps {
+  controlRef?: Ref<AudioPluginHandle>
+  sessionLabel?: string
   config: SessionConfig
   user?: UserConfig
   disabled: boolean
@@ -20,4 +22,10 @@ export interface AudioPluginDefinition {
   label: string
   description: string
   component: ComponentType<AudioPluginProps>
+}
+
+/** AudioPluginHandle exposes explicit user-gesture call controls without relying on saved preferences. */
+export interface AudioPluginHandle {
+  start: () => void
+  reveal: () => void
 }

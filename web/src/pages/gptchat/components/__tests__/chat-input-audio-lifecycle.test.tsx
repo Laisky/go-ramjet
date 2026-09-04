@@ -29,14 +29,14 @@ vi.mock('../message-input', () => ({
 }))
 
 describe('ChatInput audio lifecycle regressions', () => {
-  it('remounts and cleans up the audio plugin when the chat session changes', () => {
+  it('remounts and cleans up the audio plugin when the dictation session changes', () => {
     audioCleanup.mockReset()
     const config = {
       ...DefaultSessionConfig,
       chat_switch: {
         ...DefaultSessionConfig.chat_switch,
         enable_talk: true,
-        audio_plugin: 'realtime' as const,
+        audio_plugin: 'whisper' as const,
       },
     }
     const props = {

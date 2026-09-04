@@ -1,3 +1,4 @@
+import { waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const playerMocks = vi.hoisted(() => ({
@@ -142,12 +143,12 @@ describe('RealtimeAudioClient lifecycle regressions', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 
     const { client } = createClient()
-    const startPromise = client.start()
+    void client.start().catch(() => undefined)
     await flushMicrotasks()
 
     await client.stop()
     permission.resolve(stream)
-    await startPromise.catch(() => undefined)
+    await flushMicrotasks()
 
     expect(track.stop).toHaveBeenCalledTimes(1)
     expect(FakeWebSocket.instances).toHaveLength(0)
@@ -167,16 +168,20 @@ describe('RealtimeAudioClient lifecycle regressions', () => {
     Reflect.set(client, 'openCapture', vi.fn().mockResolvedValue(undefined))
     const startPromise = client.start()
     await flushMicrotasks()
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
     const socket = FakeWebSocket.instances[0]
     expect(socket).toBeDefined()
 
     socket.open()
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'session.updated' }),
+    } as MessageEvent)
     await startPromise
     socket.remoteClose(1000, 'normal closure')
     await flushMicrotasks()
 
     expect(track.stop).toHaveBeenCalledTimes(1)
-    expect(states.at(-1)).toBe('idle')
+    await waitFor(() => expect(states.at(-1)).toBe('idle'))
     expect(onError).not.toHaveBeenCalled()
   })
 })

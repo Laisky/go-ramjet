@@ -7,6 +7,8 @@ export function resolveRealtimeAPIBase(
   user?: UserConfig,
 ): string {
   const configured = config.api_base?.trim() || ''
+  if (config.token_type === 'direct')
+    return configured || 'https://api.openai.com'
   if (configured && configured !== 'https://api.openai.com') {
     return configured
   }
@@ -20,6 +22,7 @@ export function formatRealtimeStatus(
 ): string | null {
   const labels: Record<RealtimeAudioState, string | null> = {
     idle: null,
+    ending: 'Ending call…',
     connecting: 'Connecting…',
     listening: 'Listening…',
     thinking: 'Thinking…',

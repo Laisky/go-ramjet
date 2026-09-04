@@ -1,25 +1,35 @@
+import { PcmAudioPlayer, pcm16ToBase64 } from './pcm-audio'
+import { abortError, stopMediaStream, waitForMedia } from './media-lifecycle'
 import {
-  PcmAudioPlayer,
-  pcm16ToBase64,
-  resampleFloat32ToPCM16,
-} from './pcm-audio'
+  buildRealtimeWebSocketURL,
+  createRealtimeSessionUpdate,
+} from './realtime-session'
+import workletURL from './pcm-worklet.ts?worker&url'
 
-export const REALTIME_AUDIO_MODEL = 'gpt-realtime-2.1'
-export const REALTIME_AUDIO_VOICE = 'marin'
-
+export {
+  buildRealtimeWebSocketURL,
+  createRealtimeSessionUpdate,
+  REALTIME_AUDIO_MODEL,
+  REALTIME_AUDIO_VOICE,
+} from './realtime-session'
 export type RealtimeAudioState =
   | 'idle'
   | 'connecting'
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'ending'
+export type CallEndReason = 'user' | 'assistant' | 'remote' | 'error'
 
+/** RealtimeAudioClientCallbacks reports call state, captions, errors, and terminal reasons. */
 export interface RealtimeAudioClientCallbacks {
   onStateChange: (state: RealtimeAudioState) => void
   onTranscriptChange: (transcript: string) => void
   onError: (message: string) => void
+  onEnded?: (reason: CallEndReason, detail?: string) => void
 }
 
+/** RealtimeAudioClientOptions captures the immutable account and prompt for one call. */
 export interface RealtimeAudioClientOptions {
   apiBase: string
   apiToken: string
@@ -27,471 +37,473 @@ export interface RealtimeAudioClientOptions {
   callbacks: RealtimeAudioClientCallbacks
 }
 
+/** RealtimeItem contains only the model output fields needed for audio and hang-up. */
+interface RealtimeItem {
+  id?: string
+  type?: string
+  role?: string
+  name?: string
+  call_id?: string
+  arguments?: string
+}
+
+/** RealtimeServerEvent is the validated subset of GA Realtime events consumed here. */
 interface RealtimeServerEvent {
   type?: string
   delta?: string
   transcript?: string
+  response_id?: string
   item_id?: string
   content_index?: number
-  error?: {
-    message?: string
-  }
-  item?: {
-    id?: string
-    role?: string
-  }
+  error?: { message?: string }
+  item?: RealtimeItem
   response?: {
+    id?: string
     status?: string
-    status_details?: {
-      error?: {
-        message?: string
-      }
-    }
+    output?: RealtimeItem[]
+    status_details?: { error?: { message?: string } }
   }
 }
 
-/** buildRealtimeWebSocketURL resolves an OpenAI-compatible API base to Realtime WebSocket. */
-export function buildRealtimeWebSocketURL(apiBase: string): string {
-  const url = new URL(apiBase)
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Realtime API base must use HTTP or HTTPS')
-  }
-  if (url.username || url.password) {
-    throw new Error('Realtime API base must not contain credentials')
-  }
-  if (url.hash) {
-    throw new Error('Realtime API base must not contain a URL fragment')
-  }
+export const MAX_REALTIME_BUFFERED_BYTES = 512 * 1024
+const CONNECTION_TIMEOUT_MS = 20_000
+const GOODBYE_TIMEOUT_MS = 15_000
 
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  let path = url.pathname.replace(/\/+$/, '')
-  if (!path) {
-    path = '/v1/realtime'
-  } else if (path.endsWith('/v1')) {
-    path += '/realtime'
-  } else if (!path.endsWith('/v1/realtime')) {
-    path += '/v1/realtime'
-  }
-  url.pathname = path
-  url.searchParams.set('model', REALTIME_AUDIO_MODEL)
-  return url.toString()
-}
-
-/** createRealtimeSessionUpdate builds the native speech-to-speech session configuration. */
-export function createRealtimeSessionUpdate(
-  instructions: string,
-): Record<string, unknown> {
-  return {
-    type: 'session.update',
-    session: {
-      type: 'realtime',
-      model: REALTIME_AUDIO_MODEL,
-      output_modalities: ['audio'],
-      instructions,
-      audio: {
-        input: {
-          format: {
-            type: 'audio/pcm',
-            rate: 24_000,
-          },
-          turn_detection: {
-            type: 'semantic_vad',
-            create_response: true,
-            interrupt_response: true,
-          },
-        },
-        output: {
-          format: {
-            type: 'audio/pcm',
-            rate: 24_000,
-          },
-          voice: REALTIME_AUDIO_VOICE,
-        },
-      },
-    },
-  }
-}
-
-/** RealtimeAudioClient owns one browser-to-model native audio conversation. */
+/** RealtimeAudioClient owns a single cancellable, full-duplex native-audio call. */
 export class RealtimeAudioClient {
   private readonly options: RealtimeAudioClientOptions
   private readonly player = new PcmAudioPlayer()
+  private readonly abort = new AbortController()
+  private started = false
+  private closed = false
+  private ending = false
+  private ready = false
+  private muted = false
   private socket: WebSocket | null = null
   private mediaStream: MediaStream | null = null
-  private captureContext: AudioContext | null = null
-  private captureSource: MediaStreamAudioSourceNode | null = null
-  private captureProcessor: ScriptProcessorNode | null = null
-  private captureSilencer: GainNode | null = null
+  private source: MediaStreamAudioSourceNode | null = null
+  private processor: AudioWorkletNode | null = null
+  private rejectReady: ((error: Error) => void) | null = null
+  private acceptReady: (() => void) | null = null
+  private closePromise: Promise<void> | null = null
+  private goodbyeTimer: ReturnType<typeof setTimeout> | null = null
   private playbackQueue: Promise<void> = Promise.resolve()
   private playbackGeneration = 0
+  private responseID = ''
+  private outputBlocked = false
   private assistantItemID = ''
   private assistantContentIndex = 0
   private transcript = ''
-  private stopping = false
+  private readonly handledCalls = new Set<string>()
 
-  /** constructor stores connection settings and lifecycle callbacks. */
+  /** constructor captures settings so later UI/session edits cannot reroute an active call. */
   constructor(options: RealtimeAudioClientOptions) {
-    this.options = options
+    this.options = { ...options, callbacks: { ...options.callbacks } }
   }
 
-  /** start acquires the microphone and opens an authenticated Realtime session. */
+  /** start unlocks audio on the user gesture, acquires media, and waits for server configuration. */
   async start(): Promise<void> {
-    if (this.socket || this.mediaStream) {
-      throw new Error('Realtime audio session is already active')
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (this.started || this.closed)
+      throw new Error('Create a new client for each voice call')
+    if (!navigator.mediaDevices?.getUserMedia)
       throw new Error('This browser does not support microphone capture')
-    }
-    if (/[,\s]/.test(this.options.apiToken)) {
+    const url = buildRealtimeWebSocketURL(this.options.apiBase)
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(this.options.apiToken)) {
       throw new Error('API token contains unsupported WebSocket characters')
     }
-
-    this.stopping = false
+    this.started = true
     this.options.callbacks.onStateChange('connecting')
-
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
-      })
-      await this.player.start()
-      await this.openSocket()
+      // start() executes synchronously until its first await, preserving user activation.
+      const outputReady = this.player.start()
+      const microphoneReady = navigator.mediaDevices
+        .getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        })
+        .then((stream) => {
+          if (this.closed) {
+            stopMediaStream(stream)
+            throw abortError()
+          }
+          this.mediaStream = stream
+          stream.getTracks().forEach((track) => {
+            track.onended = () =>
+              this.fail(
+                'The microphone was disconnected. Start a new call to reconnect.',
+              )
+          })
+        })
+      await waitForMedia(
+        Promise.all([outputReady, microphoneReady]),
+        this.abort.signal,
+      )
+      await waitForMedia(this.openSocket(url), this.abort.signal)
+      await this.openCapture()
+      if (this.closed) throw abortError()
+      this.ready = true
+      this.options.callbacks.onStateChange('listening')
     } catch (error) {
-      await this.stop()
+      if (!this.closed) await this.stop('error')
       throw error
     }
   }
 
-  /** stop closes transport, microphone, capture graph, and playback resources. */
-  async stop(): Promise<void> {
-    this.stopping = true
+  /** stop immediately silences and releases media, then reports the end exactly once. */
+  stop(reason: CallEndReason = 'user', detail?: string): Promise<void> {
+    if (this.closePromise) return this.closePromise
+    this.closed = true
+    this.ready = false
+    this.abort.abort()
     this.playbackGeneration += 1
-
+    this.rejectReady?.(abortError())
+    this.rejectReady = null
+    this.acceptReady = null
+    if (this.goodbyeTimer) clearTimeout(this.goodbyeTimer)
+    this.goodbyeTimer = null
     const socket = this.socket
     this.socket = null
     if (socket) {
-      socket.onopen = null
-      socket.onmessage = null
-      socket.onerror = null
-      socket.onclose = null
+      socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null
       if (
         socket.readyState === WebSocket.OPEN ||
         socket.readyState === WebSocket.CONNECTING
-      ) {
-        socket.close(1000, 'client stopped')
-      }
+      )
+        socket.close(1000, 'call ended')
     }
-
-    await this.closeLocalResources()
-    this.resetConversationState()
-    this.options.callbacks.onTranscriptChange('')
-    this.options.callbacks.onStateChange('idle')
-    this.stopping = false
+    if (this.processor) {
+      this.processor.port.onmessage = null
+      this.processor.port.close()
+      this.processor.disconnect()
+      this.processor = null
+    }
+    this.source?.disconnect()
+    this.source = null
+    if (this.mediaStream) stopMediaStream(this.mediaStream)
+    this.mediaStream = null
+    this.options.callbacks.onStateChange('ending')
+    this.closePromise = this.player
+      .close()
+      .catch(() => {
+        this.options.callbacks.onError(
+          'Could not close the audio context; microphone capture has stopped.',
+        )
+      })
+      .then(() => {
+        this.options.callbacks.onStateChange('idle')
+        this.options.callbacks.onEnded?.(reason, detail)
+      })
+    return this.closePromise
   }
 
-  /** openSocket connects after microphone permission succeeds and initializes the session. */
-  private async openSocket(): Promise<void> {
-    const url = buildRealtimeWebSocketURL(this.options.apiBase)
-    const protocols = [
-      'realtime',
-      `openai-insecure-api-key.${this.options.apiToken}`,
-      'openai-beta.realtime-v1',
-    ]
+  /** setMuted gates outgoing frames and hardware tracks without replacing the call connection. */
+  setMuted(muted: boolean): void {
+    this.muted = muted
+    this.mediaStream?.getAudioTracks().forEach((track) => {
+      track.enabled = !muted
+    })
+    if (muted && this.ready)
+      this.sendEvent({ type: 'input_audio_buffer.clear' })
+  }
 
-    await new Promise<void>((resolve, reject) => {
-      let settled = false
-      const socket = new WebSocket(url, protocols)
+  /** openSocket resolves only after the server acknowledges the requested GA audio configuration. */
+  private openSocket(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(url, [
+        'realtime',
+        `openai-insecure-api-key.${this.options.apiToken}`,
+      ])
       this.socket = socket
-
-      socket.onmessage = (message) => {
-        this.handleMessage(message.data)
+      const timer = setTimeout(
+        () =>
+          finish(new Error('Realtime connection timed out. Please try again.')),
+        CONNECTION_TIMEOUT_MS,
+      )
+      let settled = false
+      const finish = (error?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.rejectReady = null
+        this.acceptReady = null
+        if (error) reject(error)
+        else resolve()
       }
+      this.rejectReady = (error) => finish(error)
+      this.acceptReady = () => finish()
+      socket.onopen = () => {
+        if (!this.closed)
+          this.sendEvent(createRealtimeSessionUpdate(this.options.instructions))
+      }
+      socket.onmessage = (message) => this.handleMessage(message.data)
       socket.onerror = () => {
-        const error = new Error('Realtime WebSocket connection failed')
-        if (!settled) {
-          settled = true
-          reject(error)
-          return
-        }
-        this.options.callbacks.onError(error.message)
-      }
-      socket.onclose = (event) => {
-        this.socket = null
-        if (!settled) {
-          settled = true
-          reject(
+        if (!settled)
+          finish(
             new Error(
-              event.reason ||
-                `Realtime WebSocket closed during setup (${event.code})`,
+              'Realtime connection failed. Check the API base, token, and model access.',
             ),
           )
-          return
-        }
-        if (this.stopping) {
-          return
-        }
-        if (event.code !== 1000) {
-          this.options.callbacks.onError(
-            event.reason || `Realtime audio connection closed (${event.code})`,
+        else
+          this.fail(
+            'Realtime connection failed. Start a new call to reconnect.',
           )
-        }
-        void this.handleRemoteClose()
       }
-      socket.onopen = () => {
-        void (async () => {
-          try {
-            this.sendEvent(
-              createRealtimeSessionUpdate(this.options.instructions),
-            )
-            await this.openCapture()
-            this.options.callbacks.onStateChange('listening')
-            settled = true
-            resolve()
-          } catch (error) {
-            settled = true
-            reject(error)
-          }
-        })()
+      socket.onclose = (event) => {
+        if (this.closed) return
+        if (!settled)
+          finish(
+            new Error(
+              `Realtime connection closed during setup (${event.code})`,
+            ),
+          )
+        if (event.code !== 1000)
+          this.options.callbacks.onError(
+            `Voice connection lost (${event.code}). Start a new call to reconnect.`,
+          )
+        void this.stop(event.code === 1000 ? 'remote' : 'error')
       }
     })
   }
 
-  /** openCapture streams resampled microphone frames through input_audio_buffer.append. */
+  /** openCapture installs a worklet; cancellation at the async module boundary prevents late graphs. */
   private async openCapture(): Promise<void> {
-    if (!this.mediaStream) {
-      throw new Error('Microphone stream is unavailable')
+    const context = this.player.getContext()
+    if (!context.audioWorklet || typeof AudioWorkletNode === 'undefined') {
+      throw new Error(
+        'Voice calls require AudioWorklet support and HTTPS (or localhost).',
+      )
     }
-
-    const context = new AudioContext()
-    this.captureContext = context
-    if (context.state === 'suspended') {
-      await context.resume()
-    }
-
-    const source = context.createMediaStreamSource(this.mediaStream)
-    const processor = context.createScriptProcessor(4096, 1, 1)
-    const silencer = context.createGain()
-    silencer.gain.value = 0
-
-    processor.onaudioprocess = (event) => {
-      if (this.socket?.readyState !== WebSocket.OPEN) {
+    await waitForMedia(
+      context.audioWorklet.addModule(workletURL),
+      this.abort.signal,
+    )
+    if (this.closed || !this.mediaStream) throw abortError()
+    this.source = context.createMediaStreamSource(this.mediaStream)
+    this.processor = new AudioWorkletNode(context, 'gptchat-microphone', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+    })
+    this.processor.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+      if (this.closed || !this.ready || this.muted || this.ending) return
+      if ((this.socket?.bufferedAmount ?? 0) > MAX_REALTIME_BUFFERED_BYTES) {
+        this.fail(
+          'Voice connection is too slow. The call was stopped to avoid sending delayed audio.',
+        )
         return
       }
-      const samples = event.inputBuffer.getChannelData(0)
-      const pcm = resampleFloat32ToPCM16(samples, context.sampleRate)
-      if (pcm.length === 0) {
-        return
-      }
-      try {
-        this.sendEvent({
-          type: 'input_audio_buffer.append',
-          audio: pcm16ToBase64(pcm),
-        })
-      } catch {
-        // Socket close handling releases capture resources.
-      }
+      this.sendEvent({
+        type: 'input_audio_buffer.append',
+        audio: pcm16ToBase64(new Int16Array(event.data)),
+      })
     }
-
-    source.connect(processor)
-    processor.connect(silencer)
-    silencer.connect(context.destination)
-    this.captureSource = source
-    this.captureProcessor = processor
-    this.captureSilencer = silencer
+    this.source.connect(this.processor)
+    // The worklet outputs silence; the microphone is never monitored through speakers.
+    this.processor.connect(context.destination)
   }
 
-  /** closeCapture releases every microphone and Web Audio capture resource. */
-  private async closeCapture(): Promise<void> {
-    if (this.captureProcessor) {
-      this.captureProcessor.onaudioprocess = null
-      this.captureProcessor.disconnect()
-      this.captureProcessor = null
-    }
-    if (this.captureSource) {
-      this.captureSource.disconnect()
-      this.captureSource = null
-    }
-    if (this.captureSilencer) {
-      this.captureSilencer.disconnect()
-      this.captureSilencer = null
-    }
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop())
-      this.mediaStream = null
-    }
-
-    const context = this.captureContext
-    this.captureContext = null
-    if (context && context.state !== 'closed') {
-      await context.close()
-    }
-  }
-
-  /** closeLocalResources releases capture and playback without touching the socket. */
-  private async closeLocalResources(): Promise<void> {
-    await this.closeCapture()
-    await this.player.close()
-  }
-
-  /** handleRemoteClose returns an ended server session to a clean idle state. */
-  private async handleRemoteClose(): Promise<void> {
-    this.playbackGeneration += 1
-    await this.closeLocalResources()
-    this.resetConversationState()
-    this.options.callbacks.onTranscriptChange('')
-    this.options.callbacks.onStateChange('idle')
-  }
-
-  /** resetConversationState clears playback and assistant item bookkeeping. */
-  private resetConversationState(): void {
-    this.playbackQueue = Promise.resolve()
-    this.assistantItemID = ''
-    this.assistantContentIndex = 0
-    this.transcript = ''
-  }
-
-  /** sendEvent serializes one client event when the Realtime transport is open. */
+  /** sendEvent writes a client event or fails the call without exposing credentials. */
   private sendEvent(event: Record<string, unknown>): void {
-    if (this.socket?.readyState !== WebSocket.OPEN) {
-      throw new Error('Realtime WebSocket is not open')
+    if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return
+    try {
+      this.socket.send(JSON.stringify(event))
+    } catch {
+      this.fail('Could not send voice data. Start a new call to reconnect.')
     }
-    this.socket.send(JSON.stringify(event))
   }
 
-  /** handleMessage applies one Realtime server event to UI and audio playback state. */
-  private handleMessage(raw: unknown): void {
-    if (typeof raw !== 'string') {
-      return
-    }
+  /** fail presents a transport/media error and releases this call's resources. */
+  private fail(message: string): void {
+    if (this.closed) return
+    this.options.callbacks.onError(
+      message.replaceAll(this.options.apiToken, '[redacted]'),
+    )
+    void this.stop('error')
+  }
 
+  /** handleMessage routes valid GA events while ignoring stale output after interruption. */
+  private handleMessage(raw: unknown): void {
+    if (this.closed || typeof raw !== 'string') return
     let event: RealtimeServerEvent
     try {
-      event = JSON.parse(raw) as RealtimeServerEvent
+      const value: unknown = JSON.parse(raw)
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new Error('Invalid event')
+      event = value as RealtimeServerEvent
     } catch {
-      this.options.callbacks.onError('Realtime server returned invalid JSON')
+      this.fail('Realtime returned an invalid event.')
       return
     }
-
+    if (event.type === 'session.updated') {
+      this.acceptReady?.()
+      return
+    }
+    if (event.type === 'error') {
+      const message =
+        typeof event.error?.message === 'string'
+          ? event.error.message.replaceAll(this.options.apiToken, '[redacted]')
+          : 'Realtime API returned an error'
+      this.rejectReady?.(new Error(message))
+      this.fail(message)
+      return
+    }
+    if (!this.ready || this.ending) return
+    if (event.type === 'input_audio_buffer.speech_started') {
+      this.interruptAssistant()
+      this.options.callbacks.onStateChange('listening')
+      return
+    }
+    if (event.type === 'input_audio_buffer.speech_stopped') {
+      this.options.callbacks.onStateChange('thinking')
+      return
+    }
+    if (event.type === 'response.created') {
+      this.playbackGeneration += 1
+      this.player.interrupt()
+      this.player.beginResponse()
+      this.responseID = event.response?.id ?? ''
+      this.outputBlocked = false
+      this.assistantItemID = ''
+      this.assistantContentIndex = 0
+      this.transcript = ''
+      this.options.callbacks.onTranscriptChange('')
+      this.options.callbacks.onStateChange('thinking')
+      return
+    }
+    const eventResponseID = event.response_id ?? event.response?.id
+    if (
+      this.outputBlocked ||
+      (eventResponseID &&
+        this.responseID &&
+        eventResponseID !== this.responseID)
+    )
+      return
     switch (event.type) {
-      case 'session.updated':
-        this.options.callbacks.onStateChange('listening')
-        break
-      case 'input_audio_buffer.speech_started':
-        this.interruptAssistant()
-        this.options.callbacks.onStateChange('listening')
-        break
-      case 'input_audio_buffer.speech_stopped':
-        this.options.callbacks.onStateChange('thinking')
-        break
-      case 'response.created':
-        this.playbackGeneration += 1
-        this.playbackQueue = Promise.resolve()
-        this.player.beginResponse()
-        this.assistantItemID = ''
-        this.assistantContentIndex = 0
-        this.transcript = ''
-        this.options.callbacks.onTranscriptChange('')
-        this.options.callbacks.onStateChange('thinking')
-        break
       case 'response.output_item.added':
-        if (event.item?.role === 'assistant' && event.item.id) {
-          this.assistantItemID = event.item.id
-        }
+        if (event.item?.role === 'assistant')
+          this.assistantItemID = event.item.id ?? ''
         break
       case 'response.output_audio.delta':
       case 'response.audio.delta':
-        this.handleAudioDelta(event)
+        if (typeof event.delta !== 'string') break
+        this.assistantItemID = event.item_id ?? this.assistantItemID
+        this.assistantContentIndex = event.content_index ?? 0
+        this.queueAudio(event.delta)
         break
       case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta':
-        if (event.delta) {
-          this.transcript += event.delta
-          this.options.callbacks.onTranscriptChange(this.transcript)
-        }
+        if (typeof event.delta === 'string') this.transcript += event.delta
+        this.options.callbacks.onTranscriptChange(this.transcript)
         break
       case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
-        if (event.transcript) {
+        if (typeof event.transcript === 'string')
           this.transcript = event.transcript
-          this.options.callbacks.onTranscriptChange(this.transcript)
-        }
+        this.options.callbacks.onTranscriptChange(this.transcript)
         break
       case 'response.done':
-        this.handleResponseDone(event)
-        break
-      case 'error':
-        this.options.callbacks.onError(
-          event.error?.message || 'Realtime API returned an error',
-        )
-        break
-      default:
+        this.finishResponse(event)
         break
     }
   }
 
-  /** handleAudioDelta queues native model audio and records its conversation item. */
-  private handleAudioDelta(event: RealtimeServerEvent): void {
-    if (!event.delta) {
-      return
-    }
-    if (event.item_id) {
-      this.assistantItemID = event.item_id
-    }
-    if (typeof event.content_index === 'number') {
-      this.assistantContentIndex = event.content_index
-    }
-
+  /** queueAudio serializes scheduling and invalidates deltas queued before an interruption. */
+  private queueAudio(delta: string): void {
     const generation = this.playbackGeneration
-    const delta = event.delta
     this.options.callbacks.onStateChange('speaking')
     this.playbackQueue = this.playbackQueue
-      .then(async () => {
-        if (generation !== this.playbackGeneration) {
-          return
-        }
-        await this.player.append(delta)
+      .then(() => {
+        if (this.closed || generation !== this.playbackGeneration) return
+        return this.player.append(delta)
       })
-      .catch(() => {
-        this.options.callbacks.onError('Failed to play Realtime audio')
-      })
+      .catch(() =>
+        this.fail('Could not play voice audio. Please start a new call.'),
+      )
   }
 
-  /** handleResponseDone reports model failures or returns the session to listening. */
-  private handleResponseDone(event: RealtimeServerEvent): void {
+  /** finishResponse waits for audible playback, rather than mistaking generation completion for hang-up. */
+  private finishResponse(event: RealtimeServerEvent): void {
+    if (event.response?.status === 'completed') {
+      const call = event.response.output?.find(
+        (item) => item.type === 'function_call' && item.name === 'end_call',
+      )
+      if (call && this.endByAssistant(call)) return
+    }
     if (event.response?.status === 'failed') {
       this.options.callbacks.onError(
-        event.response.status_details?.error?.message ||
-          'Realtime response failed',
+        'The voice response failed. You can try speaking again.',
       )
-      return
     }
-    this.options.callbacks.onStateChange('listening')
+    const generation = this.playbackGeneration
+    void this.playbackQueue
+      .then(() => this.player.whenDrained())
+      .then(() => {
+        if (
+          !this.closed &&
+          !this.ending &&
+          generation === this.playbackGeneration
+        )
+          this.options.callbacks.onStateChange('listening')
+      })
+      .catch(() => this.fail('Could not finish voice playback.'))
   }
 
-  /** interruptAssistant stops unheard audio and truncates it from model context. */
+  /** endByAssistant accepts one completed hang-up tool and drains goodbye audio before disposal. */
+  private endByAssistant(item: RealtimeItem): boolean {
+    if (!item.call_id || this.handledCalls.has(item.call_id)) return this.ending
+    let reason: string
+    try {
+      const args = JSON.parse(item.arguments ?? '{}') as { reason?: unknown }
+      if (
+        typeof args.reason !== 'string' ||
+        !args.reason.trim() ||
+        args.reason.length > 240
+      )
+        return false
+      reason = args.reason.trim()
+    } catch {
+      return false
+    }
+    this.handledCalls.add(item.call_id)
+    this.ending = true
+    this.setMuted(true)
+    this.options.callbacks.onStateChange('ending')
+    this.sendEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: item.call_id,
+        output: JSON.stringify({ ended: true }),
+      },
+    })
+    this.goodbyeTimer = setTimeout(() => {
+      void this.stop('assistant', reason)
+    }, GOODBYE_TIMEOUT_MS)
+    void this.playbackQueue
+      .then(() => this.player.whenDrained())
+      .then(() => this.stop('assistant', reason))
+      .catch(() => this.fail('Could not finish the voice call.'))
+    return true
+  }
+
+  /** interruptAssistant removes unheard output, including a zero-millisecond interruption. */
   private interruptAssistant(): void {
     this.playbackGeneration += 1
-    this.playbackQueue = Promise.resolve()
-    const playedMilliseconds = this.player.interrupt()
-    if (!this.assistantItemID || playedMilliseconds <= 0) {
-      return
-    }
-
-    try {
+    this.outputBlocked = true
+    const milliseconds = this.player.interrupt()
+    if (this.assistantItemID)
       this.sendEvent({
         type: 'conversation.item.truncate',
         item_id: this.assistantItemID,
         content_index: this.assistantContentIndex,
-        audio_end_ms: playedMilliseconds,
+        audio_end_ms: milliseconds,
       })
-    } catch {
-      this.options.callbacks.onError(
-        'Failed to reconcile interrupted Realtime audio',
-      )
-    }
+    this.assistantItemID = ''
+    this.transcript = ''
+    this.options.callbacks.onTranscriptChange('')
   }
 }

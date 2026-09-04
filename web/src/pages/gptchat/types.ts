@@ -76,7 +76,7 @@ export interface ChatSwitch {
   disable_https_crawler: boolean
   all_in_one: boolean
   enable_talk: boolean
-  /** Legacy saved sessions omit this field and safely fall back to Whisper. */
+  /** Optional for legacy configurations; explicitly saved plugin choices are preserved. */
   audio_plugin?: AudioPluginID
   enable_mcp: boolean
   enable_memory: boolean
@@ -142,7 +142,7 @@ export const DefaultSessionConfig: SessionConfig = {
     disable_https_crawler: false,
     all_in_one: false,
     enable_talk: false,
-    audio_plugin: 'whisper',
+    audio_plugin: 'realtime',
     enable_mcp: false,
     enable_memory: false,
     agent_mode: false,
