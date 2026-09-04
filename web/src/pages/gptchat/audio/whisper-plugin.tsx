@@ -119,13 +119,7 @@ export function WhisperAudioPlugin({
       onActivityChange(false)
       onStatusChange(null)
     }
-  }, [
-    isRecording,
-    onActivityChange,
-    onError,
-    onStatusChange,
-    transcribeBlob,
-  ])
+  }, [isRecording, onActivityChange, onError, onStatusChange, transcribeBlob])
 
   const handleToggle = useCallback(() => {
     if (isRecording) {

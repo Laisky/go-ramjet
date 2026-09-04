@@ -26,8 +26,7 @@ export function resampleFloat32ToPCM16(
     const nextIndex = Math.min(sourceIndex + 1, input.length - 1)
     const fraction = sourcePosition - sourceIndex
     const sample =
-      input[sourceIndex] +
-      (input[nextIndex] - input[sourceIndex]) * fraction
+      input[sourceIndex] + (input[nextIndex] - input[sourceIndex]) * fraction
     const clamped = Math.max(-1, Math.min(1, sample))
     output[index] =
       clamped < 0 ? Math.round(clamped * 0x8000) : Math.round(clamped * 0x7fff)

@@ -4,10 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SessionConfig, UserConfig } from '../types'
 import type { AudioPluginProps } from './plugin-types'
-import {
-  RealtimeAudioClient,
-  type RealtimeAudioState,
-} from './realtime-client'
+import { RealtimeAudioClient, type RealtimeAudioState } from './realtime-client'
 
 /** resolveRealtimeAPIBase selects an explicit session override before the account default. */
 export function resolveRealtimeAPIBase(

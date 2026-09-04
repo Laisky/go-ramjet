@@ -1,10 +1,6 @@
 import type { ComponentType } from 'react'
 
-import type {
-  AudioPluginID,
-  SessionConfig,
-  UserConfig,
-} from '../types'
+import type { AudioPluginID, SessionConfig, UserConfig } from '../types'
 
 /** AudioPluginProps defines the stable boundary between ChatInput and an audio backend. */
 export interface AudioPluginProps {
