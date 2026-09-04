@@ -31,3 +31,13 @@ jobs:
         run: pnpm -C web exec vitest run src/pages/gptchat/audio src/pages/gptchat/components/__tests__/chat-input-audio-lifecycle.test.tsx
       - name: Build frontend
         run: pnpm -C web build
+      - name: Package reproducible frontend workspace
+        if: always()
+        run: tar -czf /tmp/frontend-workspace.tar.gz web AGENTS.md docs/arch/gptchat-audio-plugins.md
+      - name: Upload frontend workspace
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: frontend-workspace
+          path: /tmp/frontend-workspace.tar.gz
+          retention-days: 1
