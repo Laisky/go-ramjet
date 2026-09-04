@@ -76,7 +76,8 @@ export interface ChatSwitch {
   disable_https_crawler: boolean
   all_in_one: boolean
   enable_talk: boolean
-  audio_plugin: AudioPluginID
+  /** Legacy saved sessions omit this field and safely fall back to Whisper. */
+  audio_plugin?: AudioPluginID
   enable_mcp: boolean
   enable_memory: boolean
   agent_mode: boolean
@@ -183,7 +184,7 @@ export interface UserConfig {
   openai_token: string
   image_token: string
   is_free: boolean
-  byok: boolean
+  byok?: boolean
   is_admin: boolean
   allowed_models: string[]
   no_limit_expensive_models: boolean
