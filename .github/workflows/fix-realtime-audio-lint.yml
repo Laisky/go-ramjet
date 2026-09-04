@@ -1,0 +1,230 @@
+name: fix-realtime-audio-lint
+
+on:
+  push:
+    branches:
+      - feat/gptchat-realtime-audio-plugins
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v6
+        with:
+          ref: feat/gptchat-realtime-audio-plugins
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          pnpm -C web install --frozen-lockfile
+
+      - name: Split Fast Refresh boundaries and harden session cleanup
+        shell: bash
+        run: |
+          cat > web/src/pages/gptchat/audio/plugin-registry.ts <<'EOF'
+          import type { AudioPluginID } from '../types'
+          import type { AudioPluginDefinition } from './plugin-types'
+          import { RealtimeAudioPlugin } from './realtime-plugin'
+          import { WhisperAudioPlugin } from './whisper-plugin'
+
+          export const AUDIO_PLUGIN_DEFINITIONS: Record<
+            AudioPluginID,
+            AudioPluginDefinition
+          > = {
+            whisper: {
+              id: 'whisper',
+              label: 'Whisper',
+              description: 'Record audio, transcribe it, then send editable text.',
+              component: WhisperAudioPlugin,
+            },
+            realtime: {
+              id: 'realtime',
+              label: 'Realtime',
+              description:
+                'Talk directly with GPT-Realtime using native streaming audio.',
+              component: RealtimeAudioPlugin,
+            },
+          }
+
+          /** resolveAudioPlugin returns a valid plugin definition with a legacy-safe fallback. */
+          export function resolveAudioPlugin(pluginID?: string): AudioPluginDefinition {
+            if (pluginID === 'realtime') {
+              return AUDIO_PLUGIN_DEFINITIONS.realtime
+            }
+            return AUDIO_PLUGIN_DEFINITIONS.whisper
+          }
+          EOF
+
+          cat > web/src/pages/gptchat/audio/audio-plugin-control.tsx <<'EOF'
+          import type { AudioPluginProps } from './plugin-types'
+          import { resolveAudioPlugin } from './plugin-registry'
+
+          interface AudioPluginControlProps extends AudioPluginProps {
+            pluginID?: string
+          }
+
+          /** AudioPluginControl renders the selected implementation behind one stable contract. */
+          export function AudioPluginControl({
+            pluginID,
+            ...props
+          }: AudioPluginControlProps) {
+            const definition = resolveAudioPlugin(pluginID)
+            const Component = definition.component
+            return <Component {...props} />
+          }
+          EOF
+
+          cat > web/src/pages/gptchat/audio/realtime-plugin-utils.ts <<'EOF'
+          import type { SessionConfig, UserConfig } from '../types'
+          import type { RealtimeAudioState } from './realtime-client'
+
+          /** resolveRealtimeAPIBase selects an explicit session override before the account default. */
+          export function resolveRealtimeAPIBase(
+            config: SessionConfig,
+            user?: UserConfig,
+          ): string {
+            const configured = config.api_base?.trim() || ''
+            if (configured && configured !== 'https://api.openai.com') {
+              return configured
+            }
+            return user?.api_base?.trim() || configured
+          }
+
+          /** formatRealtimeStatus combines transport state with a compact native transcript preview. */
+          export function formatRealtimeStatus(
+            state: RealtimeAudioState,
+            transcript: string,
+          ): string | null {
+            const labels: Record<RealtimeAudioState, string | null> = {
+              idle: null,
+              connecting: 'Connecting…',
+              listening: 'Listening…',
+              thinking: 'Thinking…',
+              speaking: 'Speaking…',
+            }
+            const label = labels[state]
+            if (!label) {
+              return null
+            }
+
+            const compactTranscript = transcript.replace(/\s+/g, ' ').trim()
+            if (
+              !compactTranscript ||
+              (state !== 'speaking' && state !== 'listening')
+            ) {
+              return label
+            }
+            const preview =
+              compactTranscript.length > 84
+                ? `…${compactTranscript.slice(-83)}`
+                : compactTranscript
+            return `${label} ${preview}`
+          }
+          EOF
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          realtime_plugin = Path('web/src/pages/gptchat/audio/realtime-plugin.tsx')
+          content = realtime_plugin.read_text()
+          content = content.replace(
+              "import type { SessionConfig, UserConfig } from '../types'\n",
+              '',
+          )
+          content = content.replace(
+              "import { RealtimeAudioClient, type RealtimeAudioState } from './realtime-client'\n",
+              "import { RealtimeAudioClient, type RealtimeAudioState } from './realtime-client'\n"
+              "import { formatRealtimeStatus, resolveRealtimeAPIBase } from './realtime-plugin-utils'\n",
+          )
+          content, count = re.subn(
+              r"/\*\* resolveRealtimeAPIBase[\s\S]*?(?=/\*\* RealtimeAudioPlugin)",
+              '',
+              content,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit('failed to move Realtime plugin helpers')
+          realtime_plugin.write_text(content)
+
+          test = Path('web/src/pages/gptchat/audio/__tests__/plugin-registry.test.ts')
+          content = test.read_text().replace(
+              "} from '../realtime-plugin'",
+              "} from '../realtime-plugin-utils'",
+          )
+          test.write_text(content)
+
+          chat_input = Path('web/src/pages/gptchat/components/chat-input.tsx')
+          content = chat_input.read_text()
+          old_import = """import {
+            AUDIO_PLUGIN_DEFINITIONS,
+            AudioPluginControl,
+            resolveAudioPlugin,
+          } from '../audio/plugin-registry'
+          """
+          new_import = """import { AudioPluginControl } from '../audio/audio-plugin-control'
+          import {
+            AUDIO_PLUGIN_DEFINITIONS,
+            resolveAudioPlugin,
+          } from '../audio/plugin-registry'
+          """
+          if old_import not in content:
+              raise SystemExit('failed to find ChatInput audio import')
+          content = content.replace(old_import, new_import, 1)
+          content = content.replace(
+              '      setMessage(draftMessage)\n',
+              '      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize an externally owned draft after session changes.\n'
+              '      setMessage(draftMessage)\n',
+              1,
+          )
+          content = content.replace(
+              '    updateMessage(prefillDraft.text)\n',
+              '    // eslint-disable-next-line react-hooks/set-state-in-effect -- copy a one-shot parent prefill into the local editor.\n'
+              '    updateMessage(prefillDraft.text)\n',
+              1,
+          )
+          content = content.replace(
+              '                  key={audioPlugin.id}\n',
+              "                  key={`${sessionId ?? 'session'}:${audioPlugin.id}`}\n",
+              1,
+          )
+          chat_input.write_text(content)
+          PY
+
+          rm web/src/pages/gptchat/audio/plugin-registry.tsx
+
+      - name: Format and lint the affected frontend files
+        run: |
+          pnpm -C web exec prettier --write \
+            src/pages/gptchat/audio/audio-plugin-control.tsx \
+            src/pages/gptchat/audio/plugin-registry.ts \
+            src/pages/gptchat/audio/realtime-plugin-utils.ts \
+            src/pages/gptchat/audio/realtime-plugin.tsx \
+            src/pages/gptchat/audio/__tests__/plugin-registry.test.ts \
+            src/pages/gptchat/components/chat-input.tsx
+          pnpm -C web exec eslint \
+            src/pages/gptchat/audio/audio-plugin-control.tsx \
+            src/pages/gptchat/audio/plugin-registry.ts \
+            src/pages/gptchat/audio/realtime-plugin-utils.ts \
+            src/pages/gptchat/audio/realtime-plugin.tsx \
+            src/pages/gptchat/audio/__tests__/plugin-registry.test.ts \
+            src/pages/gptchat/components/chat-input.tsx
+
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web
+          git commit -m 'fix(gptchat): satisfy frontend lint boundaries'
+          git push origin HEAD:feat/gptchat-realtime-audio-plugins
