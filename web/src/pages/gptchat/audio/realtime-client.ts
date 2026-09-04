@@ -123,6 +123,7 @@ export class RealtimeAudioClient {
   private captureProcessor: ScriptProcessorNode | null = null
   private captureSilencer: GainNode | null = null
   private playbackQueue: Promise<void> = Promise.resolve()
+  private playbackGeneration = 0
   private assistantItemID = ''
   private assistantContentIndex = 0
   private transcript = ''
@@ -168,6 +169,7 @@ export class RealtimeAudioClient {
   /** stop closes transport, microphone, capture graph, and playback resources. */
   async stop(): Promise<void> {
     this.stopping = true
+    this.playbackGeneration += 1
 
     const socket = this.socket
     this.socket = null
@@ -184,12 +186,8 @@ export class RealtimeAudioClient {
       }
     }
 
-    await this.closeCapture()
-    await this.player.close()
-    this.playbackQueue = Promise.resolve()
-    this.assistantItemID = ''
-    this.assistantContentIndex = 0
-    this.transcript = ''
+    await this.closeLocalResources()
+    this.resetConversationState()
     this.options.callbacks.onTranscriptChange('')
     this.options.callbacks.onStateChange('idle')
     this.stopping = false
@@ -233,14 +231,15 @@ export class RealtimeAudioClient {
           )
           return
         }
-        if (!this.stopping && event.code !== 1000) {
+        if (this.stopping) {
+          return
+        }
+        if (event.code !== 1000) {
           this.options.callbacks.onError(
             event.reason || `Realtime audio connection closed (${event.code})`,
           )
-          void this.closeCapture()
-          void this.player.close()
-          this.options.callbacks.onStateChange('idle')
         }
+        void this.handleRemoteClose()
       }
       socket.onopen = () => {
         void (async () => {
@@ -287,10 +286,14 @@ export class RealtimeAudioClient {
       if (pcm.length === 0) {
         return
       }
-      this.sendEvent({
-        type: 'input_audio_buffer.append',
-        audio: pcm16ToBase64(pcm),
-      })
+      try {
+        this.sendEvent({
+          type: 'input_audio_buffer.append',
+          audio: pcm16ToBase64(pcm),
+        })
+      } catch {
+        // Socket close handling releases capture resources.
+      }
     }
 
     source.connect(processor)
@@ -328,6 +331,29 @@ export class RealtimeAudioClient {
     }
   }
 
+  /** closeLocalResources releases capture and playback without touching the socket. */
+  private async closeLocalResources(): Promise<void> {
+    await this.closeCapture()
+    await this.player.close()
+  }
+
+  /** handleRemoteClose returns an ended server session to a clean idle state. */
+  private async handleRemoteClose(): Promise<void> {
+    this.playbackGeneration += 1
+    await this.closeLocalResources()
+    this.resetConversationState()
+    this.options.callbacks.onTranscriptChange('')
+    this.options.callbacks.onStateChange('idle')
+  }
+
+  /** resetConversationState clears playback and assistant item bookkeeping. */
+  private resetConversationState(): void {
+    this.playbackQueue = Promise.resolve()
+    this.assistantItemID = ''
+    this.assistantContentIndex = 0
+    this.transcript = ''
+  }
+
   /** sendEvent serializes one client event when the Realtime transport is open. */
   private sendEvent(event: Record<string, unknown>): void {
     if (this.socket?.readyState !== WebSocket.OPEN) {
@@ -362,7 +388,11 @@ export class RealtimeAudioClient {
         this.options.callbacks.onStateChange('thinking')
         break
       case 'response.created':
+        this.playbackGeneration += 1
+        this.playbackQueue = Promise.resolve()
         this.player.beginResponse()
+        this.assistantItemID = ''
+        this.assistantContentIndex = 0
         this.transcript = ''
         this.options.callbacks.onTranscriptChange('')
         this.options.callbacks.onStateChange('thinking')
@@ -415,9 +445,16 @@ export class RealtimeAudioClient {
       this.assistantContentIndex = event.content_index
     }
 
+    const generation = this.playbackGeneration
+    const delta = event.delta
     this.options.callbacks.onStateChange('speaking')
     this.playbackQueue = this.playbackQueue
-      .then(() => this.player.append(event.delta || ''))
+      .then(async () => {
+        if (generation !== this.playbackGeneration) {
+          return
+        }
+        await this.player.append(delta)
+      })
       .catch(() => {
         this.options.callbacks.onError('Failed to play Realtime audio')
       })
@@ -437,6 +474,8 @@ export class RealtimeAudioClient {
 
   /** interruptAssistant stops unheard audio and truncates it from model context. */
   private interruptAssistant(): void {
+    this.playbackGeneration += 1
+    this.playbackQueue = Promise.resolve()
     const playedMilliseconds = this.player.interrupt()
     if (!this.assistantItemID || playedMilliseconds <= 0) {
       return
