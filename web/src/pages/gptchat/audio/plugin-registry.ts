@@ -1,5 +1,5 @@
 import type { AudioPluginID } from '../types'
-import type { AudioPluginDefinition, AudioPluginProps } from './plugin-types'
+import type { AudioPluginDefinition } from './plugin-types'
 import { RealtimeAudioPlugin } from './realtime-plugin'
 import { WhisperAudioPlugin } from './whisper-plugin'
 
@@ -28,18 +28,4 @@ export function resolveAudioPlugin(pluginID?: string): AudioPluginDefinition {
     return AUDIO_PLUGIN_DEFINITIONS.realtime
   }
   return AUDIO_PLUGIN_DEFINITIONS.whisper
-}
-
-interface AudioPluginControlProps extends AudioPluginProps {
-  pluginID?: string
-}
-
-/** AudioPluginControl renders the selected implementation behind one stable contract. */
-export function AudioPluginControl({
-  pluginID,
-  ...props
-}: AudioPluginControlProps) {
-  const definition = resolveAudioPlugin(pluginID)
-  const Component = definition.component
-  return <Component {...props} />
 }

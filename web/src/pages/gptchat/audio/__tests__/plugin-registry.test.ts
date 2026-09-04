@@ -4,7 +4,7 @@ import { resolveAudioPlugin } from '../plugin-registry'
 import {
   formatRealtimeStatus,
   resolveRealtimeAPIBase,
-} from '../realtime-plugin'
+} from '../realtime-plugin-utils'
 import { DefaultSessionConfig, type UserConfig } from '../../types'
 
 describe('resolveAudioPlugin', () => {

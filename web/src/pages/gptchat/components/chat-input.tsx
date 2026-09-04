@@ -7,9 +7,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
+import { AudioPluginControl } from '../audio/audio-plugin-control'
 import {
   AUDIO_PLUGIN_DEFINITIONS,
-  AudioPluginControl,
   resolveAudioPlugin,
 } from '../audio/plugin-registry'
 import { useUser } from '../hooks/use-user'
@@ -96,6 +96,7 @@ export function ChatInput({
   // Sync from external draftMessage changes (e.g., switching sessions)
   useEffect(() => {
     if (draftMessage !== undefined && draftMessage !== message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize an externally owned draft after session changes.
       setMessage(draftMessage)
     }
   }, [draftMessage]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally sync only on external draft changes
@@ -105,6 +106,7 @@ export function ChatInput({
       return
     }
     lastPrefillIdRef.current = prefillDraft.id
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- copy a one-shot parent prefill into the local editor.
     updateMessage(prefillDraft.text)
     requestAnimationFrame(() => {
       textareaRef.current?.focus()
@@ -315,7 +317,7 @@ export function ChatInput({
             {config.chat_switch.enable_talk && (
               <TooltipWrapper content={audioPlugin.description} side="left">
                 <AudioPluginControl
-                  key={audioPlugin.id}
+                  key={`${sessionId ?? 'session'}:${audioPlugin.id}`}
                   pluginID={audioPlugin.id}
                   config={config}
                   user={user}
