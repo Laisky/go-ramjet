@@ -3,6 +3,8 @@ import { DefaultModel, ImageModelFluxDev } from './models'
  * Types and interfaces for GPTChat.
  */
 
+export type AudioPluginID = 'whisper' | 'realtime'
+
 export interface ChatMessageData {
   chatID: string
   role: 'user' | 'assistant' | 'system'
@@ -74,6 +76,7 @@ export interface ChatSwitch {
   disable_https_crawler: boolean
   all_in_one: boolean
   enable_talk: boolean
+  audio_plugin: AudioPluginID
   enable_mcp: boolean
   enable_memory: boolean
   agent_mode: boolean
@@ -138,6 +141,7 @@ export const DefaultSessionConfig: SessionConfig = {
     disable_https_crawler: false,
     all_in_one: false,
     enable_talk: false,
+    audio_plugin: 'whisper',
     enable_mcp: false,
     enable_memory: false,
     agent_mode: false,
@@ -179,6 +183,7 @@ export interface UserConfig {
   openai_token: string
   image_token: string
   is_free: boolean
+  byok: boolean
   is_admin: boolean
   allowed_models: string[]
   no_limit_expensive_models: boolean
