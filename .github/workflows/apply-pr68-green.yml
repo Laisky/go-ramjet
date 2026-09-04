@@ -1,0 +1,97 @@
+name: apply-pr68-green
+
+on:
+  push:
+    branches:
+      - tmp/export-pr68-source
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-push:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v6
+        with:
+          ref: feat/gptchat-realtime-audio-plugins
+          path: target
+
+      - name: Checkout validated patch payload
+        uses: actions/checkout@v6
+        with:
+          ref: tmp/export-pr68-source
+          path: payload
+
+      - name: Apply validated source overlay
+        run: |
+          base64 --decode payload/.github/pr68-green.tar.gz.b64 > /tmp/pr68-green.tar.gz
+          echo '5fe7922e8051385661ee2144540a89e7b5876f8ed69079b277bc139e9264ad9c  /tmp/pr68-green.tar.gz' | sha256sum --check --strict
+          tar -xzf /tmp/pr68-green.tar.gz -C target
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        run: |
+          corepack enable
+          pnpm -C target/web install --frozen-lockfile
+
+      - name: Check formatting
+        run: |
+          pnpm -C target/web exec prettier --check \
+            src/pages/gptchat/audio/__tests__/plugin-registry.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-call.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-client-lifecycle.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-client.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-plugin.test.tsx \
+            src/pages/gptchat/audio/__tests__/whisper-plugin-lifecycle.test.tsx \
+            src/pages/gptchat/audio/pcm-audio.ts \
+            src/pages/gptchat/audio/realtime-call-panel.tsx \
+            src/pages/gptchat/audio/realtime-call.ts \
+            src/pages/gptchat/audio/realtime-client.ts \
+            src/pages/gptchat/audio/realtime-plugin-utils.ts \
+            src/pages/gptchat/audio/realtime-plugin.tsx \
+            src/pages/gptchat/audio/whisper-plugin.tsx \
+            src/pages/gptchat/components/__tests__/chat-input-audio-lifecycle.test.tsx \
+            src/pages/gptchat/components/chat-input.tsx
+
+      - name: Lint changed frontend files
+        run: |
+          pnpm -C target/web exec eslint \
+            src/pages/gptchat/audio/__tests__/plugin-registry.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-call.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-client-lifecycle.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-client.test.ts \
+            src/pages/gptchat/audio/__tests__/realtime-plugin.test.tsx \
+            src/pages/gptchat/audio/__tests__/whisper-plugin-lifecycle.test.tsx \
+            src/pages/gptchat/audio/pcm-audio.ts \
+            src/pages/gptchat/audio/realtime-call-panel.tsx \
+            src/pages/gptchat/audio/realtime-call.ts \
+            src/pages/gptchat/audio/realtime-client.ts \
+            src/pages/gptchat/audio/realtime-plugin-utils.ts \
+            src/pages/gptchat/audio/realtime-plugin.tsx \
+            src/pages/gptchat/audio/whisper-plugin.tsx \
+            src/pages/gptchat/components/__tests__/chat-input-audio-lifecycle.test.tsx \
+            src/pages/gptchat/components/chat-input.tsx
+
+      - name: Run GPTChat regression suite
+        run: pnpm -C target/web exec vitest run src/pages/gptchat
+
+      - name: Build production frontend
+        run: pnpm -C target/web build
+
+      - name: Commit and push validated changes
+        working-directory: target
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/arch/gptchat-audio-plugins.md web/src/pages/gptchat
+          git diff --cached --check
+          git commit -m 'fix(gptchat): harden realtime call lifecycle and UX'
+          git push origin HEAD:feat/gptchat-realtime-audio-plugins
