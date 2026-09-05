@@ -49,10 +49,19 @@ export function createRealtimeSessionUpdate(instructions: string) {
           // No `language` here: the caller may switch languages mid-call, and
           // pinning one forces the transcriber to mishear the others.
           transcription: { model: REALTIME_INPUT_TRANSCRIPTION_MODEL },
+          // Filtered before the audio reaches VAD, so it suppresses the traffic,
+          // wind, and nearby chatter that otherwise register as the caller
+          // starting to speak. `near_field` matches a phone or headset held
+          // close to the mouth, which is how this call is placed.
+          noise_reduction: { type: 'near_field' },
           turn_detection: {
             type: 'semantic_vad',
             create_response: true,
-            interrupt_response: true,
+            // The server interrupts on the *start* of detected speech, before
+            // anything has been transcribed, so outdoors a passing car ended the
+            // reply mid-sentence. Barge-in is handled by the client instead,
+            // which waits for speech to persist long enough to be a real turn.
+            interrupt_response: false,
           },
         },
         output: {
