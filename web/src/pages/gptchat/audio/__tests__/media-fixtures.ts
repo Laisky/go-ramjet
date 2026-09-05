@@ -78,12 +78,24 @@ export class FakeContext {
   static moduleReady: Promise<void> = Promise.resolve()
   static resumeReady: Promise<void> = Promise.resolve()
   static initialState = 'running'
+  // The amplitude every analyser sample reports, so a test can drive the
+  // loudness the production player measures.
+  static outputAmplitude = 0
   state = FakeContext.initialState
   currentTime = 0
   sampleRate = 24_000
   destination = {}
   sources: FakeSource[] = []
   microphone = { connect: vi.fn(), disconnect: vi.fn() }
+  analyser = {
+    fftSize: 0,
+    smoothingTimeConstant: 1,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    getFloatTimeDomainData: vi.fn((target: Float32Array) => {
+      target.fill(FakeContext.outputAmplitude)
+    }),
+  }
   audioWorklet = { addModule: vi.fn(() => FakeContext.moduleReady) }
   resume = vi.fn(async () => {
     await FakeContext.resumeReady
@@ -105,6 +117,10 @@ export class FakeContext {
     const source = new FakeSource()
     this.sources.push(source)
     return source
+  }
+  /** createAnalyser returns the single node output loudness is measured on. */
+  createAnalyser() {
+    return this.analyser
   }
   /** createMediaStreamSource exposes microphone graph connections. */
   createMediaStreamSource() {
@@ -136,6 +152,7 @@ export function installMedia() {
   FakeSocket.instances = []
   FakeContext.instances = []
   FakeContext.initialState = 'running'
+  FakeContext.outputAmplitude = 0
   FakeContext.moduleReady = Promise.resolve()
   FakeContext.resumeReady = Promise.resolve()
   FakeWorklet.instances = []

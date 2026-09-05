@@ -62,6 +62,7 @@ export function RealtimeAudioPlugin({
   // that corner's responsive width — for everyone who never drags it.
   const [position, setPosition] = useState<FloatingPosition | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
+  const orbRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
     pointerId: number
     offsetX: number
@@ -320,6 +321,34 @@ export function RealtimeAudioPlugin({
     // unrelated prop changed their identity, which broke session pinning.
   }, [])
 
+  // The orb tracks the reply's loudness while the assistant speaks.
+  useEffect(() => {
+    const orb = orbRef.current
+    if (!orb) return
+    if (state !== 'speaking') {
+      orb.style.setProperty('--voice-level', '0')
+      return
+    }
+    let frame = 0
+    const follow = () => {
+      // Written straight to the element. A React state update per animation
+      // frame would re-render the whole call window sixty times a second to
+      // change one number.
+      orb.style.setProperty(
+        '--voice-level',
+        (clientRef.current?.getOutputLevel() ?? 0).toFixed(3),
+      )
+      frame = requestAnimationFrame(follow)
+    }
+    frame = requestAnimationFrame(follow)
+    return () => {
+      cancelAnimationFrame(frame)
+      orb.style.setProperty('--voice-level', '0')
+    }
+    // minimized is a dependency because the orb is unmounted while minimized,
+    // so the loop has to re-attach to the element rendered on restore.
+  }, [state, minimized])
+
   // Re-clamped whenever the window can fall outside the viewport: a rotated
   // phone, a resized browser, or the height change from minimizing it.
   const floating = position !== null
@@ -485,8 +514,11 @@ export function RealtimeAudioPlugin({
       {active && !minimized && (
         <>
           <div
+            ref={orbRef}
             aria-hidden="true"
-            className={`mx-auto my-5 h-16 w-16 rounded-full bg-primary/20 ring-4 ring-primary/10 ${state === 'speaking' ? 'motion-safe:animate-pulse' : ''}`}
+            className={`voice-orb mx-auto my-5 h-16 w-16 rounded-full bg-primary/20 ring-4 ring-primary/10 ${
+              state === 'listening' ? 'voice-orb-listening' : ''
+            }`}
           />
           <p className="mb-3 text-xs text-muted-foreground">
             Speak naturally. You can interrupt the AI. This call stays with the

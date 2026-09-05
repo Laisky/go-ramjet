@@ -1,4 +1,11 @@
 export const REALTIME_PCM_SAMPLE_RATE = 24_000
+// Speech sits far below full scale, so raw RMS would barely move an indicator
+// driven by it. This lifts an ordinary spoken passage into the top of the 0..1
+// range while leaving loud passages clipped rather than distorted.
+const LEVEL_DISPLAY_GAIN = 3
+// 128 time-domain samples at 24 kHz is about 5 ms of audio: short enough to
+// follow syllables, long enough that the value does not flicker between frames.
+const LEVEL_FFT_SIZE = 256
 
 /** resampleFloat32ToPCM16 converts browser audio samples to signed 24 kHz PCM16. */
 export function resampleFloat32ToPCM16(
@@ -77,6 +84,11 @@ export function base64PCM16ToFloat32(
 /** PcmAudioPlayer schedules audio, measures heard samples, and cannot reopen after disposal. */
 export class PcmAudioPlayer {
   private context: AudioContext | null = null
+  // Output is routed through an analyser so callers can see how loud the reply
+  // is right now. Reading the scheduled PCM instead would report what was
+  // queued, not what is being heard.
+  private analyser: AnalyserNode | null = null
+  private levelSamples: Float32Array<ArrayBuffer> | null = null
   private closed = false
   private nextStart = 0
   private segments: { start: number; duration: number }[] = []
@@ -89,6 +101,16 @@ export class PcmAudioPlayer {
     const context =
       this.context ?? new AudioContext({ sampleRate: REALTIME_PCM_SAMPLE_RATE })
     this.context = context
+    if (!this.analyser) {
+      const analyser = context.createAnalyser()
+      analyser.fftSize = LEVEL_FFT_SIZE
+      // Smoothing is a frequency-domain setting; the envelope is smoothed by
+      // the consumer, which knows its own frame rate.
+      analyser.smoothingTimeConstant = 0
+      analyser.connect(context.destination)
+      this.analyser = analyser
+      this.levelSamples = new Float32Array(analyser.fftSize)
+    }
     if (context.state === 'suspended') await context.resume()
     if (this.closed || this.context !== context)
       throw new DOMException('Audio player closed', 'AbortError')
@@ -119,7 +141,7 @@ export class PcmAudioPlayer {
     buffer.copyToChannel(samples, 0)
     const source = context.createBufferSource()
     source.buffer = buffer
-    source.connect(context.destination)
+    source.connect(this.analyser ?? context.destination)
     const start = Math.max(context.currentTime, this.nextStart)
     this.nextStart = start + buffer.duration
     this.segments.push({ start, duration: buffer.duration })
@@ -130,6 +152,23 @@ export class PcmAudioPlayer {
       this.notifyDrain()
     }
     source.start(start)
+  }
+
+  /**
+   * getLevel reports how loud the output is at this instant, from 0 to 1.
+   *
+   * Zero once playback drains, so an indicator driven by it settles instead of
+   * freezing on the last syllable.
+   */
+  getLevel(): number {
+    const analyser = this.analyser
+    const samples = this.levelSamples
+    if (!analyser || !samples || !this.sources.size) return 0
+    analyser.getFloatTimeDomainData(samples)
+    let total = 0
+    for (const sample of samples) total += sample * sample
+    const rms = Math.sqrt(total / samples.length)
+    return Math.min(1, rms * LEVEL_DISPLAY_GAIN)
   }
 
   /** isPlaying reports whether any scheduled output has yet to finish. */
@@ -175,6 +214,9 @@ export class PcmAudioPlayer {
     if (this.closed) return
     this.closed = true
     this.interrupt()
+    this.analyser?.disconnect()
+    this.analyser = null
+    this.levelSamples = null
     const context = this.context
     this.context = null
     if (context && context.state !== 'closed') await context.close()
