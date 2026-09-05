@@ -110,9 +110,11 @@ body {
   --ring: oklch(45% 0.05 250);
 
   /* Semantic surface tints — subtle cool differentiation */
-  --surface-user: oklch(94.5% 0.01 248);      /* faint cool tint for user */
-  --surface-reasoning: oklch(96% 0.008 250);   /* barely cool for thinking */
-  --surface-assistant: oklch(98% 0.004 250);   /* almost indistinguishable from card */
+  --surface-user: oklch(94.5% 0.01 248); /* faint cool tint for user */
+  --surface-reasoning: oklch(96% 0.008 250); /* barely cool for thinking */
+  --surface-assistant: oklch(
+    98% 0.004 250
+  ); /* almost indistinguishable from card */
 
   --shadow-soft: rgba(20, 30, 50, 0.05);
 
@@ -173,9 +175,9 @@ body {
   --ring: oklch(70% 0.05 250);
 
   /* Semantic surface tints — subtle cool */
-  --surface-user: oklch(24% 0.012 248);       /* faint cool tint for user */
-  --surface-reasoning: oklch(21% 0.01 250);   /* barely cool for thinking */
-  --surface-assistant: oklch(18% 0.008 250);  /* just above card */
+  --surface-user: oklch(24% 0.012 248); /* faint cool tint for user */
+  --surface-reasoning: oklch(21% 0.01 250); /* barely cool for thinking */
+  --surface-assistant: oklch(18% 0.008 250); /* just above card */
 
   --shadow-soft: rgba(0, 0, 0, 0.35);
 }
@@ -430,7 +432,6 @@ input[type='range']::-moz-range-thumb {
 
 /* Animations */
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -446,7 +447,6 @@ input[type='range']::-moz-range-thumb {
 }
 
 @keyframes bounce {
-
   0%,
   100% {
     transform: translateY(-25%);
@@ -461,6 +461,47 @@ input[type='range']::-moz-range-thumb {
 
 .animate-bounce {
   animation: bounce 1s infinite;
+}
+
+/*
+ * Voice call orb.
+ *
+ * --voice-level is written per animation frame by the call window while the
+ * assistant speaks, so the orb tracks the actual loudness of the reply instead
+ * of running a fixed loop. It stays 0 the rest of the time, which leaves the
+ * orb at rest and lets the listening breath below take over.
+ */
+.voice-orb {
+  --voice-level: 0;
+  transform: scale(calc(1 + var(--voice-level) * 0.35));
+  box-shadow: 0 0 calc(10px + var(--voice-level) * 38px)
+    calc(1px + var(--voice-level) * 9px)
+    color-mix(in oklch, var(--primary) 40%, transparent);
+  /* Short enough to keep up with syllables, long enough to smooth the jitter
+     between frames. */
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out;
+}
+
+@keyframes voice-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px 1px
+      color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 22px 4px
+      color-mix(in oklch, var(--primary) 34%, transparent);
+  }
+}
+
+/* Slow and shallow on purpose: this says "still listening", not "working". */
+.voice-orb-listening {
+  animation: voice-breathe 3.6s ease-in-out infinite;
 }
 
 @keyframes spin {
@@ -607,9 +648,9 @@ input[type='range']::-moz-range-thumb {
   border-left: 3px solid var(--destructive);
 }
 
-.code-shell__surface>.code-shell__raw,
-.code-shell__surface>.code-shell__diagram,
-.code-shell__surface>.code-shell__error {
+.code-shell__surface > .code-shell__raw,
+.code-shell__surface > .code-shell__diagram,
+.code-shell__surface > .code-shell__error {
   flex: 1;
 }
 
@@ -692,11 +733,16 @@ input[type='range']::-moz-range-thumb {
 
 /* Reduced motion: disable animations for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
-
   .animate-pulse,
   .animate-bounce,
-  .animate-spin {
+  .animate-spin,
+  .voice-orb-listening {
     animation: none;
+  }
+
+  /* The glow still follows the voice, but nothing moves or resizes. */
+  .voice-orb {
+    transform: none;
   }
 
   *,

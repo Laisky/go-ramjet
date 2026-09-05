@@ -254,6 +254,16 @@ export class RealtimeAudioClient {
     return this.closePromise
   }
 
+  /**
+   * getOutputLevel reports how loud the assistant is right now, from 0 to 1.
+   *
+   * Polled per animation frame by the UI, so it stays a cheap read rather than
+   * a callback that would drive React from the audio path.
+   */
+  getOutputLevel(): number {
+    return this.closed ? 0 : this.player.getLevel()
+  }
+
   /** setMuted gates outgoing frames and hardware tracks without replacing the call connection. */
   setMuted(muted: boolean): void {
     this.muted = muted
