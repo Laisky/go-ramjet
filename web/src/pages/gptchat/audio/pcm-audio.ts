@@ -132,6 +132,11 @@ export class PcmAudioPlayer {
     source.start(start)
   }
 
+  /** isPlaying reports whether any scheduled output has yet to finish. */
+  isPlaying(): boolean {
+    return this.sources.size > 0
+  }
+
   /** whenDrained resolves after every scheduled audio node has actually ended. */
   whenDrained(): Promise<void> {
     if (!this.sources.size) return Promise.resolve()

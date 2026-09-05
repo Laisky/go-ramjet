@@ -92,6 +92,12 @@ interface RealtimeServerEvent {
 
 export const MAX_REALTIME_BUFFERED_BYTES = 512 * 1024
 const CONNECTION_TIMEOUT_MS = 20_000
+// How long detected speech must persist before it is accepted as the caller
+// taking the floor. The server reports speech the instant its detector fires,
+// with nothing transcribed yet, so outdoors a car, a cough, or a passer-by
+// looked identical to a real interruption and cut the reply off. Anything
+// shorter than this is treated as noise and the reply keeps playing.
+export const BARGE_IN_CONFIRM_MS = 400
 const GOODBYE_TIMEOUT_MS = 15_000
 
 /** RealtimeAudioClient owns a single cancellable, full-duplex native-audio call. */
@@ -112,9 +118,14 @@ export class RealtimeAudioClient {
   private acceptReady: (() => void) | null = null
   private closePromise: Promise<void> | null = null
   private goodbyeTimer: ReturnType<typeof setTimeout> | null = null
+  private bargeInTimer: ReturnType<typeof setTimeout> | null = null
   private playbackQueue: Promise<void> = Promise.resolve()
   private playbackGeneration = 0
   private responseID = ''
+  // Whether the server is still producing a reply. Playback alone is not enough
+  // to tell: between `response.created` and the first audio delta the assistant
+  // holds the floor with nothing yet scheduled.
+  private responseActive = false
   private outputBlocked = false
   private assistantItemID = ''
   private assistantContentIndex = 0
@@ -159,7 +170,11 @@ export class RealtimeAudioClient {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            // Automatic gain rides the level up during the pauses between words,
+            // which lifts street noise to speaking volume and trips the server's
+            // speech detector. Cancellation and suppression stay on; only the
+            // gain is fixed.
+            autoGainControl: false,
           },
           video: false,
         })
@@ -203,6 +218,7 @@ export class RealtimeAudioClient {
     this.acceptReady = null
     if (this.goodbyeTimer) clearTimeout(this.goodbyeTimer)
     this.goodbyeTimer = null
+    this.cancelBargeIn()
     const socket = this.socket
     this.socket = null
     if (socket) {
@@ -244,8 +260,10 @@ export class RealtimeAudioClient {
     this.mediaStream?.getAudioTracks().forEach((track) => {
       track.enabled = !muted
     })
-    if (muted && this.ready)
+    if (muted && this.ready) {
+      this.cancelBargeIn()
       this.sendEvent({ type: 'input_audio_buffer.clear' })
+    }
   }
 
   /** openSocket resolves only after the server acknowledges the requested GA audio configuration. */
@@ -399,12 +417,16 @@ export class RealtimeAudioClient {
     }
     if (!this.ready || this.ending) return
     if (event.type === 'input_audio_buffer.speech_started') {
-      this.interruptAssistant()
-      this.options.callbacks.onStateChange('listening')
+      this.beginBargeIn()
       return
     }
     if (event.type === 'input_audio_buffer.speech_stopped') {
-      this.options.callbacks.onStateChange('thinking')
+      // Speech that stopped before it was confirmed never took the floor, so the
+      // assistant is still mid-reply and the call is not waiting on a response.
+      const unconfirmed = this.bargeInTimer !== null
+      this.cancelBargeIn()
+      if (!(unconfirmed && this.assistantHasFloor()))
+        this.options.callbacks.onStateChange('thinking')
       return
     }
     // These must stay above the response-scoping gate below. They carry no
@@ -444,6 +466,7 @@ export class RealtimeAudioClient {
       this.player.interrupt()
       this.player.beginResponse()
       this.responseID = event.response?.id ?? ''
+      this.responseActive = true
       this.outputBlocked = false
       this.assistantItemID = ''
       this.assistantContentIndex = 0
@@ -516,6 +539,7 @@ export class RealtimeAudioClient {
 
   /** finishResponse waits for audible playback, rather than mistaking generation completion for hang-up. */
   private finishResponse(event: RealtimeServerEvent): void {
+    this.responseActive = false
     if (event.response?.status === 'completed') {
       const call = event.response.output?.find(
         (item) => item.type === 'function_call' && item.name === 'end_call',
@@ -579,8 +603,49 @@ export class RealtimeAudioClient {
     return true
   }
 
+  /** assistantHasFloor reports whether a reply is still being produced or heard. */
+  private assistantHasFloor(): boolean {
+    return this.responseActive || this.player.isPlaying()
+  }
+
+  /**
+   * beginBargeIn defers an interruption until the speech has lasted long enough.
+   *
+   * The server no longer cuts the reply on its own, so this is the only path
+   * that stops the assistant mid-turn. When no reply is in flight there is
+   * nothing to protect and the caller simply has the floor.
+   */
+  private beginBargeIn(): void {
+    if (this.bargeInTimer) return
+    if (!this.assistantHasFloor()) {
+      this.options.callbacks.onStateChange('listening')
+      return
+    }
+    this.bargeInTimer = setTimeout(() => {
+      this.bargeInTimer = null
+      if (this.closed || this.ending || !this.assistantHasFloor()) return
+      this.interruptAssistant()
+      this.options.callbacks.onStateChange('listening')
+    }, BARGE_IN_CONFIRM_MS)
+  }
+
+  /** cancelBargeIn drops a pending interruption that was never confirmed. */
+  private cancelBargeIn(): void {
+    if (!this.bargeInTimer) return
+    clearTimeout(this.bargeInTimer)
+    this.bargeInTimer = null
+  }
+
   /** interruptAssistant removes unheard output, including a zero-millisecond interruption. */
   private interruptAssistant(): void {
+    this.cancelBargeIn()
+    // The session no longer interrupts server-side, so generation keeps running
+    // until it is cancelled here; otherwise the rest of the reply is billed and
+    // queued behind the caller's new turn.
+    if (this.responseActive) {
+      this.responseActive = false
+      this.sendEvent({ type: 'response.cancel' })
+    }
     this.playbackGeneration += 1
     this.outputBlocked = true
     const milliseconds = this.player.interrupt()

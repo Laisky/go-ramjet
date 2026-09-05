@@ -86,6 +86,7 @@ describe('createRealtimeSessionUpdate', () => {
           input: {
             format: { type: string; rate: number }
             transcription?: { model: string }
+            noise_reduction: { type: string }
             turn_detection: {
               type: string
               create_response: boolean
@@ -114,7 +115,14 @@ describe('createRealtimeSessionUpdate', () => {
     expect(event.session.audio.input.turn_detection).toEqual({
       type: 'semantic_vad',
       create_response: true,
-      interrupt_response: true,
+      // The client confirms a barge-in before acting on it, so the server must
+      // not cut the reply the instant its detector hears something.
+      interrupt_response: false,
+    })
+    // Applied before VAD sees the audio, so outdoor noise stops registering as
+    // the caller starting to speak.
+    expect(event.session.audio.input.noise_reduction).toEqual({
+      type: 'near_field',
     })
     expect(event.session.audio.output).toEqual({
       format: { type: 'audio/pcm', rate: 24_000 },

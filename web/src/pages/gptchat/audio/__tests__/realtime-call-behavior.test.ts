@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RealtimeAudioClient,
+  BARGE_IN_CONFIRM_MS,
   MAX_REALTIME_BUFFERED_BYTES,
 } from '../realtime-client'
 import { pcm16ToBase64, PcmAudioPlayer } from '../pcm-audio'
@@ -61,6 +62,19 @@ function complete(socket: FakeSocket, id = 'r1', output: unknown[] = []) {
     type: 'response.done',
     response: { id, status: 'completed', output },
   })
+}
+/**
+ * bargeIn delivers speech and holds it past the confirmation window.
+ *
+ * Detected speech alone no longer stops the reply; it has to last long enough
+ * to be a turn rather than a passing noise.
+ */
+async function bargeIn(socket: FakeSocket) {
+  vi.useFakeTimers()
+  socket.event({ type: 'input_audio_buffer.speech_started' })
+  await vi.advanceTimersByTimeAsync(BARGE_IN_CONFIRM_MS + 1)
+  vi.useRealTimers()
+  await flush()
 }
 const endCall = {
   type: 'function_call',
@@ -277,8 +291,7 @@ describe('Realtime call lifecycle', () => {
       delta: 'Let me explain the',
     })
     // The caller barges in, which wipes the partial transcript.
-    socket.event({ type: 'input_audio_buffer.speech_started' })
-    await flush()
+    await bargeIn(socket)
 
     expect(assistantTurns.at(-1)).toEqual({
       text: 'Let me explain the',
@@ -303,8 +316,7 @@ describe('Realtime call lifecycle', () => {
     await flush()
 
     // The caller replies, which barges in on whatever is still playing.
-    socket.event({ type: 'input_audio_buffer.speech_started' })
-    await flush()
+    await bargeIn(socket)
 
     // A finished reply must not be logged again as a second interrupted turn.
     const committed = callbacks.onAssistantTurn.mock.calls.filter(
@@ -344,8 +356,7 @@ describe('Realtime call lifecycle', () => {
     })
     await flush()
 
-    socket.event({ type: 'input_audio_buffer.speech_started' })
-    await flush()
+    await bargeIn(socket)
 
     // Interrupting is the only moment partially spoken text still exists.
     const committed = callbacks.onAssistantTurn.mock.calls.filter(
@@ -483,10 +494,50 @@ describe('Continuous native audio behavior', () => {
     expect(media.track.stop).toHaveBeenCalledTimes(1)
   })
 
-  it('truncates at zero before playback begins and rejects queued or late audio after barge-in', async () => {
+  it('keeps the reply playing through a noise blip that never becomes a turn', async () => {
+    const { socket, context, callbacks } = await connect()
+    response(socket)
+    await flush()
+    expect(context.sources).toHaveLength(1)
+
+    // A car passes: the detector fires and stops well inside the window.
+    vi.useFakeTimers()
+    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await vi.advanceTimersByTimeAsync(BARGE_IN_CONFIRM_MS - 100)
+    socket.event({ type: 'input_audio_buffer.speech_stopped' })
+    await vi.advanceTimersByTimeAsync(BARGE_IN_CONFIRM_MS)
+    vi.useRealTimers()
+    await flush()
+
+    expect(context.sources[0].stop).not.toHaveBeenCalled()
+    expect(
+      socket.sent.filter(
+        (event) => event.type === 'conversation.item.truncate',
+      ),
+    ).toHaveLength(0)
+    expect(
+      socket.sent.filter((event) => event.type === 'response.cancel'),
+    ).toHaveLength(0)
+    // The reply was never taken away, so the call is still speaking rather than
+    // waiting on a new response.
+    expect(callbacks.onStateChange).toHaveBeenLastCalledWith('speaking')
+  })
+
+  it('cancels, truncates, and rejects late audio once a barge-in is confirmed', async () => {
     const { socket, context } = await connect()
     response(socket)
-    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await bargeIn(socket)
+
+    expect(context.sources[0].stop).toHaveBeenCalled()
+    expect(socket.sent).toContainEqual({ type: 'response.cancel' })
+    expect(socket.sent).toContainEqual({
+      type: 'conversation.item.truncate',
+      item_id: 'item-r1',
+      content_index: 0,
+      audio_end_ms: 0,
+    })
+
+    // Audio still in flight for the abandoned reply must not be played.
     socket.event({
       type: 'response.output_audio.delta',
       response_id: 'r1',
@@ -494,22 +545,17 @@ describe('Continuous native audio behavior', () => {
       delta: 'AAA=',
     })
     await flush()
-    expect(context.sources).toHaveLength(0)
-    expect(socket.sent).toContainEqual({
-      type: 'conversation.item.truncate',
-      item_id: 'item-r1',
-      content_index: 0,
-      audio_end_ms: 0,
-    })
+    expect(context.sources).toHaveLength(1)
+
     response(socket, 'r2')
     await flush()
-    expect(context.sources).toHaveLength(1)
+    expect(context.sources).toHaveLength(2)
   })
 
   it('ignores an old response completion after a new response starts', async () => {
     const { socket, callbacks } = await connect()
     response(socket, 'old')
-    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await bargeIn(socket)
     socket.event({ type: 'response.created', response: { id: 'new' } })
     complete(socket, 'old', [endCall])
     await flush()
