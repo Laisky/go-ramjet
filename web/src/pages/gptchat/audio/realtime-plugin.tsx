@@ -21,9 +21,16 @@ import type { AudioPluginProps } from './plugin-types'
 import { RealtimeAudioClient, type RealtimeAudioState } from './realtime-client'
 import { DEFAULT_REALTIME_AUDIO_MODEL } from './realtime-session'
 import {
+  clampFloatingPosition,
   formatRealtimeStatus,
   resolveRealtimeAPIBase,
+  VIEWPORT_MARGIN,
+  type FloatingPosition,
 } from './realtime-plugin-utils'
+
+// How far one arrow-key press nudges the call window, for callers who move it
+// without a pointer.
+const KEYBOARD_STEP = 16
 
 /** RealtimeAudioPlugin owns a persistent call; props only affect the next explicit start. */
 export function RealtimeAudioPlugin({
@@ -51,6 +58,15 @@ export function RealtimeAudioPlugin({
   const [label, setLabel] = useState('')
   const [ended, setEnded] = useState('')
   const [seconds, setSeconds] = useState(0)
+  // null until the window is first moved, so it keeps its corner placement — and
+  // that corner's responsive width — for everyone who never drags it.
+  const [position, setPosition] = useState<FloatingPosition | null>(null)
+  const panelRef = useRef<HTMLElement | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    offsetX: number
+    offsetY: number
+  } | null>(null)
   const clientRef = useRef<RealtimeAudioClient | null>(null)
   const mounted = useRef(true)
   const connectedAt = useRef<number | null>(null)
@@ -304,6 +320,95 @@ export function RealtimeAudioPlugin({
     // unrelated prop changed their identity, which broke session pinning.
   }, [])
 
+  // Re-clamped whenever the window can fall outside the viewport: a rotated
+  // phone, a resized browser, or the height change from minimizing it.
+  const floating = position !== null
+  useEffect(() => {
+    if (!floating) return
+    const reclamp = () => {
+      const panel = panelRef.current
+      if (!panel) return
+      setPosition((current) => {
+        if (!current) return current
+        const next = clampFloatingPosition(
+          current,
+          { width: panel.offsetWidth, height: panel.offsetHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        )
+        return next.x === current.x && next.y === current.y ? current : next
+      })
+    }
+    reclamp()
+    window.addEventListener('resize', reclamp)
+    return () => window.removeEventListener('resize', reclamp)
+  }, [floating, minimized])
+
+  /** moveTo places the window at a viewport point, clamped to stay reachable. */
+  const moveTo = useCallback((x: number, y: number) => {
+    const panel = panelRef.current
+    if (!panel) return
+    setPosition(
+      clampFloatingPosition(
+        { x, y },
+        { width: panel.offsetWidth, height: panel.offsetHeight },
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    )
+  }, [])
+
+  /** beginDrag grabs the window at the point the caller pressed, not at its corner. */
+  const beginDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    // A second finger landing mid-drag must not seize the window and snap it to
+    // a new grab point; the first one keeps it until it lifts.
+    if (dragRef.current) return
+    // Buttons live in the drag handle, so a press on one must stay a click.
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button'))
+      return
+    const panel = panelRef.current
+    if (!panel) return
+    const rect = panel.getBoundingClientRect()
+    dragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    }
+    // Capture keeps the drag alive when the pointer outruns the handle.
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    moveTo(rect.left, rect.top)
+  }
+
+  const continueDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    moveTo(event.clientX - drag.offsetX, event.clientY - drag.offsetY)
+  }
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    dragRef.current = null
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
+
+  /** nudge moves the window from the keyboard, the only route without a pointer. */
+  const nudge = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const steps: Record<string, [number, number]> = {
+      ArrowLeft: [-KEYBOARD_STEP, 0],
+      ArrowRight: [KEYBOARD_STEP, 0],
+      ArrowUp: [0, -KEYBOARD_STEP],
+      ArrowDown: [0, KEYBOARD_STEP],
+    }
+    const step = steps[event.key]
+    const panel = panelRef.current
+    if (!step || !panel) return
+    event.preventDefault()
+    // The first nudge has no stored position yet, so start from where the
+    // corner placement actually put the window.
+    const rect = panel.getBoundingClientRect()
+    const from = position ?? { x: rect.left, y: rect.top }
+    moveTo(from.x + step[0], from.y + step[1])
+  }
+
   if (!active && !ended) return null
   return createPortal(
     <section
@@ -313,9 +418,32 @@ export function RealtimeAudioPlugin({
       onKeyDown={(event) => {
         if (event.key === 'Escape' && active) setMinimized(true)
       }}
-      className="fixed bottom-4 right-4 z-50 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border bg-background p-4 text-foreground shadow-xl"
+      ref={panelRef}
+      style={
+        position
+          ? {
+              left: position.x,
+              top: position.y,
+              maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+            }
+          : undefined
+      }
+      className={`fixed z-50 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-border bg-background p-4 text-foreground shadow-xl ${
+        position ? '' : 'bottom-4 right-4'
+      }`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div
+        role="group"
+        aria-label="Move the call window"
+        tabIndex={0}
+        onPointerDown={beginDrag}
+        onPointerMove={continueDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onKeyDown={nudge}
+        // touch-none stops the browser scrolling the page instead of dragging.
+        className="flex touch-none cursor-grab select-none items-center justify-between gap-2 active:cursor-grabbing"
+      >
         <div className="min-w-0">
           <h2 className="truncate font-semibold">{label}</h2>
           <p className="text-xs text-muted-foreground">

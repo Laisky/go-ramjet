@@ -43,3 +43,36 @@ export function formatRealtimeStatus(
       : compactTranscript
   return `${label} ${preview}`
 }
+
+/** FloatingPosition is the call window's viewport offset once it has been dragged. */
+export interface FloatingPosition {
+  x: number
+  y: number
+}
+
+/** VIEWPORT_MARGIN keeps a dragged call window from resting flush against an edge. */
+export const VIEWPORT_MARGIN = 8
+
+/**
+ * clampFloatingPosition keeps the dragged call window reachable.
+ *
+ * A window dropped past an edge, or left behind by a viewport that shrank,
+ * would otherwise hide its own hang-up button with no way to bring it back.
+ * The lower bound wins on a viewport too small to fit the window, so the header
+ * stays visible rather than the window being pinned off the top-left.
+ */
+export function clampFloatingPosition(
+  position: FloatingPosition,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+): FloatingPosition {
+  const limit = (value: number, extent: number, available: number) =>
+    Math.min(
+      Math.max(value, VIEWPORT_MARGIN),
+      Math.max(VIEWPORT_MARGIN, available - extent - VIEWPORT_MARGIN),
+    )
+  return {
+    x: limit(position.x, size.width, viewport.width),
+    y: limit(position.y, size.height, viewport.height),
+  }
+}
