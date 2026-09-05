@@ -32,6 +32,11 @@ export interface ChatMessageHeaderProps {
   }) => void
   onFork?: (chatId: string, role: string) => void
   pairedUserMessage?: ChatMessageData
+  /**
+   * locked disables the actions that rewrite this session's history while a voice
+   * call is transcribing into it, so a live turn and a manual edit cannot collide.
+   */
+  locked?: boolean
   /** API token for TTS functionality */
   apiToken?: string
   /** TTS state from parent to ensure consistency */
@@ -63,6 +68,7 @@ export function ChatMessageHeader({
   onEditResend,
   onFork,
   pairedUserMessage,
+  locked,
   apiToken,
   ttsStatus,
   className,
@@ -144,6 +150,8 @@ export function ChatMessageHeader({
 
   const showSpeechButton = Boolean(apiToken && isAssistant && message.content)
   const actionDisabled = Boolean(isStreaming && isAssistant)
+  // Reading actions stay available during a call; only history rewrites are held.
+  const lockedLabel = 'Unavailable while a voice call is recording to this chat'
   const copyLabel = copyError
     ? 'Failed to copy'
     : copied
@@ -195,7 +203,8 @@ export function ChatMessageHeader({
               size="sm"
               onClick={handleEditClick}
               className="h-7 w-7 rounded-md p-0"
-              title="Edit & resend"
+              disabled={locked}
+              title={locked ? lockedLabel : 'Edit & resend'}
               aria-label="Edit & resend"
             >
               <Edit2 className="h-3.5 w-3.5" />
@@ -212,8 +221,8 @@ export function ChatMessageHeader({
               size="sm"
               onClick={handleRegenerate}
               className="h-7 w-7 rounded-md p-0"
-              disabled={actionDisabled}
-              title="Regenerate response"
+              disabled={actionDisabled || locked}
+              title={locked ? lockedLabel : 'Regenerate response'}
               aria-label="Regenerate response"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -295,7 +304,8 @@ export function ChatMessageHeader({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 rounded-md p-0 text-destructive"
-                title="Delete message"
+                disabled={locked}
+                title={locked ? lockedLabel : 'Delete message'}
                 aria-label="Delete message"
               >
                 <Trash2 className="h-3.5 w-3.5" />

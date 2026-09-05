@@ -28,6 +28,8 @@ export interface ChatMessageProps {
   }) => void
   onFork?: (chatId: string, role: string) => void
   pairedUserMessage?: ChatMessageData
+  /** locked holds history rewrites while a voice call transcribes into this session. */
+  locked?: boolean
   isSelected?: boolean
   /** Called when user clicks the message to toggle selection */
   onSelect?: (index: number) => void
@@ -87,6 +89,7 @@ export const ChatMessage = memo(function ChatMessage({
   onEditResend,
   onFork,
   pairedUserMessage,
+  locked,
   isSelected,
   onSelect,
   messageIndex,
@@ -190,6 +193,7 @@ export const ChatMessage = memo(function ChatMessage({
             onEditResend={onEditResend}
             onFork={onFork}
             pairedUserMessage={pairedUserMessage}
+            locked={locked}
             apiToken={apiToken}
             className={cn(isAssistant && 'sticky top-12 z-10 backdrop-blur-sm')}
             tooltipSide={isAssistant ? 'bottom' : 'top'}
@@ -256,6 +260,7 @@ export const ChatMessage = memo(function ChatMessage({
                   variant="outline"
                   size="sm"
                   onClick={handleRegenerate}
+                  disabled={locked}
                   className="flex items-center gap-2"
                 >
                   <RotateCcw className="h-4 w-4" />

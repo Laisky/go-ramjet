@@ -1,22 +1,14 @@
 /**
  * Chat input component with file attachments and feature toggles.
  */
-import {
-  Bot,
-  Brain,
-  Image,
-  Link,
-  Loader2,
-  Mic,
-  Send,
-  Square,
-} from 'lucide-react'
+import { Bot, Brain, Image, Link, Send, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
-import { transcribeAudio } from '@/utils/api'
-import { cn } from '@/utils/cn'
+import type { AudioPluginProps } from '../audio/plugin-types'
+import { VoiceControls } from '../audio/voice-controls'
+import { TOOLBAR_BUTTON_LAYOUT, toolbarControlClasses } from './toolbar-control'
 import { useUser } from '../hooks/use-user'
 import { isImageModel } from '../models'
 import type { ChatAttachment, SelectionData, SessionConfig } from '../types'
@@ -28,7 +20,13 @@ export interface ChatInputProps {
   isLoading?: boolean
   disabled?: boolean
   config: SessionConfig
-  sessionId?: string | number
+  // Numeric to match useConfig's session id; the voice call pins it for its lifetime.
+  sessionId?: number
+  onVoiceMessage?: AudioPluginProps['onVoiceMessage']
+  /** onCallSessionChange reports which session a live voice call is recording into. */
+  onCallSessionChange?: (pinnedSessionId: number | null) => void
+  /** locked disables sending while a voice call records into the displayed session. */
+  locked?: boolean
   isSidebarOpen?: boolean
   onConfigChange?: (updates: Partial<SessionConfig['chat_switch']>) => void
   placeholder?: string
@@ -49,6 +47,9 @@ export function ChatInput({
   disabled,
   config,
   sessionId,
+  onVoiceMessage,
+  onCallSessionChange,
+  locked,
   isSidebarOpen,
   onConfigChange,
   placeholder = 'Type a message...',
@@ -62,12 +63,11 @@ export function ChatInput({
   const isFree = user?.is_free ?? true
   const [message, setMessage] = useState(() => draftMessage ?? '')
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
-  const [isRecording, setIsRecording] = useState(false)
-  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [audioBusy, setAudioBusy] = useState(false)
+  const [, setAudioActive] = useState(false)
+  const [audioStatus, setAudioStatus] = useState<string | null>(null)
   const [inputError, setInputError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
   const lastPrefillIdRef = useRef<string | null>(null)
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null)
 
@@ -85,9 +85,17 @@ export function ChatInput({
     [onDraftChange],
   )
 
+  const appendAudioDraft = useCallback(
+    (text: string) => {
+      updateMessage((prev) => (prev ? `${prev}\n${text}` : text))
+    },
+    [updateMessage],
+  )
+
   // Sync from external draftMessage changes (e.g., switching sessions)
   useEffect(() => {
     if (draftMessage !== undefined && draftMessage !== message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize an externally owned draft after session changes.
       setMessage(draftMessage)
     }
   }, [draftMessage]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally sync only on external draft changes
@@ -97,6 +105,7 @@ export function ChatInput({
       return
     }
     lastPrefillIdRef.current = prefillDraft.id
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- copy a one-shot parent prefill into the local editor.
     updateMessage(prefillDraft.text)
     requestAnimationFrame(() => {
       textareaRef.current?.focus()
@@ -106,22 +115,9 @@ export function ChatInput({
     }
   }, [prefillDraft, onPrefillUsed, updateMessage])
 
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stream
-          .getTracks()
-          .forEach((track) => track.stop())
-        mediaRecorderRef.current = null
-      }
-    }
-  }, [])
-
   // Auto-focus when input becomes enabled or session/model/config changes
   useEffect(() => {
-    if (!disabled && !isLoading && !isTranscribing && !isSidebarOpen) {
-      // Use setTimeout to ensure focus is applied after any other focus
-      // management (like Radix UI dropdown focus restoration)
+    if (!disabled && !isLoading && !audioBusy && !isSidebarOpen) {
       const timer = setTimeout(() => {
         textareaRef.current?.focus()
       }, 50)
@@ -130,7 +126,7 @@ export function ChatInput({
   }, [
     disabled,
     isLoading,
-    isTranscribing,
+    audioBusy,
     isSidebarOpen,
     sessionId,
     config,
@@ -139,7 +135,9 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     const trimmed = String(message || '').trim()
-    if (!trimmed || disabled || isLoading || isTranscribing) return
+    // `locked` holds text sends while a voice call records into this session, so a
+    // typed turn cannot land in the middle of one being transcribed.
+    if (!trimmed || disabled || isLoading || audioBusy || locked) return
     onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     updateMessage('')
     setAttachments([])
@@ -148,9 +146,10 @@ export function ChatInput({
     attachments,
     disabled,
     isLoading,
-    isTranscribing,
+    audioBusy,
     onSend,
     updateMessage,
+    locked,
   ])
 
   /**
@@ -232,14 +231,11 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Ignore keyboard events when composition is in progress (IME)
       if (e.nativeEvent.isComposing) return
 
-      // Send on Ctrl+Enter or Cmd+Enter
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
         handleSend()
-        return
       }
     },
     [handleSend],
@@ -257,78 +253,6 @@ export function ChatInput({
     [config.chat_switch, onConfigChange],
   )
 
-  const transcribeBlob = useCallback(
-    async (blob: Blob) => {
-      if (!config.api_token) {
-        setInputError('API token is required for voice transcription.')
-        return
-      }
-      setIsTranscribing(true)
-      setInputError(null)
-      try {
-        const file = new File([blob], `voice-${Date.now()}.webm`, {
-          type: blob.type || 'audio/webm',
-        })
-        const text = await transcribeAudio(file, config.api_token)
-        updateMessage((prev) => (prev ? `${prev}\n${text}` : text))
-      } catch (err) {
-        console.error('Failed to transcribe audio:', err)
-        setInputError('Failed to transcribe audio. Please try again.')
-      } finally {
-        setIsTranscribing(false)
-      }
-    },
-    [config.api_token, updateMessage],
-  )
-
-  const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (!recorder) return
-    recorder.stop()
-    recorder.stream.getTracks().forEach((track) => track.stop())
-    mediaRecorderRef.current = null
-    setIsRecording(false)
-  }, [])
-
-  const startRecording = useCallback(async () => {
-    if (isRecording) return
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setInputError('Your browser does not support audio recording.')
-      return
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = recorder
-      recordedChunksRef.current = []
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data)
-        }
-      }
-      recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
-        })
-        recordedChunksRef.current = []
-        void transcribeBlob(blob)
-      }
-      recorder.start()
-      setIsRecording(true)
-    } catch (err) {
-      console.error('Unable to access microphone:', err)
-      setInputError('Unable to access microphone. Please check permissions.')
-    }
-  }, [isRecording, transcribeBlob])
-
-  const handleToggleRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecording()
-    } else {
-      startRecording()
-    }
-  }, [isRecording, startRecording, stopRecording])
-
   return (
     <>
       <div className="theme-surface w-full p-1">
@@ -344,8 +268,12 @@ export function ChatInput({
             onMouseUp={handleInputMouseUp}
             onSelect={handleInputSelect}
             onBlur={handleInputBlur}
-            placeholder={placeholder}
-            disabled={disabled || isTranscribing}
+            placeholder={
+              locked
+                ? 'Voice call in progress — recording to this chat'
+                : placeholder
+            }
+            disabled={disabled || audioBusy || locked}
             apiToken={config.api_token}
             className="flex-1"
           />
@@ -364,13 +292,21 @@ export function ChatInput({
                   </Button>
                 </TooltipWrapper>
               ) : (
-                <TooltipWrapper content="Send message (Ctrl+Enter)" side="left">
+                <TooltipWrapper
+                  content={
+                    locked
+                      ? 'Unavailable while a voice call is recording to this chat'
+                      : 'Send message (Ctrl+Enter)'
+                  }
+                  side="left"
+                >
                   <Button
                     onClick={handleSend}
                     disabled={
                       !String(message || '').trim() ||
                       disabled ||
-                      isTranscribing
+                      audioBusy ||
+                      locked
                     }
                     className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
                     aria-label="Send message"
@@ -380,31 +316,6 @@ export function ChatInput({
                 </TooltipWrapper>
               )}
             </div>
-
-            {config.chat_switch.enable_talk && (
-              <Button
-                type="button"
-                onClick={handleToggleRecording}
-                disabled={disabled || isLoading || isTranscribing}
-                variant={isRecording ? 'destructive' : 'outline'}
-                className="w-10 rounded-md p-0 shadow-sm"
-                aria-label={
-                  isRecording
-                    ? 'Stop recording'
-                    : isTranscribing
-                      ? 'Transcribing'
-                      : 'Start voice recording'
-                }
-              >
-                {isRecording ? (
-                  <Square className="h-5 w-5" />
-                ) : isTranscribing ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -465,12 +376,19 @@ export function ChatInput({
             title="Run a server-side ReAct agent loop with auto-injected tools (web search/fetch, file I/O, memory). The model iterates with tools until it has enough information, then sends the final answer."
           />
 
-          <ToggleButton
-            active={config.chat_switch.enable_talk}
-            onClick={() => toggleSwitch('enable_talk')}
-            icon={<Mic className="h-3 w-3" />}
-            label="Voice"
-            title="Enable voice mode"
+          <VoiceControls
+            config={config}
+            user={user}
+            sessionId={sessionId}
+            onVoiceMessage={onVoiceMessage}
+            onCallSessionChange={onCallSessionChange}
+            onConfigChange={onConfigChange}
+            disabled={Boolean(disabled || isLoading)}
+            onDraftText={appendAudioDraft}
+            onError={setInputError}
+            onBusyChange={setAudioBusy}
+            onActivityChange={setAudioActive}
+            onStatusChange={setAudioStatus}
           />
 
           {(isImageModel(config.selected_model) ||
@@ -499,9 +417,14 @@ export function ChatInput({
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
-            {isTranscribing && !isRecording && (
-              <span className="text-primary">Transcribing…</span>
+          <div className="ml-auto flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+            {audioStatus && (
+              <span
+                className="max-w-[20rem] truncate text-primary"
+                title={audioStatus}
+              >
+                {audioStatus}
+              </span>
             )}
           </div>
         </div>
@@ -532,11 +455,9 @@ function ToggleButton({
         role="switch"
         aria-checked={active}
         aria-label={label}
-        className={cn(
-          'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors',
-          active
-            ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary hover:bg-primary/90'
-            : 'border border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+        className={toolbarControlClasses(
+          active ? 'active' : 'idle',
+          TOOLBAR_BUTTON_LAYOUT,
         )}
       >
         {icon}

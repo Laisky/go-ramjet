@@ -3,6 +3,8 @@ import { DefaultModel, ImageModelFluxDev } from './models'
  * Types and interfaces for GPTChat.
  */
 
+export type AudioPluginID = 'whisper' | 'realtime'
+
 export interface ChatMessageData {
   chatID: string
   role: 'user' | 'assistant' | 'system'
@@ -74,6 +76,7 @@ export interface ChatSwitch {
   disable_https_crawler: boolean
   all_in_one: boolean
   enable_talk: boolean
+  /** Optional for legacy configurations; explicitly saved plugin choices are preserved. */
   enable_mcp: boolean
   enable_memory: boolean
   agent_mode: boolean
@@ -179,9 +182,21 @@ export interface UserConfig {
   openai_token: string
   image_token: string
   is_free: boolean
+  byok?: boolean
   is_admin: boolean
   allowed_models: string[]
   no_limit_expensive_models: boolean
   api_base: string
   image_url: string
+  /**
+   * voice is chosen by the server, not the user. The audio implementation is an
+   * operational decision, so the web client reads it rather than offering a picker.
+   */
+  voice?: VoiceSettings
+}
+
+/** VoiceSettings is the server's voice configuration as sent with the user config. */
+export interface VoiceSettings {
+  plugin?: AudioPluginID
+  realtime_model?: string
 }

@@ -108,7 +108,16 @@ export function GPTChatPage() {
     loadMessages,
     regenerateMessage,
     editAndRetry,
+    upsertVoiceMessage,
   } = useChat({ sessionId, config })
+
+  // The session a live voice call is recording into, pinned at call start. History
+  // rewrites are held for that session only, so other sessions stay fully editable.
+  const [voiceCallSessionId, setVoiceCallSessionId] = useState<number | null>(
+    null,
+  )
+  const voiceLocked =
+    voiceCallSessionId !== null && voiceCallSessionId === sessionId
 
   // Update page title and favicon
   useEffect(() => {
@@ -664,6 +673,7 @@ export function GPTChatPage() {
           onRegenerate={handleRegenerate}
           onEditResend={handleEditResend}
           onFork={handleFork}
+          locked={voiceLocked}
           pairedUserMessage={
             floatingHeaderState.chatId
               ? userMessageByChatId.get(floatingHeaderState.chatId)
@@ -732,7 +742,9 @@ export function GPTChatPage() {
                         onInsert={() =>
                           handleOpenInsert(displayedStartIndex + idx)
                         }
-                        disabled={chatLoading || !config.api_token}
+                        disabled={
+                          chatLoading || !config.api_token || voiceLocked
+                        }
                       />
                     )}
                     <ChatMessage
@@ -741,6 +753,7 @@ export function GPTChatPage() {
                       onRegenerate={handleRegenerate}
                       onEditResend={handleEditResend}
                       onFork={handleFork}
+                      locked={voiceLocked}
                       pairedUserMessage={userMessageByChatId.get(msg.chatID)}
                       isSelected={idx === selectedMessageIndex}
                       onSelect={handleMessageSelect}
@@ -797,6 +810,9 @@ export function GPTChatPage() {
             disabled={!config.api_token}
             config={config}
             sessionId={sessionId}
+            onVoiceMessage={upsertVoiceMessage}
+            onCallSessionChange={setVoiceCallSessionId}
+            locked={voiceLocked}
             isSidebarOpen={configOpen}
             onConfigChange={handleChatSwitchChange}
             prefillDraft={prefillDraft}

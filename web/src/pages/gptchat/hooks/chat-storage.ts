@@ -5,7 +5,7 @@ import { kvDel, kvGet, kvSet } from '@/utils/storage'
 import type { ChatMessageData, SessionHistoryItem } from '../types'
 import { getChatDataKey, getSessionHistoryKey } from '../utils/chat-storage'
 import { recordDeletedChatId } from '../utils/deleted-chat-ids'
-import { uuidv7 } from '../utils/uuidv7'
+import { appendMessageToSession } from './chat-append'
 import { useChatStorageConcurrencyState } from './chat-storage-concurrency'
 
 /**
@@ -81,6 +81,11 @@ export interface ChatStorageApi {
   ) => Promise<void>
   clearMessages: () => Promise<void>
   deleteMessage: (chatId: string) => Promise<void>
+  /**
+   * markSessionMutation invalidates in-flight loads for a session another writer
+   * touches, so a load started before that write cannot finish and overwrite it.
+   */
+  markSessionMutation: (targetSessionId: number) => void
 }
 
 /**
@@ -247,41 +252,9 @@ export function useChatStorage({
   const saveMessage = useCallback(
     async (message: ChatMessageData) => {
       concurrency.markMutation(sessionId)
-
-      const key = getChatDataKey(
-        message.chatID,
-        message.role as 'user' | 'assistant',
-      )
-
-      const existing = await kvGet<ChatMessageData>(key)
-      const needsBump =
-        existing &&
-        typeof existing === 'object' &&
-        existing.content !== undefined &&
-        String(existing.content) !== String(message.content)
-
-      const toSave: ChatMessageData = needsBump
-        ? { ...message, edited_version: uuidv7() }
-        : message
-
-      await kvSet(key, toSave)
-
-      const historyKey = getSessionHistoryKey(sessionId)
-      const history = (await kvGet<SessionHistoryItem[]>(historyKey)) || []
-
-      const existingIndex = history.findIndex(
-        (h) => h.chatID === message.chatID && h.role === message.role,
-      )
-
-      const historyItem = toSessionHistoryItem(toSave)
-
-      if (existingIndex >= 0) {
-        history[existingIndex] = historyItem
-      } else {
-        history.push(historyItem)
-      }
-
-      await kvSet(historyKey, history)
+      // One implementation, shared with the pinned voice-call writer, so both
+      // paths queue behind each other instead of racing the history index.
+      await appendMessageToSession(sessionId, message)
     },
     [concurrency, sessionId],
   )
@@ -388,5 +361,6 @@ export function useChatStorage({
     insertMessagePair,
     clearMessages,
     deleteMessage,
+    markSessionMutation: concurrency.markMutation,
   }
 }

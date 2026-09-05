@@ -396,33 +396,21 @@ func IsModelAllowed(ctx context.Context,
 		ratelimitCost int
 		ratelimiter   = expensiveModelRateLimiter
 	)
+	// Free models. Keep this in sync with FreeModels in web/src/pages/gptchat/models.ts;
+	// an id missing here silently falls through to the expensive rate limiter.
 	switch req.Model {
-	case "gpt-3.5-turbo", // free models
-		// "gpt-3.5-turbo-1106",
-		// "gpt-3.5-turbo-0125",
-		"gpt-4o-mini",
+	case "gpt-4o-mini",
 		"gpt-5.4-nano",
 		"openai/gpt-oss-20b",
 		"openai/gpt-oss-120b",
-		// "llama2-70b-4096",
 		"deepseek-v4-flash",
-		// "deepseek-coder",
-		"gemma2-9b-it",
-		"gemma-3-27b-it",
-		"llama3-8b-8192",
-		"llama3-70b-8192",
-		"llama-3.1-8b-instant",
-		"llama-3.1-405b-instruct",
-		"llama-3.3-70b-versatile",
-		"qwen-qwq-32b",
-		"qwen/qwen3-32b",
-		// "moonshotai/kimi-k2-instruct",
-		// "mixtral-8x7b-32768",
-		// "img-to-img",
-		// "sdxl-turbo",
+		"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+		"meta-llama/llama-prompt-guard-2-86m",
+		"qwen/qwen3.6-27b",
 		"tts",
 		"gemini-3.1-flash-lite-preview",
-		"gemini-2.0-flash":
+		"gemini-3.5-flash-lite",
+		"gemini-3.8-flash":
 		ratelimiter = freeModelRateLimiter
 		ratelimitCost = freeModelRateLimitCost
 	default: // expensive model
