@@ -119,6 +119,10 @@ export class RealtimeAudioClient {
   private assistantItemID = ''
   private assistantContentIndex = 0
   private transcript = ''
+  // Whether the current reply has already been written to the chat log as a
+  // finished turn. The transcript itself must survive past that point so the
+  // on-screen caption stays up while the audio drains.
+  private assistantTurnCommitted = false
   private readonly handledCalls = new Set<string>()
 
   /** constructor captures settings so later UI/session edits cannot reroute an active call. */
@@ -444,6 +448,7 @@ export class RealtimeAudioClient {
       this.assistantItemID = ''
       this.assistantContentIndex = 0
       this.transcript = ''
+      this.assistantTurnCommitted = false
       this.options.callbacks.onTranscriptChange('')
       this.options.callbacks.onStateChange('thinking')
       return
@@ -481,8 +486,13 @@ export class RealtimeAudioClient {
         if (typeof event.transcript === 'string')
           this.transcript = event.transcript
         this.options.callbacks.onTranscriptChange(this.transcript)
-        if (this.transcript)
+        // Guarded because this handler covers both the GA event and its legacy
+        // alias. A provider or gateway that emits both would otherwise log the
+        // same reply twice.
+        if (this.transcript && !this.assistantTurnCommitted) {
           this.options.callbacks.onAssistantTurn?.(this.transcript, true)
+          this.assistantTurnCommitted = true
+        }
         break
       case 'response.done':
         this.finishResponse(event)
@@ -584,8 +594,13 @@ export class RealtimeAudioClient {
     this.assistantItemID = ''
     // Emit before the wipe. This is the only place partially spoken text still
     // exists, and a log that drops interrupted answers misrepresents the call.
-    if (this.transcript)
+    //
+    // A reply that already reported its final transcript is skipped. Its text is
+    // still held here so the caption can stay on screen while the audio drains,
+    // and re-emitting it logged the same answer to the chat a second time.
+    if (this.transcript && !this.assistantTurnCommitted)
       this.options.callbacks.onAssistantTurn?.(this.transcript, true)
+    this.assistantTurnCommitted = false
     this.transcript = ''
     this.options.callbacks.onTranscriptChange('')
   }

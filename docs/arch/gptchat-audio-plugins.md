@@ -140,6 +140,19 @@ a graph. Contexts cannot reopen after disposal. All remote close codes, includin
 1000, release media. Configuration must be acknowledged with `session.updated`
 before microphone frames are transmitted. Setup has a 20-second transport timeout.
 
+A reply is written to the chat exactly once. The authoritative final text arrives on the
+output-audio-transcript `done` event, which commits the turn and marks it committed. The
+transcript string deliberately outlives that commit so the on-screen caption stays up
+while the audio drains, which means the barge-in path still holds the full text of an
+already-logged reply; it re-committed that text and logged the answer twice. Both the
+commit path and the barge-in path are now guarded by the committed flag, which resets when
+the next `response.created` arrives. The guard also covers a provider that emits both the
+GA event and its legacy alias.
+
+Interrupting still records what was actually spoken: barge-in commits the partial text of a
+reply that had not yet reported its final transcript, since that is the only moment the
+partial exists.
+
 `response.done` means generation completed, not that audio finished playing and
 not that the call ended. The UI returns to Listening after scheduled audio drains.
 VAD speech-start stops local output, invalidates queued deltas, rejects late output

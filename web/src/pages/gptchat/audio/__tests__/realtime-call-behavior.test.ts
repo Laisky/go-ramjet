@@ -22,6 +22,7 @@ function makeClient() {
     onTranscriptChange: vi.fn(),
     onError: vi.fn(),
     onEnded: vi.fn(),
+    onAssistantTurn: vi.fn(),
   }
   const client = new RealtimeAudioClient({
     apiBase: 'https://gateway.example.com',
@@ -283,6 +284,74 @@ describe('Realtime call lifecycle', () => {
       text: 'Let me explain the',
       done: true,
     })
+  })
+
+  it('commits one assistant turn per reply, even when the caller speaks next', async () => {
+    const { callbacks, socket } = await connect()
+    response(socket)
+    socket.event({
+      type: 'response.output_audio_transcript.delta',
+      response_id: 'r1',
+      delta: 'Yes, I can speak English!',
+    })
+    socket.event({
+      type: 'response.output_audio_transcript.done',
+      response_id: 'r1',
+      transcript: 'Yes, I can speak English!',
+    })
+    complete(socket)
+    await flush()
+
+    // The caller replies, which barges in on whatever is still playing.
+    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await flush()
+
+    // A finished reply must not be logged again as a second interrupted turn.
+    const committed = callbacks.onAssistantTurn.mock.calls.filter(
+      ([, done]) => done === true,
+    )
+    expect(committed).toEqual([['Yes, I can speak English!', true]])
+  })
+
+  it('logs one turn when a gateway sends both the GA and legacy done events', async () => {
+    const { callbacks, socket } = await connect()
+    response(socket)
+    socket.event({
+      type: 'response.output_audio_transcript.done',
+      response_id: 'r1',
+      transcript: 'Hello there.',
+    })
+    socket.event({
+      type: 'response.audio_transcript.done',
+      response_id: 'r1',
+      transcript: 'Hello there.',
+    })
+    await flush()
+
+    const committed = callbacks.onAssistantTurn.mock.calls.filter(
+      ([, done]) => done === true,
+    )
+    expect(committed).toEqual([['Hello there.', true]])
+  })
+
+  it('still records a reply that the caller cut off mid-sentence', async () => {
+    const { callbacks, socket } = await connect()
+    response(socket)
+    socket.event({
+      type: 'response.output_audio_transcript.delta',
+      response_id: 'r1',
+      delta: 'Let me tell you about',
+    })
+    await flush()
+
+    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await flush()
+
+    // Interrupting is the only moment partially spoken text still exists.
+    const committed = callbacks.onAssistantTurn.mock.calls.filter(
+      ([, done]) => done === true,
+    )
+    expect(committed).toEqual([['Let me tell you about', true]])
   })
 
   it('does not create a capture graph when cancelled during worklet module loading', async () => {

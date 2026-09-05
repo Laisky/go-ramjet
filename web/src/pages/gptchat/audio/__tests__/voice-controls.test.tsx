@@ -40,6 +40,7 @@ function props() {
     onStatusChange: vi.fn(),
     onConfigChange: vi.fn(),
     onCallSessionChange: vi.fn(),
+    onVoiceMessage: vi.fn(),
   }
 }
 /** startCall uses the visible Voice button and both public transport handshakes. */
@@ -141,6 +142,41 @@ describe('Phone-style Voice UX', () => {
 
     // Viewing another session must not move where the call records.
     expect(options.onCallSessionChange).not.toHaveBeenCalledWith(2)
+  })
+
+  it('writes a finished reply to the chat once, not again on the next barge-in', async () => {
+    const options = props()
+    render(<VoiceControls {...options} />)
+    const socket = await startCall()
+
+    await act(async () => {
+      socket.event({ type: 'response.created', response: { id: 'r1' } })
+      socket.event({
+        type: 'response.output_audio_transcript.delta',
+        response_id: 'r1',
+        delta: 'Yes, I can speak English!',
+      })
+      socket.event({
+        type: 'response.output_audio_transcript.done',
+        response_id: 'r1',
+        transcript: 'Yes, I can speak English!',
+      })
+      socket.event({
+        type: 'response.done',
+        response: { id: 'r1', status: 'completed', output: [] },
+      })
+      await flush()
+      // The caller speaks again, which barges in on the finished reply.
+      socket.event({ type: 'input_audio_buffer.speech_started' })
+      await flush()
+    })
+
+    const commits = options.onVoiceMessage.mock.calls.filter(
+      ([, message, persist]) =>
+        message.role === 'assistant' && persist === true,
+    )
+    expect(commits).toHaveLength(1)
+    expect(commits[0][1].content).toBe('Yes, I can speak English!')
   })
 
   it('clears the recording session when the call ends', async () => {
