@@ -22,10 +22,15 @@ export const AUDIO_PLUGIN_DEFINITIONS: Record<
   },
 }
 
-/** resolveAudioPlugin returns a valid plugin definition with a legacy-safe fallback. */
+/**
+ * resolveAudioPlugin returns the plugin the server selected.
+ *
+ * Realtime is the default, so an absent or unrecognized id resolves to it rather
+ * than silently downgrading a deployment to dictation.
+ */
 export function resolveAudioPlugin(pluginID?: string): AudioPluginDefinition {
-  if (pluginID === 'realtime') {
-    return AUDIO_PLUGIN_DEFINITIONS.realtime
+  if (pluginID === 'whisper') {
+    return AUDIO_PLUGIN_DEFINITIONS.whisper
   }
-  return AUDIO_PLUGIN_DEFINITIONS.whisper
+  return AUDIO_PLUGIN_DEFINITIONS.realtime
 }

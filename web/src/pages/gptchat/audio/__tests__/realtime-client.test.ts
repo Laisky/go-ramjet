@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRealtimeWebSocketURL,
   createRealtimeSessionUpdate,
-  REALTIME_AUDIO_MODEL,
+  DEFAULT_REALTIME_AUDIO_MODEL,
   REALTIME_AUDIO_VOICE,
+  REALTIME_INPUT_TRANSCRIPTION_MODEL,
 } from '../realtime-client'
 
 describe('buildRealtimeWebSocketURL', () => {
@@ -13,7 +14,7 @@ describe('buildRealtimeWebSocketURL', () => {
 
     expect(url.protocol).toBe('wss:')
     expect(url.pathname).toBe('/v1/realtime')
-    expect(url.searchParams.get('model')).toBe(REALTIME_AUDIO_MODEL)
+    expect(url.searchParams.get('model')).toBe(DEFAULT_REALTIME_AUDIO_MODEL)
   })
 
   it('preserves a versioned prefix and existing query parameters', () => {
@@ -25,7 +26,7 @@ describe('buildRealtimeWebSocketURL', () => {
 
     expect(url.pathname).toBe('/custom/v1/realtime')
     expect(url.searchParams.get('tenant')).toBe('example')
-    expect(url.searchParams.get('model')).toBe(REALTIME_AUDIO_MODEL)
+    expect(url.searchParams.get('model')).toBe(DEFAULT_REALTIME_AUDIO_MODEL)
   })
 
   it('does not duplicate an existing realtime route', () => {
@@ -37,7 +38,7 @@ describe('buildRealtimeWebSocketURL', () => {
 
     expect(url.protocol).toBe('ws:')
     expect(url.pathname).toBe('/v1/realtime')
-    expect(url.searchParams.get('model')).toBe(REALTIME_AUDIO_MODEL)
+    expect(url.searchParams.get('model')).toBe(DEFAULT_REALTIME_AUDIO_MODEL)
   })
 
   it('rejects unsafe or unsupported API bases', () => {
@@ -50,6 +51,25 @@ describe('buildRealtimeWebSocketURL', () => {
     expect(() =>
       buildRealtimeWebSocketURL('https://example.com/#fragment'),
     ).toThrow('Realtime API base must not contain a URL fragment')
+  })
+
+  it('uses the server-configured model instead of the built-in default', () => {
+    // The realtime model is deployment configuration, so it must reach the only
+    // place the API accepts it: the connection query parameter.
+    const url = new URL(
+      buildRealtimeWebSocketURL(
+        'https://gateway.example.com',
+        'gpt-realtime-2.1',
+      ),
+    )
+    expect(url.searchParams.get('model')).toBe('gpt-realtime-2.1')
+  })
+
+  it('falls back to the default when the server sent a blank model', () => {
+    const url = new URL(
+      buildRealtimeWebSocketURL('https://gateway.example.com', '  '),
+    )
+    expect(url.searchParams.get('model')).toBe(DEFAULT_REALTIME_AUDIO_MODEL)
   })
 })
 
@@ -65,6 +85,7 @@ describe('createRealtimeSessionUpdate', () => {
         audio: {
           input: {
             format: { type: string; rate: number }
+            transcription?: { model: string }
             turn_detection: {
               type: string
               create_response: boolean
@@ -99,6 +120,9 @@ describe('createRealtimeSessionUpdate', () => {
       format: { type: 'audio/pcm', rate: 24_000 },
       voice: REALTIME_AUDIO_VOICE,
     })
-    expect(JSON.stringify(event)).not.toContain('transcription')
+    // Input transcription is what lets the call be written into the text chat.
+    expect(event.session.audio.input.transcription).toEqual({
+      model: REALTIME_INPUT_TRANSCRIPTION_MODEL,
+    })
   })
 })

@@ -22,6 +22,8 @@ export interface FloatingMessageHeaderProps {
   onDelete?: (chatId: string) => void
   /** Callback to regenerate the message */
   onRegenerate?: (chatId: string) => void
+  /** locked holds history rewrites while a voice call transcribes into this session. */
+  locked?: boolean
   /** Callback for edit and resend */
   onEditResend?: (payload: {
     chatId: string
@@ -56,6 +58,7 @@ export function FloatingMessageHeader({
   visible,
   onDelete,
   onRegenerate,
+  locked,
   onEditResend,
   onFork,
   pairedUserMessage,
@@ -120,6 +123,7 @@ export function FloatingMessageHeader({
         message={message}
         onDelete={onDelete}
         onRegenerate={onRegenerate}
+        locked={locked}
         onEditResend={onEditResend}
         onFork={onFork}
         pairedUserMessage={pairedUserMessage}

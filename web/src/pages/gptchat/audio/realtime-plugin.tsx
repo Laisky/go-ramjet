@@ -16,8 +16,10 @@ import {
   useState,
 } from 'react'
 import { Button } from '@/components/ui/button'
+import { generateChatId } from '../utils/chat-storage'
 import type { AudioPluginProps } from './plugin-types'
 import { RealtimeAudioClient, type RealtimeAudioState } from './realtime-client'
+import { DEFAULT_REALTIME_AUDIO_MODEL } from './realtime-session'
 import {
   formatRealtimeStatus,
   resolveRealtimeAPIBase,
@@ -30,11 +32,17 @@ export function RealtimeAudioPlugin({
   disabled,
   controlRef,
   sessionLabel,
+  sessionId,
+  onVoiceMessage,
+  onCallSessionChange,
   onError,
   onBusyChange,
   onActivityChange,
   onStatusChange,
 }: AudioPluginProps) {
+  // The realtime model is a server setting; the browser never chooses it.
+  const realtimeModel =
+    user?.voice?.realtime_model?.trim() || DEFAULT_REALTIME_AUDIO_MODEL
   const [state, setState] = useState<RealtimeAudioState>('idle')
   const [transcript, setTranscript] = useState('')
   const [muted, setMuted] = useState(false)
@@ -46,6 +54,13 @@ export function RealtimeAudioPlugin({
   const clientRef = useRef<RealtimeAudioClient | null>(null)
   const mounted = useRef(true)
   const connectedAt = useRef<number | null>(null)
+  // Pinned at call start. The call must keep writing to the session it began in
+  // even after the user switches the view to a different session.
+  const callSessionRef = useRef<number | null>(null)
+  // Conversation item id -> chat turn id. A turn holds the caller's utterance and
+  // the assistant's reply under one chat id, which is how text turns are stored.
+  const turnsRef = useRef(new Map<string, string>())
+  const assistantTurnRef = useRef<string | null>(null)
   const active = state !== 'idle'
 
   /** startClient starts from a user gesture and freezes the current routing context for the call. */
@@ -72,11 +87,17 @@ export function RealtimeAudioPlugin({
     setSeconds(0)
     setLabel(sessionLabel || config.session_name || 'Voice call')
     connectedAt.current = null
+    // Freeze the destination session alongside the routing context above.
+    callSessionRef.current = sessionId ?? null
+    turnsRef.current = new Map()
+    assistantTurnRef.current = null
     onError(null)
     const client = new RealtimeAudioClient({
       apiBase,
       apiToken: config.api_token,
       instructions: config.system_prompt,
+      // Server-configured, so a deployment can change models without a rebuild.
+      model: realtimeModel,
       callbacks: {
         onStateChange: (next) => {
           if (!mounted.current || clientRef.current !== client) return
@@ -87,6 +108,75 @@ export function RealtimeAudioPlugin({
         onTranscriptChange: (text) => {
           if (mounted.current && clientRef.current === client)
             setTranscript(text)
+        },
+        onUserTurn: (event) => {
+          if (clientRef.current !== client) return
+          const target = callSessionRef.current
+          if (target === null || !onVoiceMessage) return
+          if (event.phase === 'open') {
+            // Reserve the slot now. Transcription is asynchronous and its result
+            // can land after the assistant has already replied, so appending in
+            // arrival order would interleave the conversation wrongly.
+            const chatID = generateChatId()
+            turnsRef.current.set(event.itemID, chatID)
+            assistantTurnRef.current = chatID
+            onVoiceMessage(
+              target,
+              { chatID, role: 'user', content: '', timestamp: Date.now() },
+              true,
+            )
+            return
+          }
+          const chatID = turnsRef.current.get(event.itemID)
+          if (!chatID) return
+          turnsRef.current.delete(event.itemID)
+          if (event.phase === 'failed') {
+            onVoiceMessage(
+              target,
+              {
+                chatID,
+                role: 'user',
+                content: '[speech could not be transcribed]',
+                timestamp: Date.now(),
+              },
+              true,
+            )
+            return
+          }
+          onVoiceMessage(
+            target,
+            {
+              chatID,
+              role: 'user',
+              content: event.text,
+              timestamp: Date.now(),
+            },
+            true,
+          )
+        },
+        onAssistantTurn: (text, done) => {
+          if (clientRef.current !== client) return
+          const target = callSessionRef.current
+          if (target === null || !onVoiceMessage) return
+          // The assistant can speak first, before any caller utterance exists.
+          let chatID = assistantTurnRef.current
+          if (!chatID) {
+            chatID = generateChatId()
+            assistantTurnRef.current = chatID
+          }
+          onVoiceMessage(
+            target,
+            {
+              chatID,
+              role: 'assistant',
+              content: text,
+              model: realtimeModel,
+              timestamp: Date.now(),
+            },
+            done,
+          )
+          // A finished turn releases the id so the next reply opens a new one.
+          if (done) assistantTurnRef.current = null
         },
         onError: (message) => {
           if (mounted.current && clientRef.current === client) onError(message)
@@ -122,7 +212,16 @@ export function RealtimeAudioPlugin({
         setState('idle')
       }
     })
-  }, [config, user, disabled, onError, sessionLabel])
+  }, [
+    config,
+    user,
+    disabled,
+    onError,
+    sessionLabel,
+    sessionId,
+    onVoiceMessage,
+    realtimeModel,
+  ])
 
   useImperativeHandle(
     controlRef,
@@ -133,6 +232,9 @@ export function RealtimeAudioPlugin({
   useEffect(() => {
     onBusyChange(state === 'connecting' || state === 'ending')
     onActivityChange(active)
+    // Report the session captured at call start. Reading the live prop here would
+    // move the recording destination whenever the user switched sessions.
+    onCallSessionChange?.(active ? callSessionRef.current : null)
     onStatusChange(
       active
         ? muted
@@ -140,7 +242,15 @@ export function RealtimeAudioPlugin({
           : formatRealtimeStatus(state, '')
         : null,
     )
-  }, [state, active, muted, onBusyChange, onActivityChange, onStatusChange])
+  }, [
+    state,
+    active,
+    muted,
+    onBusyChange,
+    onActivityChange,
+    onCallSessionChange,
+    onStatusChange,
+  ])
 
   useEffect(() => {
     if (!active) return
@@ -164,6 +274,19 @@ export function RealtimeAudioPlugin({
     }
   }, [active])
 
+  // Keep the latest reporters in a ref so the teardown below can depend on nothing.
+  const reportersRef = useRef({
+    onActivityChange,
+    onBusyChange,
+    onStatusChange,
+  })
+  useEffect(() => {
+    // Written in an effect rather than during render: refs must not be mutated
+    // while rendering. The teardown only reads this on unmount, long after this
+    // has run, so it always sees the latest reporters.
+    reportersRef.current = { onActivityChange, onBusyChange, onStatusChange }
+  }, [onActivityChange, onBusyChange, onStatusChange])
+
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -171,11 +294,15 @@ export function RealtimeAudioPlugin({
       const client = clientRef.current
       clientRef.current = null
       if (client) void client.stop('user')
-      onActivityChange(false)
-      onBusyChange(false)
-      onStatusChange(null)
+      const reporters = reportersRef.current
+      reporters.onActivityChange(false)
+      reporters.onBusyChange(false)
+      reporters.onStatusChange(null)
     }
-  }, [onActivityChange, onBusyChange, onStatusChange])
+    // Empty on purpose: this hangs up the call, so it must run only on unmount.
+    // Depending on the reporter callbacks made a live call collapse whenever an
+    // unrelated prop changed their identity, which broke session pinning.
+  }, [])
 
   if (!active && !ended) return null
   return createPortal(

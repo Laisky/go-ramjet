@@ -18,6 +18,7 @@ import { generateChatId, getChatDataKey } from '../utils/chat-storage'
 import { fileToDataUrl } from '../utils/format'
 import { runDeepResearch } from './chat-deep-research'
 import { runImageModelFlow, runMaskInpainting } from './chat-media'
+import { appendMessageToSession } from './chat-append'
 import { useChatStorage } from './chat-storage'
 import { useChatStreaming } from './chat-streaming'
 import { buildApiMessages } from '../utils/build-api-messages'
@@ -61,6 +62,11 @@ export interface UseChatReturn {
     newContent: string,
     attachments?: ChatAttachment[],
   ) => Promise<void>
+  upsertVoiceMessage: (
+    targetSessionId: number,
+    message: ChatMessageData,
+    persist: boolean,
+  ) => Promise<void>
 }
 
 /**
@@ -90,6 +96,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     insertMessagePair,
     clearMessages,
     deleteMessage,
+    markSessionMutation,
   } = useChatStorage({ sessionId, setMessages, setError })
 
   const { streamAssistantReply } = useChatStreaming({
@@ -727,6 +734,42 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     ],
   )
 
+  /**
+   * upsertVoiceMessage writes one voice-call turn into the session that call was
+   * pinned to, which is not necessarily the session on screen.
+   *
+   * Live captions arrive many times per turn, so callers pass persist=false while
+   * text is still growing and persist=true once the turn is final. That mirrors
+   * text chat, which streams into React state and writes storage once at the end.
+   */
+  const upsertVoiceMessage = useCallback(
+    async (
+      targetSessionId: number,
+      message: ChatMessageData,
+      persist: boolean,
+    ) => {
+      // Only touch the rendered list when the pinned session is the one on screen.
+      // Otherwise this would splice a call's transcript into an unrelated session.
+      if (targetSessionId === sessionId) {
+        setMessages((prev) => {
+          const index = prev.findIndex(
+            (m) => m.chatID === message.chatID && m.role === message.role,
+          )
+          if (index < 0) return [...prev, message]
+          const next = [...prev]
+          next[index] = { ...next[index], ...message }
+          return next
+        })
+      }
+      if (!persist) return
+      // Mark the mutation so a concurrent load cannot finish and overwrite this
+      // write with a snapshot taken before it.
+      markSessionMutation(targetSessionId)
+      await appendMessageToSession(targetSessionId, message)
+    },
+    [markSessionMutation, sessionId],
+  )
+
   return {
     messages,
     isLoading,
@@ -740,5 +783,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     loadMessages,
     regenerateMessage,
     editAndRetry,
+    upsertVoiceMessage,
   }
 }

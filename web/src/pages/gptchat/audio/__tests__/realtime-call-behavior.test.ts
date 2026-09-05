@@ -157,6 +157,134 @@ describe('Realtime call lifecycle', () => {
     expect(callbacks.onEnded).toHaveBeenCalledWith('error', undefined)
   })
 
+  it('reserves the caller turn at commit so a late transcript keeps its place', async () => {
+    const userTurns: { itemID: string; phase: string; text: string }[] = []
+    const assistantTurns: { text: string; done: boolean }[] = []
+    const client = new RealtimeAudioClient({
+      apiBase: 'https://gateway.example.com',
+      apiToken: 'test-token',
+      instructions: 'Be helpful.',
+      callbacks: {
+        onStateChange: vi.fn(),
+        onTranscriptChange: vi.fn(),
+        onError: vi.fn(),
+        onEnded: vi.fn(),
+        onUserTurn: (event) => userTurns.push({ ...event }),
+        onAssistantTurn: (text, done) => assistantTurns.push({ text, done }),
+      },
+    })
+    clients.push(client)
+    const started = client.start()
+    await flush()
+    const socket = FakeSocket.instances.at(-1)!
+    socket.open()
+    socket.event({ type: 'session.updated' })
+    await started
+
+    // The caller's turn is committed before any text exists.
+    socket.event({ type: 'input_audio_buffer.committed', item_id: 'item-1' })
+    // The assistant answers before transcription of that turn comes back.
+    socket.event({ type: 'response.created', response: { id: 'r1' } })
+    socket.event({
+      type: 'response.output_audio_transcript.done',
+      response_id: 'r1',
+      transcript: 'Sure, I can help.',
+    })
+    socket.event({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'item-1',
+      transcript: 'Can you help me?',
+    })
+    await flush()
+
+    // The open marker must precede the assistant text so a consumer can order the
+    // log by slot rather than by arrival.
+    expect(userTurns[0]).toEqual({ itemID: 'item-1', phase: 'open', text: '' })
+    expect(userTurns.at(-1)).toEqual({
+      itemID: 'item-1',
+      phase: 'final',
+      text: 'Can you help me?',
+    })
+    expect(assistantTurns.at(-1)).toEqual({
+      text: 'Sure, I can help.',
+      done: true,
+    })
+  })
+
+  it('reports a caller turn whose transcription failed', async () => {
+    const userTurns: { itemID: string; phase: string; text: string }[] = []
+    const client = new RealtimeAudioClient({
+      apiBase: 'https://gateway.example.com',
+      apiToken: 'test-token',
+      instructions: 'Be helpful.',
+      callbacks: {
+        onStateChange: vi.fn(),
+        onTranscriptChange: vi.fn(),
+        onError: vi.fn(),
+        onUserTurn: (event) => userTurns.push({ ...event }),
+      },
+    })
+    clients.push(client)
+    const started = client.start()
+    await flush()
+    const socket = FakeSocket.instances.at(-1)!
+    socket.open()
+    socket.event({ type: 'session.updated' })
+    await started
+
+    socket.event({ type: 'input_audio_buffer.committed', item_id: 'item-9' })
+    socket.event({
+      type: 'conversation.item.input_audio_transcription.failed',
+      item_id: 'item-9',
+      error: { message: 'asr unavailable' },
+    })
+    await flush()
+
+    // A dropped transcription must resolve the slot, not leave it open forever.
+    expect(userTurns.at(-1)).toEqual({
+      itemID: 'item-9',
+      phase: 'failed',
+      text: '',
+    })
+  })
+
+  it('emits interrupted assistant speech before discarding it', async () => {
+    const assistantTurns: { text: string; done: boolean }[] = []
+    const client = new RealtimeAudioClient({
+      apiBase: 'https://gateway.example.com',
+      apiToken: 'test-token',
+      instructions: 'Be helpful.',
+      callbacks: {
+        onStateChange: vi.fn(),
+        onTranscriptChange: vi.fn(),
+        onError: vi.fn(),
+        onAssistantTurn: (text, done) => assistantTurns.push({ text, done }),
+      },
+    })
+    clients.push(client)
+    const started = client.start()
+    await flush()
+    const socket = FakeSocket.instances.at(-1)!
+    socket.open()
+    socket.event({ type: 'session.updated' })
+    await started
+
+    socket.event({ type: 'response.created', response: { id: 'r1' } })
+    socket.event({
+      type: 'response.output_audio_transcript.delta',
+      response_id: 'r1',
+      delta: 'Let me explain the',
+    })
+    // The caller barges in, which wipes the partial transcript.
+    socket.event({ type: 'input_audio_buffer.speech_started' })
+    await flush()
+
+    expect(assistantTurns.at(-1)).toEqual({
+      text: 'Let me explain the',
+      done: true,
+    })
+  })
+
   it('does not create a capture graph when cancelled during worklet module loading', async () => {
     const module = deferred<void>()
     FakeContext.moduleReady = module.promise

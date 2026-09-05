@@ -1,6 +1,10 @@
 import { Loader2, Mic, Square } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import {
+  TOOLBAR_BUTTON_LAYOUT,
+  TOOLBAR_ICON_CLASS,
+  toolbarControlClasses,
+} from '../components/toolbar-control'
 import { transcribeAudio } from '@/utils/api'
 import { stopMediaStream } from './media-lifecycle'
 import type { AudioPluginProps } from './plugin-types'
@@ -133,7 +137,7 @@ export function WhisperAudioPlugin({
   }, [cancel])
 
   return (
-    <Button
+    <button
       type="button"
       onClick={() => {
         if (state === 'starting') cancel()
@@ -144,11 +148,10 @@ export function WhisperAudioPlugin({
         } else if (state === 'idle') void startRecording()
       }}
       disabled={state === 'transcribing' || (disabled && state === 'idle')}
-      variant={
-        state === 'recording' || state === 'starting'
-          ? 'destructive'
-          : 'outline'
-      }
+      className={toolbarControlClasses(
+        state === 'recording' || state === 'starting' ? 'danger' : 'idle',
+        TOOLBAR_BUTTON_LAYOUT,
+      )}
       aria-label={
         state === 'starting'
           ? 'Cancel microphone request'
@@ -160,19 +163,21 @@ export function WhisperAudioPlugin({
       }
     >
       {state === 'recording' ? (
-        <Square className="h-4 w-4" />
+        <Square className={TOOLBAR_ICON_CLASS} />
       ) : state === 'starting' || state === 'transcribing' ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className={`${TOOLBAR_ICON_CLASS} animate-spin`} />
       ) : (
-        <Mic className="h-4 w-4" />
+        <Mic className={TOOLBAR_ICON_CLASS} />
       )}
-      {state === 'starting'
-        ? 'Cancel'
-        : state === 'recording'
-          ? 'Stop recording'
-          : state === 'transcribing'
-            ? 'Transcribing'
-            : 'Dictate'}
-    </Button>
+      <span className="hidden sm:inline">
+        {state === 'starting'
+          ? 'Cancel'
+          : state === 'recording'
+            ? 'Stop recording'
+            : state === 'transcribing'
+              ? 'Transcribing'
+              : 'Dictate'}
+      </span>
+    </button>
   )
 }

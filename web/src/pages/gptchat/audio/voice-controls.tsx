@@ -1,15 +1,18 @@
 import { Mic, Phone } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import type { AudioPluginID, SessionConfig } from '../types'
+import {
+  TOOLBAR_BUTTON_LAYOUT,
+  TOOLBAR_ICON_CLASS,
+  toolbarControlClasses,
+} from '../components/toolbar-control'
+import type { SessionConfig } from '../types'
 import type { AudioPluginHandle, AudioPluginProps } from './plugin-types'
 import { AudioPluginControl } from './audio-plugin-control'
-import { AUDIO_PLUGIN_DEFINITIONS, resolveAudioPlugin } from './plugin-registry'
+import { resolveAudioPlugin } from './plugin-registry'
 import { RealtimeAudioPlugin } from './realtime-plugin'
 
 /** VoiceControlsProps adds session identity and preference persistence to the plugin boundary. */
 interface VoiceControlsProps extends AudioPluginProps {
-  sessionId?: string | number
   onConfigChange?: (updates: Partial<SessionConfig['chat_switch']>) => void
 }
 
@@ -17,12 +20,14 @@ interface VoiceControlsProps extends AudioPluginProps {
 export function VoiceControls({
   sessionId,
   onConfigChange,
+  onCallSessionChange,
   ...props
 }: VoiceControlsProps) {
   const callRef = useRef<AudioPluginHandle>(null)
   const [callActive, setCallActive] = useState(false)
   const [dictationActive, setDictationActive] = useState(false)
-  const plugin = resolveAudioPlugin(props.config.chat_switch.audio_plugin)
+  // The server owns this choice; there is deliberately no picker in the UI.
+  const plugin = resolveAudioPlugin(props.user?.voice?.plugin)
   const { onActivityChange } = props
   const callActivity = useCallback(
     (active: boolean) => {
@@ -40,9 +45,12 @@ export function VoiceControls({
   )
   return (
     <>
-      <Button
-        size="sm"
-        variant={callActive ? 'default' : 'outline'}
+      <button
+        type="button"
+        className={toolbarControlClasses(
+          callActive ? 'active' : 'idle',
+          TOOLBAR_BUTTON_LAYOUT,
+        )}
         aria-label="Voice"
         aria-pressed={
           callActive ||
@@ -58,32 +66,16 @@ export function VoiceControls({
             })
         }}
       >
-        <Phone className="h-3 w-3" />
-        {callActive ? 'In call' : 'Voice'}
-      </Button>
-      <select
-        aria-label="Audio plugin"
-        value={plugin.id}
-        disabled={callActive || dictationActive}
-        onChange={(event) =>
-          onConfigChange?.({
-            audio_plugin: event.target.value as AudioPluginID,
-            enable_talk: false,
-          })
-        }
-        className="h-8 rounded-md border border-border bg-background px-2 text-xs disabled:opacity-60"
-      >
-        {Object.values(AUDIO_PLUGIN_DEFINITIONS).map((definition) => (
-          <option key={definition.id} value={definition.id}>
-            {definition.label}
-          </option>
-        ))}
-      </select>
+        <Phone className={TOOLBAR_ICON_CLASS} />
+        <span className="hidden sm:inline">
+          {callActive ? 'In call' : 'Voice'}
+        </span>
+      </button>
       {plugin.id === 'whisper' &&
         props.config.chat_switch.enable_talk &&
         !callActive && (
           <span className="inline-flex items-center gap-1">
-            <Mic className="h-3 w-3" />
+            <Mic className={TOOLBAR_ICON_CLASS} />
             <AudioPluginControl
               key={sessionId}
               {...props}
@@ -94,6 +86,8 @@ export function VoiceControls({
         )}
       <RealtimeAudioPlugin
         {...props}
+        sessionId={sessionId}
+        onCallSessionChange={onCallSessionChange}
         controlRef={callRef}
         sessionLabel={`${props.config.session_name || 'Chat session'} (${sessionId ?? 'current'})`}
         onActivityChange={callActivity}

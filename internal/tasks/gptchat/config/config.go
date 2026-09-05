@@ -100,6 +100,17 @@ func SetupConfig() (err error) {
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
 		&Config.LimitUploadFileBytes, 20*1024*1024)
 
+	Config.Voice.Plugin = strings.ToLower(strings.TrimSpace(gutils.OptionalVal(
+		&Config.Voice.Plugin, VoicePluginRealtime)))
+	Config.Voice.RealtimeModel = strings.TrimSpace(gutils.OptionalVal(
+		&Config.Voice.RealtimeModel, DefaultVoiceRealtimeModel))
+	switch Config.Voice.Plugin {
+	case VoicePluginRealtime, VoicePluginWhisper:
+	default:
+		return errors.Errorf("openai.voice.plugin must be %q or %q, got %q",
+			VoicePluginRealtime, VoicePluginWhisper, Config.Voice.Plugin)
+	}
+
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
 	Config.ExternalBillingAPI = strings.TrimRight(Config.ExternalBillingAPI, "/")
@@ -157,6 +168,26 @@ func trimUrl(url string) string {
 	return strings.TrimRight(strings.TrimSpace(url), "/")
 }
 
+// Voice plugin identifiers supported by the web client.
+const (
+	// VoicePluginRealtime is the live speech-to-speech call implementation.
+	VoicePluginRealtime = "realtime"
+	// VoicePluginWhisper is the record-then-transcribe dictation implementation.
+	VoicePluginWhisper = "whisper"
+	// DefaultVoiceRealtimeModel is used when no realtime model is configured.
+	DefaultVoiceRealtimeModel = "gpt-realtime-2.1-mini"
+)
+
+// VoiceConfig controls which audio implementation the web client uses.
+type VoiceConfig struct {
+	// Plugin (optional) audio implementation, "realtime" or "whisper".
+	// Default is "realtime".
+	Plugin string `json:"plugin" mapstructure:"plugin"`
+	// RealtimeModel (optional) model used for realtime voice calls.
+	// Default is gpt-realtime-2.1-mini.
+	RealtimeModel string `json:"realtime_model" mapstructure:"realtime_model"`
+}
+
 // OpenAI openai config
 //
 // nolint: lll
@@ -200,6 +231,11 @@ type OpenAI struct {
 	StaticLibs map[string]string `json:"static_libs" mapstructure:"static_libs"`
 	// QAChatModels (optional) qa chat models
 	QAChatModels []qaChatModel `json:"qa_chat_models" mapstructure:"qa_chat_models"`
+	// Voice (optional) server-controlled voice call settings.
+	//
+	// The audio implementation is an operational choice, not a per-user preference,
+	// so it is configured here rather than offered in the web UI.
+	Voice VoiceConfig `json:"voice" mapstructure:"voice"`
 	// ExternalBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
 	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
 	// ExternalBillingToken (optional) default billing token
@@ -426,6 +462,9 @@ type UserConfig struct {
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
+	// Voice is the server's voice settings, echoed to the browser so the web
+	// client does not need its own copy. It is server-owned, never user-supplied.
+	Voice VoiceConfig `json:"voice" mapstructure:"-"`
 	// IsFree (optional) is free user, default is false
 	IsFree bool `json:"is_free" mapstructure:"is_free"`
 	// BYOK (optional) user's bring his own token, default is false
@@ -471,6 +510,10 @@ func (c *UserConfig) Valid() error {
 	}
 
 	// fill default
+	//
+	// Voice settings are global and always overwrite whatever a user entry holds,
+	// so a stale per-user value cannot pin an old plugin or model.
+	c.Voice = Config.Voice
 	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
 	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
 	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)

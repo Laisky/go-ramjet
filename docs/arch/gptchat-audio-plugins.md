@@ -9,8 +9,13 @@ The red **Hang up** button ends the call, including while microphone permission
 or the connection handshake is still pending. Reloading saved preferences never
 starts the microphone automatically.
 
-Realtime is the default for new configurations. An explicitly saved Whisper
-selection is preserved; unsupported plugin identifiers fall back to Whisper.
+The audio implementation is a server setting, not a user preference. `openai.voice.plugin`
+selects `realtime` or `whisper` and defaults to realtime; an absent or unrecognized value
+resolves to realtime rather than silently downgrading a deployment to dictation. There is
+no picker in the web UI. `openai.voice.realtime_model` selects the call model and defaults
+to `gpt-realtime-2.1-mini`. Both ride the existing user-config response, are server-owned,
+and overwrite anything a per-user entry holds, so a stale value cannot pin an old model.
+An unknown plugin id fails at boot rather than leaving the browser with no audio.
 **Whisper** remains the record → transcription → editable draft workflow, with
 the existing normal text-completion and per-message speech controls unchanged.
 
@@ -36,14 +41,13 @@ mobile browser suspension. There is no automatic redial or silent context reset.
 
 ```text
 Microphone → AudioWorklet → 20 ms / 24 kHz PCM16 frames
-     → authenticated GA Realtime WebSocket → gpt-realtime-2.1
+     → authenticated GA Realtime WebSocket → the configured realtime model
      → native PCM audio deltas → browser playback
 ```
 
 The call uses `marin`, semantic VAD, automatic responses, and automatic response
 interruption. No GPTChat STT, text-completion, or TTS endpoint is called. AI captions
-come from native output-audio transcript events. User speech is not separately
-transcribed, and the call is not imported into or persisted as text-chat history.
+come from native output-audio transcript events.
 MCP, web search, memory, images, and the text agent loop are not connected to this
 voice session. This is not full ChatGPT Voice feature parity.
 
@@ -90,6 +94,43 @@ For a new direct-to-OpenAI browser deployment, prefer server-issued short-lived
 credentials and WebRTC. This PR does not introduce that bootstrap service or modify
 the OneAPI repository. A custom gateway must support the GA session schema and the
 requested model. No live provider compatibility test is implied by mocked tests.
+
+## Writing the call into the text chat
+
+A call is transcribed into the ordinary chat history of the session it started from,
+so a voice conversation reads afterwards like a typed one. Both sides are recorded: the
+assistant from its native output-audio transcript, and the caller from an input
+transcription the session explicitly enables. Input transcription is a separate ASR job,
+billed on its own and run out of band, so it adds no latency to the spoken reply. Its
+text is the transcriber's opinion, not what the model heard, so treat it as a record of
+the conversation rather than of the model's input.
+
+The destination session is pinned when the call starts, like the rest of the routing
+context. Transcripts follow the call, not the screen, so switching to another session
+mid-call never splices a conversation into an unrelated one, and the rendered list is
+only touched while the pinned session is the one on display.
+
+Ordering does not follow arrival. Transcription runs asynchronously from the reply, so
+the caller's text routinely lands after the assistant has already answered. Each turn
+therefore reserves its slot when the input buffer is committed, before any text exists,
+and is filled in later. A turn that fails to transcribe is marked rather than left open.
+A turn holds the caller's utterance and the reply under one chat id, the same shape a
+typed exchange uses. Interrupted answers are recorded from the partial transcript, which
+is otherwise discarded on barge-in.
+
+Live text streams into the view as it arrives and is written to storage at turn
+boundaries, mirroring text chat, which streams into React state and persists once at the
+end. Storage writes are serialized per session because a message and the session's
+ordering index are separate keys; concurrent unserialized commits lose an index entry and
+leave a stored message that nothing renders.
+
+While a call is recording, the session it records into stops accepting manual history
+changes: sending, editing, regenerating, deleting, and inserting a turn are all held, and
+each control says why. This is a clarity measure, not the concurrency fix. It keeps a
+typed turn from landing in the middle of one being transcribed and stops a user editing a
+message the call is still writing. The per-session write queue is still required, because
+the call itself issues overlapping writes. The hold applies only to the pinned session;
+every other session stays fully editable, including while the call continues.
 
 ## Correct lifecycle and interruption
 

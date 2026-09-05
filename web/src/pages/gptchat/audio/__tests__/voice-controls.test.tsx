@@ -1,6 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DefaultSessionConfig, type UserConfig } from '../../types'
+import {
+  TOOLBAR_BUTTON_LAYOUT,
+  toolbarControlClasses,
+} from '../../components/toolbar-control'
 import { VoiceControls } from '../voice-controls'
 import { deferred, FakeSocket, flush, installMedia } from './media-fixtures'
 
@@ -26,7 +30,7 @@ function props() {
       session_name: 'Session A',
       chat_switch: { ...DefaultSessionConfig.chat_switch, enable_talk: true },
     },
-    sessionId: 'A',
+    sessionId: 1,
     user: account,
     disabled: false,
     onDraftText: vi.fn(),
@@ -35,6 +39,7 @@ function props() {
     onActivityChange: vi.fn(),
     onStatusChange: vi.fn(),
     onConfigChange: vi.fn(),
+    onCallSessionChange: vi.fn(),
   }
 }
 /** startCall uses the visible Voice button and both public transport handshakes. */
@@ -58,6 +63,34 @@ afterEach(async () => {
   await act(flush)
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+describe('Composer toolbar consistency', () => {
+  it("gives the call and dictation controls the toggles' type scale", () => {
+    render(<VoiceControls {...props()} />)
+
+    // These must match the ToggleButton row in chat-input.tsx. Styling them with the
+    // generic Button component instead left them at 14px beside 11px neighbours.
+    const idle = toolbarControlClasses('idle', TOOLBAR_BUTTON_LAYOUT)
+    expect(screen.getByRole('button', { name: 'Voice' }).className).toBe(idle)
+  })
+
+  it('offers no plugin picker, because the server owns that choice', () => {
+    render(<VoiceControls {...props()} />)
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Audio plugin' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('marks an active call with the same emphasis a toggled feature gets', async () => {
+    render(<VoiceControls {...props()} />)
+    await startCall()
+
+    expect(screen.getByRole('button', { name: 'Voice' }).className).toBe(
+      toolbarControlClasses('active', TOOLBAR_BUTTON_LAYOUT),
+    )
+  })
 })
 
 describe('Phone-style Voice UX', () => {
@@ -94,6 +127,36 @@ describe('Phone-style Voice UX', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Call ended.')
   })
 
+  it('reports the session a call records into, and keeps it across a switch', async () => {
+    const options = props()
+    const view = render(<VoiceControls {...options} />)
+    await startCall()
+
+    // The call pins the session it began in.
+    expect(options.onCallSessionChange).toHaveBeenCalledWith(1)
+
+    options.onCallSessionChange.mockClear()
+    view.rerender(<VoiceControls {...options} sessionId={2} />)
+    await act(flush)
+
+    // Viewing another session must not move where the call records.
+    expect(options.onCallSessionChange).not.toHaveBeenCalledWith(2)
+  })
+
+  it('clears the recording session when the call ends', async () => {
+    const options = props()
+    render(<VoiceControls {...options} />)
+    const socket = await startCall()
+    options.onCallSessionChange.mockClear()
+
+    await act(async () => {
+      socket.remoteClose(1000)
+      await flush()
+    })
+
+    expect(options.onCallSessionChange).toHaveBeenCalledWith(null)
+  })
+
   it('pins the original account, prompt, and call label across text-session switches without redialing', async () => {
     const options = props()
     const view = render(<VoiceControls {...options} />)
@@ -101,7 +164,7 @@ describe('Phone-style Voice UX', () => {
     view.rerender(
       <VoiceControls
         {...options}
-        sessionId="B"
+        sessionId={2}
         user={{ ...account, api_base: 'https://other.example.com' }}
         config={{
           ...options.config,
@@ -111,7 +174,6 @@ describe('Phone-style Voice UX', () => {
           chat_switch: {
             ...options.config.chat_switch,
             enable_talk: false,
-            audio_plugin: 'whisper',
           },
         }}
       />,
@@ -123,10 +185,7 @@ describe('Phone-style Voice UX', () => {
     expect(socket.protocols).toContain(
       'openai-insecure-api-key.account-a-token',
     )
-    expect(screen.getByRole('heading')).toHaveTextContent('Session A (A)')
-    expect(
-      screen.getByRole('combobox', { name: 'Audio plugin' }),
-    ).toBeDisabled()
+    expect(screen.getByRole('heading')).toHaveTextContent('Session A (1)')
     expect(media.track.stop).not.toHaveBeenCalled()
   })
 

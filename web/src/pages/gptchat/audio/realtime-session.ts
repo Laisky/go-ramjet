@@ -1,8 +1,22 @@
-export const REALTIME_AUDIO_MODEL = 'gpt-realtime-2.1'
+// The realtime model is a server setting delivered with the user config. This is the
+// fallback used when the server did not send one.
+export const DEFAULT_REALTIME_AUDIO_MODEL = 'gpt-realtime-2.1-mini'
 export const REALTIME_AUDIO_VOICE = 'marin'
+// Input transcription is a separate ASR job, billed on its own and run out of band
+// from the spoken reply, so it adds no latency to the voice path. Without it the
+// API never reports what the user said and the call cannot be written to the chat.
+export const REALTIME_INPUT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe'
 
-/** buildRealtimeWebSocketURL resolves a configured API base to the GA Realtime route. */
-export function buildRealtimeWebSocketURL(apiBase: string): string {
+/**
+ * buildRealtimeWebSocketURL resolves a configured API base to the GA Realtime route.
+ *
+ * The model belongs only in this query parameter. Repeating it inside session.update
+ * makes gateways reject the call as a mid-session model switch.
+ */
+export function buildRealtimeWebSocketURL(
+  apiBase: string,
+  model: string = DEFAULT_REALTIME_AUDIO_MODEL,
+): string {
   const url = new URL(apiBase)
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     throw new Error('Realtime API base must use HTTP or HTTPS')
@@ -17,7 +31,7 @@ export function buildRealtimeWebSocketURL(apiBase: string): string {
   else if (path.endsWith('/v1')) path += '/realtime'
   else if (!path.endsWith('/v1/realtime')) path += '/v1/realtime'
   url.pathname = path
-  url.searchParams.set('model', REALTIME_AUDIO_MODEL)
+  url.searchParams.set('model', model.trim() || DEFAULT_REALTIME_AUDIO_MODEL)
   return url.toString()
 }
 
@@ -32,6 +46,9 @@ export function createRealtimeSessionUpdate(instructions: string) {
       audio: {
         input: {
           format: { type: 'audio/pcm', rate: 24_000 },
+          // No `language` here: the caller may switch languages mid-call, and
+          // pinning one forces the transcriber to mishear the others.
+          transcription: { model: REALTIME_INPUT_TRANSCRIPTION_MODEL },
           turn_detection: {
             type: 'semantic_vad',
             create_response: true,

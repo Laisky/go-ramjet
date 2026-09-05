@@ -77,7 +77,6 @@ export interface ChatSwitch {
   all_in_one: boolean
   enable_talk: boolean
   /** Optional for legacy configurations; explicitly saved plugin choices are preserved. */
-  audio_plugin?: AudioPluginID
   enable_mcp: boolean
   enable_memory: boolean
   agent_mode: boolean
@@ -142,7 +141,6 @@ export const DefaultSessionConfig: SessionConfig = {
     disable_https_crawler: false,
     all_in_one: false,
     enable_talk: false,
-    audio_plugin: 'realtime',
     enable_mcp: false,
     enable_memory: false,
     agent_mode: false,
@@ -190,4 +188,15 @@ export interface UserConfig {
   no_limit_expensive_models: boolean
   api_base: string
   image_url: string
+  /**
+   * voice is chosen by the server, not the user. The audio implementation is an
+   * operational decision, so the web client reads it rather than offering a picker.
+   */
+  voice?: VoiceSettings
+}
+
+/** VoiceSettings is the server's voice configuration as sent with the user config. */
+export interface VoiceSettings {
+  plugin?: AudioPluginID
+  realtime_model?: string
 }

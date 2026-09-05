@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DefaultSessionConfig } from '../../types'
+import {
+  TOOLBAR_BUTTON_LAYOUT,
+  toolbarControlClasses,
+} from '../../components/toolbar-control'
 import { WhisperAudioPlugin } from '../whisper-plugin'
 
 interface Deferred<T> {
@@ -29,6 +33,25 @@ describe('WhisperAudioPlugin lifecycle regressions', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('wears the composer toolbar style, not the generic button size', () => {
+    render(
+      <WhisperAudioPlugin
+        config={{ ...DefaultSessionConfig, api_token: 'test-token' }}
+        disabled={false}
+        onDraftText={vi.fn()}
+        onError={vi.fn()}
+        onBusyChange={vi.fn()}
+        onActivityChange={vi.fn()}
+        onStatusChange={vi.fn()}
+      />,
+    )
+
+    // It sits in the same row as the feature toggles, so it must share their scale.
+    expect(
+      screen.getByRole('button', { name: 'Start Whisper recording' }).className,
+    ).toBe(toolbarControlClasses('idle', TOOLBAR_BUTTON_LAYOUT))
   })
 
   it('stops a late microphone grant without constructing MediaRecorder after unmount', async () => {

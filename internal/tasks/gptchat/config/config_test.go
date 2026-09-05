@@ -97,3 +97,69 @@ func TestSetupConfigFirecrawlValidation(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "firecrawl.api_key")
 }
+
+// baseVoiceConfig sets the unrelated keys SetupConfig requires so a voice test
+// exercises only the voice defaults.
+func baseVoiceConfig(t *testing.T) {
+	t.Helper()
+	gconfig.Shared.Set("openai.token", "srv-token")
+	gconfig.Shared.Set("openai.enable_memory", false)
+	gconfig.Shared.Set("openai.memory_project", "go-ramjet-memory")
+	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
+	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
+}
+
+// TestSetupConfigVoiceDefaults verifies the voice plugin and realtime model fall back
+// to the server defaults when the deployment does not configure them.
+func TestSetupConfigVoiceDefaults(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "")
+	gconfig.Shared.Set("openai.voice.realtime_model", "")
+
+	require.NoError(t, SetupConfig())
+	require.Equal(t, VoicePluginRealtime, Config.Voice.Plugin)
+	require.Equal(t, "gpt-realtime-2.1-mini", Config.Voice.RealtimeModel)
+}
+
+// TestSetupConfigVoiceOverrides verifies a deployment can pick the other plugin and model.
+func TestSetupConfigVoiceOverrides(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "Whisper")
+	gconfig.Shared.Set("openai.voice.realtime_model", "gpt-realtime-2.1")
+
+	require.NoError(t, SetupConfig())
+	// Case is normalized so a capitalized value in YAML still matches the client ids.
+	require.Equal(t, VoicePluginWhisper, Config.Voice.Plugin)
+	require.Equal(t, "gpt-realtime-2.1", Config.Voice.RealtimeModel)
+}
+
+// TestSetupConfigVoiceRejectsUnknownPlugin verifies a typo fails at boot rather than
+// silently leaving the browser with no usable audio implementation.
+func TestSetupConfigVoiceRejectsUnknownPlugin(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "realtim")
+	gconfig.Shared.Set("openai.voice.realtime_model", "")
+
+	err := SetupConfig()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "openai.voice.plugin")
+}
+
+// TestUserConfigCarriesServerVoiceSettings verifies every authenticated user receives the
+// server's voice settings, overriding anything a per-user entry happens to hold.
+func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "whisper")
+	gconfig.Shared.Set("openai.voice.realtime_model", "gpt-realtime-2.1-mini")
+	require.NoError(t, SetupConfig())
+
+	user := &UserConfig{
+		UserName:      "someone",
+		Token:         "tok",
+		AllowedModels: []string{"*"},
+		Voice:         VoiceConfig{Plugin: "stale", RealtimeModel: "stale-model"},
+	}
+	require.NoError(t, user.Valid())
+	require.Equal(t, VoicePluginWhisper, user.Voice.Plugin)
+	require.Equal(t, "gpt-realtime-2.1-mini", user.Voice.RealtimeModel)
+}

@@ -8,8 +8,9 @@ import {
 export {
   buildRealtimeWebSocketURL,
   createRealtimeSessionUpdate,
-  REALTIME_AUDIO_MODEL,
+  DEFAULT_REALTIME_AUDIO_MODEL,
   REALTIME_AUDIO_VOICE,
+  REALTIME_INPUT_TRANSCRIPTION_MODEL,
 } from './realtime-session'
 // The capture worklet is served verbatim from /public, not bundled. Vite's worker
 // transform injects an `import` that AudioWorkletGlobalScope cannot execute, which
@@ -31,6 +32,24 @@ export interface RealtimeAudioClientCallbacks {
   onTranscriptChange: (transcript: string) => void
   onError: (message: string) => void
   onEnded?: (reason: CallEndReason, detail?: string) => void
+  /**
+   * onUserTurn reports the caller's own speech.
+   *
+   * `open` fires when the turn is committed, before any text exists, so a
+   * consumer can reserve an ordered slot. Transcription runs asynchronously from
+   * the reply, so `final` can arrive after the assistant has already answered
+   * and must never be appended in arrival order.
+   */
+  onUserTurn?: (event: UserTurnEvent) => void
+  /** onAssistantTurn reports the assistant's spoken text, final at the end of a turn. */
+  onAssistantTurn?: (text: string, done: boolean) => void
+}
+
+/** UserTurnEvent carries one stage of a caller utterance, keyed by its conversation item. */
+export interface UserTurnEvent {
+  itemID: string
+  phase: 'open' | 'final' | 'failed'
+  text: string
 }
 
 /** RealtimeAudioClientOptions captures the immutable account and prompt for one call. */
@@ -38,6 +57,8 @@ export interface RealtimeAudioClientOptions {
   apiBase: string
   apiToken: string
   instructions: string
+  /** model is the server-configured realtime model for this deployment. */
+  model?: string
   callbacks: RealtimeAudioClientCallbacks
 }
 
@@ -117,7 +138,10 @@ export class RealtimeAudioClient {
           ? 'Microphone capture needs a secure page. Open this site over HTTPS or on localhost.'
           : 'This browser does not support microphone capture',
       )
-    const url = buildRealtimeWebSocketURL(this.options.apiBase)
+    const url = buildRealtimeWebSocketURL(
+      this.options.apiBase,
+      this.options.model,
+    )
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(this.options.apiToken)) {
       throw new Error('API token contains unsupported WebSocket characters')
     }
@@ -379,6 +403,38 @@ export class RealtimeAudioClient {
       this.options.callbacks.onStateChange('thinking')
       return
     }
+    // These must stay above the response-scoping gate below. They carry no
+    // response_id, so the gate's outputBlocked branch would drop every one of
+    // them that lands during a barge-in window.
+    if (event.type === 'input_audio_buffer.committed') {
+      if (event.item_id)
+        this.options.callbacks.onUserTurn?.({
+          itemID: event.item_id,
+          phase: 'open',
+          text: '',
+        })
+      return
+    }
+    if (
+      event.type === 'conversation.item.input_audio_transcription.completed'
+    ) {
+      if (event.item_id)
+        this.options.callbacks.onUserTurn?.({
+          itemID: event.item_id,
+          phase: 'final',
+          text: event.transcript ?? '',
+        })
+      return
+    }
+    if (event.type === 'conversation.item.input_audio_transcription.failed') {
+      if (event.item_id)
+        this.options.callbacks.onUserTurn?.({
+          itemID: event.item_id,
+          phase: 'failed',
+          text: '',
+        })
+      return
+    }
     if (event.type === 'response.created') {
       this.playbackGeneration += 1
       this.player.interrupt()
@@ -416,12 +472,17 @@ export class RealtimeAudioClient {
       case 'response.audio_transcript.delta':
         if (typeof event.delta === 'string') this.transcript += event.delta
         this.options.callbacks.onTranscriptChange(this.transcript)
+        this.options.callbacks.onAssistantTurn?.(this.transcript, false)
         break
       case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
+        // `.done` carries the authoritative final text, so prefer it over the
+        // accumulated deltas rather than trusting our own concatenation.
         if (typeof event.transcript === 'string')
           this.transcript = event.transcript
         this.options.callbacks.onTranscriptChange(this.transcript)
+        if (this.transcript)
+          this.options.callbacks.onAssistantTurn?.(this.transcript, true)
         break
       case 'response.done':
         this.finishResponse(event)
@@ -521,6 +582,10 @@ export class RealtimeAudioClient {
         audio_end_ms: milliseconds,
       })
     this.assistantItemID = ''
+    // Emit before the wipe. This is the only place partially spoken text still
+    // exists, and a log that drops interrupted answers misrepresents the call.
+    if (this.transcript)
+      this.options.callbacks.onAssistantTurn?.(this.transcript, true)
     this.transcript = ''
     this.options.callbacks.onTranscriptChange('')
   }

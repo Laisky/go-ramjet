@@ -6,8 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
-import { cn } from '@/utils/cn'
+import type { AudioPluginProps } from '../audio/plugin-types'
 import { VoiceControls } from '../audio/voice-controls'
+import { TOOLBAR_BUTTON_LAYOUT, toolbarControlClasses } from './toolbar-control'
 import { useUser } from '../hooks/use-user'
 import { isImageModel } from '../models'
 import type { ChatAttachment, SelectionData, SessionConfig } from '../types'
@@ -19,7 +20,13 @@ export interface ChatInputProps {
   isLoading?: boolean
   disabled?: boolean
   config: SessionConfig
-  sessionId?: string | number
+  // Numeric to match useConfig's session id; the voice call pins it for its lifetime.
+  sessionId?: number
+  onVoiceMessage?: AudioPluginProps['onVoiceMessage']
+  /** onCallSessionChange reports which session a live voice call is recording into. */
+  onCallSessionChange?: (pinnedSessionId: number | null) => void
+  /** locked disables sending while a voice call records into the displayed session. */
+  locked?: boolean
   isSidebarOpen?: boolean
   onConfigChange?: (updates: Partial<SessionConfig['chat_switch']>) => void
   placeholder?: string
@@ -40,6 +47,9 @@ export function ChatInput({
   disabled,
   config,
   sessionId,
+  onVoiceMessage,
+  onCallSessionChange,
+  locked,
   isSidebarOpen,
   onConfigChange,
   placeholder = 'Type a message...',
@@ -125,7 +135,9 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     const trimmed = String(message || '').trim()
-    if (!trimmed || disabled || isLoading || audioBusy) return
+    // `locked` holds text sends while a voice call records into this session, so a
+    // typed turn cannot land in the middle of one being transcribed.
+    if (!trimmed || disabled || isLoading || audioBusy || locked) return
     onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     updateMessage('')
     setAttachments([])
@@ -137,6 +149,7 @@ export function ChatInput({
     audioBusy,
     onSend,
     updateMessage,
+    locked,
   ])
 
   /**
@@ -255,8 +268,12 @@ export function ChatInput({
             onMouseUp={handleInputMouseUp}
             onSelect={handleInputSelect}
             onBlur={handleInputBlur}
-            placeholder={placeholder}
-            disabled={disabled || audioBusy}
+            placeholder={
+              locked
+                ? 'Voice call in progress — recording to this chat'
+                : placeholder
+            }
+            disabled={disabled || audioBusy || locked}
             apiToken={config.api_token}
             className="flex-1"
           />
@@ -275,11 +292,21 @@ export function ChatInput({
                   </Button>
                 </TooltipWrapper>
               ) : (
-                <TooltipWrapper content="Send message (Ctrl+Enter)" side="left">
+                <TooltipWrapper
+                  content={
+                    locked
+                      ? 'Unavailable while a voice call is recording to this chat'
+                      : 'Send message (Ctrl+Enter)'
+                  }
+                  side="left"
+                >
                   <Button
                     onClick={handleSend}
                     disabled={
-                      !String(message || '').trim() || disabled || audioBusy
+                      !String(message || '').trim() ||
+                      disabled ||
+                      audioBusy ||
+                      locked
                     }
                     className="flex-1 w-12 rounded-md bg-primary p-0 text-primary-foreground shadow-md transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/20"
                     aria-label="Send message"
@@ -353,6 +380,8 @@ export function ChatInput({
             config={config}
             user={user}
             sessionId={sessionId}
+            onVoiceMessage={onVoiceMessage}
+            onCallSessionChange={onCallSessionChange}
             onConfigChange={onConfigChange}
             disabled={Boolean(disabled || isLoading)}
             onDraftText={appendAudioDraft}
@@ -426,11 +455,9 @@ function ToggleButton({
         role="switch"
         aria-checked={active}
         aria-label={label}
-        className={cn(
-          'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors',
-          active
-            ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary hover:bg-primary/90'
-            : 'border border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+        className={toolbarControlClasses(
+          active ? 'active' : 'idle',
+          TOOLBAR_BUTTON_LAYOUT,
         )}
       >
         {icon}

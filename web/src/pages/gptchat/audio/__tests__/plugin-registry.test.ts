@@ -8,13 +8,16 @@ import {
 import { DefaultSessionConfig, type UserConfig } from '../../types'
 
 describe('resolveAudioPlugin', () => {
-  it('keeps Whisper as the legacy-safe default', () => {
-    expect(resolveAudioPlugin().id).toBe('whisper')
-    expect(resolveAudioPlugin('unknown').id).toBe('whisper')
+  it('defaults to Realtime when the server sent no choice', () => {
+    // A deployment that never configured voice must still get live calls, and an
+    // unrecognized value must not silently downgrade it to dictation.
+    expect(resolveAudioPlugin().id).toBe('realtime')
+    expect(resolveAudioPlugin('unknown').id).toBe('realtime')
+    expect(resolveAudioPlugin('realtime').id).toBe('realtime')
   })
 
-  it('selects the Realtime implementation explicitly', () => {
-    expect(resolveAudioPlugin('realtime').id).toBe('realtime')
+  it('selects Whisper only when the server asks for it', () => {
+    expect(resolveAudioPlugin('whisper').id).toBe('whisper')
   })
 })
 

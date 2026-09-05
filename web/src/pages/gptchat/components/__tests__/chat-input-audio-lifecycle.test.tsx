@@ -7,12 +7,15 @@ import { ChatInput } from '../chat-input'
 
 const audioCleanup = vi.hoisted(() => vi.fn())
 
+// The dictation control only renders when the SERVER selects the whisper plugin,
+// so this deployment config is what puts the plugin under test on screen at all.
 vi.mock('../../hooks/use-user', () => ({
   useUser: () => ({
     user: {
       is_free: false,
       byok: true,
       api_base: 'https://proxy.example.com',
+      voice: { plugin: 'whisper' },
     },
   }),
 }))
@@ -36,7 +39,6 @@ describe('ChatInput audio lifecycle regressions', () => {
       chat_switch: {
         ...DefaultSessionConfig.chat_switch,
         enable_talk: true,
-        audio_plugin: 'whisper' as const,
       },
     }
     const props = {
