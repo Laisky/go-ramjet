@@ -59,7 +59,7 @@ describe('createRealtimeSessionUpdate', () => {
       type: string
       session: {
         type: string
-        model: string
+        model?: string
         output_modalities: string[]
         instructions: string
         audio: {
@@ -81,7 +81,9 @@ describe('createRealtimeSessionUpdate', () => {
 
     expect(event.type).toBe('session.update')
     expect(event.session.type).toBe('realtime')
-    expect(event.session.model).toBe(REALTIME_AUDIO_MODEL)
+    // The model is fixed by the connection query parameter. Sending it again in
+    // session.update makes gateways reject the call as a mid-session model switch.
+    expect(event.session.model).toBeUndefined()
     expect(event.session.output_modalities).toEqual(['audio'])
     expect(event.session.instructions).toContain('Be concise.')
     expect(event.session.audio.input.format).toEqual({

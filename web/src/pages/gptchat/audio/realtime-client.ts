@@ -4,7 +4,6 @@ import {
   buildRealtimeWebSocketURL,
   createRealtimeSessionUpdate,
 } from './realtime-session'
-import workletURL from './pcm-worklet.ts?worker&url'
 
 export {
   buildRealtimeWebSocketURL,
@@ -12,6 +11,11 @@ export {
   REALTIME_AUDIO_MODEL,
   REALTIME_AUDIO_VOICE,
 } from './realtime-session'
+// The capture worklet is served verbatim from /public, not bundled. Vite's worker
+// transform injects an `import` that AudioWorkletGlobalScope cannot execute, which
+// leaves 'gptchat-microphone' unregistered even though addModule() resolves.
+const WORKLET_URL = '/audio/pcm-worklet.js'
+
 export type RealtimeAudioState =
   | 'idle'
   | 'connecting'
@@ -106,7 +110,13 @@ export class RealtimeAudioClient {
     if (this.started || this.closed)
       throw new Error('Create a new client for each voice call')
     if (!navigator.mediaDevices?.getUserMedia)
-      throw new Error('This browser does not support microphone capture')
+      throw new Error(
+        // Browsers hide mediaDevices outside a secure context, so an insecure
+        // origin is indistinguishable from a missing feature without this check.
+        window.isSecureContext === false
+          ? 'Microphone capture needs a secure page. Open this site over HTTPS or on localhost.'
+          : 'This browser does not support microphone capture',
+      )
     const url = buildRealtimeWebSocketURL(this.options.apiBase)
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(this.options.apiToken)) {
       throw new Error('API token contains unsupported WebSocket characters')
@@ -278,7 +288,7 @@ export class RealtimeAudioClient {
       )
     }
     await waitForMedia(
-      context.audioWorklet.addModule(workletURL),
+      context.audioWorklet.addModule(WORKLET_URL),
       this.abort.signal,
     )
     if (this.closed || !this.mediaStream) throw abortError()
@@ -347,8 +357,16 @@ export class RealtimeAudioClient {
         typeof event.error?.message === 'string'
           ? event.error.message.replaceAll(this.options.apiToken, '[redacted]')
           : 'Realtime API returned an error'
-      this.rejectReady?.(new Error(message))
-      this.fail(message)
+      if (!this.ready) {
+        // Configuration never completed, so there is no usable call to keep.
+        this.rejectReady?.(new Error(message))
+        this.fail(message)
+        return
+      }
+      // Realtime errors are per-event and mostly recoverable; the session stays
+      // open. A provider that considers the call over closes the socket, and
+      // onclose already ends it. Tearing down here dropped healthy calls.
+      this.options.callbacks.onError(message)
       return
     }
     if (!this.ready || this.ending) return

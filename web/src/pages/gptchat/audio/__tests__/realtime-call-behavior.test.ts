@@ -109,6 +109,54 @@ describe('Realtime call lifecycle', () => {
     expect(FakeWorklet.instances).toHaveLength(1)
   })
 
+  it('never sends a session model, which gateways reject as a mid-call switch', async () => {
+    const { client } = makeClient()
+    const result = client.start()
+    await flush()
+    const socket = FakeSocket.instances[0]
+    socket.open()
+    await flush()
+    const update = socket.sent.find((event) => event.type === 'session.update')
+    expect(update).toBeDefined()
+    const session = update?.session as Record<string, unknown>
+    expect(Object.keys(session)).not.toContain('model')
+    // The connection query parameter is the only place the model may appear.
+    expect(new URL(socket.url).searchParams.get('model')).toBeTruthy()
+    socket.event({ type: 'session.updated' })
+    await result
+  })
+
+  it('keeps a live call open when the provider reports a recoverable error', async () => {
+    const { callbacks, socket } = await connect()
+    callbacks.onEnded.mockClear()
+    socket.event({
+      type: 'error',
+      error: { type: 'invalid_request_error', message: 'stale truncate' },
+    })
+    await flush()
+    expect(callbacks.onError).toHaveBeenCalledWith('stale truncate')
+    // The provider closes the socket when a call is genuinely over.
+    expect(callbacks.onEnded).not.toHaveBeenCalled()
+    expect(socket.close).not.toHaveBeenCalled()
+  })
+
+  it('fails the call when an error arrives before configuration completes', async () => {
+    const { client, callbacks } = makeClient()
+    const failure = client.start().catch((error: Error) => error.name)
+    await flush()
+    const socket = FakeSocket.instances[0]
+    socket.open()
+    socket.event({
+      type: 'error',
+      error: { type: 'invalid_request_error', message: 'model not allowed' },
+    })
+    await failure
+    await flush()
+    // The provider reason reaches the user; the panel then reports a failed call.
+    expect(callbacks.onError).toHaveBeenCalledWith('model not allowed')
+    expect(callbacks.onEnded).toHaveBeenCalledWith('error', undefined)
+  })
+
   it('does not create a capture graph when cancelled during worklet module loading', async () => {
     const module = deferred<void>()
     FakeContext.moduleReady = module.promise

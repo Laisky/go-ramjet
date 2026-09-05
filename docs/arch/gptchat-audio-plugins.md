@@ -48,15 +48,40 @@ MCP, web search, memory, images, and the text agent loop are not connected to th
 voice session. This is not full ChatGPT Voice feature parity.
 
 The output AudioContext is unlocked inside the explicit user gesture, before
-permission awaits, and shared with capture. A bundled AudioWorklet handles capture
-without deprecated ScriptProcessor nodes. Its resampler retains fractional sample
+permission awaits, and shared with capture. An AudioWorklet handles capture without
+deprecated ScriptProcessor nodes.
+
+That worklet is served verbatim from `public/audio/pcm-worklet.js` and is deliberately
+never bundled. `AudioWorkletGlobalScope` cannot execute `import` statements, and the
+bundler's worker transform injects one of its own in development on top of any the
+source already has. The failure is quiet: the module body throws, `addModule()` still
+resolves, `registerProcessor` never runs, and the node constructor fails with "The node
+name 'gptchat-microphone' is not defined in AudioWorkletGlobalScope". The file therefore
+carries its own copy of the resampler and contains no module syntax. Its tests evaluate
+the shipped file directly, assert the registered processor name, and compare its output
+against the shared resampler so the two cannot drift. Its resampler retains fractional sample
 coverage across blocks. The browser worklet emits silence to the output graph,
 not microphone monitoring audio.
 
 This implementation retains the existing deployment's OpenAI-compatible WebSocket
 route. It sends only the user-configured token in the authentication subprotocol;
 no server-owned credential is returned to the browser. It does not request the
-legacy beta protocol while sending GA events. Provider/gateway authorization and
+legacy beta protocol while sending GA events.
+
+`gpt-realtime-2.1` is the current flagship Realtime model and is the id the gateway
+serves; `gpt-realtime`, `-1.5`, `-2`, `-mini`, `-2.1-mini`, `-translate` and `-whisper`
+are the other live members of that family. The legacy `gpt-4o[-mini]-realtime-preview`
+models were shut down upstream on 2026-05-07, along with the whole Realtime beta
+interface on 2026-05-12, so no `OpenAI-Beta` header and no `openai-beta.realtime-v1`
+subprotocol may be sent.
+
+The model is selected once, by the `model` query parameter of the connection URL.
+`session.update` must never carry a `session.model` field. OpenAI accepts a value
+matching the connection model, but its own event schema lists `model` as
+non-updatable, and the OneAPI gateway rejects the frame outright with
+`ws_model_switch_denied` and closes the socket with policy-violation code 1008.
+Because the gateway checks for the key rather than comparing values, sending the
+identical model string still ends the call before it starts. Provider/gateway authorization and
 quota policy are authoritative; stale frontend `is_free`/`byok` labels do not
 prove whether a particular gateway token has access. Direct mode uses its explicit
 API base, rather than accidentally inheriting the account's proxy base.
@@ -90,6 +115,17 @@ The user can still hang up immediately while the AI goodbye is draining.
 If WebSocket buffered output exceeds 512 KiB, the call ends with a slow-connection
 error instead of accumulating indefinitely delayed speech. This is an explicit
 transport failure, not a hidden normal hang-up or a claimed seamless recovery.
+
+Realtime `error` events are fatal only before the configuration handshake completes,
+because a call that was never configured cannot continue. Once the call is live,
+an error event is reported to the user and the call stays open: these events are
+per-event and mostly recoverable, and a provider that considers the call over closes
+the socket, which the close handler already turns into an end. Treating every error
+as fatal previously dropped otherwise healthy calls.
+
+Microphone capture is gated on a secure context. When `navigator.mediaDevices` is
+absent, the client distinguishes an insecure origin from a genuinely unsupported
+browser, because plain HTTP on a LAN or tailnet address hides the API entirely.
 
 ## Review reproduction and regression coverage
 
