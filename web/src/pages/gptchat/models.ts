@@ -214,7 +214,7 @@ export const FreeModels = [
   ChatModelGPTOSS20B,
   ChatModelDeepV4Flash,
   ChatModelGemini35FlashLite,
-  ChatModelGemini38Flash,
+  // ChatModelGemini38Flash,
   QAModelBasebit,
   QAModelSecurity,
   QAModelImmigrate,
