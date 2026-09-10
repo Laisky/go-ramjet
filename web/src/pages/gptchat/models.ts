@@ -29,7 +29,7 @@ export const ChatModelGPTO3Deepresearch = 'o3-deep-research'
 export const ChatModelGPTO3Mini = 'o3-mini'
 export const ChatModelGPTO4Mini = 'o4-mini'
 export const ChatModelGPTO4MiniDeepresearch = 'o4-mini-deep-research'
-export const ChatModelDeepV4Flash = 'deepseek-v4-flash'
+export const ChatModelDeepFlash = 'deepseek-flash'
 export const ChatModelDeepSeekV4Pro = 'deepseek-v4-pro'
 // export const ChatModelClaude47Opus = 'claude-opus-4-7'
 export const ChatModelClaude48Opus = 'claude-opus-4-8'
@@ -61,11 +61,11 @@ export const QAModelCustom = 'qa-custom'
 export const QAModelShared = 'qa-shared'
 
 // Image models
-export const ImageModelDalle3 = 'dall-e-3'
+// export const ImageModelDalle3 = 'dall-e-3'
 // export const ImageModelGptImage1 = 'gpt-image-1'
-export const ImageModelGptImage1Mini = 'gpt-image-1-mini'
+export const ImageModelGptImage25Flare = 'gpt-image-2.5-flare'
 // export const ImageModelGptImage1dot5 = 'gpt-image-1.5'
-export const ImageModelGptImage2 = 'gpt-image-2'
+export const ImageModelGptImage25Sunburst = 'gpt-image-2.5-sunburst'
 export const ImageModelGptImageLatest = 'chatgpt-image-latest'
 // export const ImageModelSdxlTurbo = 'sdxl-turbo'
 export const ImageModelFluxDev = 'black-forest-labs/flux-dev'
@@ -110,7 +110,7 @@ export const ChatModels = [
   ChatModelGPTO3Mini,
   ChatModelGPTO4Mini,
   ChatModelGPTO4MiniDeepresearch,
-  ChatModelDeepV4Flash,
+  ChatModelDeepFlash,
   ChatModelDeepSeekV4Pro,
   // ChatModelClaude47Opus,
   ChatModelClaude48Opus,
@@ -172,8 +172,8 @@ export const VisionModels = [
   // ImageModelFluxProUltra11,
   ImageModelFluxDev,
   // ImageModelGptImage1,
-  ImageModelGptImage1Mini,
-  ImageModelGptImage2,
+  ImageModelGptImage25Flare,
+  ImageModelGptImage25Sunburst,
   ImageModelGptImageLatest,
 ]
 
@@ -186,10 +186,10 @@ export const QaModels = [
 ]
 
 export const ImageModels = [
-  ImageModelDalle3,
+  // ImageModelDalle3,
   // ImageModelGptImage1,
-  ImageModelGptImage1Mini,
-  ImageModelGptImage2,
+  ImageModelGptImage25Flare,
+  ImageModelGptImage25Sunburst,
   ImageModelGptImageLatest,
   // ImageModelSdxlTurbo,
   ImageModelFluxPro2,
@@ -212,7 +212,7 @@ export const FreeModels = [
   // ChatModelGPT5Dot4Nano,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
-  ChatModelDeepV4Flash,
+  ChatModelDeepFlash,
   ChatModelGemini35FlashLite,
   // ChatModelGemini38Flash,
   QAModelBasebit,
@@ -274,7 +274,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGemini31FlashImage,
     ChatModelGemini3ProImage,
   ],
-  Deepseek: [ChatModelDeepV4Flash, ChatModelDeepSeekV4Pro],
+  Deepseek: [ChatModelDeepFlash, ChatModelDeepSeekV4Pro],
   Others: [
     ChatModelDeepResearch,
     ChatModelLlama33With70B,
@@ -285,10 +285,10 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGrok4Dot6,
   ],
   Image: [
-    ImageModelDalle3,
+    // ImageModelDalle3,
     // ImageModelGptImage1,
-    ImageModelGptImage1Mini,
-    ImageModelGptImage2,
+    ImageModelGptImage25Flare,
+    ImageModelGptImage25Sunburst,
     ImageModelGptImageLatest,
     // ImageModelSdxlTurbo,
     ImageModelFluxDev,
