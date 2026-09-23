@@ -5,14 +5,14 @@
 
 // Chat models
 // export const ChatModelGPT4Turbo = 'gpt-4-turbo'
-export const ChatModelGPT41 = 'gpt-4.1'
+// export const ChatModelGPT41 = 'gpt-4.1'
 // export const ChatModelGPT41Mini = 'gpt-4.1-mini'
 // export const ChatModelGPT41Nano = 'gpt-4.1-nano'
 export const ChatModelGPT6Astra = 'gpt-6-astra'
 export const ChatModelGPT5Dot6 = 'gpt-5.6'
-export const ChatModelGPT5Dot6Sol = 'gpt-5.6-sol'
-export const ChatModelGPT5Dot6Terra = 'gpt-5.6-terra'
-export const ChatModelGPT5Dot6Luna = 'gpt-5.6-luna'
+export const ChatModelGPT6Sol = 'gpt-6-sol'
+export const ChatModelGPT5Dot6Astra = 'gpt-6-astra'
+export const ChatModelGPT6Luna = 'gpt-6-luna'
 // export const ChatModelGPT5Dot1 = 'gpt-5.1'
 // export const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex'
 export const ChatModelGPT5Dot3Codex = 'gpt-5.3-codex'
@@ -22,18 +22,18 @@ export const ChatModelGPT5Dot3Codex = 'gpt-5.3-codex'
 export const ChatModelGPT4OMini = 'gpt-4o-mini'
 export const ChatModelGPTOSS120B = 'openai/gpt-oss-120b'
 export const ChatModelGPTOSS20B = 'openai/gpt-oss-20b'
-export const ChatModelGPTO1 = 'o1'
-export const ChatModelGPTO3 = 'o3'
-export const ChatModelGPTO3Pro = 'o3-pro'
-export const ChatModelGPTO3Deepresearch = 'o3-deep-research'
-export const ChatModelGPTO3Mini = 'o3-mini'
-export const ChatModelGPTO4Mini = 'o4-mini'
-export const ChatModelGPTO4MiniDeepresearch = 'o4-mini-deep-research'
+// export const ChatModelGPTO1 = 'o1'
+// export const ChatModelGPTO3 = 'o3'
+// export const ChatModelGPTO3Pro = 'o3-pro'
+// export const ChatModelGPTO3Deepresearch = 'o3-deep-research'
+// export const ChatModelGPTO3Mini = 'o3-mini'
+// export const ChatModelGPTO4Mini = 'o4-mini'
+// export const ChatModelGPTO4MiniDeepresearch = 'o4-mini-deep-research'
 export const ChatModelDeepFlash = 'deepseek-flash'
 export const ChatModelDeepSeekV4Pro = 'deepseek-v4-pro'
 // export const ChatModelClaude47Opus = 'claude-opus-4-7'
-export const ChatModelClaude48Opus = 'claude-opus-4-8'
-export const ChatModelClaudeOpus5 = 'claude-opus-5'
+// export const ChatModelClaude48Opus = 'claude-opus-4-8'
+export const ChatModelClaudeOpus5Dot5 = 'claude-opus-5-5'
 export const ChatModelClaudeFable51 = 'claude-fable-5-1'
 export const ChatModelClaudeMythos51 = 'claude-mythos-5-1'
 export const ChatModelClaudeSonnet5 = 'claude-sonnet-5'
@@ -51,7 +51,7 @@ export const ChatModelLlamaPromptGuard2 = 'meta-llama/llama-prompt-guard-2-86m'
 export const ChatModelQwen36With27B = 'qwen/qwen3.6-27b'
 export const ChatModelKimiK3 = 'kimi-k3'
 export const ChatModelGlm5Dot3 = 'glm-5.3'
-export const ChatModelGrok4Dot6 = 'grok-4.6'
+export const ChatModelGrok4Dot7 = 'grok-4.7'
 
 // QA models
 export const QAModelBasebit = 'qa-bbt-xego'
@@ -85,15 +85,15 @@ export const DefaultModel = ChatModelGPT4OMini
 // Model collections
 export const ChatModels = [
   ChatModelDeepResearch,
-  ChatModelGPT41,
+  // ChatModelGPT41,
   // ChatModelGPT41Mini,
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
   ChatModelGPT6Astra,
   ChatModelGPT5Dot6,
-  ChatModelGPT5Dot6Sol,
-  ChatModelGPT5Dot6Terra,
-  ChatModelGPT5Dot6Luna,
+  ChatModelGPT6Sol,
+  ChatModelGPT5Dot6Astra,
+  ChatModelGPT6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   // ChatModelGPT5Dot4Mini,
@@ -103,18 +103,18 @@ export const ChatModels = [
   // ChatModelGPT4Turbo,
   ChatModelGPTOSS120B,
   ChatModelGPTOSS20B,
-  ChatModelGPTO1,
-  ChatModelGPTO3,
-  ChatModelGPTO3Pro,
-  ChatModelGPTO3Deepresearch,
-  ChatModelGPTO3Mini,
-  ChatModelGPTO4Mini,
-  ChatModelGPTO4MiniDeepresearch,
+  // ChatModelGPTO1,
+  // ChatModelGPTO3,
+  // ChatModelGPTO3Pro,
+  // ChatModelGPTO3Deepresearch,
+  // ChatModelGPTO3Mini,
+  // ChatModelGPTO4Mini,
+  // ChatModelGPTO4MiniDeepresearch,
   ChatModelDeepFlash,
   ChatModelDeepSeekV4Pro,
   // ChatModelClaude47Opus,
-  ChatModelClaude48Opus,
-  ChatModelClaudeOpus5,
+  // ChatModelClaude48Opus,
+  ChatModelClaudeOpus5Dot5,
   ChatModelClaudeFable51,
   ChatModelClaudeMythos51,
   ChatModelClaudeSonnet5,
@@ -124,7 +124,7 @@ export const ChatModels = [
   ChatModelQwen36With27B,
   ChatModelKimiK3,
   ChatModelGlm5Dot3,
-  ChatModelGrok4Dot6,
+  ChatModelGrok4Dot7,
   // ChatModelGemini25Pro,
   ChatModelGemini3dot1Pro,
   ChatModelGemini35FlashLite,
@@ -135,15 +135,15 @@ export const ChatModels = [
 
 export const VisionModels = [
   // ChatModelGPT4Turbo,
-  ChatModelGPT41,
+  // ChatModelGPT41,
   // ChatModelGPT41Mini,
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot1,
   ChatModelGPT6Astra,
   ChatModelGPT5Dot6,
-  ChatModelGPT5Dot6Sol,
-  ChatModelGPT5Dot6Terra,
-  ChatModelGPT5Dot6Luna,
+  ChatModelGPT6Sol,
+  ChatModelGPT5Dot6Astra,
+  ChatModelGPT6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
   // ChatModelGPT5Dot4Mini,
@@ -157,16 +157,16 @@ export const VisionModels = [
   ChatModelGemini31FlashImage,
   ChatModelGemini3ProImage,
   // ChatModelClaude47Opus,
-  ChatModelClaude48Opus,
-  ChatModelClaudeOpus5,
+  // ChatModelClaude48Opus,
+  ChatModelClaudeOpus5Dot5,
   ChatModelClaudeFable51,
   ChatModelClaudeMythos51,
   ChatModelClaudeSonnet5,
   ChatModelClaude45Haiku,
-  ChatModelGPTO1,
-  ChatModelGPTO3,
-  ChatModelGPTO3Pro,
-  ChatModelGPTO3Deepresearch,
+  // ChatModelGPTO1,
+  // ChatModelGPTO3,
+  // ChatModelGPTO3Pro,
+  // ChatModelGPTO3Deepresearch,
   ImageModelFluxPro2,
   ImageModelFluxKontextPro,
   // ImageModelFluxProUltra11,
@@ -234,34 +234,34 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGPT4OMini,
     ChatModelGPTOSS120B,
     ChatModelGPTOSS20B,
-    ChatModelGPT41,
+    // ChatModelGPT41,
     // ChatModelGPT41Mini,
     // ChatModelGPT41Nano,
     // ChatModelGPT5Dot1,
     ChatModelGPT6Astra,
     ChatModelGPT5Dot6,
-    ChatModelGPT5Dot6Sol,
-    ChatModelGPT5Dot6Terra,
-    ChatModelGPT5Dot6Luna,
+    ChatModelGPT6Sol,
+    ChatModelGPT5Dot6Astra,
+    ChatModelGPT6Luna,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot3Codex,
     // ChatModelGPT5Dot4Mini,
     // ChatModelGPT5Dot4Nano,
     // ChatModelGPT5Pro,
     // ChatModelGPT4Turbo,
-    ChatModelGPTO1,
-    ChatModelGPTO3,
-    ChatModelGPTO3Mini,
-    ChatModelGPTO3Pro,
-    ChatModelGPTO3Deepresearch,
-    ChatModelGPTO4Mini,
-    ChatModelGPTO4MiniDeepresearch,
+    // ChatModelGPTO1,
+    // ChatModelGPTO3,
+    // ChatModelGPTO3Mini,
+    // ChatModelGPTO3Pro,
+    // ChatModelGPTO3Deepresearch,
+    // ChatModelGPTO4Mini,
+    // ChatModelGPTO4MiniDeepresearch,
   ],
   Anthropic: [
     ChatModelClaude45Haiku,
     // ChatModelClaude47Opus,
-    ChatModelClaude48Opus,
-    ChatModelClaudeOpus5,
+    // ChatModelClaude48Opus,
+    ChatModelClaudeOpus5Dot5,
     ChatModelClaudeFable51,
     ChatModelClaudeMythos51,
     ChatModelClaudeSonnet5,
@@ -282,7 +282,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelQwen36With27B,
     ChatModelKimiK3,
     ChatModelGlm5Dot3,
-    ChatModelGrok4Dot6,
+    ChatModelGrok4Dot7,
   ],
   Image: [
     // ImageModelDalle3,

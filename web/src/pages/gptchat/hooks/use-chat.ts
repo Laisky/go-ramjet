@@ -5,8 +5,8 @@ import { kvDel } from '@/utils/storage'
 
 import {
   ChatModelDeepResearch,
-  ChatModelGPTO3Deepresearch,
-  ChatModelGPTO4MiniDeepresearch,
+  // ChatModelGPTO3Deepresearch,
+  // ChatModelGPTO4MiniDeepresearch,
   isImageModel,
 } from '../models'
 import {
@@ -165,9 +165,9 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
   const isDeepResearchModel = useCallback(() => {
     const model = config.selected_model
     return (
-      model === ChatModelDeepResearch ||
-      model === ChatModelGPTO3Deepresearch ||
-      model === ChatModelGPTO4MiniDeepresearch
+      model === ChatModelDeepResearch
+      // model === ChatModelGPTO3Deepresearch ||
+      // model === ChatModelGPTO4MiniDeepresearch
     )
   }, [config.selected_model])
 
