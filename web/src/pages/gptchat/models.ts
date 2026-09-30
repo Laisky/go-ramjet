@@ -10,7 +10,7 @@
 // export const ChatModelGPT41Nano = 'gpt-4.1-nano'
 export const ChatModelGPT6Astra = 'gpt-6-astra'
 export const ChatModelGPT5Dot6 = 'gpt-5.6'
-export const ChatModelGPT6Sol = 'gpt-6-sol'
+export const ChatModelGPT6Sol = 'gpt-6.1-sol'
 export const ChatModelGPT5Dot6Astra = 'gpt-6-astra'
 export const ChatModelGPT6Luna = 'gpt-6-luna'
 // export const ChatModelGPT5Dot1 = 'gpt-5.1'
@@ -36,7 +36,7 @@ export const ChatModelDeepSeekV4Pro = 'deepseek-v4-pro'
 export const ChatModelClaudeOpus5Dot5 = 'claude-opus-5-5'
 export const ChatModelClaudeFable51 = 'claude-fable-5-1'
 export const ChatModelClaudeMythos51 = 'claude-mythos-5-1'
-export const ChatModelClaudeSonnet5 = 'claude-sonnet-5'
+export const ChatModelClaudeSonnet5 = 'claude-sonnet-5-5'
 export const ChatModelClaude45Haiku = 'claude-haiku-4-5'
 // export const ChatModelGemini25Pro = 'gemini-2.5-pro'
 export const ChatModelGemini3dot1Pro = 'gemini-3.1-pro-preview'
@@ -48,7 +48,7 @@ export const ChatModelDeepResearch = 'deep-research'
 export const ChatModelLlama33With70B =
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 export const ChatModelLlamaPromptGuard2 = 'meta-llama/llama-prompt-guard-2-86m'
-export const ChatModelQwen36With27B = 'qwen/qwen3.6-27b'
+export const ChatModelQwen38With27B = 'qwen/qwen3.8-27b'
 export const ChatModelKimiK3 = 'kimi-k3'
 export const ChatModelGlm5Dot3 = 'glm-5.3'
 export const ChatModelGrok4Dot7 = 'grok-4.7'
@@ -121,7 +121,7 @@ export const ChatModels = [
   ChatModelClaude45Haiku,
   ChatModelLlama33With70B,
   ChatModelLlamaPromptGuard2,
-  ChatModelQwen36With27B,
+  ChatModelQwen38With27B,
   ChatModelKimiK3,
   ChatModelGlm5Dot3,
   ChatModelGrok4Dot7,
@@ -206,7 +206,7 @@ export const CompletionModels = [CompletionModelDavinci3]
 export const FreeModels = [
   ChatModelLlama33With70B,
   ChatModelLlamaPromptGuard2,
-  ChatModelQwen36With27B,
+  ChatModelQwen38With27B,
   ChatModelGPT4OMini,
   // ChatModelGPT41Nano,
   // ChatModelGPT5Dot4Nano,
@@ -279,7 +279,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelDeepResearch,
     ChatModelLlama33With70B,
     ChatModelLlamaPromptGuard2,
-    ChatModelQwen36With27B,
+    ChatModelQwen38With27B,
     ChatModelKimiK3,
     ChatModelGlm5Dot3,
     ChatModelGrok4Dot7,
