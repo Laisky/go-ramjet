@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	md "github.com/JohannesKaufmann/html-to-markdown/v2/v2"
+	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
