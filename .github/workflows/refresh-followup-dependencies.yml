@@ -48,7 +48,7 @@ jobs:
           cat /tmp/katex-negative.txt
           grep -q 'AssertionError' /tmp/katex-negative.txt
           grep -q 'stylesheet package renderer classes' /tmp/katex-negative.txt
-      - name: Integrate Vitest and DOMPurify and align all math renderers
+      - name: Integrate Vitest and DOMPurify and align supported math renderers
         shell: bash
         run: |
           set -euo pipefail
@@ -58,10 +58,12 @@ jobs:
           import { readFileSync, writeFileSync } from 'node:fs'
           const file = 'web/package.json'
           const pkg = JSON.parse(readFileSync(file, 'utf8'))
-          pkg.dependencies.katex = '^0.18.2'
+          // 0.18.11 is deprecated for accidentally shipping breaking changes.
+          // Use the upstream-supported release with explicit compatibility tests.
+          pkg.dependencies.katex = '^0.19.0'
           pkg.dependencies.dompurify = '^3.4.16'
           pkg.devDependencies.vitest = '^4.1.11'
-          pkg.pnpm.overrides['katex@>=0.0.0 <0.18.2'] = '^0.18.2'
+          pkg.pnpm.overrides['katex@>=0.0.0 <0.19.0'] = '^0.19.0'
           pkg.pnpm.overrides['dompurify@>=3.0.0 <3.4.16'] = '^3.4.16'
           writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`)
           const testFile = 'web/src/utils/dependency-floors.test.ts'
@@ -69,7 +71,7 @@ jobs:
           if (!tests.includes("['dompurify', 3, '3.4.1']")) {
             throw new Error('Expected the previously accepted dependency floors')
           }
-          tests = tests.replace("['dompurify', 3, '3.4.1']", "['dompurify', 3, '3.4.16'],\n  ['katex', 0, '0.18.2'],\n  ['vitest', 4, '4.1.11']")
+          tests = tests.replace("['dompurify', 3, '3.4.1']", "['dompurify', 3, '3.4.16'],\n  ['katex', 0, '0.19.0'],\n  ['vitest', 4, '4.1.11']")
           tests = tests.replace("['vite', 'postcss', 'mermaid', 'dompurify']", "['vite', 'postcss', 'mermaid', 'dompurify', 'katex', 'vitest']")
           writeFileSync(testFile, tests)
           JS
@@ -98,6 +100,6 @@ jobs:
             web/src/components/markdown-dependency-compatibility.test.tsx \
             web/src/utils/dependency-floors.test.ts
           git diff --cached --stat
-          git commit -m 'fix(deps): align KaTeX renderers and integrate Vitest and DOMPurify updates'
+          git commit -m 'fix(deps): align supported KaTeX renderers and update Vitest and DOMPurify'
           git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           echo "Prepared commit: $(git rev-parse HEAD)"
