@@ -1,0 +1,105 @@
+name: Prepare dependency PR compatibility update
+
+on:
+  push:
+    branches:
+      - codex/resolve-dependency-prs-20261007
+    paths:
+      - .github/workflows/refresh-pr-dependencies.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: prepare-dependency-prs-20261007
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'Laisky/go-ramjet'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify the original frontend PRs contain only dependency changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for number in 44 47 52 53 55 57 61 62 64; do
+            echo "=== PR #${number} ==="
+            gh api "repos/Laisky/go-ramjet/pulls/${number}/files" --paginate \
+              --jq '.[].filename' > /tmp/dependency-pr-files.txt
+            cat /tmp/dependency-pr-files.txt
+            if grep -Ev '^web/(package.json|pnpm-lock.yaml)$' /tmp/dependency-pr-files.txt; then
+              echo 'Unexpected non-dependency change: manual integration is required.'
+              exit 1
+            fi
+            gh api "repos/Laisky/go-ramjet/pulls/${number}/comments" --paginate \
+              --jq '.[] | {path, line, body}'
+            gh api "repos/Laisky/go-ramjet/pulls/${number}/reviews" --paginate \
+              --jq '.[] | {state, body}'
+          done
+      - name: Select a reproducible pnpm 10 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10 --activate
+          pnpm --version
+      - name: Apply the nine PR dependency floors to the current manifest
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const file = 'web/package.json'
+          const pkg = JSON.parse(readFileSync(file, 'utf8'))
+          pkg.dependencies.mermaid = '^11.15.0'
+          pkg.devDependencies.vite = '^8.0.5'
+          pkg.devDependencies.postcss = '^8.5.10'
+          pkg.packageManager = `pnpm@${execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim()}`
+          pkg.pnpm ??= {}
+          pkg.pnpm.overrides = {
+            ...pkg.pnpm.overrides,
+            'ajv@>=6.0.0 <6.14.0': '6.14.0',
+            'minimatch@>=3.0.0 <3.1.5': '3.1.5',
+            'flatted@>=3.0.0 <3.4.2': '3.4.2',
+            'picomatch@>=4.0.0 <4.0.4': '4.0.4',
+            'brace-expansion@>=1.0.0 <1.1.13': '1.1.13',
+            'uuid@>=11.0.0 <11.1.1': '11.1.1',
+          }
+          writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`)
+          JS
+      - name: Regenerate and format the pnpm lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C web install --no-frozen-lockfile
+          pnpm -C web exec prettier --write package.json pnpm-lock.yaml
+          pnpm -C web install --frozen-lockfile
+          git diff --stat
+          git diff -- web/package.json
+      - name: Commit only generated dependency metadata without rewriting history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- web/package.json web/pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo 'Dependency metadata is already up to date.'
+            exit 0
+          fi
+          git commit -m 'fix(deps): reconcile frontend security PRs on the current dependency graph'
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          echo "Prepared commit: $(git rev-parse HEAD)"
