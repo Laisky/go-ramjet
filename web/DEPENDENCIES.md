@@ -84,3 +84,18 @@ just the direct imports. Preparation verifies the negative control on the
 original KaTeX-only PR, then checks the fixed rendering behavior, Mermaid
 compatibility, package-manager consistency, strict installation, and lint.
 The full normal PR pipeline is still required before merging this update.
+
+## Version-check lifecycle
+
+Full-suite validation with Vitest 4.1.11 exposed a pending version-check
+request after the chat-domain tests had unmounted. All assertions passed,
+but the late fetch rejection logged during worker teardown and failed the
+run. The hook now aborts its effect-scoped requests on unmount and checks
+cancellation after asynchronous response and storage reads. Real failures
+are still reported while mounted; cancellation is not reported as an error.
+Routing tests stub network responses and unmount before restoring globals.
+
+Lifecycle tests reproduce missing cancellation, late failure logging, and
+late response persistence on the original hook. They also retain coverage
+for recording the initial version, announcing updates, and ignoring updates.
+No Vitest error reporting, test assertions, or CI gates are disabled.

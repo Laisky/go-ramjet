@@ -66,7 +66,10 @@ describe('useVersionCheck lifecycle', () => {
 
   it('does not log a late request failure after unmount', async () => {
     const request = deferred<Response>()
-    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockReturnValue(request.promise))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockReturnValue(request.promise),
+    )
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { unmount } = renderHook(() => useVersionCheck())
     unmount()

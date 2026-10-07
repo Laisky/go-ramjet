@@ -17,16 +17,18 @@ export function useVersionCheck() {
   } | null>(null)
   const runningVersionRef = useRef<string | null>(null)
 
-  const checkUpgrade = useCallback(async () => {
+  const checkUpgrade = useCallback(async (signal: AbortSignal) => {
+    if (signal.aborted) return
     try {
       const path = `${getApiBase()}/version`
       const url =
         typeof window !== 'undefined' && window.location?.origin
           ? new URL(path, window.location.origin).toString()
           : path
-      const resp = await fetch(url, { cache: 'no-cache' })
-      if (!resp.ok) return
+      const resp = await fetch(url, { cache: 'no-cache', signal })
+      if (signal.aborted || !resp.ok) return
       const data = (await resp.json()) as VersionResponse
+      if (signal.aborted) return
       const serverVer = data.Settings?.find(
         (item) => item.Key === 'vcs.time',
       )?.Value
@@ -42,6 +44,7 @@ export function useVersionCheck() {
       // If server version changed while app is running
       if (serverVer !== runningVersionRef.current) {
         const ignoredVer = await kvGet<string>(StorageKeys.IGNORED_VERSION)
+        if (signal.aborted) return
         if (serverVer !== ignoredVer) {
           setUpgradeInfo({ from: runningVersionRef.current, to: serverVer })
         } else {
@@ -51,14 +54,22 @@ export function useVersionCheck() {
         setUpgradeInfo(null)
       }
     } catch (err) {
-      console.warn('Failed to check version:', err)
+      if (!signal.aborted) {
+        console.warn('Failed to check version:', err)
+      }
     }
   }, [])
 
   useEffect(() => {
-    checkUpgrade()
-    const timer = setInterval(checkUpgrade, CHECK_INTERVAL)
-    return () => clearInterval(timer)
+    const controller = new AbortController()
+    void checkUpgrade(controller.signal)
+    const timer = setInterval(() => {
+      void checkUpgrade(controller.signal)
+    }, CHECK_INTERVAL)
+    return () => {
+      controller.abort()
+      clearInterval(timer)
+    }
   }, [checkUpgrade])
 
   const ignoreVersion = useCallback(async (version: string) => {

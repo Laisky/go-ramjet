@@ -1,5 +1,5 @@
 import { renderApp } from '@/test/render'
-import { screen, waitFor } from '@testing-library/react'
+import { act, cleanup, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -31,9 +31,19 @@ function setSiteMeta(siteId: string) {
 describe('chat domain proxying', () => {
   beforeEach(() => {
     setSiteMeta('default')
+    document.title = ''
+    // Routing tests use deterministic version responses, never live requests.
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => Response.json({ Settings: [] })),
+    )
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    cleanup()
+    await act(async () => {})
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
