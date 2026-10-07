@@ -216,11 +216,16 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 	}
 }
 
-// embeddingUrlContent if user has mentioned some url in message,
-// try to fetch and embed content of url into the tail of message.
-func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserConfig) {
+// embeddingUrlContent appends optional URL content to the last user message.
+// It returns the parent request error when that request ends; worker-only failures
+// are logged once and preserve any successful auxiliary content.
+func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserConfig) error {
+	parent := gmw.Ctx(gctx)
+	if err := parent.Err(); err != nil {
+		return errors.Wrap(err, "embed URL content")
+	}
 	if len(r.Messages) == 0 {
-		return
+		return nil
 	}
 
 	var lastUserPrompt *FrontendReqMessageContent
@@ -234,12 +239,12 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 	}
 
 	if lastUserPrompt == nil { // no user prompt
-		return
+		return nil
 	}
 
 	urls := urlRegexp.FindAllString(lastUserPrompt.String(), -1)
 	if len(urls) == 0 { // user do not mention any url
-		return
+		return nil
 	}
 
 	var (
@@ -284,17 +289,33 @@ func (r *FrontendReq) embeddingUrlContent(gctx *gin.Context, user *config.UserCo
 		})
 	}
 
-	if err := pool.Wait(); err != nil {
-		log.Logger.Error("query mentioned urls", zap.Error(err))
+	err := pool.Wait()
+	// Wait joins every worker. The incoming request, not a worker error, owns
+	// cancellation of the remaining chat preparation.
+	if parentErr := parent.Err(); parentErr != nil {
+		return errors.Wrap(parentErr, "embed URL content")
+	}
+	if err != nil {
+		logger := gmw.GetLogger(gctx)
+		logger.Error("query mentioned urls", zap.Error(redactURLEmbeddingError(err)))
 		lastUserPrompt.Append("\n\n(some url content is not available)")
 	}
 
 	if len(auxiliaries) == 0 {
-		return
+		return nil
 	}
 
 	lastUserPrompt.Append("\n\nfollowing are auxiliary content just for your reference:\n\n" +
 		strings.Join(auxiliaries, "\n"))
+	return nil
+}
+
+var embeddingErrorURLRegexp = regexp.MustCompile(`https?://[^\s"<>]+`)
+
+// redactURLEmbeddingError returns a log-only error with URLs removed from its message.
+// It leaves the original error unchanged and hides URL credentials and query values.
+func redactURLEmbeddingError(err error) error {
+	return errors.New(embeddingErrorURLRegexp.ReplaceAllString(err.Error(), "[redacted URL]"))
 }
 
 type queryChunksResponse struct {

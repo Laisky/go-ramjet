@@ -22,9 +22,9 @@ func setupHTMLCrawler(t *testing.T) {
 }
 
 func Test_dynamicFetchWorker(t *testing.T) {
-	// if os.Getenv("RUN_GPT_HTTP_IT") == "" {
-	// 	t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
-	// }
+	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
+	}
 	setupHTMLCrawler(t)
 
 	ctx := context.Background()

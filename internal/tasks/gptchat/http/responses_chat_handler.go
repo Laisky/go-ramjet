@@ -687,7 +687,9 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 		if config.Config.RamjetURL != "" &&
 			frontendReq.LaiskyExtra != nil &&
 			!frontendReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
-			frontendReq.embeddingUrlContent(ctx, user)
+			if err := frontendReq.embeddingUrlContent(ctx, user); err != nil {
+				return nil, nil, nil, errors.Wrap(err, "enhance user query")
+			}
 		}
 
 		if frontendReq.LaiskyExtra != nil &&
