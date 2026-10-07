@@ -617,8 +617,8 @@ func TestStream_Streaming_UsageEvent(t *testing.T) {
 	final := makeOpenAPIResp(t, `{"id":"resp_1","output_text":"hello"}`)
 	events := []recordedSSEEvent{
 		{
-			Type:    "response.completed",
-			RawJSON: `{"type":"response.completed","response":{"id":"resp_1","usage":{"input_tokens":100,"output_tokens":42,"total_tokens":142,"output_tokens_details":{"reasoning_tokens":7}}}}`,
+			Type:     "response.completed",
+			RawJSON:  `{"type":"response.completed","response":{"id":"resp_1","usage":{"input_tokens":100,"output_tokens":42,"total_tokens":142,"output_tokens_details":{"reasoning_tokens":7}}}}`,
 			Response: final,
 		},
 	}

@@ -111,9 +111,9 @@ func newFakeTool(name string, sleep time.Duration, output string) *fakeTool {
 	return &fakeTool{name: name, desc: "fake " + name, sleep: sleep, output: output}
 }
 
-func (f *fakeTool) Name() string                  { return f.name }
-func (f *fakeTool) Description() string           { return f.desc }
-func (f *fakeTool) Schema() stdjson.RawMessage    { return stdjson.RawMessage(`{"type":"object"}`) }
+func (f *fakeTool) Name() string               { return f.name }
+func (f *fakeTool) Description() string        { return f.desc }
+func (f *fakeTool) Schema() stdjson.RawMessage { return stdjson.RawMessage(`{"type":"object"}`) }
 
 func (f *fakeTool) Execute(ctx context.Context, call tool.Call, _ session.EventSink) (tool.Result, error) {
 	f.mu.Lock()
@@ -232,10 +232,10 @@ func newTestSession(t *testing.T) (session.Session, *transcriptRecorder) {
 
 // scriptedRound is a small DSL for building a one-round model batch.
 type scriptedRound struct {
-	textChunks    []string
+	textChunks      []string
 	reasoningChunks []string
-	functionCalls []model.FunctionCall
-	usage         *model.Usage
+	functionCalls   []model.FunctionCall
+	usage           *model.Usage
 }
 
 func (r scriptedRound) chunks() []model.StreamChunk {

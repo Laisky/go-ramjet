@@ -18,9 +18,9 @@ type stubTool struct {
 	execFn      func(ctx context.Context, call Call, sink session.EventSink) (Result, error)
 }
 
-func (s *stubTool) Name() string             { return s.name }
-func (s *stubTool) Description() string      { return s.description }
-func (s *stubTool) Schema() json.RawMessage  { return s.schema }
+func (s *stubTool) Name() string            { return s.name }
+func (s *stubTool) Description() string     { return s.description }
+func (s *stubTool) Schema() json.RawMessage { return s.schema }
 func (s *stubTool) Execute(ctx context.Context, call Call, sink session.EventSink) (Result, error) {
 	if s.execFn != nil {
 		return s.execFn(ctx, call, sink)
