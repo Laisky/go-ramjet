@@ -95,6 +95,7 @@ export function ChatInput({
   // Sync from external draftMessage changes (e.g., switching sessions)
   useEffect(() => {
     if (draftMessage !== undefined && draftMessage !== message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize an externally owned draft after session changes.
       setMessage(draftMessage)
     }
   }, [draftMessage]) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally sync only on external draft changes

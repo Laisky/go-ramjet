@@ -101,3 +101,11 @@ the old panic-success workaround is removed. Distinguish called-code findings,
 imported-package findings, and uncalled module-level advisories when reporting
 scan results. A successful scan does not imply every required module has no
 advisories.
+
+## Remaining module-level advisory
+
+The upgraded graph reports GO-2026-5932 for the unmaintained
+`golang.org/x/crypto/openpgp` package. That package is not imported by this
+application, and the advisory has no fixed version. Other packages from the
+latest `golang.org/x/crypto` module are still required. The scan reports zero
+called-code and imported-package vulnerabilities, not zero module advisories.

@@ -101,7 +101,7 @@ describe('CV dependency lifecycle compatibility', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
     const { container, rerender } = render(<CVPage />)
     await screen.findByRole('heading', { name: 'Migration' })
-    fireEvent.click(screen.getByTitle('Click to copy email'))
+    fireEvent.click(screen.getAllByTitle('Click to copy email')[0])
     await waitFor(() =>
       expect(container.querySelector('.cv-copy-feedback')).not.toBeNull(),
     )

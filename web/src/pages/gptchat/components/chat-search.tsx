@@ -154,7 +154,7 @@ export function ChatSearch({
       loadOtherSessions()
     }
     if (!isOpen && prevIsOpenRef.current) {
-      setQuery('') // eslint-disable-line react-hooks/set-state-in-effect -- reset on close
+      setQuery('')
       setResults([])
       setShowSessionFilter(false)
     }

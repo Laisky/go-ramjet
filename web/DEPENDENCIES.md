@@ -32,6 +32,7 @@ still requires the JavaScript Compiler API, so the project uses Microsoft's
 - `@typescript/native` aliases `typescript@^7.0.2` and provides the compiler.
 - `typescript` aliases `@typescript/typescript6@^6.0.2` for API consumers.
 
+The 6.0.2 compatibility package currently re-exports the locked 6.0.3 API.
 Keep both entries. Installing only the native compiler as `typescript` breaks
 API-dependent lint tools; bypassing peer checks is not a fix. TypeScript 7 no
 longer accepts `baseUrl`, so aliases use explicit relative `paths` entries.

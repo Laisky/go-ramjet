@@ -61,7 +61,7 @@ export function SelectionToolbar({
       top = top - rect.height - 10
     }
 
-    setAdjustedPosition({ top, left }) // eslint-disable-line react-hooks/set-state-in-effect -- DOM measurement sync
+    setAdjustedPosition({ top, left })
   }, [position, text])
 
   const handleCopy = (e: React.MouseEvent) => {
