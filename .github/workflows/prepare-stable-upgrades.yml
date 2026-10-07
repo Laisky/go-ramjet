@@ -15,7 +15,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
@@ -29,75 +29,93 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Complete generated dependency metadata
+      - name: Apply reviewed API migrations and format source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/upgrade-review
-          corepack enable
-          python3 <<'PY'
-          import json
-          import re
-          import urllib.request
-          from pathlib import Path
-          for path in Path('.').rglob('*.go'):
-              source = path.read_text()
-              updated = source.replace('html-to-markdown/v2/v2', 'html-to-markdown/v2').replace('goldmark/v2/v2', 'goldmark/v2')
-              if updated != source:
-                  path.write_text(updated)
-          path = Path('web/tsconfig.app.json')
-          source = path.read_text().replace('    "baseUrl": ".",\n', '').replace('"@/*": ["src/*"]', '"@/*": ["./src/*"]')
-          path.write_text(source)
-          with urllib.request.urlopen('https://registry.npmjs.org/yaml/latest', timeout=60) as response:
-              yaml = json.load(response)
-          assert re.fullmatch(r'\d+\.\d+\.\d+', yaml['version']) and not yaml.get('deprecated')
-          path = Path('web/package.json')
-          pkg = json.loads(path.read_text())
-          pkg['devDependencies']['yaml'] = '^' + yaml['version']
-          path.write_text(json.dumps(pkg, indent=2) + '\n')
-          Path('/tmp/upgrade-review/yaml-release.json').write_text(json.dumps(yaml, indent=2))
-          path = Path('Dockerfile')
-          source = path.read_text().replace('golang:1.27.0-bookworm', 'golang:1.27.1-bookworm').replace('node:24-bookworm', 'node:24.21.0-bookworm')
-          source = re.sub(r'ARG SPEECHSDK_VERSION=[0-9.]+', 'ARG SPEECHSDK_VERSION=1.52.0', source)
-          path.write_text(source.replace('RUN corepack enable || true', 'RUN corepack enable'))
-          PY
-          go get github.com/phpdave11/gofpdf@95d7704723b18e9b55cd71b234a2e40815e990d6 \
-            github.com/yuin/goldmark@v1.8.6 github.com/deckarep/golang-set/v2@v2.9.0 \
-            go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.72.0 \
-            go.opentelemetry.io/otel/sdk@v1.47.0
+          mkdir -p /tmp/upgrade-validation
+          python3 .github/apply-stable-migrations.py
+          rm .github/apply-stable-migrations.py
           go mod tidy
-          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies
-          pnpm -C web exec prettier --write package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.app.json
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          mapfile -t files < <(git diff --name-only origin/master -- '*.go')
+          goimports -local github.com/Laisky/go-ramjet -w "${files[@]}"
+          corepack enable
           pnpm -C web install --frozen-lockfile --strict-peer-dependencies
-      - name: Export review sources before publishing
+          pnpm -C web exec prettier --write src/test/dependency-lockfile.ts src/utils/dependency-floors.test.ts src/utils/package-manager.test.ts
+      - name: Frontend validation and full-lint diagnostic
+        shell: bash
+        run: |
+          set +e
+          pnpm -C web test > /tmp/upgrade-validation/frontend-tests.log 2>&1
+          echo "frontend tests: $?" >> /tmp/upgrade-validation/results.txt
+          pnpm -C web build > /tmp/upgrade-validation/frontend-build.log 2>&1
+          echo "frontend build: $?" >> /tmp/upgrade-validation/results.txt
+          pnpm -C web exec eslint src/test/dependency-lockfile.ts src/utils/dependency-floors.test.ts src/utils/package-manager.test.ts > /tmp/upgrade-validation/changed-lint.log 2>&1
+          echo "changed frontend lint: $?" >> /tmp/upgrade-validation/results.txt
+          pnpm -C web exec eslint . -f json -o /tmp/upgrade-validation/current-lint.json
+          echo "full frontend lint: $?" >> /tmp/upgrade-validation/results.txt
+          exit 0
+      - name: Compare unchanged baseline full-lint behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/ramjet-baseline 9d0ed4a09536e1c7107838fabf24cf64e7330529
+          cd /tmp/ramjet-baseline
+          corepack pnpm -C web install --frozen-lockfile
+          set +e
+          corepack pnpm -C web exec eslint . -f json -o /tmp/upgrade-validation/baseline-lint.json
+          echo "baseline full lint: $?" >> /tmp/upgrade-validation/results.txt
+          exit 0
+      - name: Install matching native and browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 poppler-utils wget
+          command -v google-chrome || command -v chromium
+          command -v pdftotext
+          wget -q -O /tmp/speech.tar.gz 'https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz'
+          sudo mkdir -p /opt/azure/speech
+          sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
+          {
+            echo 'CGO_CFLAGS=-I/opt/azure/speech/include/c_api'
+            echo 'CGO_LDFLAGS=-L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core'
+            echo 'LD_LIBRARY_PATH=/opt/azure/speech/lib/x64'
+          } >> "${GITHUB_ENV}"
+      - name: Backend and real-browser validation
+        env:
+          CRAWLER_HTTP_PROXY: ''
+        shell: bash
+        run: |
+          set +e
+          go test ./... -count=1 > /tmp/upgrade-validation/backend-tests.log 2>&1
+          echo "backend tests: $?" >> /tmp/upgrade-validation/results.txt
+          go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^TestBrowser' -count=1 -v > /tmp/upgrade-validation/browser-tests.log 2>&1
+          echo "browser tests: $?" >> /tmp/upgrade-validation/results.txt
+          go vet ./... > /tmp/upgrade-validation/go-vet.log 2>&1
+          echo "go vet: $?" >> /tmp/upgrade-validation/results.txt
+          exit 0
+      - name: Export review sources and save the candidate
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/upgrade-review/upstream
+          mkdir -p /tmp/upgrade-validation
           git ls-files -z -- '*.go' 'web/*' 'go.mod' 'go.sum' 'Dockerfile' 'package.json' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' \
-            | tar --null -T - -czf /tmp/upgrade-review/review-source.tar.gz
-          for module in github.com/chromedp/chromedp github.com/chromedp/cdproto github.com/yuin/goldmark/v2; do
-            dir="$(go list -m -f '{{.Dir}}' "${module}")"
-            name="${module//\//_}"
-            tar -C "${dir}" -czf "/tmp/upgrade-review/upstream/${name}.tar.gz" .
-          done
-          git diff --binary > /tmp/upgrade-review/candidate.patch
-          git rev-parse HEAD > /tmp/upgrade-review/source-head.txt
-      - name: Save generated application files only
-        shell: bash
-        run: |
-          set -euo pipefail
+            | tar --null -T - -czf /tmp/upgrade-validation/review-source.tar.gz
+          git diff --binary > /tmp/upgrade-validation/candidate.patch
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- go.mod go.sum Dockerfile web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/tsconfig.app.json
-          git add -- '*.go'
+          git add -- '*.go' go.mod go.sum web/src/test/dependency-lockfile.ts web/src/utils/dependency-floors.test.ts web/src/utils/package-manager.test.ts .github/apply-stable-migrations.py
           if ! git diff --cached --quiet; then
-            git commit -m 'build: persist stable dependency graph and TypeScript configuration migration'
+            git commit -m 'fix: migrate browser and Markdown APIs and preserve dependency regression guards'
             git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           fi
+          git rev-parse HEAD > /tmp/upgrade-validation/candidate-head.txt
+          cat /tmp/upgrade-validation/results.txt
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: stable-upgrade-review
-          path: /tmp/upgrade-review/
+          name: stable-upgrade-validation
+          path: /tmp/upgrade-validation/
