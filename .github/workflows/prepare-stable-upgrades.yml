@@ -15,7 +15,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
@@ -29,114 +29,75 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Complete module migration and align native builds
+      - name: Complete generated dependency metadata
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/upgrade-diagnostics
+          mkdir -p /tmp/upgrade-review
           corepack enable
           python3 <<'PY'
+          import json
           import re
+          import urllib.request
           from pathlib import Path
           for path in Path('.').rglob('*.go'):
               source = path.read_text()
               updated = source.replace('html-to-markdown/v2/v2', 'html-to-markdown/v2').replace('goldmark/v2/v2', 'goldmark/v2')
               if updated != source:
                   path.write_text(updated)
-          docker = Path('Dockerfile')
-          source = docker.read_text().replace('golang:1.27.0-bookworm', 'golang:1.27.1-bookworm').replace('node:24-bookworm', 'node:24.21.0-bookworm')
+          path = Path('web/tsconfig.app.json')
+          source = path.read_text().replace('    "baseUrl": ".",\n', '').replace('"@/*": ["src/*"]', '"@/*": ["./src/*"]')
+          path.write_text(source)
+          with urllib.request.urlopen('https://registry.npmjs.org/yaml/latest', timeout=60) as response:
+              yaml = json.load(response)
+          assert re.fullmatch(r'\d+\.\d+\.\d+', yaml['version']) and not yaml.get('deprecated')
+          path = Path('web/package.json')
+          pkg = json.loads(path.read_text())
+          pkg['devDependencies']['yaml'] = '^' + yaml['version']
+          path.write_text(json.dumps(pkg, indent=2) + '\n')
+          Path('/tmp/upgrade-review/yaml-release.json').write_text(json.dumps(yaml, indent=2))
+          path = Path('Dockerfile')
+          source = path.read_text().replace('golang:1.27.0-bookworm', 'golang:1.27.1-bookworm').replace('node:24-bookworm', 'node:24.21.0-bookworm')
           source = re.sub(r'ARG SPEECHSDK_VERSION=[0-9.]+', 'ARG SPEECHSDK_VERSION=1.52.0', source)
-          source = source.replace('RUN corepack enable || true', 'RUN corepack enable')
-          docker.write_text(source)
-          workflow = Path('.github/workflows/pr-validation.yml')
-          source = workflow.read_text()
-          source = re.sub(r'SPEECHSDK_VERSION: [0-9.]+', 'SPEECHSDK_VERSION: 1.52.0', source)
-          source = re.sub(r'node-version: [\x27\x22]?24[\x27\x22]?(?=\s*$)', "node-version: '24.21.0'", source, flags=re.M)
-          source = source.replace('goimports@v0.45.0', 'goimports@v0.51.0')
-          workflow.write_text(source)
+          path.write_text(source.replace('RUN corepack enable || true', 'RUN corepack enable'))
           PY
-          # The upstream v2.7.1 release still declares a v1 module path.
-          # Its immutable release commit is the canonical Go-consumable identity.
           go get github.com/phpdave11/gofpdf@95d7704723b18e9b55cd71b234a2e40815e990d6 \
             github.com/yuin/goldmark@v1.8.6 github.com/deckarep/golang-set/v2@v2.9.0 \
             go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.72.0 \
             go.opentelemetry.io/otel/sdk@v1.47.0
-          go mod tidy 2>&1 | tee /tmp/upgrade-diagnostics/go-tidy.log
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          mapfile -t go_files < <(git diff --name-only origin/master -- '*.go')
-          if (( ${#go_files[@]} )); then
-            goimports -local github.com/Laisky/go-ramjet -w "${go_files[@]}"
-          fi
-      - name: Resolve and format frontend dependency metadata
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          corepack enable
-          pnpm --version
-          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies 2>&1 | tee /tmp/upgrade-diagnostics/install.log
-          pnpm -C web exec prettier --write package.json pnpm-lock.yaml pnpm-workspace.yaml
+          go mod tidy
+          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies
+          pnpm -C web exec prettier --write package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.app.json
           pnpm -C web install --frozen-lockfile --strict-peer-dependencies
-      - name: Frontend diagnostic tests and build
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          pnpm -C web test > /tmp/upgrade-diagnostics/frontend-tests.log 2>&1
-          echo "frontend tests: $?" >> /tmp/upgrade-diagnostics/results.txt
-          pnpm -C web build > /tmp/upgrade-diagnostics/frontend-build.log 2>&1
-          echo "frontend build: $?" >> /tmp/upgrade-diagnostics/results.txt
-          pnpm -C web lint > /tmp/upgrade-diagnostics/frontend-lint.log 2>&1
-          echo "frontend full lint: $?" >> /tmp/upgrade-diagnostics/results.txt
-          exit 0
-      - name: Install matching native Speech SDK
+      - name: Export review sources before publishing
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 wget
-          wget -q -O /tmp/speech.tar.gz 'https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz'
-          sudo mkdir -p /opt/azure/speech
-          sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
-          {
-            echo 'CGO_CFLAGS=-I/opt/azure/speech/include/c_api'
-            echo 'CGO_LDFLAGS=-L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core'
-            echo 'LD_LIBRARY_PATH=/opt/azure/speech/lib/x64'
-          } >> "${GITHUB_ENV}"
-      - name: Backend diagnostic tests
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          go test ./... -count=1 > /tmp/upgrade-diagnostics/backend-tests.log 2>&1
-          echo "backend tests: $?" >> /tmp/upgrade-diagnostics/results.txt
-          exit 0
-      - name: Save candidate and diagnostic summary
-        if: always()
+          mkdir -p /tmp/upgrade-review/upstream
+          git ls-files -z -- '*.go' 'web/*' 'go.mod' 'go.sum' 'Dockerfile' 'package.json' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' \
+            | tar --null -T - -czf /tmp/upgrade-review/review-source.tar.gz
+          for module in github.com/chromedp/chromedp github.com/chromedp/cdproto github.com/yuin/goldmark/v2; do
+            dir="$(go list -m -f '{{.Dir}}' "${module}")"
+            name="${module//\//_}"
+            tar -C "${dir}" -czf "/tmp/upgrade-review/upstream/${name}.tar.gz" .
+          done
+          git diff --binary > /tmp/upgrade-review/candidate.patch
+          git rev-parse HEAD > /tmp/upgrade-review/source-head.txt
+      - name: Save generated application files only
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          import re
-          from pathlib import Path
-          out = ['# Stable upgrade candidate diagnostics', '', 'These are preparation results, NOT merge approval.', '']
-          for path in sorted(Path('/tmp/upgrade-diagnostics').glob('*.log')):
-              text = re.sub(r'\x1b\[[0-9;]*m', '', path.read_text())
-              out += ['## ' + path.name, '', '```text', '\n'.join(text.splitlines()[-140:]), '```', '']
-          out += ['## Exit codes', '', Path('/tmp/upgrade-diagnostics/results.txt').read_text()]
-          Path('STABLE_UPGRADE_DIAGNOSTICS.md').write_text('\n'.join(out))
-          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- go.mod go.sum Dockerfile .github/workflows/pr-validation.yml package.json web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml
-          git add -- '*.go' STABLE_UPGRADE_DIAGNOSTICS.md
-          git diff --cached --stat
-          git commit -m 'build: align stable module graph and native runtime versions'
-          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
-          git ls-files -z -- '*.go' 'web/src/*' 'web/*.json' 'web/*.ts' 'web/*.js' 'web/pnpm*' 'library/*' 'go.mod' 'go.sum' 'Dockerfile' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' | tar --null -T - -czf /tmp/upgrade-diagnostics/review-source.tar.gz
+          git add -- go.mod go.sum Dockerfile web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/tsconfig.app.json
+          git add -- '*.go'
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: persist stable dependency graph and TypeScript configuration migration'
+            git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          fi
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: stable-upgrade-diagnostics
-          path: /tmp/upgrade-diagnostics/
+          name: stable-upgrade-review
+          path: /tmp/upgrade-review/
