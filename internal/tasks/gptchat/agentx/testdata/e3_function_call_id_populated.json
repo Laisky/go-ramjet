@@ -1,0 +1,9 @@
+[
+  {
+    "index": 2,
+    "id_prefix": "fc_",
+    "id_nonempty": true,
+    "call_id": "call_xyz123",
+    "name": "web_search"
+  }
+]

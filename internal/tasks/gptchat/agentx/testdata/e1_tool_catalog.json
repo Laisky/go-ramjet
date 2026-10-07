@@ -1,0 +1,25 @@
+{
+  "parallel_tool_calls": true,
+  "stream": true,
+  "tool_count": 18,
+  "tool_names": [
+    "send_to_user",
+    "extract_key_info",
+    "file_delete",
+    "file_list",
+    "file_read",
+    "file_rename",
+    "file_search",
+    "file_stat",
+    "file_write",
+    "find_tool",
+    "get_user_request",
+    "mcp_pipe",
+    "memory_list_dir_with_abstract",
+    "memory_run_maintenance",
+    "summarize_doc",
+    "translate_text",
+    "web_fetch",
+    "web_search"
+  ]
+}
