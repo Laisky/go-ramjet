@@ -1,7 +1,7 @@
 package rollover
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/Laisky/errors/v2"
@@ -64,7 +64,7 @@ func LoadAliases(url string) (aliases []*AliasesResp, err error) {
 		return nil, err
 	}
 
-	respB, err = ioutil.ReadAll(resp.Body)
+	respB, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "try to read resp body error")
 	}

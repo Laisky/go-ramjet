@@ -69,7 +69,7 @@ const (
 	TerminatedByTimeout        = "timeout"
 	TerminatedByCircuitBreaker = "circuit_breaker"
 	TerminatedByErrorBudget    = "error_budget"
-	TerminatedByCancelled      = "cancelled"
+	TerminatedByCancelled      = "cancelled" //nolint:misspell // Preserve the published termination value for wire compatibility.
 	TerminatedByError          = "error"
 )
 
@@ -176,7 +176,7 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-// envelope is the JSONL marshalling shape: header fields are stored alongside
+// envelope is the JSONL marshaling shape: header fields are stored alongside
 // a kind-specific payload so the same line carries both routing data and the
 // typed body.
 type envelope struct {

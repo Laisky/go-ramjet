@@ -49,7 +49,7 @@ var defaultLegacyDispatcher legacyDispatcher = httppkg.ExecuteToolCallCtx
 //
 // The returned tool is stateless and safe for concurrent use.
 //
-// Execute behaviour (per proposal §3.7's error-handling pattern):
+// Execute behavior (per proposal §3.7's error-handling pattern):
 //
 //  1. Build the OpenAIResponsesFunctionCall envelope from the loop's
 //     tool.Call.

@@ -69,9 +69,9 @@ func (p *ParallelExecutor) SetStepParent(stepID string) {
 //   - nil:  every call produced an output (possibly IsError) and was
 //     recorded.
 //   - *hook.ErrAskUser: at least one Before/After hook surfaced an ask-user
-//     request; siblings were cancelled; outputs are not guaranteed to be
+//     request; siblings were canceled; outputs are not guaranteed to be
 //     filled.
-//   - context.Canceled / DeadlineExceeded: caller's context cancelled.
+//   - context.Canceled / DeadlineExceeded: caller's context canceled.
 //   - wrapped error: an unrecoverable failure not catchable as ErrAskUser
 //     (e.g. registry.Get blowup that shouldn't happen post-validation).
 //
@@ -99,7 +99,7 @@ func (p *ParallelExecutor) ExecuteAll(
 	defer cancel()
 
 	var (
-		wg       sync.WaitGroup
+		wg        sync.WaitGroup
 		askErrPtr atomicPointer[hook.ErrAskUser]
 		fatalErr  atomicPointer[wrappedErr]
 	)
@@ -301,21 +301,21 @@ func (p *ParallelExecutor) emit(ev session.Event) error {
 // tool_call_start event preview field. We keep the head only — the model's
 // arg shapes are typically short JSON objects.
 func argsPreview(args []byte) string {
-	const max = 256
-	if len(args) <= max {
+	const maxPreviewBytes = 256
+	if len(args) <= maxPreviewBytes {
 		return string(args)
 	}
-	return string(args[:max]) + "…"
+	return string(args[:maxPreviewBytes]) + "…"
 }
 
 // contentPreview keeps the first ~256 bytes of tool output for the ToolResult
 // event preview field. Full content travels separately via FunctionCallOutput.
 func contentPreview(content string) string {
-	const max = 256
-	if len(content) <= max {
+	const maxPreviewBytes = 256
+	if len(content) <= maxPreviewBytes {
 		return content
 	}
-	return content[:max] + "…"
+	return content[:maxPreviewBytes] + "…"
 }
 
 // atomicPointer is a small generic wrapper around atomic.Pointer for
@@ -328,8 +328,8 @@ func (a *atomicPointer[T]) Load() *T {
 	return (*T)(atomic.LoadPointer(&a.p))
 }
 
-func (a *atomicPointer[T]) CompareAndSwap(old, new *T) bool {
-	return atomic.CompareAndSwapPointer(&a.p, unsafe.Pointer(old), unsafe.Pointer(new))
+func (a *atomicPointer[T]) CompareAndSwap(old, replacement *T) bool {
+	return atomic.CompareAndSwapPointer(&a.p, unsafe.Pointer(old), unsafe.Pointer(replacement))
 }
 
 // wrappedErr carries a fatal sibling error together with the call_id that

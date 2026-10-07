@@ -350,7 +350,7 @@ type AgentLoopConfig struct {
 // Per proposal §3.6 the type is reserved but the tool is not registered
 // unless Enabled is true.
 type AgentLoopSubagentConfig struct {
-	Enabled  bool `json:"enabled" mapstructure:"enabled"`
+	Enabled  bool `json:"enabled"   mapstructure:"enabled"`
 	MaxDepth int  `json:"max_depth" mapstructure:"max_depth"`
 }
 

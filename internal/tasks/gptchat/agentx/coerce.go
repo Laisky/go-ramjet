@@ -79,7 +79,7 @@ func coerceInputItem(item any) (model.InputItem, error) {
 	return nil, errors.Errorf(
 		"unsupported InputItem shape %T; expected OpenAIResponsesInputMessage, "+
 			"OpenAIResponsesFunctionCall, OpenAIResponsesFunctionCallOutput, "+
-			"or a map[string]any with a recognised type/role",
+			"or a map[string]any with a recognised type/role", //nolint:misspell // Preserve the existing diagnostic text.
 		item)
 }
 
@@ -134,7 +134,7 @@ func coerceMapInputItem(m map[string]any) (model.InputItem, error) {
 	}
 
 	return nil, errors.Errorf(
-		"unrecognised map InputItem; no recognised \"type\" or \"role\" discriminator")
+		"unrecognised map InputItem; no recognised \"type\" or \"role\" discriminator") //nolint:misspell // Preserve the existing diagnostic text.
 }
 
 // remarshalJSON marshals src to JSON and unmarshals into dst. Used to
@@ -154,7 +154,7 @@ func remarshalJSON(src any, dst any) error {
 // previewItemForError renders a short JSON preview of the offending item
 // so error messages name both the index AND enough of the shape to
 // pinpoint a future schema drift. Returns an empty string when the item
-// itself cannot be marshalled (the surrounding wrap still names the
+// itself cannot be marshaled (the surrounding wrap still names the
 // index).
 func previewItemForError(item any) string {
 	if item == nil {
@@ -164,9 +164,9 @@ func previewItemForError(item any) string {
 	if err != nil {
 		return "preview=<marshal-error>"
 	}
-	const max = 200
-	if len(data) > max {
-		return "preview=" + string(data[:max]) + "..."
+	const maxPreviewBytes = 200
+	if len(data) > maxPreviewBytes {
+		return "preview=" + string(data[:maxPreviewBytes]) + "..."
 	}
 	return "preview=" + string(data)
 }
@@ -176,7 +176,7 @@ func previewItemForError(item any) string {
 // memory hook may overwrite it with) into a uniform []any so
 // coerceInputItems can walk both shapes through the same path.
 //
-// Returns nil for a nil input or an unrecognised top-level type; the
+// Returns nil for a nil input or an unrecognized top-level type; the
 // caller treats that as "no prior transcript" and the loop seeds its own
 // userMessage on top.
 func inputAsAnySlice(in any) []any {

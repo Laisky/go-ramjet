@@ -62,7 +62,7 @@ const finalChunkBytes = 200
 // is bound to a single agent run via NewWriter; the EmitFunc owns the
 // underlying transport, so the Writer holds no goroutine of its own and
 // requires no shutdown apart from the caller closing the events channel
-// or cancelling the context passed to Consume.
+// or canceling the context passed to Consume.
 type Writer struct {
 	emit      EmitFunc
 	requestID string

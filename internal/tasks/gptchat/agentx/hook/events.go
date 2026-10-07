@@ -39,12 +39,12 @@ const (
 // It mirrors loop.Caps (kept independent here to avoid the import cycle).
 // Phase 1 reads only MaxIterations; the rest are reserved.
 type Caps struct {
-	MaxIterations          int
-	MaxToolCalls           int
-	MaxParallelToolCalls   int
-	ErrorBudget            int
-	CircuitBreakerRepeats  int
-	WallClockSeconds       int
+	MaxIterations         int
+	MaxToolCalls          int
+	MaxParallelToolCalls  int
+	ErrorBudget           int
+	CircuitBreakerRepeats int
+	WallClockSeconds      int
 }
 
 // SessionStartEvent carries the per-session identifiers and budget snapshot
@@ -95,7 +95,7 @@ type SessionEndEvent struct {
 	SessionID string
 	// TerminatedBy matches RunFinished.TerminatedBy in agentx/session
 	// ("send_to_user", "implicit_final", "ask_user", "iteration_cap",
-	// "timeout", "circuit_breaker", "error_budget", "cancelled", "error").
+	// "timeout", "circuit_breaker", "error_budget", "error", and TerminatedByCancelled).
 	TerminatedBy string
 	// FinalText is the assistant-facing answer text emitted as the loop's
 	// Final event.

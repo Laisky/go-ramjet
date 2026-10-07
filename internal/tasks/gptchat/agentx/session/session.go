@@ -52,7 +52,7 @@ type Session interface {
 	Close() error
 }
 
-// Config tunes Session behaviour. Logger is required to surface dropped
+// Config tunes Session behavior. Logger is required to surface dropped
 // events on backpressure; BufferSize controls per-subscriber channel depth.
 type Config struct {
 	BufferSize int
@@ -170,7 +170,7 @@ func (s *session) Submit(ctx context.Context, op Op) error {
 		s.cancelSeq = seq
 		s.cancelMu.Unlock()
 		// Watcher: release the registered cancel when our opCtx is done
-		// (caller cancelled, or a later Submit cancelled us), but only if
+		// (caller canceled, or a later Submit canceled us), but only if
 		// our seq still matches — a newer Submit may have replaced us.
 		go func() {
 			<-opCtx.Done()

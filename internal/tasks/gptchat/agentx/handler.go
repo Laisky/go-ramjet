@@ -299,7 +299,7 @@ func handleAgentWithDeps(
 		bus.OnBeforeToolCall(loop.NewCircuitHook(caps.CircuitBreakerRepeats))
 		bus.OnBeforeToolCall(loop.NewWriteGateHook(inputs.AgentCfg.WriteGate))
 		// Distill BEFORE Wrap: the trust-delimiter encloses the
-		// summarised observation, not the raw bytes. See
+		// summarized observation, not the raw bytes. See
 		// loop/distill.go godoc for the rationale.
 		bus.OnAfterToolCall(loop.NewDistillHook(llmDistiller, distillThreshold, rawStash, userPrompt))
 		bus.OnAfterToolCall(loop.NewWrapHook())
@@ -393,7 +393,7 @@ func handleAgentWithDeps(
 
 // setAgentStreamHeaders writes the SSE response headers and request-id
 // echo before the first chunk. Mirrors the proxy path's setStreamHeaders
-// behaviour so the frontend sees an identical wire-level handshake.
+// behavior so the frontend sees an identical wire-level handshake.
 func setAgentStreamHeaders(ctx *gin.Context, upstream http.Header) {
 	ctx.Header("content-type", "text/event-stream")
 	ctx.Header("cache-control", "no-cache")
@@ -507,7 +507,7 @@ func populateCuratedServerTools(curatedServer *httppkg.MCPServerConfig, reg tool
 		}
 		raw, err := stdjson.Marshal(map[string]string{"name": d.Name})
 		if err != nil {
-			// Marshalling a static map cannot realistically fail; fall
+			// Marshaling a static map cannot realistically fail; fall
 			// back to a hand-rolled JSON literal so the lookup still
 			// finds the name even on the unreachable error path.
 			raw = stdjson.RawMessage(`{"name":` + quoteJSONString(d.Name) + `}`)

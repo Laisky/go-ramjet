@@ -95,7 +95,7 @@ type sendToUserArgs struct {
 //   - nil for any clean termination (the corresponding RunFinished event
 //     carries the structured TerminatedBy).
 //   - ctx.Err() on cancellation; one Error + RunFinished{TerminatedBy:
-//     "cancelled"} are emitted first.
+//     session.TerminatedByCancelled} are emitted first.
 //   - a wrapped error for unrecoverable failures (model.Client error not
 //     catchable as ErrAskUser, etc); an Error + RunFinished{TerminatedBy:
 //     "error"} pair is emitted.
@@ -272,7 +272,7 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 				_ = emitErrorAndRunFinished("timeout", "wall-clock budget exhausted", session.TerminatedByTimeout)
 				return nil
 			}
-			_ = emitErrorAndRunFinished("cancelled", runErr.Error(), session.TerminatedByCancelled)
+			_ = emitErrorAndRunFinished("cancelled", runErr.Error(), session.TerminatedByCancelled) //nolint:misspell // Preserve the established cancellation event code.
 			return runErr
 		}
 
@@ -303,7 +303,6 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 				return nil
 			}
 			// Generic OnContext error -> abort with structured error.
-			runErr = ctxErr
 			terminatedBy = session.TerminatedByError
 			_ = emitErrorAndRunFinished("context_hook_error", ctxErr.Error(), session.TerminatedByError)
 			return gerrors.Wrap(ctxErr, "context hook")
@@ -335,10 +334,9 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 					return nil
 				}
 				terminatedBy = session.TerminatedByCancelled
-				_ = emitErrorAndRunFinished("cancelled", loopCtx.Err().Error(), session.TerminatedByCancelled)
+				_ = emitErrorAndRunFinished("cancelled", loopCtx.Err().Error(), session.TerminatedByCancelled) //nolint:misspell // Preserve the established cancellation event code.
 				return loopCtx.Err()
 			}
-			runErr = err
 			terminatedBy = session.TerminatedByError
 			_ = emitErrorAndRunFinished("model_stream_error", err.Error(), session.TerminatedByError)
 			return gerrors.Wrap(err, "model.Stream")
@@ -390,7 +388,6 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 		if roundStreamErr != nil {
 			// Treat as fatal: we have no way to recover an incomplete
 			// stream into a coherent round.
-			runErr = roundStreamErr
 			terminatedBy = session.TerminatedByError
 			_ = emitErrorAndRunFinished("model_stream_error", roundStreamErr.Error(), session.TerminatedByError)
 			return gerrors.Wrap(roundStreamErr, "model stream chunk error")
@@ -486,10 +483,9 @@ func Run(ctx context.Context, sess session.Session, deps RunDeps) error {
 			}
 			if errors.Is(execErr, context.Canceled) {
 				terminatedBy = session.TerminatedByCancelled
-				_ = emitErrorAndRunFinished("cancelled", execErr.Error(), session.TerminatedByCancelled)
+				_ = emitErrorAndRunFinished("cancelled", execErr.Error(), session.TerminatedByCancelled) //nolint:misspell // Preserve the established cancellation event code.
 				return execErr
 			}
-			runErr = execErr
 			terminatedBy = session.TerminatedByError
 			_ = emitErrorAndRunFinished("parallel_executor_error", execErr.Error(), session.TerminatedByError)
 			return gerrors.Wrap(execErr, "executor.ExecuteAll")
@@ -633,7 +629,7 @@ func assistantMessage(text string) model.InputItem {
 // appendFunctionCallAndOutput appends the model's function_call item plus its
 // matching function_call_output item to the input transcript. Phase 1 builds
 // the items as plain maps so the loop stays decoupled from the upstream
-// adapter's concrete shapes — the OneAPI adapter recognises both the
+// adapter's concrete shapes — the OneAPI adapter recognizes both the
 // httppkg.* concrete types and these map-shaped equivalents.
 //
 // The function_call item carries BOTH an `id` and a `call_id`. The
@@ -686,7 +682,7 @@ func callIDForFunctionCall(call model.FunctionCall) string {
 }
 
 // buildDescriptors converts the per-session registry into the model-facing
-// descriptor slice. We materialise it once per loop because the registry
+// descriptor slice. We materialize it once per loop because the registry
 // shape is stable for the lifetime of a session.
 func buildDescriptors(reg tool.Registry) []model.ToolDescriptor {
 	regDesc := reg.Descriptors()

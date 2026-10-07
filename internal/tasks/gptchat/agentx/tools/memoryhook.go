@@ -176,7 +176,7 @@ func NewMemoryBeforeTurnHook(deps *MemoryDeps) func(context.Context, hook.Contex
 				)
 			}
 			// Cold-start fallback already populated Keys on the
-			// BeforeTurnResult; honour it so the After hook can still
+			// BeforeTurnResult; honor it so the After hook can still
 			// persist the turn output.
 			if result.ColdStartFallback {
 				deps.State.setReady(result.Keys)
@@ -305,7 +305,7 @@ func isPayloadTooLarge(err error) bool {
 }
 
 // truncateMiddle preserves the first and last half of s when len(s)
-// exceeds max bytes, inserting a Unicode-ellipsis marker between them.
+// exceeds maxBytes bytes, inserting a Unicode-ellipsis marker between them.
 // The marker is plain ASCII inside the marker brackets so it round-trips
 // cleanly through json.Marshal without invoking any control-char
 // escaping. Returns (truncatedString, wasTruncated).
@@ -316,23 +316,23 @@ func isPayloadTooLarge(err error) bool {
 // recall), while only sacrificing intermediate detail. Head-only or
 // tail-only would discard half of that signal.
 //
-// max <= 0 disables truncation (returns s unchanged).
-// For inputs already at or below max bytes, s is returned unchanged.
-// For inputs above max but shorter than (max + marker overhead), the
+// maxBytes <= 0 disables truncation (returns s unchanged).
+// For inputs already at or below maxBytes bytes, s is returned unchanged.
+// For inputs above maxBytes but shorter than (maxBytes + marker overhead), the
 // function still emits a marker — the result may be marginally larger
-// than max, but never larger than the original.
-func truncateMiddle(s string, max int) (string, bool) {
-	if max <= 0 || len(s) <= max {
+// than maxBytes, but never larger than the original.
+func truncateMiddle(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(s) <= maxBytes {
 		return s, false
 	}
 	// Reserve room for the marker; allocate halves from what remains.
 	// The marker length is bounded by the size-of-int decimal repr,
 	// so we recompute it after we know the dropped byte count.
-	dropped := len(s) - max
-	// Two halves split roughly evenly; favour the head so the
-	// opening sentence remains intact when max is odd.
-	headLen := max / 2
-	tailLen := max - headLen
+	dropped := len(s) - maxBytes
+	// Two halves split roughly evenly; favor the head so the
+	// opening sentence remains intact when maxBytes is odd.
+	headLen := maxBytes / 2
+	tailLen := maxBytes - headLen
 	head := s[:headLen]
 	tail := s[len(s)-tailLen:]
 	// Trim partial multi-byte runes at the cut points so the result
