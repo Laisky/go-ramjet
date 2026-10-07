@@ -33,6 +33,8 @@ jobs:
         run: |
           set -euo pipefail
           corepack enable
+          pnpm --version
+          (cd web && pnpm --version)
           node --input-type=module <<'JS'
           import { readFileSync, writeFileSync } from 'node:fs'
           const file = 'web/package.json'
@@ -45,21 +47,9 @@ jobs:
           JS
           python3 <<'PY'
           from pathlib import Path
+          import re
           path = Path('web/src/components/markdown.tsx')
           text = path.read_text()
-          old = """        mermaid.initialize({
-                    startOnLoad: false,
-                    theme: scheme === 'dark' ? 'dark' : 'default',
-                    securityLevel: 'strict',
-                    fontFamily: 'inherit',
-                    flowchart: {
-                      useMaxWidth: true,
-                      htmlLabels: true,
-                      curve: 'basis',
-                    },
-                  })"""
-          # Match the existing block while retaining its original indentation.
-          import re
           pattern = r"        mermaid\.initialize\(\{\n.*?\n        \}\)"
           matches = re.findall(pattern, text, flags=re.S)
           if len(matches) != 1:
