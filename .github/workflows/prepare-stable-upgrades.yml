@@ -29,130 +29,54 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Prepare released versions and migration changes
+      - name: Complete module migration and align native builds
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/upgrade-diagnostics
+          corepack enable
           python3 <<'PY'
-          import concurrent.futures
-          import json
           import re
-          import subprocess
-          import urllib.parse
-          import urllib.request
           from pathlib import Path
-
-          def registry(name, tag='latest'):
-              """registry returns metadata for a public package version or dist-tag."""
-              url = 'https://registry.npmjs.org/' + urllib.parse.quote(name, safe='') + '/' + tag
-              with urllib.request.urlopen(url, timeout=60) as response:
-                  return json.load(response)
-
-          def stable(name):
-              """stable verifies the latest npm tag is a non-deprecated stable version."""
-              data = registry(name)
-              if not re.fullmatch(r'\d+\.\d+\.\d+', data['version']) or data.get('deprecated'):
-                  raise ValueError(f'Unacceptable latest release for {name}')
-              return name, data['version']
-
-          file = Path('web/package.json')
-          pkg = json.loads(file.read_text())
-          names = list(dict.fromkeys([*pkg['dependencies'], *pkg['devDependencies'], 'pnpm', '@typescript/typescript6']))
-          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-              versions = dict(executor.map(stable, names))
-          for section in ['dependencies', 'devDependencies']:
-              for name in pkg[section]:
-                  pkg[section][name] = '^' + versions[name]
-          # The stable native compiler intentionally has no Compiler API yet.
-          # Microsoft recommends these aliases for API-dependent lint tools.
-          pkg['devDependencies']['@typescript/native'] = 'npm:typescript@^' + versions['typescript']
-          pkg['devDependencies']['typescript'] = 'npm:@typescript/typescript6@^' + versions['@typescript/typescript6']
-          # Keep Node type declarations aligned with the production LTS runtime.
-          node_types = registry('@types/node', 'ts5.9')['version']
-          all_node = json.load(urllib.request.urlopen('https://registry.npmjs.org/@types%2fnode', timeout=60))
-          candidates = [v for v in all_node['versions'] if re.fullmatch(r'24\.\d+\.\d+', v)]
-          node_types = max(candidates, key=lambda v: tuple(map(int, v.split('.'))))
-          pkg['devDependencies']['@types/node'] = '^' + node_types
-          pkg['packageManager'] = 'pnpm@' + versions['pnpm']
-          settings = pkg.pop('pnpm')
-          # pnpm 11+ reads settings from the workspace file, not .npmrc/package.json.
-          settings['packages'] = ['.']
-          settings['strictPeerDependencies'] = True
-          settings['allowBuilds'] = {'esbuild': False, 'katex': False, 'unrs-resolver': False,
-                                     'core-js': False, '@swc/core': False}
-          Path('web/pnpm-workspace.yaml').write_text(json.dumps(settings, indent=2) + '\n')
-          Path('web/.npmrc').unlink()
-          file.write_text(json.dumps(pkg, indent=2) + '\n')
-          root = Path('package.json')
-          rootpkg = json.loads(root.read_text())
-          rootpkg['packageManager'] = pkg['packageManager']
-          root.write_text(json.dumps(rootpkg, indent=2) + '\n')
-          Path('/tmp/upgrade-diagnostics/npm-targets.json').write_text(json.dumps(versions, indent=2) + '\n')
-
-          migrations = {
-              'github.com/JohannesKaufmann/html-to-markdown': ('github.com/JohannesKaufmann/html-to-markdown/v2', 'v2.5.2'),
-              'github.com/deckarep/golang-set/v2': ('github.com/deckarep/golang-set/v3', 'v3.0.0'),
-              'github.com/yuin/goldmark': ('github.com/yuin/goldmark/v2', 'v2.1.6'),
-              'github.com/stripe/stripe-go/v76': ('github.com/stripe/stripe-go/v87', 'v87.0.0'),
-          }
           for path in Path('.').rglob('*.go'):
               source = path.read_text()
-              updated = source
-              for old, (new, version) in migrations.items():
-                  updated = updated.replace('"' + old + '"', '"' + new + '"').replace('"' + old + '/', '"' + new + '/')
-              if path.as_posix() == 'internal/tasks/gptchat/tasks/crawler.go':
-                  updated = updated.replace('\tconverter := md.NewConverter("", true, nil)\n', '')
-                  updated = updated.replace('converter.ConvertString(string(localInput))', 'md.ConvertString(string(localInput))')
+              updated = source.replace('html-to-markdown/v2/v2', 'html-to-markdown/v2').replace('goldmark/v2/v2', 'goldmark/v2')
               if updated != source:
                   path.write_text(updated)
-          for old, (new, version) in migrations.items():
-              subprocess.run(['go', 'mod', 'edit', '-droprequire=' + old, '-require=' + new + '@' + version], check=True)
-          subprocess.run(['go', 'mod', 'edit', '-go=1.27.1'], check=True)
-          required = json.loads(subprocess.check_output(['go', 'mod', 'edit', '-json'], text=True))['Require']
-          paths = [item['Path'] for item in required]
-          text = subprocess.check_output(['go', 'list', '-m', '-mod=mod', '-u', '-json', *paths], text=True)
-          decoder = json.JSONDecoder()
-          targets = []
-          while text.strip():
-              module, offset = decoder.raw_decode(text.lstrip())
-              text = text.lstrip()[offset:]
-              update = module.get('Update', {}).get('Version', '')
-              if re.fullmatch(r'v\d+\.\d+\.\d+(?:\+incompatible)?', update):
-                  targets.append(module['Path'] + '@' + update)
-          if targets:
-              subprocess.run(['go', 'get', *targets], check=True)
-          subprocess.run(['go', 'mod', 'tidy'], check=True)
-          Path('/tmp/upgrade-diagnostics/go-targets.txt').write_text('\n'.join(targets) + '\n')
-          speech = subprocess.check_output(['go', 'list', '-m', '-f', '{{.Version}}', 'github.com/Microsoft/cognitive-services-speech-sdk-go'], text=True).strip().removeprefix('v')
           docker = Path('Dockerfile')
           source = docker.read_text().replace('golang:1.27.0-bookworm', 'golang:1.27.1-bookworm').replace('node:24-bookworm', 'node:24.21.0-bookworm')
-          source = re.sub(r'ARG SPEECHSDK_VERSION=[0-9.]+', 'ARG SPEECHSDK_VERSION=' + speech, source)
+          source = re.sub(r'ARG SPEECHSDK_VERSION=[0-9.]+', 'ARG SPEECHSDK_VERSION=1.52.0', source)
           source = source.replace('RUN corepack enable || true', 'RUN corepack enable')
           docker.write_text(source)
           workflow = Path('.github/workflows/pr-validation.yml')
           source = workflow.read_text()
-          source = re.sub(r'SPEECHSDK_VERSION: [0-9.]+', 'SPEECHSDK_VERSION: ' + speech, source)
-          source = source.replace("node-version: '24'", "node-version: '24.21.0'")
+          source = re.sub(r'SPEECHSDK_VERSION: [0-9.]+', 'SPEECHSDK_VERSION: 1.52.0', source)
+          source = re.sub(r'node-version: [\x27\x22]?24[\x27\x22]?(?=\s*$)', "node-version: '24.21.0'", source, flags=re.M)
           source = source.replace('goimports@v0.45.0', 'goimports@v0.51.0')
           workflow.write_text(source)
           PY
-          corepack enable
-          pnpm --version
-          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies 2>&1 | tee /tmp/upgrade-diagnostics/install.log
-      - name: Format candidate changes
+          # The upstream v2.7.1 release still declares a v1 module path.
+          # Its immutable release commit is the canonical Go-consumable identity.
+          go get github.com/phpdave11/gofpdf@95d7704723b18e9b55cd71b234a2e40815e990d6 \
+            github.com/yuin/goldmark@v1.8.6 github.com/deckarep/golang-set/v2@v2.9.0 \
+            go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.72.0 \
+            go.opentelemetry.io/otel/sdk@v1.47.0
+          go mod tidy 2>&1 | tee /tmp/upgrade-diagnostics/go-tidy.log
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          mapfile -t go_files < <(git diff --name-only origin/master -- '*.go')
+          if (( ${#go_files[@]} )); then
+            goimports -local github.com/Laisky/go-ramjet -w "${go_files[@]}"
+          fi
+      - name: Resolve and format frontend dependency metadata
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t go_files < <(git diff --name-only -- '*.go')
-          if (( ${#go_files[@]} )); then
-            go install golang.org/x/tools/cmd/goimports@v0.51.0
-            goimports -local github.com/Laisky/go-ramjet -w "${go_files[@]}"
-          fi
-          if [[ -x web/node_modules/.bin/prettier ]]; then
-            pnpm -C web exec prettier --write package.json pnpm-lock.yaml pnpm-workspace.yaml
-          fi
+          corepack enable
+          pnpm --version
+          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies 2>&1 | tee /tmp/upgrade-diagnostics/install.log
+          pnpm -C web exec prettier --write package.json pnpm-lock.yaml pnpm-workspace.yaml
+          pnpm -C web install --frozen-lockfile --strict-peer-dependencies
       - name: Frontend diagnostic tests and build
         if: always()
         shell: bash
@@ -170,11 +94,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="$(go list -m -f '{{.Version}}' github.com/Microsoft/cognitive-services-speech-sdk-go)"
-          version="${version#v}"
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 wget
-          wget -q -O /tmp/speech.tar.gz "https://csspeechstorage.blob.core.windows.net/drop/${version}/SpeechSDK-Linux-${version}.tar.gz"
+          wget -q -O /tmp/speech.tar.gz 'https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz'
           sudo mkdir -p /opt/azure/speech
           sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
           {
@@ -199,18 +121,20 @@ jobs:
           import re
           from pathlib import Path
           out = ['# Stable upgrade candidate diagnostics', '', 'These are preparation results, NOT merge approval.', '']
-          for path in sorted(Path('/tmp/upgrade-diagnostics').glob('*')):
+          for path in sorted(Path('/tmp/upgrade-diagnostics').glob('*.log')):
               text = re.sub(r'\x1b\[[0-9;]*m', '', path.read_text())
-              out += ['## ' + path.name, '', '```text', '\n'.join(text.splitlines()[-100:]), '```', '']
+              out += ['## ' + path.name, '', '```text', '\n'.join(text.splitlines()[-140:]), '```', '']
+          out += ['## Exit codes', '', Path('/tmp/upgrade-diagnostics/results.txt').read_text()]
           Path('STABLE_UPGRADE_DIAGNOSTICS.md').write_text('\n'.join(out))
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- go.mod go.sum Dockerfile .github/workflows/pr-validation.yml package.json web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/.npmrc
+          git add -- go.mod go.sum Dockerfile .github/workflows/pr-validation.yml package.json web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml
           git add -- '*.go' STABLE_UPGRADE_DIAGNOSTICS.md
           git diff --cached --stat
-          git commit -m 'build: prepare latest stable dependencies and major-version migrations'
+          git commit -m 'build: align stable module graph and native runtime versions'
           git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          git ls-files -z -- '*.go' 'web/src/*' 'web/*.json' 'web/*.ts' 'web/*.js' 'web/pnpm*' 'library/*' 'go.mod' 'go.sum' 'Dockerfile' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' | tar --null -T - -czf /tmp/upgrade-diagnostics/review-source.tar.gz
       - uses: actions/upload-artifact@v5
         if: always()
         with:
