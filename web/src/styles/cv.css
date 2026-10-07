@@ -10,14 +10,27 @@ html {
   overflow-x: hidden;
   overflow-x: clip;
   color: var(--cv-ink);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Helvetica Neue',
+    sans-serif;
   font-weight: 420;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   background:
-    radial-gradient(circle at top left, rgba(251, 191, 36, 0.08), transparent 55%),
-    radial-gradient(circle at 80% 20%, rgba(14, 116, 144, 0.08), transparent 45%),
+    radial-gradient(
+      circle at top left,
+      rgba(251, 191, 36, 0.08),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(14, 116, 144, 0.08),
+      transparent 45%
+    ),
     linear-gradient(180deg, #fdfbf6 0%, #f6f7fb 60%, #f8fafc 100%);
   --cv-ink: #0b1020;
   --cv-muted: #4a5568;
@@ -53,8 +66,16 @@ html {
   --cv-primary-fg: #111318;
   --cv-hover-ink: #c9cdd5;
   background:
-    radial-gradient(circle at top left, rgba(251, 191, 36, 0.03), transparent 55%),
-    radial-gradient(circle at 80% 20%, rgba(14, 116, 144, 0.03), transparent 45%),
+    radial-gradient(
+      circle at top left,
+      rgba(251, 191, 36, 0.03),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(14, 116, 144, 0.03),
+      transparent 45%
+    ),
     linear-gradient(180deg, #111318 0%, #14161e 60%, #161820 100%);
 }
 
@@ -141,6 +162,13 @@ html {
 
 .cv-edit-button {
   border: 1px solid var(--cv-border);
+}
+
+.cv-auth-notice {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cv-muted);
 }
 
 .cv-grid {
@@ -409,7 +437,6 @@ html {
   border-radius: 4px;
 }
 
-
 .cv-meta {
   font-size: 0.88rem;
   font-weight: 450;
@@ -443,7 +470,6 @@ html {
   font-size: 0.95rem;
   font-weight: 450;
 }
-
 
 .cv-modal-overlay {
   position: fixed;
@@ -639,7 +665,7 @@ html {
   text-decoration: underline;
 }
 
-.cv-content #highlights+ul {
+.cv-content #highlights + ul {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1rem;
@@ -648,7 +674,7 @@ html {
   list-style: none;
 }
 
-.cv-content #highlights+ul>li {
+.cv-content #highlights + ul > li {
   border: 1px solid var(--cv-border);
   border-radius: 0.75rem;
   background: var(--cv-surface);
@@ -656,7 +682,7 @@ html {
   box-shadow: 0 12px 30px -20px var(--cv-shadow);
 }
 
-.cv-content #highlights+ul>li>strong {
+.cv-content #highlights + ul > li > strong {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--cv-ink);

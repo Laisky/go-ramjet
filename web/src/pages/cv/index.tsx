@@ -31,6 +31,15 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 
+import {
+  authStatusFromResponse,
+  clearAuthToken,
+  consumeAuthTokenFromLocation,
+  type CvAuthStatus,
+  describeAuthStatus,
+  shouldDiscardToken,
+  verifyCvSession,
+} from './cv-auth'
 import { parseCvContent } from './cv-helpers'
 import { CvMarkdown } from './cv-markdown'
 import {
@@ -55,13 +64,25 @@ type CvContentHistoryPayload = {
   items: CvContentHistoryEntry[]
 }
 
+/**
+ * CvAuthError carries a protected-route status that describes the session.
+ */
+class CvAuthError extends Error {
+  readonly status: number
+
+  constructor(status: number) {
+    super(`cv session rejected with status ${status}`)
+    this.name = 'CvAuthError'
+    this.status = status
+  }
+}
+
 type CvContentVersionPayload = {
   content: string
   updated_at?: string
   version_id?: string
 }
 
-const AUTH_TOKEN_STORAGE_KEY = 'cv_sso_token'
 const TAILOR_DRAFT_STORAGE_KEY = 'cv_tailor_draft'
 const FALLBACK_EMAIL = 'job@laisky.com'
 const HISTORY_EDITOR_VALUE = '__editor__'
@@ -106,55 +127,6 @@ const RECOMMENDATION_LETTERS: RecommendationLetter[] = [
       'https://s3.laisky.com/public/personal/cv/laisky/recommend-letter-pateo.JPG',
   },
 ]
-
-/**
- * readAuthTokenFromURL pulls the SSO token from the current URL query string.
- */
-function readAuthTokenFromURL(): string | null {
-  const params = new URLSearchParams(window.location.search)
-  const token = params.get('sso_token')
-  if (!token) {
-    return null
-  }
-  const trimmed = token.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-/**
- * removeAuthTokenFromURL strips the SSO token from the browser URL.
- */
-function removeAuthTokenFromURL() {
-  const url = new URL(window.location.href)
-  url.searchParams.delete('sso_token')
-  const next = `${url.pathname}${url.search}${url.hash}`
-  window.history.replaceState({}, document.title, next)
-}
-
-/**
- * readStoredAuthToken returns the SSO token stored in localStorage.
- */
-function readStoredAuthToken(): string | null {
-  const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
-  if (!token) {
-    return null
-  }
-  const trimmed = token.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-/**
- * persistAuthToken saves the SSO token into localStorage.
- */
-function persistAuthToken(token: string) {
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
-}
-
-/**
- * clearAuthToken removes the SSO token from localStorage.
- */
-function clearAuthToken() {
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
-}
 
 /**
  * readTailorDraft returns the locally cached tailored CV markdown draft.
@@ -264,8 +236,13 @@ export function CVPage() {
   const [saving, setSaving] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [authToken, setAuthToken] = useState<string | null>(
-    () => readAuthTokenFromURL() ?? readStoredAuthToken(),
+  // The callback token is consumed and scrubbed from the URL before the first
+  // request, so it never reaches history, referrers or request logs.
+  const [authToken, setAuthToken] = useState<string | null>(() =>
+    consumeAuthTokenFromLocation(),
+  )
+  const [authStatus, setAuthStatus] = useState<CvAuthStatus>(() =>
+    authToken ? 'checking' : 'anonymous',
   )
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [historyEntries, setHistoryEntries] = useState<CvContentHistoryEntry[]>(
@@ -292,7 +269,9 @@ export function CVPage() {
   const emailValue = parsed.email ?? FALLBACK_EMAIL
   const isDirty = content !== savedContent
   const isEmpty = content.trim().length === 0
-  const canEdit = Boolean(authToken)
+  // Editing is offered only after the backend verified the owner session.
+  const canEdit = authStatus === 'owner' && Boolean(authToken)
+  const authNotice = describeAuthStatus(authStatus)
   const pdfURL = useMemo(() => buildPdfURL(lastSavedAt), [lastSavedAt])
   const modalMessage = authMessage ?? historyMessage
 
@@ -308,6 +287,24 @@ export function CVPage() {
     },
     [authToken],
   )
+
+  // applyAuthFailure records what a rejected protected request proved about the
+  // session. It returns the user-facing message, or null for unrelated errors.
+  const applyAuthFailure = useCallback((status: number): string | null => {
+    const next = authStatusFromResponse(status)
+    if (!next) return null
+    // A transient SSO outage must not close an open editor and lose the draft;
+    // only a definitive rejection changes the verified session state.
+    if (next !== 'unavailable') setAuthStatus(next)
+    if (shouldDiscardToken(next)) {
+      clearAuthToken()
+      setAuthToken(null)
+    }
+    console.warn(
+      `[CV] Protected request rejected: status=${status} state=${next}`,
+    )
+    return describeAuthStatus(next)
+  }, [])
 
   // handleSave persists the current markdown to the backend API.
   const handleSave = useCallback(async () => {
@@ -329,8 +326,10 @@ export function CVPage() {
         },
         body: JSON.stringify({ content }),
       })
-      if (response.status === 401) {
-        throw new Error('Unauthorized')
+      const authFailure = applyAuthFailure(response.status)
+      if (authFailure) {
+        setAuthMessage(authFailure)
+        return
       }
       if (!response.ok) {
         console.debug(
@@ -343,12 +342,7 @@ export function CVPage() {
       setLastSavedAt(payload.updated_at ?? null)
       setEditorOpen(false)
     } catch (err) {
-      if (err instanceof Error && err.message === 'Unauthorized') {
-        clearAuthToken()
-        setAuthToken(null)
-        setAuthMessage('SSO token expired. Please sign in again.')
-        console.warn('[CV] Unauthorized SSO token')
-      } else if (err instanceof Error) {
+      if (err instanceof Error) {
         console.error(`[CV] Failed to save content: ${err.message}`)
       } else {
         console.error('[CV] Failed to save content')
@@ -356,7 +350,7 @@ export function CVPage() {
     } finally {
       setSaving(false)
     }
-  }, [authToken, content, saving])
+  }, [applyAuthFailure, authToken, content, saving])
 
   // loadHistory retrieves revisions without publishing stale results after the editor closes.
   const loadHistory = useCallback(
@@ -365,7 +359,9 @@ export function CVPage() {
         signal,
         headers: buildAuthHeaders(authToken),
       })
-      if (response.status === 401) throw new Error('Unauthorized')
+      if (authStatusFromResponse(response.status)) {
+        throw new CvAuthError(response.status)
+      }
       if (!response.ok) throw new Error('Failed to load CV history')
       return response.json() as Promise<CvContentHistoryPayload>
     },
@@ -399,8 +395,8 @@ export function CVPage() {
         const response = await fetch(buildHistoryVersionURL(versionID), {
           headers: buildAuthHeaders(authToken),
         })
-        if (response.status === 401) {
-          throw new Error('Unauthorized')
+        if (authStatusFromResponse(response.status)) {
+          throw new CvAuthError(response.status)
         }
         if (response.status === 404) {
           throw new Error('VersionNotFound')
@@ -416,13 +412,8 @@ export function CVPage() {
         setContent(payload.content)
       } catch (err) {
         setSelectedHistoryVersion(HISTORY_EDITOR_VALUE)
-        if (err instanceof Error && err.message === 'Unauthorized') {
-          clearAuthToken()
-          setAuthToken(null)
-          setAuthMessage('SSO token expired. Please sign in again.')
-          console.warn(
-            '[CV] Unauthorized SSO token while loading history version',
-          )
+        if (err instanceof CvAuthError) {
+          setAuthMessage(applyAuthFailure(err.status))
           return
         }
         if (err instanceof Error && err.message === 'VersionNotFound') {
@@ -439,7 +430,7 @@ export function CVPage() {
         setHistoryMessage('Failed to load the selected history version.')
       }
     },
-    [authToken],
+    [applyAuthFailure, authToken],
   )
 
   // handleDownloadPdf downloads the PDF asset or falls back to print.
@@ -567,8 +558,10 @@ export function CVPage() {
         },
         body: JSON.stringify({ content: tailorContent }),
       })
-      if (response.status === 401) {
-        throw new Error('Unauthorized')
+      const authFailure = applyAuthFailure(response.status)
+      if (authFailure) {
+        setTailorMessage(authFailure)
+        return
       }
       if (!response.ok) {
         console.debug(
@@ -584,13 +577,6 @@ export function CVPage() {
       link.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      if (err instanceof Error && err.message === 'Unauthorized') {
-        clearAuthToken()
-        setAuthToken(null)
-        setTailorMessage('SSO token expired. Please sign in again.')
-        console.warn('[CV] Unauthorized SSO token while rendering tailored PDF')
-        return
-      }
       setTailorMessage('Failed to render the tailored PDF. Please try again.')
       if (err instanceof Error) {
         console.error(`[CV] Tailored PDF render error: ${err.message}`)
@@ -600,7 +586,7 @@ export function CVPage() {
     } finally {
       setTailorBusy(false)
     }
-  }, [authToken, parsed.title, tailorBusy, tailorContent])
+  }, [applyAuthFailure, authToken, parsed.title, tailorBusy, tailorContent])
 
   // handleTailorKeyDown wires Cmd/Ctrl+Enter inside the textarea to trigger download.
   const handleTailorKeyDown = useCallback(
@@ -613,14 +599,29 @@ export function CVPage() {
     [handleDownloadTailored],
   )
 
+  // Verify the stored session with the backend before offering editing.
   useEffect(() => {
-    const tokenFromURL = readAuthTokenFromURL()
-    if (tokenFromURL) {
-      persistAuthToken(tokenFromURL)
-      removeAuthTokenFromURL()
+    if (!authToken) {
       return
     }
-  }, [])
+    // authStatus is already "checking": the token only ever changes from the
+    // initial value to null, and the initializer marks a present token as checking.
+    const controller = new AbortController()
+    void verifyCvSession(authToken, controller.signal)
+      .then((status) => {
+        if (controller.signal.aborted) return
+        setAuthStatus(status)
+        if (shouldDiscardToken(status)) {
+          clearAuthToken()
+          setAuthToken(null)
+        }
+        console.debug(`[CV] SSO session state: ${status}`)
+      })
+      .catch(() => {
+        // Aborted by a newer token or unmount; the newer check wins.
+      })
+    return () => controller.abort()
+  }, [authToken])
 
   useEffect(() => {
     return () => {
@@ -661,10 +662,8 @@ export function CVPage() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        if (error instanceof Error && error.message === 'Unauthorized') {
-          clearAuthToken()
-          setAuthToken(null)
-          setAuthMessage('SSO token expired. Please sign in again.')
+        if (error instanceof CvAuthError) {
+          setAuthMessage(applyAuthFailure(error.status))
           setHistoryEntries([])
         } else {
           console.error('[CV] Failed to load history:', error)
@@ -675,7 +674,7 @@ export function CVPage() {
         if (!controller.signal.aborted) setHistoryLoading(false)
       })
     return () => controller.abort()
-  }, [authToken, editorOpen, loadHistory])
+  }, [applyAuthFailure, authToken, editorOpen, loadHistory])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1001,7 +1000,7 @@ export function CVPage() {
                   </Dialog.Content>
                 </Dialog.Portal>
               </Dialog.Root>
-            ) : (
+            ) : authStatus === 'checking' ? null : (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1013,6 +1012,11 @@ export function CVPage() {
                 Login
               </Button>
             )}
+            {authNotice && !canEdit ? (
+              <p className="cv-auth-notice" role="status">
+                {authNotice}
+              </p>
+            ) : null}
           </div>
         </header>
 
