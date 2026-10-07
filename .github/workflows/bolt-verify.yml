@@ -53,6 +53,8 @@ jobs:
 
       - name: Detect executable renderer changes
         id: benchmark_changes
+        env:
+          CGO_ENABLED: '0'
         shell: bash
         run: |
           set -euo pipefail
@@ -214,7 +216,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
 
       - name: Run Go vet
-        run: go vet ./...
+        run: go vet ./... ./.github/scripts/renderer-change
 
       - name: Run full head Go test suite
         shell: bash
@@ -230,7 +232,9 @@ jobs:
           git diff --exit-code HEAD
 
       - name: Run direct Go lint on head
-        run: golangci-lint run -c .golangci.yml
+        run: |
+          golangci-lint run -c .golangci.yml
+          golangci-lint run -c .golangci.yml ./.github/scripts/renderer-change
 
       - name: Check head vulnerabilities
         run: govulncheck ./...
