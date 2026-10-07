@@ -170,10 +170,15 @@ export function GPTChatPage() {
     if (!pendingScrollTarget) return
     const { chatId, role } = pendingScrollTarget
     const exists = messages.some((m) => m.chatID === chatId && m.role === role)
-    if (exists) {
-      setPendingScrollTarget(null)
+    if (!exists) return
+    // Wait for committed layout, and cancel navigation when its target changes.
+    const frame = requestAnimationFrame(() => {
       scrollToMessage(chatId, role)
-    }
+      setPendingScrollTarget((current) =>
+        current === pendingScrollTarget ? null : current,
+      )
+    })
+    return () => cancelAnimationFrame(frame)
   }, [messages, pendingScrollTarget, scrollToMessage])
 
   const handleSearchSwitchAndSelect = useCallback(

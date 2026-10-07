@@ -155,7 +155,7 @@ async function executeWithRetry<T>(
       if (name === 'QuotaExceededError') {
         const message =
           (err as { message?: string })?.message ?? 'quota exceeded'
-        throw new Error(`Storage quota exceeded: ${message}`)
+        throw new Error(`Storage quota exceeded: ${message}`, { cause: err })
       }
       if (isRetryableError(err) && attempt < maxRetries - 1) {
         console.warn(

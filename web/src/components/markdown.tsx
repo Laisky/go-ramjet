@@ -305,7 +305,6 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
       return
     }
     let cancelled = false
-    setRenderError(null)
     if (containerRef.current) {
       containerRef.current.innerHTML = ''
     }
@@ -320,6 +319,7 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
         if (!containerRef.current || cancelled) {
           return
         }
+        setRenderError(null)
 
         // Parse to validate syntax first
         const trimmedCode = code.trim()

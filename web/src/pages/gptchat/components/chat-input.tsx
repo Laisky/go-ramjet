@@ -105,7 +105,6 @@ export function ChatInput({
       return
     }
     lastPrefillIdRef.current = prefillDraft.id
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- copy a one-shot parent prefill into the local editor.
     updateMessage(prefillDraft.text)
     requestAnimationFrame(() => {
       textareaRef.current?.focus()

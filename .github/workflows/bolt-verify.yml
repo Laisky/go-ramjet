@@ -25,7 +25,8 @@ concurrency:
 env:
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-  GO_VERSION: 1.27.0
+  GO_VERSION: 1.27.1
+  SPEECHSDK_VERSION: 1.52.0
   RUN_GPT_HTTP_IT: ''
   RUN_GPT_S3_IT: ''
   DISABLE_LLM_CONSERVATION_AUDIT: 'true'
@@ -41,12 +42,12 @@ jobs:
     outputs:
       benchmark_summary: ${{ steps.benchmark.outputs.status_description }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -70,7 +71,7 @@ jobs:
             build-essential ca-certificates curl git jq libssl-dev libasound2t64 wget
           sudo mkdir -p "$SPEECHSDK_ROOT"
           wget -q -O /tmp/SpeechSDK-Linux.tar.gz \
-            https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
+            "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
           sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
 
       - name: Record benchmark environment
@@ -140,7 +141,7 @@ jobs:
           )
           speedup = baseline[0] / optimized[0]
           summary = (
-              '## ReAct prompt benchmark (Go 1.27.0)\n\n'
+              f"## ReAct prompt benchmark (Go {os.environ['GO_VERSION']})\n\n"
               '| Metric | Baseline | Optimized | Improvement |\n'
               '|---|---:|---:|---:|\n'
               f'| Time | {baseline[0]:.2f} ns/op | {optimized[0]:.2f} ns/op | '
@@ -174,19 +175,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '24.21.0'
 
       - name: Install dependencies and analysis tools
         run: |
@@ -195,9 +196,9 @@ jobs:
             build-essential ca-certificates curl git jq libssl-dev libasound2t64 wget
           sudo mkdir -p "$SPEECHSDK_ROOT"
           wget -q -O /tmp/SpeechSDK-Linux.tar.gz \
-            https://csspeechstorage.blob.core.windows.net/drop/1.50.0/SpeechSDK-Linux-1.50.0.tar.gz
+            "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
           sudo tar --strip 1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT"
-          go install golang.org/x/tools/cmd/goimports@v0.49.0
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
           corepack enable
@@ -206,8 +207,8 @@ jobs:
       - name: Validate Go 1.27 declarations and changed files
         run: |
           test "$(go env GOVERSION)" = "go${GO_VERSION}"
-          grep -Fx 'go 1.27.0' go.mod
-          grep -F 'FROM golang:1.27.0-bookworm AS gobuild' Dockerfile
+          grep -Fx "go ${GO_VERSION}" go.mod
+          grep -F "FROM golang:${GO_VERSION}-bookworm AS gobuild" Dockerfile
           grep -F 'Code targets **Go 1.27**' AGENTS.md
           grep -F -- '- Go 1.27+' docs/manual/dev.md
           test -z "$(goimports -d \

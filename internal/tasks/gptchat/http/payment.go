@@ -7,8 +7,8 @@ import (
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/stripe/stripe-go/v76"
-	"github.com/stripe/stripe-go/v76/paymentintent"
+	"github.com/stripe/stripe-go/v87"
+	"github.com/stripe/stripe-go/v87/paymentintent"
 
 	"github.com/Laisky/go-ramjet/library/web"
 )
@@ -48,6 +48,7 @@ func PaymentHandler(c *gin.Context) {
 		},
 	}
 
+	params.Context = c.Request.Context()
 	pi, err := paymentintent.New(params)
 	if web.AbortErr(c, err) {
 		return

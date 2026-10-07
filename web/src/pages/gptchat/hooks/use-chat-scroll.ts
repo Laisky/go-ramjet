@@ -56,7 +56,27 @@ export function useChatScroll({
 }: UseChatScrollOptions) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(pageSize)
+  const [visibleCount, setVisibleCount] = useState(() =>
+    messages.length === 0 ? pageSize : Math.min(pageSize, messages.length),
+  )
+  const [previousBounds, setPreviousBounds] = useState({
+    length: messages.length,
+    pageSize,
+  })
+  if (
+    previousBounds.length !== messages.length ||
+    previousBounds.pageSize !== pageSize
+  ) {
+    setPreviousBounds({ length: messages.length, pageSize })
+    setVisibleCount((previous) =>
+      messages.length === 0
+        ? pageSize
+        : Math.min(
+            messages.length,
+            Math.max(Math.min(pageSize, messages.length), previous),
+          ),
+    )
+  }
   const pendingSessionScrollRef = useRef(false)
 
   /**
@@ -410,27 +430,6 @@ export function useChatScroll({
     }
     scrollToBottom({ ignoreNearBottom: true, behavior: 'auto' })
   }, [messages, scrollToBottom])
-
-  useEffect(() => {
-    setVisibleCount((prev) => {
-      // eslint-disable-line react-hooks/set-state-in-effect -- clamp visible count to message bounds
-      if (messages.length === 0) {
-        return pageSize
-      }
-
-      const desired = Math.min(pageSize, messages.length)
-
-      if (prev < desired) {
-        return desired
-      }
-
-      if (prev > messages.length) {
-        return messages.length
-      }
-
-      return prev
-    })
-  }, [messages.length, pageSize])
 
   // Track scroll position for scroll-to-bottom button (using window scroll).
   // Also detects user-initiated upward scroll that does NOT come through

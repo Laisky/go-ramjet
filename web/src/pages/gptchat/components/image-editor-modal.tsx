@@ -113,7 +113,7 @@ export function ImageEditorModal({
 
     const maskCtx = maskCanvas.getContext('2d')
     maskCtx?.clearRect(0, 0, width, height)
-    setHasMask(false) // eslint-disable-line react-hooks/set-state-in-effect -- sync with canvas reset
+    setHasMask(false)
   }, [open, loadedImage])
 
   const pointerToCanvas = useCallback(

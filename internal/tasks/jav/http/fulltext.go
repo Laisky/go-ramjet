@@ -10,7 +10,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	gutils "github.com/Laisky/go-utils/v6"
-	gset "github.com/deckarep/golang-set/v2"
+	gset "github.com/deckarep/golang-set/v3"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"

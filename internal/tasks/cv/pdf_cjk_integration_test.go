@@ -66,7 +66,7 @@ Hello 世界 こんにちは 안녕!
 	require.NoError(t, os.WriteFile(out, pdfBytes, 0o644))
 	t.Logf("rendered %d bytes to %s", len(pdfBytes), out)
 
-	pageCount, err := api.PageCount(bytes.NewReader(pdfBytes), model.NewDefaultConfiguration())
+	pageCount, err := api.PageCount(t.Context(), bytes.NewReader(pdfBytes), model.NewDefaultConfiguration())
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, pageCount, 1)
 	t.Logf("PDF has %d page(s); open %s to visually verify CJK glyphs", pageCount, out)

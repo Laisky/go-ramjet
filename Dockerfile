@@ -1,17 +1,17 @@
 # db . -t ppcelery/go-ramjet:latest
-FROM node:24-bookworm AS nodebuild
+FROM node:24.21.0-bookworm AS nodebuild
 
 WORKDIR /app
 ADD . .
 
 # Build the unified SPA UI
-RUN corepack enable || true
+RUN corepack enable
 RUN pnpm -C web install --frozen-lockfile
 RUN pnpm -C web build
 
 # =====================================
 
-FROM golang:1.27.0-bookworm AS gobuild
+FROM golang:1.27.1-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
@@ -31,7 +31,7 @@ ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH
 # causes cgo build errors like:
 #   could not determine what C.phrase_list_grammar_set_weight refers to
 # Use Microsoft's official, immutable, versioned drop so the two never drift.
-ARG SPEECHSDK_VERSION=1.50.0
+ARG SPEECHSDK_VERSION=1.52.0
 RUN mkdir -p $SPEECHSDK_ROOT \
     && wget -O SpeechSDK-Linux.tar.gz \
         "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz" \

@@ -110,18 +110,12 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
  */
 export function GPTChatPaymentPage() {
   const [isLoading, setIsLoading] = useState(false)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  // Check for client secret in URL (redirect from Stripe)
-  useEffect(() => {
-    const secret = new URLSearchParams(window.location.search).get(
+  const [clientSecret, setClientSecret] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get(
       'payment_intent_client_secret',
-    )
-    if (secret) {
-      setClientSecret(secret)
-    }
-  }, [])
+    ),
+  )
+  const [error, setError] = useState<string | null>(null)
 
   async function createIntent() {
     setIsLoading(true)

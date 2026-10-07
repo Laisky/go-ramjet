@@ -23,7 +23,16 @@ export function DatasetManager({ config }: DatasetManagerProps) {
   const [activeChatbot, setActiveChatbot] = useState<string | undefined>(
     undefined,
   )
-  const [isDatasetLoading, setIsDatasetLoading] = useState(false)
+  const [isDatasetMutationLoading, setIsDatasetLoading] = useState(false)
+  const requestKey = JSON.stringify([
+    datasetKey,
+    config.api_token,
+    config.api_base,
+  ])
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const isDatasetLoading =
+    isDatasetMutationLoading ||
+    Boolean(datasetKey && config.api_token && loadedRequestKey !== requestKey)
   const [datasetError, setDatasetError] = useState<string | null>(null)
 
   const randomString = useCallback((length = 16) => {
@@ -192,9 +201,28 @@ export function DatasetManager({ config }: DatasetManagerProps) {
   }, [randomString])
 
   useEffect(() => {
-    if (!datasetKey) return
-    refreshDatasets()
-  }, [datasetKey, refreshDatasets])
+    if (!datasetKey || !config.api_token) return
+    let active = true
+    void api
+      .listDatasets(datasetKey, config.api_token, config.api_base)
+      .then((response) => {
+        if (!active) return
+        setDatasets(response.datasets || [])
+        setDatasetError(null)
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setDatasetError(
+            error instanceof Error ? error.message : String(error),
+          )
+      })
+      .finally(() => {
+        if (active) setLoadedRequestKey(requestKey)
+      })
+    return () => {
+      active = false
+    }
+  }, [datasetKey, config.api_token, config.api_base, requestKey])
 
   const acceptFileTypes = useMemo(() => '.pdf,.md,.ppt,.pptx,.doc,.docx', [])
 

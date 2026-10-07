@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
+	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
@@ -426,29 +426,29 @@ func fetchDynamicHTMLByChromedp(ctx context.Context, targetURL string) (htmlCont
 	chromeCtx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
-	err = chromedp.Run(chromeCtx, chromedp.Tasks{
-		network.Enable(),
-		network.SetExtraHTTPHeaders(network.Headers(headers)),
+	if _, err = chromedp.Call(chromeCtx, network.Enable, network.EnableParams{}); err != nil {
+		return "", errors.Wrapf(err, "enable browser network for %q", targetURL)
+	}
+	if _, err = chromedp.Call(chromeCtx, network.SetExtraHTTPHeaders, network.SetExtraHTTPHeadersParams{
+		Headers: network.Headers(headers),
+	}); err != nil {
+		return "", errors.Wrapf(err, "set browser headers for %q", targetURL)
+	}
+
+	err = chromedp.Do(chromeCtx,
 		chromedp.Navigate(targetURL),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var readyState string
-			for {
-				if err := chromedp.Evaluate("document.readyState", &readyState).Do(ctx); err != nil {
-					return err
-				}
-				if readyState == "complete" {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-			return nil
-		}),
-		chromedp.Sleep(2 * time.Second),
-		chromedp.InnerHTML("html", &htmlContent, chromedp.ByQuery),
-	})
+		chromedp.WaitReady(chromedp.CSS("body")),
+		chromedp.Poll[chromedp.Void](`document.readyState === "complete"`,
+			chromedp.WithPollingInterval(100*time.Millisecond),
+			chromedp.WithPollingTimeout(0)),
+		chromedp.Sleep(2*time.Second),
+	)
 	if err != nil {
 		return "", errors.Wrapf(err, "run chromedp for %q", targetURL)
+	}
+	htmlContent, err = chromedp.Run(chromeCtx, chromedp.InnerHTML(chromedp.CSS("html")))
+	if err != nil {
+		return "", errors.Wrapf(err, "read browser HTML for %q", targetURL)
 	}
 
 	return htmlContent, nil
@@ -611,13 +611,12 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	logger := gmw.GetLogger(ctx).Named("extract_html_body")
 
 	// 1) local conversion first
-	converter := md.NewConverter("", true, nil)
 	innerHTML := inner.Bytes()
 	localInput := innerHTML
 	if len(localInput) == 0 {
 		localInput = bodyContent
 	}
-	localMarkdown, localErr := converter.ConvertString(string(localInput))
+	localMarkdown, localErr := md.ConvertString(string(localInput))
 	if localErr == nil {
 		localMarkdown = strings.TrimSpace(localMarkdown)
 		if localMarkdown != "" {
