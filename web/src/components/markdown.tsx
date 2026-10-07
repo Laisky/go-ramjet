@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 
 import { cn } from '@/utils/cn'
+import { createMermaidConfig } from '@/utils/mermaid-config'
 import 'katex/dist/katex.min.css'
 
 // ANSI escape sequence pattern built via string to avoid no-control-regex lint error.
@@ -314,17 +315,7 @@ function MermaidDiagram({ code }: MermaidDiagramProps) {
         const mermaid = (await import('mermaid')).default
 
         // Initialize with proper config
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: scheme === 'dark' ? 'dark' : 'default',
-          securityLevel: 'strict',
-          fontFamily: 'inherit',
-          flowchart: {
-            useMaxWidth: true,
-            htmlLabels: true,
-            curve: 'basis',
-          },
-        })
+        mermaid.initialize(createMermaidConfig(scheme))
 
         if (!containerRef.current || cancelled) {
           return

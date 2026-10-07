@@ -37,7 +37,7 @@
     "idb-keyval": "^6.2.2",
     "katex": "^0.16.27",
     "lucide-react": "^0.541.0",
-    "mermaid": "^11.12.2",
+    "mermaid": "^11.15.0",
     "next-themes": "^0.4.6",
     "pouchdb-browser": "^9.0.0",
     "react": "^19.2.0",
@@ -70,12 +70,24 @@
     "fake-indexeddb": "^6.2.5",
     "globals": "^16.5.0",
     "jsdom": "^26.1.0",
-    "postcss": "^8.5.6",
+    "postcss": "^8.5.10",
     "prettier": "^3.6.0",
     "tailwindcss": "^4.1.12",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^8.0.1",
+    "vite": "^8.0.5",
     "vitest": "^4.1.0"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "pnpm": {
+    "overrides": {
+      "ajv@>=6.0.0 <6.14.0": "^6.14.0",
+      "minimatch@>=3.0.0 <3.1.5": "^3.1.5",
+      "flatted@>=3.0.0 <3.4.2": "^3.4.2",
+      "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
+      "brace-expansion@>=1.0.0 <1.1.13": "^1.1.13",
+      "uuid@>=11.0.0 <11.1.1": "^11.1.1",
+      "postcss@>=8.0.0 <8.5.10": "^8.5.10"
+    }
   }
 }
