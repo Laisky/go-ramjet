@@ -1,0 +1,103 @@
+name: Prepare follow-up dependency compatibility
+
+on:
+  push:
+    branches:
+      - dependabot/npm_and_yarn/web/katex-0.18.2
+    paths:
+      - .github/workflows/refresh-followup-dependencies.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-followup-dependencies-20261007
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'Laisky/go-ramjet'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install the original KaTeX PR graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm --version
+          pnpm -C web install --frozen-lockfile --strict-peer-dependencies
+      - name: Reproduce renderer and stylesheet class drift before fixing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if pnpm -C web exec vitest run src/components/markdown-dependency-compatibility.test.tsx \
+            -t 'uses the stylesheet package renderer classes' --reporter=verbose > /tmp/katex-negative.txt 2>&1; then
+            cat /tmp/katex-negative.txt
+            echo 'Expected the original KaTeX PR to fail renderer compatibility tests.'
+            exit 1
+          fi
+          cat /tmp/katex-negative.txt
+          grep -q 'AssertionError' /tmp/katex-negative.txt
+          grep -q 'stylesheet package renderer classes' /tmp/katex-negative.txt
+      - name: Integrate Vitest and DOMPurify and align all math renderers
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Start from the accepted master lockfile, not a reformatted bot graph.
+          git show f702007d38a31faced18de514746df225d5fd4e9:web/pnpm-lock.yaml > web/pnpm-lock.yaml
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const file = 'web/package.json'
+          const pkg = JSON.parse(readFileSync(file, 'utf8'))
+          pkg.dependencies.katex = '^0.18.2'
+          pkg.dependencies.dompurify = '^3.4.16'
+          pkg.devDependencies.vitest = '^4.1.11'
+          pkg.pnpm.overrides['katex@>=0.0.0 <0.18.2'] = '^0.18.2'
+          pkg.pnpm.overrides['dompurify@>=3.0.0 <3.4.16'] = '^3.4.16'
+          writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`)
+          const testFile = 'web/src/utils/dependency-floors.test.ts'
+          let tests = readFileSync(testFile, 'utf8')
+          if (!tests.includes("['dompurify', 3, '3.4.1']")) {
+            throw new Error('Expected the previously accepted dependency floors')
+          }
+          tests = tests.replace("['dompurify', 3, '3.4.1']", "['dompurify', 3, '3.4.16'],\n  ['katex', 0, '0.18.2'],\n  ['vitest', 4, '4.1.11']")
+          tests = tests.replace("['vite', 'postcss', 'mermaid', 'dompurify']", "['vite', 'postcss', 'mermaid', 'dompurify', 'katex', 'vitest']")
+          writeFileSync(testFile, tests)
+          JS
+          pnpm -C web install --no-frozen-lockfile --strict-peer-dependencies
+          pnpm -C web exec prettier --write package.json pnpm-lock.yaml \
+            src/components/markdown-dependency-compatibility.test.tsx \
+            src/utils/dependency-floors.test.ts
+          pnpm -C web install --frozen-lockfile --strict-peer-dependencies
+          pnpm -C web why katex dompurify vitest
+      - name: Validate the fixed graph and real rendering behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C web exec vitest run src/components/markdown-dependency-compatibility.test.tsx \
+            src/utils/mermaid-config.test.ts src/utils/dependency-floors.test.ts \
+            src/utils/package-manager.test.ts --reporter=verbose
+          pnpm -C web exec eslint src/components/markdown-dependency-compatibility.test.tsx \
+            src/utils/dependency-floors.test.ts
+      - name: Commit only validated dependency and test changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- web/package.json web/pnpm-lock.yaml \
+            web/src/components/markdown-dependency-compatibility.test.tsx \
+            web/src/utils/dependency-floors.test.ts
+          git diff --cached --stat
+          git commit -m 'fix(deps): align KaTeX renderers and integrate Vitest and DOMPurify updates'
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          echo "Prepared commit: $(git rev-parse HEAD)"
