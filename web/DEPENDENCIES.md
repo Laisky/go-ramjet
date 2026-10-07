@@ -2,100 +2,110 @@
 
 ## Reproducible commands
 
-Use Node.js 24, as used by CI and the production Docker build, and enable
-Corepack. The repository root and `web/package.json` both pin the same exact
-pnpm release. The root manifest exists because Corepack selects its executable
-before pnpm processes `-C web`; omitting the root pin can select an incompatible
-pnpm major on a fresh machine.
+Use Node.js 24.21.0, the production and CI LTS runtime, and enable Corepack.
+The repository root and `web/package.json` both pin pnpm 12.9.1. The root
+manifest exists because Corepack selects its executable before pnpm processes
+`-C web`; omitting the root pin can select an incompatible major version.
 
 From the repository root:
 
 ```sh
 corepack enable
 pnpm -C web install --frozen-lockfile
+pnpm -C web lint
 pnpm -C web test
 pnpm -C web build
 ```
 
-Update both package-manager pins together. Their regression test checks that they
-remain identical. Peer-dependency validation is enabled in `web/.npmrc`.
+Update both package-manager pins together. Their regression test checks that
+they remain identical. pnpm 12 reads the strict peer-dependency policy,
+transitive overrides, and dependency build-script policy from
+`web/pnpm-workspace.yaml`; do not move these settings back to `.npmrc` or
+`package.json`. Dependency build scripts are not enabled by this upgrade.
+
+## Native TypeScript and lint API
+
+The build uses TypeScript 7.0.2's native compiler. ESLint's TypeScript parser
+still requires the JavaScript Compiler API, so the project uses Microsoft's
+[documented dual-package setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/):
+
+- `@typescript/native` aliases `typescript@^7.0.2` and provides the compiler.
+- `typescript` aliases `@typescript/typescript6@^6.0.2` for API consumers.
+
+Keep both entries. Installing only the native compiler as `typescript` breaks
+API-dependent lint tools; bypassing peer checks is not a fix. TypeScript 7 no
+longer accepts `baseUrl`, so aliases use explicit relative `paths` entries.
+Vite and Vitest configuration uses `import.meta.dirname` for native ESM loading.
 
 ## Dependency update policy
 
-The October 2026 reconciliation incorporates dependency PRs #44, #47, #52, #53,
-#55, #57, #61, #62, and #64 on the current application code rather than merging
-nine stale copies of the same lockfile. Direct dependency minimums are raised;
-conditional transitive overrides stay within their existing major versions and
-allow newer compatible patches. Avoid exact-version overrides for peer ranges,
-which can reject a newer compatible package already selected elsewhere.
+PR #70 reconciled dependency PRs #44, #47, #52, #53, #55, #57, #61, #62, and #64
+on current application code instead of merging nine stale lockfiles. PR #72
+integrated #71 and #73 with math-rendering and request-lifecycle fixes. PR #74
+updates the stable toolchain and major dependencies, including React 19.3,
+Mermaid 12.1, Vitest 5.0.3, and ESLint 10.12.
 
 Generate the lockfile with pnpm, then format it with the repository's Prettier
-configuration. Do not edit integrity hashes manually. Dependency-floor tests
-check the resolved package section, including transitive PostCSS copies, and
-preserve the existing DOMPurify minimum. A dependency removed entirely from the
-transitive graph does not need to be reintroduced solely to satisfy an old PR.
+configuration. Never edit integrity hashes manually. Conditional transitive
+minimum overrides retain compatible version ranges; avoid an exact override
+that rejects a newer compatible peer dependency.
+
+pnpm 12 writes multiple YAML documents: toolchain metadata and the application
+graph. `readResolvedPackages` parses every document, not just the first
+`packages` section. Regression tests cover scoped/quoted names, inline mappings,
+peer-qualified keys, malformed metadata, and exclusion of snapshot entries.
+Mandatory application packages must be present, and every resolved copy must
+meet its minimum. Historical same-major floors remain enforced when present;
+a removed transitive package does not need to be reintroduced.
 
 ## Mermaid compatibility
 
-Mermaid 11.15 changes dotted class-diagram namespaces into hierarchical groups
-by default. Existing chat diagrams use flat dotted labels such as `api.v1`.
-`createMermaidConfig` explicitly disables automatic hierarchical namespaces to
-preserve those diagrams, while retaining strict security and both color themes.
-Tests exercise the real Mermaid parser and layout data, valid flowcharts and
-sequence diagrams, and malformed-input rejection.
+Mermaid 11.15 changed dotted class-diagram namespaces into hierarchical groups
+by default. Existing diagrams use flat labels such as `api.v1`.
+`createMermaidConfig` continues to disable automatic hierarchical namespaces
+with Mermaid 12, retaining strict security and both color themes. Tests exercise
+the real parser and layout data, flowcharts, sequence diagrams, and invalid input.
 
-Removing the compatibility setting reproduces failures in both namespace-theme
-tests. Restoring the pre-update lockfile reproduces nine dependency-floor
-failures. These negative controls were verified during preparation, followed by
-the passing fixed tests. They are not tests of vulnerability exploitability.
-
-Vite and Vitest configurations use `import.meta.dirname` rather than CommonJS
-`__dirname`, so the path aliases also work with native ESM configuration loading.
-The normal PR pipeline remains the final merge gate for tests, formatting,
-lint, type checking, backend checks, and the production image build.
+During PR #70 preparation, removing that setting failed both namespace-theme
+tests; restoring the pre-update lockfile failed nine dependency-floor checks.
+These are rendering and dependency regression checks, not exploitability tests.
 
 ## Math rendering and sanitizer alignment
 
-The follow-up reconciliation covers PRs #71, #72, and #73. Updating the direct
-KaTeX dependency alone changes the imported CSS but can leave `rehype-katex`
-using a nested 0.16 renderer. KaTeX 0.18 introduced prefixed classes such as
-`katex-base`, while the old renderer emits `base`. Four real Markdown rendering
-tests reproduce that mismatch for inline/display fractions, square roots, and
-aligned equations before the transitive renderer is updated.
+Upgrading only the direct KaTeX package changes its imported CSS but can leave
+`rehype-katex` using a nested older renderer. KaTeX 0.18 introduced prefixed
+classes such as `katex-base`; its old renderer emitted `base`. Real Markdown
+rendering tests reproduced the mismatch for inline/display fractions, square
+roots, and aligned equations during PR #72 preparation.
 
-KaTeX is aligned across the dependency graph at the supported 0.19 release line.
-This is an intentional compatibility-tested cross-minor override for a pre-1.0
-package, not an assumption that every 0.x minor release is interchangeable.
-Version 0.18.11 was deprecated upstream after accidentally shipping strict-mode
-breaking changes; the 0.19 migration additionally checks that missing font
-metrics remain non-fatal under the application's default policy. Keep renderer
-and stylesheet versions aligned when revising this override.
+All KaTeX copies remain aligned at the 0.19 release line. This is an intentional,
+compatibility-tested cross-minor override for a pre-1.0 package, not an assumption
+that every 0.x minor is interchangeable. The missing-font-metrics test also
+checks that the default strict policy remains non-fatal. Keep the renderer and
+stylesheet versions aligned when updating the override.
 
-Vitest stays on the 4.1 release line with a 4.1.11 minimum. DOMPurify has a 3.4.16
-minimum for direct and nested copies, including Mermaid's sanitizer. Regression
-tests cover active HTML removal, SVG geometry, and preservation of KaTeX classes
-and accessible MathML. DOMPurify's default removal of annotation elements is
-retained; no sanitizer allowlist is relaxed to make the tests pass. Malformed
-math still has a readable fallback, and untrusted math does not create
-JavaScript links.
+Direct and nested DOMPurify copies have a 3.4.16 minimum, including Mermaid's
+sanitizer. Tests cover active HTML removal, SVG geometry, KaTeX classes and
+accessible MathML. DOMPurify's default annotation removal is retained. No
+sanitizer allowlist is relaxed. Malformed math has a readable fallback, and
+untrusted math cannot create executable links.
 
-The dependency-floor tests include all resolved KaTeX and DOMPurify copies, not
-just the direct imports. Preparation verifies the negative control on the
-original KaTeX-only PR, then checks the fixed rendering behavior, Mermaid
-compatibility, package-manager consistency, strict installation, and lint.
-The full normal PR pipeline is still required before merging this update.
+## Request and rendering lifecycles
 
-## Version-check lifecycle
+Vitest 4.1.11 originally exposed a version-check request still running after
+unmount: all assertions passed, but late logging failed worker teardown. The
+hook aborts effect-scoped requests and checks cancellation after asynchronous
+response/storage reads. Routing tests use deterministic network responses and
+unmount before restoring globals. These guards remain active under Vitest 5.
 
-Full-suite validation with Vitest 4.1.11 exposed a pending version-check
-request after the chat-domain tests had unmounted. All assertions passed,
-but the late fetch rejection logged during worker teardown and failed the
-run. The hook now aborts its effect-scoped requests on unmount and checks
-cancellation after asynchronous response and storage reads. Real failures
-are still reported while mounted; cancellation is not reported as an error.
-Routing tests stub network responses and unmount before restoring globals.
+The stable ESLint/React upgrade also validates effect lifetimes. CV content and
+history requests ignore cancelled results, initial CV requests use the available
+authentication token, and portal targets are held in state rather than read
+from refs during render. Copy-feedback keys change only on a copy event.
+Dataset and prompt-shortcut loading discard stale results. Search navigation
+uses a cancellable animation frame, and pagination/filter bounds are reconciled
+without cascading effects. Storage quota errors preserve the underlying cause.
 
-Lifecycle tests reproduce missing cancellation, late failure logging, and
-late response persistence on the original hook. They also retain coverage
-for recording the initial version, announcing updates, and ignoring updates.
-No Vitest error reporting, test assertions, or CI gates are disabled.
+Full-project ESLint, unit tests, TypeScript, and the production Vite build are
+required CI gates. Backend browser/PDF integration and the production image
+build are also required. No test-error reporting or validation gate is disabled.
