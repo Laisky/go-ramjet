@@ -38,7 +38,7 @@ func TestRenderRecommendationLettersPDFWithFetcher(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, pdfBytes)
 
-	pageCount, err := api.PageCount(bytes.NewReader(pdfBytes), model.NewDefaultConfiguration())
+	pageCount, err := api.PageCount(t.Context(), bytes.NewReader(pdfBytes), model.NewDefaultConfiguration())
 	require.NoError(t, err)
 	require.Equal(t, 2, pageCount)
 }
@@ -55,7 +55,7 @@ func TestMergePDFBytes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, merged)
 
-	pageCount, err := api.PageCount(bytes.NewReader(merged), model.NewDefaultConfiguration())
+	pageCount, err := api.PageCount(t.Context(), bytes.NewReader(merged), model.NewDefaultConfiguration())
 	require.NoError(t, err)
 	require.Equal(t, 2, pageCount)
 }

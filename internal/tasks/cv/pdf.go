@@ -13,7 +13,6 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	"github.com/yuin/goldmark/v2/renderer/html"
@@ -223,7 +222,8 @@ func (s *PDFService) RenderAndStore(ctx context.Context, content string) error {
 
 // CVPDFRenderer converts markdown content into a styled PDF.
 type CVPDFRenderer struct {
-	markdown goldmark.Markdown
+	parser   parser.Parser
+	renderer html.Renderer
 	tmpl     *template.Template
 }
 
@@ -234,15 +234,16 @@ func NewCVPDFRenderer() (*CVPDFRenderer, error) {
 		return nil, errors.Wrap(err, "parse cv pdf template")
 	}
 
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
-		goldmark.WithRendererOptions(html.WithUnsafe()),
-	)
-
 	return &CVPDFRenderer{
-		markdown: md,
-		tmpl:     tmpl,
+		parser: parser.New(
+			parser.WithExtensions(extension.GFMParser),
+			parser.WithAutoHeadingID(),
+		),
+		renderer: html.New(
+			html.WithExtensions(extension.GFMHTMLRenderer),
+			html.WithUnsafe(),
+		),
+		tmpl: tmpl,
 	}, nil
 }
 
@@ -287,7 +288,9 @@ func (r *CVPDFRenderer) Render(ctx context.Context, content string) ([]byte, err
 // renderMarkdown converts markdown into HTML.
 func (r *CVPDFRenderer) renderMarkdown(content string) (string, error) {
 	var buf bytes.Buffer
-	if err := r.markdown.Convert([]byte(content), &buf); err != nil {
+	source := []byte(content)
+	document := r.parser.Parse(source)
+	if err := r.renderer.Render(&buf, source, document); err != nil {
 		return "", errors.Wrap(err, "render markdown")
 	}
 
@@ -354,45 +357,36 @@ func renderHTMLToPDF(ctx context.Context, htmlContent string) ([]byte, error) {
 	chromeCtx, cancelChrome := chromedp.NewContext(allocCtx)
 	defer cancelChrome()
 
-	var pdfData []byte
-	if err := chromedp.Run(
-		chromeCtx,
+	if err := chromedp.Do(chromeCtx,
 		chromedp.Navigate(dataURL),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			// Wait for web fonts (Google Fonts CDN, including Noto CJK families) to
-			// finish loading before printing. Without this the renderer can race
-			// and emit tofu/mojibake for any glyph that depends on a still-loading
-			// font face, e.g. Chinese characters served via Noto Sans/Serif SC.
-			_, exp, err := runtime.Evaluate(`document.fonts.ready.then(() => true)`).
-				WithAwaitPromise(true).
-				Do(ctx)
-			if err != nil {
-				return errors.Wrap(err, "await document.fonts.ready")
-			}
-			if exp != nil {
-				return errors.WithStack(errors.New(exp.Error()))
-			}
-			return nil
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			pdfData, _, err = page.PrintToPDF().
-				WithPrintBackground(true).
-				WithPreferCSSPageSize(true).
-				WithTransferMode(page.PrintToPDFTransferModeReturnAsBase64).
-				Do(ctx)
-			if err != nil {
-				return err
-			}
-			if len(pdfData) == 0 {
-				return errors.WithStack(errors.New("empty pdf output"))
-			}
-			return nil
-		}),
+		chromedp.WaitReady(chromedp.CSS("body")),
 	); err != nil {
-		return nil, errors.Wrap(err, "run chromedp")
+		return nil, errors.Wrap(err, "navigate PDF document")
 	}
 
-	return pdfData, nil
+	// Await the font promise before printing, including its JavaScript errors.
+	fonts, err := chromedp.Call(chromeCtx, runtime.Evaluate, runtime.EvaluateParams{
+		Expression:   `document.fonts.ready.then(() => true)`,
+		AwaitPromise: new(true),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "await document.fonts.ready")
+	}
+	if fonts.ExceptionDetails != nil {
+		return nil, errors.WithStack(errors.New(fonts.ExceptionDetails.Error()))
+	}
+
+	result, err := chromedp.Call(chromeCtx, page.PrintToPDF, page.PrintToPDFParams{
+		PrintBackground:   new(true),
+		PreferCSSPageSize: new(true),
+		TransferMode:      page.PrintToPDFTransferModeReturnAsBase64,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "print PDF document")
+	}
+	if len(result.Data) == 0 {
+		return nil, errors.WithStack(errors.New("empty pdf output"))
+	}
+
+	return result.Data, nil
 }

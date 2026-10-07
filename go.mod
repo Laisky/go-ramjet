@@ -35,7 +35,6 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/stripe/stripe-go/v87 v87.0.0
 	github.com/yanyiwu/gojieba v1.4.7
-	github.com/yuin/goldmark v1.8.6
 	github.com/yuin/goldmark/v2 v2.1.6
 	go.mongodb.org/mongo-driver v1.17.10
 	golang.org/x/image v0.46.0
@@ -157,6 +156,7 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xlzd/gotp v0.1.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.dedis.ch/kyber/v3 v3.1.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.9.2 // indirect

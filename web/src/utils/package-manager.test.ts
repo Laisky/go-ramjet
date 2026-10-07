@@ -17,7 +17,11 @@ describe('reproducible frontend tooling', () => {
 
 describe('native compiler and API compatibility', () => {
   it('keeps the TypeScript 7 compiler separate from the supported lint API', () => {
-    expect(webPackage.devDependencies['@typescript/native']).toBe('npm:typescript@^7.0.2')
-    expect(webPackage.devDependencies.typescript).toBe('npm:@typescript/typescript6@^6.0.2')
+    expect(webPackage.devDependencies['@typescript/native']).toBe(
+      'npm:typescript@^7.0.2',
+    )
+    expect(webPackage.devDependencies.typescript).toBe(
+      'npm:@typescript/typescript6@^6.0.2',
+    )
   })
 })

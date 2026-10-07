@@ -246,7 +246,7 @@ func mergePDFBytes(ctx context.Context, pdfs ...[]byte) ([]byte, error) {
 	}
 
 	var merged bytes.Buffer
-	if err := api.MergeRaw(readers, &merged, false, nil); err != nil {
+	if err := api.MergeRaw(ctx, readers, &merged, false, nil); err != nil {
 		return nil, errors.Wrap(err, "merge pdf payloads")
 	}
 

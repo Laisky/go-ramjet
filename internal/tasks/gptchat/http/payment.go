@@ -48,6 +48,7 @@ func PaymentHandler(c *gin.Context) {
 		},
 	}
 
+	params.Context = c.Request.Context()
 	pi, err := paymentintent.New(params)
 	if web.AbortErr(c, err) {
 		return

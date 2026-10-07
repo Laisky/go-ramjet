@@ -58,14 +58,17 @@ describe('resolved dependency PR floors', () => {
     },
   )
 
-  it.each(requiredFloors)('requires every %s copy to meet %s', (name, minimum) => {
-    const versions = [...(packages.get(name) ?? [])]
-    expect(versions.length).toBeGreaterThan(0)
-    for (const version of versions) {
-      expect(version).toMatch(/^\d+\.\d+\.\d+$/)
-      expect(compareVersions(version, minimum)).toBeGreaterThanOrEqual(0)
-    }
-  })
+  it.each(requiredFloors)(
+    'requires every %s copy to meet %s',
+    (name, minimum) => {
+      const versions = [...(packages.get(name) ?? [])]
+      expect(versions.length).toBeGreaterThan(0)
+      for (const version of versions) {
+        expect(version).toMatch(/^\d+\.\d+\.\d+$/)
+        expect(compareVersions(version, minimum)).toBeGreaterThanOrEqual(0)
+      }
+    },
+  )
 })
 
 describe('lockfile format compatibility', () => {
