@@ -1,0 +1,128 @@
+name: Verify version-check lifecycle compatibility
+
+on:
+  push:
+    branches:
+      - dependabot/npm_and_yarn/web/katex-0.18.2
+    paths:
+      - .github/workflows/verify-version-check-lifecycle.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-version-check-lifecycle-20261007
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Laisky/go-ramjet'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install the accepted dependency graph
+        run: |
+          corepack enable
+          pnpm -C web install --frozen-lockfile --strict-peer-dependencies
+      - name: Reproduce lifecycle failures before changing the hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          if pnpm -C web exec vitest run src/pages/gptchat/hooks/__tests__/use-version-check.test.ts \
+            --reporter=verbose > /tmp/lifecycle-negative.txt 2>&1; then
+            cat /tmp/lifecycle-negative.txt
+            echo 'Expected lifecycle regression tests to fail before the fix.'
+            exit 1
+          fi
+          cat /tmp/lifecycle-negative.txt
+          grep -q 'AssertionError' /tmp/lifecycle-negative.txt
+          grep -q 'aborts an in-flight request' /tmp/lifecycle-negative.txt
+      - name: Scope requests to the effect lifetime and isolate routing tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('web/src/pages/gptchat/hooks/use-version-check.ts')
+          text = path.read_text()
+          replacements = [
+              ('const checkUpgrade = useCallback(async () => {',
+               'const checkUpgrade = useCallback(async (signal: AbortSignal) => {\n    if (signal.aborted) return'),
+              ("const resp = await fetch(url, { cache: 'no-cache' })\n      if (!resp.ok) return",
+               "const resp = await fetch(url, { cache: 'no-cache', signal })\n      if (signal.aborted || !resp.ok) return"),
+              ('const data = (await resp.json()) as VersionResponse',
+               'const data = (await resp.json()) as VersionResponse\n      if (signal.aborted) return'),
+              ('const ignoredVer = await kvGet<string>(StorageKeys.IGNORED_VERSION)',
+               'const ignoredVer = await kvGet<string>(StorageKeys.IGNORED_VERSION)\n        if (signal.aborted) return'),
+              ("console.warn('Failed to check version:', err)",
+               "if (!signal.aborted) {\n        console.warn('Failed to check version:', err)\n      }"),
+              ('    checkUpgrade()\n    const timer = setInterval(checkUpgrade, CHECK_INTERVAL)\n    return () => clearInterval(timer)',
+               '    const controller = new AbortController()\n    void checkUpgrade(controller.signal)\n    const timer = setInterval(() => {\n      void checkUpgrade(controller.signal)\n    }, CHECK_INTERVAL)\n    return () => {\n      controller.abort()\n      clearInterval(timer)\n    }'),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one hook patch target: {old}')
+              text = text.replace(old, new)
+          path.write_text(text)
+          path = Path('web/src/__tests__/chat-domain.test.tsx')
+          text = path.read_text()
+          text = text.replace("import { screen, waitFor } from '@testing-library/react'",
+                              "import { act, cleanup, screen, waitFor } from '@testing-library/react'")
+          text = text.replace("  beforeEach(() => {\n    setSiteMeta('default')\n  })",
+                              "  beforeEach(() => {\n    setSiteMeta('default')\n    document.title = ''\n    // Routing tests use deterministic version responses, never live requests.\n    vi.stubGlobal(\n      'fetch',\n      vi.fn<typeof fetch>().mockImplementation(async () =>\n        Response.json({ Settings: [] }),\n      ),\n    )\n  })")
+          text = text.replace('  afterEach(() => {\n    vi.unstubAllGlobals()',
+                              '  afterEach(async () => {\n    cleanup()\n    await act(async () => {})\n    vi.unstubAllGlobals()')
+          path.write_text(text)
+          path = Path('web/DEPENDENCIES.md')
+          path.write_text(path.read_text() + '''
+          ## Version-check lifecycle
+
+          Full-suite validation with Vitest 4.1.11 exposed a pending version-check
+          request after the chat-domain tests had unmounted. All assertions passed,
+          but the late fetch rejection logged during worker teardown and failed the
+          run. The hook now aborts its effect-scoped requests on unmount and checks
+          cancellation after asynchronous response and storage reads. Real failures
+          are still reported while mounted; cancellation is not reported as an error.
+          Routing tests stub network responses and unmount before restoring globals.
+
+          Lifecycle tests reproduce missing cancellation, late failure logging, and
+          late response persistence on the original hook. They also retain coverage
+          for recording the initial version, announcing updates, and ignoring updates.
+          No Vitest error reporting, test assertions, or CI gates are disabled.
+          '''.replace('\n          ', '\n'))
+          PY
+      - name: Format and validate the fixed frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C web exec prettier --write \
+            src/pages/gptchat/hooks/use-version-check.ts \
+            src/pages/gptchat/hooks/__tests__/use-version-check.test.ts \
+            src/__tests__/chat-domain.test.tsx DEPENDENCIES.md
+          pnpm -C web exec eslint \
+            src/pages/gptchat/hooks/use-version-check.ts \
+            src/pages/gptchat/hooks/__tests__/use-version-check.test.ts \
+            src/__tests__/chat-domain.test.tsx
+          pnpm -C web test
+          pnpm -C web build
+      - name: Commit only the validated lifecycle fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- web/src/pages/gptchat/hooks/use-version-check.ts \
+            web/src/pages/gptchat/hooks/__tests__/use-version-check.test.ts \
+            web/src/__tests__/chat-domain.test.tsx web/DEPENDENCIES.md
+          git diff --cached --stat
+          git commit -m 'fix(web): cancel version polling requests and isolate routing tests'
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          echo "Validated commit: $(git rev-parse HEAD)"
