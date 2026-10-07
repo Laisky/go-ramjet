@@ -1,0 +1,5 @@
+{
+  "name": "go-ramjet-tooling",
+  "private": true,
+  "packageManager": "pnpm@10.34.6"
+}
