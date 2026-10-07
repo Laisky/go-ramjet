@@ -1,7 +1,12 @@
 import { kvGet, kvSet } from '@/utils/storage'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChatModelGPT41, DefaultModel } from '../../models'
+import {
+  ChatModelGPT6Sol,
+  DefaultModel,
+  ImageModelFluxDev,
+  ImageModelFluxPro2,
+} from '../../models'
 import { DefaultSessionConfig } from '../../types'
 import { useConfig } from '../use-config'
 
@@ -55,7 +60,7 @@ describe('useConfig', () => {
 
   it('should migrate legacy selected_model to selected_chat_model', async () => {
     const legacyConfig = {
-      selected_model: ChatModelGPT41,
+      selected_model: ChatModelGPT6Sol,
       // selected_chat_model is missing
     }
 
@@ -74,8 +79,9 @@ describe('useConfig', () => {
       { timeout: 3000 },
     )
 
-    expect(result.current.config.selected_model).toBe(ChatModelGPT41)
-    expect(result.current.config.selected_chat_model).toBe(ChatModelGPT41)
+    expect(result.current.config.selected_model).toBe(ChatModelGPT6Sol)
+    expect(result.current.config.selected_chat_model).toBe(ChatModelGPT6Sol)
+    expect(result.current.config.selected_draw_model).toBe(ImageModelFluxDev)
   })
 
   it('should use DefaultModel if no saved config exists', async () => {
@@ -93,7 +99,7 @@ describe('useConfig', () => {
 
   it('should migrate legacy image model to selected_draw_model', async () => {
     const legacyConfig = {
-      selected_model: 'dall-e-3',
+      selected_model: ImageModelFluxPro2,
     }
 
     ;(kvGet as Mock).mockImplementation((key: string) => {
@@ -108,9 +114,9 @@ describe('useConfig', () => {
       expect(result.current.isLoading).toBe(false)
     })
 
-    expect(result.current.config.selected_model).toBe('dall-e-3')
+    expect(result.current.config.selected_model).toBe(ImageModelFluxPro2)
     expect(result.current.config.selected_chat_model).toBe(DefaultModel)
-    expect(result.current.config.selected_draw_model).toBe('dall-e-3')
+    expect(result.current.config.selected_draw_model).toBe(ImageModelFluxPro2)
   })
 
   it('should update config state before async persistence completes', async () => {

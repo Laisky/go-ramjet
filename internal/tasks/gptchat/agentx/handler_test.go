@@ -34,10 +34,10 @@ import (
 // per Stream() call. Mirrors the loop package's fake (kept local here so
 // the test file does not depend on internal test packages).
 type fakeModelClient struct {
-	mu        sync.Mutex
-	scripts   [][]model.StreamChunk
-	calls     int
-	caps      model.Capabilities
+	mu      sync.Mutex
+	scripts [][]model.StreamChunk
+	calls   int
+	caps    model.Capabilities
 }
 
 func newFakeModelClient(scripts [][]model.StreamChunk) *fakeModelClient {
@@ -539,11 +539,11 @@ func TestI6_HookComposition_Redaction(t *testing.T) {
 // Stream call so the test can assert the wrapper coerced maps to typed
 // structs before they reached the model boundary.
 type recordingModelClient struct {
-	mu       sync.Mutex
-	inputs   [][]model.InputItem
-	scripts  [][]model.StreamChunk
-	calls    int
-	caps     model.Capabilities
+	mu      sync.Mutex
+	inputs  [][]model.InputItem
+	scripts [][]model.StreamChunk
+	calls   int
+	caps    model.Capabilities
 }
 
 func newRecordingModelClient(scripts [][]model.StreamChunk) *recordingModelClient {

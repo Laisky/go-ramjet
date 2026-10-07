@@ -465,7 +465,7 @@ func TestS3ContentStoreSaveRemovesVersionsOnLimit(t *testing.T) {
 	require.Equal(t, "hello", payload.Content)
 	require.NotNil(t, payload.UpdatedAt)
 	require.Equal(t, 2, client.putCalls)
-	require.Equal(t, 1, client.listCalls)
+	require.Equal(t, 2, client.listCalls, "version-limit cleanup and post-save history pruning each list versions")
 	require.Equal(t, 1, client.removeCalls)
 }
 
@@ -515,9 +515,9 @@ func (p *precleanS3Client) ListObjects(_ context.Context, _ string, _ minio.List
 	return ch
 }
 
-// TestS3ContentStorePrecleanNonCurrentVersions verifies non-current content versions are removed before upload.
+// TestS3ContentStoreSavePreservesHistoryBelowLimit verifies saved content retains existing revisions below the history limit.
 // It takes a testing.T and returns no values.
-func TestS3ContentStorePrecleanNonCurrentVersions(t *testing.T) {
+func TestS3ContentStoreSavePreservesHistoryBelowLimit(t *testing.T) {
 	t.Parallel()
 
 	client := &precleanS3Client{
@@ -533,7 +533,7 @@ func TestS3ContentStorePrecleanNonCurrentVersions(t *testing.T) {
 	_, err = store.Save(context.Background(), "hello")
 	require.NoError(t, err)
 	require.Equal(t, 1, client.putCalls)
-	require.Equal(t, 0, client.listCalls)
+	require.Equal(t, 1, client.listCalls, "post-save history pruning lists versions without deleting retained revisions")
 	require.Equal(t, 0, client.removeCalls)
 	require.Empty(t, client.removedVersionIDs)
 }

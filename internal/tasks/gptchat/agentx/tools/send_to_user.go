@@ -79,12 +79,12 @@ type SendToUserArgs struct {
 type sendToUserTool struct{}
 
 // NewSendToUserTool returns the synthetic exit tool. The loop driver is
-// expected to recognise SendToUserName *before* invoking Execute and
+// expected to recognize SendToUserName *before* invoking Execute and
 // terminate the loop directly; Execute here is the defensive fallback
 // path used when the loop driver chooses to push the call through the
 // normal Execute() pipeline (e.g. for uniform tracing).
 //
-// Execute behaviour:
+// Execute behavior:
 //
 //   - Parses call.Args into SendToUserArgs.
 //   - On parse failure: returns Result{IsError: true, Content: "send_to_user:
@@ -110,6 +110,7 @@ func (sendToUserTool) Schema() json.RawMessage { return sendToUserSchema }
 func (sendToUserTool) Execute(_ context.Context, call tool.Call, _ session.EventSink) (tool.Result, error) {
 	args, err := parseSendToUserArgs(call.Args)
 	if err != nil {
+		//nolint:nilerr // Model-visible schema errors are encoded in Result.IsError; Go errors terminate execution.
 		return tool.Result{
 			Content: "send_to_user: " + err.Error(),
 			IsError: true,
@@ -122,6 +123,7 @@ func (sendToUserTool) Execute(_ context.Context, call tool.Call, _ session.Event
 	if marshalErr != nil {
 		// Should never happen — args is plain strings/strings — but stay
 		// defensive so callers always get a usable Result.
+		//nolint:nilerr // Preserve the model-visible Result.IsError contract for argument encoding failures.
 		return tool.Result{
 			Content: "send_to_user: " + marshalErr.Error(),
 			IsError: true,

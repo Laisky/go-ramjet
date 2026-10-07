@@ -4,7 +4,7 @@ package monitor
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -74,7 +74,7 @@ func loadESStats(wg *sync.WaitGroup, url string, esStats interface{}) {
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger) // nolint: errcheck,gosec
 
-	respBytes, err := ioutil.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Logger.Error("try to read es stat body got error", zap.String("url", url), zap.Error(err))
 		return

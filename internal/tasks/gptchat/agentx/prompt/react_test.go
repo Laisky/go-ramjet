@@ -194,4 +194,3 @@ func TestAsContextHook_RecognisesMapShape(t *testing.T) {
 		t.Errorf("want system role after overwrite, got %q", sys.Role)
 	}
 }
-

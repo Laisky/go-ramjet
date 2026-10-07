@@ -11,7 +11,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/agentx/model"
 )
 
-// LLMDistiller summarises raw tool output via an upstream model.Client.
+// LLMDistiller summarizes raw tool output via an upstream model.Client.
 // It is the production backend wired by loop.NewDistillHook; the
 // deterministic head/tail truncator (FallbackTruncate) is the failure-mode
 // fallback that runs when the LLM call errors or times out.
@@ -62,7 +62,7 @@ func NewLLMDistiller(client model.Client, modelID string, cache *Cache) *LLMDist
 	}
 }
 
-// Distill summarises req.Raw. Cache hits return immediately. On LLM
+// Distill summarizes req.Raw. Cache hits return immediately. On LLM
 // failure (network error, timeout, empty output) the function returns a
 // deterministic head/tail truncation under Truncated=true and a nil
 // error so the parent ReAct loop is never stalled by a summariser
@@ -162,6 +162,8 @@ func (d *LLMDistiller) callLLM(ctx context.Context, req Request, target int) (st
 		switch chunk.Kind {
 		case model.ChunkText:
 			out.WriteString(chunk.Text)
+		case model.ChunkReasoning, model.ChunkFunction, model.ChunkUsage, model.ChunkDone:
+			// Only assistant text contributes to the summary; keep draining the stream.
 		case model.ChunkError:
 			if chunk.Err != nil {
 				streamErr = chunk.Err

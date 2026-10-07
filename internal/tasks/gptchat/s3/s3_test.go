@@ -4,6 +4,7 @@ package s3
 import (
 	"bytes"
 	"context"
+	"os"
 	"testing"
 
 	gconfig "github.com/Laisky/go-config/v2"
@@ -13,7 +14,11 @@ import (
 	"github.com/Laisky/go-ramjet/library/s3"
 )
 
+// TestGetCli exercises configured S3 uploads only when explicitly enabled.
 func TestGetCli(t *testing.T) {
+	if os.Getenv("RUN_GPT_S3_IT") == "" {
+		t.Skip("integration test disabled: set RUN_GPT_S3_IT to run")
+	}
 	ctx := context.Background()
 
 	err := gconfig.S.LoadFromFile("/opt/configs/go-ramjet/settings.yml")

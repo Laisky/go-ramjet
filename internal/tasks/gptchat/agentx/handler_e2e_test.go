@@ -687,8 +687,8 @@ func TestE4_ToolForcingPromptInvokesTool(t *testing.T) {
 		},
 		{
 			{Kind: model.ChunkFunction, FunctionCall: &model.FunctionCall{
-				CallID:    "call_send_e4",
-				Name:      "send_to_user",
+				CallID: "call_send_e4",
+				Name:   "send_to_user",
 				Arguments: rawArgs(t, map[string]any{
 					"final_answer": "The latest stable Go version is 1.26.2.",
 				}),

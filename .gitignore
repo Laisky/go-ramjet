@@ -88,4 +88,6 @@ diff.txt
 patch
 errlog
 /.claude
-/internal/tasks/gptchat/agentx/testdata/
+/internal/tasks/gptchat/agentx/testdata/*
+!/internal/tasks/gptchat/agentx/testdata/e1_tool_catalog.json
+!/internal/tasks/gptchat/agentx/testdata/e3_function_call_id_populated.json

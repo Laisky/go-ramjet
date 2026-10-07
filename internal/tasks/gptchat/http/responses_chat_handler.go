@@ -184,7 +184,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	// Image generation wins above (the existing block returns early), so we
 	// only get here for normal text models. Agent mode is opt-in via the
 	// LaiskyExtra.ChatSwitch.AgentMode pointer — absent ≡ proxy path,
-	// keeping the existing tool-relay behaviour bit-identical for every
+	// keeping the existing tool-relay behavior bit-identical for every
 	// request that does not flip the switch (acceptance criterion #5,
 	// proposal §4.2 decision #1).
 	if ctx.GetBool(ctxKeyAgentMode) {
@@ -687,7 +687,9 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 		if config.Config.RamjetURL != "" &&
 			frontendReq.LaiskyExtra != nil &&
 			!frontendReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
-			frontendReq.embeddingUrlContent(ctx, user)
+			if err := frontendReq.embeddingUrlContent(ctx, user); err != nil {
+				return nil, nil, nil, errors.Wrap(err, "enhance user query")
+			}
 		}
 
 		if frontendReq.LaiskyExtra != nil &&

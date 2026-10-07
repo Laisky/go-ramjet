@@ -14,7 +14,7 @@ const PromptVersion = 1
 // buildSystemPrompt returns the static-ish system prompt for the
 // summariser model. The bulk of the body is fixed so that providers with
 // prompt caching can hit on the prefix across calls; only the
-// target-tokens hint varies, and even that stabilises once a session is
+// target-tokens hint varies, and even that stabilizes once a session is
 // running.
 //
 // The prompt explicitly defends against indirect prompt injection: any
@@ -38,7 +38,7 @@ func buildSystemPrompt(target int) string {
 
 // buildUserPrompt assembles the per-call summariser input. The salience
 // anchors (UserPrompt, AssistantHint, ToolName, Args) tell the summariser
-// what to optimise for; Raw is fenced inside <RAW> tags so the model can
+// what to optimize for; Raw is fenced inside <RAW> tags so the model can
 // safely treat it as data.
 func buildUserPrompt(req Request, target int) string {
 	var b strings.Builder

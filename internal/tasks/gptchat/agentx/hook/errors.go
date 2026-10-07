@@ -14,6 +14,8 @@ import "fmt"
 // See proposal §3.7 for the design rationale (we diverge from Codex's
 // retry-with-escalation pattern — the conversation turn boundary is the
 // approval gate).
+//
+//nolint:errname // Preserve the exported hook sentinel name used by callers.
 type ErrAskUser struct {
 	// Code is a structured identifier for telemetry: "write_gate",
 	// "circuit_breaker", … Hooks of the same kind share a Code.

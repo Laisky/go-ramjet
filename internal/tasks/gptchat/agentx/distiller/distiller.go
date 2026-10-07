@@ -1,7 +1,7 @@
 // Package distiller turns oversize tool outputs into short, high-density
 // "Observation" strings before they enter the next ReAct round's input.
 //
-// The classic ReAct loop has an Observation role that *summarises* tool
+// The classic ReAct loop has an Observation role that *summarizes* tool
 // results into context — agentx Phase 1 collapsed Observation into raw
 // `function_call_output`, which lets large web pages or file dumps bloat
 // the next-round prompt verbatim. This package supplies the missing step:
@@ -48,7 +48,7 @@ const (
 	DefaultFallbackTailBytes = 512
 )
 
-// Request bundles the inputs a Distiller needs to summarise one raw tool
+// Request bundles the inputs a Distiller needs to summarize one raw tool
 // output. The salience anchors (UserPrompt, AssistantHint) tell the
 // summariser what dimension of the raw text to preserve; without them the
 // summariser has no theory of relevance and tends to drop load-bearing
@@ -61,7 +61,7 @@ type Request struct {
 	// summariser uses it as a salience anchor (e.g. for web_search, the
 	// query terms).
 	Args json.RawMessage
-	// Raw is the verbatim tool output to be summarised.
+	// Raw is the verbatim tool output to be summarized.
 	Raw string
 	// UserPrompt is the original user-turn text. Stable across the
 	// session — prompt-cache-friendly when the underlying provider

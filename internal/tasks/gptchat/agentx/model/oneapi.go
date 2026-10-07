@@ -662,4 +662,3 @@ func extractUsageFromRaw(raw []byte) *Usage {
 		Total:           u.TotalTokens,
 	}
 }
-
