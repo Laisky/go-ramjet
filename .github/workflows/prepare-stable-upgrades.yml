@@ -29,21 +29,22 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Apply reviewed API migrations and format source
+      - name: Apply lifecycle refinements and format changed source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/upgrade-validation
-          python3 .github/apply-stable-migrations.py
-          rm .github/apply-stable-migrations.py
+          python3 .github/apply-stable-followup.py
+          rm .github/apply-stable-followup.py
           go mod tidy
           go install golang.org/x/tools/cmd/goimports@v0.51.0
           mapfile -t files < <(git diff --name-only origin/master -- '*.go')
           goimports -local github.com/Laisky/go-ramjet -w "${files[@]}"
           corepack enable
           pnpm -C web install --frozen-lockfile --strict-peer-dependencies
-          pnpm -C web exec prettier --write src/test/dependency-lockfile.ts src/utils/dependency-floors.test.ts src/utils/package-manager.test.ts
-      - name: Frontend validation and full-lint diagnostic
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/master -- web | grep -E '\.(tsx?|jsx?|json|yaml|md)$' | sed 's@^web/@@')
+          pnpm -C web exec prettier --write "${files[@]}"
+      - name: Frontend tests, compiler, and full lint
         shell: bash
         run: |
           set +e
@@ -51,30 +52,15 @@ jobs:
           echo "frontend tests: $?" >> /tmp/upgrade-validation/results.txt
           pnpm -C web build > /tmp/upgrade-validation/frontend-build.log 2>&1
           echo "frontend build: $?" >> /tmp/upgrade-validation/results.txt
-          pnpm -C web exec eslint src/test/dependency-lockfile.ts src/utils/dependency-floors.test.ts src/utils/package-manager.test.ts > /tmp/upgrade-validation/changed-lint.log 2>&1
-          echo "changed frontend lint: $?" >> /tmp/upgrade-validation/results.txt
           pnpm -C web exec eslint . -f json -o /tmp/upgrade-validation/current-lint.json
           echo "full frontend lint: $?" >> /tmp/upgrade-validation/results.txt
           exit 0
-      - name: Compare unchanged baseline full-lint behavior
-        shell: bash
-        run: |
-          set -euo pipefail
-          git worktree add --detach /tmp/ramjet-baseline 9d0ed4a09536e1c7107838fabf24cf64e7330529
-          cd /tmp/ramjet-baseline
-          corepack pnpm -C web install --frozen-lockfile
-          set +e
-          corepack pnpm -C web exec eslint . -f json -o /tmp/upgrade-validation/baseline-lint.json
-          echo "baseline full lint: $?" >> /tmp/upgrade-validation/results.txt
-          exit 0
-      - name: Install matching native and browser dependencies
+      - name: Native SDK and browser setup
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 poppler-utils wget
-          command -v google-chrome || command -v chromium
-          command -v pdftotext
           wget -q -O /tmp/speech.tar.gz 'https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz'
           sudo mkdir -p /opt/azure/speech
           sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
@@ -83,7 +69,46 @@ jobs:
             echo 'CGO_LDFLAGS=-L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core'
             echo 'LD_LIBRARY_PATH=/opt/azure/speech/lib/x64'
           } >> "${GITHUB_ENV}"
-      - name: Backend and real-browser validation
+      - name: Isolate browser startup from application logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          for executable in headless_shell headless-shell chromium chromium-browser google-chrome google-chrome-stable /opt/google/chrome/chrome; do
+            if command -v "${executable}"; then
+              timeout 5 "${executable}" --version || true
+            fi
+          done > /tmp/upgrade-validation/browser-environment.log 2>&1
+          cat > /tmp/browser-probe.go <<'GO'
+          package main
+          import (
+            "context"
+            "fmt"
+            "log"
+            "os"
+            "time"
+            "github.com/chromedp/chromedp"
+          )
+          func probe(path string) {
+            fmt.Println("PROBE", path)
+            ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+            defer cancel()
+            options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.NoSandbox, chromedp.CombinedOutput(os.Stdout))
+            if path != "default" { options = append(options, chromedp.ExecPath(path)) }
+            allocator, stop := chromedp.NewExecAllocator(ctx, options...)
+            defer stop()
+            browser, closeBrowser := chromedp.NewContext(allocator, chromedp.WithDebugf(log.Printf))
+            defer closeBrowser()
+            title, err := chromedp.Run(browser, chromedp.Title())
+            fmt.Printf("RESULT %s title=%q error=%v\n", path, title, err)
+          }
+          func main() {
+            probe("default")
+            probe("google-chrome")
+            if _, err := os.Stat("/opt/google/chrome/chrome"); err == nil { probe("/opt/google/chrome/chrome") }
+          }
+          GO
+          go run /tmp/browser-probe.go > /tmp/upgrade-validation/browser-probe.log 2>&1
+      - name: Backend, payment, browser, and security validation
         env:
           CRAWLER_HTTP_PROXY: ''
         shell: bash
@@ -95,8 +120,12 @@ jobs:
           echo "browser tests: $?" >> /tmp/upgrade-validation/results.txt
           go vet ./... > /tmp/upgrade-validation/go-vet.log 2>&1
           echo "go vet: $?" >> /tmp/upgrade-validation/results.txt
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 && golangci-lint run -c .golangci.yml > /tmp/upgrade-validation/go-lint.log 2>&1
+          echo "go lint: $?" >> /tmp/upgrade-validation/results.txt
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0 && govulncheck ./... > /tmp/upgrade-validation/go-vuln.log 2>&1
+          echo "govulncheck: $?" >> /tmp/upgrade-validation/results.txt
           exit 0
-      - name: Export review sources and save the candidate
+      - name: Export diagnostics and save candidate source
         if: always()
         shell: bash
         run: |
@@ -107,9 +136,9 @@ jobs:
           git diff --binary > /tmp/upgrade-validation/candidate.patch
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- '*.go' go.mod go.sum web/src/test/dependency-lockfile.ts web/src/utils/dependency-floors.test.ts web/src/utils/package-manager.test.ts .github/apply-stable-migrations.py
+          git add -- '*.go' go.mod go.sum web .github/apply-stable-followup.py
           if ! git diff --cached --quiet; then
-            git commit -m 'fix: migrate browser and Markdown APIs and preserve dependency regression guards'
+            git commit -m 'fix: preserve React lifecycle and stable dependency contracts'
             git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           fi
           git rev-parse HEAD > /tmp/upgrade-validation/candidate-head.txt
