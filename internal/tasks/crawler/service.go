@@ -10,7 +10,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
-	mapset "github.com/deckarep/golang-set/v2"
+	mapset "github.com/deckarep/golang-set/v3"
 
 	"github.com/Laisky/go-ramjet/library/log"
 )

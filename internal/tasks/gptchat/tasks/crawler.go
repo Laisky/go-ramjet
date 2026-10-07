@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
+	md "github.com/JohannesKaufmann/html-to-markdown/v2/v2"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
@@ -611,13 +611,12 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	logger := gmw.GetLogger(ctx).Named("extract_html_body")
 
 	// 1) local conversion first
-	converter := md.NewConverter("", true, nil)
 	innerHTML := inner.Bytes()
 	localInput := innerHTML
 	if len(localInput) == 0 {
 		localInput = bodyContent
 	}
-	localMarkdown, localErr := converter.ConvertString(string(localInput))
+	localMarkdown, localErr := md.ConvertString(string(localInput))
 	if localErr == nil {
 		localMarkdown = strings.TrimSpace(localMarkdown)
 		if localMarkdown != "" {

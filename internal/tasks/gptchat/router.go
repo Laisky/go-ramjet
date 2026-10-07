@@ -10,7 +10,7 @@ import (
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/stripe/stripe-go/v76"
+	"github.com/stripe/stripe-go/v87"
 
 	// Blank-import the agent-mode entrypoint so its init() side-effect
 	// registers the dispatcher into the http package's table. Without
