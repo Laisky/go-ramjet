@@ -1,7 +1,6 @@
 # October 2026 stable dependency upgrade
 
-PR #74 updates the application using released versions verified on October 7,
-2026. Its acceptance evidence is recorded on the PR. A successful preparation
+PR #74 updates the application using released versions verified on October 7, 2026. Its acceptance evidence is recorded on the PR. A successful preparation
 workflow alone is not proof of passing tests: diagnostic runs retain individual
 exit codes. The final normal and Bolt verification workflows must both pass.
 
