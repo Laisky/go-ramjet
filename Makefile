@@ -1,35 +1,17 @@
 .PHONY: install
 install:
-	# curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
-
-	go install golang.org/x/tools/cmd/goimports@latest
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	# go install go.uber.org/nilaway/cmd/nilaway@latest
-	# go install github.com/mitranim/gow@latest
-	# go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-	# go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+	go install golang.org/x/tools/cmd/goimports@v0.51.0
+	go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 
 .PHONY: lint
 lint:
 	goimports -local github.com/Laisky/go-ramjet -w .
 	go mod tidy
 	gofmt -s -w .
-	go vet
-	# nilaway ./...
+	go vet ./...
 	golangci-lint run -c .golangci.yml
-	@tmpfile=$$(mktemp); \
-	if govulncheck ./... >"$$tmpfile" 2>&1; then \
-		cat "$$tmpfile"; \
-	else \
-		cat "$$tmpfile"; \
-		if grep -q '^panic:' "$$tmpfile"; then \
-			echo 'WARN: govulncheck panicked due to an upstream tool bug; skipping failure'; \
-		else \
-			rm -f "$$tmpfile"; \
-			exit 1; \
-		fi; \
-	fi; \
-	rm -f "$$tmpfile"
+	govulncheck ./...
 
 .PHONY: changelog
 changelog:
@@ -41,8 +23,8 @@ gen:
 
 .PHONY: frontend-install
 frontend-install:
-	corepack enable || true
-	pnpm -C web install
+	corepack enable
+	pnpm -C web install --frozen-lockfile
 
 .PHONY: frontend-build
 frontend-build: frontend-install
@@ -60,5 +42,6 @@ dev: frontend-install
 build: frontend-build
 # 	go build
 
+.PHONY: format
 format:
-	npx prettier --write .
+	pnpm -C web exec prettier --write .
