@@ -29,38 +29,92 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Apply lifecycle refinements and format changed source
+      - name: Format regression tests and remove obsolete lint suppressions
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/upgrade-validation
-          python3 .github/apply-stable-followup.py
-          rm .github/apply-stable-followup.py
-          go mod tidy
-          go install golang.org/x/tools/cmd/goimports@v0.51.0
-          mapfile -t files < <(git diff --name-only origin/master -- '*.go')
-          goimports -local github.com/Laisky/go-ramjet -w "${files[@]}"
+          mkdir -p /tmp/final-upgrade
           corepack enable
           pnpm -C web install --frozen-lockfile --strict-peer-dependencies
+          python3 <<'PY'
+          from pathlib import Path
+          for name in ['chat-input.tsx', 'chat-search.tsx', 'image-editor-modal.tsx', 'selection-toolbar.tsx']:
+              path = Path('web/src/pages/gptchat/components') / name
+              lines = path.read_text().splitlines(keepends=True)
+              path.write_text(''.join(line for line in lines if 'eslint-disable-next-line react-hooks/set-state-in-effect' not in line))
+          PY
           mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/master -- web | grep -E '\.(tsx?|jsx?|json|yaml|md)$' | sed 's@^web/@@')
           pnpm -C web exec prettier --write "${files[@]}"
-      - name: Frontend tests, compiler, and full lint
+          pnpm -C web exec prettier --write ../docs/dependency-upgrade-2026-10.md
+          make install
+          go mod tidy
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/master -- '*.go')
+          goimports -local github.com/Laisky/go-ramjet -w "${files[@]}"
+      - name: Verify actual native compiler and API versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm -C web exec tsc --version | tee /tmp/final-upgrade/compiler-version.log
+          grep -F 'Version 7.0.2' /tmp/final-upgrade/compiler-version.log
+          pnpm -C web exec node --input-type=module -e '
+            import ts from "typescript";
+            console.log("Compiler API", ts.version);
+            if (ts.version !== "6.0.2" || typeof ts.createSourceFile !== "function") process.exit(1);
+          ' | tee /tmp/final-upgrade/compiler-api.log
+      - name: Validate frontend fixes against their negative controls
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import subprocess
+          from pathlib import Path
+          tests = ['src/pages/cv/dependency-lifecycle.test.tsx',
+                   'src/pages/gptchat/hooks/__tests__/use-prompt-shortcuts.test.ts',
+                   'src/pages/gptchat/components/__tests__/dataset-dependency.test.tsx']
+          command = ['pnpm', '-C', 'web', 'exec', 'vitest', 'run', *tests, '--reporter=verbose']
+          fixed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+          Path('/tmp/final-upgrade/focused-fixed.log').write_text(fixed.stdout)
+          with Path('/tmp/final-upgrade/results.txt').open('a') as output:
+              output.write(f'focused regression tests: {fixed.returncode}\n')
+          if fixed.returncode:
+              print(fixed.stdout)
+              raise SystemExit(fixed.returncode)
+          paths = ['web/src/pages/cv/index.tsx',
+                   'web/src/pages/gptchat/hooks/use-prompt-shortcuts.ts',
+                   'web/src/pages/gptchat/components/dataset-manager.tsx']
+          originals = {path: Path(path).read_bytes() for path in paths}
+          try:
+              for path in paths:
+                  Path(path).write_bytes(subprocess.check_output(['git', 'show', '5896ce13cc8d78921f6a3238244786a8c4db5dc8:' + path]))
+              negative = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+              Path('/tmp/final-upgrade/frontend-negative.log').write_text(negative.stdout)
+              if negative.returncode == 0 or 'AssertionError' not in negative.stdout:
+                  raise RuntimeError('The original lifecycle code did not produce the expected assertion failures')
+              print('Original lifecycle code reproduces assertion failures; restoring the fixed code.')
+          finally:
+              for path, content in originals.items():
+                  Path(path).write_bytes(content)
+          with Path('/tmp/final-upgrade/results.txt').open('a') as output:
+              output.write('frontend negative control: 0\n')
+          PY
+      - name: Full frontend validation
+        if: always()
         shell: bash
         run: |
           set +e
-          pnpm -C web test > /tmp/upgrade-validation/frontend-tests.log 2>&1
-          echo "frontend tests: $?" >> /tmp/upgrade-validation/results.txt
-          pnpm -C web build > /tmp/upgrade-validation/frontend-build.log 2>&1
-          echo "frontend build: $?" >> /tmp/upgrade-validation/results.txt
-          pnpm -C web exec eslint . -f json -o /tmp/upgrade-validation/current-lint.json
-          echo "full frontend lint: $?" >> /tmp/upgrade-validation/results.txt
+          pnpm -C web test > /tmp/final-upgrade/frontend-tests.log 2>&1
+          echo "frontend tests: $?" >> /tmp/final-upgrade/results.txt
+          pnpm -C web build > /tmp/final-upgrade/frontend-build.log 2>&1
+          echo "frontend build: $?" >> /tmp/final-upgrade/results.txt
+          pnpm -C web lint > /tmp/final-upgrade/frontend-lint.log 2>&1
+          echo "full frontend lint: $?" >> /tmp/final-upgrade/results.txt
           exit 0
       - name: Native SDK and browser setup
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 poppler-utils wget
+          sudo apt-get install -y --no-install-recommends build-essential libssl-dev libasound2t64 poppler-utils dbus-daemon wget
           wget -q -O /tmp/speech.tar.gz 'https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz'
           sudo mkdir -p /opt/azure/speech
           sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
@@ -69,82 +123,95 @@ jobs:
             echo 'CGO_LDFLAGS=-L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core'
             echo 'LD_LIBRARY_PATH=/opt/azure/speech/lib/x64'
           } >> "${GITHUB_ENV}"
-      - name: Isolate browser startup from application logic
+      - name: Payment context regression negative control
+        if: always()
         shell: bash
         run: |
-          set -euo pipefail
-          for executable in headless_shell headless-shell chromium chromium-browser google-chrome google-chrome-stable /opt/google/chrome/chrome; do
-            if command -v "${executable}"; then
-              timeout 5 "${executable}" --version || true
-            fi
-          done > /tmp/upgrade-validation/browser-environment.log 2>&1
-          cat > /tmp/browser-probe.go <<'GO'
-          package main
-          import (
-            "context"
-            "fmt"
-            "log"
-            "os"
-            "time"
-            "github.com/chromedp/chromedp"
-          )
-          func probe(path string) {
-            fmt.Println("PROBE", path)
-            ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-            defer cancel()
-            options := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.NoSandbox, chromedp.CombinedOutput(os.Stdout))
-            if path != "default" { options = append(options, chromedp.ExecPath(path)) }
-            allocator, stop := chromedp.NewExecAllocator(ctx, options...)
-            defer stop()
-            browser, closeBrowser := chromedp.NewContext(allocator, chromedp.WithDebugf(log.Printf))
-            defer closeBrowser()
-            title, err := chromedp.Run(browser, chromedp.Title())
-            fmt.Printf("RESULT %s title=%q error=%v\n", path, title, err)
-          }
-          func main() {
-            probe("default")
-            probe("google-chrome")
-            if _, err := os.Stat("/opt/google/chrome/chrome"); err == nil { probe("/opt/google/chrome/chrome") }
-          }
-          GO
-          go run /tmp/browser-probe.go > /tmp/upgrade-validation/browser-probe.log 2>&1
-      - name: Backend, payment, browser, and security validation
+          python3 <<'PY'
+          import subprocess
+          from pathlib import Path
+          path = Path('internal/tasks/gptchat/http/payment.go')
+          original = path.read_text()
+          target = '\tparams.Context = c.Request.Context()\n'
+          assert original.count(target) == 1
+          command = ['go', 'test', './internal/tasks/gptchat/http', '-run', '^TestStableStripePaymentContract$', '-count=1']
+          fixed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+          Path('/tmp/final-upgrade/payment-fixed.log').write_text(fixed.stdout)
+          if fixed.returncode:
+              raise RuntimeError(fixed.stdout)
+          try:
+              path.write_text(original.replace(target, ''))
+              negative = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+              Path('/tmp/final-upgrade/payment-negative.log').write_text(negative.stdout)
+              if negative.returncode == 0 or 'request-scope' not in negative.stdout or 'Not equal' not in negative.stdout:
+                  raise RuntimeError('Removing context propagation did not produce the expected contract assertion failure')
+          finally:
+              path.write_text(original)
+          with Path('/tmp/final-upgrade/results.txt').open('a') as output:
+              output.write('payment negative control: 0\n')
+          PY
+      - name: Full backend, browser, lint, and security validation
+        if: always()
         env:
           CRAWLER_HTTP_PROXY: ''
         shell: bash
         run: |
           set +e
-          go test ./... -count=1 > /tmp/upgrade-validation/backend-tests.log 2>&1
-          echo "backend tests: $?" >> /tmp/upgrade-validation/results.txt
-          go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^TestBrowser' -count=1 -v > /tmp/upgrade-validation/browser-tests.log 2>&1
-          echo "browser tests: $?" >> /tmp/upgrade-validation/results.txt
-          go vet ./... > /tmp/upgrade-validation/go-vet.log 2>&1
-          echo "go vet: $?" >> /tmp/upgrade-validation/results.txt
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 && golangci-lint run -c .golangci.yml > /tmp/upgrade-validation/go-lint.log 2>&1
-          echo "go lint: $?" >> /tmp/upgrade-validation/results.txt
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0 && govulncheck ./... > /tmp/upgrade-validation/go-vuln.log 2>&1
-          echo "govulncheck: $?" >> /tmp/upgrade-validation/results.txt
+          go test ./... -count=1 > /tmp/final-upgrade/backend-tests.log 2>&1
+          echo "backend tests: $?" >> /tmp/final-upgrade/results.txt
+          dbus-run-session -- go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^TestBrowser' -count=1 -v > /tmp/final-upgrade/browser-tests.log 2>&1
+          echo "browser tests: $?" >> /tmp/final-upgrade/results.txt
+          make lint > /tmp/final-upgrade/make-lint.log 2>&1
+          echo "make lint: $?" >> /tmp/final-upgrade/results.txt
+          go test -race ./internal/tasks/cv -run '^TestStable' -count=1 > /tmp/final-upgrade/race-tests.log 2>&1
+          echo "renderer race tests: $?" >> /tmp/final-upgrade/results.txt
+          govulncheck -show verbose ./... > /tmp/final-upgrade/go-vuln-verbose.log 2>&1
+          echo "govulncheck verbose: $?" >> /tmp/final-upgrade/results.txt
           exit 0
-      - name: Export diagnostics and save candidate source
+      - name: Record remaining released module updates
+        if: always()
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+          required = json.loads(subprocess.check_output(['go', 'mod', 'edit', '-json'], text=True))['Require']
+          paths = [module['Path'] for module in required]
+          text = subprocess.check_output(['go', 'list', '-m', '-u', '-json', *paths], text=True)
+          Path('/tmp/final-upgrade/modules.json').write_text(text)
+          decoder = json.JSONDecoder()
+          updates = []
+          while text.strip():
+              module, end = decoder.raw_decode(text.lstrip())
+              text = text.lstrip()[end:]
+              version = module.get('Update', {}).get('Version', '')
+              if re.fullmatch(r'v\d+\.\d+\.\d+(?:\+incompatible)?', version):
+                  updates.append({'path': module['Path'], 'current': module['Version'], 'stable_update': version})
+          Path('/tmp/final-upgrade/remaining-stable-updates.json').write_text(json.dumps(updates, indent=2) + '\n')
+          print(json.dumps(updates, indent=2))
+          PY
+      - name: Export evidence and save only reviewed application changes
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/upgrade-validation
-          git ls-files -z -- '*.go' 'web/*' 'go.mod' 'go.sum' 'Dockerfile' 'package.json' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' \
-            | tar --null -T - -czf /tmp/upgrade-validation/review-source.tar.gz
-          git diff --binary > /tmp/upgrade-validation/candidate.patch
+          mkdir -p /tmp/final-upgrade
+          git ls-files -z -- '*.go' 'web/*' 'docs/*' 'go.mod' 'go.sum' 'Dockerfile' 'Makefile' 'package.json' '.golangci.yml' '.github/workflows/*' 'AGENTS.md' \
+            | tar --null -T - -czf /tmp/final-upgrade/review-source.tar.gz
+          git diff --binary > /tmp/final-upgrade/candidate.patch
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- '*.go' go.mod go.sum web .github/apply-stable-followup.py
+          git add -- '*.go' go.mod go.sum web docs/dependency-upgrade-2026-10.md
           if ! git diff --cached --quiet; then
-            git commit -m 'fix: preserve React lifecycle and stable dependency contracts'
+            git commit -m 'test: finalize stable-upgrade regression coverage and formatting'
             git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           fi
-          git rev-parse HEAD > /tmp/upgrade-validation/candidate-head.txt
-          cat /tmp/upgrade-validation/results.txt
+          git rev-parse HEAD > /tmp/final-upgrade/candidate-head.txt
+          cat /tmp/final-upgrade/results.txt
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: stable-upgrade-validation
-          path: /tmp/upgrade-validation/
+          name: stable-upgrade-final-validation
+          path: /tmp/final-upgrade/
