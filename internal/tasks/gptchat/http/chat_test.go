@@ -439,6 +439,7 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
 }
 
 func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested(t *testing.T) {
+	quotaHook := setupFreeUserTestQuota(t)
 	gin.SetMode(gin.TestMode)
 
 	var (
@@ -499,6 +500,7 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested
 
 	err := sendChatWithResponsesToolLoop(ctx)
 	require.NoError(t, err)
+	require.Positive(t, quotaHook.reads.Load(), "free-user path must still reserve quota")
 
 	mu.Lock()
 	defer mu.Unlock()
