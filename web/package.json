@@ -30,12 +30,12 @@
     "@stripe/stripe-js": "^8.5.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.4.1",
+    "dompurify": "^3.4.16",
     "events": "^3.3.0",
     "highlight.js": "^11.11.1",
     "idb": "^8.0.3",
     "idb-keyval": "^6.2.2",
-    "katex": "^0.18.2",
+    "katex": "^0.19.0",
     "lucide-react": "^0.541.0",
     "mermaid": "^11.15.0",
     "next-themes": "^0.4.6",
@@ -76,7 +76,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^8.0.5",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@10.34.6",
   "pnpm": {
@@ -87,7 +87,9 @@
       "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
       "brace-expansion@>=1.0.0 <1.1.13": "^1.1.13",
       "uuid@>=11.0.0 <11.1.1": "^11.1.1",
-      "postcss@>=8.0.0 <8.5.10": "^8.5.10"
+      "postcss@>=8.0.0 <8.5.10": "^8.5.10",
+      "katex@>=0.0.0 <0.19.0": "^0.19.0",
+      "dompurify@>=3.0.0 <3.4.16": "^3.4.16"
     }
   }
 }

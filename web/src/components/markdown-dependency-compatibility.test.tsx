@@ -16,16 +16,18 @@ const mathCases = [
   ['inline fraction', '\\frac{a}{b}', false],
   ['display fraction', '\\frac{a}{b}', true],
   ['square root', '\\sqrt{x^2 + y^2}', false],
-  ['aligned equations', '\\begin{aligned}a &= b + c\\\\d &= e\\end{aligned}', true],
+  [
+    'aligned equations',
+    '\\begin{aligned}a &= b + c\\\\d &= e\\end{aligned}',
+    true,
+  ],
 ] as const
 
 describe('Markdown math dependency compatibility', () => {
   it.each(mathCases)(
     'uses the stylesheet package renderer classes for %s',
     (_name, expression, displayMode) => {
-      const source = displayMode
-        ? `$$\n${expression}\n$$`
-        : `$${expression}$`
+      const source = displayMode ? `$$\n${expression}\n$$` : `$${expression}$`
       const { container } = render(<Markdown>{source}</Markdown>)
       const actual = container.querySelector('.katex')
       const reference = document.createElement('div')
@@ -35,7 +37,9 @@ describe('Markdown math dependency compatibility', () => {
       expect(actual).not.toBeNull()
       expect(expected).not.toBeNull()
       if (!actual || !expected) {
-        throw new Error('Both Markdown and the stylesheet package must render math')
+        throw new Error(
+          'Both Markdown and the stylesheet package must render math',
+        )
       }
       // The CSS import in Markdown resolves to this direct KaTeX package.
       // Comparing real output detects a nested rehype-katex renderer whose old
@@ -43,7 +47,9 @@ describe('Markdown math dependency compatibility', () => {
       expect(collectClasses(actual)).toEqual(collectClasses(expected))
       expect(actual.querySelector('math')).not.toBeNull()
       expect(actual.querySelector('annotation')?.textContent).toBe(expression)
-      expect(container.querySelector('.katex-display') !== null).toBe(displayMode)
+      expect(container.querySelector('.katex-display') !== null).toBe(
+        displayMode,
+      )
     },
   )
 
@@ -88,7 +94,9 @@ describe('DOMPurify dependency compatibility', () => {
     )
     const root = document.createElement('div')
     root.innerHTML = clean
-    expect(root.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 100')
+    expect(root.querySelector('svg')?.getAttribute('viewBox')).toBe(
+      '0 0 100 100',
+    )
     expect(root.querySelector('path')?.getAttribute('d')).toBe('M0 0 L10 10')
     expect(root.querySelector('[onclick], script')).toBeNull()
   })
@@ -101,7 +109,9 @@ describe('DOMPurify dependency compatibility', () => {
     clean.innerHTML = DOMPurify.sanitize(html)
     expect(collectClasses(clean)).toEqual(collectClasses(original))
     expect(clean.querySelector('math mfrac')).not.toBeNull()
-    expect(Array.from(clean.querySelectorAll('math mi'), (node) => node.textContent)).toEqual(['a', 'b'])
+    expect(
+      Array.from(clean.querySelectorAll('math mi'), (node) => node.textContent),
+    ).toEqual(['a', 'b'])
     // DOMPurify deliberately excludes annotation elements by default. Keep
     // that policy rather than weakening sanitization just to preserve TeX text.
     expect(clean.querySelector('annotation, annotation-xml')).toBeNull()
