@@ -47,6 +47,13 @@ describe('Markdown math dependency compatibility', () => {
     },
   )
 
+  it('keeps missing font metrics non-fatal with the default strict policy', () => {
+    const { container } = render(<Markdown>{'$\\text{🙂}$'}</Markdown>)
+    expect(container.querySelector('.katex')).not.toBeNull()
+    expect(container.querySelector('.katex-error')).toBeNull()
+    expect(container.textContent).toContain('🙂')
+  })
+
   it('keeps untrusted math commands from creating executable links', () => {
     const { container } = render(
       <Markdown>{'$\\href{javascript:alert(1)}{unsafe}$'}</Markdown>,
@@ -86,14 +93,17 @@ describe('DOMPurify dependency compatibility', () => {
     expect(root.querySelector('[onclick], script')).toBeNull()
   })
 
-  it('preserves KaTeX classes and accessible MathML', () => {
+  it('preserves KaTeX classes and accessible MathML without allowing annotations', () => {
     const html = katex.renderToString('\\frac{a}{b}')
     const original = document.createElement('div')
     original.innerHTML = html
     const clean = document.createElement('div')
     clean.innerHTML = DOMPurify.sanitize(html)
     expect(collectClasses(clean)).toEqual(collectClasses(original))
-    expect(clean.querySelector('math')).not.toBeNull()
-    expect(clean.querySelector('annotation')?.textContent).toBe('\\frac{a}{b}')
+    expect(clean.querySelector('math mfrac')).not.toBeNull()
+    expect(Array.from(clean.querySelectorAll('math mi'), (node) => node.textContent)).toEqual(['a', 'b'])
+    // DOMPurify deliberately excludes annotation elements by default. Keep
+    // that policy rather than weakening sanitization just to preserve TeX text.
+    expect(clean.querySelector('annotation, annotation-xml')).toBeNull()
   })
 })
