@@ -94,8 +94,10 @@ export function ChatSearch({
   const inputRef = useRef<HTMLInputElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
 
-  // Keep selectedSessionIds in sync with sessions list changes
-  useEffect(() => {
+  // Reconcile changed input during render, before any stale filter reaches the DOM.
+  const [previousSessions, setPreviousSessions] = useState(sessions)
+  if (previousSessions !== sessions) {
+    setPreviousSessions(sessions)
     setSelectedSessionIds((prev) => {
       const validIds = new Set(sessions.map((s) => s.id))
       const next = new Set<number>()
@@ -109,7 +111,7 @@ export function ChatSearch({
       if (next.size === 0) return new Set(sessions.map((s) => s.id))
       return next
     })
-  }, [sessions])
+  }
 
   // Open on Ctrl/Cmd + K or Ctrl/Cmd + F
   useEffect(() => {

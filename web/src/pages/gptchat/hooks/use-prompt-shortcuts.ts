@@ -31,13 +31,22 @@ export function usePromptShortcuts(configLoading: boolean) {
       shortcuts = DefaultPrompts
     }
 
-    setPromptShortcuts(shortcuts)
+    return shortcuts
   }, [])
 
   // Load shortcuts on mount or when config finishes loading
   useEffect(() => {
-    if (!configLoading) {
-      loadPromptShortcuts()
+    if (configLoading) return
+    let active = true
+    void loadPromptShortcuts()
+      .then((shortcuts) => {
+        if (active) setPromptShortcuts(shortcuts)
+      })
+      .catch((error: unknown) => {
+        if (active) console.warn('Failed to load prompt shortcuts:', error)
+      })
+    return () => {
+      active = false
     }
   }, [configLoading, loadPromptShortcuts])
 

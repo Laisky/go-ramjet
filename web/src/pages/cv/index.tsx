@@ -183,7 +183,6 @@ function persistTailorDraft(content: string) {
   }
 }
 
-
 /**
  * buildAuthHeaders creates an Authorization header when a token is available.
  */
@@ -259,11 +258,15 @@ export function CVPage() {
   const [content, setContent] = useState('')
   const [savedContent, setSavedContent] = useState('')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loadedToken, setLoadedToken] = useState<{
+    token: string | null
+  } | null>(null)
   const [saving, setSaving] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [authToken, setAuthToken] = useState<string | null>(null)
+  const [authToken, setAuthToken] = useState<string | null>(
+    () => readAuthTokenFromURL() ?? readStoredAuthToken(),
+  )
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [historyEntries, setHistoryEntries] = useState<CvContentHistoryEntry[]>(
     [],
@@ -279,7 +282,11 @@ export function CVPage() {
   const [tailorBusy, setTailorBusy] = useState(false)
   const [tailorMessage, setTailorMessage] = useState<string | null>(null)
   const copyTimeoutRef = useRef<number | null>(null)
-  const cvPageRef = useRef<HTMLDivElement>(null)
+  const [cvPageElement, setCvPageElement] = useState<HTMLDivElement | null>(
+    null,
+  )
+  const [copySequence, setCopySequence] = useState(0)
+  const loading = loadedToken === null || loadedToken.token !== authToken
 
   const parsed = useMemo(() => parseCvContent(content), [content])
   const emailValue = parsed.email ?? FALLBACK_EMAIL
@@ -289,34 +296,15 @@ export function CVPage() {
   const pdfURL = useMemo(() => buildPdfURL(lastSavedAt), [lastSavedAt])
   const modalMessage = authMessage ?? historyMessage
 
-  // loadContent fetches CV markdown from the backend API.
+  // loadContent retrieves a CV snapshot without changing component state.
   const loadContent = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true)
-      try {
-        const response = await fetch('/cv/content', {
-          signal,
-          headers: buildAuthHeaders(authToken),
-        })
-        if (!response.ok) {
-          console.debug(
-            `[CV] Load failed: ${response.status} ${response.statusText} ${response.url}`,
-          )
-          throw new Error('Failed to load CV content')
-        }
-        const payload = (await response.json()) as CvContentPayload
-        setContent(payload.content)
-        setSavedContent(payload.content)
-        setLastSavedAt(payload.updated_at ?? null)
-      } catch (err) {
-        if (err instanceof Error) {
-          console.error(`[CV] Failed to load content: ${err.message}`)
-        } else {
-          console.error('[CV] Failed to load content')
-        }
-      } finally {
-        setLoading(false)
-      }
+    async (signal: AbortSignal): Promise<CvContentPayload> => {
+      const response = await fetch('/cv/content', {
+        signal,
+        headers: buildAuthHeaders(authToken),
+      })
+      if (!response.ok) throw new Error('Failed to load CV content')
+      return response.json() as Promise<CvContentPayload>
     },
     [authToken],
   )
@@ -370,55 +358,16 @@ export function CVPage() {
     }
   }, [authToken, content, saving])
 
-  // loadHistory fetches the latest persisted CV revisions for the editor history dropdown.
+  // loadHistory retrieves revisions without publishing stale results after the editor closes.
   const loadHistory = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!authToken) {
-        setHistoryEntries([])
-        setHistoryMessage(null)
-        return
-      }
-
-      setHistoryLoading(true)
-      setHistoryMessage(null)
-      try {
-        const response = await fetch('/cv/content/history', {
-          signal,
-          headers: buildAuthHeaders(authToken),
-        })
-        if (response.status === 401) {
-          throw new Error('Unauthorized')
-        }
-        if (!response.ok) {
-          console.debug(
-            `[CV] History load failed: ${response.status} ${response.statusText} ${response.url}`,
-          )
-          throw new Error('Failed to load CV history')
-        }
-
-        const payload = (await response.json()) as CvContentHistoryPayload
-        setHistoryEntries(payload.items)
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          return
-        }
-        if (err instanceof Error && err.message === 'Unauthorized') {
-          clearAuthToken()
-          setAuthToken(null)
-          setAuthMessage('SSO token expired. Please sign in again.')
-          setHistoryEntries([])
-          console.warn('[CV] Unauthorized SSO token while loading history')
-          return
-        }
-        if (err instanceof Error) {
-          console.error(`[CV] Failed to load history: ${err.message}`)
-        } else {
-          console.error('[CV] Failed to load history')
-        }
-        setHistoryMessage('Failed to load saved history.')
-      } finally {
-        setHistoryLoading(false)
-      }
+    async (signal: AbortSignal): Promise<CvContentHistoryPayload> => {
+      const response = await fetch('/cv/content/history', {
+        signal,
+        headers: buildAuthHeaders(authToken),
+      })
+      if (response.status === 401) throw new Error('Unauthorized')
+      if (!response.ok) throw new Error('Failed to load CV history')
+      return response.json() as Promise<CvContentHistoryPayload>
     },
     [authToken],
   )
@@ -534,6 +483,7 @@ export function CVPage() {
     try {
       await navigator.clipboard.writeText(emailValue)
       setCopyState('copied')
+      setCopySequence((sequence) => sequence + 1)
     } catch {
       console.warn('[CV] Failed to copy email')
     } finally {
@@ -553,6 +503,8 @@ export function CVPage() {
   const handleEditorOpenChange = useCallback(
     (open: boolean) => {
       setEditorOpen(open)
+      setHistoryLoading(open)
+      setHistoryMessage(null)
       if (!open) {
         setContent(savedContent)
         setAuthMessage(null)
@@ -665,13 +617,8 @@ export function CVPage() {
     const tokenFromURL = readAuthTokenFromURL()
     if (tokenFromURL) {
       persistAuthToken(tokenFromURL)
-      setAuthToken(tokenFromURL)
       removeAuthTokenFromURL()
       return
-    }
-    const storedToken = readStoredAuthToken()
-    if (storedToken) {
-      setAuthToken(storedToken)
     }
   }, [])
 
@@ -685,9 +632,22 @@ export function CVPage() {
 
   useEffect(() => {
     const controller = new AbortController()
-    loadContent(controller.signal)
+    void loadContent(controller.signal)
+      .then((payload) => {
+        if (controller.signal.aborted) return
+        setContent(payload.content)
+        setSavedContent(payload.content)
+        setLastSavedAt(payload.updated_at ?? null)
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          console.error('[CV] Failed to load content:', error)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadedToken({ token: authToken })
+      })
     return () => controller.abort()
-  }, [loadContent])
+  }, [authToken, loadContent])
 
   useEffect(() => {
     if (!editorOpen || !authToken) {
@@ -695,7 +655,25 @@ export function CVPage() {
     }
 
     const controller = new AbortController()
-    loadHistory(controller.signal)
+    void loadHistory(controller.signal)
+      .then((payload) => {
+        if (!controller.signal.aborted) setHistoryEntries(payload.items)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          clearAuthToken()
+          setAuthToken(null)
+          setAuthMessage('SSO token expired. Please sign in again.')
+          setHistoryEntries([])
+        } else {
+          console.error('[CV] Failed to load history:', error)
+          setHistoryMessage('Failed to load saved history.')
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHistoryLoading(false)
+      })
     return () => controller.abort()
   }, [authToken, editorOpen, loadHistory])
 
@@ -765,7 +743,7 @@ export function CVPage() {
   ])
 
   return (
-    <div className="cv-page" ref={cvPageRef}>
+    <div className="cv-page" ref={setCvPageElement}>
       <div className="cv-shell">
         <header className="cv-hero cv-animate-in">
           <div className="cv-hero-text">
@@ -791,7 +769,7 @@ export function CVPage() {
                 <Mail className="h-4 w-4" />
                 {emailValue}
                 {copyState === 'copied' && (
-                  <span key={Date.now()} className="cv-copy-feedback">
+                  <span key={copySequence} className="cv-copy-feedback">
                     <Check className="h-4 w-4" />
                     Copied
                   </span>
@@ -838,7 +816,7 @@ export function CVPage() {
                     Tailor PDF
                   </Button>
                 </Dialog.Trigger>
-                <Dialog.Portal container={cvPageRef.current}>
+                <Dialog.Portal container={cvPageElement}>
                   <Dialog.Overlay className="cv-modal-overlay" />
                   <Dialog.Content className="cv-modal-content">
                     <div className="cv-modal-header">
@@ -847,8 +825,8 @@ export function CVPage() {
                           Tailor PDF
                         </Dialog.Title>
                         <Dialog.Description className="cv-modal-description">
-                          Render a one-off PDF from custom markdown. The live
-                          CV and saved history are not modified.
+                          Render a one-off PDF from custom markdown. The live CV
+                          and saved history are not modified.
                         </Dialog.Description>
                       </div>
                       <Dialog.Close asChild>
@@ -864,7 +842,8 @@ export function CVPage() {
                     <div className="cv-modal-status">
                       <span>Draft is local to this browser.</span>
                       <span>
-                        Press {navigator.platform.toLowerCase().includes('mac')
+                        Press{' '}
+                        {navigator.platform.toLowerCase().includes('mac')
                           ? 'Cmd'
                           : 'Ctrl'}
                         +Enter to download.
@@ -924,7 +903,7 @@ export function CVPage() {
                     Edit
                   </Button>
                 </Dialog.Trigger>
-                <Dialog.Portal container={cvPageRef.current}>
+                <Dialog.Portal container={cvPageElement}>
                   <Dialog.Overlay className="cv-modal-overlay" />
                   <Dialog.Content className="cv-modal-content">
                     <div className="cv-modal-header">
@@ -1051,7 +1030,7 @@ export function CVPage() {
                   <Mail className="h-4 w-4" />
                   {emailValue}
                   {copyState === 'copied' && (
-                    <span key={Date.now()} className="cv-copy-feedback">
+                    <span key={copySequence} className="cv-copy-feedback">
                       <Check className="h-4 w-4" />
                       Copied
                     </span>

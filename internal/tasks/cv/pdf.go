@@ -373,7 +373,7 @@ func renderHTMLToPDF(ctx context.Context, htmlContent string) ([]byte, error) {
 		return nil, errors.Wrap(err, "await document.fonts.ready")
 	}
 	if fonts.ExceptionDetails != nil {
-		return nil, errors.WithStack(errors.New(fonts.ExceptionDetails.Error()))
+		return nil, errors.WithStack(&chromedp.ExceptionError{ExceptionDetails: fonts.ExceptionDetails})
 	}
 
 	result, err := chromedp.Call(chromeCtx, page.PrintToPDF, page.PrintToPDFParams{

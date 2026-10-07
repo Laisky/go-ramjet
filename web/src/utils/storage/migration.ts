@@ -112,7 +112,7 @@ export async function migrateFromPouchDB(): Promise<void> {
 
     await metaSet<MigrationStatus>(MIGRATION_STATUS_KEY, 'pending')
 
-    let PouchDBCtor: PouchCtor | null = null
+    let PouchDBCtor: PouchCtor
     try {
       const mod = await import('pouchdb-browser')
       PouchDBCtor = (mod as unknown as { default: PouchCtor }).default

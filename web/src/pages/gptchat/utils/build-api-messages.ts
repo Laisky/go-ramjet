@@ -92,7 +92,7 @@ export function buildApiMessages(
 
   for (let i = 0; i < context.length; i += 1) {
     const msg = context[i]
-    let content: string | ContentPart[] = msg.content
+    let content: string | ContentPart[]
     if (isFreeTier) {
       // Free tier: strip all images from history context messages
       content = stripFileNotes(msg.content, msg.attachments)
