@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import lockfile from '../../pnpm-lock.yaml?raw'
 
-const packageSection = lockfile.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0]
+const packageSection = lockfile
+  .split('\npackages:\n')[1]
+  ?.split('\nsnapshots:\n')[0]
 
 /**
  * compareVersions compares stable numeric versions and returns a negative value

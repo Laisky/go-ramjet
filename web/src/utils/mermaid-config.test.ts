@@ -39,7 +39,9 @@ describe('Mermaid dependency compatibility', () => {
       expect(groups.map((node) => node.label)).toEqual(['api.v1', 'api.v2'])
       expect(groups.every((node) => node.parentId === undefined)).toBe(true)
       expect(nodes.find((node) => node.id === 'User')?.parentId).toBe('api.v1')
-      expect(nodes.find((node) => node.id === 'Account')?.parentId).toBe('api.v2')
+      expect(nodes.find((node) => node.id === 'Account')?.parentId).toBe(
+        'api.v2',
+      )
     },
   )
 
