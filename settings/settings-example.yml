@@ -54,6 +54,14 @@ tasks:
       # object names under the prefix
       content_key: 'cv.md'
       pdf_key: 'cv.pdf'
+    # CV editing accepts Laisky SSO sessions only for these owner accounts.
+    # Sessions are verified with the SSO GraphQL WhoAmI query; without
+    # owner_uids every editing route fails closed (cv_owner_not_configured).
+    sso:
+      graphql_endpoint: 'https://sso.laisky.com/query' # https required (loopback http allowed for development)
+      owner_uids:
+        - '00000000-0000-7000-8000-000000000000' # the owner's SSO UID (WhoAmI.id / JWT sub)
+      timeout: 5s
   backups:
     interval: 3600
     configs:

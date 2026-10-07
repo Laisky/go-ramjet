@@ -50,6 +50,10 @@ describe('CVPage history modal', () => {
           return createJSONResponse({})
         }
 
+        if (url === '/cv/auth/session') {
+          return createJSONResponse({ uid: 'owner', owner: true })
+        }
+
         if (url === '/cv/content/history') {
           expect(init).toMatchObject({
             headers: { Authorization: 'Bearer test-token' },
@@ -145,9 +149,15 @@ describe('CVPage tailor PDF modal', () => {
           return createJSONResponse({})
         }
 
+        if (url === '/cv/auth/session') {
+          return createJSONResponse({ uid: 'owner', owner: true })
+        }
+
         if (url === '/cv/pdf/preview') {
           previewCall(init)
-          return new Response(new Blob(['%PDF-tailored'], { type: 'application/pdf' }), {
+          // A string body keeps Response independent of jsdom's Blob, which
+          // lacks stream() and cannot back an undici Response.
+          return new Response('%PDF-tailored', {
             status: 200,
             headers: { 'Content-Type': 'application/pdf' },
           })
@@ -192,7 +202,9 @@ describe('CVPage tailor PDF modal', () => {
       Authorization: 'Bearer test-token',
       'Content-Type': 'application/json',
     })
-    expect(JSON.parse(init.body as string)).toEqual({ content: '# Tailored CV' })
+    expect(JSON.parse(init.body as string)).toEqual({
+      content: '# Tailored CV',
+    })
 
     expect(createObjectURL).toHaveBeenCalled()
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')

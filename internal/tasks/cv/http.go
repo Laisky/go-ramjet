@@ -8,7 +8,6 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
-	"github.com/Laisky/laisky-blog-graphql/library/auth"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
@@ -86,16 +85,32 @@ func bindHTTP(store ContentRepository, pdfStore *S3PDFStore, pdfService *PDFServ
 		pdfService: pdfService,
 	}
 
-	grp := web.Server.Group(cvSitePathPrefix)
+	registerCVRoutes(web.Server, h, cvRouteProtection())
+	registerAgentDiscoveryRoutes(web.Server, h)
+}
+
+// cvRouteProtection returns the middleware guarding CV editing routes. CV
+// accepts the EdDSA sessions issued by Laisky SSO, verified by SSO itself, and
+// only for the configured owner accounts. It reads tasks.cv.sso.* once.
+func cvRouteProtection() gin.HandlerFunc {
+	guard := newCVOwnerAuthFromConfig()
+	logCVOwnerAuthConfig(guard)
+	return guard.Middleware
+}
+
+// registerCVRoutes mounts the CV API on router. Public reads stay open; every
+// route that reveals drafts or history, or mutates or renders content, runs
+// behind protect.
+func registerCVRoutes(router gin.IRouter, h *handler, protect gin.HandlerFunc) {
+	grp := router.Group(cvSitePathPrefix)
 	grp.GET("/meta", h.getPageMeta)
 	grp.GET("/content", h.getContent)
-	grp.GET("/content/history", auth.AuthMw, h.listContentHistory)
-	grp.GET("/content/version", auth.AuthMw, h.getContentVersion)
-	grp.PUT("/content", auth.AuthMw, h.saveContent)
+	grp.GET("/content/history", protect, h.listContentHistory)
+	grp.GET("/content/version", protect, h.getContentVersion)
+	grp.PUT("/content", protect, h.saveContent)
 	grp.GET("/pdf", h.downloadPDF)
-	grp.POST("/pdf/preview", auth.AuthMw, h.renderPDFPreview)
-
-	registerAgentDiscoveryRoutes(web.Server, h)
+	grp.POST("/pdf/preview", protect, h.renderPDFPreview)
+	grp.GET("/auth/session", protect, h.getAuthSession)
 }
 
 // getPageMeta returns resolved CV page metadata for the current request host/path.
