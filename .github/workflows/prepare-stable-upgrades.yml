@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
-      - name: Correct regression fixtures and remove only unused directives
+      - name: Correct fixtures and retain the baseline external-draft policy
         shell: bash
         run: |
           set -euo pipefail
@@ -34,8 +34,6 @@ jobs:
           from pathlib import Path
           path = Path('web/src/pages/gptchat/components/chat-input.tsx')
           text = path.read_text()
-          # Restore the pre-existing external-draft exception; only the prefill
-          # directive was reported as unused in the baseline lint comparison.
           comment = '      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize an externally owned draft after session changes.\n'
           target = '      setMessage(draftMessage)\n'
           assert text.count(target) == 1 and comment not in text
@@ -65,7 +63,7 @@ jobs:
           pnpm -C web install --frozen-lockfile --strict-peer-dependencies
           mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/master -- web | grep -E '\.(tsx?|jsx?|json|yaml|md)$' | sed 's@^web/@@')
           pnpm -C web exec prettier --write "${files[@]}" ../docs/dependency-upgrade-2026-10.md
-      - name: Verify native compiler and supported API identity
+      - name: Verify compiler and API identities
         shell: bash
         run: |
           set -euo pipefail
@@ -95,11 +93,11 @@ jobs:
           originals = {path: Path(path).read_bytes() for path in paths}
           try:
               for path in paths:
-                  Path(path).write_bytes(subprocess.check_output(['git', 'show', '5896ce13cc8d78921f6a3238244786a8c4db5dc8:' + path]))
+                  Path(path).write_bytes(subprocess.check_output(['git', 'show', '6ac435e0a708dab7749e9e4935b7650e158fc2f7:' + path]))
               negative = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
               Path('/tmp/final-frontend/negative.log').write_text(negative.stdout)
               if negative.returncode == 0 or 'AssertionError' not in negative.stdout:
-                  raise RuntimeError('The original code did not reproduce the expected lifecycle assertion failures')
+                  raise RuntimeError('Original lifecycle code did not reproduce the expected assertion failures')
               print('Lifecycle negative control passed: original code fails assertions.')
           finally:
               for path, content in originals.items(): Path(path).write_bytes(content)
