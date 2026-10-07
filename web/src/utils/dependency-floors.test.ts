@@ -32,7 +32,9 @@ const dependencyFloors = [
   ['postcss', 8, '8.5.10'],
   ['mermaid', 11, '11.15.0'],
   ['uuid', 11, '11.1.1'],
-  ['dompurify', 3, '3.4.1'],
+  ['dompurify', 3, '3.4.16'],
+  ['katex', 0, '0.19.0'],
+  ['vitest', 4, '4.1.11'],
 ] as const
 
 describe('resolved dependency PR floors', () => {
@@ -55,7 +57,11 @@ describe('resolved dependency PR floors', () => {
       )
       // A removed transitive dependency is also a valid resolution of its PR.
       // Direct dependencies must remain present so an empty match cannot pass.
-      if (['vite', 'postcss', 'mermaid', 'dompurify'].includes(name)) {
+      if (
+        ['vite', 'postcss', 'mermaid', 'dompurify', 'katex', 'vitest'].includes(
+          name,
+        )
+      ) {
         expect(versions.length).toBeGreaterThan(0)
       }
       for (const version of versions) {
