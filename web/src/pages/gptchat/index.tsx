@@ -742,7 +742,7 @@ export function GPTChatPage() {
                 )}
                 {displayedMessages.map((msg, idx) => (
                   <Fragment key={`${msg.chatID}-${msg.role}`}>
-                    {idx > 0 && (
+                    {idx > 0 && msg.role === 'user' && (
                       <ConversationInsert
                         onInsert={() =>
                           handleOpenInsert(displayedStartIndex + idx)
