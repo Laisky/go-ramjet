@@ -62,9 +62,8 @@ vi.mock('@/components/ui/tooltip-wrapper', () => ({
 }))
 
 vi.mock('../components', async () => {
-  const { ConversationInsert } = await import(
-    '../components/conversation-insert'
-  )
+  const { ConversationInsert } =
+    await import('../components/conversation-insert')
   return {
     ConversationInsert,
     ChatMessage: ({
@@ -281,9 +280,9 @@ describe('GPTChatPage conversation insertion boundaries', () => {
 
   it('keeps valid insertion controls disabled during a voice call', async () => {
     render(<GPTChatPage />)
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: 'Start voice call' }),
-    )
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Start voice call' }))
     expectInsertTargets(['second-user'])
     expect(
       screen.getByRole('button', { name: 'Insert message here' }),
