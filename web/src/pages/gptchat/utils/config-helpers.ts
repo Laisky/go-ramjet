@@ -2,7 +2,12 @@
  * Helper functions for chat configuration.
  */
 import { kvGet, StorageKeys } from '@/utils/storage'
-import { AllModels } from '../models'
+import {
+  AllModels,
+  DefaultModel,
+  ImageModelFluxDev,
+  isRetiredResearchModel,
+} from '../models'
 import { DefaultSessionConfig, type SessionConfig } from '../types'
 
 export const DEFAULT_SESSION_ID = 1
@@ -190,13 +195,43 @@ function deepCloneConfig(config: SessionConfig): SessionConfig {
 }
 
 /**
+ * normalizeRetiredResearchConfig returns a config with retired selections replaced
+ * by the default chat or image model, preserving all other settings and history.
+ */
+export function normalizeRetiredResearchConfig(
+  config: SessionConfig,
+): SessionConfig {
+  if (
+    ![
+      config.selected_model,
+      config.selected_chat_model,
+      config.selected_draw_model,
+    ].some(isRetiredResearchModel)
+  ) {
+    return config
+  }
+  return {
+    ...config,
+    selected_model: isRetiredResearchModel(config.selected_model)
+      ? DefaultModel
+      : config.selected_model,
+    selected_chat_model: isRetiredResearchModel(config.selected_chat_model)
+      ? DefaultModel
+      : config.selected_chat_model,
+    selected_draw_model: isRetiredResearchModel(config.selected_draw_model)
+      ? ImageModelFluxDev
+      : config.selected_draw_model,
+  }
+}
+
+/**
  * Normalize numeric fields in config to ensure they are numbers, not strings
  */
 export function normalizeConfigNumericFields(
   config: SessionConfig,
 ): SessionConfig {
   return {
-    ...config,
+    ...normalizeRetiredResearchConfig(config),
     max_tokens:
       typeof config.max_tokens === 'number'
         ? config.max_tokens
@@ -293,6 +328,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
       targetPath === 'selected_model' &&
       typeof coercedValue === 'string' &&
       coercedValue &&
+      !isRetiredResearchModel(coercedValue) &&
       !AllModels.includes(coercedValue)
     ) {
       AllModels.push(coercedValue)
@@ -312,7 +348,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
   }
 
   return {
-    config: mutated ? updatedConfig : config,
+    config: normalizeRetiredResearchConfig(mutated ? updatedConfig : config),
     mutated,
   }
 }

@@ -59,3 +59,19 @@ describe('ModelSelector availability states', () => {
     expect(onModelChange).toHaveBeenCalledWith(otherModel)
   })
 })
+
+describe('ModelSelector retired research', () => {
+  it('offers ordinary models without the retired custom research option', async () => {
+    const user = userEvent.setup()
+    render(
+      <ModelSelector
+        label="Chat"
+        selectedModel="gpt-4o-mini"
+        onModelChange={vi.fn()}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /chat/i }))
+    expect(screen.queryByText('deep-research')).not.toBeInTheDocument()
+    expect(screen.getAllByText('gpt-4o-mini').length).toBeGreaterThan(0)
+  })
+})
