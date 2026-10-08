@@ -13,7 +13,7 @@ Worker records are separate Redis data: `laisky/tasks/llm_storm/pending`, `laisk
 ## Deployment and shutdown order
 
 1. Verify all actual containers and callers, including GraphQL enqueue and direct llm-storm research/conversation endpoints. Check queue depth, active jobs/sessions, service labels, mounts, restart policies, and automatic deploy/start definitions. A second service definition or other active caller requires explicit resolution before stopping the worker.
-2. Merge only after the standard reviewed workflow and exact-head checks pass. The go-ramjet master push workflow builds an immutable short-SHA image and automatically deploys its configured b1 instance. Confirm its actual running image and HTTP 410 behavior; update any other running go-ramjet caller explicitly before proceeding.
+2. Merge only after the standard reviewed workflow and exact-head checks pass. The go-ramjet master push workflow publishes latest and short-SHA images, pulls latest, and recreates only the configured b1 go-ramjet service using modern Docker Compose. It validates configuration before deployment and verifies the pulled image, container state, and HTTP health. Confirm its actual running image and HTTP 410 behavior; update any other running go-ramjet caller explicitly before proceeding.
 3. Retire only the identified llm-storm service definition and automatic start policy after no approved caller or active job depends on it. Stop only that container. Preserve its image, stopped container where practical, Redis records, env files, volumes, and unrelated services.
 4. Confirm the container is stopped and remains stopped, normal go-ramjet health and synthetic ordinary flows pass, and the worker/host CPU measurement decreases.
 
