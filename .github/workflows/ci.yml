@@ -110,7 +110,58 @@ jobs:
           password: ${{ secrets.TARGET_HOST_PASSWORD }}
           port: ${{ secrets.TARGET_HOST_SSH_PORT }}
           script: |
-            docker pull ppcelery/go-ramjet:latest
+            bash -se <<'RAMJET_DEPLOY'
+            set -Eeuo pipefail
             cd /home/laisky/repo/VPS
-            docker-compose -f b1-docker-compose.yml up -d --remove-orphans --force-recreate go-ramjet
-            docker ps
+            compose_file=b1-docker-compose.yml
+            image=ppcelery/go-ramjet:latest
+
+            # Validate the modern Compose CLI and existing configuration before changes.
+            compose_version="$(docker compose version --short)"
+            compose_major="${compose_version#v}"
+            compose_major="${compose_major%%.*}"
+            if [[ ! "$compose_major" =~ ^[0-9]+$ ]] || (( 10#$compose_major < 2 )); then
+              printf 'Modern Docker Compose is required; found %s\n' "$compose_version" >&2
+              exit 1
+            fi
+            docker compose -f "$compose_file" config --quiet
+            docker pull "$image"
+            expected_image="$(docker image inspect --format '{{.Id}}' "$image")"
+            if [[ -z "$expected_image" ]]; then
+              printf 'Cannot identify the pulled latest image\n' >&2
+              exit 1
+            fi
+
+            # Preserve the existing environment and configuration, and recreate only this service.
+            docker compose -f "$compose_file" up -d --no-deps --force-recreate go-ramjet
+            container="$(docker compose -f "$compose_file" ps --quiet go-ramjet)"
+            if [[ -z "$container" || "$container" == *$'\n'* ]]; then
+              printf 'Expected exactly one deployed go-ramjet container\n' >&2
+              exit 1
+            fi
+            running="$(docker inspect --format '{{.State.Running}}' "$container")"
+            if [[ "$running" != true ]]; then
+              printf 'The deployed go-ramjet container is not running\n' >&2
+              exit 1
+            fi
+            actual_image="$(docker inspect --format '{{.Image}}' "$container")"
+            if [[ "$actual_image" != "$expected_image" ]]; then
+              printf 'The running go-ramjet image does not match the pulled latest image\n' >&2
+              exit 1
+            fi
+
+            container_ips="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if .IPAddress}}{{.IPAddress}}{{"\n"}}{{end}}{{end}}' "$container")"
+            container_ip="${container_ips%%$'\n'*}"
+            if [[ ! "$container_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              printf 'Cannot identify the go-ramjet container IPv4 address\n' >&2
+              exit 1
+            fi
+            health_status="$(curl --fail --silent --show-error --retry 10 --retry-delay 2 --retry-connrefused \
+              --connect-timeout 5 --max-time 15 --output /dev/null --write-out '%{http_code}' \
+              "http://${container_ip}:24456/gptchat/version")"
+            if [[ "$health_status" != 200 ]]; then
+              printf 'The go-ramjet version health probe did not return HTTP 200\n' >&2
+              exit 1
+            fi
+            printf 'go-ramjet is running with the pulled latest image; version health probe returned HTTP 200\n'
+            RAMJET_DEPLOY

@@ -75,11 +75,16 @@ func bindHTTP() {
 	})
 
 	grp := web.Server.Group("/gptchat")
+	registerGPTChatRoutes(grp, globalRatelimitMw)
+}
+
+// registerGPTChatRoutes binds the chat API and retired compatibility routes to grp, applying rateLimiter only to active endpoints.
+func registerGPTChatRoutes(grp *gin.RouterGroup, rateLimiter gin.HandlerFunc) {
 	registerFaviconRoutes(grp)
 
 	// NOTE: Legacy HTML UI has been migrated into the unified SPA served from web/dist.
 	// Static assets (JS/CSS) are no longer served from Go; the SPA handles all UI.
-	apiWithRatelimiter := grp.Group("", globalRatelimitMw)
+	apiWithRatelimiter := grp.Group("", rateLimiter)
 	apiWithRatelimiter.POST("/audit/conservation", ihttp.SaveLlmConservationHandler)
 	apiWithRatelimiter.Any("/api", ihttp.ChatHandler)
 	apiWithRatelimiter.POST("/images/generations", ihttp.DrawByDalleHandler)
@@ -90,8 +95,8 @@ func bindHTTP() {
 	// apiWithRatelimiter.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandlerByNvidia)
 	apiWithRatelimiter.POST("/chat/oneshot", ihttp.OneShotChatHandler)
 	apiWithRatelimiter.POST("/files/chat", ihttp.UploadFiles)
-	apiWithRatelimiter.POST("/deepresearch", ihttp.CreateDeepResearchHandler)
-	apiWithRatelimiter.GET("/deepresearch/:task_id", ihttp.GetDeepResearchStatusHandler)
+	grp.POST("/deepresearch", ihttp.CreateDeepResearchHandler)
+	grp.GET("/deepresearch/:task_id", ihttp.GetDeepResearchStatusHandler)
 	apiWithRatelimiter.GET("/audio/tts", ihttp.TTSHanler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	// grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)

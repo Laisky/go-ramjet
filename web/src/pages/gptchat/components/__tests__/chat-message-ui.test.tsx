@@ -182,3 +182,21 @@ describe('ChatMessage UI', () => {
     ).not.toBeInTheDocument()
   })
 })
+
+describe('Historical research messages', () => {
+  it('keeps completed research content and references readable after retirement', () => {
+    const message: ChatMessageData = {
+      chatID: 'historical-research',
+      role: 'assistant',
+      model: 'deep-research',
+      content:
+        'Stored research report\n\n[Source](https://example.com/reference)',
+    }
+    render(<ChatMessage message={message} />)
+    expect(screen.getByText('Stored research report')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Source' })).toHaveAttribute(
+      'href',
+      'https://example.com/reference',
+    )
+  })
+})

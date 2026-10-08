@@ -44,7 +44,6 @@ export const ChatModelGemini35FlashLite = 'gemini-3.5-flash-lite'
 export const ChatModelGemini38Flash = 'gemini-3.8-flash'
 export const ChatModelGemini31FlashImage = 'gemini-3.1-flash-image-preview'
 export const ChatModelGemini3ProImage = 'gemini-3-pro-image'
-export const ChatModelDeepResearch = 'deep-research'
 export const ChatModelLlama33With70B =
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 export const ChatModelLlamaPromptGuard2 = 'meta-llama/llama-prompt-guard-2-86m'
@@ -84,7 +83,6 @@ export const DefaultModel = ChatModelGPT4OMini
 
 // Model collections
 export const ChatModels = [
-  ChatModelDeepResearch,
   // ChatModelGPT41,
   // ChatModelGPT41Mini,
   // ChatModelGPT41Nano,
@@ -276,7 +274,6 @@ export const ModelCategories: Record<string, string[]> = {
   ],
   Deepseek: [ChatModelDeepFlash, ChatModelDeepSeekV4Pro],
   Others: [
-    ChatModelDeepResearch,
     ChatModelLlama33With70B,
     ChatModelLlamaPromptGuard2,
     ChatModelQwen38With27B,
@@ -327,12 +324,21 @@ export function isFreeModel(model: string): boolean {
 }
 
 /**
+ * isRetiredResearchModel returns whether model names the retired llm-storm feature.
+ * Provider research models retain their ordinary routing and are not retired here.
+ */
+export function isRetiredResearchModel(model?: string): boolean {
+  return model === 'deep-research'
+}
+
+/**
  * isModelAllowed reports whether the current user may select and use the model.
  */
 export function isModelAllowed(
   model: string,
   allowedModels?: string[],
 ): boolean {
+  if (isRetiredResearchModel(model)) return false
   if (!allowedModels || allowedModels.length === 0) {
     return true
   }

@@ -21,7 +21,7 @@ export interface ChatMessageData {
   error?: string
   /**
    * Transient label shown alongside the loading animation while a non-streaming
-   * flow (image generation, mask inpainting, deep research) is in progress.
+   * flow (image generation, mask inpainting) is in progress.
    * Not persisted — cleared once the final content arrives.
    */
   loadingLabel?: string
@@ -169,7 +169,6 @@ export const RoleSystem = 'system' as const
 // Task types
 export const ChatTaskTypeChat = 'chat' as const
 export const ChatTaskTypeImage = 'image' as const
-export const ChatTaskTypeDeepResearch = 'deepresearch' as const
 
 // Task status
 export const ChatTaskStatusWaiting = 'waiting' as const

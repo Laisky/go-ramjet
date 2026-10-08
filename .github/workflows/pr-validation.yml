@@ -116,6 +116,9 @@ jobs:
           echo "go.mod or go.sum is not tidy for Go 1.27"
           exit 1
 
+      - name: Run release deployment contract tests
+        run: python3 ci/test_release_deployment.py
+
       - name: Run Go tests
         run: go test ./... -count=1
 

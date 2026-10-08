@@ -85,16 +85,6 @@ export interface ChatTool {
   strict?: boolean
 }
 
-// Deep research
-export interface DeepResearchTask {
-  task_id: string
-  status: string
-  result?: string
-  output?: string
-  content?: string
-  summary?: string
-}
-
 export interface McpServer {
   id?: string
   name: string
@@ -479,53 +469,6 @@ export async function editImageWithMask(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
-  }
-
-  return response.json()
-}
-
-/**
- * Create a deep-research task.
- */
-export async function createDeepResearchTask(
-  prompt: string,
-  apiToken: string,
-  apiBase?: string,
-): Promise<{ task_id: string }> {
-  const headers = await buildHeaders(apiToken, apiBase)
-
-  const response = await fetch(`${getApiBase()}/deepresearch`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ prompt }),
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
-  }
-
-  return response.json()
-}
-
-/**
- * Fetch deep-research task status.
- */
-export async function fetchDeepResearchStatus(
-  taskId: string,
-  apiToken: string,
-  apiBase?: string,
-): Promise<DeepResearchTask> {
-  const headers = await buildHeaders(apiToken, apiBase)
-
-  const response = await fetch(`${getApiBase()}/deepresearch/${taskId}`, {
-    method: 'GET',
-    headers,
   })
 
   if (!response.ok) {

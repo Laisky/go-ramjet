@@ -1,14 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ContentPart } from '@/utils/api'
 import { kvDel } from '@/utils/storage'
 
-import {
-  ChatModelDeepResearch,
-  // ChatModelGPTO3Deepresearch,
-  // ChatModelGPTO4MiniDeepresearch,
-  isImageModel,
-} from '../models'
+import { isImageModel } from '../models'
 import {
   type ChatAttachment,
   type ChatMessageData,
@@ -16,7 +11,7 @@ import {
 } from '../types'
 import { generateChatId, getChatDataKey } from '../utils/chat-storage'
 import { fileToDataUrl } from '../utils/format'
-import { runDeepResearch } from './chat-deep-research'
+import { normalizeRetiredResearchConfig } from '../utils/config-helpers'
 import { runImageModelFlow, runMaskInpainting } from './chat-media'
 import { appendMessageToSession } from './chat-append'
 import { useChatStorage } from './chat-storage'
@@ -70,10 +65,17 @@ export interface UseChatReturn {
 }
 
 /**
- * useChat coordinates persistence, streaming, and special flows (media, deep research) for a
+ * useChat coordinates persistence, streaming, and special media flows for a
  * single chat session and returns state plus action helpers.
  */
-export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
+export function useChat({
+  sessionId,
+  config: sourceConfig,
+}: UseChatOptions): UseChatReturn {
+  const config = useMemo(
+    () => normalizeRetiredResearchConfig(sourceConfig),
+    [sourceConfig],
+  )
   const [messages, setMessages] = useState<ChatMessageData[]>([])
   const [isLoading, _setIsLoading] = useState(false)
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null)
@@ -81,7 +83,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const currentChatIdRef = useRef<string | null>(null)
-  const deepResearchAbortRef = useRef(false)
 
   const setIsLoading = useCallback((loading: boolean) => {
     _setIsLoading(loading)
@@ -122,7 +123,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       })
     }
 
-    deepResearchAbortRef.current = true
     currentChatIdRef.current = null
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
     setLoadingChatId(null)
@@ -158,18 +158,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
     }
     return null
   }, [])
-
-  /**
-   * isDeepResearchModel determines whether the selected model triggers the deep research flow.
-   */
-  const isDeepResearchModel = useCallback(() => {
-    const model = config.selected_model
-    return (
-      model === ChatModelDeepResearch
-      // model === ChatModelGPTO3Deepresearch ||
-      // model === ChatModelGPTO4MiniDeepresearch
-    )
-  }, [config.selected_model])
 
   /**
    * sendMessage handles user submission, attachment processing, and dispatches assistant streams.
@@ -261,21 +249,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         return
       }
 
-      if (isDeepResearchModel()) {
-        await runDeepResearch({
-          chatId,
-          prompt: content,
-          config,
-          setMessages,
-          setIsLoading,
-          setError,
-          saveMessage,
-          deepResearchAbortRef,
-          currentChatIdRef,
-        })
-        return
-      }
-
       if (isImageModel(config.selected_model)) {
         await runImageModelFlow({
           chatId,
@@ -316,7 +289,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       config,
       currentChatIdRef,
       findMaskPair,
-      isDeepResearchModel,
       messages,
       saveMessage,
       setIsLoading,
@@ -440,21 +412,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
         return
       }
 
-      if (isDeepResearchModel()) {
-        await runDeepResearch({
-          chatId,
-          prompt: safeContent,
-          config,
-          setMessages,
-          setIsLoading,
-          setError,
-          saveMessage,
-          deepResearchAbortRef,
-          currentChatIdRef,
-        })
-        return
-      }
-
       if (isImageModel(config.selected_model)) {
         await runImageModelFlow({
           chatId,
@@ -475,7 +432,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
       config,
       findMaskPair,
       insertMessagePair,
-      isDeepResearchModel,
       isLoading,
       messages,
       saveMessage,
@@ -485,16 +441,13 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
   )
 
   /**
-   * stopGeneration cancels any in-flight assistant generation or deep research runs.
+   * stopGeneration cancels any in-flight assistant generation.
    */
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
       setIsLoading(false)
-    }
-    if (!deepResearchAbortRef.current) {
-      deepResearchAbortRef.current = true
     }
   }, [setIsLoading])
 
@@ -566,21 +519,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
-      if (isDeepResearchModel()) {
-        await runDeepResearch({
-          chatId,
-          prompt: userMsg.content,
-          config,
-          setMessages,
-          setIsLoading,
-          setError,
-          saveMessage,
-          deepResearchAbortRef,
-          currentChatIdRef,
-        })
-        return
-      }
-
       if (isImageModel(config.selected_model)) {
         await runImageModelFlow({
           chatId,
@@ -597,14 +535,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
-    [
-      config,
-      messages,
-      isDeepResearchModel,
-      saveMessage,
-      setIsLoading,
-      streamAssistantReply,
-    ],
+    [config, messages, saveMessage, setIsLoading, streamAssistantReply],
   )
 
   /**
@@ -693,21 +624,6 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       const apiMessages = buildApiMessages(config, contextMessages, userContent)
 
-      if (isDeepResearchModel()) {
-        await runDeepResearch({
-          chatId,
-          prompt: trimmed,
-          config,
-          setMessages,
-          setIsLoading,
-          setError,
-          saveMessage,
-          deepResearchAbortRef,
-          currentChatIdRef,
-        })
-        return
-      }
-
       if (isImageModel(config.selected_model)) {
         await runImageModelFlow({
           chatId,
@@ -724,14 +640,7 @@ export function useChat({ sessionId, config }: UseChatOptions): UseChatReturn {
 
       await streamAssistantReply({ chatId, payload: apiMessages })
     },
-    [
-      config,
-      messages,
-      isDeepResearchModel,
-      saveMessage,
-      setIsLoading,
-      streamAssistantReply,
-    ],
+    [config, messages, saveMessage, setIsLoading, streamAssistantReply],
   )
 
   /**

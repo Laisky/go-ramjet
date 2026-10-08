@@ -22,6 +22,7 @@ import {
   getActiveSessionId,
   getSessionConfigKey,
   normalizeConfigNumericFields,
+  normalizeRetiredResearchConfig,
 } from '../utils/config-helpers'
 import {
   exportAllData as exportData,
@@ -126,7 +127,11 @@ async function hydrateSessionConfig(
     })
   }
 
-  let configChanged = false
+  let configChanged =
+    !!savedConfig &&
+    (savedConfig.selected_model !== finalConfig.selected_model ||
+      savedConfig.selected_chat_model !== finalConfig.selected_chat_model ||
+      savedConfig.selected_draw_model !== finalConfig.selected_draw_model)
 
   const hasSelectedChatModel =
     savedConfig &&
@@ -409,7 +414,7 @@ export function useConfig() {
     }
 
     const baseConfig = configRef.current
-    const newConfig = {
+    const newConfig = normalizeRetiredResearchConfig({
       ...baseConfig,
       ...updates,
       chat_switch: {
@@ -418,7 +423,7 @@ export function useConfig() {
       },
       sync_key: updates.sync_key ?? baseConfig.sync_key,
       updated_at: Date.now(),
-    }
+    })
 
     configRef.current = newConfig
     setConfigState(newConfig)

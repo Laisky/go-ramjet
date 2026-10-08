@@ -259,3 +259,54 @@ describe('useConfig', () => {
     ).toBe('paid-token-12345')
   })
 })
+
+describe('useConfig research retirement', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('repairs and persists saved research selections without deleting session data', async () => {
+    const saved = {
+      ...DefaultSessionConfig,
+      selected_model: 'deep-research',
+      selected_chat_model: 'deep-research',
+      selected_draw_model: ImageModelFluxPro2,
+      api_token: 'test-retirement-token',
+      session_name: 'Retained research session',
+    }
+    ;(kvGet as Mock).mockImplementation((key: string) =>
+      Promise.resolve(
+        key === 'config_selected_session'
+          ? 1
+          : key === 'chat_user_config_1'
+            ? saved
+            : null,
+      ),
+    )
+    const { result } = renderHook(() => useConfig())
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+    expect(result.current.config.selected_model).toBe(DefaultModel)
+    expect(result.current.config.selected_chat_model).toBe(DefaultModel)
+    expect(result.current.config.selected_draw_model).toBe(ImageModelFluxPro2)
+    expect(result.current.config.session_name).toBe('Retained research session')
+    expect(kvSet).toHaveBeenCalledWith(
+      'chat_user_config_1',
+      expect.objectContaining({
+        selected_model: DefaultModel,
+        selected_chat_model: DefaultModel,
+        api_token: 'test-retirement-token',
+      }),
+    )
+
+    await act(async () => {
+      await result.current.updateConfig({
+        selected_model: 'deep-research',
+        selected_chat_model: 'deep-research',
+      })
+    })
+    expect(result.current.config.selected_model).toBe(DefaultModel)
+    expect(result.current.config.selected_chat_model).toBe(DefaultModel)
+  })
+})

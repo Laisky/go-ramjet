@@ -260,7 +260,6 @@ const ChatModelGemini3ProImage = 'gemini-3-pro-image';
 // const ChatModelGroqMixtral8x7B32K = 'mixtral-8x7b-32768';
 // const ChatModelGroqGemma2With9B = 'gemma2-9b-it';
 // const ChatModelGroqGemma3With27B = 'gemma-3-27b-it';
-const ChatModelDeepResearch = 'deep-research';
 // const ChatModelGroqllama3With8B = 'llama-3.1-8b-instant';
 const ChatModelGroqllama3With70B = 'llama-3.3-70b-versatile';
 const ChatModelGroqLlama4 = 'meta-llama/llama-guard-4-12b';
@@ -292,7 +291,6 @@ const DefaultModel = ChatModelGPT4OMini;
 
 const ChatTaskTypeChat = 'chat';
 const ChatTaskTypeImage = 'image';
-const ChatTaskTypeDeepResearch = 'deepresearch';
 
 const ChatTaskStatusWaiting = 'waiting';
 const ChatTaskStatusProcessing = 'processing';
@@ -301,7 +299,6 @@ const ChatTaskStatusDone = 'done';
 // casual chat models
 
 const ChatModels = [
-  ChatModelDeepResearch,
   // ChatModelTurbo35,
   // ChatModelTurbo35V1106,
   // ChatModelTurbo35V0125,
@@ -543,7 +540,6 @@ const ModelCategories = {
   ],
   Deepseek: [ChatModelDeepSeekChat, ChatModelDeepSeekResoner],
   Others: [
-    ChatModelDeepResearch,
     // ChatModelGroqGemma2With9B,
     ChatModelGroqllama3With70B,
     ChatModelGroqLlama4,
@@ -999,7 +995,9 @@ function applyUrlConfigOverrides(sconfig) {
     }
 
     const currentValue = getNestedConfigValue(sconfig, pathSegments);
-    const coercedValue = coerceConfigValue(pathSegments[pathSegments.length - 1], rawValue, currentValue);
+    const coercedValue = targetPath === 'selected_model' && rawValue === 'deep-research'
+      ? DefaultModel
+      : coerceConfigValue(pathSegments[pathSegments.length - 1], rawValue, currentValue);
     if (coercedValue === currentValue) {
       searchParams.delete(rawKey);
       mutated = true;
@@ -2027,7 +2025,6 @@ async function setupChatJs() {
   setupScrollDetection();
   setupGlobalAiRespHeartbeatTimer();
   setInterval(fetchImageDrawingResultBackground, 3000);
-  setInterval(fetchDeepResearchResultBackground, 3000);
 }
 
 function newChatID() {
@@ -2568,89 +2565,6 @@ async function checkIsImageAllSubtaskDone(item, imageUrl, succeed) {
     renderAfterAiResp(chatData, false);
   } else {
     await setChatData(chatID, RoleAI, chatData);
-  }
-}
-
-let mutexFetchDeepResearchResultBackground = false;
-
-/**
- * Fetches the deep research result background for the AI response and displays it in the chat container.
- */
-async function fetchDeepResearchResultBackground() {
-  if (mutexFetchDeepResearchResultBackground) {
-    return;
-  }
-
-  mutexFetchDeepResearchResultBackground = true;
-  try {
-    const elements =
-      chatContainer.querySelectorAll(
-        `.role-ai .ai-response[data-task-type="${ChatTaskTypeDeepResearch}"][data-task-status="${ChatTaskStatusWaiting}"]`
-      ) || [];
-
-    // should not use Promise.all here, because we need to check each image's status
-    // one by one, not all at once to avoid data race of chatData.taskData
-    for (const item of elements) {
-      if (item.dataset.taskStatus !== ChatTaskStatusWaiting) {
-        return;
-      }
-
-      const chatID = item.closest('.role-ai').dataset.chatid;
-      let chatData = (await getChatData(chatID, RoleAI)) || {};
-      const taskId = chatData.taskId;
-
-      try {
-        const resp = await fetch(`/deepresearch/${taskId}`, {
-          method: 'GET',
-          cache: 'no-cache',
-        });
-        if (!resp.ok || resp.status !== 200) {
-          return;
-        }
-
-        const respData = await resp.json();
-
-        switch (respData.status) {
-          case 'pending':
-          case 'running':
-            return;
-          case 'failed':
-            item.innerHTML = `<p>🔥Someting in trouble...</p><pre style="text-wrap: pretty;">${respData.failed_reason}</pre>`;
-            item.dataset.taskStatus = ChatTaskStatusDone;
-            chatData = await updateChatData(chatID, RoleAI, {
-              taskStatus: ChatTaskStatusDone,
-              content: item.innerHTML,
-            });
-            break;
-          case 'success':
-            item.innerHTML = await renderHTML(respData.result_article, true);
-            item.dataset.taskStatus = ChatTaskStatusDone;
-            chatData = await updateChatData(chatID, RoleAI, {
-              model: 'deep-research',
-              rawContent: respData.result_article,
-              taskStatus: ChatTaskStatusDone,
-              content: item.innerHTML,
-              attachHTML: `
-                            <p style="margin-bottom: 0;">
-                                <button class="btn btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#chatRef-${chatID}" aria-expanded="false" aria-controls="chatRef-${chatID}" style="font-size: 0.6em">
-                                    > toggle reference
-                                </button>
-                            </p>
-                            <div>
-                                <div class="collapse" id="chatRef-${chatID}">
-                                    <div class="card card-body">${combineRefsWithIndex(respData.result_references.url_to_unified_index)}</div>
-                                </div>
-                            </div>`,
-            });
-
-            renderAfterAiResp(chatData, false);
-        }
-      } catch (err) {
-        console.warn('fetch deep research result, ' + err);
-      }
-    }
-  } finally {
-    mutexFetchDeepResearchResultBackground = false;
   }
 }
 
@@ -4043,9 +3957,7 @@ async function sendFluxProPrompt2Server(chatID, selectedModel, currentAIRespEle,
  * @returns chat/complete/image/qa/unknown
  */
 async function detectPromptTaskType(model, prompt) {
-  if (model === ChatModelDeepResearch) {
-    return 'deepresearch';
-  } else if (IsChatModel(model)) {
+  if (IsChatModel(model)) {
     const sconfig = await getChatSessionConfig();
     if (sconfig.chat_switch.all_in_one) {
       try {
@@ -4582,53 +4494,6 @@ async function sendChat2Server(chatID, reqPrompt) {
       }
 
       return chatID;
-    case 'deepresearch': //  new case for deep-research
-      try {
-        const resp = await fetch('/deepresearch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + sconfig.api_token,
-            'X-Laisky-User-Id': await libs.getSHA1(sconfig.api_token),
-            'X-Laisky-Api-Base': sconfig.api_base,
-          },
-          body: JSON.stringify({ prompt: reqPrompt }),
-        });
-
-        if (!resp.ok || resp.status !== 200) {
-          throw new Error(`[${resp.status}]: ${await resp.text()}`);
-        }
-
-        const respData = await resp.json();
-        console.log('deepresearch', respData);
-        globalAIRespEle.dataset.taskStatus = ChatTaskStatusWaiting;
-        globalAIRespEle.dataset.taskType = ChatTaskTypeDeepResearch;
-
-        // Save task ID and other relevant data to chatData
-        const chatData = (await getChatData(chatID, RoleAI)) || {};
-        chatData.chatID = chatID;
-        chatData.role = RoleAI;
-        chatData.model = selectedModel;
-        chatData.taskId = respData.task_id;
-        chatData.taskStatus = ChatTaskStatusWaiting;
-        chatData.taskType = ChatTaskTypeDeepResearch;
-
-        await saveChats2Storage(chatData);
-
-        globalAIRespEle.innerHTML = `
-                <p dir="auto" class="card-text placeholder-glow">
-                    <span class="placeholder col-7"></span>
-                    <span class="placeholder col-4"></span>
-                    <span class="placeholder col-4"></span>
-                    <span class="placeholder col-6"></span>
-                    <span class="placeholder col-8"></span>
-                </p>`;
-      } catch (err) {
-        await abortAIResp(`failed to send deepresearch prompt: ${renderError(err)}`);
-      } finally {
-        unlockChatInput();
-      }
-      return chatID;
     default:
       globalAIRespEle.innerHTML =
         '<p>🔥Someting in trouble...</p>' +
@@ -5107,7 +4972,7 @@ async function sendChat2Server(chatID, reqPrompt) {
       if (globalAIRespData.annotations && globalAIRespData.annotations.length > 0) {
         const referencesHTML = parseAnnotationsAsRef(globalAIRespData.annotations);
         if (referencesHTML) {
-          // Create a collapsible references section similar to deepResearch format
+          // Create a collapsible references section for stored chat sources
           globalAIRespData.attachHTML =
             (globalAIRespData.attachHTML || '') +
             `<div>
@@ -5899,40 +5764,6 @@ function parseAnnotationsAsRef(annotations) {
   refsHtml += '</ul>';
 
   return refsHtml;
-}
-
-/**
- * parse references to markdown links with index.
- * References are sorted by their index.
- * Each list item shows the index and the URL/text.
- *
- * @param {object} refObject - An object where keys are reference URLs/text and values are their index order.
- * @returns {string} HTML unordered list with sorted references.
- */
-function combineRefsWithIndex(refObject) {
-  const entries = [];
-  // Convert object to array of {url, index} entries
-  for (const url in refObject) {
-    if (Object.prototype.hasOwnProperty.call(refObject, url)) {
-      entries.push({ url, index: refObject[url] });
-    }
-  }
-  // sort entries by their index value in ascending order
-  entries.sort((a, b) => a.index - b.index);
-
-  let markdown = '';
-  for (const entry of entries) {
-    // decode and sanitize the url/text
-    const sanitizedVal = libs.sanitizeHTML(decodeURIComponent(entry.url));
-    // include the index in the output (e.g., "1: ..." )
-    if (entry.url.startsWith('http')) {
-      markdown += `<li>[${entry.index}] <a href="${sanitizedVal}" target="_blank">${sanitizedVal}</a></li>`;
-    } else {
-      markdown += `<li>[${entry.index}] <p>${sanitizedVal}</p></li>`;
-    }
-  }
-
-  return `<ul style="margin-bottom: 0;">${markdown}</ul>`;
 }
 
 // parse langchain qa references to markdown links
