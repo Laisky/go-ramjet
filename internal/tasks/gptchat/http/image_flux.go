@@ -112,22 +112,9 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 			logger := logger.With(zap.Int("n_img", i))
 			taskCtx := gmw.SetLogger(taskCtx, logger)
 
-			var imgContent []byte
-			switch r := req.(type) {
-			case *DrawImageByFluxReplicateRequest:
-				imgContent, err = drawFluxByReplicate(taskCtx, model, r)
-			case *InpaintingImageByFlusReplicateRequest:
-				imgContent, err = inpaitingFluxByReplicate(taskCtx, model, r)
-			default:
-				err = errors.Errorf("unknown request type %T", req)
-			}
+			imgContent, err := generateAndBillFluxImage(taskCtx, user, model, price, req)
 			if err != nil {
-				return errors.WithStack(err)
-			}
-
-			if err := checkUserExternalBilling(taskCtx,
-				user, price, "txt2image:"+model); err != nil {
-				return errors.Wrapf(err, "check user external billing for %d image", i)
+				return errors.Wrapf(err, "generate and bill image %d", i)
 			}
 			atomic.AddInt32(&anySucceed, 1)
 			return uploadImage2Minio(taskCtx,
@@ -190,6 +177,34 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 		"created":    time.Now().Unix(),
 		"data":       openaiData,
 	})
+}
+
+// generateAndBillFluxImage generates a Flux image and charges once after success.
+// It records generation latency, excluding billing and upload, and returns the image
+// only after billing succeeds. Unsupported requests and generation failures are not charged.
+func generateAndBillFluxImage(ctx context.Context, user *config.UserConfig,
+	model string, price db.Price, req any) ([]byte, error) {
+	start := time.Now()
+	var (
+		img []byte
+		err error
+	)
+	switch r := req.(type) {
+	case *DrawImageByFluxReplicateRequest:
+		img, err = drawFluxByReplicate(ctx, model, r)
+	case *InpaintingImageByFlusReplicateRequest:
+		img, err = inpaitingFluxByReplicate(ctx, model, r)
+	default:
+		return nil, errors.Errorf("unknown request type %T", req)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "generate Flux image")
+	}
+	if err := checkUserExternalBillingWithElapsed(ctx, user, price,
+		"txt2image:"+model, time.Since(start)); err != nil {
+		return nil, errors.Wrap(err, "check user external billing")
+	}
+	return img, nil
 }
 
 // drawFluxByReplicate draw image by replicate service
