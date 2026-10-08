@@ -1,0 +1,76 @@
+name: consolidate-billing-once
+
+on:
+  push:
+    branches: [fix/consolidate-useful-billing-20261008]
+    paths: [.github/workflows/consolidate-billing-once.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/consolidate-useful-billing-20261008
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Install native test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libasound2t64 libssl-dev
+          curl --fail --location https://csspeechstorage.blob.core.windows.net/drop/1.52.0/SpeechSDK-Linux-1.52.0.tar.gz -o /tmp/speech.tar.gz
+          sudo mkdir -p /opt/azure/speech
+          sudo tar --strip-components=1 -xzf /tmp/speech.tar.gz -C /opt/azure/speech
+          echo 'CGO_CFLAGS=-I/opt/azure/speech/include/c_api' >> "$GITHUB_ENV"
+          echo 'CGO_LDFLAGS=-L/opt/azure/speech/lib/x64 -lMicrosoft.CognitiveServices.Speech.core' >> "$GITHUB_ENV"
+          echo 'LD_LIBRARY_PATH=/opt/azure/speech/lib/x64' >> "$GITHUB_ENV"
+      - name: Apply reviewed source patch
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          import base64, gzip, hashlib, subprocess
+          payload = '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'
+          patch = gzip.decompress(base64.b64decode(payload))
+          assert hashlib.sha256(patch).hexdigest() == '0b0cc6954da687b2485d727363255daf6615adc975c663786dfc82ecd5b4b6a4'
+          subprocess.run(['git', 'apply', '--index', '-'], input=patch, check=True)
+          PY
+          go install golang.org/x/tools/cmd/goimports@v0.51.0
+          goimports -local github.com/Laisky/go-ramjet -w internal/tasks/gptchat/http/{external_billing,external_billing_test,image_flux,ramjet}.go
+      - name: Run billing and Flux behavioral regressions
+        run: go test ./internal/tasks/gptchat/http -run '^(TestExternalBilling|TestFluxGenerationBilling|TestFluxUnsupportedRequest)' -count=1 -v
+      - name: Verify regression negative control
+        shell: bash
+        run: |
+          cp internal/tasks/gptchat/http/external_billing.go /tmp/external_billing.go
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('internal/tasks/gptchat/http/external_billing.go')
+          s = p.read_text()
+          assert s.count('json:"elapsed_time_ms,omitempty"') == 1
+          p.write_text(s.replace('json:"elapsed_time_ms,omitempty"', 'json:"-"'))
+          PY
+          set +e
+          go test ./internal/tasks/gptchat/http -run '^TestExternalBillingUsage$' -count=1 -v > /tmp/negative.log 2>&1
+          result=$?
+          set -e
+          cp /tmp/external_billing.go internal/tasks/gptchat/http/external_billing.go
+          cat /tmp/negative.log
+          test "$result" -ne 0
+          grep -q -- '--- FAIL: TestExternalBillingUsage/positive' /tmp/negative.log
+      - name: Commit validated source without the temporary workflow
+        run: |
+          git rm .github/workflows/consolidate-billing-once.yml
+          git add internal/tasks/gptchat/http/{external_billing,external_billing_test,image_flux,ramjet}.go
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(gptchat): retain useful billing latency without delaying upfront charges'
+          git push --force-with-lease="refs/heads/fix/consolidate-useful-billing-20261008:$GITHUB_SHA" origin HEAD:fix/consolidate-useful-billing-20261008
+          git log -1 --format='%H %s'
