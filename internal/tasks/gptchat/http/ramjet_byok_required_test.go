@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
+	gconfig "github.com/Laisky/go-config/v2"
+
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
@@ -137,4 +139,46 @@ func TestRamjetBYOKProviderResolutionLeavesGenericStateUnchanged(t *testing.T) {
 	require.Equal(t, selected, resolved.APIBase)
 	require.Equal(t, "https://oneapi.laisky.com", general.APIBase)
 	require.Equal(t, key[:15], resolved.UserName)
+}
+
+// TestRamjetBYOKImageCredentialConsistency prevents image requests from using a cached replacement credential.
+func TestRamjetBYOKImageCredentialConsistency(t *testing.T) {
+	originalBackend := gconfig.Shared.GetString("openai.rate_limiter_backend")
+	gconfig.Shared.Set("openai.rate_limiter_backend", "legacy")
+	t.Cleanup(func() { gconfig.Shared.Set("openai.rate_limiter_backend", originalBackend) })
+	const key = "sk-SYNTHETIC-IMAGE-CALLER-KEY"
+	for _, tc := range []struct {
+		name, imageToken string
+		rejected         bool
+	}{
+		{"missing", "", true},
+		{"substituted", "SERVER_SYNTHETIC_IMAGE_SUBSTITUTE", true},
+		{"caller", key, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			byokAuditSetup(t)
+			config.Config.RateLimitExpensiveModelsIntervalSeconds = 60
+			original := newAuthContext(key)
+			original.Request.URL.Path = "/gptchat/ramjet/gptchat/image/dalle"
+			original.Request.Body = io.NopCloser(strings.NewReader("{}"))
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = original.Request
+			ctx.Set(ctxKeyUser, &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, ImageToken: tc.imageToken, UserName: key[:15], APIBase: "http://100.64.0.10:3000", AllowedModels: []string{"*"}})
+			calls := 0
+			httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
+				calls++
+				require.Equal(t, key, req.Header.Get("Authorization"))
+				return byokAuditResponse(req, "{}"), nil
+			})}
+			RamjetProxyHandler(ctx)
+			if tc.rejected {
+				require.GreaterOrEqual(t, recorder.Code, http.StatusBadRequest)
+				require.Zero(t, calls)
+			} else {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Equal(t, 1, calls)
+			}
+		})
+	}
 }

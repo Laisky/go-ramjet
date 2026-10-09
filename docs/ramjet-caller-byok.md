@@ -10,7 +10,8 @@ credential formats.
 
 The resolver verifies that cached BYOK account state still contains the
 original caller key as both its account token and OpenAI token. It never
-accepts a configured server key as a replacement. The redundant temporary
+accepts a configured server key as a replacement. Image routes also require the cached image credential to match the original
+caller key before model checks or outbound dispatch. The redundant temporary
 server-token assignment in chunk queries is removed.
 
 The modern dataset client uses a shared header builder for upload, list,
@@ -44,8 +45,8 @@ Dataset identity, quota keys, and billing identifiers are unchanged. The origina
 caller key cached in request context also remains intact after the proxy's
 existing header mutation. No new credential persistence is added.
 
-Authentication diagnostics now use a SHA256 fingerprint rather than the BYOK
-identifier. Short rejected keys are omitted from errors. Full free-tier tokens,
+Authentication and provider diagnostics now use categorical messages without
+keys, key prefixes, or credential-derived fingerprints. Short rejected keys are omitted from errors. Full free-tier tokens,
 raw provider URLs, and URL-parser errors are omitted from these authentication
 logs. Existing user-identifier logging in unrelated endpoints is a separate
 privacy follow-up; these changes do not claim to sanitize all application logs.
@@ -63,6 +64,8 @@ requests. Before the fix:
 - Missing, anonymous free-tier, and placeholder proxy requests reached the
   mocked Ramjet backend with the configured server key.
 - Missing-key chunk queries reached the mocked backend.
+- Cached BYOK image state with an empty or substituted image credential
+  dispatched that replacement; a normal caller-owned image credential passed.
 - Three valid selected URLs containing query, userinfo, or fragment fields
   were silently replaced with the generic default provider. Five malformed
   selected URLs also reached the mocked backend.
@@ -74,10 +77,10 @@ requests. Before the fix:
 Retained Go tests cover rejection before dispatch, cached server-key mismatch,
 unchanged caller key/base/identity, free-tier behavior outside Ramjet,
 authentication-log privacy, redirects, and URL-enrichment cancellation.
-The final focused qualification passed 60 Go leaf cases across 25 top-level
-tests (71 passing entries including parent groups) and 92 frontend tests, including
+The final focused qualification passed 63 Go leaf cases across 26 top-level
+tests (75 passing entries including parent groups) and 92 frontend tests, including
 the existing sync, config, dataset, SHA1, and retirement compatibility controls.
-The full HTTP package also passed 218 unit leaf cases across 107 top-level
+The full HTTP package also passed 221 unit leaf cases across 108 top-level
 tests, with eight existing live integration tests skipped.
 See `ramjet-frontend-byok.md` for the frontend-only command.
 
@@ -98,7 +101,8 @@ handler headers and invokes the actual standard-library-only Python resolver.
 Ten cases passed: raw or Bearer inbound credentials with an internal HTTP
 provider root, an existing `/v1` suffix, and query, userinfo, or fragment fields. The selected backend
 and caller key remained unchanged, and `/v1` was added exactly once. The tested
-companion resolver source SHA256 was
-`f0c5d490a141d8a30d135f9f0b836cb303e0ed76b172c2203f2f9f28588e62f5`.
+companion resolver commit was `903e8c5c13adeebbddfc7c39af2469a948cea520`,
+and its source SHA256 was
+`03e167c5362d18aff215e420e33eb83ef5b27289aab254730c9cfdac5ebc3b86`.
 Set `RAMJET_CREDENTIAL_RESOLVER_PATH` to the companion public source file for
 this local qualification; it stays opt-in when the other repository is absent.

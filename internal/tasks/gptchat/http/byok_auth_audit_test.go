@@ -57,11 +57,17 @@ func TestBYOKAuthAuditIdentityAndCredentialsPreserved(t *testing.T) {
 func TestBYOKAuthAuditKeyExcludedFromLogs(t *testing.T) {
 	key := "sk-SYNTHETIC-ONLY-PRIVATE-KEY-0123456789"
 	ctx, entries := byokAuthAuditContext(t, key)
+	ctx.Request.Header.Set("X-Laisky-Api-Base", "http://100.64.0.10:3000")
 	_, err := getUserByAuthHeader(ctx)
 	require.NoError(t, err)
 	logged := fmt.Sprint(entries.All())
 	require.NotContains(t, logged, key)
 	require.NotContains(t, logged, key[:15])
+	for _, message := range []string{"use laisky's oneapi token", "use user's own api base"} {
+		categorical := entries.FilterMessage(message).All()
+		require.Len(t, categorical, 1)
+		require.Empty(t, categorical[0].ContextMap(), "credential diagnostics must not emit derived values")
+	}
 }
 
 // TestBYOKAuthAuditInvalidKeyExcludedFromErrors requires rejected synthetic credentials to be absent from errors.
@@ -90,6 +96,9 @@ func TestBYOKAuthAuditInvalidURLCredentialsExcludedFromLogs(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "https://oneapi.laisky.com", user.APIBase)
 			require.NotContains(t, fmt.Sprint(entries.All()), base)
+			categorical := entries.FilterMessage("ignore invalid X-Laisky-Api-Base").All()
+			require.Len(t, categorical, 1)
+			require.Empty(t, categorical[0].ContextMap(), "provider diagnostics must not emit derived values")
 		})
 	}
 }
