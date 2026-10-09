@@ -45,7 +45,7 @@ Dataset identity, quota keys, and billing identifiers are unchanged. The origina
 caller key cached in request context also remains intact after the proxy's
 existing header mutation. No new credential persistence is added.
 
-Authentication and provider diagnostics now use categorical messages without
+BYOK authentication and provider diagnostics now use categorical messages without
 keys, key prefixes, or credential-derived fingerprints. Short rejected keys are omitted from errors. Full free-tier tokens,
 raw provider URLs, and URL-parser errors are omitted from these authentication
 logs. Existing user-identifier logging in unrelated endpoints is a separate
