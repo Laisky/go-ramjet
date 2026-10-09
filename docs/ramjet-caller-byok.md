@@ -75,3 +75,13 @@ go test -p 1 ./internal/tasks/gptchat/http \
 
 No deployment, host installation, CI expansion, or credential configuration
 change is part of this work.
+
+The local opt-in `TestRamjetBYOKActualResolverContract` captures real proxy
+handler headers and invokes the actual standard-library-only Python resolver.
+Four cases passed: raw or Bearer inbound credentials with an internal HTTP
+provider root, with or without an existing `/v1` suffix. The selected backend
+and caller key remained unchanged, and `/v1` was added exactly once. The tested
+companion resolver source SHA256 was
+`f668ca84ae6a1e75cfe349196f105c1ec01463035673ef99fe46521a61f0193e`.
+Set `RAMJET_CREDENTIAL_RESOLVER_PATH` to the companion public source file for
+this local qualification; it stays opt-in when the other repository is absent.
