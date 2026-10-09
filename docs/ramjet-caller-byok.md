@@ -18,6 +18,14 @@ delete, chatbot list, and chatbot selection. It rejects anonymous or malformed
 credentials before hashing or fetch. Generic Go chat, OneAPI, account, and sync
 endpoints retain their existing free-tier behavior.
 
+The active caller inventory is the SPA's five dataset methods, the wildcard
+`RamjetProxyHandler`, and `queryChunks` invoked by URL enrichment (including
+the Responses chat path). Both Go callers pass through `setUserAuth`.
+The retained legacy `templates/js/chat.js` also attaches session credentials
+for dataset, shared-context, and build requests, but current `router.go`
+explicitly retires the legacy HTML UI and no longer registers its static assets.
+It is documented as inactive source rather than updated as an active client.
+
 ## Forwarding and compatibility
 
 The browser sends a Bearer key and optional `X-Laisky-Api-Base` to the
