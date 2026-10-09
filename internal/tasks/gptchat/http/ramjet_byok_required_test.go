@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,4 +65,76 @@ func TestRamjetBYOKCachedServerCredentialsRejected(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+// TestRamjetBYOKSelectedProviderPreserved keeps explicit HTTP provider URLs instead of silently choosing a default.
+func TestRamjetBYOKSelectedProviderPreserved(t *testing.T) {
+	for _, base := range []string{
+		"http://100.64.0.10:3000/provider?api-version=synthetic",
+		"http://SYNTHETIC_URL_USER:SYNTHETIC_URL_PASS@100.64.0.10:3000/provider",
+		"http://100.64.0.10:3000/provider#synthetic-fragment",
+	} {
+		t.Run(base, func(t *testing.T) {
+			byokAuditSetup(t)
+			key := "sk-SYNTHETIC-ONLY-PROVIDER-KEY"
+			ctx, entries := byokAuthAuditContext(t, key)
+			ctx.Request.Method = http.MethodPost
+			ctx.Request.URL.Path = "/gptchat/ramjet/gptchat/query/chunks"
+			ctx.Request.Body = io.NopCloser(strings.NewReader("{}"))
+			ctx.Request.Header.Set("X-Laisky-Api-Base", base)
+			calls := 0
+			httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
+				calls++
+				require.Equal(t, base, req.Header.Get("X-Laisky-Openai-Api-Base"))
+				require.Equal(t, key, req.Header.Get("Authorization"))
+				return byokAuditResponse(req, "{}"), nil
+			})}
+			RamjetProxyHandler(ctx)
+			require.Equal(t, http.StatusOK, ctx.Writer.Status())
+			require.Equal(t, 1, calls)
+			require.NotContains(t, fmt.Sprint(entries.All()), base)
+		})
+	}
+}
+
+// TestRamjetBYOKMalformedProviderRejected stops invalid selected destinations before any upstream dispatch.
+func TestRamjetBYOKMalformedProviderRejected(t *testing.T) {
+	for _, base := range []string{
+		"file:///synthetic", "https://", "http://[invalid", "http://provider.test:70000", "http://provider.test/%SYNTHETIC",
+	} {
+		t.Run(base, func(t *testing.T) {
+			byokAuditSetup(t)
+			ctx, entries := byokAuthAuditContext(t, "sk-SYNTHETIC-ONLY-PROVIDER-KEY")
+			ctx.Request.Method = http.MethodPost
+			ctx.Request.URL.Path = "/gptchat/ramjet/gptchat/query/chunks"
+			ctx.Request.Body = io.NopCloser(strings.NewReader("{}"))
+			ctx.Request.Header.Set("X-Laisky-Api-Base", base)
+			calls := 0
+			httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
+				calls++
+				return byokAuditResponse(req, "{}"), nil
+			})}
+			RamjetProxyHandler(ctx)
+			require.GreaterOrEqual(t, ctx.Writer.Status(), http.StatusBadRequest)
+			require.Zero(t, calls)
+			require.NotContains(t, fmt.Sprint(entries.All()), base)
+		})
+	}
+}
+
+// TestRamjetBYOKProviderResolutionLeavesGenericStateUnchanged keeps non-Ramjet provider policy independent.
+func TestRamjetBYOKProviderResolutionLeavesGenericStateUnchanged(t *testing.T) {
+	byokAuditSetup(t)
+	key := "sk-SYNTHETIC-ONLY-PROVIDER-KEY"
+	ctx := newAuthContext(key)
+	selected := "http://100.64.0.10:3000/provider?api-version=synthetic"
+	ctx.Request.Header.Set("X-Laisky-Api-Base", selected)
+	general, err := getUserByAuthHeader(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "https://oneapi.laisky.com", general.APIBase)
+	resolved, err := resolveRamjetUser(ctx)
+	require.NoError(t, err)
+	require.Equal(t, selected, resolved.APIBase)
+	require.Equal(t, "https://oneapi.laisky.com", general.APIBase)
+	require.Equal(t, key[:15], resolved.UserName)
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -37,7 +38,7 @@ headers = json.load(sys.stdin)
 options = module.resolve_request_credentials(headers["authorization"], headers["api_base"])
 json.dump(options, sys.stdout)
 `
-	for _, base := range []string{"http://100.64.0.10:3000/provider", "http://100.64.0.10:3000/provider/v1"} {
+	for _, base := range []string{"http://100.64.0.10:3000/provider", "http://100.64.0.10:3000/provider/v1", "http://100.64.0.10:3000/provider?api-version=synthetic", "http://SYNTHETIC_URL_USER:SYNTHETIC_URL_PASS@100.64.0.10:3000/provider", "http://100.64.0.10:3000/provider#synthetic-fragment"} {
 		for _, authorization := range []string{key, "Bearer " + key} {
 			t.Run(fmt.Sprintf("%s/%s", base, strings.Split(authorization, " ")[0]), func(t *testing.T) {
 				byokAuditSetup(t)
@@ -65,7 +66,12 @@ json.dump(options, sys.stdout)
 					var options map[string]string
 					require.NoError(t, json.Unmarshal(output, &options))
 					require.Equal(t, key, options["api_key"])
-					require.Equal(t, "http://100.64.0.10:3000/provider/v1", options["base_url"])
+					expected, err := url.Parse(strings.TrimRight(base, "/"))
+					require.NoError(t, err)
+					if !strings.HasSuffix(expected.Path, "/v1") {
+						expected.Path = strings.TrimRight(expected.Path, "/") + "/v1"
+					}
+					require.Equal(t, expected.String(), options["base_url"])
 					return byokAuditResponse(req, "{}"), nil
 				})}
 				RamjetProxyHandler(proxyContext)
