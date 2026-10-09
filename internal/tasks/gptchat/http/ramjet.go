@@ -267,7 +267,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 // setUserAuth parse and set user auth to request header
 func setUserAuth(gctx *gin.Context, req *http.Request) error {
-	user, err := getUserByAuthHeader(gctx)
+	user, err := resolveRamjetUser(gctx)
 	if err != nil {
 		return errors.Wrap(err, "get user from token")
 	}
