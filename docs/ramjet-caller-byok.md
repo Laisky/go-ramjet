@@ -106,3 +106,41 @@ and its source SHA256 was
 `03e167c5362d18aff215e420e33eb83ef5b27289aab254730c9cfdac5ebc3b86`.
 Set `RAMJET_CREDENTIAL_RESOLVER_PATH` to the companion public source file for
 this local qualification; it stays opt-in when the other repository is absent.
+
+
+## Image capability selection
+
+The active wildcard proxy accepts `POST /gptchat/ramjet/gptchat/image/dalle`
+and forwards the JSON body unchanged to Ramjet. Supply `prompt` and, when
+needed, `model` and `image_profile`, with the same caller-owned key and
+selected provider headers described above. The gateway does not choose a model,
+rewrite capabilities, or perform alternate-model/provider retries.
+
+For the exact official `https://api.openai.com/v1` backend, Ramjet defaults to
+the pinned `gpt-image-2-2026-04-21` model and the `gpt-image` profile. The
+official backend rejects retired `dall-e-2`/`dall-e-3` models and a conflicting
+`legacy` profile. A custom backend requires an explicit model; known GPT image
+and DALL-E model names infer their corresponding profile. Unknown custom models
+must declare either `image_profile: "gpt-image"` or
+`image_profile: "legacy"`. The GPT image profile uses PNG, low quality, one
+1024x1024 image, and no `response_format`; the legacy profile requests
+`b64_json` and omits `quality` and `output_format`.
+
+For example, a configured compatible backend may receive:
+
+```json
+{"prompt":"A synthetic landscape","model":"custom-image-model","image_profile":"gpt-image"}
+```
+
+The public success response remains `{"task_id":"...","image_url":["..."]}`.
+The gateway also forwards Ramjet's rejection status and generic response
+unchanged. The retained `TestRamjetBYOKImageCapabilityPassthrough` regression
+uses synthetic transports to check exact request bytes, key, backend, stable
+identity, success-array response, and rejection-response forwarding. It proves
+gateway passthrough, rather than claiming to validate the Python capability
+resolver or perform image generation.
+
+There is no active Ramjet image UI in this checkout. The modern SPA and retained
+inactive legacy source use the separate Go `/images/generations` and edit APIs
+for their image controls. Those independent APIs and their model configuration
+are unchanged by this Ramjet caller contract.
