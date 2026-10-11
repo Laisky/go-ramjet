@@ -30,22 +30,26 @@ func rendererBrowserTestTask(target string, subresources bool) *rlibs.HTMLCrawle
 // TestRendererBrowserHTTPS proves the parent verifies TLS identity before fulfilling a secure browser document.
 func TestRendererBrowserHTTPS(t *testing.T) {
 	opts := rendererBrowserTestOptions(t)
-	var hits atomic.Int32
+	var hits, verifiedResponses atomic.Int32
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "example.com", r.TLS.ServerName)
 		require.Equal(t, "example.com", r.Host)
 		w.Header().Set("Content-Type", "text/html")
 		_, err := w.Write([]byte(`<html><body><div id="result">before</div><script>document.querySelector('#result').textContent=window.isSecureContext?'verified secure render':'insecure'</script></body></html>`))
 		require.NoError(t, err)
+		verifiedResponses.Add(1)
 	}))
 	defer srv.Close()
 	deps := rendererTestDependencies(t, srv, "93.184.216.34", &hits)
 	deps.rootCAs = x509.NewCertPool()
 	deps.rootCAs.AddCert(srv.Certificate())
 	task := rlibs.NewHTMLCrawlerTaskWithEgress("https://example.com/", "synthetic-secret-never-forward", false, &rlibs.CrawlerEgressPolicy{Host: "example.com", Addresses: []string{"93.184.216.34"}, MaxRedirects: 2, AllowSubresources: false})
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Chrome startup and stabilization share the unchanged production render allowance.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+	renderStarted := time.Now()
 	html, receipt, err := renderVerifiedHTMLWithDependencies(ctx, task, deps, opts)
+	t.Logf("HTTPS fixture elapsed=%s verified_responses=%d pinned_dials=%d", time.Since(renderStarted), verifiedResponses.Load(), hits.Load())
 	require.NoError(t, err)
 	require.Contains(t, html, "verified secure render")
 	require.Len(t, receipt.Origins, 1)
