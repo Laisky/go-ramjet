@@ -328,3 +328,18 @@ func asTools(in []*fakeTool) []tool.Tool {
 
 // silence unused import in case of later refactor.
 var _ = atomic.LoadInt64
+
+// TestParallel_AlreadyCanceledContext verifies canceled dispatch returns the caller error and no partial results.
+// A pre-canceled context deterministically exercises the semaphore/dispatch early exit without scheduler timing.
+func TestParallel_AlreadyCanceledContext(t *testing.T) {
+	t.Parallel()
+	tools := []*fakeTool{newFakeTool("cancel-fixture", 0, "fixture")}
+	reg := buildTestRegistry(t, asTools(tools)...)
+	exec := NewParallelExecutor(newParallelBus(t), reg, nullSink{}, Caps{MaxParallelToolCalls: 8}, NewBudgetCounter())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	outputs, err := exec.ExecuteAll(ctx, []model.FunctionCall{{CallID: "cancel-fixture", Name: "cancel-fixture", Arguments: rawJSON(`{}`)}})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, outputs)
+	require.Zero(t, tools[0].callCount(), "canceled dispatch must not execute a tool")
+}
