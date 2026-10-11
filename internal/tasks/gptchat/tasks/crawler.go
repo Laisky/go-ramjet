@@ -263,9 +263,14 @@ func runDynamicWebCrawler() error {
 // inject transient/fatal Redis errors without a live Redis instance.
 var popHTMLCrawlerTask = popHTMLCrawlerTaskFromRedis
 
+// popHTMLCrawlerTaskFromRedis consumes only the verified-generation queue and returns the decoded task.
 func popHTMLCrawlerTaskFromRedis(ctx context.Context) (*rlibs.HTMLCrawlerTask, error) {
-	client := rutils.GetCli().GetDB().Client
+	return popHTMLCrawlerTaskUsingClient(ctx, rutils.GetCli().GetDB().Client)
+}
 
+// popHTMLCrawlerTaskUsingClient consumes one verified task using client and returns its decoded envelope.
+// Legacy workers consume a separate queue and must never compete for this task.
+func popHTMLCrawlerTaskUsingClient(ctx context.Context, client redis.Cmdable) (*rlibs.HTMLCrawlerTask, error) {
 	vals, err := client.BLPop(ctx, 5*time.Second, rlibs.KeyTaskHTMLCrawlerPending).Result()
 	if err != nil {
 		// Return the raw error so callers can classify transient infrastructure
@@ -695,12 +700,20 @@ func enqueueHTMLCrawlerTaskToRedis(ctx context.Context, task *rlibs.HTMLCrawlerT
 	if err := ctx.Err(); err != nil {
 		return errors.WithStack(err)
 	}
+	return enqueueHTMLCrawlerTaskUsingClient(ctx, task, rutils.GetCli().GetDB().Client)
+}
+
+// enqueueHTMLCrawlerTaskUsingClient initializes task and appends its envelope to the verified queue.
+// It returns serialization, cancellation or mutation errors from client without using the legacy queue.
+func enqueueHTMLCrawlerTaskUsingClient(ctx context.Context, task *rlibs.HTMLCrawlerTask, client redis.Cmdable) error {
+	if err := ctx.Err(); err != nil {
+		return errors.WithStack(err)
+	}
 	payload, err := task.ToString()
 	if err != nil {
 		return errors.Wrap(err, "serialize task")
 	}
 
-	client := rutils.GetCli().GetDB().Client
 	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, crawlerDataTTL).Err(); err != nil {
 		return errors.Wrap(err, "init task result")
 	}
