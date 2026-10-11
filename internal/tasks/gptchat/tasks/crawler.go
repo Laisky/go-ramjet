@@ -3,7 +3,6 @@ package tasks
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -253,58 +252,9 @@ func runDynamicWebCrawler() error {
 
 	logger := log.Logger.Named("run_dynamic_web_crawler").With(
 		zap.Bool("output_markdown", task.OutputMarkdown),
-		zap.String("task_id", task.TaskID),
-		zap.String("url", task.Url))
-	logger.Info("get task")
+		zap.String("task_id", crawlerLogTaskID(task.TaskID)))
 	ctxCrawler = gmw.SetLogger(ctxCrawler, logger)
-
-	// mark running
-	if err := setHTMLCrawlerTaskResult(ctxCrawler, task); err != nil {
-		logger.Warn("set running state", zap.Error(err))
-	}
-
-	rawBody, markdown, err := dynamicFetchWorker(ctxCrawler, task.Url, task.APIKey, task.OutputMarkdown)
-	if err != nil {
-		now := time.Now().UTC()
-		reason := fmt.Sprintf("fetch url %q", task.Url)
-
-		task.Status = rlibs.TaskStatusFailed
-		task.FinishedAt = &now
-		task.FailedReason = &reason
-		logger.Error("dynamic fetch url", zap.Error(err))
-	} else {
-		now := time.Now().UTC()
-		task.ResultHTML = rawBody
-		if task.OutputMarkdown && strings.TrimSpace(markdown) != "" {
-			task.ResultMarkdown = []byte(markdown)
-		}
-		task.Status = rlibs.TaskStatusSuccess
-		task.FinishedAt = &now
-		logger.Info("success dynamic fetch url")
-
-		var markdownPtr *string
-		if strings.TrimSpace(markdown) != "" {
-			markdownPtr = &markdown
-		}
-
-		record := &CrawlRecord{
-			TaskID:       task.TaskID,
-			CrawledAt:    now,
-			APIKeyPrefix: apiKeyPrefix(task.APIKey),
-			URL:          task.Url,
-			RawBody:      rawBody,
-			Markdown:     markdownPtr,
-		}
-		if err := SaveCrawlRecord(ctxCrawler, record); err != nil {
-			logger.Warn("persist crawl record", zap.Error(err))
-		}
-	}
-
-	if err := setHTMLCrawlerTaskResult(ctxCrawler, task); err != nil {
-		return errors.Wrap(err, "set task result")
-	}
-
-	return nil
+	return processHTMLCrawlerTask(ctxCrawler, task)
 }
 
 // popHTMLCrawlerTask pops the next pending crawler task.
@@ -347,7 +297,7 @@ func setHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 		return errors.Wrap(err, "serialize task")
 	}
 
-	ctxPublish, cancelPublish := context.WithTimeout(context.Background(), 30*time.Second)
+	ctxPublish, cancelPublish := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelPublish()
 
 	key := crawlerResultKey(task.TaskID)
@@ -689,49 +639,13 @@ func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchDynami
 		return nil, errors.Wrap(err, "apply options")
 	}
 
-	// DB cache lookup
-	if record, ok, err := LoadLatestCrawlRecord(ctx, url); err != nil {
-		return nil, errors.Wrap(err, "load cache")
-	} else if ok {
-		age := time.Since(record.CrawledAt)
-		fresh := age >= 0 && age <= 3*24*time.Hour
-		if fresh {
-			if opt.outputMarkdown && record.Markdown != nil && strings.TrimSpace(*record.Markdown) != "" {
-				return []byte(*record.Markdown), nil
-			}
-			return record.RawBody, nil
-		}
-	}
-
-	// submit task
-	taskID, err := addHTMLCrawlerTask(ctx, url, opt.apiKey, opt.outputMarkdown)
+	// Legacy crawl records have no connection receipt. Never release those
+	// cached bodies before admission and verification of a current task.
+	task, err := submitAdmittedHTMLCrawlerTask(ctx, url, opt.outputMarkdown)
 	if err != nil {
-		return nil, errors.Wrap(err, "submit task")
+		return nil, errors.Wrap(err, "submit crawler task")
 	}
-
-	// fetch task result
-	for {
-		task, err := getHTMLCrawlerTaskResult(ctx, taskID)
-		if err != nil {
-			return nil, errors.Wrap(err, "get task result")
-		}
-
-		switch task.Status {
-		case rlibs.TaskStatusSuccess:
-			return task.ResultHTML, nil
-		case rlibs.TaskStatusPending,
-			rlibs.TaskStatusRunning:
-			time.Sleep(time.Second)
-			continue
-		case rlibs.TaskStatusFailed:
-			if task.FinishedAt == nil || task.FailedReason == nil {
-				return nil, errors.Errorf("task %q failed", taskID)
-			}
-			return nil, errors.Errorf("task failed at %s for reason %q", *task.FinishedAt, *task.FailedReason)
-		default:
-			return nil, errors.Errorf("unknown task status %q", task.Status)
-		}
-	}
+	return waitVerifiedHTMLCrawlerTask(ctx, task)
 }
 
 type fetchDynamicURLContentOption struct {
@@ -755,7 +669,8 @@ type FetchDynamicURLContentOption func(*fetchDynamicURLContentOption) error
 
 // WithMarkdownConversion enables HTML body to Markdown conversion.
 //
-// When apiKey is empty, conversion will be skipped.
+// apiKey is retained for API compatibility; queued crawls use local conversion
+// and never persist or transmit this key.
 func WithMarkdownConversion(apiKey string, outputMarkdown bool) FetchDynamicURLContentOption {
 	return func(opt *fetchDynamicURLContentOption) error {
 		opt.apiKey = apiKey
@@ -764,22 +679,39 @@ func WithMarkdownConversion(apiKey string, outputMarkdown bool) FetchDynamicURLC
 	}
 }
 
+// addHTMLCrawlerTask admits url and enqueues a pinned task, returning its ID.
+// apiKey is unused because secure rendering and local conversion need no token.
 func addHTMLCrawlerTask(ctx context.Context, url, apiKey string, outputMarkdown bool) (string, error) {
-	task := rlibs.NewHTMLCrawlerTaskWithOptions(url, apiKey, outputMarkdown)
+	task, err := submitAdmittedHTMLCrawlerTask(ctx, url, outputMarkdown)
+	if err != nil {
+		return "", err
+	}
+	return task.TaskID, nil
+}
+
+// enqueueHTMLCrawlerTaskToRedis initializes and enqueues admitted task using ctx.
+// It returns any serialization, cancellation or Redis mutation error.
+func enqueueHTMLCrawlerTaskToRedis(ctx context.Context, task *rlibs.HTMLCrawlerTask) error {
+	if err := ctx.Err(); err != nil {
+		return errors.WithStack(err)
+	}
 	payload, err := task.ToString()
 	if err != nil {
-		return "", errors.Wrap(err, "serialize task")
+		return errors.Wrap(err, "serialize task")
 	}
 
 	client := rutils.GetCli().GetDB().Client
 	if err := client.Set(ctx, crawlerResultKey(task.TaskID), payload, crawlerDataTTL).Err(); err != nil {
-		return "", errors.Wrap(err, "init task result")
+		return errors.Wrap(err, "init task result")
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.WithStack(err)
 	}
 	if err := client.RPush(ctx, rlibs.KeyTaskHTMLCrawlerPending, payload).Err(); err != nil {
-		return "", errors.Wrap(err, "enqueue task")
+		return errors.Wrap(err, "enqueue task")
 	}
 
-	return task.TaskID, nil
+	return nil
 }
 
 func getHTMLCrawlerTaskResult(ctx context.Context, taskID string) (*rlibs.HTMLCrawlerTask, error) {

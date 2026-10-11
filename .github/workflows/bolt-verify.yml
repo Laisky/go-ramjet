@@ -25,7 +25,7 @@ concurrency:
 env:
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-  GO_VERSION: 1.27.1
+  GO_VERSION: 1.27.2
   SPEECHSDK_VERSION: 1.52.0
   RUN_GPT_HTTP_IT: ''
   RUN_GPT_S3_IT: ''

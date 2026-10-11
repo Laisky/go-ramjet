@@ -1,6 +1,6 @@
 module github.com/Laisky/go-ramjet
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
@@ -8,9 +8,9 @@ require (
 	github.com/Laisky/gin-middlewares/v7 v7.0.3-0.20260320133617-ccf155d4ffea
 	github.com/Laisky/go-chaining v0.0.0-20180507092046-43dcdc5a21be
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
-	github.com/Laisky/go-utils/v6 v6.3.1
+	github.com/Laisky/go-utils/v6 v6.3.2-0.20261008165128-506ec9758d5f
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20260522113951-e8d8d162b146
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20261011025545-f6de2a121c15
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061
@@ -38,8 +38,9 @@ require (
 	github.com/yuin/goldmark/v2 v2.1.6
 	go.mongodb.org/mongo-driver v1.17.10
 	golang.org/x/image v0.46.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/protobuf v1.36.12
 	gorm.io/driver/clickhouse v0.7.0
 	gorm.io/gorm v1.31.2
@@ -91,7 +92,7 @@ require (
 	github.com/goccy/go-json v0.11.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
+	github.com/golang/snappy v1.0.1-0.20260716114414-9ae09f520e93 // indirect
 	github.com/google/go-cpy v0.0.0-20211218193943-a9c933c06932 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hhrutter/tiff v1.0.7 // indirect
@@ -147,7 +148,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd // indirect
+	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.2 // indirect
@@ -156,7 +157,6 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xlzd/gotp v0.1.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
-	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.dedis.ch/kyber/v3 v3.1.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.9.2 // indirect
@@ -169,7 +169,6 @@ require (
 	golang.org/x/arch v0.31.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
