@@ -149,6 +149,11 @@ func (p *ParallelExecutor) ExecuteAll(
 	if fe := fatalErr.Load(); fe != nil {
 		return nil, gerrors.Wrapf(fe.err, "parallel tool call %q", fe.callID)
 	}
+	// Cancellation can stop dispatch before runOne records a fatal error.
+	// Preserve ask-user/fatal precedence and discard incomplete outputs.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, gerrors.WithStack(ctxErr)
+	}
 	return outputs, nil
 }
 
