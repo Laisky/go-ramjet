@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -267,7 +268,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 // setUserAuth parse and set user auth to request header
 func setUserAuth(gctx *gin.Context, req *http.Request) error {
-	user, err := getUserByAuthHeader(gctx)
+	user, err := resolveRamjetUser(gctx)
 	if err != nil {
 		return errors.Wrap(err, "get user from token")
 	}
@@ -295,6 +296,9 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
 			cost = db.PriceTxt2Image
 			costReason = "txt2image"
+			if subtle.ConstantTimeCompare([]byte(user.ImageToken), []byte(token)) != 1 {
+				return errors.New("Ramjet requires matching caller-owned image credentials")
+			}
 			token = user.ImageToken
 			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
 			if err = IsModelAllowed(gctx, user, &FrontendReq{

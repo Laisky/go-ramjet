@@ -48,6 +48,34 @@ async function request<T>(
 }
 
 /**
+ * buildRamjetHeaders validates a supplied BYOK key and returns its authorization,
+ * derived identity, and optional unchanged provider endpoint for Ramjet requests.
+ */
+async function buildRamjetHeaders(
+  apiToken: string,
+  apiBase?: string,
+): Promise<Record<string, string>> {
+  if (
+    typeof apiToken !== 'string' ||
+    !apiToken ||
+    apiToken === 'DEFAULT_PROXY_TOKEN' ||
+    apiToken.startsWith('FREETIER-') ||
+    /[\s\p{Cc}]/u.test(apiToken)
+  ) {
+    throw new Error('A valid BYOK API key is required for Ramjet operations.')
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiToken}`,
+    'X-Laisky-User-Id': await getSHA1(apiToken),
+  }
+  if (apiBase) {
+    headers['X-Laisky-Api-Base'] = apiBase
+  }
+  return headers
+}
+
+/**
  * withCacheBuster returns an endpoint URL that bypasses stale browser/proxy caches.
  */
 function withCacheBuster(endpoint: string): string {
@@ -120,13 +148,7 @@ export const api = {
     form.append('file_key', datasetName)
     form.append('data_key', dataKey)
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
-    }
-    if (apiBase) {
-      headers['X-Laisky-Api-Base'] = apiBase
-    }
+    const headers = await buildRamjetHeaders(apiToken, apiBase)
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
       method: 'POST',
@@ -145,13 +167,9 @@ export const api = {
     apiBase?: string,
   ): Promise<{ datasets: DatasetInfo[]; selected?: string[] }> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
+      ...(await buildRamjetHeaders(apiToken, apiBase)),
       'Cache-Control': 'no-cache',
       'X-PDFCHAT-PASSWORD': dataKey,
-    }
-    if (apiBase) {
-      headers['X-Laisky-Api-Base'] = apiBase
     }
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
@@ -172,14 +190,10 @@ export const api = {
     apiBase?: string,
   ): Promise<void> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
+      ...(await buildRamjetHeaders(apiToken, apiBase)),
       'Cache-Control': 'no-cache',
       'Content-Type': 'application/json',
       'X-PDFCHAT-PASSWORD': dataKey,
-    }
-    if (apiBase) {
-      headers['X-Laisky-Api-Base'] = apiBase
     }
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
@@ -198,13 +212,9 @@ export const api = {
     apiBase?: string,
   ): Promise<ChatbotList> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
+      ...(await buildRamjetHeaders(apiToken, apiBase)),
       'Cache-Control': 'no-cache',
       'X-PDFCHAT-PASSWORD': dataKey,
-    }
-    if (apiBase) {
-      headers['X-Laisky-Api-Base'] = apiBase
     }
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/ctx/list`, {
@@ -225,12 +235,8 @@ export const api = {
     apiBase?: string,
   ): Promise<void> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiToken}`,
-      'X-Laisky-User-Id': await getSHA1(apiToken),
+      ...(await buildRamjetHeaders(apiToken, apiBase)),
       'Content-Type': 'application/json',
-    }
-    if (apiBase) {
-      headers['X-Laisky-Api-Base'] = apiBase
     }
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/ctx/active`, {

@@ -145,12 +145,11 @@ SWITCH_FOR_USER:
 	case strings.HasPrefix(userToken, "FREETIER-"),
 		userToken == config.FreetierUserToken: // free userch
 		if len(userToken) < 15 {
-			return nil, errors.Errorf("invalid freetier token %q", userToken)
+			return nil, errors.New("invalid freetier token")
 		}
 
 		username := userToken[:15]
 		logger.Debug("use server's freetier openai token",
-			zap.String("token", userToken),
 			zap.String("user", username))
 
 		for _, commFreeUser := range config.Config.UserTokens {
@@ -171,11 +170,11 @@ SWITCH_FOR_USER:
 	case strings.HasPrefix(userToken, "laisky-"),
 		strings.HasPrefix(userToken, "sk-"):
 		if len(userToken) < 15 {
-			return nil, errors.Errorf("invalid laisky's oneapi token %q", userToken)
+			return nil, errors.New("invalid laisky's oneapi token")
 		}
 
 		username := userToken[:15]
-		logger.Debug("use laisky's oneapi token", zap.String("user", username))
+		logger.Debug("use laisky's oneapi token")
 		user = &config.UserConfig{ // default to openai user
 			UserName:    username,
 			Token:       userToken,
@@ -288,10 +287,7 @@ func applyUserAPIBaseOverride(gctx *gin.Context, user *config.UserConfig, logger
 
 	override, err := validateAPIBase(raw)
 	if err != nil {
-		logger.Warn("ignore invalid X-Laisky-Api-Base",
-			zap.String("api_base", raw),
-			zap.Error(err),
-		)
+		logger.Warn("ignore invalid X-Laisky-Api-Base")
 		return
 	}
 
@@ -305,7 +301,7 @@ func applyUserAPIBaseOverride(gctx *gin.Context, user *config.UserConfig, logger
 		user.ImageUrl = override + "/v1/images/generations"
 	}
 
-	logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
+	logger.Debug("use user's own api base")
 }
 
 // validateAPIBase validates and normalizes a user-provided API base URL.
