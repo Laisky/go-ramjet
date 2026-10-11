@@ -10,7 +10,7 @@ require (
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-utils/v6 v6.3.2-0.20261008165128-506ec9758d5f
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20261011020932-4e24f2e075a0
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20261011025545-f6de2a121c15
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061

@@ -28,6 +28,17 @@ func verifiedTestReceipt(task *rlibs.HTMLCrawlerTask) *crawleregress.Receipt {
 	return receipt
 }
 
+// wireRoundTripVerifiedTask serializes task with the production encoder and
+// decodes it with the production queue parser, returning an independent object.
+func wireRoundTripVerifiedTask(t *testing.T, task *rlibs.HTMLCrawlerTask) *rlibs.HTMLCrawlerTask {
+	t.Helper()
+	payload, err := task.ToString()
+	require.NoError(t, err)
+	decoded, err := rlibs.NewHTMLCrawlerTaskFromString(payload)
+	require.NoError(t, err)
+	return decoded
+}
+
 // preserveVerifiedWorkerSeams restores dependency seams after a serial unit test.
 func preserveVerifiedWorkerSeams(t *testing.T) {
 	t.Helper()
@@ -155,7 +166,7 @@ func TestVerifiedTaskValidHTMLAndMarkdown(t *testing.T) {
 // TestVerifiedTaskAdmissionAndEvidenceFailures denies unsupported settings and
 // missing/forged evidence before returning any potentially private body.
 func TestVerifiedTaskAdmissionAndEvidenceFailures(t *testing.T) {
-	for _, tc := range []string{"missing_policy", "private_pin", "configured_proxy", "missing_receipt", "forged_task", "forged_peer", "forged_policy"} {
+	for _, tc := range []string{"missing_policy", "private_pin", "configured_proxy", "missing_receipt", "forged_task", "forged_peer", "forged_policy", "renderer_mutates_policy"} {
 		t.Run(tc, func(t *testing.T) {
 			preserveVerifiedWorkerSeams(t)
 			task := verifiedTestTask()
@@ -180,6 +191,10 @@ func TestVerifiedTaskAdmissionAndEvidenceFailures(t *testing.T) {
 					receipt.Origins[0].PeerAddress = "127.0.0.1"
 				case "forged_policy":
 					receipt.PolicyDigest = "forged"
+				case "renderer_mutates_policy":
+					renderTask.Egress.Addresses[0] = "8.8.4.4"
+					receipt = crawleregress.NewReceipt(renderTask.TaskID, renderTask.Url, *renderTask.Egress)
+					receipt.Origins = []crawleregress.Origin{{URL: renderTask.Url, Addresses: []string{"8.8.4.4"}, PeerAddress: "8.8.4.4", Kind: crawleregress.OriginDocument}}
 				}
 				return "<body>must-not-return</body>", receipt, nil
 			}
@@ -187,6 +202,9 @@ func TestVerifiedTaskAdmissionAndEvidenceFailures(t *testing.T) {
 			require.Error(t, err)
 			require.Nil(t, body)
 			require.Nil(t, receipt)
+			if tc == "renderer_mutates_policy" {
+				require.Equal(t, []string{"8.8.8.8"}, task.Egress.Addresses)
+			}
 			if tc == "missing_policy" || tc == "private_pin" || tc == "configured_proxy" {
 				require.Zero(t, calls)
 			}
@@ -249,6 +267,9 @@ func TestVerifiedWorkerPublishesSanitizedResults(t *testing.T) {
 		t.Run(map[bool]string{false: "success", true: "failure"}[fail], func(t *testing.T) {
 			preserveVerifiedWorkerSeams(t)
 			task := verifiedTestTask()
+			submitted := *task
+			submittedPolicy := crawleregress.ClonePolicy(*task.Egress)
+			submitted.Egress = &submittedPolicy
 			withInjectedPop(t, func(context.Context) (*rlibs.HTMLCrawlerTask, error) { return task, nil })
 			fetchVerifiedHTMLContent = func(_ context.Context, renderTask *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
 				if fail {
@@ -257,11 +278,13 @@ func TestVerifiedWorkerPublishesSanitizedResults(t *testing.T) {
 				return "<body>safe-result</body>", verifiedTestReceipt(renderTask), nil
 			}
 			states := []string{}
+			payloads := []string{}
 			publishHTMLCrawlerTask = func(_ context.Context, result *rlibs.HTMLCrawlerTask) error {
 				payload, err := result.ToString()
 				require.NoError(t, err)
 				require.NotContains(t, payload, "token-canary")
 				states = append(states, result.Status)
+				payloads = append(payloads, payload)
 				return nil
 			}
 			audits := 0
@@ -271,6 +294,17 @@ func TestVerifiedWorkerPublishesSanitizedResults(t *testing.T) {
 				return nil
 			}
 			require.NoError(t, runDynamicWebCrawler())
+			loadVerifiedHTMLCrawlerTask = func(context.Context, string) (*rlibs.HTMLCrawlerTask, error) {
+				return rlibs.NewHTMLCrawlerTaskFromString(payloads[len(payloads)-1])
+			}
+			consumerBody, consumerErr := waitVerifiedHTMLCrawlerTask(context.Background(), &submitted)
+			if fail {
+				require.Error(t, consumerErr)
+				require.Nil(t, consumerBody)
+			} else {
+				require.NoError(t, consumerErr)
+				require.Equal(t, task.ResultMarkdown, consumerBody)
+			}
 			require.Equal(t, rlibs.TaskStatusRunning, states[0])
 			if fail {
 				require.Equal(t, []string{rlibs.TaskStatusRunning, rlibs.TaskStatusFailed}, states)
@@ -313,6 +347,7 @@ func TestVerifiedProducerAdmitsBeforeEnqueue(t *testing.T) {
 				require.Empty(t, task.APIKey)
 				require.Equal(t, []string{"8.8.8.8"}, task.Egress.Addresses)
 				require.False(t, task.Egress.AllowSubresources)
+				require.Equal(t, crawleregress.DefaultMaxRedirects, task.Egress.MaxRedirects)
 				return nil
 			}
 			id, err := addHTMLCrawlerTask(ctx, "https://example.com/", "token-canary", true)
@@ -331,14 +366,19 @@ func TestVerifiedProducerAdmitsBeforeEnqueue(t *testing.T) {
 // TestVerifiedConsumerRejectsUnverifiedBody protects the task-return boundary
 // independently from worker implementation and consumes Markdown when requested.
 func TestVerifiedConsumerRejectsUnverifiedBody(t *testing.T) {
-	for _, scenario := range []string{"valid", "legacy_receipt", "changed_identity", "changed_format", "failed_reason", "pending_cancellation", "oversized_result"} {
+	for _, scenario := range []string{"valid", "legacy_receipt", "changed_identity", "changed_format", "changed_policy", "empty_html", "failed_reason", "pending_cancellation", "oversized_result"} {
 		t.Run(scenario, func(t *testing.T) {
 			preserveVerifiedWorkerSeams(t)
 			submitted := verifiedTestTask()
+			if scenario == "empty_html" {
+				submitted.OutputMarkdown = false
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 			defer cancel()
 			loadVerifiedHTMLCrawlerTask = func(context.Context, string) (*rlibs.HTMLCrawlerTask, error) {
 				result := *submitted
+				resultPolicy := crawleregress.ClonePolicy(*submitted.Egress)
+				result.Egress = &resultPolicy
 				result.Status = rlibs.TaskStatusSuccess
 				result.ResultHTML, result.ResultMarkdown = []byte("raw-html"), []byte("local-markdown")
 				result.EgressReceipt = verifiedTestReceipt(submitted)
@@ -350,6 +390,10 @@ func TestVerifiedConsumerRejectsUnverifiedBody(t *testing.T) {
 					result.TaskID = "other-task"
 				case "changed_format":
 					result.OutputMarkdown = false
+				case "changed_policy":
+					result.Egress.Addresses[0] = "8.8.4.4"
+				case "empty_html":
+					result.ResultHTML = nil
 				case "failed_reason":
 					result.Status = rlibs.TaskStatusFailed
 					reason := "token-canary"
@@ -359,7 +403,7 @@ func TestVerifiedConsumerRejectsUnverifiedBody(t *testing.T) {
 				case "oversized_result":
 					result.ResultHTML = make([]byte, rendererMaxResponseBytes+1)
 				}
-				return &result, nil
+				return wireRoundTripVerifiedTask(t, &result), nil
 			}
 			body, err := waitVerifiedHTMLCrawlerTask(ctx, submitted)
 			if scenario == "valid" {
@@ -422,4 +466,122 @@ func TestCrawlerTaskLogIDBoundsUserInput(t *testing.T) {
 	require.Equal(t, "invalid", crawlerLogTaskID("token-canary https://example.com"))
 	require.Equal(t, "invalid", crawlerLogTaskID("01234567-0123-0123-0123-01234567890z"))
 	require.Equal(t, "01234567-0123-0123-0123-01234567890a", crawlerLogTaskID("01234567-0123-0123-0123-01234567890a"))
+}
+
+// TestVerifiedConsumerSnapshotIsolation rejects a loaded result after a caller's
+// mutable original submission changes, retaining the original policy snapshot.
+func TestVerifiedConsumerSnapshotIsolation(t *testing.T) {
+	preserveVerifiedWorkerSeams(t)
+	submitted := verifiedTestTask()
+	loadVerifiedHTMLCrawlerTask = func(context.Context, string) (*rlibs.HTMLCrawlerTask, error) {
+		submitted.Egress.Addresses[0] = "8.8.4.4"
+		result := *submitted
+		result.Status = rlibs.TaskStatusSuccess
+		result.ResultHTML, result.ResultMarkdown = []byte("changed-html"), []byte("changed-markdown")
+		result.EgressReceipt = crawleregress.NewReceipt(result.TaskID, result.Url, *result.Egress)
+		result.EgressReceipt.Origins = []crawleregress.Origin{{URL: result.Url, Addresses: []string{"8.8.4.4"}, PeerAddress: "8.8.4.4", Kind: crawleregress.OriginDocument}}
+		return wireRoundTripVerifiedTask(t, &result), nil
+	}
+	body, err := waitVerifiedHTMLCrawlerTask(context.Background(), submitted)
+	require.Error(t, err)
+	require.Nil(t, body)
+}
+
+// TestVerifiedWorkerLegacyChainIncludesDocumentsOnly keeps legacy redirect
+// evidence compatible while structured receipts retain observed subresources.
+func TestVerifiedWorkerLegacyChainIncludesDocumentsOnly(t *testing.T) {
+	preserveVerifiedWorkerSeams(t)
+	task := verifiedTestTask()
+	task.Egress.AllowSubresources = true
+	task.Egress.MaxRedirects = 1
+	finalURL := "https://example.com/final"
+	fetchVerifiedHTMLContent = func(_ context.Context, renderTask *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
+		receipt := verifiedTestReceipt(renderTask)
+		receipt.Origins = append(receipt.Origins,
+			crawleregress.Origin{URL: "https://assets.example.com/script.js", Addresses: []string{"1.1.1.1"}, PeerAddress: "1.1.1.1", Kind: crawleregress.OriginSubresource},
+			crawleregress.Origin{URL: finalURL, Addresses: []string{"8.8.8.8"}, PeerAddress: "8.8.8.8", Kind: crawleregress.OriginDocument})
+		return "<body>local-result</body>", receipt, nil
+	}
+	publishHTMLCrawlerTask = func(context.Context, *rlibs.HTMLCrawlerTask) error { return nil }
+	persistVerifiedCrawlRecord = func(context.Context, *CrawlRecord) error { return nil }
+	require.NoError(t, processHTMLCrawlerTask(context.Background(), task))
+	require.Equal(t, rlibs.TaskStatusSuccess, task.Status)
+	require.Equal(t, []string{task.Url, finalURL}, task.RequestChain)
+	require.Len(t, task.EgressReceipt.Origins, 3)
+}
+
+// TestVerifiedTaskRejectsExcessRedirectPolicy refuses invalid shared redirect
+// budgets before any renderer, external fallback or DNS operation occurs.
+func TestVerifiedTaskRejectsExcessRedirectPolicy(t *testing.T) {
+	preserveVerifiedWorkerSeams(t)
+	task := verifiedTestTask()
+	task.Egress.MaxRedirects = crawleregress.MaxRedirects + 1
+	calls := 0
+	fetchVerifiedHTMLContent = func(context.Context, *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
+		calls++
+		return "unexpected", nil, nil
+	}
+	body, _, receipt, err := fetchVerifiedCrawlerTask(context.Background(), task)
+	require.Error(t, err)
+	require.Zero(t, calls)
+	require.Nil(t, body)
+	require.Nil(t, receipt)
+}
+
+// TestVerifiedWorker3952WireCompatibility preserves the deployed server's exact
+// known crawler wire fields while its older parser ignores additive receipts.
+func TestVerifiedWorker3952WireCompatibility(t *testing.T) {
+	// These are the crawler egress and result fields at GraphQL revision3952e43.
+	type policy3952 struct {
+		Host              string   `json:"host"`
+		Addresses         []string `json:"addresses"`
+		MaxRedirects      int      `json:"max_redirects"`
+		AllowSubresources bool     `json:"allow_subresources"`
+	}
+	type task3952 struct {
+		TaskID         string      `json:"task_id"`
+		Status         string      `json:"status"`
+		URL            string      `json:"url"`
+		APIKey         string      `json:"api_key,omitempty"`
+		OutputMarkdown bool        `json:"output_markdown,omitempty"`
+		Egress         *policy3952 `json:"egress,omitempty"`
+		RequestChain   []string    `json:"request_chain,omitempty"`
+		ResultHTML     []byte      `json:"result_html,omitempty"`
+		ResultMarkdown []byte      `json:"result_markdown,omitempty"`
+	}
+	task := verifiedTestTask()
+	task.APIKey = ""
+	task.Status = rlibs.TaskStatusSuccess
+	task.Egress.MaxRedirects = 1
+	task.Egress.AllowSubresources = true
+	task.ResultHTML, task.ResultMarkdown = []byte("<body>rendered-result</body>"), []byte("rendered-result")
+	finalURL := "https://example.com/final"
+	task.RequestChain = []string{task.Url, finalURL}
+	task.EgressReceipt = verifiedTestReceipt(task)
+	task.EgressReceipt.Origins = append(task.EgressReceipt.Origins,
+		crawleregress.Origin{URL: "https://assets.example.com/script.js", Addresses: []string{"1.1.1.1"}, PeerAddress: "1.1.1.1", Kind: crawleregress.OriginSubresource},
+		crawleregress.Origin{URL: finalURL, Addresses: []string{"8.8.8.8"}, PeerAddress: "8.8.8.8", Kind: crawleregress.OriginDocument})
+	payload, err := task.ToString()
+	require.NoError(t, err)
+	var old task3952
+	require.NoError(t, json.Unmarshal([]byte(payload), &old))
+	require.Equal(t, task.TaskID, old.TaskID)
+	require.Equal(t, task.Status, old.Status)
+	require.Equal(t, task.Url, old.URL)
+	require.Empty(t, old.APIKey)
+	require.True(t, old.OutputMarkdown)
+	require.Equal(t, task.Egress.Host, old.Egress.Host)
+	require.Equal(t, task.Egress.Addresses, old.Egress.Addresses)
+	require.Equal(t, task.Egress.MaxRedirects, old.Egress.MaxRedirects)
+	require.True(t, old.Egress.AllowSubresources)
+	require.Equal(t, task.RequestChain, old.RequestChain)
+	require.Equal(t, task.ResultHTML, old.ResultHTML)
+	require.Equal(t, task.ResultMarkdown, old.ResultMarkdown)
+	// The old verifier counts each legacy chain entry after the first as a
+	// redirect. Subresources stay in the additive receipt and never consume it.
+	require.LessOrEqual(t, len(old.RequestChain)-1, old.Egress.MaxRedirects)
+	oldPayload, err := json.Marshal(old)
+	require.NoError(t, err)
+	require.NotContains(t, string(oldPayload), "egress_receipt")
+	require.NoError(t, crawleregress.VerifyReceipt(context.Background(), task.TaskID, task.Url, *task.Egress, wireRoundTripVerifiedTask(t, task).EgressReceipt))
 }

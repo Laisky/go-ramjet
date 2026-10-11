@@ -28,7 +28,7 @@ func submitAdmittedHTMLCrawlerTask(ctx context.Context, target string, outputMar
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	policy := admission.Policy(5, false)
+	policy := admission.Policy(crawleregress.DefaultMaxRedirects, false)
 	task := rlibs.NewHTMLCrawlerTaskWithEgress(target, "", outputMarkdown, &policy)
 	if err := enqueueAdmittedHTMLCrawlerTask(ctx, task); err != nil {
 		return nil, errors.Wrap(err, "enqueue admitted crawler task")
@@ -42,6 +42,10 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 	if submitted == nil || submitted.Egress == nil {
 		return nil, crawlerFailure("policy_missing", "admission", nil)
 	}
+	expected := *submitted
+	expectedPolicy := crawleregress.ClonePolicy(*submitted.Egress)
+	expected.Egress = &expectedPolicy
+	submitted = &expected
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, errors.WithStack(err)
@@ -55,7 +59,10 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 		}
 		switch task.Status {
 		case rlibs.TaskStatusSuccess:
-			if task.TaskID != submitted.TaskID || task.Url != submitted.Url || task.OutputMarkdown != submitted.OutputMarkdown {
+			if task.TaskID != submitted.TaskID || task.Url != submitted.Url || task.OutputMarkdown != submitted.OutputMarkdown || task.Egress == nil {
+				return nil, crawlerFailure("result_invalid", "verification", nil)
+			}
+			if crawleregress.PolicyDigest(task.Url, *task.Egress) != crawleregress.PolicyDigest(submitted.Url, *submitted.Egress) {
 				return nil, crawlerFailure("result_invalid", "verification", nil)
 			}
 			if err := crawleregress.VerifyReceipt(ctx, submitted.TaskID, submitted.Url, *submitted.Egress, task.EgressReceipt); err != nil {
@@ -69,6 +76,9 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 					return nil, crawlerFailure("empty_markdown", "conversion", nil)
 				}
 				return task.ResultMarkdown, nil
+			}
+			if len(task.ResultHTML) == 0 {
+				return nil, crawlerFailure("empty_body", "render", nil)
 			}
 			return task.ResultHTML, nil
 		case rlibs.TaskStatusPending, rlibs.TaskStatusRunning:

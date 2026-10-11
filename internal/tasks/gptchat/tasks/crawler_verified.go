@@ -29,18 +29,18 @@ func convertVerifiedHTMLToMarkdown(content string) (string, error) {
 	return md.ConvertString(content)
 }
 
-// crawlerTaskFailure carries only reviewed scalar diagnostics for task failures.
-type crawlerTaskFailure struct {
+// crawlerTaskError carries only reviewed scalar diagnostics for task failures.
+type crawlerTaskError struct {
 	code  string
 	stage string
 	cause error
 }
 
 // Error returns the scalar code and stage without the upstream error or target.
-func (e *crawlerTaskFailure) Error() string { return "crawler " + e.stage + ": " + e.code }
+func (e *crawlerTaskError) Error() string { return "crawler " + e.stage + ": " + e.code }
 
 // Unwrap returns a context lifecycle error, when present, for cancellation checks.
-func (e *crawlerTaskFailure) Unwrap() error { return e.cause }
+func (e *crawlerTaskError) Unwrap() error { return e.cause }
 
 // crawlerFailure classifies err into a safe scalar failure for the supplied stage.
 func crawlerFailure(code, stage string, err error) error {
@@ -50,12 +50,12 @@ func crawlerFailure(code, stage string, err error) error {
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		code, cause = "timeout", context.DeadlineExceeded
 	}
-	return errors.WithStack(&crawlerTaskFailure{code: code, stage: stage, cause: cause})
+	return errors.WithStack(&crawlerTaskError{code: code, stage: stage, cause: cause})
 }
 
 // crawlerDiagnostic returns reviewed code and stage for err without its text.
 func crawlerDiagnostic(err error) (string, string) {
-	var failure *crawlerTaskFailure
+	var failure *crawlerTaskError
 	if errors.As(err, &failure) {
 		return failure.code, failure.stage
 	}
@@ -96,7 +96,7 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	if err != nil {
 		return nil, "", nil, crawlerFailure("policy_invalid", "admission", err)
 	}
-	if admission.Host != policy.Host || policy.MaxRedirects < 0 || policy.MaxRedirects > 20 {
+	if admission.Host != policy.Host || policy.MaxRedirects < 0 || policy.MaxRedirects > crawleregress.MaxRedirects {
 		return nil, "", nil, crawlerFailure("policy_invalid", "admission", nil)
 	}
 	// An external browser proxy has no enforceable connection evidence. Refuse
@@ -106,7 +106,8 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	}
 	renderTask := *task
 	renderTask.APIKey = ""
-	renderTask.Egress = &policy
+	renderPolicy := crawleregress.ClonePolicy(policy)
+	renderTask.Egress = &renderPolicy
 	renderTask.RequestChain = nil
 	renderTask.EgressReceipt = nil
 	renderTask.ResultHTML = nil
@@ -217,7 +218,9 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		task.Status, task.ResultHTML = rlibs.TaskStatusSuccess, body
 		task.ResultMarkdown, task.EgressReceipt = []byte(markdown), receipt
 		for _, origin := range receipt.Origins {
-			task.RequestChain = append(task.RequestChain, origin.URL)
+			if origin.Kind == crawleregress.OriginDocument {
+				task.RequestChain = append(task.RequestChain, origin.URL)
+			}
 		}
 		var markdownPtr *string
 		if markdown != "" {
