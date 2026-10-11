@@ -11,7 +11,7 @@ RUN pnpm -C web build
 
 # =====================================
 
-FROM golang:1.27.1-bookworm AS gobuild
+FROM golang:1.27.2-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \
@@ -50,7 +50,8 @@ ADD . .
 COPY --from=nodebuild /app/web/dist ./web/dist
 ENV GOOS=linux
 ENV GOARCH=amd64
-RUN go build
+RUN go build \
+    && CGO_ENABLED=0 go build -o /goapp/crawler-browser-launcher ./cmd/crawler-browser-launcher
 
 # =====================================
 
@@ -115,6 +116,7 @@ WORKDIR /app
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
 COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
+COPY --from=gobuild /goapp/crawler-browser-launcher /usr/local/bin/crawler-browser-launcher
 COPY --from=gobuild /goapp/web/dist /app/web/dist
 
 ENTRYPOINT ["/app/go-ramjet"]

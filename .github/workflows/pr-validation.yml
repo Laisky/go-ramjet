@@ -128,7 +128,10 @@ jobs:
         run: |
           command -v google-chrome || command -v chromium
           command -v pdftotext
-          dbus-run-session -- go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^TestBrowser' -count=1
+          dbus-run-session -- go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^Test(Browser|Renderer(Egress|Browser))' -count=1
+
+      - name: Verify browser process network confinement
+        run: go test ./cmd/crawler-browser-launcher -count=1
 
       - name: Run go vet
         run: go vet ./...
