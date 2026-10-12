@@ -47,9 +47,17 @@ Legacy encrypted-original downloads retain their independent object-address/pass
 
 Ramjet has no authoritative paid grant in this flow. The gateway sends the conservative free flag; private users retain free capacity and three process admission permits. The existing eight queued/running upload ceiling remains. Session identity, UID/free headers, fresh model keys, or max_chunks do not grant paid capacity.
 
+Compound model keys and URL options are checked for identifiable Laisky sessions, including case-preserved authorities, without recursive decoding or general content inspection. Retained admission failures are policy controls, not evidence of production disclosure. Unrelated provider JWTs, opaque keys and configured destinations remain supported.
+
 ## Frontend and qualification
 
-The dataset UI uses a dedicated GPTChat ownership session slot, separate from CV storage and model configuration. Explicit sign-in starts the established redirect flow with a cryptographically random pending state. A callback can replace the session only when its state matches; session/state query parameters are scrubbed before requests. Account/session/model changes clear displayed items and abort stale requests. No actual sign-in or credential creation was performed. Runtime SSO callback allowlisting and delivery remain rollout prerequisites.
+The dataset-management UI remains disabled: its mount in ConfigSidebar is still commented out. Its sign-in component and private API helpers are prepared source, not a reachable new feature.
+
+The actual SPA main entrypoint admits and scrubs ownership callbacks before site metadata bootstrap and React mounting, independently of the hidden component. Admission applies to the /gptchat route and the root landing route only when the resolved site is chat; CV and other application callbacks remain untouched.
+
+The prepared dataset UI uses a dedicated GPTChat ownership session slot, separate from CV storage and model configuration. Explicit sign-in starts the established redirect flow with a cryptographically random pending state. A callback can replace the session only when its state matches; session/state query parameters are scrubbed before requests. Account/session/model changes clear displayed items and abort stale requests. No actual sign-in or credential creation was performed.
+
+The retained active-entrypoint test imports real main.tsx and checks accepted and mismatched state before bootstrapSite, createRoot, and render, including chat-site root and other-app exclusion controls. Exact-source qualification is recorded in the paired PRs. Runtime SSO callback allowlisting and delivery remain rollout prerequisites.
 
 The focused Go qualification passed 519 case events across `library/ssosession`, CV, and GPTChat HTTP with exit 0 in 21.759 seconds. These are focused results, not a new full-application count. Synthetic fixtures use local authorities and mock transports; they contact no real SSO, storage, model, account, or quota service. The scoped frontend run passed 108 tests before its final same-origin/redirect policy and awaited-act fixture follow-ups; their formatting and scoped ESLint passed. Exact-source frontend qualification is coordinated separately under the shared dev test slot.
 

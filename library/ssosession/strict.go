@@ -146,27 +146,34 @@ func (v *StrictVerifier) Verify(ctx context.Context, token string) (*Identity, e
 	return identity, nil
 }
 
-// HasLaiskyIssuer recognizes session-shaped model credentials for rejection.
-// It grants no identity and never contacts the authority.
-func HasLaiskyIssuer(token string) bool {
-	if len(token) > MaxTokenLength {
-		return false
+// HasLaiskyIssuer recognizes identifiable compact session tokens embedded in
+// model-option strings. It grants no identity, performs no recursive decoding,
+// and never contacts an authority. Only bounded payloads are decoded.
+func HasLaiskyIssuer(value string) bool {
+	runs := strings.FieldsFunc(value, func(r rune) bool {
+		return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' ||
+			r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.')
+	})
+	for _, run := range runs {
+		parts := strings.Split(run, ".")
+		// Sliding candidates also handle dot-joined tokens and host suffixes.
+		for i := 1; i+1 < len(parts); i++ {
+			if parts[i-1] == "" || parts[i] == "" || parts[i+1] == "" || len(parts[i]) > MaxTokenLength {
+				continue
+			}
+			raw, err := base64.RawURLEncoding.DecodeString(parts[i])
+			if err != nil {
+				continue
+			}
+			var claims struct {
+				Issuer string `json:"iss"`
+			}
+			if json.Unmarshal(raw, &claims) == nil && claims.Issuer == "laisky-sso" {
+				return true
+			}
+		}
 	}
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return false
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return false
-	}
-	var claims struct {
-		Issuer string `json:"iss"`
-	}
-	if err = json.Unmarshal(raw, &claims); err != nil {
-		return false
-	}
-	return claims.Issuer == "laisky-sso"
+	return false
 }
 
 // strictNormalizeUID accepts canonical UUID text case-insensitively and rejects

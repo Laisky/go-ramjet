@@ -92,10 +92,11 @@ func validateRamjetAPIBase(raw string) error {
 }
 
 // modelURLContainsSession inspects only URL routing components for identifiable
-// Laisky sessions or the separately supplied original session. It does not
+// Laisky sessions or the separately supplied original session. Authority case
+// is preserved rather than normalized before this policy check. It does not
 // restrict destinations, unrelated provider JWTs, prompts or request content.
 func modelURLContainsSession(parsed *url.URL, original string) bool {
-	components := []string{parsed.Fragment}
+	components := []string{parsed.Host, parsed.Fragment}
 	components = append(components, strings.Split(parsed.Path, "/")...)
 	if parsed.User != nil {
 		components = append(components, parsed.User.Username())

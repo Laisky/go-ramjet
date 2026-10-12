@@ -8,7 +8,6 @@ import type { SessionConfig } from '../types'
 import { api } from '../utils/api'
 import {
   clearOwnershipSession,
-  consumeOwnershipSession,
   GPTCHAT_SSO_STORAGE_KEY,
   ownershipSignInURL,
   readOwnershipSession,
@@ -20,7 +19,7 @@ interface DatasetManagerProps {
 
 /** DatasetManager keeps the private account session separate from model configuration. */
 export function DatasetManager({ config }: DatasetManagerProps) {
-  const [sessionToken, setSessionToken] = useState(consumeOwnershipSession)
+  const [sessionToken, setSessionToken] = useState(readOwnershipSession)
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === GPTCHAT_SSO_STORAGE_KEY || event.key === null) {

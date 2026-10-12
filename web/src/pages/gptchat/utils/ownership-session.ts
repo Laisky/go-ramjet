@@ -103,3 +103,11 @@ export function ownershipSessionHeader(token?: string): Record<string, string> {
   }
   return { 'X-Laisky-SSO-Token': 'Bearer ' + token }
 }
+
+/** bootstrapOwnershipSession admits callbacks only on routes that actually mount GPTChat. */
+export function bootstrapOwnershipSession(siteId: string): void {
+  const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/'
+  if (path === '/gptchat' || (path === '/' && siteId === 'chat')) {
+    consumeOwnershipSession()
+  }
+}

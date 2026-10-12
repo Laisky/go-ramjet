@@ -14,6 +14,7 @@ import {
   GPTCHAT_SSO_STORAGE_KEY,
   GPTCHAT_SSO_STATE_KEY,
   clearOwnershipSession,
+  bootstrapOwnershipSession,
 } from '../../utils/ownership-session'
 import { kvGet, kvSet } from '@/utils/storage'
 import { DefaultSessionConfig } from '../../types'
@@ -107,7 +108,7 @@ describe('dataset request lifecycle', () => {
     ).toBeDisabled()
   })
 
-  it('scrubs the callback before a private fetch and keeps the model key separate', async () => {
+  it('uses the bootstrap-admitted session and keeps the model key separate', async () => {
     history.replaceState(
       null,
       '',
@@ -122,6 +123,7 @@ describe('dataset request lifecycle', () => {
         return { datasets: [] }
       },
     )
+    bootstrapOwnershipSession('chat')
     render(
       <DatasetManager
         config={{ ...DefaultSessionConfig, api_token: 'model-key' }}
