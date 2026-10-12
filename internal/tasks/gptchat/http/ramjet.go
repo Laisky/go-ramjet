@@ -238,7 +238,7 @@ func RamjetProxyHandler(ctx *gin.Context) {
 		return
 	}
 
-	req.Header = ctx.Request.Header
+	req.Header = ctx.Request.Header.Clone()
 	req.Header.Del("Accept-Encoding") // do not disable gzip
 	if err = setUserAuth(ctx, req); web.AbortErr(ctx, err) {
 		return
@@ -276,9 +276,9 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	// req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
 	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
 	req.Header.Set("X-Laisky-User-Id", user.UserName)
-	if user.IsFree {
-		req.Header.Set("X-Laisky-User-Is-Free", "true")
-	}
+	// Ramjet has no authoritative paid-account grant for these BYOK requests.
+	// Untrusted caller state must never select its privileged resource budget.
+	req.Header.Set("X-Laisky-User-Is-Free", "true")
 
 	// if set header "Accept-Encoding" manually,
 	// golang's http client will not auto decompress response body

@@ -74,7 +74,7 @@ func TestBYOKAuditProxyForwarding(t *testing.T) {
 			RamjetProxyHandler(ctx)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Equal(t, tc.expectedToken, GetRawUserToken(ctx))
-			require.Equal(t, tc.expectedToken[:15], ctx.Request.Header.Get("X-Laisky-User-Id"))
+			require.Empty(t, ctx.Request.Header.Get("X-Laisky-User-Id"))
 		})
 	}
 }

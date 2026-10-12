@@ -2,8 +2,8 @@
 
 package http
 
-// These opt-in tests record a known ownership gap. They are not security
-// acceptance criteria and must not be used as an ownership policy contract.
+// These opt-in tests retain the original reproduction matrix as repaired proxy
+// acceptance criteria and separately characterize unchanged generic free quota.
 
 import (
 	"context"
@@ -69,7 +69,7 @@ func namespaceDenyHTTP() *int {
 	return calls
 }
 
-// TestNamespaceCharacterizationDatasetScope records prefix collisions and header behavior through the actual proxy.
+// TestNamespaceCharacterizationDatasetScope verifies isolated private scopes and untrusted header handling through the actual proxy.
 func TestNamespaceCharacterizationDatasetScope(t *testing.T) {
 	keys := []string{"sk-SYNTHETIC-01-A", "sk-SYNTHETIC-01-B", "sk-SYNTHETIC-02-C"}
 	require.NotEqual(t, keys[0], keys[1])
@@ -112,9 +112,9 @@ func TestNamespaceCharacterizationDatasetScope(t *testing.T) {
 						require.Equal(t, "/gptchat/files", req.URL.Path)
 						require.Equal(t, method, req.Method)
 						require.Equal(t, key, req.Header.Get("Authorization"))
-						require.Equal(t, key[:15], req.Header.Get("X-Laisky-User-Id"))
+						require.Equal(t, ramjetCredentialScope(key), req.Header.Get("X-Laisky-User-Id"))
 						require.NotEqual(t, "forged-other-namespace", req.Header.Get("X-Laisky-User-Id"))
-						require.Equal(t, freeHeader, req.Header.Get("X-Laisky-User-Is-Free"))
+						require.Equal(t, "true", req.Header.Get("X-Laisky-User-Is-Free"))
 						payload, readErr := io.ReadAll(req.Body)
 						require.NoError(t, readErr)
 						require.Equal(t, body, string(payload))
@@ -132,7 +132,7 @@ func TestNamespaceCharacterizationDatasetScope(t *testing.T) {
 	}
 	for _, method := range []string{http.MethodGet, http.MethodDelete} {
 		for _, freeHeader := range []string{"", "true", "false"} {
-			require.Equal(t, scopes[fmt.Sprintf("%s/0/%s", method, freeHeader)], scopes[fmt.Sprintf("%s/1/%s", method, freeHeader)])
+			require.NotEqual(t, scopes[fmt.Sprintf("%s/0/%s", method, freeHeader)], scopes[fmt.Sprintf("%s/1/%s", method, freeHeader)])
 			require.NotEqual(t, scopes[fmt.Sprintf("%s/0/%s", method, freeHeader)], scopes[fmt.Sprintf("%s/2/%s", method, freeHeader)])
 		}
 	}

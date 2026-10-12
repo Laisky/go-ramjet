@@ -18,7 +18,7 @@ import (
 
 // TestRamjetBYOKRequiredBeforeProxyDispatch rejects requests that would previously spend server-owned credentials.
 func TestRamjetBYOKRequiredBeforeProxyDispatch(t *testing.T) {
-	for _, key := range []string{"", "FREETIER-SYNTHETIC-CLIENT-0123456789", config.FreetierUserToken, "sk-SHORT", "sk-SYNTHETIC WITH SPACE", " sk-SYNTHETIC-LEADING-SPACE", "sk-SYNTHETIC-TRAILING-SPACE "} {
+	for _, key := range []string{"", "FREETIER-SYNTHETIC-CLIENT-0123456789", config.FreetierUserToken, "sk-SHORT", "sk-SYNTHETIC WITH SPACE", " sk-SYNTHETIC-LEADING-SPACE", "sk-SYNTHETIC-TRAILING-SPACE ", "laisky-SYNTHETIC-UTF8-é"} {
 		t.Run(key, func(t *testing.T) {
 			byokAuditSetup(t)
 			original := newAuthContext(key)
@@ -138,7 +138,8 @@ func TestRamjetBYOKProviderResolutionLeavesGenericStateUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, selected, resolved.APIBase)
 	require.Equal(t, "https://oneapi.laisky.com", general.APIBase)
-	require.Equal(t, key[:15], resolved.UserName)
+	require.Equal(t, ramjetCredentialScope(key), resolved.UserName)
+	require.Equal(t, key[:15], general.UserName)
 }
 
 // TestRamjetBYOKImageCredentialConsistency prevents image requests from using a cached replacement credential.

@@ -21,7 +21,7 @@ func resolveRamjetUser(ctx *gin.Context) (*config.UserConfig, error) {
 	key := GetRawUserToken(ctx)
 	headerKey := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
 	if subtle.ConstantTimeCompare([]byte(headerKey), []byte(key)) != 1 || key == "" || key == config.FreetierUserToken || strings.HasPrefix(key, "FREETIER-") ||
-		strings.IndexFunc(key, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		strings.IndexFunc(key, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) || r > 126 }) >= 0 {
 		return nil, errors.New("Ramjet requires a caller-provided API key")
 	}
 	selectedBase := ctx.Request.Header.Get("X-Laisky-Api-Base")
@@ -39,6 +39,7 @@ func resolveRamjetUser(ctx *gin.Context) (*config.UserConfig, error) {
 		return nil, errors.New("Ramjet requires matching caller-owned credentials")
 	}
 	resolved := *user
+	resolved.UserName = ramjetCredentialScope(key)
 	if selectedBase != "" {
 		resolved.APIBase = selectedBase
 	}
