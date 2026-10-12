@@ -145,8 +145,9 @@ func embeddingTestContext(t *testing.T, parent context.Context, logger glog.Logg
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(string(raw))).WithContext(parent)
 	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request.Header.Set("Authorization", "Bearer sk-SYNTHETIC-EMBEDDING-AUTH")
 	ctx.Set(ctxKeyUser, &config.UserConfig{
-		UserName: "embedding-test-user", Token: "synthetic-auth", OpenaiToken: "synthetic-auth",
+		UserName: "embedding-test-user", Token: "sk-SYNTHETIC-EMBEDDING-AUTH", OpenaiToken: "sk-SYNTHETIC-EMBEDDING-AUTH",
 		APIBase: serverURL, AllowedModels: []string{"*"}, IsFree: free, BYOK: true,
 	})
 	gmw.SetLogger(ctx, logger)
