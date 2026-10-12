@@ -25,6 +25,7 @@ func TestRamjetBYOKRequiredBeforeProxyDispatch(t *testing.T) {
 			if key == "" {
 				original.Request.Header.Del("Authorization")
 			}
+			original.Request.Method = http.MethodPost
 			original.Request.URL.Path = "/gptchat/ramjet/gptchat/query/chunks"
 			original.Request.Body = io.NopCloser(strings.NewReader("{}"))
 			recorder := httptest.NewRecorder()
@@ -138,7 +139,7 @@ func TestRamjetBYOKProviderResolutionLeavesGenericStateUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, selected, resolved.APIBase)
 	require.Equal(t, "https://oneapi.laisky.com", general.APIBase)
-	require.Equal(t, ramjetCredentialScope(key), resolved.UserName)
+	require.Equal(t, "public", resolved.UserName)
 	require.Equal(t, key[:15], general.UserName)
 }
 
@@ -160,6 +161,7 @@ func TestRamjetBYOKImageCredentialConsistency(t *testing.T) {
 			byokAuditSetup(t)
 			config.Config.RateLimitExpensiveModelsIntervalSeconds = 60
 			original := newAuthContext(key)
+			original.Request.Method = http.MethodPost
 			original.Request.URL.Path = "/gptchat/ramjet/gptchat/image/dalle"
 			original.Request.Body = io.NopCloser(strings.NewReader("{}"))
 			recorder := httptest.NewRecorder()

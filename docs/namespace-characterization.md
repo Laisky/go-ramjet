@@ -1,4 +1,4 @@
-Historical receipt at commit7c69d28; the current source repair and compatibility boundary are described in [private credential capabilities](security/private-credential-capabilities.md). Proxy assertions now check repaired scopes; generic anonymous free-quota controls remain unchanged.
+Historical receipt captured at commit `7c69d28`; the observations below describe the earlier source at `214c80d`. The current [private account ownership boundary](security/private-credential-capabilities.md) uses strict original SSO sessions and an independent operator registry. Retained manual proxy assertions now check verified account identity rather than first-15 or full-key scopes. Generic anonymous free-quota controls remain unchanged. The receipt below is preserved as historical evidence, not a description of current private authorization.
 
 # Manual namespace characterization (task20261008-26)
 

@@ -61,6 +61,7 @@ func TestBYOKAuditProxyForwarding(t *testing.T) {
 			proxyCtx, _ := gin.CreateTestContext(recorder)
 			proxyCtx.Request = ctx.Request
 			ctx = proxyCtx
+			ctx.Request.Method = http.MethodPost
 			ctx.Request.URL.Path = "/gptchat/ramjet/gptchat/query/chunks"
 			ctx.Request.Header.Set("X-Laisky-Api-Base", "http://100.64.0.10:3000")
 			ctx.Request.Body = io.NopCloser(strings.NewReader("{}"))

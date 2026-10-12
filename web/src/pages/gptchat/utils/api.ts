@@ -1,5 +1,6 @@
 import { getApiBase, getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
+import { ownershipSessionHeader } from './ownership-session'
 
 const resolveApiBase = () => getApiBase()
 
@@ -49,11 +50,12 @@ async function request<T>(
 
 /**
  * buildRamjetHeaders validates a supplied BYOK key and returns its authorization,
- * derived identity, and optional unchanged provider endpoint for Ramjet requests.
+ * legacy identity, separate original SSO session, and unchanged provider endpoint.
  */
 async function buildRamjetHeaders(
   apiToken: string,
   apiBase?: string,
+  sessionToken?: string,
 ): Promise<Record<string, string>> {
   if (
     typeof apiToken !== 'string' ||
@@ -66,6 +68,7 @@ async function buildRamjetHeaders(
   }
 
   const headers: Record<string, string> = {
+    ...ownershipSessionHeader(sessionToken),
     Authorization: `Bearer ${apiToken}`,
     'X-Laisky-User-Id': await getSHA1(apiToken),
   }
@@ -136,23 +139,29 @@ export const api = {
     }
   },
 
+  /** uploadDataset uploads a private file using a separate SSO session and the selected model key. */
   async uploadDataset(
     file: File,
     datasetName: string,
     dataKey: string,
     apiToken: string,
     apiBase?: string,
+    sessionToken?: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     const form = new FormData()
     form.append('file', file)
     form.append('file_key', datasetName)
     form.append('data_key', dataKey)
 
-    const headers = await buildRamjetHeaders(apiToken, apiBase)
+    const headers = await buildRamjetHeaders(apiToken, apiBase, sessionToken)
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
       method: 'POST',
       headers,
+      signal,
+      redirect: 'error',
+      mode: 'same-origin',
       body: form,
     })
 
@@ -161,13 +170,16 @@ export const api = {
     }
   },
 
+  /** listDatasets reads account-owned metadata using SSO; legacy model arguments are ignored. */
   async listDatasets(
     dataKey: string,
-    apiToken: string,
-    apiBase?: string,
+    _apiToken: string,
+    _apiBase?: string,
+    sessionToken?: string,
+    signal?: AbortSignal,
   ): Promise<{ datasets: DatasetInfo[]; selected?: string[] }> {
     const headers: Record<string, string> = {
-      ...(await buildRamjetHeaders(apiToken, apiBase)),
+      ...ownershipSessionHeader(sessionToken),
       'Cache-Control': 'no-cache',
       'X-PDFCHAT-PASSWORD': dataKey,
     }
@@ -175,6 +187,9 @@ export const api = {
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
       method: 'GET',
       headers,
+      signal,
+      redirect: 'error',
+      mode: 'same-origin',
       cache: 'no-cache',
     })
     if (!resp.ok) {
@@ -183,14 +198,17 @@ export const api = {
     return resp.json()
   },
 
+  /** deleteDataset removes an account-owned dataset using SSO; legacy model arguments are ignored. */
   async deleteDataset(
     datasetName: string,
     dataKey: string,
-    apiToken: string,
-    apiBase?: string,
+    _apiToken: string,
+    _apiBase?: string,
+    sessionToken?: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     const headers: Record<string, string> = {
-      ...(await buildRamjetHeaders(apiToken, apiBase)),
+      ...ownershipSessionHeader(sessionToken),
       'Cache-Control': 'no-cache',
       'Content-Type': 'application/json',
       'X-PDFCHAT-PASSWORD': dataKey,
@@ -199,6 +217,9 @@ export const api = {
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/files`, {
       method: 'DELETE',
       headers,
+      signal,
+      redirect: 'error',
+      mode: 'same-origin',
       body: JSON.stringify({ datasets: [datasetName] }),
     })
     if (!resp.ok) {
@@ -206,13 +227,16 @@ export const api = {
     }
   },
 
+  /** listChatbots reads account-owned chatbot metadata using SSO; legacy model arguments are ignored. */
   async listChatbots(
     dataKey: string,
-    apiToken: string,
-    apiBase?: string,
+    _apiToken: string,
+    _apiBase?: string,
+    sessionToken?: string,
+    signal?: AbortSignal,
   ): Promise<ChatbotList> {
     const headers: Record<string, string> = {
-      ...(await buildRamjetHeaders(apiToken, apiBase)),
+      ...ownershipSessionHeader(sessionToken),
       'Cache-Control': 'no-cache',
       'X-PDFCHAT-PASSWORD': dataKey,
     }
@@ -220,6 +244,9 @@ export const api = {
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/ctx/list`, {
       method: 'GET',
       headers,
+      signal,
+      redirect: 'error',
+      mode: 'same-origin',
       cache: 'no-cache',
     })
     if (!resp.ok) {
@@ -228,20 +255,26 @@ export const api = {
     return resp.json()
   },
 
+  /** setActiveChatbot activates a private chatbot using a separate SSO session and selected model key. */
   async setActiveChatbot(
     dataKey: string,
     chatbotName: string,
     apiToken: string,
     apiBase?: string,
+    sessionToken?: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     const headers: Record<string, string> = {
-      ...(await buildRamjetHeaders(apiToken, apiBase)),
+      ...(await buildRamjetHeaders(apiToken, apiBase, sessionToken)),
       'Content-Type': 'application/json',
     }
 
     const resp = await fetch(`${resolveApiBase()}/ramjet/gptchat/ctx/active`, {
       method: 'POST',
       headers,
+      signal,
+      redirect: 'error',
+      mode: 'same-origin',
       body: JSON.stringify({ data_key: dataKey, chatbot_name: chatbotName }),
     })
     if (!resp.ok) {

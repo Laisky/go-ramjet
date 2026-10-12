@@ -11,44 +11,80 @@ vi.mock('@/utils/api', () => ({
 const operations = [
   {
     name: 'uploadDataset',
+    requiresByok: true,
     method: 'POST',
     endpoint: '/ramjet/gptchat/files',
-    invoke: (token: string, base?: string) =>
+    invoke: (
+      token: string,
+      base?: string,
+      session = 'synthetic-original-session',
+    ) =>
       api.uploadDataset(
         new File(['synthetic dataset'], 'sample.md'),
         'synthetic-dataset',
         'synthetic-data-key',
         token,
         base,
+        session,
       ),
   },
   {
     name: 'listDatasets',
+    requiresByok: false,
     method: 'GET',
     endpoint: '/ramjet/gptchat/files',
-    invoke: (token: string, base?: string) =>
-      api.listDatasets('synthetic-data-key', token, base),
+    invoke: (
+      token: string,
+      base?: string,
+      session = 'synthetic-original-session',
+    ) => api.listDatasets('synthetic-data-key', token, base, session),
   },
   {
     name: 'deleteDataset',
+    requiresByok: false,
     method: 'DELETE',
     endpoint: '/ramjet/gptchat/files',
-    invoke: (token: string, base?: string) =>
-      api.deleteDataset('synthetic-dataset', 'synthetic-data-key', token, base),
+    invoke: (
+      token: string,
+      base?: string,
+      session = 'synthetic-original-session',
+    ) =>
+      api.deleteDataset(
+        'synthetic-dataset',
+        'synthetic-data-key',
+        token,
+        base,
+        session,
+      ),
   },
   {
     name: 'listChatbots',
+    requiresByok: false,
     method: 'GET',
     endpoint: '/ramjet/gptchat/ctx/list',
-    invoke: (token: string, base?: string) =>
-      api.listChatbots('synthetic-data-key', token, base),
+    invoke: (
+      token: string,
+      base?: string,
+      session = 'synthetic-original-session',
+    ) => api.listChatbots('synthetic-data-key', token, base, session),
   },
   {
     name: 'setActiveChatbot',
+    requiresByok: true,
     method: 'POST',
     endpoint: '/ramjet/gptchat/ctx/active',
-    invoke: (token: string, base?: string) =>
-      api.setActiveChatbot('synthetic-data-key', 'synthetic-bot', token, base),
+    invoke: (
+      token: string,
+      base?: string,
+      session = 'synthetic-original-session',
+    ) =>
+      api.setActiveChatbot(
+        'synthetic-data-key',
+        'synthetic-bot',
+        token,
+        base,
+        session,
+      ),
   },
 ]
 
@@ -74,6 +110,7 @@ describe('Ramjet dataset BYOK forwarding', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ datasets: [], chatbots: [] }),
+        text: async () => '{}',
       }),
     )
   })
@@ -83,62 +120,109 @@ describe('Ramjet dataset BYOK forwarding', () => {
     vi.unstubAllGlobals()
   })
 
-  describe.each(operations)('$name', ({ invoke, endpoint, method }) => {
-    it.each(invalidKeys)(
-      'rejects $name before any request and keeps the key out of errors and logs',
-      async ({ token }) => {
-        const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
-        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-        const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  describe.each(operations)(
+    '$name',
+    ({ invoke, endpoint, method, requiresByok }) => {
+      it.each(invalidKeys)(
+        'applies the model-key requirement for $name without leaking credentials',
+        async ({ token }) => {
+          if (!requiresByok) {
+            await invoke(token, 'http://100.64.0.10:8080/provider')
+            const [, options] = vi.mocked(fetch).mock.calls[0]
+            const headers = options?.headers as Record<string, string>
+            expect(headers['X-Laisky-SSO-Token']).toBe(
+              'Bearer synthetic-original-session',
+            )
+            expect(headers).not.toHaveProperty('Authorization')
+            expect(headers).not.toHaveProperty('X-Laisky-User-Id')
+            expect(headers).not.toHaveProperty('X-Laisky-Api-Base')
+            expect(getSHA1).not.toHaveBeenCalled()
+            return
+          }
+          const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+          const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+          const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+          const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-        await expect(
-          invoke(token, 'http://100.64.0.10:8080/provider'),
-        ).rejects.toThrow(
-          'A valid BYOK API key is required for Ramjet operations.',
-        )
-        expect(fetch).not.toHaveBeenCalled()
-        expect(getSHA1).not.toHaveBeenCalled()
-        for (const logger of [debug, info, log, warn, error]) {
-          expect(logger).not.toHaveBeenCalled()
-        }
-      },
-    )
+          await expect(
+            invoke(token, 'http://100.64.0.10:8080/provider'),
+          ).rejects.toThrow(
+            'A valid BYOK API key is required for Ramjet operations.',
+          )
+          expect(fetch).not.toHaveBeenCalled()
+          expect(getSHA1).not.toHaveBeenCalled()
+          for (const logger of [debug, info, log, warn, error]) {
+            expect(logger).not.toHaveBeenCalled()
+          }
+        },
+      )
 
-    it.each([
-      'synthetic-provider-key',
-      'sk-synthetic-key',
-      'laisky-synthetic-key',
-    ])(
-      'forwards valid key %s and the selected endpoint unchanged',
-      async (token) => {
-        const base = 'http://100.64.0.10:8080/provider'
-        await invoke(token, base)
+      it.each([
+        'synthetic-provider-key',
+        'sk-synthetic-key',
+        'laisky-synthetic-key',
+      ])(
+        'forwards valid key %s and the selected endpoint unchanged',
+        async (token) => {
+          const base = 'http://100.64.0.10:8080/provider'
+          await invoke(token, base)
 
-        expect(getSHA1).toHaveBeenCalledWith(token)
-        expect(fetch).toHaveBeenCalledExactlyOnceWith(
-          `/gptchat${endpoint}`,
-          expect.objectContaining({
-            method,
-            headers: expect.objectContaining({
-              Authorization: `Bearer ${token}`,
-              'X-Laisky-User-Id': 'synthetic-user-id',
-              'X-Laisky-Api-Base': base,
+          if (requiresByok) expect(getSHA1).toHaveBeenCalledWith(token)
+          else expect(getSHA1).not.toHaveBeenCalled()
+          expect(fetch).toHaveBeenCalledExactlyOnceWith(
+            `/gptchat${endpoint}`,
+            expect.objectContaining({
+              method,
+              redirect: 'error',
+              mode: 'same-origin',
+              headers: expect.objectContaining({
+                ...(requiresByok
+                  ? {
+                      Authorization: 'Bearer ' + token,
+                      'X-Laisky-User-Id': 'synthetic-user-id',
+                      'X-Laisky-Api-Base': base,
+                    }
+                  : {}),
+                'X-Laisky-SSO-Token': 'Bearer synthetic-original-session',
+              }),
             }),
-          }),
-        )
-      },
+          )
+        },
+      )
+
+      it('rejects a missing separate SSO session before any fetch', async () => {
+        await expect(
+          invoke('synthetic-provider-key', undefined, ''),
+        ).rejects.toThrow('Sign in with Laisky SSO to manage private datasets.')
+        expect(fetch).not.toHaveBeenCalled()
+      })
+
+      it('omits an unset endpoint without replacing the supplied key', async () => {
+        const token = 'synthetic-provider-key'
+        await invoke(token)
+
+        const [, options] = vi.mocked(fetch).mock.calls[0]
+        const headers = options?.headers as Record<string, string>
+        if (requiresByok) expect(headers.Authorization).toBe('Bearer ' + token)
+        else expect(headers).not.toHaveProperty('Authorization')
+        expect(headers).not.toHaveProperty('X-Laisky-Api-Base')
+      })
+    },
+  )
+  it('does not attach an ownership session to generic user or sync requests', async () => {
+    localStorage.setItem(
+      'gptchat_ownership_sso_token',
+      'stored-private-session',
     )
-
-    it('omits an unset endpoint without replacing the supplied key', async () => {
-      const token = 'synthetic-provider-key'
-      await invoke(token)
-
-      const [, options] = vi.mocked(fetch).mock.calls[0]
-      const headers = options?.headers as Record<string, string>
-      expect(headers.Authorization).toBe(`Bearer ${token}`)
-      expect(headers).not.toHaveProperty('X-Laisky-Api-Base')
-    })
+    await api.fetchCurrentUser('model-key')
+    await api.uploadUserData('sync-key', { synthetic: true })
+    await api.downloadUserData('sync-key')
+    for (const [, options] of vi.mocked(fetch).mock.calls) {
+      expect(options?.headers).not.toHaveProperty('X-Laisky-SSO-Token')
+      expect(options).not.toHaveProperty('redirect')
+      expect(options).not.toHaveProperty('mode')
+    }
+    localStorage.removeItem('gptchat_ownership_sso_token')
   })
 })

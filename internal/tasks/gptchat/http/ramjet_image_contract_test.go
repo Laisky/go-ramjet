@@ -54,7 +54,7 @@ func TestRamjetBYOKImageCapabilityPassthrough(t *testing.T) {
 				require.Equal(t, "/gptchat/image/dalle", req.URL.Path)
 				require.Equal(t, key, req.Header.Get("Authorization"))
 				require.Equal(t, tc.base, req.Header.Get("X-Laisky-Openai-Api-Base"))
-				require.Equal(t, ramjetCredentialScope(key), req.Header.Get("X-Laisky-User-Id"))
+				require.Equal(t, "public", req.Header.Get("X-Laisky-User-Id"))
 				require.Equal(t, "true", req.Header.Get("X-Laisky-User-Is-Free"))
 				payload, err := io.ReadAll(req.Body)
 				require.NoError(t, err)

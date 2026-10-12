@@ -20,6 +20,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
+	"github.com/Laisky/go-ramjet/library/ssosession"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -41,8 +42,13 @@ func OneapiProxyHandler(ctx *gin.Context) {
 		return
 	}
 
-	req.Header = ctx.Request.Header
+	req.Header = ctx.Request.Header.Clone()
+	req.Header.Del(ramjetSessionHeader)
 
+	if ssosession.HasLaiskyIssuer(GetRawUserToken(ctx)) {
+		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "An SSO session cannot be used as a model API key"})
+		return
+	}
 	user, err := getUserByAuthHeader(ctx)
 	if web.AbortErr(ctx, errors.Wrap(err, "get user by auth header")) {
 		return
@@ -225,8 +231,19 @@ func countOneAPIModels(payload []byte) (int, error) {
 func RamjetProxyHandler(ctx *gin.Context) {
 	defer gutils.LogErr(ctx.Request.Body.Close, log.Logger)
 	url := ctx.Request.URL
-	targetUrl := config.Config.RamjetURL + "/" + strings.TrimPrefix(
-		strings.TrimPrefix(url.Path, "/"), "gptchat/ramjet/")
+	if url.RawPath != "" {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "A canonical Ramjet operation is required"})
+		return
+	}
+	operationPath := "/" + strings.TrimPrefix(strings.TrimPrefix(url.Path, "/"), "gptchat/ramjet/")
+	operation := *ctx.Request
+	operationURL := *url
+	operationURL.Path = operationPath
+	operation.URL = &operationURL
+	if _, routeErr := ramjetPrivateRoute(&operation); abortRamjetAccountAuth(ctx, routeErr) {
+		return
+	}
+	targetUrl := config.Config.RamjetURL + operationPath
 	targetUrl += "?" + url.RawQuery
 
 	req, err := http.NewRequestWithContext(gmw.Ctx(ctx),
@@ -240,16 +257,40 @@ func RamjetProxyHandler(ctx *gin.Context) {
 
 	req.Header = ctx.Request.Header.Clone()
 	req.Header.Del("Accept-Encoding") // do not disable gzip
-	if err = setUserAuth(ctx, req); web.AbortErr(ctx, err) {
+	if _, routeErr := ramjetPrivateRoute(req); abortRamjetAccountAuth(ctx, routeErr) {
 		return
 	}
+	if !ramjetMetadataOnly(req) || ctx.GetHeader("Authorization") != "" {
+		if err = setUserAuth(ctx, req); web.AbortErr(ctx, err) {
+			return
+		}
+	} else {
+		// Pure account metadata never substitutes a configured server model key.
+		req.Header.Del("Authorization")
+		req.Header.Del("X-Laisky-Openai-Api-Base")
+		req.Header.Set("X-Laisky-User-Is-Free", "true")
+	}
 
-	resp, err := httpcli.Do(req) //nolint: bodyclose
+	private, accountErr := setRamjetAccountAuth(ctx, req)
+	if abortRamjetAccountAuth(ctx, accountErr) {
+		return
+	}
+	client := httpcli
+	if private {
+		client = privateRamjetHTTPClient(httpcli)
+	}
+
+	resp, err := client.Do(req) //nolint: bodyclose
 	if web.AbortErr(ctx, err) {
 		return
 	}
 
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
+	if private && resp.StatusCode >= http.StatusMultipleChoices && resp.StatusCode < http.StatusBadRequest {
+		// Do not expose a backend redirect for a browser to replay the session.
+		ctx.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": "Private dataset service returned a redirect"})
+		return
+	}
 	payload, err := io.ReadAll(resp.Body)
 	if web.AbortErr(ctx, err) {
 		return
@@ -275,7 +316,8 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 
 	// req.Header.Set("X-Laisky-Image-Token-Type", user.ImageTokenType.String())
 	req.Header.Set("X-Laisky-Openai-Api-Base", user.APIBase)
-	req.Header.Set("X-Laisky-User-Id", user.UserName)
+	req.Header.Set("X-Laisky-User-Id", "public")
+	req.Header.Del(ramjetSessionHeader)
 	// Ramjet has no authoritative paid-account grant for these BYOK requests.
 	// Untrusted caller state must never select its privileged resource budget.
 	req.Header.Set("X-Laisky-User-Is-Free", "true")

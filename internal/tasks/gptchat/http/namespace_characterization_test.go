@@ -93,6 +93,7 @@ func TestNamespaceCharacterizationDatasetScope(t *testing.T) {
 					ctx.Request = httptest.NewRequest(method, "/gptchat/ramjet/gptchat/files", strings.NewReader(body))
 					ctx.Request.Header.Set("Authorization", "Bearer "+key)
 					ctx.Request.Header.Set("X-Laisky-User-Id", "forged-other-namespace")
+					requireRamjetSession(t, ctx.Request.Header, []string{ramjetTestAccountA, ramjetTestAccountB, ramjetTestAccountC}[keyIndex])
 					if freeHeader != "" {
 						ctx.Request.Header.Set("X-Laisky-User-Is-Free", freeHeader)
 					}
@@ -112,7 +113,7 @@ func TestNamespaceCharacterizationDatasetScope(t *testing.T) {
 						require.Equal(t, "/gptchat/files", req.URL.Path)
 						require.Equal(t, method, req.Method)
 						require.Equal(t, key, req.Header.Get("Authorization"))
-						require.Equal(t, ramjetCredentialScope(key), req.Header.Get("X-Laisky-User-Id"))
+						require.Equal(t, []string{ramjetTestAccountA, ramjetTestAccountB, ramjetTestAccountC}[keyIndex], req.Header.Get("X-Laisky-User-Id"))
 						require.NotEqual(t, "forged-other-namespace", req.Header.Get("X-Laisky-User-Id"))
 						require.Equal(t, "true", req.Header.Get("X-Laisky-User-Is-Free"))
 						payload, readErr := io.ReadAll(req.Body)

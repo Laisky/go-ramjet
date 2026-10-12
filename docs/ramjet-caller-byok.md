@@ -1,111 +1,100 @@
 # Ramjet caller credential contract
 
-Client-triggered Ramjet requests require the caller's own API key. The Go
-Ramjet proxy and chunk-query caller share `resolveRamjetUser`, which rejects
-missing credentials, `FREETIER-` session tokens, `DEFAULT_PROXY_TOKEN`, and
-keys containing whitespace or control characters before outbound dispatch.
-The existing Go key parser continues to accept its existing `sk-` and
-`laisky-` formats and minimum length; this change does not broaden provider
-credential formats.
+Private Ramjet requests use a verified original Laisky SSO session and a separate
+model credential. The gateway sends `X-Laisky-SSO-Token: Bearer <session>` only
+to recognized private Ramjet routes after strict online WhoAmI verification.
+Ramjet independently verifies that session and checks an exact operator-registry
+grant. Forwarded UID is informational and never a private ownership authority.
+See [the ownership boundary](security/private-credential-capabilities.md) for
+the disabled registry, historical-data boundary, and strict session policy.
 
-The resolver verifies that cached BYOK account state still contains the
-original caller key as both its account token and OpenAI token. It never
-accepts a configured server key as a replacement. Image routes also require the cached image credential to match the original
-caller key before model checks or outbound dispatch. The redundant temporary
-server-token assignment in chunk queries is removed.
+Dataset list/delete and chatbot list can authenticate with SSO alone. Upload,
+private chat/search, build, activation, and publication additionally require the
+caller's model key. Metadata without Authorization does not call the generic key
+resolver or substitute a configured server credential.
 
-The modern dataset client uses a shared header builder for upload, list,
-delete, chatbot list, and chatbot selection. It rejects anonymous or malformed
-credentials before hashing or fetch. Generic Go chat, OneAPI, account, and sync
-endpoints retain their existing free-tier behavior.
+Model-using routes share `resolveRamjetUser`. It rejects missing credentials,
+`FREETIER-` session tokens, `DEFAULT_PROXY_TOKEN`, non-ASCII/control/whitespace
+keys, recognizable Laisky SSO JWTs, and a key equal to the separate original SSO
+session before model dispatch. Existing `sk-` and `laisky-` formats and minimum
+length remain. Cached BYOK state must contain the original caller key as account
+and OpenAI token; image routes additionally require that same image credential.
+The resolver copies cached state and does not overwrite the generic identity.
 
-The active caller inventory is the SPA's five dataset methods, the wildcard
-`RamjetProxyHandler`, and `queryChunks` invoked by URL enrichment (including
-the Responses chat path). Both Go callers pass through `setUserAuth`.
-The retained legacy `templates/js/chat.js` also attaches session credentials
-for dataset, shared-context, and build requests, but current `router.go`
-explicitly retires the legacy HTML UI and no longer registers its static assets.
-It is documented as inactive source rather than updated as an active client.
+The active caller inventory is the SPA dataset methods, the wildcard
+`RamjetProxyHandler`, and `queryChunks` for URL enrichment, including Responses
+chat. The retained `templates/js/chat.js` is inactive: current `router.go`
+retires its HTML/static routes. Generic Go chat, account, sync, memory and free-tier
+quota behavior remain unchanged.
 
 ## Forwarding and compatibility
 
-The browser sends a Bearer key and optional `X-Laisky-Api-Base` to the
-current-origin gateway. The Go proxy forwards the same key to configured
-`RamjetURL`, using the existing raw Authorization format, and maps the selected
-provider base to `X-Laisky-Openai-Api-Base`. Chunk queries use the same resolver
-and header construction. No provider allowlist, gateway-only restriction,
-or redirect policy is introduced. Explicit selected HTTP(S) URLs retain their
-userinfo, query, and fragment fields. Malformed selected URLs fail before
-dispatch instead of being replaced with the generic default. The Ramjet
-resolver copies cached user state before selecting the provider, so generic
-endpoint provider resolution remains unchanged.
+The browser targets the current-origin gateway, using a Bearer model key and an
+optional `X-Laisky-Api-Base`. Go forwards that exact model key in the existing
+raw Authorization format and maps the selected base to
+`X-Laisky-Openai-Api-Base`. Chunk queries retain the same key/base contract.
+Public/model-only requests strip SSO and use informational UID `public`;
+private UID is the verified stable account UUID. Private namespace selection is
+performed independently by Ramjet's registry.
 
-The persisted Go user identifier remains the existing first 15 key characters.
-Dataset identity, quota keys, and billing identifiers are unchanged. The original
-caller key cached in request context also remains intact after the proxy's
-existing header mutation. No new credential persistence is added.
+Intentional configured HTTP(S) backends, including internal destinations,
+userinfo, query, and fragment syntax, remain supported. Malformed selected URLs
+fail before dispatch. The narrow additional guard rejects recognizable Laisky
+SSO session values in those URL components; it is not a broad provider allowlist
+or a prompt/content filter.
 
-BYOK authentication and provider diagnostics now use categorical messages without
-keys, key prefixes, or credential-derived fingerprints. Short rejected keys are omitted from errors. Full free-tier tokens,
-raw provider URLs, and URL-parser errors are omitted from these authentication
-logs. Existing user-identifier logging in unrelated endpoints is a separate
-privacy follow-up; these changes do not claim to sanitize all application logs.
+Private proxy requests use a request-specific client with redirects disabled;
+private backend 3xx responses become 502 without Location. WhoAmI also refuses
+redirects. Existing model/public HTTP redirect behavior remains characterized.
+Header cloning preserves caller state, and SSO is removed from OneAPI forwarding.
 
-The existing Go HTTP client follows redirects. Mock transport tests confirm
-that Authorization is dropped for an unrelated hostname and retained for the
-same hostname or its subdomains; custom identity headers remain copied.
-This behavior is characterized without changing destination policy.
+BYOK authentication diagnostics use categorical messages without keys, key
+prefixes, credential fingerprints, raw provider URLs, or URL-parser errors.
+Existing unrelated endpoint logging is outside this change.
 
-## Synthetic regression evidence
+## Current and historical regression evidence
 
-All credentials are synthetic, with mock HTTP transports and no production
-requests. Before the fix:
+The current focused Go qualification passed 519 case events across the shared
+SSO verifier, CV, and GPTChat HTTP packages, exit 0 in 21.759 seconds. Tests cover
+strict original-session/active-account binding, malformed and ambiguous claims,
+stable account identity across model-key rotation, shared model keys across
+different accounts, SSO-only metadata, header separation, redirects, and
+targeted URL session rejection. These are focused results, not a full-suite count.
+
+The following receipts describe the earlier BYOK stage, before the account
+ownership repair. They remain historical evidence; its first-15 identity and
+redirect observations are not the current private ownership contract.
+
+All credentials were synthetic, using mock transports. Before that BYOK fix:
 
 - Missing, anonymous free-tier, and placeholder proxy requests reached the
-  mocked Ramjet backend with the configured server key.
+  mocked backend with the configured server key.
 - Missing-key chunk queries reached the mocked backend.
-- Cached BYOK image state with an empty or substituted image credential
-  dispatched that replacement; a normal caller-owned image credential passed.
-- Three valid selected URLs containing query, userinfo, or fragment fields
-  were silently replaced with the generic default provider. Five malformed
-  selected URLs also reached the mocked backend.
-- Authentication logs included a partial BYOK key and a complete free-tier
-  token; short-key errors and invalid-URL warnings reflected supplied values.
-- All 50 invalid-input frontend cases reached fetch. All 20 valid-key and
-  endpoint-forwarding cases already passed.
+- Empty/substituted cached image credentials were forwarded.
+- Three valid selected URLs were replaced with the generic default provider;
+  five malformed selected URLs also reached the mocked backend.
+- Logs exposed a partial BYOK key and complete free-tier token.
+- All 50 invalid-input frontend cases reached fetch; 20 valid controls passed.
 
-Retained Go tests cover rejection before dispatch, cached server-key mismatch,
-unchanged caller key/base/identity, free-tier behavior outside Ramjet,
-authentication-log privacy, redirects, and URL-enrichment cancellation.
-The final focused qualification passed 63 Go leaf cases across 26 top-level
-tests (75 passing entries including parent groups) and 92 frontend tests, including
-the existing sync, config, dataset, SHA1, and retirement compatibility controls.
-The full HTTP package also passed 221 unit leaf cases across 108 top-level
-tests, with eight existing live integration tests skipped.
-See `ramjet-frontend-byok.md` for the frontend-only command.
+That earlier focused qualification passed 63 Go leaf cases across 26 top-level
+tests (75 passing entries including parent groups) and 92 frontend tests.
+Its full HTTP package passed 221 unit leaf cases across 108 top-level tests,
+with eight existing live integration skips. These counts are preserved rather
+than combined with the current focused result.
 
-From the repository root, use the existing offline/native SDK configuration
-and a shared qualification slot to run:
-
-```sh
-go test -p 1 ./internal/tasks/gptchat/http \
-  -run '^Test(BYOK|RamjetBYOK|GetUserByAuthHeader|URLEmbedding)' \
-  -count=1 -timeout=45s
-```
-
-No deployment, host installation, CI expansion, or credential configuration
-change is part of this work.
-
-The local opt-in `TestRamjetBYOKActualResolverContract` captures real proxy
-handler headers and invokes the actual standard-library-only Python resolver.
-Ten cases passed: raw or Bearer inbound credentials with an internal HTTP
-provider root, an existing `/v1` suffix, and query, userinfo, or fragment fields. The selected backend
-and caller key remained unchanged, and `/v1` was added exactly once. The tested
-companion resolver commit was `903e8c5c13adeebbddfc7c39af2469a948cea520`,
-and its source SHA256 was
+The earlier opt-in `TestRamjetBYOKActualResolverContract` captured proxy
+headers and invoked the actual standard-library-only Python resolver. Ten cases
+passed for raw/Bearer keys and internal HTTP, existing /v1, query, userinfo and
+fragment bases. The companion commit was
+`903e8c5c13adeebbddfc7c39af2469a948cea520`, source SHA256
 `03e167c5362d18aff215e420e33eb83ef5b27289aab254730c9cfdac5ebc3b86`.
-Set `RAMJET_CREDENTIAL_RESOLVER_PATH` to the companion public source file for
-this local qualification; it stays opt-in when the other repository is absent.
+The retained test uses `RAMJET_CREDENTIAL_RESOLVER_PATH` and remains opt-in when
+the companion repository is absent. It proves key/backend forwarding, not
+private account authorization.
+
+Use the repository's existing offline/native SDK configuration and shared dev
+qualification slot. No production calls, deployment, host installation,
+credential configuration, or CI expansion is part of this work.
 
 
 ## Image capability selection
@@ -135,8 +124,8 @@ For example, a configured compatible backend may receive:
 The public success response remains `{"task_id":"...","image_url":["..."]}`.
 The gateway also forwards Ramjet's rejection status and generic response
 unchanged. The retained `TestRamjetBYOKImageCapabilityPassthrough` regression
-uses synthetic transports to check exact request bytes, key, backend, stable
-identity, success-array response, and rejection-response forwarding. It proves
+uses synthetic transports to check exact request bytes, key, backend, informational
+public UID, success-array response, and rejection-response forwarding. It proves
 gateway passthrough, rather than claiming to validate the Python capability
 resolver or perform image generation.
 

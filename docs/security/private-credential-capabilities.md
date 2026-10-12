@@ -1,45 +1,56 @@
-# Private credential capability boundary
+# Private account ownership and model credentials
 
-Ramjet previously accepted a caller-selected UID and free/paid flag. Go supplied the first 15 key characters as that UID. Neither active request path verifies an account or enrolls a provider key. The unused JWT verifier and commented account lookup cannot supply ownership authority.
+Private datasets and chatbot namespaces belong to a verified Laisky SSO account under a server-controlled Ramjet registry. Model API keys select model credentials and backends; they grant no private namespace ownership. Caller UID and free/paid headers are informational and cannot create a grant.
 
-The repaired contract authorizes new private storage through possession of the complete HTTP-safe model credential. Both services derive:
+The earlier complete-key `ckv2-` hash and S3 HMAC-marker proposal is superseded. It did not establish account ownership or a trusted grant authority. The current source uses neither mechanism, aliases no historical namespace, and performs no production rollout or migration.
 
-    ckv2- + hex(SHA256("ramjet-private-key-capability-v2\0" + canonical_key))
+## Independent account verification
 
-Ramjet recomputes this value from the raw or Bearer Authorization credential. Incoming UID and free/paid headers grant no private access or paid capacity. Go computes its informational forwarding UID after its existing constant-time credential checks, and keeps generic cached identity unchanged. Raw provider credentials and intentional configured HTTP(S) backends remain supported.
+The gateway accepts the original session only in:
 
-The capability is not an assertion of provider validity, account ownership, paid status, or human identity. Anyone who shares or learns the complete credential shares this capability. Weak or publicly known credentials remain weak capabilities. Provider routing does not change storage scope; rotation creates a distinct scope, with no automatic account or key alias. Private namespace operations do not query provider revocation: possession of an old key continues to authorize its initialized namespace. An application revocation/transfer authority is absent from this flow; provider rotation alone does not invalidate that capability.
+    X-Laisky-SSO-Token: Bearer <original Laisky SSO session>
 
-## New namespace initialization
+The original model key remains separate in Authorization. Go verifies the session before forwarding a recognized private operation. Ramjet independently verifies that same original session and then checks its own registry; neither the forwarded UID nor a gateway assertion is authorization.
 
-A ckv2-looking name is insufficient proof: historical callers could supply arbitrary UIDs. Before private access, Ramjet authenticates __ownership_v2/marker.json under the namespace using a domain-separated HMAC of its scope with the complete credential.
+Both private verifiers use the fixed HTTPS WhoAmI authority. They require EdDSA, issuer `laisky-sso`, a decoded 64-byte signature, the documented `iss`, `sub`, `uid`, `exp`, `iat`, `jti`, `username`, and `display_name` claims, finite future expiry, bounded issue time, and matching nonzero canonical UUID subject and UID. Online WhoAmI must return the same active account. Duplicate JSON fields, ambiguous auth/envelope fields, unsupported critical headers, and malformed token encodings fail closed. Local claim parsing supplies rejection checks; the online authority verifies the original signed session.
 
-A valid upload may initialize only an empty namespace, after request validation and existing bounded admission. An occupied unmarked namespace, malformed/copied marker, failed marker write/readback, or unknown storage error grants no access. An empty uninitialized namespace lists as empty and deletion is a no-op; private chat/build/activation/publication require an initialized namespace. Metadata lies outside all single-component dataset paths.
+The shared Go library retains the existing CV verifier/configuration/owner policy behind thin wrappers. Strict private verification is a separate wrapper and does not silently change CV's legacy parsing behavior.
 
-The marker authenticates new namespace initialization. It does not authenticate individual historical records or repair unauthorized old writers. Empty-prefix inspection and marker creation are not atomic against a legacy unrestricted writer.
+Session and private-proxy requests refuse redirects. A private backend redirect becomes a gateway 502 without Location, preventing browser replay of the session. Public/model Ramjet and OneAPI forwarding remove the session header. A recognizable Laisky session, or the separately supplied original session, is rejected as a model key or when embedded in selected model-base URL userinfo, query, path, or fragment. Unrelated provider JWTs and intentional configured HTTP(S) backends remain supported.
 
-**Any separately authorized rollout must stop all unrestricted legacy writers before initializing new namespaces.** Mixed old/new private writers are unsupported. No production rollout, inventory, migration, account action or configuration change is performed by this source work.
+## Disabled operator registry
 
-Historical records stay in place. SHA1, truncated-key and arbitrary-UID names are never aliased automatically. Even a historical ckv2-looking namespace fails closed without valid initialization proof. Migration needs an independently verified binding of principal/complete credential to each exact record and permitted operations, plus conflict handling for collisions. Namespace resemblance, a provider-shaped key, or a password for one encrypted record cannot establish ownership of an entire legacy namespace.
+Ramjet opens only an explicitly configured, existing local SQLite registry with `mode=rw`. Business requests do not create a database or schema. The registry validates its exact schema, configured bucket/root prefix, file ownership and protected parent/file permissions before use. Missing, disabled, inaccessible, or invalid authority returns a fixed unavailable response without revealing paths.
 
-## Operations and compatibility
+Every grant binds a verified account UUID, one random `pns3-` namespace, an exact permitted operation, and the server-configured bucket and root prefix. S3 objects, marker resemblance, provider-shaped keys, passwords, and caller-selected identifiers cannot create registry authority.
 
-Dataset list/upload/delete, chatbot names/build/activation/publication, private query and password-bound caches use only the server-derived private scope. Object names use full-component validation; traversal, separators, trailing newlines and malformed current-pointer names are rejected before object access or scheduling.
+Only a validated upload may initialize a fresh empty random namespace, and only when the operator registry explicitly allows fresh initialization. Existing owners without an upload grant cannot escalate. The registry serializes its grant transaction, but the S3 empty-prefix check is not a distributed transaction with unrestricted legacy writers. A separately authorized rollout must stop those writers and drain their background jobs before enabling fresh initialization.
 
-Merged PR288's AES password proof remains required on private warm and cold cache reads. Password knowledge alone cannot select another key's cache. The marker remains necessary before reading a warm cache.
+Historical SHA1, first-15-key, arbitrary-UID, and ckv2-looking records remain in place without automatic access through the new registry. Historical grant import is deliberately unsupported by this implementation. Any future migration needs independently verified account-to-record ownership and exact permitted operations; naming similarity or an encrypted-object password cannot establish namespace ownership. No registry configuration, creation outside disposable tests, host permission change, inventory, migration, or production action occurs in this source task.
 
-Published links keep query uid and chatbot_name. A legacy UID header can select an owner only on the explicit public-share read route; query uid takes precedence. The reader retrieves named chatbot-share-v2 plaintext archives, never a private current pointer or encrypted private store. Public cache keys are owner/name tuples. Reader credentials, provider and admission remain bound to the reader, rather than the public owner.
+## Operation boundaries
 
-Legacy encrypted-original downloads retain their independent object-address/password capability and authenticated decryption. Public/content-addressed files, content-supplied chunk/summary caches, Go sync encryption, memory session IDs and generic anonymous free-tier quota semantics are unchanged. No new claim of a memory read leak or anonymous anti-Sybil control is made.
+| Operation | Original SSO session | Separate model key |
+| --- | --- | --- |
+| List/delete datasets; list chatbots | Required | Optional |
+| Upload; private chat/search; build/activate/publish | Required | Required |
+| Read an explicit published share | Public named plaintext selector | Reader model use follows its existing key contract |
+| Model-only chunks/query/image operations | Not forwarded | Required under the existing caller contract |
 
-Unverified Ramjet callers receive the conservative free chunk budget and share a correctly initialized process admission bucket of three permits. The existing eight queued/running upload ceiling remains. Caller UID/free flags, fresh keys, or max_chunks cannot grant a paid budget.
+Metadata without Authorization does not invoke the generic Go key resolver or substitute a server model key. Model-using private operations preserve the caller's complete key and selected provider base. The private forwarded UID is the verified account ID for diagnostics only; Ramjet uses the registry namespace. Model-only UID is the informational value `public`.
 
-## Local qualification
+Object names use full-component validation before access or scheduling. Private caches require the exact request-local grant and authenticated AES password proof on both warm and cold reads. Knowledge of a password alone cannot select another account's private cache.
 
-Run retained ordinary regressions with synthetic storage and model transports:
+Published links retain query `uid` and `chatbot_name`. Only explicit public GET `/ctx/share` may use a legacy UID header as a fallback selector; query UID takes precedence. The reader loads only the named `chatbot-share-v2` plaintext archive, never a private current pointer or encrypted private store. Public cache keys include owner and name. Reader model credentials and admission remain the reader's.
 
-    python -m unittest tests.test_namespace_ownership tests.test_namespace_provenance tests.test_namespace_public tests.test_private_cache_password tests.test_byok_routing tests.test_byok_image tests.test_upload_jobs
+Legacy encrypted-original downloads retain their independent object-address/password capability and authenticated decryption. Public/content-addressed files, content-supplied chunk/summary caches, Go generic identity, sync encryption, memory session IDs, and anonymous free-tier quota semantics are unchanged. No memory-read leak or anonymous anti-Sybil guarantee is claimed.
 
-The Go companion adds actual proxy/chunk forwarding controls, fixed scope vectors, forged-cache controls and an opt-in cross-language resolver contract. Heavy suites remain local; existing formatting and fast-unit CI workload is unchanged.
+Ramjet has no authoritative paid grant in this flow. The gateway sends the conservative free flag; private users retain free capacity and three process admission permits. The existing eight queued/running upload ceiling remains. Session identity, UID/free headers, fresh model keys, or max_chunks do not grant paid capacity.
 
-Historical characterization receipts retain their original source revisions. Current manual selectors assert repaired behavior. No test contacts production storage, providers, accounts or quota services.
+## Frontend and qualification
+
+The dataset UI uses a dedicated GPTChat ownership session slot, separate from CV storage and model configuration. Explicit sign-in starts the established redirect flow with a cryptographically random pending state. A callback can replace the session only when its state matches; session/state query parameters are scrubbed before requests. Account/session/model changes clear displayed items and abort stale requests. No actual sign-in or credential creation was performed. Runtime SSO callback allowlisting and delivery remain rollout prerequisites.
+
+The focused Go qualification passed 519 case events across `library/ssosession`, CV, and GPTChat HTTP with exit 0 in 21.759 seconds. These are focused results, not a new full-application count. Synthetic fixtures use local authorities and mock transports; they contact no real SSO, storage, model, account, or quota service. The scoped frontend run passed 108 tests before its final same-origin/redirect policy and awaited-act fixture follow-ups; their formatting and scoped ESLint passed. Exact-source frontend qualification is coordinated separately under the shared dev test slot.
+
+Historical reproduction and prior BYOK qualification receipts remain in [namespace characterization](../namespace-characterization.md), [caller contract](../ramjet-caller-byok.md), and [frontend contract](../ramjet-frontend-byok.md). The manual proxy selectors now assert stable account identity and independence from model keys; generic quota controls remain unchanged. Heavy regression suites remain local and automatic CI is not expanded by this documentation.
