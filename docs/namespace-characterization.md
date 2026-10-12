@@ -1,3 +1,5 @@
+Historical receipt at commit7c69d28; the current source repair and compatibility boundary are described in [private credential capabilities](security/private-credential-capabilities.md). Proxy assertions now check repaired scopes; generic anonymous free-quota controls remain unchanged.
+
 # Manual namespace characterization (task20261008-26)
 
 These opt-in tests document a known ownership gap in the PR80 source at
