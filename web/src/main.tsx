@@ -16,10 +16,13 @@ import '@/styles/site-themes.css'
 bootstrapOwnershipSession(resolveSiteId())
 bootstrapSite()
 
-ReactDOM.createRoot(
-  document.getElementById('root')!,
-  getReactErrorOptions(),
-).render(
+const container = document.getElementById('root')!
+const errorOptions = getReactErrorOptions()
+const root = errorOptions
+  ? ReactDOM.createRoot(container, errorOptions)
+  : ReactDOM.createRoot(container)
+
+root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
