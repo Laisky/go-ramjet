@@ -81,6 +81,8 @@ describe('deployment and SDK behavior', () => {
     expect(sdk.init).toHaveBeenCalledTimes(1)
     expect(options().transport).toBeUndefined()
     expect(options().defaultIntegrations).toBeUndefined()
+    expect(options().beforeSendLog?.({} as Sentry.Log)).toBeNull()
+    expect(options().beforeSendMetric?.({} as Sentry.Metric)).toBeNull()
     const defaults = [
       { name: 'Console' },
       { name: 'BrowserSession' },

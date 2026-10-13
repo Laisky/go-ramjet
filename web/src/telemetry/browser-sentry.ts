@@ -91,7 +91,8 @@ export function createBrowserTelemetry(
               (integration) => integration.name !== 'BrowserSession',
             )
           },
-          enableLogs: false,
+          beforeSendLog: () => null,
+          beforeSendMetric: () => null,
           tracePropagationTargets: [],
           dataCollection: {
             userInfo: false,

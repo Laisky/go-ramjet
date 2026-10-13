@@ -48,6 +48,7 @@ it('emits useful standard SDK envelopes with targeted private cause, URL, scope 
     ),
   ).toBe(true)
 
+  Sentry.logger.info('synthetic-private-log')
   Sentry.setUser({
     id: 'synthetic-private-user',
     email: 'synthetic-private-email',
@@ -233,6 +234,11 @@ it('emits useful standard SDK envelopes with targeted private cause, URL, scope 
   expect(events()[3].exception?.values?.[0].value).toBe(
     'Ordinary unhandled promise failure',
   )
+  expect(
+    envelopes
+      .flatMap((envelope) => envelope[1])
+      .every((item) => item[0].type === 'event'),
+  ).toBe(true)
   expect(JSON.stringify(envelopes)).not.toContain('synthetic-private')
   expect(fetchSpy).not.toHaveBeenCalled()
 })
