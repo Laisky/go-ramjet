@@ -361,3 +361,289 @@ test('permits an OS temporary directory alias whose resolved artifact location i
     os.tmpdir = originalTmpdir
   }
 })
+
+test('records mapped and mapless coverage without copying mapless facades or changing footer contracts', async () => {
+  const { root, dist } = await fixture()
+  await fs.mkdir(path.join(root, 'web'))
+  const facade =
+    'var e={};e._sentryDebugIdIdentifier="sentry-dbid-abcdefab-1234-1234-1234-123456789abc";'
+  await fs.writeFile(path.join(dist, 'assets/facade.js'), facade)
+  const plugin = privateSentryArtifactPlugin()
+  plugin.configResolved({
+    root: path.join(root, 'web'),
+    build: { outDir: '../dist' },
+  })
+  plugin.generateBundle(
+    {},
+    {
+      'assets/main.js': {
+        type: 'chunk',
+        fileName: 'assets/main.js',
+        sourcemapFileName: 'assets/main.js.map',
+      },
+      // The hook must read final map bytes, independent of asset source representation.
+      'assets/main.js.map': {
+        type: 'asset',
+        fileName: 'assets/main.js.map',
+        source: 'not-actual-map-json',
+      },
+      'assets/facade.js': { type: 'chunk', fileName: 'assets/facade.js' },
+    },
+  )
+  const originalInfo = console.info
+  let artifactDirectory
+  console.info = (message) => {
+    assert.ok(message.startsWith('Private chat source-map artifact: '))
+    artifactDirectory = message.slice(
+      'Private chat source-map artifact: '.length,
+    )
+    ownedDirectories.add(artifactDirectory)
+  }
+  try {
+    await plugin.closeBundle()
+  } finally {
+    console.info = originalInfo
+  }
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(artifactDirectory, 'manifest.json'), 'utf8'),
+  )
+  assert.deepEqual(manifest.coverage, {
+    generatedChunks: 2,
+    mappedChunks: 1,
+    unmappedChunks: 1,
+  })
+  assert.equal(manifest.artifacts.length, 1)
+  assert.equal(manifest.artifacts[0].javascript, 'assets/main.js')
+  assert.equal(
+    await fs.readFile(path.join(dist, 'assets/facade.js'), 'utf8'),
+    facade,
+  )
+  assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), [
+    'facade.js',
+    'main.js',
+  ])
+})
+
+test('recognizes a mapped chunk from its emitted map asset when sourcemapFileName is absent', async () => {
+  const { root, dist } = await fixture()
+  await fs.mkdir(path.join(root, 'web'))
+  const plugin = privateSentryArtifactPlugin()
+  plugin.configResolved({
+    root: path.join(root, 'web'),
+    build: { outDir: '../dist' },
+  })
+  plugin.generateBundle(
+    {},
+    {
+      'assets/main.js': { type: 'chunk', fileName: 'assets/main.js' },
+      'assets/main.js.map': {
+        type: 'asset',
+        fileName: 'assets/main.js.map',
+        source: new Uint8Array(),
+      },
+    },
+  )
+  const originalInfo = console.info
+  let artifactDirectory
+  console.info = (message) => {
+    artifactDirectory = message.slice(
+      'Private chat source-map artifact: '.length,
+    )
+    ownedDirectories.add(artifactDirectory)
+  }
+  try {
+    await plugin.closeBundle()
+  } finally {
+    console.info = originalInfo
+  }
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(artifactDirectory, 'manifest.json'), 'utf8'),
+  )
+  assert.deepEqual(manifest.coverage, {
+    generatedChunks: 1,
+    mappedChunks: 1,
+    unmappedChunks: 0,
+  })
+})
+
+test('bounds coverage counts and refuses inconsistent mapped totals', async () => {
+  for (const coverage of [
+    { generatedChunks: 2, mappedChunks: 0, unmappedChunks: 2 },
+    { generatedChunks: 2, mappedChunks: 1, unmappedChunks: 0 },
+    { generatedChunks: 4097, mappedChunks: 1, unmappedChunks: 4096 },
+    { generatedChunks: 1.5, mappedChunks: 1, unmappedChunks: 0.5 },
+  ]) {
+    const { root, dist } = await fixture()
+    await assert.rejects(
+      quarantinePrivateMaps(dist, ['assets/main.js'], '', root, coverage),
+      { message: FAILURE },
+    )
+    assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), ['main.js'])
+  }
+})
+
+test('continues to reject runtime-only identity for every mapped JS/map pair', async () => {
+  const { dist } = await fixture()
+  await fs.writeFile(
+    path.join(dist, 'assets/main.js'),
+    'var e={};e._sentryDebugIdIdentifier="sentry-dbid-' + DEBUG_ID + '";',
+  )
+  await expectFailure(dist)
+  assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), ['main.js'])
+})
+
+test('repairs absent map Debug ID metadata only in private copies while preserving all source-map fields', async () => {
+  const { dist, javascript, sourceMap } = await fixture()
+  const originalMap = {
+    ...JSON.parse(sourceMap),
+    file: 'main.js',
+    sourceRoot: '../src',
+    x_custom: { preserved: true },
+    names: ['synthetic'],
+    mappings: 'AAAA',
+  }
+  delete originalMap.debug_id
+  const originalBytes = Buffer.from(JSON.stringify(originalMap, null, 2) + '\n')
+  await fs.writeFile(path.join(dist, 'assets/main.js.map'), originalBytes)
+  const { artifactDirectory, manifest } = await quarantinePrivateMaps(dist, [
+    'assets/main.js',
+  ])
+  ownedDirectories.add(artifactDirectory)
+  const preparedBytes = await fs.readFile(
+    path.join(artifactDirectory, 'assets/main.js.map'),
+  )
+  const preparedMap = JSON.parse(preparedBytes.toString('utf8'))
+  assert.equal(preparedMap.debug_id, DEBUG_ID)
+  assert.equal(preparedMap.debugId, DEBUG_ID)
+  delete preparedMap.debug_id
+  delete preparedMap.debugId
+  assert.deepEqual(preparedMap, originalMap)
+  assert.equal(manifest.repairedMetadata, 1)
+  assert.equal(
+    manifest.artifacts[0].originalMapSha256,
+    createHash('sha256').update(originalBytes).digest('hex'),
+  )
+  assert.equal(
+    manifest.artifacts[0].sourceMapSha256,
+    createHash('sha256').update(preparedBytes).digest('hex'),
+  )
+  assert.notEqual(
+    manifest.artifacts[0].originalMapSha256,
+    manifest.artifacts[0].sourceMapSha256,
+  )
+  assert.equal(
+    await fs.readFile(path.join(dist, 'assets/main.js'), 'utf8'),
+    javascript,
+  )
+  assert.equal(
+    await fs.readFile(path.join(artifactDirectory, 'assets/main.js'), 'utf8'),
+    javascript,
+  )
+  assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), ['main.js'])
+})
+
+test('preserves existing matching metadata bytes exactly without completing partially present fields', async () => {
+  const { dist, sourceMap } = await fixture()
+  const { artifactDirectory, manifest } = await quarantinePrivateMaps(dist, [
+    'assets/main.js',
+  ])
+  ownedDirectories.add(artifactDirectory)
+  const preparedBytes = await fs.readFile(
+    path.join(artifactDirectory, 'assets/main.js.map'),
+  )
+  assert.equal(preparedBytes.toString('utf8'), sourceMap)
+  assert.equal(JSON.parse(preparedBytes.toString('utf8')).debugId, undefined)
+  assert.equal(manifest.repairedMetadata, 0)
+  assert.equal(
+    manifest.artifacts[0].originalMapSha256,
+    manifest.artifacts[0].sourceMapSha256,
+  )
+})
+
+test('never repairs present null, invalid, mismatched or inconsistent map IDs', async () => {
+  for (const fields of [
+    { debug_id: null },
+    { debugId: 'invalid' },
+    { debug_id: 'abcdefab-1234-1234-1234-123456789abc' },
+    { debug_id: DEBUG_ID, debugId: 'abcdefab-1234-1234-1234-123456789abc' },
+  ]) {
+    const { dist, sourceMap } = await fixture()
+    const map = JSON.parse(sourceMap)
+    delete map.debug_id
+    await fs.writeFile(
+      path.join(dist, 'assets/main.js.map'),
+      JSON.stringify({ ...map, ...fields }),
+    )
+    await expectFailure(dist)
+    assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), ['main.js'])
+  }
+})
+
+test('corroborates optional runtime markers against the unchanged official footer for private metadata repair', async () => {
+  for (const quote of ['"', "'", '`']) {
+    const { dist, javascript, sourceMap } = await fixture()
+    const map = JSON.parse(sourceMap)
+    delete map.debug_id
+    const publicJavascript =
+      'var e={};e._sentryDebugIdIdentifier=' +
+      quote +
+      'sentry-dbid-' +
+      DEBUG_ID +
+      quote +
+      ';\n' +
+      javascript
+    await fs.writeFile(path.join(dist, 'assets/main.js'), publicJavascript)
+    await fs.writeFile(
+      path.join(dist, 'assets/main.js.map'),
+      JSON.stringify(map),
+    )
+    const { artifactDirectory, manifest } = await quarantinePrivateMaps(dist, [
+      'assets/main.js',
+    ])
+    ownedDirectories.add(artifactDirectory)
+    assert.equal(manifest.repairedMetadata, 1)
+    assert.equal(
+      await fs.readFile(path.join(dist, 'assets/main.js'), 'utf8'),
+      publicJavascript,
+    )
+  }
+})
+
+test('rejects runtime/footer conflicts and requires exactly one valid official footer for missing map metadata', async () => {
+  for (const kind of [
+    'runtime-mismatch',
+    'runtime-invalid',
+    'runtime-unrecognized',
+    'footer-missing',
+    'footer-repeated',
+    'footer-invalid',
+  ]) {
+    const { dist, javascript, sourceMap } = await fixture()
+    const map = JSON.parse(sourceMap)
+    delete map.debug_id
+    let publicJavascript = javascript
+    if (kind === 'runtime-mismatch')
+      publicJavascript =
+        'var e={};e._sentryDebugIdIdentifier="sentry-dbid-abcdefab-1234-1234-1234-123456789abc";\n' +
+        javascript
+    if (kind === 'runtime-invalid')
+      publicJavascript =
+        'var e={};e._sentryDebugIdIdentifier="invalid";\n' + javascript
+    if (kind === 'runtime-unrecognized')
+      publicJavascript =
+        'var e={};e._sentryDebugIdIdentifier=unknownExpression;\n' + javascript
+    if (kind === 'footer-missing')
+      publicJavascript =
+        'var e={};e._sentryDebugIdIdentifier="sentry-dbid-' + DEBUG_ID + '";'
+    if (kind === 'footer-repeated')
+      publicJavascript += '//# debugId=' + DEBUG_ID + '\n'
+    if (kind === 'footer-invalid') publicJavascript += '//# debugId=invalid\n'
+    await fs.writeFile(path.join(dist, 'assets/main.js'), publicJavascript)
+    await fs.writeFile(
+      path.join(dist, 'assets/main.js.map'),
+      JSON.stringify(map),
+    )
+    await expectFailure(dist)
+    assert.deepEqual(await fs.readdir(path.join(dist, 'assets')), ['main.js'])
+  }
+})

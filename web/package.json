@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0 --port 25173",
     "dev:proxy": "vite --config vite.config.dev.ts --host 0.0.0.0 --port 25173",
     "build": "tsc -b && vite build",
-    "test": "vitest run && node --test private-sentry-maps.contract.mjs",
+    "test": "node --test private-sentry-maps.contract.mjs && vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --check .",

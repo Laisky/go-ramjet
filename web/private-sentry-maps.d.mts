@@ -15,15 +15,24 @@ export function privateSentryOptions(): {
   release: { inject: false; create: false; finalize: false }
   errorHandler: () => never
 }
+/** PrivateChunkCoverage records generated, mapped and mapless chunk counts. */
+export interface PrivateChunkCoverage {
+  generatedChunks: number
+  mappedChunks: number
+  unmappedChunks: number
+}
 /** PrivateArtifactManifest describes private artifact paths, matching Debug IDs and exact checksums. */
 export interface PrivateArtifactManifest {
   schemaVersion: number
   release: string | null
+  coverage: PrivateChunkCoverage
+  repairedMetadata: number
   artifacts: Array<{
     javascript: string
     sourceMap: string
     debugId: string
     javascriptSha256: string
+    originalMapSha256: string
     sourceMapSha256: string
   }>
 }
@@ -33,6 +42,7 @@ export function quarantinePrivateMaps(
   expectedChunks: string[],
   release?: string,
   buildContextDirectory?: string,
+  coverage?: PrivateChunkCoverage,
 ): Promise<{ artifactDirectory: string; manifest: PrivateArtifactManifest }>
 /** privateSentryArtifactPlugin returns the build hook that archives and removes hidden maps. */
 export function privateSentryArtifactPlugin(): Plugin

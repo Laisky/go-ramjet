@@ -122,12 +122,78 @@ function isWithin(directory, candidate) {
   )
 }
 
+/** preparePrivateSourceMap validates the official JS footer and adds absent Debug ID metadata only to private map bytes. */
+function preparePrivateSourceMap(jsBytes, originalMapBytes) {
+  const javascript = jsBytes.toString('utf8')
+  const footers = [
+    ...javascript.matchAll(/(?:^|\n)\/\/# debugId=([^\r\n]*)(?=\r?\n|$)/g),
+  ]
+  if (footers.length !== 1 || !UUID_PATTERN.test(footers[0][1])) fail()
+  const debugId = footers[0][1]
+  const assignments = [
+    ...javascript.matchAll(/\b_sentryDebugIdIdentifier\s*=/g),
+  ]
+  const runtimeMarkers = [
+    ...javascript.matchAll(
+      /\b_sentryDebugIdIdentifier\s*=\s*(["'`])([^"'`\r\n]*)\1/g,
+    ),
+  ]
+  if (
+    assignments.length !== runtimeMarkers.length ||
+    runtimeMarkers.length > 1 ||
+    runtimeMarkers.some((marker) => marker[2] !== 'sentry-dbid-' + debugId)
+  )
+    fail()
+  const sourceMap = JSON.parse(originalMapBytes.toString('utf8'))
+  if (sourceMap.version !== 3 || !Array.isArray(sourceMap.sources)) fail()
+  const existingFields = ['debug_id', 'debugId'].filter((field) =>
+    Object.hasOwn(sourceMap, field),
+  )
+  if (existingFields.some((field) => sourceMap[field] !== debugId)) fail()
+  const repairedMetadata = existingFields.length === 0
+  if (repairedMetadata) {
+    // Official @sentry/bundler-plugins 10.76.2 core/debug-id-upload.js
+    // setDebugIdOnSourceMap assigns both fields; preserve every other parsed field.
+    sourceMap.debug_id = debugId
+    sourceMap.debugId = debugId
+  }
+  const mapBytes = repairedMetadata
+    ? Buffer.from(JSON.stringify(sourceMap) + '\n', 'utf8')
+    : originalMapBytes
+  if (mapBytes.length > MAX_FILE_BYTES) fail()
+  return { debugId, mapBytes, repairedMetadata }
+}
+
+/** chunkCoverage returns bounded coverage counts without forwarding arbitrary metadata. */
+function chunkCoverage(mappedChunks, supplied) {
+  const coverage = supplied ?? {
+    generatedChunks: mappedChunks,
+    mappedChunks,
+    unmappedChunks: 0,
+  }
+  const {
+    generatedChunks,
+    mappedChunks: recordedMapped,
+    unmappedChunks,
+  } = coverage
+  if (
+    ![generatedChunks, recordedMapped, unmappedChunks].every(
+      (count) => Number.isInteger(count) && count >= 0 && count <= MAX_FILES,
+    ) ||
+    recordedMapped !== mappedChunks ||
+    generatedChunks !== recordedMapped + unmappedChunks
+  )
+    fail()
+  return { generatedChunks, mappedChunks: recordedMapped, unmappedChunks }
+}
+
 /** quarantinePrivateMaps validates matching Debug IDs and privately copies mapped JS before removing every public map. */
 export async function quarantinePrivateMaps(
   distDirectory,
   expectedChunks,
   release = '',
   buildContextDirectory = path.dirname(path.resolve(distDirectory)),
+  suppliedCoverage,
 ) {
   const root = path.resolve(distDirectory)
   let mapFiles = []
@@ -143,6 +209,7 @@ export async function quarantinePrivateMaps(
     if (release && !/^go-ramjet@[a-f0-9]{7,40}$/.test(release)) fail()
     const chunks = new Set(expectedChunks)
     if (chunks.size !== expectedChunks.length || chunks.size > MAX_FILES) fail()
+    const coverage = chunkCoverage(chunks.size, suppliedCoverage)
     for (const chunk of chunks) {
       if (typeof chunk !== 'string' || !chunk.endsWith('.js')) fail()
       const filename = path.resolve(root, chunk)
@@ -169,8 +236,8 @@ export async function quarantinePrivateMaps(
     const debugIds = new Set()
     let total = 0
     for (const mapFile of mapFiles) {
-      const mapBytes = await readRegular(mapFile)
-      total += mapBytes.length
+      const originalMapBytes = await readRegular(mapFile)
+      total += originalMapBytes.length
       if (total > MAX_TOTAL_BYTES) fail()
       // CSS maps carry no Sentry Debug ID and are removed, never published.
       if (!mapFile.endsWith('.js.map')) continue
@@ -180,28 +247,11 @@ export async function quarantinePrivateMaps(
       const jsBytes = await readRegular(javascript)
       total += jsBytes.length
       if (total > MAX_TOTAL_BYTES) fail()
-      const sourceMap = JSON.parse(mapBytes.toString('utf8'))
-      const debugId = sourceMap.debug_id ?? sourceMap.debugId
-      const jsIds = [
-        ...jsBytes
-          .toString('utf8')
-          .matchAll(
-            new RegExp(`(?:^|\n)//# debugId=(${UUID})(?=\r?\n|$)`, 'g'),
-          ),
-      ]
-      if (
-        sourceMap.version !== 3 ||
-        !Array.isArray(sourceMap.sources) ||
-        typeof debugId !== 'string' ||
-        !UUID_PATTERN.test(debugId) ||
-        (sourceMap.debug_id !== undefined &&
-          sourceMap.debugId !== undefined &&
-          sourceMap.debug_id !== sourceMap.debugId) ||
-        jsIds.length !== 1 ||
-        jsIds[0][1] !== debugId ||
-        debugIds.has(debugId)
+      const { debugId, mapBytes, repairedMetadata } = preparePrivateSourceMap(
+        jsBytes,
+        originalMapBytes,
       )
-        fail()
+      if (debugIds.has(debugId)) fail()
       debugIds.add(debugId)
       artifacts.push({
         name,
@@ -209,6 +259,8 @@ export async function quarantinePrivateMaps(
         debugId,
         jsBytes,
         mapBytes,
+        originalMapBytes,
+        repairedMetadata,
       })
     }
     if (artifacts.length !== chunks.size) fail()
@@ -249,12 +301,17 @@ export async function quarantinePrivateMaps(
         sourceMap: artifact.mapName,
         debugId: artifact.debugId,
         javascriptSha256: digest(artifact.jsBytes),
+        originalMapSha256: digest(artifact.originalMapBytes),
         sourceMapSha256: digest(artifact.mapBytes),
       })
     }
     const manifest = {
       schemaVersion: 1,
       release: release || null,
+      coverage,
+      repairedMetadata: artifacts.filter(
+        (artifact) => artifact.repairedMetadata,
+      ).length,
       artifacts: entries,
     }
     await fs.writeFile(
@@ -284,6 +341,7 @@ export function privateSentryArtifactPlugin() {
   let distDirectory
   let buildContextDirectory
   let chunks = []
+  let coverage
   let release = ''
   return {
     name: 'chat-private-sentry-artifacts',
@@ -295,9 +353,23 @@ export function privateSentryArtifactPlugin() {
       release = process.env.VITE_CHAT_SENTRY_RELEASE || ''
     },
     generateBundle(_options, bundle) {
-      chunks = Object.values(bundle)
-        .filter((entry) => entry.type === 'chunk')
+      const generated = Object.values(bundle).filter(
+        (entry) => entry.type === 'chunk',
+      )
+      // Mapless facade chunks are coverage gaps, not uploadable JS/map pairs.
+      chunks = generated
+        .filter((entry) => {
+          const mapName = entry.sourcemapFileName ?? entry.fileName + '.map'
+          if (bundle[mapName]?.type !== 'asset') return false
+          if (mapName !== entry.fileName + '.map') fail()
+          return true
+        })
         .map((entry) => entry.fileName)
+      coverage = {
+        generatedChunks: generated.length,
+        mappedChunks: chunks.length,
+        unmappedChunks: generated.length - chunks.length,
+      }
     },
     async closeBundle() {
       const { artifactDirectory } = await quarantinePrivateMaps(
@@ -305,6 +377,7 @@ export function privateSentryArtifactPlugin() {
         chunks,
         release,
         buildContextDirectory,
+        coverage,
       )
       console.info(`Private chat source-map artifact: ${artifactDirectory}`)
     },
