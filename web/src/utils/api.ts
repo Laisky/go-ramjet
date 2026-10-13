@@ -1,3 +1,10 @@
+import { privateResponseError } from '@/telemetry/privacy'
+import {
+  captureUnexpectedRequestFailure,
+  decodePrivateResponse,
+  parsePrivateJSON,
+  requestWithDiagnostics,
+} from '@/telemetry/request-diagnostics'
 import type { Annotation } from '@/pages/gptchat/types'
 
 /**
@@ -215,18 +222,23 @@ export async function sendChatRequest(
 ): Promise<ChatCompletionResponse> {
   const headers = await buildHeaders(apiToken, apiBase)
 
-  const response = await fetch(`${getApiBase()}/api`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ...request, stream: false }),
+  return requestWithDiagnostics('Chat completion', async () => {
+    const response = await fetch(`${getApiBase()}/api`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...request, stream: false }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw privateResponseError(
+        `[${response.status}]: ${text}`,
+        'API request failed (HTTP ' + response.status + ')',
+      )
+    }
+
+    return decodePrivateResponse('Chat completion', () => response.json())
   })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
-  }
-
-  return response.json()
 }
 
 /**
@@ -271,7 +283,10 @@ export function sendStreamingChatRequest(
 
       if (!response.ok) {
         const text = await response.text()
-        throw new Error(`[${response.status}]: ${text}`)
+        throw privateResponseError(
+          `[${response.status}]: ${text}`,
+          'API request failed (HTTP ' + response.status + ')',
+        )
       }
 
       const requestId =
@@ -284,6 +299,7 @@ export function sendStreamingChatRequest(
       }
 
       const decoder = new TextDecoder()
+      let reportedProtocolFailure = false
       let buffer = ''
 
       while (true) {
@@ -310,7 +326,10 @@ export function sendStreamingChatRequest(
           }
 
           try {
-            const parsed = JSON.parse(data) as ChatCompletionResponse
+            const parsed = parsePrivateJSON<ChatCompletionResponse>(
+              data,
+              'Chat stream',
+            )
             const id = requestId || parsed.id
             const model = parsed.model
             if (id || model) {
@@ -400,8 +419,12 @@ export function sendStreamingChatRequest(
             if (parsed.choices?.[0]?.finish_reason) {
               callbacks.onFinish?.(parsed.choices[0].finish_reason)
             }
-          } catch {
-            console.debug('Non-JSON SSE data:', data)
+          } catch (error) {
+            if (!reportedProtocolFailure) {
+              reportedProtocolFailure = true
+              captureUnexpectedRequestFailure(error, 'Chat stream')
+            }
+            console.debug('Non-JSON SSE frame ignored.')
           }
         }
       }
@@ -410,6 +433,7 @@ export function sendStreamingChatRequest(
         // Request was cancelled
         return
       }
+      captureUnexpectedRequestFailure(error, 'Chat stream')
       callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
       )
@@ -438,7 +462,10 @@ export async function generateImage(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -473,7 +500,10 @@ export async function editImageWithMask(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -502,7 +532,10 @@ export async function uploadFiles(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -531,7 +564,10 @@ export async function uploadFile(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -559,7 +595,10 @@ export async function transcribeAudio(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   const data = await response.json().catch(() => ({}))
@@ -593,7 +632,10 @@ export async function getCurrentUser(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -616,7 +658,10 @@ export async function createPaymentIntent(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`[${response.status}]: ${text}`)
+    throw privateResponseError(
+      `[${response.status}]: ${text}`,
+      'API request failed (HTTP ' + response.status + ')',
+    )
   }
 
   return response.json()
@@ -636,10 +681,7 @@ export async function fetchTTS(
 ): Promise<string> {
   const url = `${getApiBase()}/audio/tts?apikey=${encodeURIComponent(apiToken)}&text=${encodeURIComponent(text)}`
 
-  console.debug('[fetchTTS] Requesting TTS audio:', {
-    textLength: text.length,
-    url: url.replace(apiToken, '***'),
-  })
+  console.debug('[fetchTTS] Requesting TTS audio.')
 
   const response = await fetch(url, {
     method: 'GET',
@@ -647,11 +689,11 @@ export async function fetchTTS(
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.debug('[fetchTTS] Server error:', {
-      status: response.status,
-      error: errorText,
-    })
-    throw new Error(`TTS request failed [${response.status}]: ${errorText}`)
+    console.debug('[fetchTTS] Server request failed: ' + response.status)
+    throw privateResponseError(
+      `TTS request failed [${response.status}]: ${errorText}`,
+      'TTS request failed (HTTP ' + response.status + ')',
+    )
   }
 
   const blob = await response.blob()

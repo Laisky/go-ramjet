@@ -42,6 +42,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare public chat browser build arguments
+        id: chat_sentry
+        env:
+          CHAT_SENTRY_ENABLED: ${{ vars.CHAT_SENTRY_ENABLED }}
+          CHAT_SENTRY_DSN: ${{ vars.CHAT_SENTRY_DSN }}
+          CHAT_SENTRY_ENVIRONMENT: ${{ vars.CHAT_SENTRY_ENVIRONMENT }}
+          CHAT_SENTRY_SOURCE_SHA: ${{ github.sha }}
+        run: python3 ci/browser_sentry_build_args.py
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -63,6 +72,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          build-args: ${{ steps.chat_sentry.outputs.build_args }}
           push: true
           tags: |
             ppcelery/go-ramjet:latest
@@ -80,6 +90,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare public chat browser build arguments
+        id: chat_sentry
+        env:
+          CHAT_SENTRY_ENABLED: ${{ vars.CHAT_SENTRY_ENABLED }}
+          CHAT_SENTRY_DSN: ${{ vars.CHAT_SENTRY_DSN }}
+          CHAT_SENTRY_ENVIRONMENT: ${{ vars.CHAT_SENTRY_ENVIRONMENT }}
+          CHAT_SENTRY_SOURCE_SHA: ${{ github.sha }}
+        run: python3 ci/browser_sentry_build_args.py
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -90,6 +109,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          build-args: ${{ steps.chat_sentry.outputs.build_args }}
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

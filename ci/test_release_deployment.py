@@ -10,6 +10,10 @@ import subprocess
 import tempfile
 import unittest
 
+from browser_sentry_build_args import (
+    INVALID_MESSAGE, OUTPUT_DELIMITER, PublicConfigurationError, prepare_browser_build_args,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "ppcelery/go-ramjet:latest"
 HEALTH_URL = "http://172.20.0.4:24456/gptchat/version"
@@ -282,6 +286,15 @@ class ReleaseDeploymentContract(unittest.TestCase):
         self.assertIn(command, workflow)
         self.assertLess(workflow.index(command), workflow.index("run: go test ./... -count=1"))
 
+    def test_helper_only_changes_run_unfiltered_pr_contract_validation(self):
+        """test_helper_only_changes_run_unfiltered_pr_contract_validation checks helper coverage without release-trigger changes."""
+        workflow = (ROOT / ".github/workflows/pr-validation.yml").read_text()
+        triggers = workflow.split("permissions:", 1)[0]
+        self.assertIn("pull_request:", triggers)
+        self.assertIn("      - master", triggers)
+        self.assertNotRegex(triggers, r"(?m)^\s+paths(?:-ignore)?:")
+        self.assertIn("run: python3 ci/test_release_deployment.py", workflow)
+
     def test_release_selectors_preserve_builds_and_gate_only_marked_deployment(self):
         """test_release_selectors_preserve_builds_and_gate_only_marked_deployment executes actual selectors."""
         cases = [
@@ -298,6 +311,196 @@ class ReleaseDeploymentContract(unittest.TestCase):
         for message, expected in cases:
             with self.subTest(message=message):
                 self.assertEqual(release_job_decisions(ROOT / ".github/workflows/ci.yml", message), expected)
+
+
+class BrowserSentryBuildArgsContract(unittest.TestCase):
+    """BrowserSentryBuildArgsContract exercises bounded public inputs and unchanged release controls."""
+
+    FIXTURE_DSN = "https://" + "a" * 32 + "@o123.ingest.sentry.io/456"
+    FIXTURE_SHA = "b" * 40
+    APPROVED_WORKFLOW_SHA256 = "4ca28bd752d238557e0d3b08052b6a1a2b8760dfbf792ee6a421c643e01819c5"
+    BRIDGE_STEP = """      - name: Prepare public chat browser build arguments
+        id: chat_sentry
+        env:
+          CHAT_SENTRY_ENABLED: ${{ vars.CHAT_SENTRY_ENABLED }}
+          CHAT_SENTRY_DSN: ${{ vars.CHAT_SENTRY_DSN }}
+          CHAT_SENTRY_ENVIRONMENT: ${{ vars.CHAT_SENTRY_ENVIRONMENT }}
+          CHAT_SENTRY_SOURCE_SHA: ${{ github.sha }}
+        run: python3 ci/browser_sentry_build_args.py
+
+"""
+    BUILD_ARGS_INPUT = "          build-args: ${{ steps.chat_sentry.outputs.build_args }}\n"
+
+    def enabled_environment(self):
+        """enabled_environment returns synthetic public values without any real project configuration."""
+        return {
+            "CHAT_SENTRY_ENABLED": "true",
+            "CHAT_SENTRY_DSN": self.FIXTURE_DSN,
+            "CHAT_SENTRY_ENVIRONMENT": "production",
+            "CHAT_SENTRY_SOURCE_SHA": self.FIXTURE_SHA,
+        }
+
+    def disabled_arguments(self):
+        """disabled_arguments returns the fixed four-argument disabled contract."""
+        return (
+            "VITE_CHAT_SENTRY_ENABLED=false\n"
+            "VITE_CHAT_SENTRY_DSN=\n"
+            "VITE_CHAT_SENTRY_ENVIRONMENT=\n"
+            "VITE_CHAT_SENTRY_RELEASE="
+        )
+
+    def test_missing_or_nontrue_opt_in_keeps_all_public_values_blank(self):
+        """test_missing_or_nontrue_opt_in_keeps_all_public_values_blank prevents accidental activation or value forwarding."""
+        for opt_in in ("", "false", "TRUE", "1", "synthetic-private-value"):
+            environ = self.enabled_environment()
+            environ["CHAT_SENTRY_ENABLED"] = opt_in
+            environ["CHAT_SENTRY_DSN"] = "synthetic-private-value"
+            environ["CHAT_SENTRY_ENVIRONMENT"] = "synthetic-private-value"
+            environ["CHAT_SENTRY_SOURCE_SHA"] = "synthetic-private-value"
+            self.assertEqual(prepare_browser_build_args(environ), self.disabled_arguments())
+        self.assertEqual(prepare_browser_build_args({}), self.disabled_arguments())
+
+    def test_valid_public_input_derives_release_only_from_workflow_sha(self):
+        """test_valid_public_input_derives_release_only_from_workflow_sha ignores arbitrary environment and release overrides."""
+        environ = self.enabled_environment()
+        environ.update({
+            "CHAT_SENTRY_RELEASE": "synthetic-private-value",
+            "VITE_CHAT_SENTRY_RELEASE": "synthetic-private-value",
+            "SENTRY_AUTH_TOKEN": "synthetic-private-value",
+            "UNRELATED_SECRET": "synthetic-private-value",
+        })
+        args = prepare_browser_build_args(environ)
+        self.assertEqual(len(args.splitlines()), 4)
+        self.assertIn("VITE_CHAT_SENTRY_RELEASE=go-ramjet@" + self.FIXTURE_SHA, args)
+        self.assertNotIn("synthetic-private-value", args)
+        self.assertNotIn("AUTH_TOKEN", args)
+        for region in ("", ".us", ".de"):
+            environ["CHAT_SENTRY_DSN"] = self.FIXTURE_DSN.replace(".ingest.", ".ingest" + region + ".")
+            self.assertIn("VITE_CHAT_SENTRY_ENABLED=true", prepare_browser_build_args(environ))
+
+    def test_public_value_bounds_accept_boundary_and_reject_overflow(self):
+        """test_public_value_bounds_accept_boundary_and_reject_overflow verifies the exact environment and DSN size limits."""
+        environ = self.enabled_environment()
+        environ["CHAT_SENTRY_ENVIRONMENT"] = "x" * 32
+        self.assertIn("VITE_CHAT_SENTRY_ENABLED=true", prepare_browser_build_args(environ))
+        # Synthetic syntax-only fixture; no DNS lookup, SDK init or event occurs.
+        prefix = "https://" + "a" * 32 + "@o"
+        suffix = ".ingest.sentry.io/456"
+        environ["CHAT_SENTRY_DSN"] = prefix + "1" * (256 - len(prefix + suffix)) + suffix
+        self.assertEqual(len(environ["CHAT_SENTRY_DSN"]), 256)
+        self.assertIn("VITE_CHAT_SENTRY_ENABLED=true", prepare_browser_build_args(environ))
+        environ["CHAT_SENTRY_DSN"] += "1"
+        with self.assertRaises(PublicConfigurationError):
+            prepare_browser_build_args(environ)
+
+    def test_real_helper_disabled_output_never_forwards_submitted_values(self):
+        """test_real_helper_disabled_output_never_forwards_submitted_values verifies the actual runner behavior when opt-in is absent."""
+        with tempfile.TemporaryDirectory(prefix="chat-public-args-") as directory:
+            output_path = Path(directory) / "output"
+            environ = {"CHAT_SENTRY_DSN": "synthetic-private-value", "SENTRY_AUTH_TOKEN": "synthetic-private-value"}
+            result = self.run_preparation(environ, output_path)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, "")
+            self.assertEqual("\n".join(output_path.read_text().splitlines()[1:-1]), self.disabled_arguments())
+            self.assertNotIn("synthetic-private-value", output_path.read_text())
+
+    def test_explicit_opt_in_rejects_missing_or_unsafe_public_values(self):
+        """test_explicit_opt_in_rejects_missing_or_unsafe_public_values fails closed without reflecting malformed input."""
+        cases = [
+            ("CHAT_SENTRY_DSN", ""),
+            ("CHAT_SENTRY_DSN", "x" * 257),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("https:", "http:")),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("@", ":synthetic-private-value@")),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("sentry.io", "sentry.io.evil.test")),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("/456", ":443/456")),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN + "?token=synthetic-private-value"),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN + "#synthetic-private-value"),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("/456", "/%34%35%36")),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN.replace("https://" + "a", "https://%61", 1)),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN + "\nSENTRY_AUTH_TOKEN=synthetic-private-value"),
+            ("CHAT_SENTRY_DSN", self.FIXTURE_DSN + "\r"),
+            ("CHAT_SENTRY_ENVIRONMENT", ""),
+            ("CHAT_SENTRY_ENVIRONMENT", "x" * 33),
+            ("CHAT_SENTRY_ENVIRONMENT", "production\nsynthetic-private-value"),
+            ("CHAT_SENTRY_ENVIRONMENT", "private@example.com"),
+            ("CHAT_SENTRY_SOURCE_SHA", ""),
+            ("CHAT_SENTRY_SOURCE_SHA", "b" * 39),
+            ("CHAT_SENTRY_SOURCE_SHA", "B" * 40),
+            ("CHAT_SENTRY_SOURCE_SHA", "b" * 40 + "\nsynthetic-private-value"),
+        ]
+        for key, value in cases:
+            with self.subTest(key=key, scenario=cases.index((key, value))):
+                environ = self.enabled_environment()
+                environ[key] = value
+                with self.assertRaises(PublicConfigurationError) as caught:
+                    prepare_browser_build_args(environ)
+                self.assertEqual(str(caught.exception), INVALID_MESSAGE)
+
+    def run_preparation(self, environ, output_path):
+        """run_preparation executes the real helper with an isolated runner environment and captures diagnostics."""
+        import sys
+        return subprocess.run(
+            [sys.executable, str(ROOT / "ci/browser_sentry_build_args.py")],
+            env={**environ, "GITHUB_OUTPUT": str(output_path)},
+            text=True, capture_output=True, timeout=5,
+        )
+
+    def test_real_helper_writes_bounded_actions_output_without_logging_values(self):
+        """test_real_helper_writes_bounded_actions_output_without_logging_values verifies actual runner output and silent success."""
+        with tempfile.TemporaryDirectory(prefix="chat-public-args-") as directory:
+            output_path = Path(directory) / "output"
+            result = self.run_preparation(self.enabled_environment(), output_path)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, "")
+            lines = output_path.read_text().splitlines()
+            self.assertEqual(lines[0], "build_args<<" + OUTPUT_DELIMITER)
+            self.assertEqual(lines[-1], OUTPUT_DELIMITER)
+            self.assertEqual(len(lines), 6)
+            self.assertEqual("\n".join(lines[1:-1]), prepare_browser_build_args(self.enabled_environment()))
+
+    def test_real_helper_invalid_opt_in_does_not_write_or_echo_submitted_data(self):
+        """test_real_helper_invalid_opt_in_does_not_write_or_echo_submitted_data proves a publishing job cannot consume invalid outputs."""
+        with tempfile.TemporaryDirectory(prefix="chat-public-args-") as directory:
+            output_path = Path(directory) / "output"
+            environ = self.enabled_environment()
+            environ["CHAT_SENTRY_DSN"] = "synthetic-private-value\nSENTRY_AUTH_TOKEN=synthetic-private-value"
+            result = self.run_preparation(environ, output_path)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, INVALID_MESSAGE + "\n")
+            self.assertFalse(output_path.exists())
+
+    def test_real_helper_output_failure_is_static(self):
+        """test_real_helper_output_failure_is_static contains runner file errors without exposing paths or configuration."""
+        with tempfile.TemporaryDirectory(prefix="chat-public-args-") as directory:
+            result = self.run_preparation(self.enabled_environment(), Path(directory) / "missing" / "output")
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, INVALID_MESSAGE + "\n")
+
+    def test_bridge_is_identical_in_both_builds_and_preserves_every_release_control(self):
+        """test_bridge_is_identical_in_both_builds_and_preserves_every_release_control requires the approved workflow after removing only the public bridge."""
+        import hashlib
+        source = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertEqual(source.count(self.BRIDGE_STEP), 2)
+        self.assertEqual(source.count(self.BUILD_ARGS_INPUT), 2)
+        for job in ("build_latest", "build_latest_cache"):
+            body = source.split("  " + job + ":\n", 1)[1]
+            body = re.split(r"^  [a-zA-Z_][a-zA-Z_0-9-]*:\n", body, maxsplit=1, flags=re.MULTILINE)[0]
+            self.assertIn(self.BRIDGE_STEP, body)
+            self.assertIn(self.BUILD_ARGS_INPUT, body)
+        preserved = source.replace(self.BRIDGE_STEP, "").replace(self.BUILD_ARGS_INPUT, "")
+        self.assertEqual(hashlib.sha256(preserved.encode()).hexdigest(), self.APPROVED_WORKFLOW_SHA256)
+
+    def test_feature_branch_push_remains_outside_release_trigger(self):
+        """test_feature_branch_push_remains_outside_release_trigger guards the current Draft branch against publishing or deployment."""
+        source = (ROOT / ".github/workflows/ci.yml").read_text()
+        branch_section = source.split("    branches:\n", 1)[1].split("    paths-ignore:\n", 1)[0]
+        branches = re.findall(r"^      - '([^']+)'$", branch_section, re.MULTILINE)
+        self.assertEqual(branches, ["master", "main", "test/ci"])
+        self.assertNotIn("feat/browser-sentry-20261012-08", branches)
 
 
 if __name__ == "__main__":
