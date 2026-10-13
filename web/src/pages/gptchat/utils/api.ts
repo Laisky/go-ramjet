@@ -1,4 +1,4 @@
-import { privateResponseError } from '@/telemetry/privacy'
+import { markPrivateError, privateResponseError } from '@/telemetry/privacy'
 import { getApiBase, getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
 import { ownershipSessionHeader } from './ownership-session'
@@ -33,7 +33,11 @@ async function request<T>(
   const response = await fetch(`${resolveApiBase()}${endpoint}`, options)
 
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text())
+    throw markPrivateError(
+      new ApiError(response.status, await response.text()),
+      'Chat account request failed (HTTP ' + response.status + ')',
+      true,
+    )
   }
 
   // Handle empty responses

@@ -11,8 +11,9 @@ import {
   createBrowserTelemetry,
   type BrowserEnvelope,
 } from './browser-sentry'
-import { privateResponseError } from './privacy'
+import { isExpectedRequestError, privateResponseError } from './privacy'
 import { sendChatRequest } from '@/utils/api'
+import { api, ApiError } from '@/pages/gptchat/utils/api'
 import { afterEach, expect, it, vi } from 'vitest'
 
 afterEach(async () => {
@@ -303,3 +304,121 @@ it('keeps expected HTTP responses in UI and emits one actionable transport/decod
   )
   expect(JSON.stringify(envelopes)).not.toContain('synthetic-private')
 })
+
+it.each(['current-user', 'upload-config', 'download-config'])(
+  'marks private account HTTP responses for %s without changing UI errors',
+  async (operation) => {
+    const raw = operation + ' synthetic-private-response ' + 'x'.repeat(300)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(raw, { status: 402 }),
+    )
+    const envelopes: BrowserEnvelope[] = []
+    const telemetry = createBrowserTelemetry(Sentry, () => ({
+      send(envelope) {
+        envelopes.push(envelope)
+        return Promise.resolve({ statusCode: 200 })
+      },
+      flush: () => Promise.resolve(true),
+    }))
+    expect(
+      telemetry.initialize(
+        {
+          enabled: 'true',
+          dsn: 'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/1',
+          environment: 'test',
+          release: 'go-ramjet@abcdef0',
+        },
+        window.location.hostname,
+      ),
+    ).toBe(true)
+    const call =
+      operation === 'current-user'
+        ? api.fetchCurrentUser('fixture-token')
+        : operation === 'upload-config'
+          ? api.uploadUserData('fixture-sync-key', { fixture: true })
+          : api.downloadUserData('fixture-sync-key')
+    const error = await call.catch((value: unknown) => value)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(402)
+    expect((error as ApiError).message).toBe(raw)
+    expect(isExpectedRequestError(error)).toBe(true)
+    telemetry.capture(error)
+    await Sentry.flush(1000)
+    const events = () =>
+      envelopes.flatMap((envelope) =>
+        envelope[1]
+          .filter((item) => item[0].type === 'event')
+          .map((item) => item[1] as Sentry.ErrorEvent),
+      )
+    expect(events()).toHaveLength(1)
+    expect(JSON.stringify(events())).not.toContain('synthetic-private-response')
+    expect(
+      events()[0].exception?.values?.some(
+        (value) =>
+          value.type === 'ApiError' &&
+          value.value === 'Chat account request failed (HTTP 402)',
+      ),
+    ).toBe(true)
+
+    // Ordinary diagnostic errors remain useful; this control rejects blanket redaction.
+    const ordinary = new TypeError(
+      "Cannot read properties of undefined (reading 'map')",
+    )
+    telemetry.capture(ordinary)
+    await Sentry.flush(1000)
+    expect(events()).toHaveLength(2)
+    expect(
+      events()[1].exception?.values?.some(
+        (value) => value.value === ordinary.message,
+      ),
+    ).toBe(true)
+  },
+)
+
+it('account response negative control preserves ordinary SDK diagnostic messages', async () => {
+  const envelopes: BrowserEnvelope[] = []
+  const telemetry = createBrowserTelemetry(Sentry, () => ({
+    send(envelope) {
+      envelopes.push(envelope)
+      return Promise.resolve({ statusCode: 200 })
+    },
+    flush: () => Promise.resolve(true),
+  }))
+  expect(
+    telemetry.initialize(
+      {
+        enabled: 'true',
+        dsn: 'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/1',
+        environment: 'test',
+        release: 'go-ramjet@abcdef0',
+      },
+      window.location.hostname,
+    ),
+  ).toBe(true)
+  const ordinary = new TypeError(
+    "Cannot read properties of undefined (reading 'map')",
+  )
+  telemetry.capture(ordinary)
+  await Sentry.flush(1000)
+  const events = envelopes.flatMap((envelope) =>
+    envelope[1]
+      .filter((item) => item[0].type === 'event')
+      .map((item) => item[1] as Sentry.ErrorEvent),
+  )
+  expect(events).toHaveLength(1)
+  expect(
+    events[0].exception?.values?.some(
+      (value) => value.value === ordinary.message,
+    ),
+  ).toBe(true)
+})
+
+it.each([400, 404])(
+  'account response UI control preserves missing-config HTTP %s fallback',
+  async (status) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Config does not exist', { status }),
+    )
+    await expect(api.downloadUserData('fixture-sync-key')).resolves.toEqual({})
+  },
+)
