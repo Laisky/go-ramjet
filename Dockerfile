@@ -7,7 +7,16 @@ ADD . .
 # Build the unified SPA UI
 RUN corepack enable
 RUN pnpm -C web install --frozen-lockfile
-RUN pnpm -C web build
+# Public browser configuration only; never pass Sentry upload/auth tokens here.
+ARG VITE_CHAT_SENTRY_ENABLED=false
+ARG VITE_CHAT_SENTRY_DSN
+ARG VITE_CHAT_SENTRY_ENVIRONMENT
+ARG VITE_CHAT_SENTRY_RELEASE
+RUN VITE_CHAT_SENTRY_ENABLED="$VITE_CHAT_SENTRY_ENABLED" \
+    VITE_CHAT_SENTRY_DSN="$VITE_CHAT_SENTRY_DSN" \
+    VITE_CHAT_SENTRY_ENVIRONMENT="$VITE_CHAT_SENTRY_ENVIRONMENT" \
+    VITE_CHAT_SENTRY_RELEASE="$VITE_CHAT_SENTRY_RELEASE" \
+    pnpm -C web build
 
 # =====================================
 

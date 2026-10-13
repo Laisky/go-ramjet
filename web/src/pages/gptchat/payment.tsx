@@ -1,3 +1,4 @@
+import { privateResponseError } from '@/telemetry/privacy'
 import {
   Elements,
   PaymentElement,
@@ -134,7 +135,10 @@ export function GPTChatPaymentPage() {
 
       if (!resp.ok) {
         const text = await resp.text()
-        throw new Error(text || `request failed: ${resp.status}`)
+        throw privateResponseError(
+          text || `request failed: ${resp.status}`,
+          'Payment request failed (HTTP ' + resp.status + ')',
+        )
       }
 
       const json = (await resp.json()) as PaymentIntentResponse
