@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig, type PluginOption } from 'vite'
+import { defineConfig, type PluginOption, type UserConfig } from 'vite'
 import path from 'node:path'
 import {
   isPrivateSourceMapBuild,
@@ -7,7 +7,7 @@ import {
   privateSentryOptions,
 } from './private-sentry-maps.mjs'
 
-export default defineConfig(async ({ command }) => {
+export default defineConfig(async ({ command }): Promise<UserConfig> => {
   const privateMaps = isPrivateSourceMapBuild(
     command,
     process.env.CHAT_SENTRY_PRIVATE_SOURCE_MAPS,

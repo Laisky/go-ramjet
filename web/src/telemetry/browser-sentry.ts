@@ -84,7 +84,7 @@ export function createBrowserTelemetry(
           dsn: deployment.dsn,
           environment: deployment.environment,
           release: deployment.release,
-          tags: { site: 'chat' },
+          initialScope: { tags: { site: 'chat' } },
           integrations(defaults) {
             // Keep the standard error/breadcrumb integrations; release-health sessions are outside scope.
             return defaults.filter(
@@ -152,7 +152,7 @@ export function createBrowserTelemetry(
       try {
         if (info)
           sdk.captureReactException(error, info, {
-            ...(operation ? { tags: { operation } } : {}),
+            ...(operation ? { captureContext: { tags: { operation } } } : {}),
             mechanism: { type: 'auto.function.react.error_handler', handled },
           })
         else

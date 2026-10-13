@@ -113,6 +113,7 @@ it('emits useful standard SDK envelopes with targeted private cause, URL, scope 
         .map((item) => item[1] as Sentry.ErrorEvent),
     )
   expect(events()).toHaveLength(1)
+  expect(events()[0].tags?.site).toBe('chat')
   const first = events()[0]
   expect(
     first.exception?.values?.some((value) => value.value === outer.message),
