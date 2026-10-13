@@ -19,7 +19,7 @@ Vite substitutes these values during `pnpm -C web build`. The Docker frontend st
 
 ## Privacy and error behavior
 
-Initialization runs before application imports. The existing ErrorBoundary captures caught errors once and preserves its fallback/retry UI when telemetry is disabled or SDK initialization/capture fails. React 19 root hooks capture uncaught/recoverable render errors. Only GlobalHandlers and Dedupe integrations are enabled; they cover uncaught errors and unhandled rejections without SDK default integration drift.
+Initialization runs before application imports. The existing ErrorBoundary captures caught errors once and preserves its fallback/retry UI when telemetry is disabled or SDK initialization/capture fails. React 19 root hooks capture uncaught/recoverable render errors only after successful target-host initialization. Disabled, failed or unsupported-host initialization retains React's native root error dispatch. Only GlobalHandlers and Dedupe integrations are enabled; they cover uncaught errors and unhandled rejections without SDK default integration drift.
 
 Both `beforeSend` and the final transport reconstruct an allowlisted error schema. SDK-internal events can bypass `beforeSend`, so the transport independently projects even those events. It forwards one error item, validated event ID and generated timestamp, and drops every other envelope item, attachments and trace headers. Telemetry fetches omit credentials and referrers.
 

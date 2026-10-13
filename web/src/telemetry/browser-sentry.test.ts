@@ -259,6 +259,7 @@ describe('fail-closed bootstrap and capture', () => {
     const { telemetry, beforeSend } = fixture()
     const mutable = { ...config }
     telemetry.initialize(mutable, 'chat.laisky.com')
+    expect(telemetry.isEnabled()).toBe(true)
     mutable.environment = 'private@example.com'
     mutable.release = 'secret'
     expect(beforeSend()).toMatchObject({
@@ -267,6 +268,7 @@ describe('fail-closed bootstrap and capture', () => {
     })
     vi.stubGlobal('window', { location: { hostname: 'cv.laisky.com' } })
     expect(beforeSend()).toBeNull()
+    expect(telemetry.isEnabled()).toBe(false)
   })
   it.each(['throw', 'undefined'])(
     'drops events after partial init failure: %s',

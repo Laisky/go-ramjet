@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { browserTelemetry } from './browser-sentry'
-import { reactErrorOptions } from './react-errors'
+import { getReactErrorOptions } from './react-errors'
 
 afterEach(() => {
   cleanup()
@@ -42,7 +42,8 @@ it('captures uncaught React root errors through the actual root hook', async () 
     .mockImplementation(() => undefined)
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const container = document.createElement('div')
-  const root = createRoot(container, reactErrorOptions)
+  vi.spyOn(browserTelemetry, 'isEnabled').mockReturnValue(true)
+  const root = createRoot(container, getReactErrorOptions())
   flushSync(() => {
     root.render(<BrokenPage />)
   })
@@ -59,7 +60,8 @@ it('routes recoverable React errors through safe capture and fixed diagnostics',
     .mockImplementation(() => undefined)
   const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const error = new Error('private prompt')
-  reactErrorOptions.onRecoverableError(error)
+  vi.spyOn(browserTelemetry, 'isEnabled').mockReturnValue(true)
+  getReactErrorOptions()?.onRecoverableError?.(error, { componentStack: '' })
   expect(capture).toHaveBeenCalledWith(error)
   expect(log).toHaveBeenCalledWith('[React] Browser render error.')
 })
@@ -72,4 +74,24 @@ it('keeps boundary fallback usable with telemetry disabled', () => {
     </ErrorBoundary>,
   )
   expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+})
+
+it('keeps default global error dispatch when capture is disabled or unsupported', async () => {
+  const capture = vi
+    .spyOn(browserTelemetry, 'capture')
+    .mockImplementation(() => undefined)
+  vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  expect(getReactErrorOptions()).toBeUndefined()
+  const reported = vi.fn((event: ErrorEvent) => event.preventDefault())
+  window.addEventListener('error', reported)
+  const root = createRoot(document.createElement('div'), getReactErrorOptions())
+  flushSync(() => {
+    root.render(<BrokenPage />)
+  })
+  await vi.waitFor(() => expect(reported).toHaveBeenCalledTimes(1))
+  expect(capture).not.toHaveBeenCalled()
+  window.removeEventListener('error', reported)
+  await act(async () => {
+    root.unmount()
+  })
 })

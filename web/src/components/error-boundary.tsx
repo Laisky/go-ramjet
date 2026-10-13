@@ -28,6 +28,7 @@ export class ErrorBoundary extends Component<
     return { hasError: true, error }
   }
 
+  /** componentDidCatch reports a caught render error without changing fallback behavior. */
   componentDidCatch(error: Error) {
     browserTelemetry.capture(error)
     console.error('[ErrorBoundary] Uncaught render error.')

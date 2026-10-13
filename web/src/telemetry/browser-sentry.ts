@@ -304,6 +304,14 @@ export function createBrowserTelemetry(
       }
       return enabled
     },
+    /** isEnabled reports whether initialized capture is active on the exact target host. */
+    isEnabled(): boolean {
+      return (
+        enabled &&
+        typeof window !== 'undefined' &&
+        window.location.hostname === HOST
+      )
+    },
     /** capture reports boundary or React root errors while preserving UI behavior on SDK failure. */
     capture(error: unknown): void {
       if (!enabled) return
