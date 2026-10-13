@@ -1,3 +1,4 @@
+import { privateResponseError } from '@/telemetry/privacy'
 import { getApiBase, getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
 import { ownershipSessionHeader } from './ownership-session'
@@ -166,7 +167,10 @@ export const api = {
     })
 
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 
@@ -193,7 +197,10 @@ export const api = {
       cache: 'no-cache',
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
     return resp.json()
   },
@@ -223,7 +230,10 @@ export const api = {
       body: JSON.stringify({ datasets: [datasetName] }),
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 
@@ -250,7 +260,10 @@ export const api = {
       cache: 'no-cache',
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
     return resp.json()
   },
@@ -278,7 +291,10 @@ export const api = {
       body: JSON.stringify({ data_key: dataKey, chatbot_name: chatbotName }),
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 }

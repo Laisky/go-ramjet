@@ -62,7 +62,7 @@ it('routes recoverable React errors through safe capture and fixed diagnostics',
   const error = new Error('private prompt')
   vi.spyOn(browserTelemetry, 'isEnabled').mockReturnValue(true)
   getReactErrorOptions()?.onRecoverableError?.(error, { componentStack: '' })
-  expect(capture).toHaveBeenCalledWith(error)
+  expect(capture).toHaveBeenCalledWith(error, { componentStack: '' })
   expect(log).toHaveBeenCalledWith('[React] Browser render error.')
 })
 

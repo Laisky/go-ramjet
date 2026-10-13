@@ -1,5 +1,5 @@
 import { browserTelemetry } from '@/telemetry/browser-sentry'
-import { Component, type ReactNode } from 'react'
+import { Component, type ReactNode, type ErrorInfo } from 'react'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -29,8 +29,8 @@ export class ErrorBoundary extends Component<
   }
 
   /** componentDidCatch reports a caught render error without changing fallback behavior. */
-  componentDidCatch(error: Error) {
-    browserTelemetry.capture(error)
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    browserTelemetry.capture(error, info, true)
     console.error('[ErrorBoundary] Uncaught render error.')
   }
 

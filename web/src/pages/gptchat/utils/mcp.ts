@@ -1,3 +1,8 @@
+import { privateResponseError } from '@/telemetry/privacy'
+import {
+  decodePrivateResponse,
+  requestWithDiagnostics,
+} from '@/telemetry/request-diagnostics'
 import type { McpServerConfig, McpTool } from '../types'
 
 type MutableServer = McpServerConfig & Record<string, unknown>
@@ -94,8 +99,7 @@ function normalizeToolsToOpenAIFormat(tools: unknown[]): McpTool[] {
       description:
         typeof item.description === 'string' ? item.description : undefined,
       input_schema: (item.inputSchema || item.parameters) as
-        | Record<string, unknown>
-        | undefined,
+        Record<string, unknown> | undefined,
     }
   })
 }
@@ -161,11 +165,16 @@ async function ensureMCPSession(
     throw new Error(`HTTP ${resp.status} during MCP init`)
   }
 
-  const initData = (await fetchJSONOrSSE(resp)) as {
+  const initData = (await requestWithDiagnostics('MCP response', () =>
+    decodePrivateResponse('MCP response', () => fetchJSONOrSSE(resp)),
+  )) as {
     error?: { message?: string }
   } | null
   if (initData?.error) {
-    throw new Error(initData.error.message || 'MCP initialize error')
+    throw privateResponseError(
+      initData.error.message || 'MCP initialize error',
+      'MCP initialization failed',
+    )
   }
 
   // Notifications/initialized
@@ -237,12 +246,18 @@ export async function syncMCPServerTools(
     throw new Error(`HTTP ${resp.status} fetching tools`)
   }
 
-  const data = (await fetchJSONOrSSE(resp)) as {
+  const data = (await requestWithDiagnostics('MCP response', () =>
+    decodePrivateResponse('MCP response', () => fetchJSONOrSSE(resp)),
+  )) as {
     error?: { message?: string }
     result?: { tools?: unknown[] }
   } | null
   if (!data) throw new Error('Invalid JSON-RPC response')
-  if (data.error) throw new Error(data.error.message || 'MCP error')
+  if (data.error)
+    throw privateResponseError(
+      data.error.message || 'MCP error',
+      'MCP tool discovery failed',
+    )
 
   const normalizedRawTools = normalizeMCPToolListResponse(data)
   if (!normalizedRawTools) throw new Error('Invalid tool list format')

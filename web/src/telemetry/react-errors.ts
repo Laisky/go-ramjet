@@ -2,8 +2,11 @@ import type { RootOptions } from 'react-dom/client'
 import { browserTelemetry } from './browser-sentry'
 
 /** reportRootError captures uncaught/recoverable React errors and preserves console visibility. */
-function reportRootError(error: unknown): void {
-  browserTelemetry.capture(error)
+function reportRootError(
+  error: unknown,
+  info: { componentStack?: string | null },
+): void {
+  browserTelemetry.capture(error, info)
   console.error('[React] Browser render error.')
 }
 

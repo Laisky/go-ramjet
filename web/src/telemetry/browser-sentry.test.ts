@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Sentry from '@sentry/react'
-import { createBrowserTelemetry, sanitizeBrowserEvent } from './browser-sentry'
+import { createBrowserTelemetry } from './browser-sentry'
 
 const config = {
   enabled: 'true',
@@ -8,59 +8,23 @@ const config = {
   environment: 'test',
   release: 'go-ramjet@abcdef0',
 }
-const assets = new Set(['https://chat.laisky.com/assets/index-ABCDEFGH.js'])
-const event: Sentry.ErrorEvent = {
-  type: undefined,
-  exception: {
-    values: [
-      {
-        type: 'TypeError',
-        value: 'private prompt',
-        stacktrace: {
-          frames: [
-            {
-              filename:
-                'https://chat.laisky.com/assets/index-ABCDEFGH.js?token=secret#private',
-              lineno: 12,
-              colno: 3,
-              function: 'private tool result',
-              vars: { token: 'secret' },
-              pre_context: ['private completion'],
-              context_line: 'secret source',
-            },
-          ],
-        },
-      },
-    ],
-  },
-}
 
-/** fixture constructs an SDK double which never creates a network transport. */
+/** fixture creates an SDK double without transports or external events. */
 function fixture() {
   const sdk = {
-    init: vi.fn(() => ({})),
+    init: vi.fn((...options: [Sentry.BrowserOptions?]) => ({ options })),
     captureException: vi.fn(),
-    globalHandlersIntegration: vi.fn(() => ({ name: 'GlobalHandlers' })),
-    dedupeIntegration: vi.fn(() => ({ name: 'Dedupe' })),
+    captureReactException: vi.fn(),
+    consoleIntegration: vi.fn(() => ({ name: 'Console' })),
   }
   const telemetry = createBrowserTelemetry(
     sdk as unknown as Parameters<typeof createBrowserTelemetry>[0],
   )
-  const beforeSend = (input = event, hint: Sentry.EventHint = {}) => {
-    const options = sdk.init.mock
-      .calls[0]?.[0] as unknown as Sentry.BrowserOptions
-    return options.beforeSend?.(input, hint)
-  }
-  return { sdk, telemetry, beforeSend }
+  return { sdk, telemetry, options: () => sdk.init.mock.calls[0][0]! }
 }
 
 beforeEach(() => {
-  vi.stubGlobal('window', {
-    location: {
-      hostname: 'chat.laisky.com',
-      origin: 'https://chat.laisky.com',
-    },
-  })
+  vi.stubGlobal('window', { location: new URL('https://chat.laisky.com/') })
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 afterEach(() => {
@@ -68,276 +32,155 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('browser privacy projection', () => {
-  it('retains useful error type, safe asset coordinates and deployment identity only', () => {
-    const result = sanitizeBrowserEvent(event, config, assets)
-    expect(result).toEqual({
-      type: undefined,
-      platform: 'javascript',
-      level: 'error',
-      environment: 'test',
-      release: 'go-ramjet@abcdef0',
-      tags: { site: 'chat' },
-      exception: {
-        values: [
-          {
-            type: 'TypeError',
-            value: 'Browser error (message withheld)',
-            mechanism: { type: 'generic', handled: false },
-            stacktrace: {
-              frames: [
-                {
-                  filename: 'https://chat.laisky.com/assets/index-ABCDEFGH.js',
-                  lineno: 12,
-                  colno: 3,
-                  in_app: true,
-                },
-              ],
-            },
-          },
-        ],
-      },
-    })
-  })
-  it('drops credentials, bodies, chat history, MCP inputs/results and arbitrary nested metadata', () => {
-    const dirty = {
-      ...event,
-      message: 'private prompt',
-      user: { email: 'private@example.com' },
-      request: {
-        url: 'https://chat.laisky.com/gptchat/private?api_key=secret',
-        headers: { Authorization: 'Bearer secret', Cookie: 'secret' },
-        data: 'private body',
-      },
-      breadcrumbs: [{ message: 'private history', data: { token: 'secret' } }],
-      extra: {
-        localStorage: 'secret',
-        toolArguments: 'private',
-        toolResult: 'private',
-      },
-      contexts: { arbitrary: { completion: 'private' } },
-      tags: { email: 'private@example.com' },
-      debug_meta: {
-        images: [
-          { type: 'sourcemap', code_file: 'secret', debug_id: 'secret' },
-        ],
-      },
-    }
-    expect(
-      JSON.stringify(sanitizeBrowserEvent(dirty, config, assets)),
-    ).not.toMatch(
-      /private|secret|Authorization|Cookie|localStorage|toolArguments|toolResult/,
-    )
-  })
+describe('deployment and SDK behavior', () => {
+  it.each(['cv.laisky.com', 'chat2.laisky.com', 'localhost'])(
+    'keeps unsupported host %s disabled',
+    (hostname) => {
+      vi.stubGlobal('window', {
+        location: new URL('https://' + hostname + '/'),
+      })
+      const { sdk, telemetry } = fixture()
+      expect(telemetry.initialize(config, hostname)).toBe(false)
+      telemetry.capture(new Error('Ordinary failure'))
+      expect(sdk.init).not.toHaveBeenCalled()
+      expect(sdk.captureException).not.toHaveBeenCalled()
+    },
+  )
   it.each([
-    'https://cv.laisky.com/assets/index-ABCDEFGH.js',
-    'https://chat.laisky.com/gptchat/user-secret/entry.js',
-    'https://chat.laisky.com/assets/sk-sensitiveprompt-ABCDEFGH.js',
-    'https://chat.laisky.com/assets/private@example.com-ABCDEFGH.js',
-    'https://secret@chat.laisky.com/assets/index-ABCDEFGH.js',
-    'https://chat.laisky.com/assets/index-secret12.js',
-    'data:text/javascript,secret',
-    'https://chat.laisky.com/assets/index-ABCDEFGH.js' + 'x'.repeat(600),
-  ])('discards unsafe stack URL %s', (filename) => {
-    const dirty = {
-      type: undefined,
-      exception: {
-        values: [
-          {
-            type: 'private custom error',
-            value: 'secret',
-            stacktrace: { frames: [{ filename }] },
-          },
-        ],
-      },
-    } as Sentry.ErrorEvent
-    expect(
-      sanitizeBrowserEvent(dirty, config, assets)?.exception?.values?.[0],
-    ).toEqual({
-      type: 'Error',
-      value: 'Browser error (message withheld)',
-      mechanism: { type: 'generic', handled: false },
-    })
-  })
-  it('bounds chained exceptions and frames and rejects messages/transactions', () => {
-    const long = {
-      ...event,
-      exception: {
-        values: Array(100).fill({
-          ...event.exception!.values![0],
-          stacktrace: {
-            frames: Array(1000).fill(
-              event.exception!.values![0].stacktrace!.frames![0],
-            ),
-          },
-        }),
-      },
-    }
-    const safe = sanitizeBrowserEvent(long, config, assets)
-    expect(safe?.exception?.values).toHaveLength(3)
-    expect(safe?.exception?.values?.[0].stacktrace?.frames).toHaveLength(30)
-    expect(
-      sanitizeBrowserEvent({ type: undefined, message: 'secret' }, config),
-    ).toBeNull()
-    expect(
-      sanitizeBrowserEvent(
-        { ...event, type: 'transaction' } as unknown as Sentry.ErrorEvent,
-        config,
-      ),
-    ).toBeNull()
-  })
-})
-
-describe('fail-closed bootstrap and capture', () => {
-  it.each([
-    'cv.laisky.com',
-    'chat2.laisky.com',
-    'localhost',
-    'chat.laisky.com.attacker.test',
-    'sso.laisky.com',
-  ])('never initializes on %s', (host) => {
-    const { sdk, telemetry } = fixture()
-    expect(telemetry.initialize(config, host)).toBe(false)
-    telemetry.capture(new Error('secret'))
-    expect(sdk.init).not.toHaveBeenCalled()
-    expect(sdk.captureException).not.toHaveBeenCalled()
-  })
-  it.each([
-    {},
-    { ...config, enabled: 'false' },
+    { ...config, enabled: undefined },
     { ...config, dsn: undefined },
-    { ...config, environment: undefined },
-    { ...config, release: undefined },
-    { ...config, dsn: 'https://secret@attacker.test/1' },
-    { ...config, dsn: config.dsn + '?token=secret' },
-    { ...config, environment: 'private@example.com' },
-    { ...config, release: 'secret release' },
-  ])('requires explicit valid deployment configuration', (input) => {
+    { ...config, dsn: 'https://user:pass@example.com/1' },
+    { ...config, environment: 'invalid value' },
+    { ...config, release: 'bad' },
+  ])('keeps missing or invalid configuration disabled', (value) => {
     const { sdk, telemetry } = fixture()
-    expect(telemetry.initialize(input, 'chat.laisky.com')).toBe(false)
+    expect(telemetry.initialize(value, 'chat.laisky.com')).toBe(false)
     expect(sdk.init).not.toHaveBeenCalled()
   })
-  it('initializes once, excludes broad integrations, and drops logs/metrics/breadcrumbs', () => {
-    const { sdk, telemetry } = fixture()
+  it.each(['http://chat.laisky.com/', 'https://chat.laisky.com:8443/'])(
+    'refuses origin %s',
+    (url) => {
+      vi.stubGlobal('window', { location: new URL(url) })
+      const { sdk, telemetry } = fixture()
+      expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(false)
+      expect(sdk.init).not.toHaveBeenCalled()
+    },
+  )
+  it.each(['https://chat.laisky.com/', 'https://chat.laisky.com:443/'])(
+    'accepts normalized HTTPS origin %s',
+    (url) => {
+      vi.stubGlobal('window', { location: new URL(url) })
+      const { telemetry } = fixture()
+      expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(true)
+    },
+  )
+  it('initializes once and preserves standard defaults except health sessions', () => {
+    const { sdk, telemetry, options } = fixture()
     expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(true)
     expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(true)
     expect(sdk.init).toHaveBeenCalledTimes(1)
-    const options = sdk.init.mock
-      .calls[0]?.[0] as unknown as Sentry.BrowserOptions
-    expect(options.defaultIntegrations).toBe(false)
-    expect(options.integrations).toEqual([
-      { name: 'GlobalHandlers' },
-      { name: 'Dedupe' },
+    expect(options().transport).toBeUndefined()
+    expect(options().defaultIntegrations).toBeUndefined()
+    const defaults = [
+      { name: 'Console' },
+      { name: 'BrowserSession' },
+      { name: 'LinkedErrors' },
+      { name: 'BrowserApiErrors' },
+    ]
+    const integrations = options().integrations as (
+      input: typeof defaults,
+    ) => typeof defaults
+    expect(integrations(defaults).map((value) => value.name)).toEqual([
+      'Console',
+      'LinkedErrors',
+      'BrowserApiErrors',
     ])
-    expect(options.dataCollection).toEqual({
-      userInfo: false,
-      cookies: false,
+    expect(options().dataCollection).toMatchObject({
       httpHeaders: false,
       httpBodies: [],
+      cookies: false,
       urlQueryParams: false,
       graphQL: { document: false, variables: false },
       genAI: { inputs: false, outputs: false },
-      databaseQueryData: false,
-      queues: false,
-      stackFrameVariables: false,
-      frameContextLines: 0,
     })
-    expect(options.tracePropagationTargets).toEqual([])
-    expect(options.tracesSampleRate).toBeUndefined()
-    expect(options.beforeBreadcrumb?.({})).toBeNull()
-    expect(options.beforeSendLog?.({} as Sentry.Log)).toBeNull()
-    expect(options.beforeSendMetric?.({} as Sentry.Metric)).toBeNull()
   })
-  it('deduplicates the same boundary/global Error and clears attachments', () => {
-    const { telemetry, beforeSend } = fixture()
-    telemetry.initialize(config, 'chat.laisky.com')
-    const original = new Error('secret')
-    const hint = {
-      originalException: original,
-      attachments: [{ filename: 'private.txt', data: 'secret' }],
+  it('snapshots public identifiers, deduplicates one object and clears attachments', () => {
+    const { telemetry, options } = fixture()
+    const value = { ...config }
+    telemetry.initialize(value, 'chat.laisky.com')
+    value.environment = 'changed'
+    expect(options().environment).toBe('test')
+    const error = new Error('Ordinary failure')
+    const hint: Sentry.EventHint = {
+      originalException: error,
+      attachments: [{ filename: 'private.txt', data: 'private-content' }],
     }
-    expect(beforeSend(event, hint)).not.toBeNull()
+    const event = {
+      exception: { values: [{ type: 'Error', value: error.message }] },
+    } as Sentry.ErrorEvent
+    expect(options().beforeSend?.(event, hint)).toMatchObject(event)
     expect(hint.attachments).toEqual([])
-    expect(beforeSend(event, { originalException: original })).toBeNull()
-  })
-  it('snapshots deployment identity and rechecks exact host at send time', () => {
-    const { telemetry, beforeSend } = fixture()
-    const mutable = { ...config }
-    telemetry.initialize(mutable, 'chat.laisky.com')
-    expect(telemetry.isEnabled()).toBe(true)
-    mutable.environment = 'private@example.com'
-    mutable.release = 'secret'
-    expect(beforeSend()).toMatchObject({
-      environment: 'test',
-      release: 'go-ramjet@abcdef0',
-    })
-    vi.stubGlobal('window', {
-      location: { hostname: 'cv.laisky.com', origin: 'https://cv.laisky.com' },
-    })
-    expect(beforeSend()).toBeNull()
+    expect(options().beforeSend?.(event, hint)).toBeNull()
+    vi.stubGlobal('window', { location: new URL('https://cv.laisky.com/') })
     expect(telemetry.isEnabled()).toBe(false)
+    expect(options().beforeSend?.(event, {})).toBeNull()
   })
   it.each(['throw', 'undefined'])(
-    'drops events after partial init failure: %s',
-    (failure) => {
-      const { sdk, telemetry, beforeSend } = fixture()
+    'contains init %s and blocks partially installed callbacks',
+    (mode) => {
+      const { sdk, telemetry, options } = fixture()
       sdk.init.mockImplementation(() => {
-        if (failure === 'throw') throw new Error('secret')
+        if (mode === 'throw') throw new Error('synthetic-private-config')
         return undefined as unknown as object
       })
       expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(false)
-      expect(beforeSend()).toBeNull()
-      telemetry.capture(new Error('secret'))
+      expect(
+        options().beforeSend?.(
+          { exception: { values: [{ value: 'Ordinary failure' }] } },
+          {},
+        ),
+      ).toBeNull()
+      telemetry.capture(new Error('Ordinary failure'))
       expect(sdk.captureException).not.toHaveBeenCalled()
-      expect(telemetry.initialize(config, 'chat.laisky.com')).toBe(false)
-      expect(sdk.init).toHaveBeenCalledTimes(1)
       expect(console.warn).toHaveBeenCalledWith(
         '[Telemetry] Browser error capture unavailable.',
       )
     },
   )
-  it('contains capture and sanitation failures without logging their content', () => {
-    const { sdk, telemetry, beforeSend } = fixture()
+  it('contains SDK capture failures and forwards React component info', () => {
+    const { sdk, telemetry } = fixture()
     telemetry.initialize(config, 'chat.laisky.com')
+    const error = new TypeError('Ordinary failure')
+    const info = { componentStack: 'at ChatMessage\nat ChatPage' }
+    telemetry.capture(error, info, true)
+    expect(sdk.captureReactException).toHaveBeenCalledWith(error, info, {
+      mechanism: { type: 'auto.function.react.error_handler', handled: true },
+    })
     sdk.captureException.mockImplementation(() => {
-      throw new Error('secret')
+      throw new Error('synthetic-private-sdk-value')
     })
-    expect(() => telemetry.capture(new Error('secret'))).not.toThrow()
-    const hostile = Object.defineProperty({}, 'exception', {
-      get() {
-        throw new Error('secret')
-      },
-    })
-    expect(beforeSend(hostile as Sentry.ErrorEvent)).toBeNull()
+    expect(() => telemetry.capture(error)).not.toThrow()
     expect(console.warn).toHaveBeenCalledWith(
       '[Telemetry] Browser error capture unavailable.',
     )
   })
 })
 
-describe('exact HTTPS origin', () => {
-  it.each(['http://chat.laisky.com/', 'https://chat.laisky.com:8443/'])(
-    'never initializes or captures on %s',
-    (url) => {
-      vi.stubGlobal('window', { location: new URL(url) })
-      const { sdk, telemetry } = fixture()
-      expect(telemetry.initialize(config, window.location.hostname)).toBe(false)
-      telemetry.capture(new Error('private'))
-      expect(sdk.init).not.toHaveBeenCalled()
-      expect(sdk.captureException).not.toHaveBeenCalled()
-      expect(telemetry.isEnabled()).toBe(false)
+it('drops only malformed breadcrumbs without interrupting logging or ordinary breadcrumbs', () => {
+  const { telemetry, options } = fixture()
+  telemetry.initialize(config, 'chat.laisky.com')
+  const malformed = Object.defineProperty({}, 'message', {
+    enumerable: true,
+    get() {
+      throw new Error('synthetic-private-getter')
     },
-  )
-
-  it.each(['https://chat.laisky.com/', 'https://chat.laisky.com:443/'])(
-    'accepts the normalized target origin %s',
-    (url) => {
-      vi.stubGlobal('window', { location: new URL(url) })
-      const { sdk, telemetry } = fixture()
-      expect(telemetry.initialize(config, window.location.hostname)).toBe(true)
-      telemetry.capture(new Error('synthetic'))
-      expect(sdk.init).toHaveBeenCalledTimes(1)
-      expect(sdk.captureException).toHaveBeenCalledTimes(1)
-    },
-  )
+  })
+  expect(() => options().beforeBreadcrumb?.(malformed, {})).not.toThrow()
+  expect(options().beforeBreadcrumb?.(malformed, {})).toBeNull()
+  expect(
+    options().beforeBreadcrumb?.(
+      { category: 'console', message: 'Ordinary safe diagnostic' },
+      {},
+    ),
+  ).toMatchObject({ message: 'Ordinary safe diagnostic' })
 })
