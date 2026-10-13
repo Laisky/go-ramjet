@@ -23,7 +23,12 @@ function envelope(type: string, payload: unknown = event): BrowserEnvelope {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('window', { location: { hostname: 'chat.laisky.com' } })
+  vi.stubGlobal('window', {
+    location: {
+      hostname: 'chat.laisky.com',
+      origin: 'https://chat.laisky.com',
+    },
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 afterEach(() => {
@@ -93,7 +98,9 @@ it('drops malformed payloads, invalid event IDs and unready/unsupported-host sen
   await createPrivateTransport(base, config, () => false).send(
     envelope('event'),
   )
-  vi.stubGlobal('window', { location: { hostname: 'cv.laisky.com' } })
+  vi.stubGlobal('window', {
+    location: { hostname: 'cv.laisky.com', origin: 'https://cv.laisky.com' },
+  })
   await transport.send(envelope('event'))
   expect(base.send).not.toHaveBeenCalled()
 })
@@ -122,3 +129,18 @@ it('contains synchronous/asynchronous SDK transport and flush failure', async ()
     '[Telemetry] Browser error transport unavailable.',
   )
 })
+
+it.each(['http://chat.laisky.com/', 'https://chat.laisky.com:8443/'])(
+  'blocks the final transport on %s',
+  async (url) => {
+    vi.stubGlobal('window', { location: new URL(url) })
+    const base = {
+      send: vi.fn(() => Promise.resolve({})),
+      flush: vi.fn(() => Promise.resolve(true)),
+    }
+    await createPrivateTransport(base, config, () => true).send(
+      envelope('event'),
+    )
+    expect(base.send).not.toHaveBeenCalled()
+  },
+)

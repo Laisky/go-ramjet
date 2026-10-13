@@ -55,7 +55,12 @@ function fixture() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('window', { location: { hostname: 'chat.laisky.com' } })
+  vi.stubGlobal('window', {
+    location: {
+      hostname: 'chat.laisky.com',
+      origin: 'https://chat.laisky.com',
+    },
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 afterEach(() => {
@@ -266,7 +271,9 @@ describe('fail-closed bootstrap and capture', () => {
       environment: 'test',
       release: 'go-ramjet@abcdef0',
     })
-    vi.stubGlobal('window', { location: { hostname: 'cv.laisky.com' } })
+    vi.stubGlobal('window', {
+      location: { hostname: 'cv.laisky.com', origin: 'https://cv.laisky.com' },
+    })
     expect(beforeSend()).toBeNull()
     expect(telemetry.isEnabled()).toBe(false)
   })
@@ -306,4 +313,31 @@ describe('fail-closed bootstrap and capture', () => {
       '[Telemetry] Browser error capture unavailable.',
     )
   })
+})
+
+describe('exact HTTPS origin', () => {
+  it.each(['http://chat.laisky.com/', 'https://chat.laisky.com:8443/'])(
+    'never initializes or captures on %s',
+    (url) => {
+      vi.stubGlobal('window', { location: new URL(url) })
+      const { sdk, telemetry } = fixture()
+      expect(telemetry.initialize(config, window.location.hostname)).toBe(false)
+      telemetry.capture(new Error('private'))
+      expect(sdk.init).not.toHaveBeenCalled()
+      expect(sdk.captureException).not.toHaveBeenCalled()
+      expect(telemetry.isEnabled()).toBe(false)
+    },
+  )
+
+  it.each(['https://chat.laisky.com/', 'https://chat.laisky.com:443/'])(
+    'accepts the normalized target origin %s',
+    (url) => {
+      vi.stubGlobal('window', { location: new URL(url) })
+      const { sdk, telemetry } = fixture()
+      expect(telemetry.initialize(config, window.location.hostname)).toBe(true)
+      telemetry.capture(new Error('synthetic'))
+      expect(sdk.init).toHaveBeenCalledTimes(1)
+      expect(sdk.captureException).toHaveBeenCalledTimes(1)
+    },
+  )
 })

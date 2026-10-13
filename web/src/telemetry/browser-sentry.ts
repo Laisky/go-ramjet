@@ -19,6 +19,12 @@ export type BrowserTransport = ReturnType<typeof makeFetchTransport>
 export type BrowserEnvelope = Parameters<BrowserTransport['send']>[0]
 
 const HOST = 'chat.laisky.com'
+const ORIGIN = 'https://chat.laisky.com'
+
+/** isTargetOrigin permits only HTTPS on the exact target host and normalized default port. */
+function isTargetOrigin(): boolean {
+  return typeof window !== 'undefined' && window.location.origin === ORIGIN
+}
 const TYPES = new Set([
   'Error',
   'TypeError',
@@ -178,12 +184,7 @@ export function createPrivateTransport(
     /** send forwards only a reconstructed error item and safe event identifier. */
     send(envelope) {
       try {
-        if (
-          !isReady() ||
-          typeof window === 'undefined' ||
-          window.location.hostname !== HOST
-        )
-          return Promise.resolve({})
+        if (!isReady() || !isTargetOrigin()) return Promise.resolve({})
         const item = envelope[1]?.[0]
         if (
           item?.[0]?.type !== 'event' ||
@@ -239,7 +240,7 @@ export function createBrowserTelemetry(
     /** initialize enables capture once, only for a valid deployment on the exact target host. */
     initialize(config: BrowserTelemetryConfig, hostname: string): boolean {
       if (attempted) return enabled
-      if (!validConfig(config, hostname)) return false
+      if (!isTargetOrigin() || !validConfig(config, hostname)) return false
       attempted = true
       const deployment = Object.freeze({ ...config })
       try {
@@ -290,12 +291,7 @@ export function createBrowserTelemetry(
           beforeSend(event, hint) {
             try {
               hint.attachments = []
-              if (
-                !enabled ||
-                typeof window === 'undefined' ||
-                window.location.hostname !== HOST
-              )
-                return null
+              if (!enabled || !isTargetOrigin()) return null
               const original = hint.originalException
               if (
                 (typeof original === 'object' && original !== null) ||
@@ -321,15 +317,11 @@ export function createBrowserTelemetry(
     },
     /** isEnabled reports whether initialized capture is active on the exact target host. */
     isEnabled(): boolean {
-      return (
-        enabled &&
-        typeof window !== 'undefined' &&
-        window.location.hostname === HOST
-      )
+      return enabled && isTargetOrigin()
     },
     /** capture reports boundary or React root errors while preserving UI behavior on SDK failure. */
     capture(error: unknown): void {
-      if (!enabled) return
+      if (!enabled || !isTargetOrigin()) return
       try {
         sdk.captureException(error)
       } catch {
