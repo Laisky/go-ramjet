@@ -1,6 +1,21 @@
-import * as Sentry from '@sentry/react'
+import {
+  init,
+  captureException,
+  globalHandlersIntegration,
+  dedupeIntegration,
+  makeFetchTransport,
+} from '@sentry/react'
+import type * as Sentry from '@sentry/react'
 
-export type BrowserTransport = ReturnType<typeof Sentry.makeFetchTransport>
+const DEFAULT_SDK = {
+  init,
+  captureException,
+  globalHandlersIntegration,
+  dedupeIntegration,
+  makeFetchTransport,
+}
+
+export type BrowserTransport = ReturnType<typeof makeFetchTransport>
 export type BrowserEnvelope = Parameters<BrowserTransport['send']>[0]
 
 const HOST = 'chat.laisky.com'
@@ -215,7 +230,7 @@ export function createBrowserTelemetry(
     | 'globalHandlersIntegration'
     | 'dedupeIntegration'
     | 'makeFetchTransport'
-  > = Sentry,
+  > = DEFAULT_SDK,
 ) {
   let attempted = false
   let enabled = false
