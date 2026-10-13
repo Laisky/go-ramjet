@@ -170,6 +170,7 @@ func serveLOGINFixture(listener net.Listener, certificate tls.Certificate, accep
 		return
 	}
 	tlsReady := false
+	authenticated := false
 	dataReady := false
 	for {
 		line, err := reader.ReadString('\n')
@@ -231,6 +232,7 @@ func serveLOGINFixture(listener net.Listener, certificate tls.Certificate, accep
 				result <- "rejected"
 				return
 			}
+			authenticated = true
 			response = "235 authenticated\r\n"
 		case strings.HasPrefix(command, "AUTH "):
 			if err := write("504 unsupported mechanism\r\n"); err != nil {
@@ -240,6 +242,14 @@ func serveLOGINFixture(listener net.Listener, certificate tls.Certificate, accep
 			result <- "unsupported auth"
 			return
 		case command == "DATA":
+			if !tlsReady || !authenticated {
+				if err := write("530 authentication required\r\n"); err != nil {
+					result <- err.Error()
+					return
+				}
+				result <- "unauthenticated data"
+				return
+			}
 			if err := write("354 enter data\r\n"); err != nil {
 				result <- err.Error()
 				return

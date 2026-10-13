@@ -28,6 +28,7 @@ func (c *contractCaller) CallTool(_ context.Context, name string, args any, out 
 	if err != nil {
 		return errors.Wrap(err, "encode fixture arguments")
 	}
+	c.args = map[string]any{}
 	if err := json.Unmarshal(data, &c.args); err != nil {
 		return errors.Wrap(err, "decode fixture arguments")
 	}
@@ -86,11 +87,17 @@ func TestMemoryStorageFileContract(t *testing.T) {
 	require.Equal(t, "file_write", caller.name)
 	require.Equal(t, "APPEND", caller.args["mode"])
 	require.Equal(t, "utf-8", caller.args["content_encoding"])
+	require.Equal(t, map[string]any{"project": "gptchat", "path": "/memory/session/a.txt", "content": "fact", "content_encoding": "utf-8", "mode": "APPEND", "offset": float64(0)}, caller.args)
 	content, err := engine.Read(ctx, "gptchat", "/memory/session/a.txt", 3, 7)
 	require.NoError(t, err)
 	require.Empty(t, content)
 	require.Equal(t, float64(3), caller.args["offset"])
 	require.Equal(t, float64(7), caller.args["length"])
+	require.Equal(t, map[string]any{"project": "gptchat", "path": "/memory/session/a.txt", "offset": float64(3), "length": float64(7)}, caller.args)
+	caller.response = `{"content":"populated synthetic content"}`
+	content, err = engine.Read(ctx, "gptchat", "/memory/session/a.txt", 3, 7)
+	require.NoError(t, err)
+	require.Equal(t, "populated synthetic content", content)
 	caller.response = `{"exists":false}`
 	info, err := engine.Stat(ctx, "gptchat", "/memory/session/missing.txt")
 	require.NoError(t, err)
