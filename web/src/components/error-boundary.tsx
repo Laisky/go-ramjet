@@ -1,4 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { browserTelemetry } from '@/telemetry/browser-sentry'
+import { Component, type ReactNode } from 'react'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -27,8 +28,9 @@ export class ErrorBoundary extends Component<
     return { hasError: true, error }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[ErrorBoundary] Uncaught error:', error, info.componentStack)
+  componentDidCatch(error: Error) {
+    browserTelemetry.capture(error)
+    console.error('[ErrorBoundary] Uncaught render error.')
   }
 
   render() {
