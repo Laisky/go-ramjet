@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/textproto"
@@ -17,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	emailSDK "github.com/Laisky/go-utils/v6/email"
 	"github.com/stretchr/testify/require"
@@ -172,7 +174,11 @@ func serveLOGINFixture(listener net.Listener, certificate tls.Certificate, accep
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			result <- err.Error()
+			if dataReady && errors.Is(err, io.EOF) {
+				result <- "delivered"
+			} else {
+				result <- err.Error()
+			}
 			return
 		}
 		command := strings.TrimSpace(line)
