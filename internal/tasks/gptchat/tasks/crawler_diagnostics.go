@@ -14,6 +14,7 @@ import (
 type crawlerTaskError struct {
 	code, stage string
 	cause       error
+	signal      crawlerChallengeSignal
 }
 
 // Error retains meaningful sanitized cause text while excluding credentials and raw payloads.
@@ -78,12 +79,15 @@ func crawlerDiagnostic(err error) (string, string) {
 }
 
 type crawlerFailureKey struct{}
-type crawlerFailureMetadata struct{ Stage, Category string }
+type crawlerFailureMetadata struct {
+	Stage, Category string
+	Signal          crawlerChallengeSignal
+}
 
-// withCrawlerFailure carries only the reviewed pair to the terminal publication encoder.
+// withCrawlerFailure carries only the reviewed pair and optional finite signal to the terminal publication encoder.
 func withCrawlerFailure(ctx context.Context, err error) context.Context {
 	category, stage := crawlerDiagnostic(err)
-	return context.WithValue(ctx, crawlerFailureKey{}, crawlerFailureMetadata{Stage: stage, Category: category})
+	return context.WithValue(ctx, crawlerFailureKey{}, crawlerFailureMetadata{Stage: stage, Category: category, Signal: crawlerDiagnosticSignal(err)})
 }
 
 // encodeHTMLCrawlerTaskResult extends the pinned DTO with optional reviewed failure metadata only.
@@ -98,6 +102,7 @@ func encodeHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTas
 	}
 	delete(fields, "failure_stage")
 	delete(fields, "failure_category")
+	delete(fields, "failure_signal")
 	metadata, ok := ctx.Value(crawlerFailureKey{}).(crawlerFailureMetadata)
 	if task.Status == rlibs.TaskStatusFailed && ok && log.CrawlerFailurePair(metadata.Stage, metadata.Category) {
 		stage, err := json.Marshal(metadata.Stage)
@@ -109,6 +114,13 @@ func encodeHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTas
 			return "", errors.Wrap(err, "encode crawler category")
 		}
 		fields["failure_stage"], fields["failure_category"] = stage, category
+		if approvedCrawlerChallengeSignal(metadata.Stage, metadata.Category, metadata.Signal) {
+			signal, err := json.Marshal(metadata.Signal)
+			if err != nil {
+				return "", errors.Wrap(err, "encode crawler signal")
+			}
+			fields["failure_signal"] = signal
+		}
 	}
 	encoded, err := json.Marshal(fields)
 	if err != nil {

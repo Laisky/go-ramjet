@@ -95,8 +95,8 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	if err := crawleregress.VerifyReceipt(ctx, task.TaskID, task.Url, policy, receipt); err != nil {
 		return nil, "", nil, crawlerFailure("evidence_rejected", "verification", err)
 	}
-	if isCloudflareChallenge(htmlContent) {
-		return nil, "", nil, crawlerFailure("challenge", "render", nil)
+	if signal := cloudflareChallengeSignal(htmlContent); signal != "" {
+		return nil, "", nil, crawlerChallengeFailure(signal)
 	}
 	if strings.TrimSpace(htmlContent) == "" {
 		return nil, "", nil, crawlerFailure("empty_body", "render", nil)
@@ -190,6 +190,9 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		reason := code
 		task.Status, task.FailedReason = rlibs.TaskStatusFailed, &reason
 		fields := log.CrawlerFailureFields(task.TaskID, stage, code, time.Since(startedAt))
+		if signal := crawlerDiagnosticSignal(fetchErr); signal != "" {
+			fields = append(fields, zap.String("challenge_signal", string(signal)))
+		}
 		fields = append(fields, zap.Error(fetchErr))
 		logger.Error("verified crawler task failed", fields...)
 		ctx = withCrawlerFailure(ctx, fetchErr)

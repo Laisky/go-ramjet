@@ -16,18 +16,35 @@ func isCloudflareChallenge(content string) bool {
 	return hasCloudflareChallenge(document)
 }
 
-// hasCloudflareChallenge inspects DOM attributes and executable resources without matching quoted documentation.
+// cloudflareChallengeSignal returns the first finite signal using the retained detector traversal.
+func cloudflareChallengeSignal(content string) crawlerChallengeSignal {
+	document, err := html.Parse(strings.NewReader(content))
+	if err != nil {
+		return ""
+	}
+	return findCloudflareChallengeSignal(document)
+}
+
+// hasCloudflareChallenge preserves the boolean DOM detector contract.
 func hasCloudflareChallenge(node *html.Node) bool {
+	return findCloudflareChallengeSignal(node) != ""
+}
+
+// findCloudflareChallengeSignal follows the retained DOM/attribute order and returns only a finite matched signal.
+func findCloudflareChallengeSignal(node *html.Node) crawlerChallengeSignal {
 	if node.Type == html.ElementNode {
 		switch node.Data {
 		case "pre", "code", "textarea":
-			return false
+			return ""
 		}
 		for _, attribute := range node.Attr {
 			if attribute.Key == "id" || attribute.Key == "class" {
 				for _, value := range strings.Fields(attribute.Val) {
-					if value == "cf-chl-widget" || value == "challenge-error-text" {
-						return true
+					switch value {
+					case "cf-chl-widget":
+						return crawlerChallengeWidgetElement
+					case "challenge-error-text":
+						return crawlerChallengeErrorElement
 					}
 				}
 			}
@@ -37,24 +54,24 @@ func hasCloudflareChallenge(node *html.Node) bool {
 					continue
 				}
 				if strings.HasPrefix(source.Path, "/cdn-cgi/challenge-platform/") {
-					return true
+					return crawlerChallengePlatformScript
 				}
 			}
 		}
 		if node.Data == "script" {
 			for child := node.FirstChild; child != nil; child = child.NextSibling {
 				if child.Type == html.TextNode && hasCloudflareAssignment(child.Data) {
-					return true
+					return crawlerChallengeOptionsAssignment
 				}
 			}
 		}
 	}
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
-		if hasCloudflareChallenge(child) {
-			return true
+		if signal := findCloudflareChallengeSignal(child); signal != "" {
+			return signal
 		}
 	}
-	return false
+	return ""
 }
 
 // hasCloudflareAssignment scans assignment tokens while excluding quoted strings and comments.
