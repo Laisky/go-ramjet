@@ -297,7 +297,7 @@ func setHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 		return errors.New("task is nil")
 	}
 
-	payload, err := task.ToString()
+	payload, err := encodeHTMLCrawlerTaskResult(ctx, task)
 	if err != nil {
 		return errors.Wrap(err, "serialize task")
 	}
@@ -615,26 +615,6 @@ func ExtractHTMLBody(ctx context.Context, targetURL string, content []byte, apiK
 	}
 
 	return bodyContent, llmMarkdown, nil
-}
-
-// isCloudflareChallenge checks if the content is a Cloudflare challenge page
-func isCloudflareChallenge(htmlContent string) bool {
-	// Check for Cloudflare Turnstile/Challenge indicators
-	indicators := []string{
-		"cf-turnstile-response",
-		"cf-chl-widget",
-		"_cf_chl_opt",
-		"challenge-platform",
-		"challenge-error-text",
-		"Just a moment...",
-		"Verification is taking longer than expected",
-	}
-	for _, indicator := range indicators {
-		if strings.Contains(htmlContent, indicator) {
-			return true
-		}
-	}
-	return false
 }
 
 // FetchDynamicURLContent is a wrapper for submit & fetch dynamic url content

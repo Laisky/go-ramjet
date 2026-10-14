@@ -107,7 +107,7 @@ func TestVerifiedTaskNoExternalFallbacks(t *testing.T) {
 		conversionErr    bool
 	}{
 		{name: "direct_error", code: "render_failed", renderErr: errors.New("private-upstream token-canary https://example.com/?secret=yes")},
-		{name: "challenge", html: "<body>cf-chl-widget</body>", code: "challenge"},
+		{name: "challenge", html: "<body><div id=\"cf-chl-widget\"></div></body>", code: "challenge"},
 		{name: "empty_body", html: " \n ", code: "empty_body"},
 		{name: "empty_markdown", html: "<html><body></body></html>", code: "empty_markdown"},
 		{name: "conversion_error", html: "<body>local-text</body>", code: "conversion_failed", conversionErr: true},

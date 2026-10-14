@@ -6,7 +6,7 @@ The candidate consumes the versioned GraphQL crawler contract through the immuta
 
 The running worker was built from `bb26ec77f68fe5a28535f6def19635dc6014b8bb` and used a May 2026 GraphQL task model without Egress or RequestChain. Its JSON round-trip loses the newer policy and evidence fields. Synthetic tests reproduce secure-server rejection of this old-model result. The nearby worker task was saved successfully 443 ms before the reported GraphQL alert. GraphQL logs retained only data beginning 19.5 hours after the alert, so the exact request-level cause cannot be established. There was no observed DNS, timeout, or upstream worker error in the retained incident window.
 
-The empty alert object is a separate confirmed logging-policy issue: the deployed alert SDK forwards no fields without an explicit allowlist and always excludes raw errors. The GraphQL companion adds reviewed scalar diagnostics while keeping secrets, targets, and user content out of alerts.
+The empty alert object was separately reproduced with the deployed SDK revision: its default empty field filter exported no structured fields, and its alert hook excluded errors. The diagnostic repair uses the shared SDK default that forwards ordinary primitive fields and meaningful sanitized error text, with targeted credential, sensitive URL, and payload redaction. An explicit field filter remains optional; the crawler does not require a field-name allowlist. The worker uses a curated logger and bounded stage/category, duration, and canonical task ID fields, while the GraphQL companion retains safe failure metadata. Neither path logs targets, credentials, raw bodies, or user content.
 
 ## Enforced transport
 
