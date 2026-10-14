@@ -6,7 +6,7 @@ The candidate consumes the versioned GraphQL crawler contract through the immuta
 
 The running worker was built from `bb26ec77f68fe5a28535f6def19635dc6014b8bb` and used a May 2026 GraphQL task model without Egress or RequestChain. Its JSON round-trip loses the newer policy and evidence fields. Synthetic tests reproduce secure-server rejection of this old-model result. The nearby worker task was saved successfully 443 ms before the reported GraphQL alert. GraphQL logs retained only data beginning 19.5 hours after the alert, so the exact request-level cause cannot be established. There was no observed DNS, timeout, or upstream worker error in the retained incident window.
 
-The empty alert object is a separate confirmed logging-policy issue: the deployed alert SDK forwards no fields without an explicit allowlist and always excludes raw errors. The GraphQL companion adds reviewed scalar diagnostics while keeping secrets, targets, and user content out of alerts.
+The empty alert object was separately reproduced with the deployed SDK revision: its default empty field filter exported no structured fields, and its alert hook excluded errors. The diagnostic repair uses the shared SDK default that forwards ordinary primitive fields and meaningful sanitized error text, with targeted credential, sensitive URL, and payload redaction. An explicit field filter remains optional; the crawler does not require a field-name allowlist. The worker uses a curated logger and bounded stage/category, duration, and canonical task ID fields, while the GraphQL companion retains safe failure metadata. Neither path logs targets, credentials, raw bodies, or user content.
 
 ## Enforced transport
 
@@ -29,3 +29,11 @@ The exact-file authorization is now confirmed and the guarded hardening is appli
 A caller cancellation does not immediately cancel an already dequeued task in another process: there is no distributed cancellation/deadline field in the current task contract. Worker and browser local timeouts bound work, and accepted canceled work publishes a bounded terminal failure. Immediate cross-process cancellation requires a separate contract change and acceptance test.
 
 Before release, run the full checks, build and attest the paired runtime images (including the helper), and qualify the actual published digests with synthetic unauthenticated fixtures. Keep RequireVerified enabled. Use `[publish only]` in the actual merge/squash commit message: existing CI publishes but skips automatic deployment. After qualification, deploy the backward-compatible worker before the new producer. Preserve pending tasks, the dirty base Compose file, configuration mounts and prior immutable image digests. Restore the producer first, then the worker, if paired rollback is necessary. Observe worker idleness and terminal completion before recreation; zero pending alone is insufficient. No host security/network change or authenticated user-request replay is required.
+
+Startup alert scope: only the static reviewed
+`go-ramjet.run_dynamic_web_crawler.verified_crawler_task` logger exports SDK default
+fields. Legacy crawler and unrelated services retain metadata-only fields because
+their errors may contain raw provider or user content. The existing Alert instance
+and rate limiter remain shared, with one hook call per entry and no field-name
+allowlist. Actual startup/HTTP receiver controls cover useful future fields,
+sanitized causes, private user/payload values and logger-name lookalikes.

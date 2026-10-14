@@ -295,7 +295,7 @@ func renderVerifiedHTMLWithDependencies(ctx context.Context, task *rlibs.HTMLCra
 	failureMu.Lock()
 	observedFailure := failure
 	failureMu.Unlock()
-	if err := errors.Join(observedFailure, captureErr); err != nil {
+	if err := combineRendererFailure(ctx, observedFailure, captureErr); err != nil {
 		return "", nil, errors.Wrap(err, "verified renderer failed")
 	}
 	if len(html) > crawleregress.MaxResponseBytes {

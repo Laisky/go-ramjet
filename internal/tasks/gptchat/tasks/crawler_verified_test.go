@@ -106,8 +106,8 @@ func TestVerifiedTaskNoExternalFallbacks(t *testing.T) {
 		renderErr        error
 		conversionErr    bool
 	}{
-		{name: "direct_error", code: "render_failed", renderErr: errors.New("private-upstream token-canary https://example.com/?secret=yes")},
-		{name: "challenge", html: "<body>cf-chl-widget</body>", code: "challenge"},
+		{name: "direct_error", code: "render_failed", renderErr: errors.New("navigation failed: token=token-canary request https://example.com/?secret=yes")},
+		{name: "challenge", html: "<body><div id=\"cf-chl-widget\"></div></body>", code: "challenge"},
 		{name: "empty_body", html: " \n ", code: "empty_body"},
 		{name: "empty_markdown", html: "<html><body></body></html>", code: "empty_markdown"},
 		{name: "conversion_error", html: "<body>local-text</body>", code: "conversion_failed", conversionErr: true},
@@ -120,8 +120,9 @@ func TestVerifiedTaskNoExternalFallbacks(t *testing.T) {
 				require.Empty(t, task.APIKey)
 				return tc.html, verifiedTestReceipt(task), tc.renderErr
 			}
+			conversionCause := errors.New("conversion failed: response body:token-canary")
 			if tc.conversionErr {
-				convertVerifiedMarkdown = func(string) (string, error) { return "", errors.New("private-conversion token-canary") }
+				convertVerifiedMarkdown = func(string) (string, error) { return "", conversionCause }
 			}
 			body, markdown, receipt, err := fetchVerifiedCrawlerTask(context.Background(), verifiedTestTask())
 			require.Error(t, err)
@@ -134,6 +135,12 @@ func TestVerifiedTaskNoExternalFallbacks(t *testing.T) {
 			require.NotContains(t, err.Error(), "token-canary")
 			require.NotContains(t, err.Error(), "https://")
 			require.NotContains(t, err.Error(), "private-upstream")
+			if tc.renderErr != nil {
+				require.ErrorIs(t, err, tc.renderErr)
+			}
+			if tc.conversionErr {
+				require.ErrorIs(t, err, conversionCause)
+			}
 		})
 	}
 }
@@ -273,7 +280,7 @@ func TestVerifiedWorkerPublishesSanitizedResults(t *testing.T) {
 			withInjectedPop(t, func(context.Context) (*rlibs.HTMLCrawlerTask, error) { return task, nil })
 			fetchVerifiedHTMLContent = func(_ context.Context, renderTask *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
 				if fail {
-					return "", nil, errors.New("token-canary https://example.com/private?canary=query")
+					return "", nil, errors.New("navigation failed: token=token-canary request https://example.com/private?canary=query")
 				}
 				return "<body>safe-result</body>", verifiedTestReceipt(renderTask), nil
 			}

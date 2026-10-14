@@ -117,7 +117,7 @@ func setupLogger(ctx context.Context) {
 			log.Logger.Panic("create AlertPusher", zap.Error(err))
 		}
 
-		opts = append(opts, zap.HooksWithFields(alertPusher.GetZapHook()))
+		opts = append(opts, zap.HooksWithFields(log.CrawlerDiagnosticAlertHook(alertPusher.GetZapHook())))
 		log.Logger.Info("set alert",
 			zap.String("alert_api", gconfig.Shared.GetString("logger.push_api")),
 			zap.String("alert_type", gconfig.Shared.GetString("logger.alert_type")),

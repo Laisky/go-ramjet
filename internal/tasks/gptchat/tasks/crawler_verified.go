@@ -10,10 +10,13 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 	"golang.org/x/net/html"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
@@ -27,39 +30,6 @@ var (
 // returns Markdown or the converter error, without any remote fetch or token.
 func convertVerifiedHTMLToMarkdown(content string) (string, error) {
 	return md.ConvertString(content)
-}
-
-// crawlerTaskError carries only reviewed scalar diagnostics for task failures.
-type crawlerTaskError struct {
-	code  string
-	stage string
-	cause error
-}
-
-// Error returns the scalar code and stage without the upstream error or target.
-func (e *crawlerTaskError) Error() string { return "crawler " + e.stage + ": " + e.code }
-
-// Unwrap returns a context lifecycle error, when present, for cancellation checks.
-func (e *crawlerTaskError) Unwrap() error { return e.cause }
-
-// crawlerFailure classifies err into a safe scalar failure for the supplied stage.
-func crawlerFailure(code, stage string, err error) error {
-	var cause error
-	if errors.Is(err, context.Canceled) {
-		code, cause = "canceled", context.Canceled
-	} else if errors.Is(err, context.DeadlineExceeded) {
-		code, cause = "timeout", context.DeadlineExceeded
-	}
-	return errors.WithStack(&crawlerTaskError{code: code, stage: stage, cause: cause})
-}
-
-// crawlerDiagnostic returns reviewed code and stage for err without its text.
-func crawlerDiagnostic(err error) (string, string) {
-	var failure *crawlerTaskError
-	if errors.As(err, &failure) {
-		return failure.code, failure.stage
-	}
-	return "worker_failed", "worker"
 }
 
 // crawlerLogTaskID returns a UUID-shaped task identifier or a redacted marker.
@@ -182,7 +152,9 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 	if task == nil {
 		return crawlerFailure("task_missing", "admission", nil)
 	}
-	logger := gmw.GetLogger(ctx).Named("verified_crawler_task")
+	logger := log.Logger.Named("run_dynamic_web_crawler.verified_crawler_task")
+	ctx = gmw.SetLogger(ctx, logger)
+	startedAt := time.Now()
 	// Secure rendering and local conversion have no use for a provider token.
 	task.APIKey = ""
 	task.ResultHTML, task.ResultMarkdown, task.RequestChain = nil, nil, nil
@@ -198,13 +170,18 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelCleanup()
 		now := time.Now().UTC()
-		code, _ := crawlerDiagnostic(crawlerFailure("worker_failed", "render", err))
+		failure := crawlerFailure("worker_failed", "render", err)
+		if fetchErr != nil {
+			// A concrete failure precedes caller cleanup; do not overwrite its diagnostics.
+			failure = fetchErr
+		}
+		code, _ := crawlerDiagnostic(failure)
 		task.Status, task.FailedReason, task.FinishedAt = rlibs.TaskStatusFailed, &code, &now
-		if cleanupErr := publishHTMLCrawlerTask(cleanupCtx, task); cleanupErr != nil {
+		if cleanupErr := publishHTMLCrawlerTask(withCrawlerFailure(cleanupCtx, failure), task); cleanupErr != nil {
 			logger.Warn("crawler terminal cleanup failed", zap.String("error_code", "cleanup_store_failed"),
 				zap.String("stage", "persistence"))
 		}
-		return crawlerFailure("worker_failed", "render", err)
+		return errors.WithStack(errors.Join(failure, crawlerFailure("worker_failed", "render", err)))
 	}
 	now := time.Now().UTC()
 	task.FinishedAt = &now
@@ -212,8 +189,10 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		code, stage := crawlerDiagnostic(fetchErr)
 		reason := code
 		task.Status, task.FailedReason = rlibs.TaskStatusFailed, &reason
-		logger.Error("verified crawler task failed", zap.Error(fetchErr),
-			zap.String("error_code", code), zap.String("stage", stage))
+		fields := log.CrawlerFailureFields(task.TaskID, stage, code, time.Since(startedAt))
+		fields = append(fields, zap.Error(fetchErr))
+		logger.Error("verified crawler task failed", fields...)
+		ctx = withCrawlerFailure(ctx, fetchErr)
 	} else {
 		task.Status, task.ResultHTML = rlibs.TaskStatusSuccess, body
 		task.ResultMarkdown, task.EgressReceipt = []byte(markdown), receipt
