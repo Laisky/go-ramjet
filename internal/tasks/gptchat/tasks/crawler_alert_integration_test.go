@@ -60,7 +60,7 @@ func TestVerifiedWorkerActualAlertAndCuratedJSON(t *testing.T) {
 		zapcore.AddSync(&encoded), zap.DebugLevel)
 	base, err := glog.NewWithName("go-ramjet", glog.LevelDebug,
 		zap.WrapCore(func(zapcore.Core) zapcore.Core { return core }),
-		zap.HooksWithFields(alert.GetZapHook()))
+		zap.HooksWithFields(appLog.CrawlerDiagnosticAlertHook(alert.GetZapHook())))
 	require.NoError(t, err)
 	originalLogger := appLog.Logger
 	appLog.Logger = base

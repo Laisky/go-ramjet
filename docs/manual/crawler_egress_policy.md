@@ -29,3 +29,11 @@ The exact-file authorization is now confirmed and the guarded hardening is appli
 A caller cancellation does not immediately cancel an already dequeued task in another process: there is no distributed cancellation/deadline field in the current task contract. Worker and browser local timeouts bound work, and accepted canceled work publishes a bounded terminal failure. Immediate cross-process cancellation requires a separate contract change and acceptance test.
 
 Before release, run the full checks, build and attest the paired runtime images (including the helper), and qualify the actual published digests with synthetic unauthenticated fixtures. Keep RequireVerified enabled. Use `[publish only]` in the actual merge/squash commit message: existing CI publishes but skips automatic deployment. After qualification, deploy the backward-compatible worker before the new producer. Preserve pending tasks, the dirty base Compose file, configuration mounts and prior immutable image digests. Restore the producer first, then the worker, if paired rollback is necessary. Observe worker idleness and terminal completion before recreation; zero pending alone is insufficient. No host security/network change or authenticated user-request replay is required.
+
+Startup alert scope: only the static reviewed
+`go-ramjet.run_dynamic_web_crawler.verified_crawler_task` logger exports SDK default
+fields. Legacy crawler and unrelated services retain metadata-only fields because
+their errors may contain raw provider or user content. The existing Alert instance
+and rate limiter remain shared, with one hook call per entry and no field-name
+allowlist. Actual startup/HTTP receiver controls cover useful future fields,
+sanitized causes, private user/payload values and logger-name lookalikes.
