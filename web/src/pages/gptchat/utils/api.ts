@@ -1,3 +1,4 @@
+import { markPrivateError, privateResponseError } from '@/telemetry/privacy'
 import { getApiBase, getSHA1 } from '@/utils/api'
 import type { UserConfig } from '../types'
 import { ownershipSessionHeader } from './ownership-session'
@@ -32,7 +33,11 @@ async function request<T>(
   const response = await fetch(`${resolveApiBase()}${endpoint}`, options)
 
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text())
+    throw markPrivateError(
+      new ApiError(response.status, await response.text()),
+      'Chat account request failed (HTTP ' + response.status + ')',
+      true,
+    )
   }
 
   // Handle empty responses
@@ -166,7 +171,10 @@ export const api = {
     })
 
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 
@@ -193,7 +201,10 @@ export const api = {
       cache: 'no-cache',
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
     return resp.json()
   },
@@ -223,7 +234,10 @@ export const api = {
       body: JSON.stringify({ datasets: [datasetName] }),
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 
@@ -250,7 +264,10 @@ export const api = {
       cache: 'no-cache',
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
     return resp.json()
   },
@@ -278,7 +295,10 @@ export const api = {
       body: JSON.stringify({ data_key: dataKey, chatbot_name: chatbotName }),
     })
     if (!resp.ok) {
-      throw new Error(`[${resp.status}]: ${await resp.text()}`)
+      throw privateResponseError(
+        `[${resp.status}]: ${await resp.text()}`,
+        'Ramjet request failed (HTTP ' + resp.status + ')',
+      )
     }
   },
 }
