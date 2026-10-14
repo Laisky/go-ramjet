@@ -126,8 +126,8 @@ func TestCrawlerDiagnosticPanickingCauseNeverLeaks(t *testing.T) {
 
 // TestCrawlerDiagnosticBrowserPayloadOmitted recognizes typed page exceptions without parsing their user text.
 func TestCrawlerDiagnosticBrowserPayloadOmitted(t *testing.T) {
-	cause := &chromedp.ExceptionError{ExceptionDetails: &cdpruntime.ExceptionDetails{Text: "unlabeled-private-page-text",
-		Exception: &cdpruntime.RemoteObject{Description: "<article>unlabeled-private-html-content</article>"}}}
+	cause := &chromedp.ExceptionError{ExceptionDetails: &cdpruntime.ExceptionDetails{Text: "unlabeled-private-page-text", LineNumber: 7, ColumnNumber: 12,
+		Exception: &cdpruntime.RemoteObject{ClassName: "TypeError", Description: "<article>unlabeled-private-html-content</article>"}}}
 	failure := crawlerFailure("render_failed", "render", errors.WithStack(cause))
 	var typed *chromedp.ExceptionError
 	require.ErrorAs(t, failure, &typed)
@@ -137,30 +137,38 @@ func TestCrawlerDiagnosticBrowserPayloadOmitted(t *testing.T) {
 		require.Contains(t, output, "render_failed")
 		require.NotContains(t, output, "unlabeled-private")
 		require.NotContains(t, output, "<article>")
+		require.Contains(t, output, "TypeError")
+		require.Contains(t, output, "7:12")
 	}
 }
 
-// TestCrawlerDiagnosticTypedTransportPrivacy preserves safe type context without target addresses or names.
+// TestCrawlerDiagnosticTypedTransportPrivacy retains routine operational context while excluding URLs, credentials and certificate payloads.
 func TestCrawlerDiagnosticTypedTransportPrivacy(t *testing.T) {
 	certificate := &x509.Certificate{DNSNames: []string{"private-certificate-name.invalid"}}
-	hostname := x509.HostnameError{Certificate: certificate, Host: "private-tls-host.invalid"}
+	hostname := x509.HostnameError{Certificate: certificate, Host: "tls.example.test"}
 	for _, tc := range []struct {
 		name    string
 		cause   error
-		useful  string
+		useful  []string
 		private []string
 	}{
-		{name: "dns", cause: &net.DNSError{Err: "no such host", Name: "private-dns-host.invalid", Server: "192.0.2.73:53"},
-			useful: "DNS lookup failed", private: []string{"private-dns-host", "192.0.2.73"}},
-		{name: "tls_hostname", cause: hostname, useful: "TLS certificate verification failed",
-			private: []string{"private-tls-host", "private-certificate-name"}},
+		{name: "dns", cause: &net.DNSError{Err: "no such host", Name: "resolver.example.test", Server: "192.0.2.73:53"},
+			useful: []string{"DNS lookup failed", "resolver.example.test", "no such host"}},
+		{name: "dns_credential", cause: &net.DNSError{Err: "no such host", Name: "https://synthetic-user:synthetic-password@resolver.example.test/path?api_key=dns-private-key", Server: "192.0.2.73:53"},
+			useful: []string{"DNS lookup failed"}, private: []string{"https://", "synthetic-user", "synthetic-password", "dns-private-key", "/path"}},
+		{name: "tls_hostname", cause: hostname, useful: []string{"TLS certificate verification failed", "tls.example.test"},
+			private: []string{"private-certificate-name"}},
 		{name: "tls_verification", cause: &tls.CertificateVerificationError{UnverifiedCertificates: []*x509.Certificate{certificate}, Err: hostname},
-			useful: "TLS certificate verification failed", private: []string{"private-tls-host", "private-certificate-name"}},
+			useful: []string{"TLS certificate verification failed", "tls.example.test"}, private: []string{"private-certificate-name"}},
+		{name: "tls_credential", cause: x509.HostnameError{Certificate: certificate, Host: "api_key=tls-private-key"},
+			useful: []string{"TLS certificate verification failed"}, private: []string{"tls-private-key", "private-certificate-name"}},
 		{name: "connection", cause: &net.OpError{Op: "dial", Net: "tcp", Source: &net.TCPAddr{IP: net.ParseIP("192.0.2.61"), Port: 4321},
 			Addr: &net.TCPAddr{IP: net.ParseIP("192.0.2.62"), Port: 443}, Err: syscall.ECONNREFUSED},
-			useful: "connection refused", private: []string{"192.0.2.61", "192.0.2.62"}},
-		{name: "url", cause: &url.Error{Op: "Get", URL: "https://private-request-host.invalid/private-path?query=private-query-value", Err: syscall.ECONNREFUSED},
-			useful: "connection refused", private: []string{"private-request-host", "private-path", "private-query-value"}},
+			useful: []string{"connection refused", "dial tcp"}, private: []string{"192.0.2.61", "192.0.2.62"}},
+		{name: "connection_credential", cause: &net.OpError{Op: "dial token=operation-private-token", Net: "tcp", Err: syscall.ECONNREFUSED},
+			useful: []string{"connection refused", "dial"}, private: []string{"operation-private-token"}},
+		{name: "url", cause: &url.Error{Op: "Get", URL: "https://synthetic-user:synthetic-password@request.example.test/private-path?api_key=request-private-key", Err: syscall.ECONNREFUSED},
+			useful: []string{"connection refused", "Get"}, private: []string{"https://", "synthetic-user", "synthetic-password", "private-path", "request-private-key"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			failure := crawlerFailure("render_failed", "render", errors.WithStack(tc.cause))
@@ -170,7 +178,9 @@ func TestCrawlerDiagnosticTypedTransportPrivacy(t *testing.T) {
 			require.Equal(t, "render", stage)
 			local, remote := captureCrawlerDiagnosticProjection(t, failure)
 			for _, output := range []string{failure.Error(), fmt.Sprintf("%+v", failure), local, remote} {
-				require.Contains(t, output, tc.useful)
+				for _, useful := range tc.useful {
+					require.Contains(t, output, useful)
+				}
 				for _, private := range tc.private {
 					require.NotContains(t, output, private)
 				}
