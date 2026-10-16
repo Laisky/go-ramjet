@@ -357,11 +357,15 @@ func renderHTMLToPDF(ctx context.Context, htmlContent string) ([]byte, error) {
 	chromeCtx, cancelChrome := chromedp.NewContext(allocCtx)
 	defer cancelChrome()
 
-	if err := chromedp.Do(chromeCtx,
-		chromedp.Navigate(dataURL),
-		chromedp.WaitReady(chromedp.CSS("body")),
-	); err != nil {
+	// Startup, navigation and readiness share the same render deadline; labels identify which phase failed.
+	if err := chromedp.Do(chromeCtx); err != nil {
+		return nil, errors.Wrap(err, "start PDF browser")
+	}
+	if err := chromedp.Do(chromeCtx, chromedp.Navigate(dataURL)); err != nil {
 		return nil, errors.Wrap(err, "navigate PDF document")
+	}
+	if err := chromedp.Do(chromeCtx, chromedp.WaitReady(chromedp.CSS("body"))); err != nil {
+		return nil, errors.Wrap(err, "wait for PDF document body")
 	}
 
 	// Await the font promise before printing, including its JavaScript errors.

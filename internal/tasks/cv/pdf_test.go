@@ -6,6 +6,10 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
@@ -149,4 +153,29 @@ func buildTestPDF(t *testing.T, label string) []byte {
 	var buf bytes.Buffer
 	require.NoError(t, pdf.Output(&buf))
 	return buf.Bytes()
+}
+
+// TestRenderHTMLToPDFRejectsCanceledContext preserves cancellation identity and nil output before browser rendering.
+func TestRenderHTMLToPDFRejectsCanceledContext(t *testing.T) {
+	// On Unix, bind the pinned allocator's first lookup candidate to an owned sentinel and verify selection before cancellation.
+	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		directory := t.TempDir()
+		executable := filepath.Join(directory, "headless_shell")
+		require.NoError(t, os.WriteFile(executable, []byte("#!/bin/sh\n: > \"$0.launched\"\nexit 1\n"), 0o700))
+		t.Setenv("PATH", directory)
+		selected, err := exec.LookPath("headless_shell")
+		require.NoError(t, err)
+		require.Equal(t, executable, selected, "the pinned Unix allocator selects the owned first candidate")
+		t.Cleanup(func() {
+			_, statErr := os.Stat(executable + ".launched")
+			require.ErrorIs(t, statErr, os.ErrNotExist, "canceled rendering must not launch the selected owned browser")
+		})
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	payload, err := renderHTMLToPDF(ctx, "<html><body>canceled fixture</body></html>")
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, payload)
+	require.Contains(t, err.Error(), "context done")
+	require.NotContains(t, err.Error(), "start PDF browser")
 }
