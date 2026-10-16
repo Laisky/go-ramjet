@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -120,12 +121,46 @@ func TestCrawlerChallengeSignalWorkerSerialization(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			require.True(t, isCloudflareChallenge(tc.content), "the retained classifier still rejects this fixture")
 			local, remote, wire := captureChallengeSignalWorker(t, tc.content, nil, true)
-			var entry map[string]any
-			require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(local)), &entry))
-			require.Equal(t, "render", entry["stage"])
-			require.Equal(t, "challenge", entry["error_code"])
-			require.Equal(t, tc.signal, entry["challenge_signal"], "the actual worker must retain its finite matched signal")
+			decoder := json.NewDecoder(strings.NewReader(local))
+			var entries []map[string]any
+			for {
+				var entry map[string]any
+				decodeErr := decoder.Decode(&entry)
+				if errors.Is(decodeErr, io.EOF) {
+					break
+				}
+				require.NoError(t, decodeErr, "each emitted worker event must be valid JSON")
+				entries = append(entries, entry)
+			}
+			require.Len(t, entries, 2, "one processing failure precedes one successful terminal publication")
+			const taskID = "37b25fb8-4974-4a11-a5f5-b2f6c296025c"
+			for _, entry := range entries {
+				require.Equal(t, taskID, entry["task_id"])
+				require.Equal(t, "failed", entry["result_status"])
+				require.Equal(t, "active", entry["worker_context_state"])
+				duration, ok := entry["duration_ms"].(float64)
+				require.True(t, ok, "each event must retain bounded elapsed duration")
+				require.GreaterOrEqual(t, duration, float64(0))
+				require.LessOrEqual(t, duration, float64(300000))
+				require.NotContains(t, entry, "caller_receipt")
+			}
+			processing, publication := entries[0], entries[1]
+			require.Equal(t, "processing_completed", processing["event"])
+			require.Equal(t, "error", processing["level"])
+			require.Equal(t, "render", processing["stage"])
+			require.Equal(t, "challenge", processing["error_code"])
+			require.Equal(t, "challenge", processing["category"])
+			require.Equal(t, tc.signal, processing["challenge_signal"], "the actual worker must retain its finite matched signal")
+			require.NotContains(t, processing, "publication_outcome", "processing completion does not establish publication")
+			require.Equal(t, "result_published", publication["event"])
+			require.Equal(t, "info", publication["level"])
+			require.Equal(t, "success", publication["publication_outcome"])
+			require.NotContains(t, publication, "challenge_signal", "publication is distinct from processing failure")
+			require.Contains(t, remote, `"event":"processing_completed"`)
+			require.Contains(t, remote, `"task_id":"`+taskID+`"`)
+			require.Contains(t, remote, `"result_status":"failed"`)
 			require.Contains(t, remote, `"challenge_signal":"`+tc.signal+`"`)
+			require.NotContains(t, remote, `"event":"result_published"`, "the failure alert cannot claim caller receipt or publication")
 			var envelope map[string]any
 			require.NoError(t, json.Unmarshal([]byte(wire), &envelope))
 			require.Equal(t, tc.signal, envelope["failure_signal"])
