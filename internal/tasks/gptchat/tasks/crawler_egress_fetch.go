@@ -140,7 +140,7 @@ func (f *rendererEgressFetcher) prepare(ctx context.Context, id, parent, raw, ki
 }
 
 // fetch performs one admitted HTTP exchange without following redirects or using environment proxies.
-func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind, method string, headers http.Header) (*http.Response, []byte, error) {
+func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind, method string, headers http.Header) (response *http.Response, body []byte, resultErr error) {
 	admission, err := f.prepare(ctx, id, parent, raw, kind, method)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "prepare renderer request")
@@ -197,10 +197,17 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	}
 	req.Header.Set("Accept-Encoding", "gzip")
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
+	response, err = client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "renderer exchange")
 	}
+	// A response status is evidence only; HTTP acceptance and body handling remain unchanged.
+	observedStatus := response.StatusCode
+	defer func() {
+		if resultErr != nil && kind == crawleregress.OriginDocument && observedStatus >= 100 && observedStatus <= 599 {
+			resultErr = errors.WithStack(&crawlerHTTPStatusError{status: observedStatus, cause: resultErr})
+		}
+	}()
 	var reader io.Reader = response.Body
 	var compressed *gzip.Reader
 	switch strings.ToLower(strings.TrimSpace(response.Header.Get("Content-Encoding"))) {
