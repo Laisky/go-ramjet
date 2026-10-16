@@ -88,7 +88,9 @@ func RunDynamicWebCrawler() {
 					continue
 				}
 
-				if isTransientRedisErr(err) {
+				if crawlerErrorLogged(err) {
+					// The task boundary already emitted sanitized correlated diagnostics.
+				} else if isTransientRedisErr(err) {
 					// Expected, self-healing Redis condition (restart / failover /
 					// network blip). Avoid the ERROR-level stack-trace storm: warn
 					// once when the outage starts, then throttle to a heartbeat.
