@@ -20,5 +20,6 @@
       'unrs-resolver': false,
       'core-js': false,
       '@swc/core': false,
+      '@sentry/cli': false,
     },
 }

@@ -1,3 +1,4 @@
+import { privateResponseError } from '@/telemetry/privacy'
 import { PcmAudioPlayer, pcm16ToBase64 } from './pcm-audio'
 import { abortError, stopMediaStream, waitForMedia } from './media-lifecycle'
 import {
@@ -18,12 +19,7 @@ export {
 const WORKLET_URL = '/audio/pcm-worklet.js'
 
 export type RealtimeAudioState =
-  | 'idle'
-  | 'connecting'
-  | 'listening'
-  | 'thinking'
-  | 'speaking'
-  | 'ending'
+  'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ending'
 export type CallEndReason = 'user' | 'assistant' | 'remote' | 'error'
 
 /** RealtimeAudioClientCallbacks reports call state, captions, errors, and terminal reasons. */
@@ -415,7 +411,9 @@ export class RealtimeAudioClient {
           : 'Realtime API returned an error'
       if (!this.ready) {
         // Configuration never completed, so there is no usable call to keep.
-        this.rejectReady?.(new Error(message))
+        this.rejectReady?.(
+          privateResponseError(message, 'Realtime API returned an error'),
+        )
         this.fail(message)
         return
       }
