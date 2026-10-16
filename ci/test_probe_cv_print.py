@@ -1,11 +1,14 @@
 """Pure driver contracts: no Go, browser, GitHub API, dependency install or network."""
 
+import contextlib
 import importlib.util
+import io
 import json
 import pathlib
 import signal
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -161,6 +164,104 @@ class DriverContracts(unittest.TestCase):
         self.assertEqual(report['cells'][0]['status'], 'watchdog_cleanup_unknown')
         self.assertTrue(all(row['notAttempted'] for row in report['cells'][1:]))
 
+
+    def test_dirty_metadata_names_only_verified_public_sources(self):
+        """test_dirty_metadata_names_only_verified_public_sources excludes sensitive and arbitrary untracked names."""
+        tracked = (b'internal/tasks/cv/pdf.go\0ci/probe_cv_print.py\0'
+                   b'.github/instructions/laisky.instructions.md\0internal/private-key-canary.go\0')
+        status = (b' M internal/tasks/cv/pdf.go\0?? ci/__pycache__/probe_cv_print.cpython-312.pyc\0'
+                  b'?? ci/__pycache__/private-name-canary.cpython-312.pyc\0'
+                  b' M .github/instructions/laisky.instructions.md\0'
+                  b' M internal/private-key-canary.go\0?? arbitrary-name-canary.secret-extension-canary\0')
+        metadata = probe.dirty_metadata(status, tracked)
+        encoded = json.dumps(metadata)
+        self.assertEqual(metadata['totalEntries'], 6)
+        self.assertEqual(metadata['entries'][0]['path'], 'internal/tasks/cv/pdf.go')
+        self.assertEqual(metadata['entries'][1]['trackedSourcePath'], 'ci/probe_cv_print.py')
+        self.assertNotIn('path', metadata['entries'][1])
+        self.assertEqual(metadata['entries'][1]['extension'], '.pyc')
+        self.assertNotIn('trackedSourcePath', metadata['entries'][2])
+        for private in ('private-name-canary', 'private-key-canary', 'arbitrary-name-canary',
+                        'secret-extension-canary', 'laisky.instructions.md'):
+            self.assertNotIn(private, encoded)
+        self.assertFalse(metadata['contentsRead'])
+
+    def test_dirty_metadata_cap_counts_all_entries_without_exporting_names(self):
+        """test_dirty_metadata_cap_counts_all_entries_without_exporting_names retains totals beyond the 32-row cap."""
+        status = b''.join(b'?? arbitrary-private-canary-' + str(index).encode() + b'.log\0' for index in range(70))
+        metadata = probe.dirty_metadata(status, b'')
+        self.assertEqual(metadata['totalEntries'], 70)
+        self.assertEqual(metadata['statusCounts'], {'??': 70})
+        self.assertEqual(metadata['categoryCounts'], {'untracked_other': 70})
+        self.assertEqual(len(metadata['entries']), 32)
+        self.assertTrue(metadata['entryLimitReached'])
+        self.assertNotIn('canary', json.dumps(metadata))
+
+    def test_dirty_guard_reads_only_status_and_tracked_name_metadata(self):
+        """test_dirty_guard_reads_only_status_and_tracked_name_metadata keeps dirty state fatal without reading contents."""
+        replies = [b'?? ci/__pycache__/probe_cv_print.cpython-312.pyc\0', b'ci/probe_cv_print.py\0']
+        with mock.patch.object(probe, 'git_bytes', side_effect=replies) as git_bytes:
+            with self.assertRaises(probe.ProbeError) as caught:
+                probe.require_clean(pathlib.Path('/owned'), 'current_checkout_not_clean')
+        self.assertEqual(str(caught.exception), 'current_checkout_not_clean')
+        self.assertEqual(caught.exception.dirty_metadata['totalEntries'], 1)
+        self.assertEqual(git_bytes.call_args_list, [
+            mock.call(pathlib.Path('/owned'), 'status', '--porcelain=v1', '-z', '--untracked-files=all'),
+            mock.call(pathlib.Path('/owned'), 'ls-files', '--cached', '-z'),
+        ])
+
+    def test_dirty_metadata_consumes_rename_sources_and_bounds_malformed_records(self):
+        """test_dirty_metadata_consumes_rename_sources_and_bounds_malformed_records preserves counts without exposing old names."""
+        tracked = b'ci/probe_cv_print.py\0internal/tasks/cv/pdf.go\0'
+        status = (b'R  ci/probe_cv_print.py\0private-old-rename-canary\0'
+                  b' M internal/tasks/cv/pdf.go\0BAD malformed-private-canary\0'
+                  b'R  ci/new-private-canary.py\0')
+        metadata = probe.dirty_metadata(status, tracked)
+        self.assertEqual(metadata['totalEntries'], 4)
+        self.assertEqual(metadata['statusCounts'], {'R ': 2, ' M': 1, 'unknown': 1})
+        self.assertEqual(metadata['malformedRecords'], 2)
+        self.assertEqual(metadata['entries'][0]['path'], 'ci/probe_cv_print.py')
+        self.assertEqual(metadata['entries'][1]['path'], 'internal/tasks/cv/pdf.go')
+        self.assertEqual(metadata['entries'][2]['status'], 'unknown')
+        self.assertNotIn('canary', json.dumps(metadata))
+        self.assertFalse(metadata['contentsRead'])
+
+    def test_main_persists_dirty_artifact_and_fails_before_browser_execution(self):
+        """test_main_persists_dirty_artifact_and_fails_before_browser_execution checks real JSON serialization and fatal wiring."""
+        status = (b'?? ci/__pycache__/browser_sentry_build_args.cpython-312.pyc\0'
+                  b'?? untracked-private-artifact-canary.key\0')
+        tracked = b'ci/browser_sentry_build_args.py\0'
+        original_save = probe.save_report
+        with tempfile.TemporaryDirectory(prefix='probe-driver-artifact-contract-') as temporary:
+            artifact = pathlib.Path(temporary) / 'report.json'
+            def save(report):
+                """save writes the real sanitized report to this contract's owned temporary artifact."""
+                original_save(report, target=artifact)
+            with mock.patch.object(probe, 'git_bytes', side_effect=[status, tracked]) as git_bytes, \
+                    mock.patch.object(probe, 'save_report', side_effect=save) as save_mock, \
+                    mock.patch.object(probe, 'run_matrix') as matrix, \
+                    mock.patch.object(probe, 'run_browser') as browser, \
+                    contextlib.redirect_stdout(io.StringIO()) as printed:
+                exit_code = probe.main()
+            report = json.loads(artifact.read_text())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(save_mock.call_count, 2)
+        self.assertEqual(git_bytes.call_count, 2)
+        matrix.assert_not_called()
+        browser.assert_not_called()
+        self.assertFalse(report['complete'])
+        self.assertFalse(report['allCellsPassed'])
+        self.assertEqual(report['cells'], [])
+        self.assertEqual(report['status'], 'setup_or_cleanup_failure')
+        self.assertEqual(report['marker'], 'current_checkout_not_clean')
+        self.assertEqual(report['dirtyCheckout']['totalEntries'], 2)
+        self.assertEqual(report['dirtyCheckout']['entries'][0]['trackedSourcePath'],
+                         'ci/browser_sentry_build_args.py')
+        self.assertFalse(report['rawOutputPersisted'])
+        self.assertNotIn('canary', json.dumps(report) + printed.getvalue())
+        self.assertNotIn('CV_PRINT_PROBE_CELL ', printed.getvalue())
+        self.assertIn('CV_PRINT_PROBE_RESULT ', printed.getvalue())
+
     def test_workflow_contract_invocation_is_bytecode_free(self):
         """test_workflow_contract_invocation_is_bytecode_free verifies workflow contract invocation is bytecode free using controlled fixtures."""
         workflow = pathlib.Path(__file__).resolve().parents[1] / '.github/workflows/pr-validation.yml'
@@ -231,11 +332,11 @@ class DriverContracts(unittest.TestCase):
             if expression == 'a' * 40 + '^{tree}':
                 return '3' * 40
             raise AssertionError('unexpected command before prerequisite failure')
-        with mock.patch.object(probe, 'git', side_effect=fake_git):
+        with mock.patch.object(probe, 'git', side_effect=fake_git), mock.patch.object(probe, 'require_clean'):
             with self.assertRaisesRegex(probe.ProbeError, 'checkout_tree_differs_from_expected_pr_head'):
                 with probe.checkouts_for_ci(pathlib.Path('/owned'), 'a' * 40):
                     self.fail('different tree must not execute cells')
-        with mock.patch.object(probe, 'git', return_value='private-module-canary'):
+        with mock.patch.object(probe, 'git', return_value='private-module-canary'), mock.patch.object(probe, 'require_clean'):
             with self.assertRaises(probe.ProbeError):
                 with probe.checkouts_for_ci(pathlib.Path('/owned')):
                     self.fail('non-exact modules must not execute cells')

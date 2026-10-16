@@ -78,7 +78,12 @@ RUNTIME = re.compile(r'CV browser runtime: go=(go[0-9]{1,3}\.[0-9]{1,3}(?:\.[0-9
 
 
 class ProbeError(RuntimeError):
-    """A fixed marker; never attach raw subprocess output."""
+    """A fixed marker and optional already-sanitized dirty metadata."""
+
+    def __init__(self, marker, dirty_metadata=None):
+        """__init__ stores a fixed marker and finite metadata without raw command output."""
+        super().__init__(marker)
+        self.dirty_metadata = dirty_metadata
 
 
 def stamp():
@@ -343,17 +348,112 @@ def run_matrix(checkouts, environ, execute=run_browser, on_cell=None):
     return report
 
 
-def git(root, *args):
-    """git returns captured Git output for supplied arguments or raises a fixed prerequisite marker."""
+SAFE_EXTENSIONS = frozenset(('.go', '.py', '.pyc', '.pyo', '.json', '.yml', '.yaml', '.md', '.txt',
+                             '.log', '.xml', '.out', '.test', '.tmp', '.pdf', '.html', '.css', '.sql',
+                             '.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.sh', '.toml', '.mod', '.sum'))
+PUBLIC_ROOT_FILES = frozenset(('go.mod', 'go.sum', 'Dockerfile', 'Makefile', 'README.md', 'AGENTS.md'))
+PUBLIC_PREFIXES = frozenset(('ci', 'internal', 'library', 'cmd', 'docs', 'web', '.scripts'))
+SENSITIVE_COMPONENT = re.compile(r'secret|credential|password|token|api[_-]?key|cookie|private|instruction', re.IGNORECASE)
+
+
+def public_source_path(path, tracked):
+    """public_source_path permits only tracked, bounded ASCII source paths without sensitive components."""
+    if path not in tracked:
+        return False
+    try:
+        text = path.decode('ascii')
+    except UnicodeDecodeError:
+        return False
+    if len(text) > 256 or not re.fullmatch(r'[A-Za-z0-9_./@+-]+', text):
+        return False
+    parts = pathlib.PurePosixPath(text).parts
+    if not parts or text.startswith('/') or any(part in ('.', '..') or SENSITIVE_COMPONENT.search(part) for part in parts):
+        return False
+    if text in PUBLIC_ROOT_FILES:
+        return True
+    if parts[0] == '.github':
+        allowed_prefix = len(parts) > 2 and parts[1] == 'workflows'
+    else:
+        allowed_prefix = parts[0] in PUBLIC_PREFIXES
+    hidden = any(part.startswith('.') for index, part in enumerate(parts) if index > 0)
+    return bool(allowed_prefix and not hidden and pathlib.PurePosixPath(text).suffix.lower() in SAFE_EXTENSIONS)
+
+
+def dirty_metadata(status, tracked_output):
+    """dirty_metadata projects porcelain-v1 NUL records to counts and at most 32 privacy-safe rows."""
+    tracked = set(tracked_output.split(b'\0')) - {b''}
+    records = status.split(b'\0')
+    rows, status_counts, category_counts = [], {}, {}
+    index, total, malformed = 0, 0, 0
+    while index < len(records):
+        record = records[index]
+        index += 1
+        if not record:
+            continue
+        valid = len(record) >= 4 and record[2:3] == b' ' and re.fullmatch(rb'[ MADRCUT?!]{2}', record[:2])
+        code = record[:2].decode('ascii') if valid else 'unknown'
+        path = record[3:] if valid else record
+        if not valid:
+            malformed += 1
+        if valid and ('R' in code or 'C' in code):
+            if index < len(records) and records[index]:
+                index += 1  # Old rename/copy path is deliberately not exported.
+            else:
+                malformed += 1
+        total += 1
+        status_counts[code] = status_counts.get(code, 0) + 1
+        text = path.decode('utf-8', errors='replace')
+        parts = pathlib.PurePosixPath(text).parts
+        prefix = parts[0] if parts and parts[0] in PUBLIC_PREFIXES else (
+            'github_workflow' if len(parts) > 1 and parts[:2] == ('.github', 'workflows') else 'other')
+        extension = pathlib.PurePosixPath(text).suffix.lower()
+        extension = extension if extension in SAFE_EXTENSIONS else ('none' if not extension else 'other')
+        is_tracked = path in tracked
+        is_public = public_source_path(path, tracked)
+        category = 'tracked_public_source' if is_public else 'tracked_other' if is_tracked else (
+            'python_cache' if '__pycache__' in parts or extension in ('.pyc', '.pyo') else 'untracked_other')
+        row = {'status': code, 'tracked': is_tracked, 'category': category,
+               'prefixCategory': prefix, 'extension': extension, 'pathSHA256': digest(path)}
+        if is_public:
+            row['path'] = text
+        elif category == 'python_cache':
+            match = re.fullmatch(r'(.+)/__pycache__/([A-Za-z_][A-Za-z0-9_]*)[.]cpython-[0-9]{2,3}(?:[.]opt-[0-9])?[.]pyc', text)
+            if match:
+                source = (match[1] + '/' + match[2] + '.py').encode()
+                if public_source_path(source, tracked):
+                    row['trackedSourcePath'] = source.decode('ascii')
+        category_counts[category] = category_counts.get(category, 0) + 1
+        if len(rows) < 32:
+            rows.append(row)
+    return {'totalEntries': total, 'statusCounts': status_counts, 'categoryCounts': category_counts,
+            'entries': rows, 'entryLimit': 32, 'entryLimitReached': total > 32,
+            'malformedRecords': malformed, 'contentsRead': False}
+
+
+def git_bytes(root, *args):
+    """git_bytes returns unprinted Git metadata bytes or raises a fixed prerequisite marker."""
     process = subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=30)
     require(process.returncode == 0, 'git_prerequisite_failed')
-    return process.stdout.decode().strip()
+    return process.stdout
+
+
+def git(root, *args):
+    """git returns captured Git output for supplied arguments or raises a fixed prerequisite marker."""
+    return git_bytes(root, *args).decode().strip()
+
+
+def require_clean(root, marker):
+    """require_clean preserves the fatal dirty guard and attaches only bounded file-status metadata."""
+    status = git_bytes(root, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+    if status:
+        tracked = git_bytes(root, 'ls-files', '--cached', '-z')
+        raise ProbeError(marker, dirty_metadata(status, tracked))
 
 
 @contextlib.contextmanager
 def checkouts_for_ci(root, expected_head=None):
     """checkouts_for_ci yields exact owned baseline/current bindings after validating source and module identities."""
-    require(not git(root, 'status', '--porcelain'), 'current_checkout_not_clean')
+    require_clean(root, 'current_checkout_not_clean')
     for revision in (ACCEPTED, EXACT, 'HEAD'):
         for filename, expected in MODULE_BLOBS.items():
             require(git(root, 'rev-parse', revision + ':' + filename) == expected, 'module_bytes_differ')
@@ -377,13 +477,13 @@ def checkouts_for_ci(root, expected_head=None):
                 git(root, 'cat-file', '-e', revision + '^{commit}')
                 git(root, 'worktree', 'add', '--detach', str(target), revision)
                 created.append(target)
-                require(git(target, 'rev-parse', 'HEAD') == revision and
-                        not git(target, 'status', '--porcelain'), 'baseline_checkout_not_exact_clean')
+                require(git(target, 'rev-parse', 'HEAD') == revision, 'baseline_checkout_not_exact_clean')
+                require_clean(target, 'baseline_checkout_not_exact_clean')
                 paths[role] = {'path': target, 'head': revision, 'tree': git(target, 'rev-parse', 'HEAD^{tree}')}
             yield paths
             for role in ('accepted', 'exact', 'current'):
                 entry = paths[role]
-                require(not git(entry['path'], 'status', '--porcelain'), 'source_changed_during_probe')
+                require_clean(entry['path'], 'source_changed_during_probe')
         finally:
             for target in reversed(created):
                 require(owner in target.resolve().parents, 'owned_cleanup_path_invalid')
@@ -408,6 +508,8 @@ def main():
     except Exception as error:
         report.update(complete=False, allCellsPassed=False, status='setup_or_cleanup_failure',
                       marker=str(error) if isinstance(error, ProbeError) else 'internal_failure')
+        if isinstance(error, ProbeError) and error.dirty_metadata is not None:
+            report['dirtyCheckout'] = error.dirty_metadata
     save_report(report)
     for row in report.get('cells', []):
         # Every string here is a fixed cell/test identity or a validated finite observation.

@@ -282,8 +282,9 @@ class ReleaseDeploymentContract(unittest.TestCase):
     def test_pr_validation_runs_contract_before_go_unit_tests(self):
         """test_pr_validation_runs_contract_before_go_unit_tests checks the required workflow invocation."""
         workflow = (ROOT / ".github/workflows/pr-validation.yml").read_text()
-        command = "python3 ci/test_release_deployment.py"
+        command = "python3 -B ci/test_release_deployment.py"
         self.assertIn(command, workflow)
+        self.assertNotIn("run: python3 ci/test_release_deployment.py", workflow)
         self.assertLess(workflow.index(command), workflow.index("run: go test ./... -count=1"))
 
     def test_helper_only_changes_run_unfiltered_pr_contract_validation(self):
@@ -293,7 +294,7 @@ class ReleaseDeploymentContract(unittest.TestCase):
         self.assertIn("pull_request:", triggers)
         self.assertIn("      - master", triggers)
         self.assertNotRegex(triggers, r"(?m)^\s+paths(?:-ignore)?:")
-        self.assertIn("run: python3 ci/test_release_deployment.py", workflow)
+        self.assertIn("run: python3 -B ci/test_release_deployment.py", workflow)
 
     def test_release_selectors_preserve_builds_and_gate_only_marked_deployment(self):
         """test_release_selectors_preserve_builds_and_gate_only_marked_deployment executes actual selectors."""
