@@ -330,10 +330,19 @@ func extractMarkdownTitle(content string) string {
 
 // renderHTMLToPDF renders HTML into PDF bytes using headless Chrome.
 func renderHTMLToPDF(ctx context.Context, htmlContent string) ([]byte, error) {
+	return renderHTMLToPDFWithRenderer(ctx, htmlContent, renderHTMLToPDFInBrowser)
+}
+
+// renderHTMLToPDFWithRenderer rejects ended contexts before invoking renderer and otherwise preserves its inputs, output and error.
+func renderHTMLToPDFWithRenderer(ctx context.Context, htmlContent string, renderer func(context.Context, string) ([]byte, error)) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context done")
 	}
+	return renderer(ctx, htmlContent)
+}
 
+// renderHTMLToPDFInBrowser renders HTML with the existing browser phases and total render deadline.
+func renderHTMLToPDFInBrowser(ctx context.Context, htmlContent string) ([]byte, error) {
 	encoded := base64.StdEncoding.EncodeToString([]byte(htmlContent))
 	dataURL := "data:text/html;base64," + encoded
 

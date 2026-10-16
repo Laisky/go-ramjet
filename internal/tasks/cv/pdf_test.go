@@ -6,12 +6,10 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"testing"
+	"time"
 
+	"github.com/Laisky/errors/v2"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/phpdave11/gofpdf"
@@ -155,27 +153,72 @@ func buildTestPDF(t *testing.T, label string) []byte {
 	return buf.Bytes()
 }
 
-// TestRenderHTMLToPDFRejectsCanceledContext preserves cancellation identity and nil output before browser rendering.
+// TestRenderHTMLToPDFRejectsCanceledContext preserves lifecycle identity and proves no renderer invocation for ended contexts.
 func TestRenderHTMLToPDFRejectsCanceledContext(t *testing.T) {
-	// On Unix, bind the pinned allocator's first lookup candidate to an owned sentinel and verify selection before cancellation.
-	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		directory := t.TempDir()
-		executable := filepath.Join(directory, "headless_shell")
-		require.NoError(t, os.WriteFile(executable, []byte("#!/bin/sh\n: > \"$0.launched\"\nexit 1\n"), 0o700))
-		t.Setenv("PATH", directory)
-		selected, err := exec.LookPath("headless_shell")
-		require.NoError(t, err)
-		require.Equal(t, executable, selected, "the pinned Unix allocator selects the owned first candidate")
-		t.Cleanup(func() {
-			_, statErr := os.Stat(executable + ".launched")
-			require.ErrorIs(t, statErr, os.ErrNotExist, "canceled rendering must not launch the selected owned browser")
+	t.Parallel()
+	for _, state := range []string{"canceled", "deadline_exceeded"} {
+		t.Run(state, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(t.Context())
+			wantErr := context.Canceled
+			if state == "deadline_exceeded" {
+				cancel()
+				ctx, cancel = context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+				wantErr = context.DeadlineExceeded
+			} else {
+				cancel()
+			}
+			defer cancel()
+			calls := 0
+			payload, err := renderHTMLToPDFWithRenderer(ctx, "<html><body>ended fixture</body></html>",
+				func(context.Context, string) ([]byte, error) {
+					calls++
+					return []byte("unexpected renderer output"), nil
+				})
+			require.ErrorIs(t, err, wantErr)
+			require.Nil(t, payload)
+			require.Zero(t, calls, "ended contexts must not invoke the renderer")
+			require.Contains(t, err.Error(), "context done")
+			// The real entry uses the same guard before reaching any browser allocation.
+			payload, err = renderHTMLToPDF(ctx, "<html><body>ended fixture</body></html>")
+			require.ErrorIs(t, err, wantErr)
+			require.Nil(t, payload)
+			require.Contains(t, err.Error(), "context done")
+			require.NotContains(t, err.Error(), "start PDF browser")
 		})
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	payload, err := renderHTMLToPDF(ctx, "<html><body>canceled fixture</body></html>")
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, payload)
-	require.Contains(t, err.Error(), "context done")
-	require.NotContains(t, err.Error(), "start PDF browser")
+}
+
+// TestRenderHTMLToPDFActiveRendererControl proves the renderer seam runs once and preserves context, HTML, bytes and error identity.
+func TestRenderHTMLToPDFActiveRendererControl(t *testing.T) {
+	t.Parallel()
+	for _, failed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "success", true: "failure"}[failed], func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			const html = "<html><body>owned active fixture</body></html>"
+			expected := []byte("%PDF-owned")
+			var cause error
+			if failed {
+				cause = errors.New("owned renderer failure")
+			}
+			calls := 0
+			payload, err := renderHTMLToPDFWithRenderer(ctx, html, func(receivedCtx context.Context, receivedHTML string) ([]byte, error) {
+				calls++
+				require.Same(t, ctx, receivedCtx)
+				require.Equal(t, html, receivedHTML)
+				return expected, cause
+			})
+			require.Equal(t, 1, calls)
+			require.Equal(t, expected, payload)
+			require.Same(t, &expected[0], &payload[0], "the boundary must not copy renderer bytes")
+			if failed {
+				require.Same(t, cause, err)
+				require.ErrorIs(t, err, cause)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
