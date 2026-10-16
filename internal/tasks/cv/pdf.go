@@ -348,58 +348,86 @@ func renderHTMLToPDFInBrowser(ctx context.Context, htmlContent string) ([]byte, 
 
 	renderCtx, cancel := context.WithTimeout(ctx, pdfRenderTimeout)
 	defer cancel()
+	probeStarted := time.Now()
+	probe := cvPDFPrintProbeFromContext(ctx)
 
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(
-		renderCtx,
-		append(chromedp.DefaultExecAllocatorOptions[:],
-			chromedp.NoDefaultBrowserCheck,
-			chromedp.NoFirstRun,
-			chromedp.Flag("headless", true),
-			chromedp.Flag("disable-gpu", true),
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("no-sandbox", true),
-			chromedp.WindowSize(pdfViewportWidth, pdfViewportHeight),
-		)...,
+	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.NoDefaultBrowserCheck,
+		chromedp.NoFirstRun,
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.WindowSize(pdfViewportWidth, pdfViewportHeight),
 	)
+	// Explicit browser choice belongs only to the owned synthetic probe; ordinary rendering retains implicit selection.
+	if executable, ok := ctx.Value(cvPDFPrintProbeBrowserKey{}).(string); ok && probe != nil {
+		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(executable))
+	}
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(renderCtx, allocatorOptions...)
 	defer cancelAlloc()
 
 	chromeCtx, cancelChrome := chromedp.NewContext(allocCtx)
 	defer cancelChrome()
 
-	// Startup, navigation and readiness share the same render deadline; labels identify which phase failed.
+	// PROBE ONLY: the original action order and shared deadline remain unchanged.
+	phaseStarted := time.Now()
+	emitCVPDFPrintProbe(chromeCtx, probe, "startup", "begin", probeStarted, phaseStarted, "")
 	if err := chromedp.Do(chromeCtx); err != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "startup", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "start PDF browser")
 	}
+	emitCVPDFPrintProbe(chromeCtx, probe, "startup", "success", probeStarted, phaseStarted, "")
+	// This one explicitly measured metadata command exists only for observer-enabled probe contexts.
+	observeCVPDFBrowserVersion(chromeCtx, probe, probeStarted)
+	phaseStarted = time.Now()
+	emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "begin", probeStarted, phaseStarted, "")
 	if err := chromedp.Do(chromeCtx, chromedp.Navigate(dataURL)); err != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "navigate PDF document")
 	}
+	emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "success", probeStarted, phaseStarted, "")
+	phaseStarted = time.Now()
+	emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "begin", probeStarted, phaseStarted, "")
 	if err := chromedp.Do(chromeCtx, chromedp.WaitReady(chromedp.CSS("body"))); err != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "wait for PDF document body")
 	}
+	emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "success", probeStarted, phaseStarted, "")
 
 	// Await the font promise before printing, including its JavaScript errors.
+	phaseStarted = time.Now()
+	emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "begin", probeStarted, phaseStarted, "")
 	fonts, err := chromedp.Call(chromeCtx, runtime.Evaluate, runtime.EvaluateParams{
 		Expression:   `document.fonts.ready.then(() => true)`,
 		AwaitPromise: new(true),
 	})
 	if err != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "await document.fonts.ready")
 	}
 	if fonts.ExceptionDetails != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.WithStack(&chromedp.ExceptionError{ExceptionDetails: fonts.ExceptionDetails})
 	}
 
+	emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "success", probeStarted, phaseStarted, "")
+	phaseStarted = time.Now()
+	emitCVPDFPrintProbe(chromeCtx, probe, "print", "begin", probeStarted, phaseStarted, "")
 	result, err := chromedp.Call(chromeCtx, page.PrintToPDF, page.PrintToPDFParams{
 		PrintBackground:   new(true),
 		PreferCSSPageSize: new(true),
 		TransferMode:      page.PrintToPDFTransferModeReturnAsBase64,
 	})
 	if err != nil {
+		emitCVPDFPrintProbe(chromeCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "print PDF document")
 	}
 	if len(result.Data) == 0 {
+		emitCVPDFPrintProbe(chromeCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.WithStack(errors.New("empty pdf output"))
 	}
 
+	emitCVPDFPrintProbe(chromeCtx, probe, "print", "success", probeStarted, phaseStarted, "")
 	return result.Data, nil
 }
