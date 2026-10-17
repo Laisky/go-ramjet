@@ -37,7 +37,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git libasound2t64 libssl-dev poppler-utils dbus-daemon wget
+            build-essential ca-certificates curl git libasound2t64 libssl-dev poppler-utils dbus-daemon wget python3-yaml
           wget -O /tmp/SpeechSDK-Linux.tar.gz \
             "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
           sudo mkdir -p "${SPEECHSDK_ROOT}"
@@ -117,7 +117,7 @@ jobs:
           exit 1
 
       - name: Run release deployment contract tests
-        run: python3 -B ci/test_release_deployment.py
+        run: /usr/bin/python3 -B ci/test_release_deployment.py
 
       - name: Run CV diagnostic matrix driver contracts
         run: python3 -B ci/test_probe_cv_print.py

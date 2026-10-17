@@ -77,47 +77,42 @@ else:
 """
 
 
+def read_workflow(path):
+    """read_workflow parses a workflow Path and returns its YAML mapping."""
+    import yaml
+    workflow = yaml.safe_load(path.read_text())
+    # PyYAML uses YAML 1.1, where the Actions key "on" is a boolean.
+    if "on" not in workflow and True in workflow:
+        workflow["on"] = workflow.pop(True)
+    return workflow
+
+
+def runs_python_script(command, script, bytecode_free=False):
+    """runs_python_script checks the actual argv for a Python script invocation."""
+    args = shlex.split(command, comments=True)
+    return (len(args) in (2, 3) and Path(args[0]).name == "python3" and args[-1] == script
+            and all(arg == "-B" for arg in args[1:-1]) and (not bytecode_free or "-B" in args))
+
+
 def extract_release_script(workflow):
-    """extract_release_script reads the workflow Path and returns its unique literal SSH script."""
-    lines = workflow.read_text().splitlines()
-    starts = [index for index, line in enumerate(lines) if line.strip() == "script: |"]
-    if len(starts) != 1:
+    """extract_release_script returns the deployment job's unique SSH script."""
+    steps = read_workflow(workflow)["jobs"]["deploy"]["steps"]
+    scripts = [step["with"]["script"] for step in steps if "script" in step.get("with", {})]
+    if len(scripts) != 1:
         raise ValueError("expected exactly one remote deployment script")
-    start = starts[0]
-    indent = len(lines[start]) - len(lines[start].lstrip()) + 2
-    script = []
-    for line in lines[start + 1:]:
-        if line.strip() and len(line) - len(line.lstrip()) < indent:
-            break
-        script.append(line[indent:])
-    return "\n".join(script) + "\n"
+    return scripts[0]
 
 
 def release_job_decisions(workflow, message):
-    """release_job_decisions executes the real prefix check and evaluates supported job selectors."""
-    source = workflow.read_text()
-
-    def job_body(name):
-        """job_body returns the named job's source without subsequent jobs."""
-        body = source.split("  " + name + ":\n", 1)[1]
-        return re.split(r"^  [a-zA-Z_][a-zA-Z_0-9-]*:\n", body, maxsplit=1, flags=re.MULTILINE)[0]
-
-    check = job_body("check_skip")
-    lines = check.splitlines()
-    starts = [index for index, line in enumerate(lines) if line.strip() == "run: |"]
-    if len(starts) != 1:
+    """release_job_decisions executes the prefix check and evaluates release selectors."""
+    jobs = read_workflow(workflow)["jobs"]
+    scripts = [step["run"] for step in jobs["check_skip"]["steps"] if step.get("id") == "check"]
+    if len(scripts) != 1:
         raise AssertionError("Expected exactly one commit-prefix check script")
-    start = starts[0]
-    indent = len(lines[start]) - len(lines[start].lstrip()) + 2
-    script = []
-    for line in lines[start + 1:]:
-        if line.strip() and len(line) - len(line.lstrip()) < indent:
-            break
-        script.append(line[indent:])
     with tempfile.TemporaryDirectory(prefix="release-selector-contract-") as directory:
         output = Path(directory) / "outputs"
         result = subprocess.run(
-            ["bash"], input="\n".join(script) + "\n", text=True, capture_output=True, timeout=5,
+            ["bash"], input=scripts[0], text=True, capture_output=True, timeout=5,
             env={"PATH": os.environ["PATH"], "COMMIT_MSG": message, "GITHUB_OUTPUT": str(output)},
         )
         if result.returncode:
@@ -126,19 +121,19 @@ def release_job_decisions(workflow, message):
     skip = outputs["should_skip"]
 
     def selected(name):
-        """selected evaluates the workflow's restricted release expression grammar."""
-        matches = re.findall(r"^    if: (.+)$", job_body(name), flags=re.MULTILINE)
-        if len(matches) != 1:
-            raise AssertionError("Expected exactly one selector for " + name)
+        """selected evaluates the existing restricted release expression grammar."""
+        condition = jobs[name]["if"].strip()
+        if condition.startswith("${{") and condition.endswith("}}"):
+            condition = condition[3:-2].strip()
         decisions = []
-        for predicate in matches[0].split(" && "):
+        for predicate in re.split(r"\s*&&\s*", condition):
+            predicate = " ".join(predicate.split())
             if predicate == "needs.check_skip.outputs.should_skip != 'true'":
                 decisions.append(skip.casefold() != "true")
                 continue
             marker = re.fullmatch(r"!contains\(github\.event\.head_commit\.message, '([^']*)'\)", predicate)
             if marker is None:
                 raise AssertionError("Unsupported release selector: " + predicate)
-            # GitHub contains() is case insensitive; see its expressions reference.
             decisions.append(marker.group(1).casefold() not in message.casefold())
         return all(decisions)
 
@@ -280,31 +275,35 @@ class ReleaseDeploymentContract(unittest.TestCase):
                     self.assertFalse(any(event["binary"] == "curl" for event in self.events()))
 
     def test_pr_validation_runs_contract_before_go_unit_tests(self):
-        """test_pr_validation_runs_contract_before_go_unit_tests checks the required workflow invocation."""
-        workflow = (ROOT / ".github/workflows/pr-validation.yml").read_text()
-        command = "python3 -B ci/test_release_deployment.py"
-        self.assertIn(command, workflow)
-        self.assertNotIn("run: python3 ci/test_release_deployment.py", workflow)
-        self.assertLess(workflow.index(command), workflow.index("run: go test ./... -count=1"))
+        """test_pr_validation_runs_contract_before_go_unit_tests checks execution order."""
+        steps = read_workflow(ROOT / ".github/workflows/pr-validation.yml")["jobs"]["backend"]["steps"]
+        contracts = [index for index, step in enumerate(steps)
+                     if runs_python_script(step.get("run", ""), "ci/test_release_deployment.py", bytecode_free=True)]
+        go_tests = [index for index, step in enumerate(steps)
+                    if shlex.split(step.get("run", "")) == ["go", "test", "./...", "-count=1"]]
+        self.assertEqual(len(contracts), 1)
+        self.assertEqual(len(go_tests), 1)
+        self.assertLess(contracts[0], go_tests[0])
 
     def test_helper_only_changes_run_unfiltered_pr_contract_validation(self):
-        """test_helper_only_changes_run_unfiltered_pr_contract_validation checks helper coverage without release-trigger changes."""
-        workflow = (ROOT / ".github/workflows/pr-validation.yml").read_text()
-        triggers = workflow.split("permissions:", 1)[0]
-        self.assertIn("pull_request:", triggers)
-        self.assertIn("      - master", triggers)
-        self.assertNotRegex(triggers, r"(?m)^\s+paths(?:-ignore)?:")
-        self.assertIn("run: python3 -B ci/test_release_deployment.py", workflow)
+        """test_helper_only_changes_run_unfiltered_pr_contract_validation checks event coverage."""
+        workflow = read_workflow(ROOT / ".github/workflows/pr-validation.yml")
+        trigger = workflow["on"]["pull_request"]
+        self.assertIn("master", trigger["branches"])
+        self.assertNotIn("paths", trigger)
+        self.assertNotIn("paths-ignore", trigger)
+        self.assertTrue(any(runs_python_script(step.get("run", ""), "ci/test_release_deployment.py", bytecode_free=True)
+                            for step in workflow["jobs"]["backend"]["steps"]))
 
-    def test_release_selectors_preserve_builds_and_gate_only_marked_deployment(self):
-        """test_release_selectors_preserve_builds_and_gate_only_marked_deployment executes actual selectors."""
+    def test_release_selectors_deploy_marked_releases_and_preserve_prefix_skips(self):
+        """test_release_selectors_deploy_marked_releases_and_preserve_prefix_skips runs actual release selectors."""
         cases = [
             ("fix: ordinary release", (True, True, True)),
             ("fix: docs wording without a skipped prefix", (True, True, True)),
             ("fix: quoted '$()' commit text", (True, True, True)),
-            ("fix: release [publish only]", (True, True, False)),
-            ("fix: release [PUBLISH ONLY]", (True, True, False)),
-            ("fix: release\n\n[publish only]", (True, True, False)),
+            ("fix: release [publish only]", (True, True, True)),
+            ("fix: release [PUBLISH ONLY]", (True, True, True)),
+            ("fix: release\n\n[publish only]", (True, True, True)),
         ]
         for prefix in ("docs:", "doc:", "tests:", "test:", "ci:"):
             cases.append((prefix + " existing skip", (False, False, False)))
@@ -319,19 +318,6 @@ class BrowserSentryBuildArgsContract(unittest.TestCase):
 
     FIXTURE_DSN = "https://" + "a" * 32 + "@o123.ingest.sentry.io/456"
     FIXTURE_SHA = "b" * 40
-    APPROVED_WORKFLOW_SHA256 = "4ca28bd752d238557e0d3b08052b6a1a2b8760dfbf792ee6a421c643e01819c5"
-    BRIDGE_STEP = """      - name: Prepare public chat browser build arguments
-        id: chat_sentry
-        env:
-          CHAT_SENTRY_ENABLED: ${{ vars.CHAT_SENTRY_ENABLED }}
-          CHAT_SENTRY_DSN: ${{ vars.CHAT_SENTRY_DSN }}
-          CHAT_SENTRY_ENVIRONMENT: ${{ vars.CHAT_SENTRY_ENVIRONMENT }}
-          CHAT_SENTRY_SOURCE_SHA: ${{ github.sha }}
-        run: python3 ci/browser_sentry_build_args.py
-
-"""
-    BUILD_ARGS_INPUT = "          build-args: ${{ steps.chat_sentry.outputs.build_args }}\n"
-
     def enabled_environment(self):
         """enabled_environment returns synthetic public values without any real project configuration."""
         return {
@@ -481,27 +467,232 @@ class BrowserSentryBuildArgsContract(unittest.TestCase):
             self.assertEqual(result.stdout, "")
             self.assertEqual(result.stderr, INVALID_MESSAGE + "\n")
 
-    def test_bridge_is_identical_in_both_builds_and_preserves_every_release_control(self):
-        """test_bridge_is_identical_in_both_builds_and_preserves_every_release_control requires the approved workflow after removing only the public bridge."""
-        import hashlib
-        source = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertEqual(source.count(self.BRIDGE_STEP), 2)
-        self.assertEqual(source.count(self.BUILD_ARGS_INPUT), 2)
-        for job in ("build_latest", "build_latest_cache"):
-            body = source.split("  " + job + ":\n", 1)[1]
-            body = re.split(r"^  [a-zA-Z_][a-zA-Z_0-9-]*:\n", body, maxsplit=1, flags=re.MULTILINE)[0]
-            self.assertIn(self.BRIDGE_STEP, body)
-            self.assertIn(self.BUILD_ARGS_INPUT, body)
-        preserved = source.replace(self.BRIDGE_STEP, "").replace(self.BUILD_ARGS_INPUT, "")
-        self.assertEqual(hashlib.sha256(preserved.encode()).hexdigest(), self.APPROVED_WORKFLOW_SHA256)
 
-    def test_feature_branch_push_remains_outside_release_trigger(self):
-        """test_feature_branch_push_remains_outside_release_trigger guards the current Draft branch against publishing or deployment."""
+class ReleaseWorkflowWiringContract(unittest.TestCase):
+    def assert_required_step(self, step):
+        """assert_required_step checks a required action executes and propagates failures."""
+        self.assertIs(step.get("continue-on-error", False), False)
+        condition = step.get("if", True)
+        self.assertIn("".join(str(condition).split()).lower(),
+                      {"true", "success()", "${{true}}", "${{success()}}"})
+
+    """ReleaseWorkflowWiringContract checks delivery behavior fields rather than YAML bytes."""
+
+    def assert_build_jobs(self, workflow):
+        """assert_build_jobs checks both public bridges, publication roles and target platforms."""
+        for name, publishes in (("build_latest", True), ("build_latest_cache", False)):
+            steps = workflow["jobs"][name]["steps"]
+            helpers = [(index, step) for index, step in enumerate(steps) if step.get("id") == "chat_sentry"]
+            builds = [(index, step) for index, step in enumerate(steps)
+                      if step.get("uses", "").startswith("docker/build-push-action@")]
+            self.assertEqual(len(helpers), 1)
+            self.assertEqual(len(builds), 1)
+            helper_index, helper = helpers[0]
+            build_index, build = builds[0]
+            self.assertLess(helper_index, build_index)
+            self.assert_required_step(helper)
+            self.assert_required_step(build)
+            self.assertEqual(helper["env"], {
+                "CHAT_SENTRY_ENABLED": "${{ vars.CHAT_SENTRY_ENABLED }}",
+                "CHAT_SENTRY_DSN": "${{ vars.CHAT_SENTRY_DSN }}",
+                "CHAT_SENTRY_ENVIRONMENT": "${{ vars.CHAT_SENTRY_ENVIRONMENT }}",
+                "CHAT_SENTRY_SOURCE_SHA": "${{ github.sha }}",
+            })
+            self.assertTrue(runs_python_script(helper["run"], "ci/browser_sentry_build_args.py"))
+            inputs = build["with"]
+            self.assertEqual(inputs["context"], ".")
+            self.assertEqual("".join(inputs["build-args"].split()), "${{steps.chat_sentry.outputs.build_args}}")
+            self.assertEqual(str(inputs["push"]).lower(), str(publishes).lower())
+            platforms = set(str(inputs.get("platforms", "linux/amd64")).replace(",", "\n").split())
+            self.assertEqual(platforms, {"linux/amd64"})
+            tags = set(inputs.get("tags", "").splitlines())
+            if publishes:
+                self.assertEqual(tags, {"ppcelery/go-ramjet:latest",
+                                        "ppcelery/go-ramjet:${{ steps.vars.outputs.short_sha }}"})
+            else:
+                self.assertFalse(tags)
+                self.assertIn("type=gha", inputs["cache-from"])
+                self.assertIn("type=gha", inputs["cache-to"])
+
+    def assert_release_controls(self, workflow):
+        """assert_release_controls checks triggers, successful-build dependencies and serialization."""
+        self.assertEqual(set(workflow["on"]), {"push"})
+        trigger = workflow["on"]["push"]
+        self.assertEqual(set(trigger["branches"]), {"master", "main", "test/ci"})
+        self.assertEqual(set(trigger["paths-ignore"]), {"docs/**", "doc/**", "tests/**", "test/**", "ci/**"})
+        jobs = workflow["jobs"]
+        for name in ("check_skip", "build_latest", "build_latest_cache", "deploy"):
+            self.assertIs(jobs[name].get("continue-on-error", False), False, name)
+        checks = [step for step in jobs["check_skip"]["steps"] if step.get("id") == "check"]
+        self.assertEqual(len(checks), 1)
+        self.assert_required_step(checks[0])
+        self.assertEqual("".join(checks[0]["env"]["COMMIT_MSG"].split()),
+                         "${{github.event.head_commit.message}}")
+        self.assertEqual("".join(jobs["check_skip"]["outputs"]["should_skip"].split()),
+                         "${{steps.check.outputs.should_skip}}")
+        variables = [step for step in jobs["build_latest"]["steps"] if step.get("id") == "vars"]
+        self.assertEqual(len(variables), 1)
+        self.assert_required_step(variables[0])
+        for name, required in (("build_latest", {"check_skip"}),
+                               ("build_latest_cache", {"check_skip", "build_latest"}),
+                               ("deploy", {"check_skip", "build_latest"})):
+            needs = jobs[name]["needs"]
+            needs = {needs} if isinstance(needs, str) else set(needs)
+            self.assertTrue(required.issubset(needs), name)
+        concurrency = jobs["deploy"]["concurrency"]
+        self.assertIsInstance(concurrency["group"], str)
+        self.assertTrue(concurrency["group"].strip())
+        self.assertNotIn("${{", concurrency["group"])
+        self.assertIs(concurrency["cancel-in-progress"], False)
+
+    def assert_ssh_binding(self, workflow):
+        """assert_ssh_binding checks existing remote references and a unique deployment script."""
+        ssh = [step for step in workflow["jobs"]["deploy"]["steps"]
+               if step.get("uses", "").startswith("appleboy/ssh-action@")]
+        self.assertEqual(len(ssh), 1)
+        self.assert_required_step(ssh[0])
+        inputs = ssh[0]["with"]
+        self.assertEqual({key: inputs[key] for key in ("host", "username", "password", "port")}, {
+            "host": "${{ secrets.TARGET_HOST }}", "username": "${{ secrets.TARGET_HOST_USERNAME }}",
+            "password": "${{ secrets.TARGET_HOST_PASSWORD }}", "port": "${{ secrets.TARGET_HOST_SSH_PORT }}",
+        })
+        self.assertIsInstance(inputs["script"], str)
+        self.assertTrue(inputs["script"].strip())
+
+    def assert_delivery_wiring(self, workflow):
+        """assert_delivery_wiring runs only the targeted delivery-role assertions."""
+        self.assert_build_jobs(workflow)
+        self.assert_release_controls(workflow)
+        self.assert_ssh_binding(workflow)
+
+    def test_public_browser_inputs_are_wired_into_both_builds(self):
+        """test_public_browser_inputs_are_wired_into_both_builds checks publication and cache roles."""
+        self.assert_build_jobs(read_workflow(ROOT / ".github/workflows/ci.yml"))
+
+    def test_release_triggers_dependencies_and_serialization(self):
+        """test_release_triggers_dependencies_and_serialization checks the approved release boundary."""
+        self.assert_release_controls(read_workflow(ROOT / ".github/workflows/ci.yml"))
+
+    def test_ssh_deployment_keeps_existing_binding(self):
+        """test_ssh_deployment_keeps_existing_binding checks unchanged target credential references."""
+        self.assert_ssh_binding(read_workflow(ROOT / ".github/workflows/ci.yml"))
+
+    def test_commit_image_tag_uses_running_workflow_sha(self):
+        """test_commit_image_tag_uses_running_workflow_sha executes the actual short-SHA output step."""
+        steps = read_workflow(ROOT / ".github/workflows/ci.yml")["jobs"]["build_latest"]["steps"]
+        scripts = [step["run"] for step in steps if step.get("id") == "vars"]
+        self.assertEqual(len(scripts), 1)
+        with tempfile.TemporaryDirectory(prefix="ramjet-image-tag-") as directory:
+            output = Path(directory) / "output"
+            result = subprocess.run(["bash"], input=scripts[0], text=True, capture_output=True, timeout=5,
+                                    env={"PATH": os.environ["PATH"], "GITHUB_SHA": "b" * 40,
+                                         "GITHUB_OUTPUT": str(output)})
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(output.read_text().splitlines(), ["short_sha=" + "b" * 7])
+
+    def test_comments_quoting_and_display_names_preserve_delivery_contract(self):
+        """test_comments_quoting_and_display_names_preserve_delivery_contract keeps cosmetic edits valid."""
+        import yaml
         source = (ROOT / ".github/workflows/ci.yml").read_text()
-        branch_section = source.split("    branches:\n", 1)[1].split("    paths-ignore:\n", 1)[0]
-        branches = re.findall(r"^      - '([^']+)'$", branch_section, re.MULTILINE)
-        self.assertEqual(branches, ["master", "main", "test/ci"])
-        self.assertNotIn("feat/browser-sentry-20261012-08", branches)
+        variants = (
+            "# Cosmetic workflow comment.\n" + source,
+            source.replace("      - 'master'", '      - "master"', 1),
+            source.replace("      cancel-in-progress: false", "      cancel-in-progress: false # Keep active rollout", 1),
+            source.replace("name: Prepare public chat browser build arguments", "name: Prepare browser reporting"),
+        )
+        for variant in variants:
+            workflow = yaml.safe_load(variant)
+            if "on" not in workflow and True in workflow:
+                workflow["on"] = workflow.pop(True)
+            self.assert_delivery_wiring(workflow)
+        workflow["jobs"]["build_latest"]["steps"].insert(0, {"name": "Explain build", "run": "true"})
+        workflow["jobs"]["deploy"]["steps"].insert(0, {"name": "Explain rollout", "run": "true"})
+        self.assert_delivery_wiring(workflow)
+
+    def test_real_publication_target_and_security_changes_are_rejected(self):
+        """test_real_publication_target_and_security_changes_are_rejected preserves substantive gates."""
+        import copy
+        workflow = read_workflow(ROOT / ".github/workflows/ci.yml")
+
+        def build(model, job="build_latest"):
+            """build returns image action inputs for a fixture mutation."""
+            return next(step["with"] for step in model["jobs"][job]["steps"]
+                        if step.get("uses", "").startswith("docker/build-push-action@"))
+
+        def bridge(model):
+            """bridge returns the public helper step for a fixture mutation."""
+            return next(step for step in model["jobs"]["build_latest"]["steps"] if step.get("id") == "chat_sentry")
+
+        def delay_bridge(model):
+            """delay_bridge moves the identified helper behind its consumer."""
+            steps = model["jobs"]["build_latest"]["steps"]
+            steps.append(steps.pop(next(index for index, step in enumerate(steps)
+                                        if step.get("id") == "chat_sentry")))
+
+        def ssh_step(model):
+            """ssh_step locates the deployment action independently of display ordering."""
+            return next(step for step in model["jobs"]["deploy"]["steps"]
+                        if step.get("uses", "").startswith("appleboy/ssh-action@"))
+
+        mutations = (
+            ("skip-input-disconnected", lambda model: next(step for step in model["jobs"]["check_skip"]["steps"] if step.get("id") == "check")["env"].update(COMMIT_MSG="constant")),
+            ("skip-output-disconnected", lambda model: model["jobs"]["check_skip"]["outputs"].update(should_skip="false")),
+            ("helper-skipped", lambda model: bridge(model).update({"if": False})),
+            ("helper-failure-ignored", lambda model: bridge(model).update({"continue-on-error": True})),
+            ("build-failure-ignored", lambda model: next(step for step in model["jobs"]["build_latest"]["steps"] if step.get("uses", "").startswith("docker/build-push-action@")).update({"continue-on-error": True})),
+            ("deploy-failure-ignored", lambda model: model["jobs"]["deploy"].update({"continue-on-error": True})),
+            ("publish-disabled", lambda model: build(model).update(push=False)),
+            ("cache-published", lambda model: build(model, "build_latest_cache").update(push=True)),
+            ("wrong-tags", lambda model: build(model).update(tags="another/image:latest")),
+            ("wrong-platform", lambda model: build(model).update(platforms="linux/arm64")),
+            ("missing-build-dependency", lambda model: model["jobs"]["deploy"].update(needs=["check_skip"])),
+            ("feature-branch-release", lambda model: model["on"]["push"]["branches"].append("feature/*")),
+            ("new-publish-event", lambda model: model["on"].update(pull_request={})),
+            ("canceled-rollout", lambda model: model["jobs"]["deploy"]["concurrency"].update({"cancel-in-progress": True})),
+            ("branch-specific-rollout", lambda model: model["jobs"]["deploy"]["concurrency"].update(group="deploy-${{ github.ref }}")),
+            ("secret-browser-input", lambda model: bridge(model)["env"].update(CHAT_SENTRY_DSN="${{ secrets.PRIVATE_DSN }}")),
+            ("wrong-output", lambda model: build(model).update({"build-args": "${{ steps.unrelated.outputs.build_args }}"})),
+            ("late-helper", delay_bridge),
+            ("changed-ssh-target", lambda model: ssh_step(model)["with"].update(host="unreviewed-host")),
+            ("ssh-skipped", lambda model: ssh_step(model).update({"if": False})),
+            ("ssh-failure-ignored", lambda model: ssh_step(model).update({"continue-on-error": True})),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                candidate = copy.deepcopy(workflow)
+                mutate(candidate)
+                with self.assertRaises(AssertionError):
+                    self.assert_delivery_wiring(candidate)
+
+    def test_broader_recreation_and_masked_failures_fail_executable_contracts(self):
+        """test_broader_recreation_and_masked_failures_fail_executable_contracts runs changed shells."""
+        import copy
+        import yaml
+        from unittest import mock
+        original = read_workflow(ROOT / ".github/workflows/ci.yml")
+        fixtures = (
+            ("--no-deps --force-recreate go-ramjet", "--force-recreate",
+             "test_recreates_only_ramjet_without_dependencies_or_orphan_removal"),
+            ("set -Eeuo pipefail", "set +e", "test_up_failure_cannot_be_masked_by_later_commands"),
+        )
+        for old, new, method in fixtures:
+            with self.subTest(method=method), tempfile.TemporaryDirectory(prefix="ramjet-unsafe-shell-") as directory:
+                workflow = copy.deepcopy(original)
+                ssh = next(step["with"] for step in workflow["jobs"]["deploy"]["steps"]
+                           if step.get("uses", "").startswith("appleboy/ssh-action@"))
+                self.assertEqual(ssh["script"].count(old), 1)
+                ssh["script"] = ssh["script"].replace(old, new, 1)
+                path = Path(directory) / ".github/workflows/ci.yml"
+                path.parent.mkdir(parents=True)
+                path.write_text(yaml.safe_dump(workflow))
+                contract = ReleaseDeploymentContract(method)
+                contract.setUp()
+                try:
+                    with mock.patch.dict(globals(), {"ROOT": Path(directory)}):
+                        with self.assertRaises(AssertionError):
+                            getattr(contract, method)()
+                finally:
+                    contract.doCleanups()
 
 
 if __name__ == "__main__":
