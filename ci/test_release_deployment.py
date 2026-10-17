@@ -296,15 +296,15 @@ class ReleaseDeploymentContract(unittest.TestCase):
         self.assertNotRegex(triggers, r"(?m)^\s+paths(?:-ignore)?:")
         self.assertIn("run: python3 -B ci/test_release_deployment.py", workflow)
 
-    def test_release_selectors_preserve_builds_and_gate_only_marked_deployment(self):
-        """test_release_selectors_preserve_builds_and_gate_only_marked_deployment executes actual selectors."""
+    def test_release_selectors_deploy_marked_releases_and_preserve_prefix_skips(self):
+        """test_release_selectors_deploy_marked_releases_and_preserve_prefix_skips runs actual release selectors."""
         cases = [
             ("fix: ordinary release", (True, True, True)),
             ("fix: docs wording without a skipped prefix", (True, True, True)),
             ("fix: quoted '$()' commit text", (True, True, True)),
-            ("fix: release [publish only]", (True, True, False)),
-            ("fix: release [PUBLISH ONLY]", (True, True, False)),
-            ("fix: release\n\n[publish only]", (True, True, False)),
+            ("fix: release [publish only]", (True, True, True)),
+            ("fix: release [PUBLISH ONLY]", (True, True, True)),
+            ("fix: release\n\n[publish only]", (True, True, True)),
         ]
         for prefix in ("docs:", "doc:", "tests:", "test:", "ci:"):
             cases.append((prefix + " existing skip", (False, False, False)))
@@ -313,13 +313,21 @@ class ReleaseDeploymentContract(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(release_job_decisions(ROOT / ".github/workflows/ci.yml", message), expected)
 
+    def test_deploy_serializes_all_release_branches_without_cancellation(self):
+        """test_deploy_serializes_all_release_branches_without_cancellation protects an in-flight service rollout."""
+        source = (ROOT / ".github/workflows/ci.yml").read_text()
+        deploy = source.split("  deploy:\n", 1)[1]
+        concurrency = deploy.split("    concurrency:\n", 1)[1].split("    steps:\n", 1)[0]
+        self.assertRegex(concurrency, r"(?m)^      group: deploy-b1$")
+        self.assertRegex(concurrency, r"(?m)^      cancel-in-progress: false$")
+
 
 class BrowserSentryBuildArgsContract(unittest.TestCase):
     """BrowserSentryBuildArgsContract exercises bounded public inputs and unchanged release controls."""
 
     FIXTURE_DSN = "https://" + "a" * 32 + "@o123.ingest.sentry.io/456"
     FIXTURE_SHA = "b" * 40
-    APPROVED_WORKFLOW_SHA256 = "4ca28bd752d238557e0d3b08052b6a1a2b8760dfbf792ee6a421c643e01819c5"
+    APPROVED_WORKFLOW_SHA256 = "3065a79eebcb6b20e64a059bea5ed66c750cf53396e6ae9d2a3e3eca3b7e0300"
     BRIDGE_STEP = """      - name: Prepare public chat browser build arguments
         id: chat_sentry
         env:
