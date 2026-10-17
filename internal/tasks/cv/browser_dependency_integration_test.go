@@ -17,8 +17,10 @@ import (
 // TestBrowserPDFWaitsForFontsAndKeepsPagination tests real Chrome, typed CDP commands, and PDF decoding against a self-contained document.
 func TestBrowserPDFWaitsForFontsAndKeepsPagination(t *testing.T) {
 	t.Parallel()
+	logCVBrowserRuntime(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
+	ctx = withCVPDFPrintProbe(ctx, t)
 	const document = `<!doctype html><html><head><meta charset="utf-8">
 <style>@page {size: A4} .second {break-before: page}</style></head>
 <body><h1 id="ready">Not ready</h1><p class="second">Second page</p>
@@ -43,8 +45,10 @@ setTimeout(() => { document.getElementById('ready').textContent = 'Font-ready mi
 // TestBrowserPDFRejectsFontPromiseFailure verifies JavaScript exceptions still fail the rendering request.
 func TestBrowserPDFRejectsFontPromiseFailure(t *testing.T) {
 	t.Parallel()
+	logCVBrowserRuntime(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
+	ctx = withCVPDFPrintProbe(ctx, t)
 	payload, err := renderHTMLToPDF(ctx, `<html><body><script>
 Object.defineProperty(document.fonts, 'ready', {value: Promise.reject(new Error('font load failed'))});
 </script></body></html>`)

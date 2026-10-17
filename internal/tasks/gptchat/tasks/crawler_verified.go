@@ -95,8 +95,8 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	if err := crawleregress.VerifyReceipt(ctx, task.TaskID, task.Url, policy, receipt); err != nil {
 		return nil, "", nil, crawlerFailure("evidence_rejected", "verification", err)
 	}
-	if isCloudflareChallenge(htmlContent) {
-		return nil, "", nil, crawlerFailure("challenge", "render", nil)
+	if signal := cloudflareChallengeSignal(htmlContent); signal != "" {
+		return nil, "", nil, crawlerChallengeFailure(signal)
 	}
 	if strings.TrimSpace(htmlContent) == "" {
 		return nil, "", nil, crawlerFailure("empty_body", "render", nil)
@@ -155,43 +155,71 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 	logger := log.Logger.Named("run_dynamic_web_crawler.verified_crawler_task")
 	ctx = gmw.SetLogger(ctx, logger)
 	startedAt := time.Now()
+	// Publication errors belong to this reviewed boundary; the outer loop retains backoff without emitting them again.
+	publishFailure := func(publishErr error, cleanup bool) error {
+		fields := crawlerLifecycleFields(ctx, task.TaskID, "result_publication_failed", task.Status, "failed", startedAt)
+		fields = append(fields, zap.String("stage", "persistence"), zap.String("error_code", "publication_failed"),
+			zap.Bool("cleanup", cleanup), zap.Error(&crawlerTaskError{code: "publication_failed", stage: "persistence", cause: publishErr}))
+		logger.Error("crawler result publication failed", fields...)
+		return &crawlerLoggedError{cause: publishErr}
+	}
+	processingComplete := func(failure error) {
+		fields := crawlerLifecycleFields(ctx, task.TaskID, "processing_completed", task.Status, "", startedAt)
+		if failure != nil {
+			code, stage := crawlerDiagnostic(failure)
+			fields = append(fields, zap.String("stage", stage), zap.String("category", code), zap.String("error_code", code))
+			fields = append(fields, crawlerUpstreamStatusFields(failure)...)
+			if signal := crawlerDiagnosticSignal(failure); signal != "" {
+				fields = append(fields, zap.String("challenge_signal", string(signal)))
+			}
+			fields = append(fields, zap.Error(failure))
+			logger.Error("verified crawler task failed", fields...)
+			return
+		}
+		fields = append(fields, zap.String("stage", "processing"))
+		logger.Info("crawler processing completed", fields...)
+	}
+	publicationComplete := func() {
+		logger.Info("crawler terminal result published",
+			crawlerLifecycleFields(ctx, task.TaskID, "result_published", task.Status, "success", startedAt)...)
+	}
 	// Secure rendering and local conversion have no use for a provider token.
 	task.APIKey = ""
 	task.ResultHTML, task.ResultMarkdown, task.RequestChain = nil, nil, nil
 	task.EgressReceipt, task.FailedReason, task.FinishedAt = nil, nil, nil
 	task.Status = rlibs.TaskStatusRunning
 	if err := publishHTMLCrawlerTask(ctx, task); err != nil {
-		return errors.Wrap(err, "publish crawler running state")
+		return publishFailure(errors.Wrap(err, "publish crawler running state"), false)
 	}
 	body, markdown, receipt, fetchErr := fetchVerifiedCrawlerTask(ctx, task)
 	if err := ctx.Err(); err != nil {
-		// Accepted work needs a terminal state even when its render context ends.
-		// This bounded cleanup publishes no body and cannot resume any fallback.
+		// Accepted work needs a terminal state even when its independent worker context ends.
 		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelCleanup()
 		now := time.Now().UTC()
 		failure := crawlerFailure("worker_failed", "render", err)
 		if fetchErr != nil {
-			// A concrete failure precedes caller cleanup; do not overwrite its diagnostics.
+			// Preserve a concrete primary failure even when the worker context also ends.
 			failure = fetchErr
 		}
 		code, _ := crawlerDiagnostic(failure)
 		task.Status, task.FailedReason, task.FinishedAt = rlibs.TaskStatusFailed, &code, &now
+		processingComplete(failure)
 		if cleanupErr := publishHTMLCrawlerTask(withCrawlerFailure(cleanupCtx, failure), task); cleanupErr != nil {
-			logger.Warn("crawler terminal cleanup failed", zap.String("error_code", "cleanup_store_failed"),
-				zap.String("stage", "persistence"))
+			// The publication error is separate from the already-emitted processing failure.
+			_ = publishFailure(cleanupErr, true)
+		} else {
+			publicationComplete()
 		}
-		return errors.WithStack(errors.Join(failure, crawlerFailure("worker_failed", "render", err)))
+		return &crawlerLoggedError{cause: errors.WithStack(errors.Join(failure, crawlerFailure("worker_failed", "render", err)))}
 	}
 	now := time.Now().UTC()
 	task.FinishedAt = &now
 	if fetchErr != nil {
-		code, stage := crawlerDiagnostic(fetchErr)
+		code, _ := crawlerDiagnostic(fetchErr)
 		reason := code
 		task.Status, task.FailedReason = rlibs.TaskStatusFailed, &reason
-		fields := log.CrawlerFailureFields(task.TaskID, stage, code, time.Since(startedAt))
-		fields = append(fields, zap.Error(fetchErr))
-		logger.Error("verified crawler task failed", fields...)
+		processingComplete(fetchErr)
 		ctx = withCrawlerFailure(ctx, fetchErr)
 	} else {
 		task.Status, task.ResultHTML = rlibs.TaskStatusSuccess, body
@@ -201,6 +229,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 				task.RequestChain = append(task.RequestChain, origin.URL)
 			}
 		}
+		processingComplete(nil)
 		var markdownPtr *string
 		if markdown != "" {
 			markdownPtr = &markdown
@@ -208,12 +237,15 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		record := &CrawlRecord{TaskID: task.TaskID, CrawledAt: now,
 			URL: task.Url, RawBody: body, Markdown: markdownPtr}
 		if err := persistVerifiedCrawlRecord(ctx, record); err != nil {
-			logger.Warn("crawler audit persistence failed", zap.String("error_code", "audit_store_failed"),
-				zap.String("stage", "persistence"))
+			fields := crawlerLifecycleFields(ctx, task.TaskID, "audit_persistence_failed", task.Status, "", startedAt)
+			fields = append(fields, zap.String("error_code", "audit_store_failed"), zap.String("stage", "persistence"),
+				zap.Error(&crawlerTaskError{code: "audit_store_failed", stage: "persistence", cause: err}))
+			logger.Warn("crawler audit persistence failed", fields...)
 		}
 	}
 	if err := publishHTMLCrawlerTask(ctx, task); err != nil {
-		return errors.Wrap(err, "publish crawler terminal state")
+		return publishFailure(errors.Wrap(err, "publish crawler terminal state"), false)
 	}
+	publicationComplete()
 	return nil
 }

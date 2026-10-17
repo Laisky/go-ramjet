@@ -117,18 +117,31 @@ jobs:
           exit 1
 
       - name: Run release deployment contract tests
-        run: python3 ci/test_release_deployment.py
+        run: python3 -B ci/test_release_deployment.py
+
+      - name: Run CV diagnostic matrix driver contracts
+        run: python3 -B ci/test_probe_cv_print.py
 
       - name: Run Go tests
         run: go test ./... -count=1
 
       - name: Run browser dependency integration tests
+        id: cv_print_probe
         env:
           CRAWLER_HTTP_PROXY: ''
+          CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           command -v google-chrome || command -v chromium
           command -v pdftotext
-          dbus-run-session -- go test -tags=browser_integration ./internal/tasks/cv ./internal/tasks/gptchat/tasks -run '^Test(Browser|Renderer(Egress|Browser))' -count=1
+          python3 ci/probe_cv_print.py
+
+      - name: Upload bounded CV print diagnostic evidence
+        if: always() && steps.cv_print_probe.outcome != 'skipped'
+        uses: actions/upload-artifact@v5
+        with:
+          name: cv-print-diagnostic-evidence
+          path: /tmp/task02-cv-print-probe-report.json
+          if-no-files-found: error
 
       - name: Verify browser process network confinement
         run: go test ./cmd/crawler-browser-launcher -count=1
