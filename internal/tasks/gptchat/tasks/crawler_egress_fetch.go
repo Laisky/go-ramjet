@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 )
 
@@ -201,6 +202,27 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "renderer exchange")
 	}
+	// Preserve selected upstream facts before browser fulfillment removes framing headers.
+	countedBody := &rendererCountedBody{ReadCloser: response.Body}
+	response.Body = countedBody
+	observedResponse := &crawlercapture.Renderer{
+		RequestID: id, ParentRequestID: parent, Kind: kind, Method: method,
+		URL: crawlercapture.CapturedString(raw), UpstreamStatus: response.StatusCode,
+		PeerAddress: peer, Protocol: response.Proto,
+		DeclaredContentLength: response.ContentLength, ContentEncoding: response.Header.Get("Content-Encoding"),
+		TransferEncoding: append([]string(nil), response.TransferEncoding...), DecodedBody: crawlercapture.NotReached(),
+	}
+	var decodedBody []byte
+	var decodedObserved bool
+	defer func() {
+		if resultErr != nil {
+			if decodedObserved {
+				observedResponse.DecodedBody = crawlercapture.Captured(decodedBody)
+			}
+			observedResponse.EncodedBodyBytes = countedBody.bytes
+			observeRendererFailure(ctx, observedResponse)
+		}
+	}()
 	// A response status is evidence only; HTTP acceptance and body handling remain unchanged.
 	observedStatus := response.StatusCode
 	// Headers are observed even when decoding or reading this response later fails.
@@ -217,17 +239,56 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	case "gzip":
 		compressed, err = gzip.NewReader(response.Body)
 		if err != nil {
-			return nil, nil, errors.Wrap(errors.Join(err, response.Body.Close()), "decode renderer gzip")
+			observedResponse.FailurePhase = "decode"
+			observedResponse.DecodeError = err.Error()
+			closeErr := response.Body.Close()
+			if closeErr != nil {
+				observedResponse.CloseError = closeErr.Error()
+			}
+			return nil, nil, errors.Wrap(errors.Join(err, closeErr), "decode renderer gzip")
 		}
 		reader = compressed
 	default:
-		return nil, nil, errors.Wrap(errors.Join(errors.New("renderer content encoding denied"), response.Body.Close()), "reject renderer encoding")
+		observedResponse.FailurePhase = "decode"
+		observedResponse.DecodeError = "renderer content encoding denied"
+		closeErr := response.Body.Close()
+		if closeErr != nil {
+			observedResponse.CloseError = closeErr.Error()
+		}
+		return nil, nil, errors.Wrap(errors.Join(errors.New("renderer content encoding denied"), closeErr), "reject renderer encoding")
 	}
 	body, readErr := io.ReadAll(io.LimitReader(&rendererBudgetReader{fetcher: f, reader: reader}, rendererMaxResponseBytes+1))
+	decodedBody = body
+	decodedObserved = true
+	observedResponse.DecodedBodyComplete = true
+	if readErr != nil {
+		observedResponse.DecodedBodyComplete = false
+		observedResponse.ReadError = readErr.Error()
+		observedResponse.FailurePhase = "read"
+		f.bodyMu.Lock()
+		totalBudgetExceeded := f.bytes > rendererMaxTotalBytes
+		f.bodyMu.Unlock()
+		if totalBudgetExceeded {
+			observedResponse.FailurePhase = "budget"
+		}
+	}
 	if compressed != nil {
-		readErr = errors.Join(readErr, compressed.Close())
+		decodeCloseErr := compressed.Close()
+		if decodeCloseErr != nil {
+			observedResponse.DecodeCloseError = decodeCloseErr.Error()
+			if observedResponse.FailurePhase == "" {
+				observedResponse.FailurePhase = "decode"
+			}
+		}
+		readErr = errors.Join(readErr, decodeCloseErr)
 	}
 	closeErr := response.Body.Close()
+	if closeErr != nil {
+		observedResponse.CloseError = closeErr.Error()
+		if observedResponse.FailurePhase == "" {
+			observedResponse.FailurePhase = "close"
+		}
+	}
 	response.Header.Del("Content-Encoding")
 	response.Header.Del("Content-Length")
 	f.mu.Lock()
@@ -239,14 +300,18 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 		return nil, nil, errors.Wrap(err, "read renderer response")
 	}
 	if len(body) > rendererMaxResponseBytes {
+		observedResponse.FailurePhase = "budget"
+		observedResponse.DecodedBodyComplete = false
 		return nil, nil, errors.Errorf("renderer response budget exhausted")
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.sealed {
+		observedResponse.FailurePhase = "post_read"
 		return nil, nil, errors.Errorf("renderer evidence sealed during request")
 	}
 	if peer == "" {
+		observedResponse.FailurePhase = "post_read"
 		return nil, nil, errors.Errorf("renderer connection evidence missing")
 	}
 	return response, body, nil

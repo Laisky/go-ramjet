@@ -45,3 +45,28 @@ trim, error codes, task lifecycle, policy verification and success data remain
 unchanged. The supplied incident is not yet bound to an originating instance or
 target, so the added observations are prospective evidence, not a retrospective
 upstream diagnosis.
+
+
+## Exact private reproduction logs (later requirement, 2026-10-18)
+
+The scalar context above remains a backward-compatible diagnostic envelope; it
+is not sufficient to reproduce conversion. The later requirement adds a
+separate private application-native failure journal containing the original
+queued URL, browser-returned document, and the single exact serialized BODY
+argument passed to the pinned converter. Caller logs separately preserve the
+pre-trim declared URL and declared/resolved output option, joined by task ID.
+These selected bytes are not filtered, redacted or truncated.
+
+Ordinary alerts are bounded references to the emitting service/hostname/process
+and capture ID/hash, not the full reproduction transport. Complete files are
+synchronously published with private permissions and explicit durability status.
+The source default is container-local and does not establish production
+retention; approved persistent binds, filesystem support, capacity/monitoring and
+retention ownership are prerequisites to any auto-deploying release.
+
+A separate standalone command consumes only the private capture pair and runs
+the pinned local converter without browser/configuration/provider access.
+Script-only input can reproduce empty Markdown locally, but missing historical
+input is an instrumentation/retention gap, not evidence of a particular target
+or upstream cause. See [private failure logs and replay](../crawler-failure-journal.md)
+for exact representations, partial renderer response limits and release gates.

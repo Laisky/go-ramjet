@@ -81,3 +81,15 @@ helps distinguish future incidents without guessing the original website cause.
 The supplied 2026-10-18 event has not yet been bound to an originating instance or
 target, so this source repair does not establish its upstream cause. It adds no
 retry, alternate converter, external fetch or success fallback.
+
+
+## Exact private failure logs and replay
+
+Scalar failure context remains optional and backward compatible. Full
+reproduction uses the separate [private failure journal](../crawler-failure-journal.md),
+which retains the selected original input and exact converter argument without
+payload filtering or truncation. Notifications provide source/capture references;
+they are not the authoritative payload transport. Source-only defaults are
+container-local. A reviewed persistent bind and capacity/retention policy are
+required before an auto-deploying release; no runtime mount is changed by this
+source addition.
