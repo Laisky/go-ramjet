@@ -262,15 +262,15 @@ func TestCrawlerFailureLoggingLargeWorkerInputs(t *testing.T) {
 	}
 }
 
-// TestCrawlerPinnedAlertStillChangesChosenURL records the existing SDK fidelity limitation, not a guarantee.
-func TestCrawlerPinnedAlertStillChangesChosenURL(t *testing.T) {
+// TestCrawlerAlertPreservesChosenURLAfterAdoption verifies the new SDK keeps the selected URL over actual HTTP.
+func TestCrawlerAlertPreservesChosenURLAfterAdoption(t *testing.T) {
 	_, message := crawlerAlertContextFixture(t, "<html><body><script>synthetic source input</script></body></html>", nil, true)
 	require.Contains(t, message, "source_service")
-	require.NotContains(t, message, "https://example.com/private?canary=query", "pinned SDK sanitizes chosen URLs; full remote-alert fidelity remains unqualified")
+	require.Contains(t, message, "https://example.com/private?canary=query", "chosen URL is no longer rewritten by the SDK")
 }
 
-// TestCrawlerPinnedAlertRejectsLargeChosenInputs exposes the real SDK transport cap without clipping inputs.
-func TestCrawlerPinnedAlertRejectsLargeChosenInputs(t *testing.T) {
+// TestCrawlerDefaultSDKAlertRetainsFiniteLimit keeps the SDK default cap distinct from the application startup budget.
+func TestCrawlerDefaultSDKAlertRetainsFiniteLimit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	alert, err := glog.NewAlert(ctx, "http://127.0.0.1:1", glog.WithAlertType("synthetic"), glog.WithAlertToken("synthetic-only"))

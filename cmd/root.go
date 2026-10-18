@@ -11,6 +11,7 @@ import (
 	gcmd "github.com/Laisky/go-utils/v6/cmd"
 	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
+	"github.com/Laisky/zap/zapcore"
 	"github.com/spf13/cobra"
 
 	"github.com/Laisky/go-ramjet/internal/pkg/singleton"
@@ -111,13 +112,17 @@ func setupLogger(ctx context.Context) {
 			glog.WithAlertType(gconfig.Shared.GetString("logger.alert_type")),
 			glog.WithAlertToken(gconfig.Shared.GetString("logger.push_token")),
 			glog.WithAlertHookLevel(zap.ErrorLevel),
+			glog.WithAlertMaxMessageBytes(log.HTTPAlertMaxMessageBytes),
 			glog.WithRateLimiter(ratelimiter),
 		)
 		if err != nil {
 			log.Logger.Panic("create AlertPusher", zap.Error(err))
 		}
 
-		opts = append(opts, zap.HooksWithFields(log.CrawlerDiagnosticAlertHook(alertPusher.GetZapHook())))
+		alertCore := log.CrawlerDiagnosticAlertCore(alertPusher.GetZapCore())
+		opts = append(opts, zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, alertCore)
+		}))
 		log.Logger.Info("set alert",
 			zap.String("alert_api", gconfig.Shared.GetString("logger.push_api")),
 			zap.String("alert_type", gconfig.Shared.GetString("logger.alert_type")),
