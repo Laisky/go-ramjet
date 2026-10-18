@@ -9,27 +9,54 @@ names the trusted PEM CA file. The bearer-token file is private runtime material
 The CA file is public trust material; its authenticity must still be preserved. APP_LOG_OTLP_HOST and APP_LOG_OTLP_ENV must explicitly label the controlled host
 and deployment environment. service.name is fixed to go-ramjet and service.namespace to laisky.
 
-The OTLP branch preserves ordinary operational messages, sanitized logger identity,
-source locations and generic primitive fields, including strings, integers, finite
-floats, booleans, durations (seconds), timestamps and sanitized error text. There is
-no event/message/diagnostic-field allowlist. It reuses go-utils SanitizeDiagnosticText
-for recognizable credentials, authentication values, URLs and labeled raw payloads,
-and also redacts the configured OTLP bearer token if echoed.
+The OTLP branch preserves the original application message and supplied fields by
+default. It performs no automatic sanitization, token replacement, key filtering,
+omission or truncation. Existing application-level logging and alert policies remain
+the application's responsibility; this bridge adds no optional redaction setting.
 
-Credential/raw-request/response-body keys are excluded using the existing normalized
-key deny contract plus actual MCP/search payload labels. Names such as token_count,
-query_latency and password_reset_required remain ordinary diagnostics. Unlabeled
-private prose cannot be recognized reliably: callers must not put user content into
-messages. Arbitrary object/array/reflection/Stringer marshalers and raw bytes are not
-executed or exported; summarize them with ordinary fields. Namespace fields stop
-projection rather than flattening private nested context.
+Fields use the fork's native typed Zap encoder contract. Durations are signed
+nanoseconds; timestamps use RFC3339Nano, retaining precision and the selected offset.
+Binary values remain native OTLP bytes. Valid Unicode strings remain strings; invalid
+Unicode message/field strings retain their original bytes as BytesValue. Floats retain
+native precision, sign and nonfinite values. Complex values use their standard Go
+string representation. Object, Array, Stringer and Error invoke their ordinary
+application encoders; Reflect alone follows application JSON tags/custom marshaling
+before recursive native mapping. Nulls, empty containers and unknown names survive.
 
-Projection bounds are 4 KiB body, 2 KiB strings, 128-byte keys, 24 attributes (including
-reserved flags), 16 KiB approximate content budget and at most 256 examined source
-fields. Duplicate keys do not grow output. app.log.attributes_dropped and
-app.log.content_truncated make exclusions and bounds visible. Fixed resource identity,
-logger/source metadata and these flags cannot be overwritten by source fields.
-Stdout keeps the original message and fields unchanged.
+The bridge follows [OpenTelemetry's arbitrary-value mapping](https://opentelemetry.io/docs/specs/otel/common/attribute-type-mapping/):
+integers outside signed int64 and reflected JSON decimals beyond double range or
+shortest-roundtrip precision become exact decimal strings. A multimap lists every key
+once, with an ordered array of all values for each key; singleton keys in that object
+also become one-element arrays. An array supplied as one source value stays one array
+element. No duplicate-key override or SDK-specific duplicate extension is required.
+
+Bound fields are snapshotted once per opted-in output branch at With, preserving
+namespace and binding order. The normal stdout branch still owns its own encoding,
+as with any additional logger sink; callbacks should be deterministic. Bound callbacks
+are not rerun for each event. Disabled logger creation returns the original Core and
+adds no callbacks. APP_LOG_OTLP_ENDPOINT must be set before logger initialization;
+changing the environment later does not retrofit earlier disabled logger branches.
+The base Core's acceptance, sampling, alerts and writes remain authoritative.
+
+SDK attribute count, string-length and nesting limits are explicitly disabled so SDK
+defaults or environment settings cannot silently rewrite content. Empty root attribute keys or non-Unicode map keys, malformed reflected Unicode such as a lone surrogate, or private
+encoder failures reject the whole remote record with a fixed hook diagnostic and an
+observable Rejected count. Normal application JSON marshal errors retain Zap's normal
+error-field behavior. User encoders run before SDK admission, so shutdown does not wait
+for a stalled callback; a callback completing after admission closes is explicitly
+rejected and counted. Local stdout retains its existing behavior. Receiver limits can
+still reject records; exporter-return counters and final queries distinguish outcomes.
+
+Record attributes and resource attributes remain separate native OTLP scopes even when
+names coincide; application fields take precedence over optional bridge-added
+logger/source metadata. The sink's indexing and native OTLP mapping may not retain all
+of these distinctions. The isolated pinned VictoriaLogs mapping crashed on colliding
+resource/record stream-label names, so this source must use a separately qualified
+lossless downstream representation before deployment. Transport success alone is not
+a lossless-storage promise. No application-side mirror or content filter is added. The experimental downstream
+JSON-array representation retains the ordinary JSON-compatible subset, but collapses
+some integer/double and bytes/string distinctions; nonfinite values also produced
+invalid JSON in the pinned sink. It is not qualified as a general lossless backend.
 
 One private SDK provider batches at most 512 queued records, 128 per batch, with a
 one-second interval and five-second export timeout. The SDK overwrites oldest queued
@@ -38,7 +65,7 @@ WAL durability begins only after collector acceptance. Retry outcomes can be amb
 and duplicate delivery remains possible. Hard process failure can lose buffered logs.
 
 LogOTLPStats reports emitted, successfully returned exporter records, failed exporter
-records and unresolved records. Unresolved includes queued/in-flight work and possible
+records, whole records rejected before SDK admission, and unresolved records. Unresolved includes queued/in-flight work and possible
 SDK overflow; it is not exact queue size or a live drop count. After stopped producers
 and a successful shutdown, remaining unresolved records were not exported. Exporter
 success alone does not prove VictoriaLogs storage: validate the actual query separately.
@@ -71,10 +98,10 @@ Failed counts records in failed export batches, not an exact receiver-rejected i
 count. Exported still means exporter return success rather than verified final storage.
 No process-global handler is installed to rewrite SDK-internal configuration diagnostics.
 
-The SDK merges resource environment attributes even with an explicit resource. Setup
-therefore validates bounded resource-environment syntax before SDK detector diagnostics
-and rejects any merged attributes beyond the application-owned identity. Environment
-identity values cannot replace fixed application labels. Configuration errors are fixed
+The SDK preserves normal custom OTEL_RESOURCE_ATTRIBUTES. Setup validates resource
+syntax before SDK parsing and reports malformed configuration explicitly; it does not
+filter keys by content. Explicit APP identity labels override environment identity
+values through normal resource merge precedence. Configuration errors are fixed
 messages, and the environment is never rewritten.
 
 Deployment must give Docker at least a 30-second stop_grace_period, covering the

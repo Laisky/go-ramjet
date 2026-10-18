@@ -78,16 +78,23 @@ func isolateOTLP(t *testing.T, p *otlpPipeline) {
 	otlpState.retained = p
 	otlpState.current.Store(p)
 	otlpState.Unlock()
+	previousLogger := Logger
+	Logger = Logger.WithOptions(privateOTLPOption())
 	t.Cleanup(func() {
 		require.NoError(t, ShutdownOTLP(context.Background()))
 		otlpState.Lock()
 		otlpState.retained = previous
 		otlpState.Unlock()
+		Logger = previousLogger
 	})
 }
 
-// TestOTLPInitCapturedChildrenAndPrivacy verifies startup-captured children export safely once enabled.
-func TestOTLPInitCapturedChildrenAndPrivacy(t *testing.T) {
+// TestOTLPInitCapturedChildrenAndFidelity verifies startup-captured children retain supplied content once enabled.
+func TestOTLPInitCapturedChildrenAndFidelity(t *testing.T) {
+	t.Setenv("APP_LOG_OTLP_ENDPOINT", "https://synthetic.invalid")
+	previousLogger := Logger
+	Logger = Logger.WithOptions(privateOTLPOption())
+	t.Cleanup(func() { Logger = previousLogger })
 	captured := Logger.Named("worker token=private-dynamic-name-canary").With(zap.String("authorization", "bound-secret-canary"), zap.Int("attempt", 2))
 	sink := &captureExporter{}
 	p := newOTLPPipeline(sink, "b1", "production", 512, 128, time.Hour)
@@ -97,13 +104,13 @@ func TestOTLPInitCapturedChildrenAndPrivacy(t *testing.T) {
 	records := sink.snapshot()
 	require.Len(t, records, 1)
 	record := records[0]
-	require.Equal(t, "cache refresh api_key=[redacted]", record.Body().AsString())
+	require.Equal(t, "cache refresh api_key=message-secret-canary", record.Body().AsString())
 	attrs := map[string]any{}
 	record.WalkAttributes(func(kv attribute.KeyValue) bool { attrs[string(kv.Key)] = kv.Value.AsInterface(); return true })
 	require.EqualValues(t, 2, attrs["attempt"])
 	require.EqualValues(t, 503, attrs["status_code"])
-	require.NotContains(t, fmt.Sprint(attrs), "canary")
-	require.NotContains(t, attrs, "count")
+	require.Contains(t, fmt.Sprint(attrs), "canary")
+	require.Contains(t, attrs, "count")
 	var service string
 	for _, attr := range record.Resource().Attributes() {
 		if attr.Key == "service.name" {
@@ -118,12 +125,6 @@ func TestOTLPInitCapturedChildrenAndPrivacy(t *testing.T) {
 	require.Zero(t, stats.Unresolved)
 }
 
-// explosiveValue proves unreviewed interfaces are never evaluated by the remote hook.
-type explosiveValue struct{}
-
-// String panics if remote conversion improperly evaluates arbitrary user objects.
-func (explosiveValue) String() string { panic("remote hook evaluated arbitrary object") }
-
 // TestOTLPStdoutAndSingleHook preserves the original sink and one remote event.
 func TestOTLPStdoutAndSingleHook(t *testing.T) {
 	sink := &captureExporter{}
@@ -131,7 +132,7 @@ func TestOTLPStdoutAndSingleHook(t *testing.T) {
 	var local bytes.Buffer
 	logger, err := glog.NewWithName("go-ramjet", glog.LevelInfo, zap.WrapCore(func(zapcore.Core) zapcore.Core {
 		return zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&local), zapcore.InfoLevel)
-	}), zap.HooksWithFields(otlpHook))
+	}), privateOTLPOption())
 	require.NoError(t, err)
 	logger.Info("local-useful-evidence", zap.String("local_only", "kept"))
 	logger.Debug("suppressed")
@@ -195,15 +196,19 @@ func TestOTLPTLSConfigIdempotenceAndShutdown(t *testing.T) {
 	})
 	shutdown, err := ConfigureOTLP(context.Background())
 	require.NoError(t, err)
+	previousLogger := Logger
+	Logger = Logger.WithOptions(privateOTLPOption())
+	t.Cleanup(func() { Logger = previousLogger })
 	original := otlpState.current.Load()
 	_, err = ConfigureOTLP(context.Background())
 	require.NoError(t, err)
 	require.Same(t, original, otlpState.current.Load())
-	Logger.Info("cache refresh token=private-message-canary", zap.Int("attempt", 1))
+	Logger.Info("cache refresh token=private-message-canary", zap.Int("attempt", 1), zap.String("configured_token_echo", "synthetic-token"))
 	require.NoError(t, shutdown(context.Background()))
 	select {
 	case body := <-requests:
-		require.NotContains(t, string(body), "canary")
+		require.Contains(t, string(body), "private-message-canary")
+		require.Contains(t, string(body), "synthetic-token")
 		var req collectorlog.ExportLogsServiceRequest
 		require.NoError(t, proto.Unmarshal(body, &req))
 		require.Len(t, req.ResourceLogs, 1)
@@ -287,15 +292,6 @@ func TestOTLPShutdownConcurrentEmission(t *testing.T) {
 	require.EqualValues(t, len(sink.snapshot()), LogOTLPStats().Emitted)
 }
 
-// TestOTLPPrivacyDoesNotInvokeObject ensures private conversion cannot invoke user callbacks.
-func TestOTLPPrivacyDoesNotInvokeObject(t *testing.T) {
-	sink := &captureExporter{}
-	isolateOTLP(t, newOTLPPipeline(sink, "", "", 2, 1, time.Hour))
-	require.NoError(t, otlpHook(zapcore.Entry{Level: zapcore.InfoLevel, Time: time.Now()}, []zapcore.Field{zap.Any("count", explosiveValue{})}))
-	require.NoError(t, ShutdownOTLP(context.Background()))
-	require.Len(t, sink.snapshot(), 1)
-}
-
 // TestOTLPSDKErrorSanitization captures actual SDK errors from a terminal HTTP failure.
 func TestOTLPSDKErrorSanitization(t *testing.T) {
 	reports := make(chan string, 4)
@@ -321,7 +317,7 @@ func TestOTLPSDKErrorSanitization(t *testing.T) {
 	require.EqualValues(t, 1, LogOTLPStats().Failed)
 }
 
-// TestOTLPExternalAcceptance sends one private synthetic record through an explicitly opted-in HTTPS collector.
+// TestOTLPExternalAcceptance sends one synthetic fidelity record through an explicitly opted-in HTTPS collector.
 // Runtime credentials are consumed through the production file API and never printed.
 func TestOTLPExternalAcceptance(t *testing.T) {
 	if os.Getenv("OTLP_LOG_ACCEPTANCE") != "1" {
@@ -341,7 +337,10 @@ func TestOTLPExternalAcceptance(t *testing.T) {
 	shutdown, err := ConfigureOTLP(context.Background())
 	require.NoError(t, err)
 	require.True(t, LogOTLPStats().Enabled, "APP_LOG_OTLP_ENDPOINT must enable the production HTTPS path")
-	Logger.Info("synthetic operational refresh completed", zap.String("stage", "cache"), zap.String("future_revision", "parser-v2"), zap.Int("channel_count", 17), zap.Float64("duration_ms", 12.5), zap.Bool("cache_ready", true), zap.String("api_key", "external-private-api-canary"), zap.String("authorization", "Bearer external-private-auth-canary"), zap.String("target_url", "https://user:external-private-url-canary@example.test/private?token=external-private-query-canary"), zap.String("request_body", "external-private-body-canary"), zap.Int("status_code", 299), zap.Bool("success", true))
+	Logger.Info("synthetic operational refresh completed", zap.String("stage", "cache"), zap.String("future_revision", "parser-v2"), zap.Int("channel_count", 17), zap.Float64("duration_ms", 12.5), zap.Bool("cache_ready", true), zap.String("api_key", "external-private-api-canary"), zap.String("authorization", "Bearer external-private-auth-canary"), zap.String("target_url", "https://user:external-private-url-canary@example.test/private?token=external-private-query-canary"), zap.String("request_body", "external-private-body-canary"), zap.Int("status_code", 299), zap.Bool("success", true),
+		zap.Object("object", fidelityObject{}), zap.Array("array", fidelityArray{}), zap.Reflect("null_value", nil), zap.Reflect("empty_object", map[string]any{}), zap.Reflect("empty_array", []any{}),
+		zap.String("service.name", "application-service"), zap.String("host.name", "application-host"), zap.String("_msg", "application-field"),
+		zap.Namespace("namespace"), zap.String("payload", "synthetic-namespace-canary"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	require.NoError(t, shutdown(ctx))
@@ -349,5 +348,6 @@ func TestOTLPExternalAcceptance(t *testing.T) {
 	require.EqualValues(t, 1, stats.Emitted)
 	require.EqualValues(t, 1, stats.Exported)
 	require.Zero(t, stats.Failed)
+	require.Zero(t, stats.Rejected)
 	require.Zero(t, stats.Unresolved)
 }

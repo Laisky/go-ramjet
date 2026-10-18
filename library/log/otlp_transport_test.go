@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/Laisky/zap/zapcore"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	collectorlog "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	"google.golang.org/protobuf/proto"
@@ -45,6 +47,9 @@ func configureSyntheticTLS(t *testing.T, server *httptest.Server) func(context.C
 	})
 	shutdown, err := ConfigureOTLP(context.Background())
 	require.NoError(t, err)
+	previousLogger := Logger
+	Logger = Logger.WithOptions(privateOTLPOption())
+	t.Cleanup(func() { Logger = previousLogger })
 	return shutdown
 }
 
@@ -119,25 +124,27 @@ func TestOTLPRequiresExplicitResourceLabels(t *testing.T) {
 	}
 }
 
-// TestOTLPDuplicateAttributesStayBounded prevents allocation proportional to repeated approved keys.
-func TestOTLPDuplicateAttributesStayBounded(t *testing.T) {
-	fields := make([]zapcore.Field, 20000)
+// TestOTLPDuplicateAttributesPreserved retains every application-supplied duplicate on the OTLP record.
+func TestOTLPDuplicateAttributesPreserved(t *testing.T) {
+	fields := make([]zapcore.Field, 1000)
 	for index := range fields {
 		fields[index] = zap.Int("attempt", index)
 	}
-	_, attrs := projectOTLPContent(zapcore.Entry{}, fields, "")
-	require.Len(t, attrs, 2)
-	require.EqualValues(t, 0, attrs[0].Value.AsInt64())
-	bounded := testing.AllocsPerRun(20, func() { _, _ = projectOTLPContent(zapcore.Entry{}, fields[:256], "") })
-	oversized := testing.AllocsPerRun(20, func() { _, _ = projectOTLPContent(zapcore.Entry{}, fields, "") })
-	require.LessOrEqual(t, oversized, bounded+1, "input field limit must bound duplicate processing allocations")
 	sink := &captureExporter{}
 	isolateOTLP(t, newOTLPPipeline(sink, "", "", 2, 1, time.Hour))
 	require.NoError(t, otlpHook(zapcore.Entry{Time: time.Now()}, fields))
 	require.NoError(t, ShutdownOTLP(context.Background()))
 	records := sink.snapshot()
 	require.Len(t, records, 1)
-	require.Equal(t, 2, records[0].AttributesLen())
+	require.Equal(t, 1, records[0].AttributesLen())
+	records[0].WalkAttributes(func(field attribute.KeyValue) bool {
+		values := field.Value.AsSlice()
+		require.Len(t, values, len(fields))
+		for index, value := range values {
+			require.EqualValues(t, index, value.AsInt64())
+		}
+		return true
+	})
 }
 
 // TestOTLPPartialSuccessIsNotStorageAcceptance records sanitized terminal rejection without claiming storage acceptance.
@@ -178,8 +185,8 @@ func TestOTLPTransportUntrustedCertificateFails(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestOTLPResourceEnvironmentCannotLeak validates unknown and malformed environment metadata before SDK diagnostics.
-func TestOTLPResourceEnvironmentCannotLeak(t *testing.T) {
+// TestOTLPResourceEnvironmentPreserved validates malformed syntax and preserves operator-chosen metadata.
+func TestOTLPResourceEnvironmentPreserved(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	defer server.Close()
 	shutdown := configureSyntheticTLS(t, server)
@@ -193,7 +200,7 @@ func TestOTLPResourceEnvironmentCannotLeak(t *testing.T) {
 	handler := otel.GetErrorHandler()
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) { reports <- err.Error() }))
 	t.Cleanup(func() { otel.SetErrorHandler(handler) })
-	for _, raw := range []string{"private_payload=private-env-canary", "broken-private-env-canary", "service.name=%zz-private-env-canary"} {
+	for _, raw := range []string{"broken-synthetic-env-canary", "service.name=%zz-synthetic-env-canary"} {
 		t.Run(raw[:min(len(raw), 10)], func(t *testing.T) {
 			t.Setenv("OTEL_RESOURCE_ATTRIBUTES", raw)
 			_, err := ConfigureOTLP(context.Background())
@@ -203,6 +210,52 @@ func TestOTLPResourceEnvironmentCannotLeak(t *testing.T) {
 			require.Empty(t, reports)
 		})
 	}
-	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=ignored,host.name=ignored,deployment.environment.name=ignored")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=ignored,host.name=ignored,deployment.environment.name=ignored,private_payload=synthetic-resource-canary")
 	require.NoError(t, validateOTLPResource("b1", "test"))
+	sink := &captureExporter{}
+	isolateOTLP(t, newOTLPPipeline(sink, "b1", "test", 512, 128, time.Hour))
+	Logger.Info("resource")
+	require.NoError(t, ShutdownOTLP(context.Background()))
+	records := sink.snapshot()
+	require.Len(t, records, 1)
+	attrs := records[0].Resource().Set()
+	custom, ok := attrs.Value(attribute.Key("private_payload"))
+	require.True(t, ok)
+	require.Equal(t, "synthetic-resource-canary", custom.AsString())
+	host, ok := attrs.Value(attribute.Key("host.name"))
+	require.True(t, ok)
+	require.Equal(t, "b1", host.AsString())
+}
+
+// TestOTLPResourceLabelsPreserveOperatorText accepts valid labels without bridge naming policy.
+func TestOTLPResourceLabelsPreserveOperatorText(t *testing.T) {
+	requests := make(chan []byte, 1)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		requests <- body
+		w.Header().Set("Content-Type", "application/x-protobuf")
+	}))
+	defer server.Close()
+	shutdown := configureSyntheticTLS(t, server)
+	require.NoError(t, shutdown(context.Background()))
+	otlpState.Lock()
+	otlpState.retained = nil
+	otlpState.Unlock()
+	host := "synthetic host Unicode é " + strings.Repeat("h", 180)
+	environment := "synthetic environment é " + strings.Repeat("e", 180)
+	t.Setenv("APP_LOG_OTLP_HOST", host)
+	t.Setenv("APP_LOG_OTLP_ENV", environment)
+	shutdown, err := ConfigureOTLP(context.Background())
+	require.NoError(t, err)
+	Logger.Info("resource text")
+	require.NoError(t, shutdown(context.Background()))
+	var request collectorlog.ExportLogsServiceRequest
+	require.NoError(t, proto.Unmarshal(<-requests, &request))
+	fields := map[string]string{}
+	for _, field := range request.ResourceLogs[0].Resource.Attributes {
+		fields[field.Key] = field.Value.GetStringValue()
+	}
+	require.Equal(t, host, fields["host.name"])
+	require.Equal(t, environment, fields["deployment.environment.name"])
 }

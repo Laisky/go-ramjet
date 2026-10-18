@@ -23,7 +23,7 @@ type TelegramCli struct {
 func (t *TelegramCli) Setup() {
 	t.url = gconfig.Shared.GetString("telegram.api")
 	t.cli = graphql.NewClient(t.url, nil)
-	log.Logger.Info("configured telegram alert client")
+	log.Logger.Info("setup url", zap.String("url", t.url))
 }
 
 type alertMutation struct {

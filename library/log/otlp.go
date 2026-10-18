@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Laisky/errors/v2"
 	"go.opentelemetry.io/otel/attribute"
@@ -33,22 +33,23 @@ var otlpState struct {
 
 // otlpPipeline owns one private provider and its delivery counters.
 type otlpPipeline struct {
-	provider        *sdklog.LoggerProvider
-	logger          otellog.Logger
-	admission       sync.RWMutex
-	stopped         bool
-	redactionSecret string
-	emitted         atomic.Uint64
-	exported        atomic.Uint64
-	failed          atomic.Uint64
+	provider  *sdklog.LoggerProvider
+	logger    otellog.Logger
+	admission sync.RWMutex
+	stopped   bool
+	emitted   atomic.Uint64
+	exported  atomic.Uint64
+	failed    atomic.Uint64
+	rejected  atomic.Uint64
 }
 
 // OTLPStats reports process-local attempts and outcomes, not durable acceptance.
 // Unresolved includes queued, in-flight and SDK-overflow records; it is not a drop counter.
+// Rejected counts whole records that cannot be encoded or represented before SDK admission.
 type OTLPStats struct {
-	Enabled                               bool
-	Emitted, Exported, Failed, Unresolved uint64
-	QueueCapacity                         int
+	Enabled                                         bool
+	Emitted, Exported, Failed, Rejected, Unresolved uint64
+	QueueCapacity                                   int
 }
 
 // LogOTLPStats returns bounded pipeline counters without emitting another log.
@@ -60,7 +61,7 @@ func LogOTLPStats() OTLPStats {
 	if p == nil {
 		return s
 	}
-	s.Emitted, s.Exported, s.Failed = p.emitted.Load(), p.exported.Load(), p.failed.Load()
+	s.Emitted, s.Exported, s.Failed, s.Rejected = p.emitted.Load(), p.exported.Load(), p.failed.Load(), p.rejected.Load()
 	if s.Emitted > s.Exported+s.Failed {
 		s.Unresolved = s.Emitted - s.Exported - s.Failed
 	}
@@ -103,9 +104,8 @@ func ConfigureOTLP(ctx context.Context) (func(context.Context) error, error) {
 		return nil, errors.New("invalid OTLP CA file")
 	}
 	host, env := os.Getenv("APP_LOG_OTLP_HOST"), os.Getenv("APP_LOG_OTLP_ENV")
-	valid := regexp.MustCompile(`^[a-zA-Z0-9._:-]{1,128}$`)
 	for _, label := range []string{host, env} {
-		if !valid.MatchString(label) {
+		if label == "" || !utf8.ValidString(label) {
 			return nil, errors.New("invalid OTLP resource label")
 		}
 	}
@@ -122,7 +122,6 @@ func ConfigureOTLP(ctx context.Context) (func(context.Context) error, error) {
 		return nil, errors.New("create OTLP log exporter")
 	}
 	p := newOTLPPipeline(exporter, host, env, otlpQueueSize, 128, time.Second)
-	p.redactionSecret = bearer
 	otlpState.retained = p
 	otlpState.current.Store(p)
 	return ShutdownOTLP, nil
@@ -158,7 +157,7 @@ func newOTLPPipeline(exporter sdklog.Exporter, host, env string, queue, batch in
 		sdklog.WithMaxQueueSize(queue), sdklog.WithExportMaxBatchSize(batch),
 		sdklog.WithExportInterval(interval), sdklog.WithExportTimeout(5*time.Second))
 	p.provider = sdklog.NewLoggerProvider(sdklog.WithResource(explicitOTLPResource(host, env)), sdklog.WithProcessor(processor),
-		sdklog.WithAttributeCountLimit(24), sdklog.WithAttributeValueLengthLimit(2048))
+		sdklog.WithAttributeCountLimit(-1), sdklog.WithAttributeValueLengthLimit(-1), sdklog.WithAttributeValueDepthLimit(-1))
 	p.logger = p.provider.Logger("github.com/Laisky/go-ramjet/library/log")
 	return p
 }
@@ -229,39 +228,21 @@ func explicitOTLPResource(host, env string) *resource.Resource {
 	return resource.NewSchemaless(attrs...)
 }
 
-// validateOTLPResource rejects unexpected SDK environment attributes before a provider can export them.
-// Syntax is checked first because SDK detector diagnostics can contain malformed input text.
-func validateOTLPResource(host, env string) error {
+// validateOTLPResource rejects malformed SDK resource syntax without restricting operator-chosen keys.
+// The SDK preserves custom attributes; explicit application identity wins normal merge precedence.
+func validateOTLPResource(_, _ string) error {
 	raw := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
-	if len(raw) > 16*1024 {
-		return errors.New("unexpected OTLP resource environment configuration")
+	if raw == "" {
+		return nil
 	}
-	if raw != "" {
-		for _, pair := range strings.Split(raw, ",") {
-			key, value, ok := strings.Cut(strings.TrimSpace(pair), "=")
-			key = strings.TrimSpace(key)
-			if !ok || !validOTLPKey(key) || !fixedOTLPResourceKey(key) {
-				return errors.New("unexpected OTLP resource environment configuration")
-			}
-			if _, err := url.PathUnescape(strings.TrimSpace(value)); err != nil {
-				return errors.New("unexpected OTLP resource environment configuration")
-			}
+	for _, pair := range strings.Split(raw, ",") {
+		key, value, ok := strings.Cut(strings.TrimSpace(pair), "=")
+		if !ok || !validOTLPKey(strings.TrimSpace(key)) {
+			return errors.New("invalid OTLP resource environment configuration")
+		}
+		if _, err := url.PathUnescape(strings.TrimSpace(value)); err != nil {
+			return errors.New("invalid OTLP resource environment configuration")
 		}
 	}
-	explicit := explicitOTLPResource(host, env)
-	merged, err := resource.Merge(resource.Environment(), explicit)
-	if err != nil || !merged.Equal(explicit) {
-		return errors.New("unexpected OTLP resource environment configuration")
-	}
 	return nil
-}
-
-// fixedOTLPResourceKey identifies metadata keys that explicit application identity always overrides.
-func fixedOTLPResourceKey(key string) bool {
-	switch key {
-	case "service.name", "service.namespace", "host.name", "deployment.environment.name":
-		return true
-	default:
-		return false
-	}
 }
