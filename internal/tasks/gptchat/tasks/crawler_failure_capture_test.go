@@ -198,3 +198,75 @@ func TestCrawlerFailureJournalActualAlertReference(t *testing.T) {
 	require.Contains(t, string(record.Converter.Input.Bytes()), strings.Repeat("synthetic-private-body;", 1024))
 	require.Greater(t, len(directory), 3000, "real long configured path must exercise receiver truncation")
 }
+
+// TestCrawlerFailureJournalLargeWorkerInputs preserves observed and serialized sizes without imposing a capture cap.
+func TestCrawlerFailureJournalLargeWorkerInputs(t *testing.T) {
+	for _, mode := range []string{"serialized_body_expansion", "oversize_browser_document"} {
+		t.Run(mode, func(t *testing.T) {
+			preserveVerifiedWorkerSeams(t)
+			directory := t.TempDir()
+			require.NoError(t, os.Chmod(directory, 0700))
+			journal, err := crawlercapture.NewJournal(directory, crawlercapture.Source{Service: "go-ramjet", Hostname: "synthetic-large-worker", ProcessRunID: "synthetic-large-run"})
+			require.NoError(t, err)
+			original := newCrawlerFailureJournal
+			newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return journal, nil }
+			t.Cleanup(func() { newCrawlerFailureJournal = original })
+			count := rendererMaxResponseBytes/5 + 128
+			// Literal apostrophes are valid inside a double-quoted DOM attribute.
+			// Go's real BODY serializer expands each to &#39; without changing the visible text.
+			page := "<html><body data-fixture=\"" + strings.Repeat("'", count) + "\"><p>visible positive control</p></body></html>"
+			expectedInput := "<body data-fixture=\"" + strings.Repeat("&#39;", count) + "\"><p>visible positive control</p></body>"
+			if mode == "oversize_browser_document" {
+				page = "<html><body>" + strings.Repeat("x", rendererMaxResponseBytes) + "</body></html>"
+			}
+			fetchVerifiedHTMLContent = func(_ context.Context, current *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
+				return page, verifiedTestReceipt(current), nil
+			}
+			publishHTMLCrawlerTask = func(context.Context, *rlibs.HTMLCrawlerTask) error { return nil }
+			persistVerifiedCrawlRecord = func(context.Context, *CrawlRecord) error {
+				t.Fatal("oversized result must not persist success")
+				return nil
+			}
+			conversions := 0
+			passedInput := ""
+			convertedOutput := ""
+			convertVerifiedMarkdown = func(input string) (string, error) {
+				conversions++
+				passedInput = input
+				output, err := convertVerifiedHTMLToMarkdown(input)
+				convertedOutput = output
+				return output, err
+			}
+			task := verifiedTestTask()
+			require.NoError(t, processHTMLCrawlerTask(context.Background(), task))
+			require.Equal(t, rlibs.TaskStatusFailed, task.Status)
+			require.NotNil(t, task.FailedReason)
+			require.Equal(t, "result_too_large", *task.FailedReason)
+			paths, err := filepath.Glob(filepath.Join(directory, "*.json"))
+			require.NoError(t, err)
+			require.Len(t, paths, 1)
+			record, err := crawlercapture.Read(paths[0])
+			require.NoError(t, err)
+			require.Equal(t, page, string(record.RenderedHTML.Bytes()))
+			require.EqualValues(t, len(page), record.RenderedHTML.ByteLength)
+			require.Equal(t, "result_too_large", record.Failure.Code)
+			if mode == "oversize_browser_document" {
+				require.Greater(t, len(page), rendererMaxResponseBytes)
+				require.Equal(t, 0, conversions)
+				require.Equal(t, "not_reached", record.Converter.Input.State)
+				require.Equal(t, "render", record.Failure.Stage)
+				return
+			}
+			require.Less(t, len(page), rendererMaxResponseBytes, "browser document is accepted before serialization expands it")
+			require.Greater(t, len(expectedInput), rendererMaxResponseBytes)
+			require.Equal(t, 1, conversions, "the actual pinned converter executes once, without another fetch")
+			require.Equal(t, expectedInput, passedInput)
+			require.Contains(t, convertedOutput, "visible positive control", "real converter produces nonempty output before the existing BODY-size rejection")
+			require.Equal(t, expectedInput, string(record.Converter.Input.Bytes()))
+			require.EqualValues(t, len(expectedInput), record.Converter.Input.ByteLength)
+			sum := sha256.Sum256([]byte(expectedInput))
+			require.Equal(t, hex.EncodeToString(sum[:]), record.Converter.Input.SHA256)
+			require.Equal(t, "conversion", record.Failure.Stage)
+		})
+	}
+}
