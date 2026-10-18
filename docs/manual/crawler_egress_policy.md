@@ -37,3 +37,47 @@ their errors may contain raw provider or user content. The existing Alert instan
 and rate limiter remain shared, with one hook call per entry and no field-name
 allowlist. Actual startup/HTTP receiver controls cover useful future fields,
 sanitized causes, private user/payload values and logger-name lookalikes.
+
+## Optional failure context (2026-10-18 candidate)
+
+Failed verified tasks may include a backward-compatible `failure_context` object.
+Older queue decoders ignore it. Success results and admission failures without
+observations do not gain context. The existing task ID, target URL, output mode,
+policy and receipt bindings are unchanged; a caller must validate those bindings
+before using worker diagnostics.
+
+The worker authors only these diagnostic values, with no full URL, userinfo,
+query, fragment, raw response headers, cookies, HTML or Markdown payload:
+
+- `target_scheme` / `target_hostname`: canonical components of the admitted task.
+- `final_scheme` / `final_hostname`, `upstream_status`, `content_type`: the latest
+  actual root-document response observed by the pinned transport. Content type is
+  the parsed base MIME type without parameters. Headers remain observations if
+  later body decoding fails; neither status nor MIME changes HTTP acceptance.
+  Subresources and subframes cannot overwrite document metadata.
+- `redirect_count`: observed root-document redirect depth, present only when the
+  predecessor chain is known. A later navigation without that chain is not
+  inferred to be a redirect.
+- `rendered_html_bytes`: actual returned rendered-document size.
+- `conversion_input_bytes`: actual serialized body supplied to local conversion.
+- `conversion_output_bytes` / `conversion_output_trimmed_bytes`: actual output
+  sizes before and after the existing whitespace trim.
+- `body_text_runes` / `body_text_nodes`: non-whitespace parsed text outside
+  script/style elements, excluding surrounding whitespace. These counts do not
+  claim CSS visibility, main-article extraction or website readiness.
+- `converter`: `html-to-markdown/v2` when conversion was entered.
+
+A missing count means that stage was not observed; an observed zero is retained.
+All counts are nonnegative int64, including an observed size above the existing
+payload budget. Existing response, result and allocation limits remain unchanged.
+Every simultaneous valid scalar representation fits the 2048-byte optional
+context budget (two 253-byte hostnames, 127-byte base MIME type and maximum int64
+counts included); no valid count is truncated. Snapshots are independent, and
+late renderer callbacks cannot mutate a terminal result.
+
+For `empty_markdown`, the failure text explains that the requested result contains
+no non-whitespace text. Zero body text versus nonzero body text with empty output
+helps distinguish future incidents without guessing the original website cause.
+The supplied 2026-10-18 event has not yet been bound to an originating instance or
+target, so this source repair does not establish its upstream cause. It adds no
+retry, alternate converter, external fetch or success fallback.

@@ -203,6 +203,8 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	}
 	// A response status is evidence only; HTTP acceptance and body handling remain unchanged.
 	observedStatus := response.StatusCode
+	// Headers are observed even when decoding or reading this response later fails.
+	observeCrawlerDocumentResponse(ctx, kind, id, parent, raw, response.StatusCode, response.Header.Get("Content-Type"))
 	defer func() {
 		if resultErr != nil && kind == crawleregress.OriginDocument && observedStatus >= 100 && observedStatus <= 599 {
 			resultErr = errors.WithStack(&crawlerHTTPStatusError{status: observedStatus, cause: resultErr})

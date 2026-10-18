@@ -54,7 +54,13 @@ func crawlerLogTaskID(taskID string) string {
 // fetchVerifiedCrawlerTask renders task using its admitted pins and returns body,
 // local Markdown and verified observed connections. It never invokes external
 // fetch or conversion fallbacks, and never passes the task API key to a renderer.
-func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) ([]byte, string, *crawleregress.Receipt, error) {
+func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) (resultBody []byte, resultMarkdown string, resultReceipt *crawleregress.Receipt, resultErr error) {
+	var observation *crawlerContextObservation
+	defer func() {
+		if observation != nil && resultErr != nil {
+			resultErr = withCrawlerObservedFailure(resultErr, observation.snapshot())
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, "", nil, crawlerFailure("worker_failed", "admission", err)
 	}
@@ -74,6 +80,7 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	if os.Getenv("CRAWLER_HTTP_PROXY") != "" {
 		return nil, "", nil, crawlerFailure("unsupported_proxy", "admission", nil)
 	}
+	ctx, observation = newCrawlerContextObservation(ctx, task.Url)
 	renderTask := *task
 	renderTask.APIKey = ""
 	renderPolicy := crawleregress.ClonePolicy(policy)
@@ -83,12 +90,14 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	renderTask.ResultHTML = nil
 	renderTask.ResultMarkdown = nil
 	htmlContent, receipt, err := fetchVerifiedHTMLContent(ctx, &renderTask)
+	observation.sealDocuments()
 	if err != nil {
 		return nil, "", nil, crawlerFailure("render_failed", "render", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, "", nil, crawlerFailure("render_failed", "render", err)
 	}
+	observeCrawlerRenderedBytes(ctx, len(htmlContent))
 	if len(htmlContent) > rendererMaxResponseBytes {
 		return nil, "", nil, crawlerFailure("result_too_large", "render", nil)
 	}
@@ -135,10 +144,12 @@ func extractVerifiedHTMLBody(ctx context.Context, content string, outputMarkdown
 	if !outputMarkdown {
 		return rendered.Bytes(), "", nil
 	}
+	observeCrawlerConversionInput(ctx, body, rendered.Len())
 	markdown, err := convertVerifiedMarkdown(rendered.String())
 	if err != nil {
 		return nil, "", crawlerFailure("conversion_failed", "conversion", err)
 	}
+	observeCrawlerConversionOutput(ctx, markdown, strings.TrimSpace(markdown))
 	markdown = strings.TrimSpace(markdown)
 	if markdown == "" {
 		return nil, "", crawlerFailure("empty_markdown", "conversion", nil)
@@ -168,7 +179,10 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		if failure != nil {
 			code, stage := crawlerDiagnostic(failure)
 			fields = append(fields, zap.String("stage", stage), zap.String("category", code), zap.String("error_code", code))
-			fields = append(fields, crawlerUpstreamStatusFields(failure)...)
+			fields = append(fields, crawlerFailureContextFields(failure)...)
+			if contextValue := crawlerFailureContextFrom(failure); contextValue == nil || contextValue.UpstreamStatus == nil {
+				fields = append(fields, crawlerUpstreamStatusFields(failure)...)
+			}
 			if signal := crawlerDiagnosticSignal(failure); signal != "" {
 				fields = append(fields, zap.String("challenge_signal", string(signal)))
 			}
