@@ -15,5 +15,5 @@ func init() {
 		panic(err)
 	}
 
-	Logger.WithOptions(zap.HooksWithFields())
+	Logger = Logger.WithOptions(zap.HooksWithFields(otlpHook))
 }

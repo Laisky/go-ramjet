@@ -5,7 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	gcmd "github.com/Laisky/go-utils/v6/cmd"
@@ -28,12 +32,27 @@ var rootCMD = &cobra.Command{
 	Short: "go-ramjet",
 	Long:  `go-ramjet`,
 	Args:  gcmd.NoExtraArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		ctx := context.Background()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 
 		if !initialize(ctx, cmd) {
-			return
+			return nil
 		}
+
+		shutdown, err := log.ConfigureOTLP(ctx)
+		if err != nil {
+			return errors.Wrap(err, "configure OTLP logs")
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := shutdown(shutdownCtx); err != nil {
+				log.Logger.Error("flush OTLP logs", zap.Error(err))
+			}
+			stats := log.LogOTLPStats()
+			log.Logger.Info("OTLP log shutdown", zap.Uint64("emitted", stats.Emitted), zap.Uint64("exported", stats.Exported), zap.Uint64("failed", stats.Failed), zap.Uint64("unresolved", stats.Unresolved))
+		}()
 
 		//加载参数并启动邮箱
 		alert.Manager.Setup()
@@ -55,7 +74,7 @@ var rootCMD = &cobra.Command{
 		store.TaskStore.Start(ctx)
 
 		// Run HTTP Server
-		web.RunServer(gconfig.Shared.GetString("server.addr"))
+		return web.RunServerContext(ctx, gconfig.Shared.GetString("server.addr"))
 	},
 }
 
