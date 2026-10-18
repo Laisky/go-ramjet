@@ -17,8 +17,6 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
-
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 const (
@@ -206,19 +204,20 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	// Preserve selected upstream facts before browser fulfillment removes framing headers.
 	countedBody := &rendererCountedBody{ReadCloser: response.Body}
 	response.Body = countedBody
-	observedResponse := &crawlercapture.Renderer{
+	observedResponse := &rendererFailureResponse{
 		RequestID: id, ParentRequestID: parent, Kind: kind, Method: method,
-		URL: crawlercapture.CapturedString(raw), UpstreamStatus: response.StatusCode,
+		URL: raw, UpstreamStatus: response.StatusCode,
 		PeerAddress: peer, Protocol: response.Proto,
 		DeclaredContentLength: response.ContentLength, ContentEncoding: response.Header.Get("Content-Encoding"),
-		TransferEncoding: append([]string(nil), response.TransferEncoding...), DecodedBody: crawlercapture.NotReached(),
+		TransferEncoding: append([]string(nil), response.TransferEncoding...),
 	}
 	var decodedBody []byte
 	var decodedObserved bool
 	defer func() {
 		if resultErr != nil {
 			if decodedObserved {
-				observedResponse.DecodedBody = crawlercapture.Captured(decodedBody)
+				observedResponse.DecodedBody = decodedBody
+				observedResponse.DecodedBodyObserved = true
 			}
 			observedResponse.EncodedBodyBytes = countedBody.bytes
 			observeRendererFailure(ctx, observedResponse)

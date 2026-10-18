@@ -36,7 +36,8 @@ authority's port and IPv6 brackets; it does not resolve DNS. Diagnostics use the
 existing shared `crawleregress.RequestURL` representation: HTTP(S), no userinfo,
 lowercase hostname and one terminal dot removed. They do not introduce IDNA or
 IP-spelling normalization into task/policy binding or connection behavior.
-Paths, query and fragments are not diagnostic fields.
+Paths, query and fragments are not fields in this optional Redis object. The
+original selected URL is separately emitted in ordinary failure logs.
 
 The optional scalar `failure_context` keeps an observed zero distinct from an
 unreached stage. Body text counts describe trimmed parsed text nodes outside
@@ -47,26 +48,30 @@ target, so the added observations are prospective evidence, not a retrospective
 upstream diagnosis.
 
 
-## Exact private reproduction logs (later requirement, 2026-10-18)
+## Original input in ordinary logs and alerts (updated requirement)
 
-The scalar context above remains a backward-compatible diagnostic envelope; it
-is not sufficient to reproduce conversion. The later requirement adds a
-separate private application-native failure journal containing the original
-queued URL, browser-returned document, and the single exact serialized BODY
-argument passed to the pinned converter. Caller logs separately preserve the
-pre-trim declared URL and declared/resolved output option, joined by task ID.
-These selected bytes are not filtered, redacted or truncated.
+Scalar context remains a backward-compatible Redis diagnostic envelope. It is
+not sufficient to reproduce conversion. Ordinary structured failure logs and
+the existing alert path select the original queued URL, the last successfully
+observed browser DOM snapshot and the single serialized BODY argument actually
+passed to the pinned converter. An observed DOM snapshot may precede a later
+rendering failure and is not necessarily returned, final or stable. Caller
+diagnostics separately select the decoded declared URL before trimming, the
+submitted URL and declared/resolved output option, joined by task ID.
 
-Ordinary alerts are bounded references to the emitting service/hostname/process
-and capture ID/hash, not the full reproduction transport. Complete files are
-synchronously published with private permissions and explicit durability status.
-The source default is container-local and does not establish production
-retention; approved persistent binds, filesystem support, capacity/monitoring and
-retention ownership are prerequisites to any auto-deploying release.
+Selected input is emitted without application-side previewing, filtering,
+replacement or truncation. Unobserved stages remain distinguishable from
+observed empty values. Source service, hostname, process-run identity and public
+build provenance identify the emitter; no task/API key, arbitrary request
+envelope, authorization headers or configuration is serialized.
 
-A separate standalone command consumes only the private capture pair and runs
-the pinned local converter without browser/configuration/provider access.
-Script-only input can reproduce empty Markdown locally, but missing historical
-input is an instrumentation/retention gap, not evidence of a particular target
-or upstream cause. See [private failure logs and replay](../crawler-failure-journal.md)
-for exact representations, partial renderer response limits and release gates.
+There is no application-managed archive, new private API, replay CLI, storage
+mount or capture-directory setting. Full-field transport through the existing
+logger, SDK, alert receiver and final destination is a separate fidelity gate
+owned by those components. Their limits must not be hidden by a successful
+application fixture or silently worked around with another storage path.
+
+Script-only HTML can reproduce empty Markdown with the real local converter.
+Missing historical input remains an instrumentation/retention gap, not evidence
+of a particular target or upstream cause. Reproduction fixtures use synthetic
+input and do not retry the failed target.

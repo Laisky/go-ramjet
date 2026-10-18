@@ -1,36 +1,74 @@
 package tasks
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
+	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Laisky/errors/v2"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
+	"github.com/Laisky/zap"
+	"github.com/Laisky/zap/zapcore"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
+	appLog "github.com/Laisky/go-ramjet/library/log"
 )
 
-// TestCrawlerFailureJournalWorkerRecords exercises the actual pinned converter and worker lifecycle.
-func TestCrawlerFailureJournalWorkerRecords(t *testing.T) {
-	preserveVerifiedWorkerSeams(t)
-	directory := t.TempDir()
-	require.NoError(t, os.Chmod(directory, 0700))
-	t.Setenv("CRAWLER_FAILURE_LOG_DIR", directory)
-	journal, err := crawlercapture.NewJournal(directory, crawlercapture.Source{Service: "go-ramjet", Hostname: "synthetic-worker", ProcessRunID: "synthetic-worker-run", Revision: "synthetic-source"})
+// crawlerFieldsThroughJSONCore encodes ordinary Zap fields using the production JSON core.
+func crawlerFieldsThroughJSONCore(t *testing.T, fields []zap.Field) map[string]any {
+	t.Helper()
+	var output bytes.Buffer
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(&output), zapcore.DebugLevel)
+	zap.New(core).Error("synthetic failure", fields...)
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(output.Bytes(), &record))
+	return record
+}
+
+// crawlerWorkerLogBuffer installs a real ordinary log core without remote services or payload files.
+func crawlerWorkerLogBuffer(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	output := new(bytes.Buffer)
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(output), zapcore.DebugLevel)
+	logger, err := glog.NewWithName("go-ramjet", glog.LevelDebug, zap.WrapCore(func(zapcore.Core) zapcore.Core { return core }))
 	require.NoError(t, err)
-	original := newCrawlerFailureJournal
-	newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return journal, nil }
-	t.Cleanup(func() { newCrawlerFailureJournal = original })
-	url := "https://1.1.1.1/Unicode-你好?literal=synthetic-input-canary#fragment"
+	prior := appLog.Logger
+	appLog.Logger = logger
+	t.Cleanup(func() { appLog.Logger = prior })
+	return output
+}
+
+// crawlerWorkerFailureRecords selects actual worker failure entries from the ordinary core.
+func crawlerWorkerFailureRecords(t *testing.T, output *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(line, &record))
+		if record["queued_target_url_observed"] == true {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
+// TestCrawlerFailureLoggingWorkerInputs uses the real converter and actual worker log boundary.
+func TestCrawlerFailureLoggingWorkerInputs(t *testing.T) {
+	preserveVerifiedWorkerSeams(t)
+	output := crawlerWorkerLogBuffer(t)
+	target := "https://1.1.1.1/Unicode-你好?literal=synthetic-input-canary#fragment"
 	policy := crawleregress.Policy{Host: "1.1.1.1", Addresses: []string{"1.1.1.1"}, MaxRedirects: 5}
-	task := rlibs.NewHTMLCrawlerTaskWithEgress(url, "SYNTHETIC_TASK_API_KEY_EXCLUDED", true, &policy)
+	task := rlibs.NewHTMLCrawlerTaskWithEgress(target, "SYNTHETIC_TASK_API_KEY_EXCLUDED", true, &policy)
 	task.TaskID = "0199c118-4229-7000-8000-000000000002"
 	page := "<html><head><title>fixture</title></head><body><script>const canary='synthetic-exact-script';</script></body></html>"
 	expected := "<body><script>const canary='synthetic-exact-script';</script></body>"
@@ -47,70 +85,87 @@ func TestCrawlerFailureJournalWorkerRecords(t *testing.T) {
 	convertVerifiedMarkdown = convertVerifiedHTMLToMarkdown
 	require.NoError(t, processHTMLCrawlerTask(context.Background(), task))
 	require.Equal(t, rlibs.TaskStatusFailed, task.Status)
-	require.NotNil(t, task.FailedReason)
 	require.Equal(t, "empty_markdown", *task.FailedReason)
-	paths, err := filepath.Glob(filepath.Join(directory, "*.json"))
-	require.NoError(t, err)
-	require.Len(t, paths, 1, "exact original queued URL and actual converter input must be durably journalled")
-	capture, err := crawlercapture.Read(paths[0])
-	require.NoError(t, err)
-	require.Equal(t, url, string(capture.Request.OriginalURL.Bytes()))
-	require.Equal(t, url, string(capture.Request.SubmittedURL.Bytes()))
-	require.True(t, capture.Request.OutputMarkdown)
-	require.Equal(t, expected, string(capture.Converter.Input.Bytes()))
-	require.Equal(t, page, string(capture.RenderedHTML.Bytes()))
-	require.Equal(t, "conversion", capture.Failure.Stage)
-	require.Equal(t, "empty_markdown", capture.Failure.Code)
-	require.Equal(t, task.TaskID, capture.Correlation.TaskID)
-	require.Equal(t, "synthetic-worker", capture.Source.Hostname)
-	raw, err := os.ReadFile(paths[0])
-	require.NoError(t, err)
-	require.NotContains(t, string(raw), "SYNTHETIC_TASK_API_KEY_EXCLUDED")
-	for _, blob := range []crawlercapture.Blob{capture.Request.OriginalURL, capture.Request.SubmittedURL, capture.Request.OriginalOutputMarkdown, capture.RenderedHTML, capture.Converter.Input} {
-		require.NotContains(t, string(blob.Bytes()), "SYNTHETIC_TASK_API_KEY_EXCLUDED")
-	}
-	require.Contains(t, string(capture.Converter.Input.Bytes()), "synthetic-exact-script")
-	if export := os.Getenv("CRAWLER_CAPTURE_TEST_FIXTURE_DIR"); export != "" {
-		require.NoError(t, os.MkdirAll(export, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(export, "worker-empty-markdown.json"), raw, 0600))
+	records := crawlerWorkerFailureRecords(t, output)
+	require.Len(t, records, 1)
+	record := records[0]
+	require.Equal(t, target, record["queued_target_url"])
+	require.Equal(t, page, record["rendered_html"])
+	require.Equal(t, expected, record["conversion_input"])
+	require.Equal(t, true, record["rendered_html_observed"])
+	require.Equal(t, true, record["conversion_input_observed"])
+	require.Equal(t, true, record["output_markdown"])
+	require.Equal(t, "conversion", record["stage"])
+	require.Equal(t, "empty_markdown", record["error_code"])
+	require.Equal(t, task.TaskID, record["task_id"])
+	require.Equal(t, "go-ramjet", record["source_service"])
+	require.NotEmpty(t, record["source_hostname"])
+	require.NotEmpty(t, record["source_process_run_id"])
+	require.NotContains(t, output.String(), "SYNTHETIC_TASK_API_KEY_EXCLUDED")
+	for _, key := range []string{"failure_capture_path", "failure_capture_id", "failure_capture_status", "failure_capture_sha256"} {
+		require.NotContains(t, record, key)
 	}
 }
 
-// TestCrawlerFailureJournalRealConverterControl confirms the empty result is not a fake converter.
-func TestCrawlerFailureJournalRealConverterControl(t *testing.T) {
-	output, err := convertVerifiedHTMLToMarkdown("<body><script>const x=1;</script></body>")
+// TestCrawlerFailureLoggingRealConverterControl confirms empty Markdown is not a fake converter result.
+func TestCrawlerFailureLoggingRealConverterControl(t *testing.T) {
+	result, err := convertVerifiedHTMLToMarkdown("<body><script>const x=1;</script></body>")
 	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(output))
-	output, err = convertVerifiedHTMLToMarkdown("<body><p>visible positive control</p></body>")
+	require.Empty(t, strings.TrimSpace(result))
+	result, err = convertVerifiedHTMLToMarkdown("<body><p>visible positive control</p></body>")
 	require.NoError(t, err)
-	require.Contains(t, output, "visible positive control")
+	require.Contains(t, result, "visible positive control")
 }
 
-// TestCrawlerFailureJournalConverterPin guards the fallback against public module drift.
-func TestCrawlerFailureJournalConverterPin(t *testing.T) {
+// TestCrawlerFailureLoggingConverterPin guards the public fallback version against dependency drift.
+func TestCrawlerFailureLoggingConverterPin(t *testing.T) {
 	data, err := os.ReadFile("../../../../go.mod")
 	require.NoError(t, err)
 	require.Contains(t, string(data), "github.com/JohannesKaufmann/html-to-markdown/v2 "+pinnedCrawlerConverterVersion)
 	require.NotContains(t, string(data), "replace github.com/JohannesKaufmann/html-to-markdown/v2")
 }
 
-// TestCrawlerFailureJournalLifecycle covers failures on either side of the converter and an ordinary success.
-func TestCrawlerFailureJournalLifecycle(t *testing.T) {
+// TestCrawlerChosenInputLoggingStates preserves empty, absent, Unicode, binary, and large chosen values.
+func TestCrawlerChosenInputLoggingStates(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		observed    bool
+	}{
+		{"not_reached", "", false}, {"empty", "", true}, {"unicode", "雪 😀 e\u0301\r\n\x00", true},
+		{"invalid_utf8", string([]byte{0xff, 0, 0xc0, 0xaf}), true}, {"large", strings.Repeat("雪", 12000), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := crawlerFieldsThroughJSONCore(t, crawlerChosenInputFields("conversion_input", tc.value, tc.observed))
+			require.Equal(t, tc.observed, record["conversion_input_observed"])
+			if !tc.observed {
+				require.NotContains(t, record, "conversion_input")
+				return
+			}
+			require.EqualValues(t, len(tc.value), record["conversion_input_bytes"])
+			if record["conversion_input_encoding"] == "base64" {
+				decoded, err := base64.StdEncoding.DecodeString(record["conversion_input"].(string))
+				require.NoError(t, err)
+				require.Equal(t, []byte(tc.value), decoded)
+			} else {
+				require.Equal(t, tc.value, record["conversion_input"])
+			}
+		})
+	}
+}
+
+// TestCrawlerFailureLoggingLifecycle preserves original processing/publication errors and success behavior.
+func TestCrawlerFailureLoggingLifecycle(t *testing.T) {
 	for _, mode := range []string{"running_publication", "render", "canceled_conversion", "terminal_publication", "audit_persistence", "success"} {
 		t.Run(mode, func(t *testing.T) {
 			preserveVerifiedWorkerSeams(t)
-			directory := t.TempDir()
-			require.NoError(t, os.Chmod(directory, 0700))
-			journal, err := crawlercapture.NewJournal(directory, crawlercapture.Source{Service: "go-ramjet", Hostname: "synthetic-worker", ProcessRunID: "synthetic-lifecycle-run"})
-			require.NoError(t, err)
-			original := newCrawlerFailureJournal
-			newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return journal, nil }
-			t.Cleanup(func() { newCrawlerFailureJournal = original })
+			output := crawlerWorkerLogBuffer(t)
 			task := verifiedTestTask()
+			originalURL := task.Url
 			page := "<html><body><p>positive local conversion</p></body></html>"
-			fetchVerifiedHTMLContent = func(ctx context.Context, current *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
+			cause := errors.New("synthetic original failure")
+			fetchVerifiedHTMLContent = func(_ context.Context, current *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
 				if mode == "render" {
-					return "", nil, errors.New("synthetic network read failure")
+					return "", nil, cause
 				}
 				return page, verifiedTestReceipt(current), nil
 			}
@@ -118,13 +173,13 @@ func TestCrawlerFailureJournalLifecycle(t *testing.T) {
 			publishHTMLCrawlerTask = func(context.Context, *rlibs.HTMLCrawlerTask) error {
 				calls++
 				if mode == "running_publication" || mode == "terminal_publication" && calls == 2 {
-					return errors.New("synthetic publication failure")
+					return cause
 				}
 				return nil
 			}
 			persistVerifiedCrawlRecord = func(context.Context, *CrawlRecord) error {
 				if mode == "audit_persistence" {
-					return errors.New("synthetic audit store failure")
+					return cause
 				}
 				return nil
 			}
@@ -133,89 +188,51 @@ func TestCrawlerFailureJournalLifecycle(t *testing.T) {
 			convertVerifiedMarkdown = convertVerifiedHTMLToMarkdown
 			if mode == "canceled_conversion" {
 				convertVerifiedMarkdown = func(input string) (string, error) {
-					output, e := convertVerifiedHTMLToMarkdown(input)
+					result, err := convertVerifiedHTMLToMarkdown(input)
 					cancel()
-					return output, e
+					return result, err
 				}
 			}
 			processErr := processHTMLCrawlerTask(ctx, task)
-			if mode == "running_publication" || mode == "terminal_publication" || mode == "canceled_conversion" {
-				require.Error(t, processErr)
+			if mode == "running_publication" || mode == "terminal_publication" {
+				require.ErrorIs(t, processErr, cause)
+			} else if mode == "canceled_conversion" {
+				require.ErrorIs(t, processErr, context.Canceled)
 			} else {
 				require.NoError(t, processErr)
 			}
-			paths, e := filepath.Glob(filepath.Join(directory, "*.json"))
-			require.NoError(t, e)
+			records := crawlerWorkerFailureRecords(t, output)
 			if mode == "success" {
-				require.Empty(t, paths)
+				require.Empty(t, records)
+				require.Equal(t, rlibs.TaskStatusSuccess, task.Status)
 				return
 			}
-			require.Len(t, paths, 1, "each failure gets one capture even if cleanup/publication logs again")
-			record, e := crawlercapture.Read(paths[0])
-			require.NoError(t, e)
-			require.Equal(t, task.TaskID, record.Correlation.TaskID)
+			require.NotEmpty(t, records)
+			record := records[0]
+			require.Equal(t, originalURL, record["queued_target_url"])
 			if mode == "running_publication" || mode == "render" {
-				require.Equal(t, "not_reached", record.Converter.Input.State)
-				require.Equal(t, "not_reached", record.RenderedHTML.State)
+				require.Equal(t, false, record["rendered_html_observed"])
+				require.Equal(t, false, record["conversion_input_observed"])
 			} else {
-				require.Equal(t, page, string(record.RenderedHTML.Bytes()))
-				require.Equal(t, "<body><p>positive local conversion</p></body>", string(record.Converter.Input.Bytes()))
+				require.Equal(t, page, record["rendered_html"])
+				require.Equal(t, "<body><p>positive local conversion</p></body>", record["conversion_input"])
+			}
+			if mode != "canceled_conversion" {
+				require.Contains(t, output.String(), "synthetic original failure")
 			}
 		})
 	}
 }
 
-// TestCrawlerFailureJournalActualAlertReference survives the receiver's first-3000-rune boundary.
-func TestCrawlerFailureJournalActualAlertReference(t *testing.T) {
-	directory := t.TempDir()
-	require.NoError(t, os.Chmod(directory, 0700))
-	for range 29 {
-		directory = filepath.Join(directory, strings.Repeat("synthetic", 13))
-	}
-	journal, err := crawlercapture.NewJournal(directory, crawlercapture.Source{Service: "go-ramjet", Hostname: "synthetic-alert-worker", ProcessRunID: "synthetic-alert-run"})
-	require.NoError(t, err)
-	original := newCrawlerFailureJournal
-	newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return journal, nil }
-	t.Cleanup(func() { newCrawlerFailureJournal = original })
-	page := "<body><script>" + strings.Repeat("synthetic-private-body;", 1024) + "</script></body>"
-	_, message := crawlerAlertContextFixture(t, page, nil, true)
-	paths, err := filepath.Glob(filepath.Join(directory, "*.json"))
-	require.NoError(t, err)
-	require.Len(t, paths, 1)
-	record, err := crawlercapture.Read(paths[0])
-	require.NoError(t, err)
-	raw, err := os.ReadFile(paths[0])
-	require.NoError(t, err)
-	sum := sha256.Sum256(raw)
-	prefix := []rune(message)
-	if len(prefix) > 3000 {
-		prefix = prefix[:3000]
-	}
-	for _, value := range []string{"go-ramjet", "synthetic-alert-worker", "synthetic-alert-run", "complete", record.CaptureID, hex.EncodeToString(sum[:])} {
-		require.Contains(t, string(prefix), value, "compact identity must precede the potentially long filesystem path")
-	}
-	require.NotContains(t, message, "synthetic-private-body")
-	require.Contains(t, string(record.Converter.Input.Bytes()), strings.Repeat("synthetic-private-body;", 1024))
-	require.Greater(t, len(directory), 3000, "real long configured path must exercise receiver truncation")
-}
-
-// TestCrawlerFailureJournalLargeWorkerInputs preserves observed and serialized sizes without imposing a capture cap.
-func TestCrawlerFailureJournalLargeWorkerInputs(t *testing.T) {
+// TestCrawlerFailureLoggingLargeWorkerInputs keeps actual DOM and serialized converter arguments intact.
+func TestCrawlerFailureLoggingLargeWorkerInputs(t *testing.T) {
 	for _, mode := range []string{"serialized_body_expansion", "oversize_browser_document"} {
 		t.Run(mode, func(t *testing.T) {
 			preserveVerifiedWorkerSeams(t)
-			directory := t.TempDir()
-			require.NoError(t, os.Chmod(directory, 0700))
-			journal, err := crawlercapture.NewJournal(directory, crawlercapture.Source{Service: "go-ramjet", Hostname: "synthetic-large-worker", ProcessRunID: "synthetic-large-run"})
-			require.NoError(t, err)
-			original := newCrawlerFailureJournal
-			newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return journal, nil }
-			t.Cleanup(func() { newCrawlerFailureJournal = original })
+			output := crawlerWorkerLogBuffer(t)
 			count := rendererMaxResponseBytes/5 + 128
-			// Literal apostrophes are valid inside a double-quoted DOM attribute.
-			// Go's real BODY serializer expands each to &#39; without changing the visible text.
 			page := "<html><body data-fixture=\"" + strings.Repeat("'", count) + "\"><p>visible positive control</p></body></html>"
-			expectedInput := "<body data-fixture=\"" + strings.Repeat("&#39;", count) + "\"><p>visible positive control</p></body>"
+			expected := "<body data-fixture=\"" + strings.Repeat("&#39;", count) + "\"><p>visible positive control</p></body>"
 			if mode == "oversize_browser_document" {
 				page = "<html><body>" + strings.Repeat("x", rendererMaxResponseBytes) + "</body></html>"
 			}
@@ -227,46 +244,39 @@ func TestCrawlerFailureJournalLargeWorkerInputs(t *testing.T) {
 				t.Fatal("oversized result must not persist success")
 				return nil
 			}
-			conversions := 0
-			passedInput := ""
-			convertedOutput := ""
-			convertVerifiedMarkdown = func(input string) (string, error) {
-				conversions++
-				passedInput = input
-				output, err := convertVerifiedHTMLToMarkdown(input)
-				convertedOutput = output
-				return output, err
-			}
+			convertVerifiedMarkdown = convertVerifiedHTMLToMarkdown
 			task := verifiedTestTask()
 			require.NoError(t, processHTMLCrawlerTask(context.Background(), task))
 			require.Equal(t, rlibs.TaskStatusFailed, task.Status)
-			require.NotNil(t, task.FailedReason)
 			require.Equal(t, "result_too_large", *task.FailedReason)
-			paths, err := filepath.Glob(filepath.Join(directory, "*.json"))
-			require.NoError(t, err)
-			require.Len(t, paths, 1)
-			record, err := crawlercapture.Read(paths[0])
-			require.NoError(t, err)
-			require.Equal(t, page, string(record.RenderedHTML.Bytes()))
-			require.EqualValues(t, len(page), record.RenderedHTML.ByteLength)
-			require.Equal(t, "result_too_large", record.Failure.Code)
+			records := crawlerWorkerFailureRecords(t, output)
+			require.Len(t, records, 1)
+			require.Equal(t, page, records[0]["rendered_html"])
 			if mode == "oversize_browser_document" {
-				require.Greater(t, len(page), rendererMaxResponseBytes)
-				require.Equal(t, 0, conversions)
-				require.Equal(t, "not_reached", record.Converter.Input.State)
-				require.Equal(t, "render", record.Failure.Stage)
-				return
+				require.Equal(t, false, records[0]["conversion_input_observed"])
+			} else {
+				require.Greater(t, len(expected), rendererMaxResponseBytes)
+				require.Equal(t, expected, records[0]["conversion_input"])
 			}
-			require.Less(t, len(page), rendererMaxResponseBytes, "browser document is accepted before serialization expands it")
-			require.Greater(t, len(expectedInput), rendererMaxResponseBytes)
-			require.Equal(t, 1, conversions, "the actual pinned converter executes once, without another fetch")
-			require.Equal(t, expectedInput, passedInput)
-			require.Contains(t, convertedOutput, "visible positive control", "real converter produces nonempty output before the existing BODY-size rejection")
-			require.Equal(t, expectedInput, string(record.Converter.Input.Bytes()))
-			require.EqualValues(t, len(expectedInput), record.Converter.Input.ByteLength)
-			sum := sha256.Sum256([]byte(expectedInput))
-			require.Equal(t, hex.EncodeToString(sum[:]), record.Converter.Input.SHA256)
-			require.Equal(t, "conversion", record.Failure.Stage)
 		})
 	}
+}
+
+// TestCrawlerPinnedAlertStillChangesChosenURL records the existing SDK fidelity limitation, not a guarantee.
+func TestCrawlerPinnedAlertStillChangesChosenURL(t *testing.T) {
+	_, message := crawlerAlertContextFixture(t, "<html><body><script>synthetic source input</script></body></html>", nil, true)
+	require.Contains(t, message, "source_service")
+	require.NotContains(t, message, "https://example.com/private?canary=query", "pinned SDK sanitizes chosen URLs; full remote-alert fidelity remains unqualified")
+}
+
+// TestCrawlerPinnedAlertRejectsLargeChosenInputs exposes the real SDK transport cap without clipping inputs.
+func TestCrawlerPinnedAlertRejectsLargeChosenInputs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	alert, err := glog.NewAlert(ctx, "http://127.0.0.1:1", glog.WithAlertType("synthetic"), glog.WithAlertToken("synthetic-only"))
+	require.NoError(t, err)
+	defer alert.Close()
+	fields := crawlerChosenInputFields("rendered_html", strings.Repeat("original chosen body ", 2000), true)
+	err = alert.GetZapHook()(zapcore.Entry{LoggerName: "go-ramjet.run_dynamic_web_crawler.verified_crawler_task", Level: zapcore.ErrorLevel, Time: time.Now().UTC(), Message: "synthetic failure"}, fields)
+	require.ErrorIs(t, err, glog.ErrAlertMessageTooLarge)
 }

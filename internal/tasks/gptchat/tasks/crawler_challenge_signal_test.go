@@ -164,10 +164,19 @@ func TestCrawlerChallengeSignalWorkerSerialization(t *testing.T) {
 			var envelope map[string]any
 			require.NoError(t, json.Unmarshal([]byte(wire), &envelope))
 			require.Equal(t, tc.signal, envelope["failure_signal"])
+			require.Equal(t, "https://example.com/private?canary=query", processing["queued_target_url"])
+			require.Equal(t, tc.content, processing["rendered_html"], "the selected challenge DOM is ordinary failure-log input, including credential-shaped fixture text")
+			require.Equal(t, true, processing["rendered_html_observed"])
+			require.Equal(t, false, processing["conversion_input_observed"], "challenge rejection precedes conversion")
+			require.Equal(t, "go-ramjet", processing["source_service"])
+			require.NotEmpty(t, processing["source_hostname"])
 			for _, output := range []string{local, remote, wire} {
-				for _, private := range []string{"private-body-canary", "private-resource.invalid", "private-key-canary", "_cf_chl_opt"} {
-					require.NotContains(t, output, private)
-				}
+				require.NotContains(t, output, "token-canary", "task credentials are not selected diagnostic inputs")
+				require.NotContains(t, output, "synthetic-only", "alert transport credentials never enter diagnostic fields")
+			}
+			// Queue compatibility remains scalar-only; adding log context must not copy page data into the DTO.
+			for _, content := range []string{"private-body-canary", "private-resource.invalid", "private-key-canary", "_cf_chl_opt"} {
+				require.NotContains(t, wire, content)
 			}
 			legacy, err := rlibs.NewHTMLCrawlerTaskFromString(wire)
 			require.NoError(t, err)

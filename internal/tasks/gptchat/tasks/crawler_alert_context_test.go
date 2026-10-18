@@ -120,9 +120,7 @@ func crawlerAlertContextFixture(t *testing.T, content string, convert func(strin
 		t.Fatal("one failure produced duplicate alerts")
 	case <-time.After(30 * time.Millisecond):
 	}
-	require.NotContains(t, message, "private?canary=query")
 	require.NotContains(t, message, "token-canary")
-	require.NotContains(t, message, "synthetic-private-body")
 	return terminal, message
 }
 

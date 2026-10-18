@@ -179,10 +179,9 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 	// Publication errors belong to this reviewed boundary; the outer loop retains backoff without emitting them again.
 	publishFailure := func(publishErr error, cleanup bool) error {
 		fields := crawlerLifecycleFields(ctx, task.TaskID, "result_publication_failed", task.Status, "failed", startedAt)
-		fields = append(fields, capture.fields("persistence", "publication_failed")...)
+		fields = append(fields, capture.fields()...)
 		fields = append(fields, zap.String("stage", "persistence"), zap.String("error_code", "publication_failed"),
 			zap.Bool("cleanup", cleanup), zap.Error(&crawlerTaskError{code: "publication_failed", stage: "persistence", cause: publishErr}))
-		fields = append(fields, capture.pathField())
 		logger.Error("crawler result publication failed", fields...)
 		return &crawlerLoggedError{cause: publishErr}
 	}
@@ -190,7 +189,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		fields := crawlerLifecycleFields(ctx, task.TaskID, "processing_completed", task.Status, "", startedAt)
 		if failure != nil {
 			code, stage := crawlerDiagnostic(failure)
-			fields = append(fields, capture.fields(stage, code)...)
+			fields = append(fields, capture.fields()...)
 			fields = append(fields, zap.String("stage", stage), zap.String("category", code), zap.String("error_code", code))
 			fields = append(fields, crawlerFailureContextFields(failure)...)
 			if contextValue := crawlerFailureContextFrom(failure); contextValue == nil || contextValue.UpstreamStatus == nil {
@@ -199,7 +198,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 			if signal := crawlerDiagnosticSignal(failure); signal != "" {
 				fields = append(fields, zap.String("challenge_signal", string(signal)))
 			}
-			fields = append(fields, zap.Error(failure), capture.pathField())
+			fields = append(fields, zap.Error(failure))
 			logger.Error("verified crawler task failed", fields...)
 			return
 		}
@@ -265,10 +264,9 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 			URL: task.Url, RawBody: body, Markdown: markdownPtr}
 		if err := persistVerifiedCrawlRecord(ctx, record); err != nil {
 			fields := crawlerLifecycleFields(ctx, task.TaskID, "audit_persistence_failed", task.Status, "", startedAt)
-			fields = append(fields, capture.fields("persistence", "audit_store_failed")...)
+			fields = append(fields, capture.fields()...)
 			fields = append(fields, zap.String("error_code", "audit_store_failed"), zap.String("stage", "persistence"),
 				zap.Error(&crawlerTaskError{code: "audit_store_failed", stage: "persistence", cause: err}))
-			fields = append(fields, capture.pathField())
 			logger.Warn("crawler audit persistence failed", fields...)
 		}
 	}

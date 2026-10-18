@@ -3,50 +3,41 @@ package tasks
 import (
 	"context"
 	"runtime/debug"
-	"sync"
+	"unicode/utf8"
 
-	"github.com/Laisky/errors/v2"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
 
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
+	"github.com/Laisky/go-ramjet/library/buildidentity"
 )
 
 const pinnedCrawlerConverterVersion = "v2.5.2"
 
-// defaultCrawlerFailureJournal reads the selected private directory once per worker process.
-var defaultCrawlerFailureJournal = sync.OnceValues(func() (*crawlercapture.Journal, error) {
-	return crawlercapture.JournalFromEnvironment("go-ramjet")
-})
-
-// newCrawlerFailureJournal is a fixture seam; production uses the process-stable journal.
-var newCrawlerFailureJournal = func() (*crawlercapture.Journal, error) { return defaultCrawlerFailureJournal() }
-
-// crawlerCaptureKey separates reproduction inputs from arbitrary request context values.
+// crawlerCaptureKey separates selected reproduction inputs from arbitrary request context.
 type crawlerCaptureKey struct{}
 
-// crawlerFailureCapture retains only explicit, immutable reproduction inputs for this task.
+// crawlerFailureCapture keeps immutable chosen inputs in memory until the existing failure log.
 type crawlerFailureCapture struct {
-	record    crawlercapture.Record
-	renderer  *rendererFailureObservation
-	once      sync.Once
-	reference crawlercapture.Reference
-	err       error
+	queuedURL         string
+	outputMarkdown    bool
+	renderedHTML      string
+	renderedObserved  bool
+	converterInput    string
+	converterObserved bool
+	renderer          *rendererFailureObservation
+	source            buildidentity.Source
+	sourceErr         error
 }
 
-// withCrawlerFailureCapture snapshots the admitted queue inputs before any task mutation.
+// withCrawlerFailureCapture snapshots queued inputs before task mutation without I/O or persistence.
 func withCrawlerFailureCapture(ctx context.Context, task *rlibs.HTMLCrawlerTask) (context.Context, *crawlerFailureCapture) {
 	ctx, renderer := withRendererFailureObservation(ctx)
-	capture := &crawlerFailureCapture{renderer: renderer, record: crawlercapture.Record{
-		Correlation:  crawlercapture.Correlation{TaskID: task.TaskID},
-		Request:      crawlercapture.Request{OriginalURL: crawlercapture.CapturedString(task.Url), SubmittedURL: crawlercapture.CapturedString(task.Url), OutputMarkdown: task.OutputMarkdown},
-		Converter:    crawlercapture.Converter{Name: "html-to-markdown/v2", Version: crawlerConverterVersion(), Input: crawlercapture.NotReached()},
-		RenderedHTML: crawlercapture.NotReached(),
-	}}
+	source, sourceErr := buildidentity.ProcessSource("go-ramjet")
+	capture := &crawlerFailureCapture{queuedURL: task.Url, outputMarkdown: task.OutputMarkdown, renderer: renderer, source: source, sourceErr: sourceErr}
 	return context.WithValue(ctx, crawlerCaptureKey{}, capture), capture
 }
 
-// crawlerConverterVersion selects resolved public module provenance, with a guarded source pin for Go tests.
+// crawlerConverterVersion selects resolved public module provenance with a guarded test fallback.
 func crawlerConverterVersion() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, dep := range info.Deps {
@@ -65,53 +56,58 @@ func crawlerConverterVersion() string {
 	return pinnedCrawlerConverterVersion
 }
 
-// observeCrawlerCaptureRendered retains the exact browser-returned document, not HTTP bytes.
+// observeCrawlerCaptureRendered retains the exact browser-returned DOM string, not HTTP wire bytes.
 func observeCrawlerCaptureRendered(ctx context.Context, content string) {
 	capture, _ := ctx.Value(crawlerCaptureKey{}).(*crawlerFailureCapture)
 	if capture != nil {
-		capture.record.RenderedHTML = crawlercapture.CapturedString(content)
+		capture.renderedHTML = content
+		capture.renderedObserved = true
 	}
 }
 
-// observeCrawlerCaptureConverter retains the same immutable argument used for local conversion.
+// observeCrawlerCaptureConverter retains the identical immutable string passed to the converter.
 func observeCrawlerCaptureConverter(ctx context.Context, content string) {
 	capture, _ := ctx.Value(crawlerCaptureKey{}).(*crawlerFailureCapture)
 	if capture != nil {
-		capture.record.Converter.Input = crawlercapture.CapturedString(content)
+		capture.converterInput = content
+		capture.converterObserved = true
 	}
 }
 
-// fields persists once before notification, even under cancellation, and returns compact lookup metadata.
-func (c *crawlerFailureCapture) fields(stage, code string) []zap.Field {
-	c.once.Do(func() {
-		c.record.Failure = crawlercapture.Failure{Stage: stage, Code: code}
-		c.record.Renderer = c.renderer.Snapshot()
-		journal, err := newCrawlerFailureJournal()
-		if err != nil {
-			source, sourceErr := crawlercapture.ProcessSource("go-ramjet")
-			c.reference = crawlercapture.Reference{Status: "write_failed", Source: source}
-			c.err = errors.Join(err, sourceErr)
-			return
-		}
-		c.reference, c.err = journal.Write(c.record)
-	})
-	reference := c.reference
-	fields := []zap.Field{
-		zap.String("failure_capture_service", reference.Source.Service),
-		zap.String("failure_capture_hostname", reference.Source.Hostname),
-		zap.String("failure_capture_process_run_id", reference.Source.ProcessRunID),
-		zap.String("failure_capture_status", reference.Status),
-		zap.String("failure_capture_id", reference.CaptureID),
-		zap.String("failure_capture_sha256", reference.SHA256),
-		zap.Int64("failure_capture_bytes", reference.Bytes),
+// crawlerChosenInputFields uses ordinary Zap values without truncation, filtering, or normalization.
+// Invalid UTF-8 uses Zap's standard binary/base64 representation with an explicit encoding field.
+func crawlerChosenInputFields(name, value string, observed bool) []zap.Field {
+	fields := []zap.Field{zap.Bool(name+"_observed", observed)}
+	if !observed {
+		return fields
 	}
-	if c.err != nil {
-		fields = append(fields, zap.NamedError("failure_capture_error", c.err))
+	fields = append(fields, zap.Int(name+"_bytes", len(value)))
+	if utf8.ValidString(value) {
+		return append(fields, zap.String(name+"_encoding", "utf8"), zap.String(name, value))
+	}
+	return append(fields, zap.String(name+"_encoding", "base64"), zap.Binary(name, []byte(value)))
+}
+
+// fields returns selected original inputs and source identity for the existing failure log.
+// It never serializes a task, API key, request headers, configuration, or external storage reference.
+func (c *crawlerFailureCapture) fields() []zap.Field {
+	fields := []zap.Field{
+		zap.String("source_service", c.source.Service), zap.String("source_hostname", c.source.Hostname),
+		zap.String("source_process_run_id", c.source.ProcessRunID), zap.String("source_revision", c.source.Revision),
+		zap.Bool("source_modified", c.source.Modified), zap.String("source_go_version", c.source.GoVersion),
+		zap.String("source_module_version", c.source.ModuleVersion), zap.Bool("output_markdown", c.outputMarkdown),
+		zap.String("converter_version", crawlerConverterVersion()),
+	}
+	if c.sourceErr != nil {
+		fields = append(fields, zap.NamedError("source_identity_error", c.sourceErr))
+	}
+	fields = append(fields, crawlerChosenInputFields("queued_target_url", c.queuedURL, true)...)
+	fields = append(fields, crawlerChosenInputFields("rendered_html", c.renderedHTML, c.renderedObserved)...)
+	fields = append(fields, crawlerChosenInputFields("conversion_input", c.converterInput, c.converterObserved)...)
+	response := c.renderer.Snapshot()
+	fields = append(fields, zap.Bool("renderer_response_observed", response != nil))
+	if response != nil {
+		fields = append(fields, response.fields()...)
 	}
 	return fields
-}
-
-// pathField is appended after all compact correlation fields in a notification.
-func (c *crawlerFailureCapture) pathField() zap.Field {
-	return zap.String("failure_capture_path", c.reference.Path)
 }

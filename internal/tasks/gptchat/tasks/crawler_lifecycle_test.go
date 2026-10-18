@@ -204,15 +204,45 @@ func TestCrawlerLifecycleActualSerialization(t *testing.T) {
 						require.Contains(t, message, "\"upstream_status\":503")
 					}
 					require.NotContains(t, message, "private-upstream-body-canary")
-					for _, canary := range []string{"private.invalid", "private-key-canary", "private-auth-canary", "private-query-canary", "private-body-canary", "body-canary-private"} {
-						require.NotContains(t, message, canary)
+					for _, canary := range []string{"private.invalid", "private-key-canary", "private-auth-canary", "private-query-canary", "private-body-canary", "token-canary", "synthetic-only"} {
+						require.NotContains(t, message, canary, "unselected error/config/transport canaries remain outside selected inputs")
+					}
+					if scenario == "terminal_publish_failure" {
+						require.Contains(t, message, "body-canary-private", "selected DOM and converter input remain visible when the SDK accepts this small record")
 					}
 				case <-time.After(3 * time.Second):
 					t.Fatal("no actual SDK lifecycle alert")
 				}
 			}
-			for _, canary := range []string{"private.invalid", "private-key-canary", "private-auth-canary", "private-query-canary", "private-body-canary", "body-canary-private", "private-upstream-body-canary"} {
-				require.NotContains(t, encoded.String(), canary)
+			payloadRows := 0
+			for _, row := range rows {
+				if row["queued_target_url_observed"] != true {
+					continue
+				}
+				payloadRows++
+				require.Equal(t, task.Url, row["queued_target_url"], "failed lifecycle boundaries retain the exact queued input")
+				require.Equal(t, "go-ramjet", row["source_service"])
+				require.NotEmpty(t, row["source_hostname"])
+				if scenario == "terminal_publish_failure" || scenario == "audit_failure" {
+					require.Equal(t, "<html><body><p>body-canary-private</p></body></html>", row["rendered_html"])
+					require.Equal(t, "<body><p>body-canary-private</p></body>", row["conversion_input"])
+					require.Equal(t, true, row["rendered_html_observed"])
+					require.Equal(t, true, row["conversion_input_observed"])
+				} else {
+					require.Equal(t, false, row["rendered_html_observed"])
+					require.Equal(t, false, row["conversion_input_observed"])
+				}
+			}
+			expectedPayloadRows := 1
+			switch scenario {
+			case "success":
+				expectedPayloadRows = 0
+			case "cleanup_publish_failure":
+				expectedPayloadRows = 2
+			}
+			require.Equal(t, expectedPayloadRows, payloadRows, "every failure boundary emits its chosen inputs; success emits no failure payload")
+			for _, canary := range []string{"private.invalid", "private-key-canary", "private-auth-canary", "private-query-canary", "private-body-canary", "private-upstream-body-canary", "token-canary", "synthetic-only"} {
+				require.NotContains(t, encoded.String(), canary, "no arbitrary error/config/credential object is serialized as selected input")
 			}
 		})
 	}

@@ -10,16 +10,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/stretchr/testify/require"
-
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 // TestRendererFailedHTTPResponseCapture exercises actual short HTTP bodies and a complete control.
@@ -94,7 +90,7 @@ func TestRendererFailedHTTPResponseCapture(t *testing.T) {
 			require.Equal(t, "request-id", captured.RequestID)
 			require.Equal(t, crawleregress.OriginDocument, captured.Kind)
 			require.Equal(t, http.MethodGet, captured.Method)
-			require.Equal(t, target, string(captured.URL.Bytes()))
+			require.Equal(t, target, captured.URL)
 			require.Equal(t, http.StatusOK, captured.UpstreamStatus)
 			require.Equal(t, "93.184.216.34", captured.PeerAddress)
 			require.Equal(t, "HTTP/1.1", captured.Protocol)
@@ -103,12 +99,11 @@ func TestRendererFailedHTTPResponseCapture(t *testing.T) {
 			if mode == "gzip_header" {
 				require.Equal(t, "decode", captured.FailurePhase)
 				require.NotEmpty(t, captured.DecodeError)
-				require.Equal(t, "not_reached", captured.DecodedBody.State)
+				require.False(t, captured.DecodedBodyObserved)
 			} else {
 				require.Equal(t, "read", captured.FailurePhase)
-				require.Equal(t, prefix, captured.DecodedBody.Bytes())
+				require.Equal(t, prefix, captured.DecodedBody)
 				require.NotEmpty(t, captured.ReadError)
-				require.NoError(t, captured.DecodedBody.Validate())
 			}
 			switch mode {
 			case "fixed_length":
@@ -125,14 +120,13 @@ func TestRendererFailedHTTPResponseCapture(t *testing.T) {
 			require.NoError(t, marshalErr)
 			require.NotContains(t, string(serialized), "transport-secret-canary")
 			require.NotContains(t, string(serialized), "transport-cookie-canary")
-			requireRendererFailureJournalRoundTrip(t, target, captured)
-			mutatedURL := captured.URL.Bytes()
-			mutatedURL[0] = 'X'
-			mutatedBody := captured.DecodedBody.Bytes()
+			requireRendererFailureLogFields(t, target, captured)
+			captured.URL = "changed snapshot URL"
+			mutatedBody := captured.DecodedBody
 			if len(mutatedBody) > 0 {
 				mutatedBody[0] = 'X'
 			}
-			require.Equal(t, target, string(holder.Snapshot().URL.Bytes()), "snapshot bytes have independent ownership")
+			require.Equal(t, target, holder.Snapshot().URL, "snapshot bytes have independent ownership")
 		})
 	}
 }
@@ -172,7 +166,7 @@ func TestRendererFailedResponseCancellation(t *testing.T) {
 	require.Equal(t, "read", captured.FailurePhase)
 	require.Contains(t, captured.ReadError, "context canceled")
 	require.False(t, captured.DecodedBodyComplete)
-	require.Equal(t, prefix, captured.DecodedBody.Bytes())
+	require.Equal(t, prefix, captured.DecodedBody)
 	require.EqualValues(t, 1, hits.Load())
 }
 
@@ -200,63 +194,40 @@ func TestRendererFailureObservationFirstAndIndependent(t *testing.T) {
 	ctx, holder := withRendererFailureObservation(context.Background())
 	first := newRendererFailureFixture("first")
 	observeRendererFailure(ctx, first)
-	firstURL := first.URL.Bytes()
-	firstURL[0] = 'X'
-	first.URL = crawlercapture.Captured(firstURL)
-	firstBody := first.DecodedBody.Bytes()
-	firstBody[0] = 'X'
-	first.DecodedBody = crawlercapture.Captured(firstBody)
+	first.URL = "changed source URL"
+	first.DecodedBody[0] = 'X'
 	observeRendererFailure(ctx, newRendererFailureFixture("second"))
 	require.Equal(t, "first", holder.Snapshot().RequestID)
-	require.Equal(t, "http://example.com/input", string(holder.Snapshot().URL.Bytes()))
-	require.Equal(t, []byte("partial"), holder.Snapshot().DecodedBody.Bytes())
+	require.Equal(t, "http://example.com/input", holder.Snapshot().URL)
+	require.Equal(t, []byte("partial"), holder.Snapshot().DecodedBody)
 }
 
 // newRendererFailureFixture returns synthetic, credential-free selected response facts.
-func newRendererFailureFixture(id string) *crawlercapture.Renderer {
-	return &crawlercapture.Renderer{
+func newRendererFailureFixture(id string) *rendererFailureResponse {
+	return &rendererFailureResponse{
 		RequestID: id, Kind: crawleregress.OriginDocument, Method: http.MethodGet,
-		URL:            crawlercapture.CapturedString("http://example.com/input"),
+		URL:            "http://example.com/input",
 		UpstreamStatus: http.StatusOK, DeclaredContentLength: 100, FailurePhase: "read",
-		DecodedBody: crawlercapture.CapturedString("partial"), ReadError: "unexpected EOF",
+		DecodedBody: []byte("partial"), DecodedBodyObserved: true, ReadError: "unexpected EOF",
 	}
 }
 
-// requireRendererFailureJournalRoundTrip verifies the actual failed HTTP snapshot
-// survives sealed publication and decoding, including private immutable Blob backing.
-func requireRendererFailureJournalRoundTrip(t *testing.T, target string, captured *crawlercapture.Renderer) {
+// requireRendererFailureLogFields verifies the real failed HTTP observation passes
+// intact through the ordinary Zap JSON core, without archive schemas or private files.
+func requireRendererFailureLogFields(t *testing.T, target string, captured *rendererFailureResponse) {
 	t.Helper()
-	directory := t.TempDir()
-	require.NoError(t, os.Chmod(directory, 0700))
-	journal, err := crawlercapture.NewJournal(filepath.Join(directory, "journal"), crawlercapture.Source{
-		Service: "synthetic-renderer", Hostname: "synthetic-host", ProcessRunID: "synthetic-process",
-	})
-	require.NoError(t, err)
-	reference, err := journal.Write(crawlercapture.Record{
-		Correlation: crawlercapture.Correlation{TaskID: "capture-task"},
-		Failure:     crawlercapture.Failure{Stage: "render", Code: "render_failed"},
-		Request: crawlercapture.Request{
-			OriginalURL: crawlercapture.CapturedString(target), SubmittedURL: crawlercapture.CapturedString(target), OutputMarkdown: true,
-		},
-		Converter: crawlercapture.Converter{Input: crawlercapture.NotReached()},
-		Renderer:  captured,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "complete", reference.Status)
-	decoded, err := crawlercapture.Read(reference.Path)
-	require.NoError(t, err)
-	require.NotNil(t, decoded.Renderer)
-	require.Equal(t, []byte(target), decoded.Renderer.URL.Bytes(), "nonempty captured URL survives observer snapshots and streaming journal")
-	require.Equal(t, captured.DecodedBody.State, decoded.Renderer.DecodedBody.State)
-	require.Equal(t, captured.DecodedBody.Bytes(), decoded.Renderer.DecodedBody.Bytes(), "entire available decoded prefix survives the journal")
-	require.Equal(t, captured.DecodedBody.SHA256, decoded.Renderer.DecodedBody.SHA256)
-	require.Equal(t, captured.DecodedBody.ByteLength, decoded.Renderer.DecodedBody.ByteLength)
-	require.Equal(t, captured.RequestID, decoded.Renderer.RequestID)
-	require.Equal(t, captured.FailurePhase, decoded.Renderer.FailurePhase)
-	require.Equal(t, captured.ReadError, decoded.Renderer.ReadError)
-	require.Equal(t, captured.DecodeError, decoded.Renderer.DecodeError)
-	require.Equal(t, captured.DecodedBodyComplete, decoded.Renderer.DecodedBodyComplete)
-	raw, err := os.ReadFile(reference.Path)
+	logged := crawlerFieldsThroughJSONCore(t, captured.fields())
+	require.Equal(t, target, logged["renderer_request_url"])
+	require.Equal(t, captured.DecodedBodyObserved, logged["renderer_decoded_body_observed"])
+	if captured.DecodedBodyObserved {
+		require.Equal(t, string(captured.DecodedBody), logged["renderer_decoded_body"])
+		require.EqualValues(t, len(captured.DecodedBody), logged["renderer_decoded_body_bytes"])
+	}
+	require.Equal(t, captured.FailurePhase, logged["renderer_failure_phase"])
+	require.Equal(t, captured.ReadError, logged["renderer_read_error"])
+	require.Equal(t, captured.DecodeError, logged["renderer_decode_error"])
+	require.Equal(t, captured.DecodedBodyComplete, logged["renderer_decoded_body_complete"])
+	raw, err := json.Marshal(logged)
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "transport-secret-canary")
 	require.NotContains(t, string(raw), "transport-cookie-canary")
