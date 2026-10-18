@@ -16,9 +16,10 @@ import (
 	"testing"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 // TestRendererFailedHTTPResponseCapture exercises actual short HTTP bodies and a complete control.

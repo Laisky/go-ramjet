@@ -16,8 +16,9 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
+
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 const (

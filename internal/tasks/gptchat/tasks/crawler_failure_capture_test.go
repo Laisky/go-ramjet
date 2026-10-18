@@ -4,15 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
-	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
-	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Laisky/errors/v2"
+	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
+	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
+	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 // TestCrawlerFailureJournalWorkerRecords exercises the actual pinned converter and worker lifecycle.

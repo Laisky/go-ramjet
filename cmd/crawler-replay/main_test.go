@@ -12,8 +12,9 @@ import (
 	"testing"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 type replayPair struct {

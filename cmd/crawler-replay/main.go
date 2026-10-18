@@ -17,6 +17,7 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/Laisky/errors/v2"
+
 	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 

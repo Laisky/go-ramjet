@@ -6,9 +6,10 @@ import (
 	"sync"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/go-ramjet/library/crawlercapture"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
+
+	"github.com/Laisky/go-ramjet/library/crawlercapture"
 )
 
 const pinnedCrawlerConverterVersion = "v2.5.2"
