@@ -54,7 +54,13 @@ func crawlerLogTaskID(taskID string) string {
 // fetchVerifiedCrawlerTask renders task using its admitted pins and returns body,
 // local Markdown and verified observed connections. It never invokes external
 // fetch or conversion fallbacks, and never passes the task API key to a renderer.
-func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) ([]byte, string, *crawleregress.Receipt, error) {
+func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) (resultBody []byte, resultMarkdown string, resultReceipt *crawleregress.Receipt, resultErr error) {
+	var observation *crawlerContextObservation
+	defer func() {
+		if observation != nil && resultErr != nil {
+			resultErr = withCrawlerObservedFailure(resultErr, observation.snapshot())
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, "", nil, crawlerFailure("worker_failed", "admission", err)
 	}
@@ -74,6 +80,7 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	if os.Getenv("CRAWLER_HTTP_PROXY") != "" {
 		return nil, "", nil, crawlerFailure("unsupported_proxy", "admission", nil)
 	}
+	ctx, observation = newCrawlerContextObservation(ctx, task.Url)
 	renderTask := *task
 	renderTask.APIKey = ""
 	renderPolicy := crawleregress.ClonePolicy(policy)
@@ -84,11 +91,20 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	renderTask.ResultMarkdown = nil
 	htmlContent, receipt, err := fetchVerifiedHTMLContent(ctx, &renderTask)
 	if err != nil {
+		if htmlContent != "" {
+			observeCrawlerCaptureRendered(ctx, htmlContent)
+		}
+	} else {
+		observeCrawlerCaptureRendered(ctx, htmlContent)
+	}
+	observation.sealDocuments()
+	if err != nil {
 		return nil, "", nil, crawlerFailure("render_failed", "render", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, "", nil, crawlerFailure("render_failed", "render", err)
 	}
+	observeCrawlerRenderedBytes(ctx, len(htmlContent))
 	if len(htmlContent) > rendererMaxResponseBytes {
 		return nil, "", nil, crawlerFailure("result_too_large", "render", nil)
 	}
@@ -135,10 +151,14 @@ func extractVerifiedHTMLBody(ctx context.Context, content string, outputMarkdown
 	if !outputMarkdown {
 		return rendered.Bytes(), "", nil
 	}
-	markdown, err := convertVerifiedMarkdown(rendered.String())
+	observeCrawlerConversionInput(ctx, body, rendered.Len())
+	converterInput := rendered.String()
+	observeCrawlerCaptureConverter(ctx, converterInput)
+	markdown, err := convertVerifiedMarkdown(converterInput)
 	if err != nil {
 		return nil, "", crawlerFailure("conversion_failed", "conversion", err)
 	}
+	observeCrawlerConversionOutput(ctx, markdown, strings.TrimSpace(markdown))
 	markdown = strings.TrimSpace(markdown)
 	if markdown == "" {
 		return nil, "", crawlerFailure("empty_markdown", "conversion", nil)
@@ -152,12 +172,14 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 	if task == nil {
 		return crawlerFailure("task_missing", "admission", nil)
 	}
+	ctx, capture := withCrawlerFailureCapture(ctx, task)
 	logger := log.Logger.Named("run_dynamic_web_crawler.verified_crawler_task")
 	ctx = gmw.SetLogger(ctx, logger)
 	startedAt := time.Now()
 	// Publication errors belong to this reviewed boundary; the outer loop retains backoff without emitting them again.
 	publishFailure := func(publishErr error, cleanup bool) error {
 		fields := crawlerLifecycleFields(ctx, task.TaskID, "result_publication_failed", task.Status, "failed", startedAt)
+		fields = append(fields, capture.fields()...)
 		fields = append(fields, zap.String("stage", "persistence"), zap.String("error_code", "publication_failed"),
 			zap.Bool("cleanup", cleanup), zap.Error(&crawlerTaskError{code: "publication_failed", stage: "persistence", cause: publishErr}))
 		logger.Error("crawler result publication failed", fields...)
@@ -167,8 +189,12 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		fields := crawlerLifecycleFields(ctx, task.TaskID, "processing_completed", task.Status, "", startedAt)
 		if failure != nil {
 			code, stage := crawlerDiagnostic(failure)
+			fields = append(fields, capture.fields()...)
 			fields = append(fields, zap.String("stage", stage), zap.String("category", code), zap.String("error_code", code))
-			fields = append(fields, crawlerUpstreamStatusFields(failure)...)
+			fields = append(fields, crawlerFailureContextFields(failure)...)
+			if contextValue := crawlerFailureContextFrom(failure); contextValue == nil || contextValue.UpstreamStatus == nil {
+				fields = append(fields, crawlerUpstreamStatusFields(failure)...)
+			}
 			if signal := crawlerDiagnosticSignal(failure); signal != "" {
 				fields = append(fields, zap.String("challenge_signal", string(signal)))
 			}
@@ -238,6 +264,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 			URL: task.Url, RawBody: body, Markdown: markdownPtr}
 		if err := persistVerifiedCrawlRecord(ctx, record); err != nil {
 			fields := crawlerLifecycleFields(ctx, task.TaskID, "audit_persistence_failed", task.Status, "", startedAt)
+			fields = append(fields, capture.fields()...)
 			fields = append(fields, zap.String("error_code", "audit_store_failed"), zap.String("stage", "persistence"),
 				zap.Error(&crawlerTaskError{code: "audit_store_failed", stage: "persistence", cause: err}))
 			logger.Warn("crawler audit persistence failed", fields...)

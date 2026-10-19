@@ -22,6 +22,8 @@ func (e *crawlerTaskError) Error() string {
 	message := "crawler " + e.stage + ": " + e.code
 	if detail := crawlerCauseText(e.cause); detail != "" {
 		message += ": " + detail
+	} else if e.code == "empty_markdown" {
+		message += ": requested Markdown result contains no non-whitespace text"
 	}
 	return boundCrawlerDiagnosticText(message)
 }
@@ -82,12 +84,13 @@ type crawlerFailureKey struct{}
 type crawlerFailureMetadata struct {
 	Stage, Category string
 	Signal          crawlerChallengeSignal
+	Context         *crawlerFailureContext
 }
 
 // withCrawlerFailure carries only the reviewed pair and optional finite signal to the terminal publication encoder.
 func withCrawlerFailure(ctx context.Context, err error) context.Context {
 	category, stage := crawlerDiagnostic(err)
-	return context.WithValue(ctx, crawlerFailureKey{}, crawlerFailureMetadata{Stage: stage, Category: category, Signal: crawlerDiagnosticSignal(err)})
+	return context.WithValue(ctx, crawlerFailureKey{}, crawlerFailureMetadata{Stage: stage, Category: category, Signal: crawlerDiagnosticSignal(err), Context: crawlerFailureContextFrom(err)})
 }
 
 // encodeHTMLCrawlerTaskResult extends the pinned DTO with optional reviewed failure metadata only.
@@ -103,6 +106,8 @@ func encodeHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTas
 	delete(fields, "failure_stage")
 	delete(fields, "failure_category")
 	delete(fields, "failure_signal")
+	delete(fields, "failure_context")
+	var diagnostic json.RawMessage
 	metadata, ok := ctx.Value(crawlerFailureKey{}).(crawlerFailureMetadata)
 	if task.Status == rlibs.TaskStatusFailed && ok && log.CrawlerFailurePair(metadata.Stage, metadata.Category) {
 		stage, err := json.Marshal(metadata.Stage)
@@ -114,6 +119,15 @@ func encodeHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTas
 			return "", errors.Wrap(err, "encode crawler category")
 		}
 		fields["failure_stage"], fields["failure_category"] = stage, category
+		if metadata.Context != nil {
+			contextBytes, encodeErr := json.Marshal(metadata.Context)
+			if encodeErr != nil {
+				return "", errors.Wrap(encodeErr, "encode crawler failure context")
+			}
+			if len(contextBytes) <= crawlerFailureContextMaxBytes {
+				diagnostic = contextBytes
+			}
+		}
 		if approvedCrawlerChallengeSignal(metadata.Stage, metadata.Category, metadata.Signal) {
 			signal, err := json.Marshal(metadata.Signal)
 			if err != nil {
@@ -125,6 +139,12 @@ func encodeHTMLCrawlerTaskResult(ctx context.Context, task *rlibs.HTMLCrawlerTas
 	encoded, err := json.Marshal(fields)
 	if err != nil {
 		return "", errors.Wrap(err, "encode crawler envelope")
+	}
+	// Keep the established scalar envelope prefix before the optional larger context.
+	if len(diagnostic) != 0 {
+		encoded = append(encoded[:len(encoded)-1], []byte(`,"failure_context":`)...)
+		encoded = append(encoded, diagnostic...)
+		encoded = append(encoded, '}')
 	}
 	return string(encoded), nil
 }

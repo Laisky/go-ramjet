@@ -84,13 +84,17 @@ func TestStartupAlertDiagnosticScope(t *testing.T) {
 				t.Fatal("actual startup alert missing")
 			}
 			require.Contains(t, message, tc.scope)
-			require.NotContains(t, message, "canary")
 			if tc.diagnostic {
+				for _, chosen := range []string{"private-key-canary", "private-body-canary"} {
+					require.Contains(t, message, chosen, "chosen error text is no longer implicitly sanitized by the SDK")
+				}
+
 				require.Contains(t, message, `"future_revision":"parser-v2"`)
 				require.Contains(t, message, `"attempt":2`)
 				require.Contains(t, message, "unexpected EOF")
 				require.NotContains(t, message, "{}")
 			} else {
+				require.NotContains(t, message, "canary", "the existing application-owned unrelated field scope is preserved")
 				require.True(t, strings.HasSuffix(message, "{}"), "unreviewed app logs retain legacy metadata-only export")
 			}
 			select {

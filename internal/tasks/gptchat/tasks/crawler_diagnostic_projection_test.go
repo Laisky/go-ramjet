@@ -24,6 +24,8 @@ import (
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/stretchr/testify/require"
+
+	appLog "github.com/Laisky/go-ramjet/library/log"
 )
 
 // crawlerPanickingDiagnosticCause simulates a formatter panic containing synthetic credential data.
@@ -56,7 +58,7 @@ func captureCrawlerDiagnosticProjection(t *testing.T, failure error) (string, st
 	t.Cleanup(server.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	alert, err := glog.NewAlert(ctx, server.URL, glog.WithAlertType("synthetic"), glog.WithAlertToken("synthetic-only"))
+	alert, err := glog.NewAlert(ctx, server.URL, glog.WithAlertType("synthetic"), glog.WithAlertToken("synthetic-only"), glog.WithAlertMaxMessageBytes(appLog.HTTPAlertMaxMessageBytes))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		alert.Close()
@@ -104,7 +106,22 @@ func TestCrawlerDiagnosticProjectionHTTPAndJSONBounds(t *testing.T) {
 	require.Contains(t, fields["error"], "[truncated]")
 	require.Contains(t, remote, "navigation failed")
 	require.Contains(t, remote, "[truncated]")
-	require.Less(t, len(remote), 4096, "the bounded error must survive actual alert serialization")
+	// The SDK now retains ordinary Zap rich-error fields, including verbose stack
+	// text. Their complete alert need not fit twice the application error-text bound.
+	offset := strings.Index(remote, "\n{")
+	require.GreaterOrEqual(t, offset, 0, "actual alert must retain its structured error fields")
+	var remoteFields map[string]any
+	require.NoError(t, json.Unmarshal([]byte(remote[offset+1:]), &remoteFields))
+	require.Equal(t, fields["error"], remoteFields["error"], "transport preserves the exact application-owned projection")
+	remoteError := remoteFields["error"].(string)
+	require.LessOrEqual(t, len(remoteError), crawlerDiagnosticTextLimit)
+	require.True(t, utf8.ValidString(remoteError))
+	if verbose, present := fields["errorVerbose"]; present {
+		require.Equal(t, verbose, remoteFields["errorVerbose"], "faithful transport preserves the ordinary Zap verbose representation")
+	} else {
+		require.NotContains(t, remoteFields, "errorVerbose")
+	}
+	require.LessOrEqual(t, len(remote), appLog.HTTPAlertMaxMessageBytes, "the complete formatted alert respects its explicit SDK admission budget")
 }
 
 // TestCrawlerDiagnosticPanickingCauseNeverLeaks keeps a formatter panic out of direct and emitted diagnostics.

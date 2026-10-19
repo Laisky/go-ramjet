@@ -276,6 +276,7 @@ func renderVerifiedHTMLWithDependencies(ctx context.Context, task *rlibs.HTMLCra
 				break
 			}
 			html, captureErr = chromedp.Run(browserCtx, chromedp.OuterHTML(chromedp.CSS("html")))
+			observeRendererDOMSnapshot(ctx, html, captureErr)
 			failureMu.Lock()
 			if !activeRequest || captureErr != nil {
 				snapshotComplete = true
@@ -295,16 +296,31 @@ func renderVerifiedHTMLWithDependencies(ctx context.Context, task *rlibs.HTMLCra
 	failureMu.Lock()
 	observedFailure := failure
 	failureMu.Unlock()
+	return finishRendererSnapshot(ctx, html, observedFailure, captureErr, f, blockedRequests.Load())
+}
+
+// finishRendererSnapshot applies the existing terminal checks after snapshot observation.
+// Rejections keep their original errors and never return unverified or over-budget HTML.
+func finishRendererSnapshot(ctx context.Context, html string, observedFailure, captureErr error, f *rendererEgressFetcher, blockedRequests int64) (string, *crawleregress.Receipt, error) {
 	if err := combineRendererFailure(ctx, observedFailure, captureErr); err != nil {
 		return "", nil, errors.Wrap(err, "verified renderer failed")
 	}
 	if len(html) > crawleregress.MaxResponseBytes {
 		return "", nil, errors.Errorf("renderer DOM response budget exhausted")
 	}
-	receipt, err = f.seal(ctx)
+	receipt, err := f.seal(ctx)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "seal renderer evidence")
 	}
-	receipt.BlockedRequests = blockedRequests.Load()
+	receipt.BlockedRequests = blockedRequests
 	return html, receipt, nil
+}
+
+// observeRendererDOMSnapshot retains a successful CDP snapshot before later checks can reject it.
+// Failed CDP reads neither prove an empty document nor erase a prior observed snapshot.
+func observeRendererDOMSnapshot(ctx context.Context, html string, snapshotErr error) {
+	if snapshotErr != nil {
+		return
+	}
+	observeCrawlerCaptureRendered(ctx, html)
 }

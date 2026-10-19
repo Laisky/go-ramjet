@@ -6,7 +6,7 @@ The candidate consumes the versioned GraphQL crawler contract through the immuta
 
 The running worker was built from `bb26ec77f68fe5a28535f6def19635dc6014b8bb` and used a May 2026 GraphQL task model without Egress or RequestChain. Its JSON round-trip loses the newer policy and evidence fields. Synthetic tests reproduce secure-server rejection of this old-model result. The nearby worker task was saved successfully 443 ms before the reported GraphQL alert. GraphQL logs retained only data beginning 19.5 hours after the alert, so the exact request-level cause cannot be established. There was no observed DNS, timeout, or upstream worker error in the retained incident window.
 
-The empty alert object was separately reproduced with the deployed SDK revision: its default empty field filter exported no structured fields, and its alert hook excluded errors. The diagnostic repair uses the shared SDK default that forwards ordinary primitive fields and meaningful sanitized error text, with targeted credential, sensitive URL, and payload redaction. An explicit field filter remains optional; the crawler does not require a field-name allowlist. The worker uses a curated logger and bounded stage/category, duration, and canonical task ID fields, while the GraphQL companion retains safe failure metadata. Neither path logs targets, credentials, raw bodies, or user content.
+The empty alert object was separately reproduced with the deployed SDK revision: its default empty field filter exported no structured fields, and its alert hook excluded errors. That historical diagnosis is separate from the current application requirement: preserve selected original crawler input and useful diagnostics in ordinary structured logs and alerts. Existing logger/SDK fidelity is qualified with its owner; this application change does not add a field-name workaround or silently replace diagnostic content.
 
 ## Enforced transport
 
@@ -30,10 +30,84 @@ A caller cancellation does not immediately cancel an already dequeued task in an
 
 Before release, run the full checks, build and attest the paired runtime images (including the helper), and qualify the actual published digests with synthetic unauthenticated fixtures. Keep RequireVerified enabled. Release policy updated 2026-10-17: eligible normal release pushes publish and automatically deploy the current `latest` image; `[publish only]` no longer suppresses deployment. Complete paired qualification before an eligible publishing push or merge. Existing branch/path filters and docs/doc/tests/test/ci commit-prefix skips remain unchanged. After qualification, deploy the backward-compatible worker before the new producer. Preserve pending tasks, the dirty base Compose file, configuration mounts and prior immutable image digests. Restore the producer first, then the worker, if paired rollback is necessary. Observe worker idleness and terminal completion before recreation; zero pending alone is insufficient. No host security/network change or authenticated user-request replay is required.
 
-Startup alert scope: only the static reviewed
-`go-ramjet.run_dynamic_web_crawler.verified_crawler_task` logger exports SDK default
-fields. Legacy crawler and unrelated services retain metadata-only fields because
-their errors may contain raw provider or user content. The existing Alert instance
-and rate limiter remain shared, with one hook call per entry and no field-name
-allowlist. Actual startup/HTTP receiver controls cover useful future fields,
-sanitized causes, private user/payload values and logger-name lookalikes.
+Startup alert scope remains the existing reviewed
+go-ramjet.run_dynamic_web_crawler.verified_crawler_task logger and shared Alert
+instance. This change does not alter unrelated logger scope, transport security
+or rate-limit configuration. The failure entry adds original selected inputs,
+source/task correlation and observed response facts. Qualification must exercise
+the existing production hook and complete HTTP payload, then the actual logging
+and alert destinations; a small synthetic receiver alone does not prove that
+large fields survive downstream limits.
+
+## Optional failure context (2026-10-18 candidate)
+
+Failed verified tasks may include a backward-compatible `failure_context` object.
+Older queue decoders ignore it. Success results and admission failures without
+observations do not gain context. The existing task ID, target URL, output mode,
+policy and receipt bindings are unchanged; a caller must validate those bindings
+before using worker diagnostics.
+
+The optional Redis object contains the following scalar values. Full selected
+URLs and HTML are separate ordinary failure-log fields, not an expansion of the
+queue/result ABI. Arbitrary raw headers, cookies and API keys are not selected:
+
+- `target_scheme` / `target_hostname`: canonical components of the admitted task.
+- `final_scheme` / `final_hostname`, `upstream_status`, `content_type`: the latest
+  actual root-document response observed by the pinned transport. Content type is
+  the parsed base MIME type without parameters. Headers remain observations if
+  later body decoding fails; neither status nor MIME changes HTTP acceptance.
+  Subresources and subframes cannot overwrite document metadata.
+- `redirect_count`: observed root-document redirect depth, present only when the
+  predecessor chain is known. A later navigation without that chain is not
+  inferred to be a redirect.
+- `rendered_html_bytes`: actual returned rendered-document size.
+- `conversion_input_bytes`: actual serialized body supplied to local conversion.
+- `conversion_output_bytes` / `conversion_output_trimmed_bytes`: actual output
+  sizes before and after the existing whitespace trim.
+- `body_text_runes` / `body_text_nodes`: non-whitespace parsed text outside
+  script/style elements, excluding surrounding whitespace. These counts do not
+  claim CSS visibility, main-article extraction or website readiness.
+- `converter`: `html-to-markdown/v2` when conversion was entered.
+
+A missing count means that stage was not observed; an observed zero is retained.
+All counts are nonnegative int64, including an observed size above the existing
+payload budget. Existing response, result and allocation limits remain unchanged.
+Every simultaneous valid scalar representation fits the 2048-byte optional
+context budget (two 253-byte hostnames, 127-byte base MIME type and maximum int64
+counts included); no valid count is truncated. Snapshots are independent, and
+late renderer callbacks cannot mutate a terminal result.
+
+For `empty_markdown`, the failure text explains that the requested result contains
+no non-whitespace text. Zero body text versus nonzero body text with empty output
+helps distinguish future incidents without guessing the original website cause.
+The supplied 2026-10-18 event has not yet been bound to an originating instance or
+target, so this source repair does not establish its upstream cause. It adds no
+retry, alternate converter, external fetch or success fallback.
+
+
+## Original input in ordinary logs and alerts
+
+Failure entries carry the selected queued URL, the last successfully observed
+browser DOM snapshot and
+the single immutable serialized BODY supplied to local conversion, together with
+whether each stage was reached. The observed snapshot can precede a later
+rendering failure; it is not necessarily returned, final or stable. Available
+failed renderer response bytes and
+selected framing/errors are diagnostic observations, not browser fulfillment or
+success data. Caller diagnostics retain the original declared URL/options and
+join on the existing task ID. Service, hostname, process-run identity and public
+build metadata identify the actual source.
+
+Application code does not preview, truncate, replace or filter these selected
+values. It does not serialize a task, provider key, authorization headers,
+arbitrary context or process configuration. No application journal, replay CLI,
+private archive API, storage mount or capture-directory setting is introduced.
+Use existing structured logging and alerts; backend capacity and retention
+remain logging-system responsibilities.
+
+Complete delivery through the existing SDK/receiver/destination is a required
+fidelity gate. Existing size, queue or notification constraints must remain
+visible rather than silently losing fields. Source tests use synthetic data and
+do not establish production delivery or recover historical input that was never
+logged. Existing converter behavior, error identity, egress policy, queue/result
+binding, billing and successful requests remain unchanged.

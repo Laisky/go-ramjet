@@ -314,15 +314,13 @@ class DriverContracts(unittest.TestCase):
         self.assertEqual(row['status'], 'test_failure')
         self.assertNotIn('UnknownPrivateCanary', json.dumps(row))
 
-    def test_expected_pr_tree_and_module_bindings_are_checked_before_worktrees(self):
-        """test_expected_pr_tree_and_module_bindings_are_checked_before_worktrees verifies expected pr tree and module bindings are checked before worktrees using controlled fixtures."""
+    def test_expected_pr_tree_binding_is_checked_before_worktrees(self):
+        """test_expected_pr_tree_binding_is_checked_before_worktrees verifies expected PR tree before creating worktrees using controlled fixtures."""
         def fake_git(root, *args):
             """fake_git returns fixed Git metadata for prerequisite checks and rejects unexpected commands."""
             if args == ('status', '--porcelain'):
                 return ''
             expression = args[-1]
-            if ':' in expression:
-                return probe.MODULE_BLOBS[expression.split(':', 1)[1]]
             if expression == 'HEAD':
                 return '1' * 40
             if expression == 'HEAD^{tree}':
@@ -340,6 +338,310 @@ class DriverContracts(unittest.TestCase):
             with self.assertRaises(probe.ProbeError):
                 with probe.checkouts_for_ci(pathlib.Path('/owned')):
                     self.fail('non-exact modules must not execute cells')
+
+
+    def test_otlp_only_module_addition_keeps_browser_closure(self):
+        """test_otlp_only_module_addition_keeps_browser_closure permits unrelated OTLP metadata additions."""
+        output = 'github.com/chromedp/chromedp v0.20.1\n'
+        sums = ('github.com/chromedp/chromedp v0.20.1 h1:browser\n'
+                'github.com/chromedp/chromedp v0.20.1/go.mod h1:browsermod\n')
+        baseline = probe.dependency_graph(output, sums)
+        current = probe.dependency_graph(output, sums +
+            'go.opentelemetry.io/otel/sdk/log v1.47.0 h1:logs\n'
+            'go.opentelemetry.io/otel/sdk/log v1.47.0/go.mod h1:logsmod\n')
+        probe.require_dependency_match({'accepted': baseline, 'exact': baseline, 'current': current})
+        self.assertEqual(baseline, current)
+
+    def test_browser_control_mutation_or_replacement_is_rejected(self):
+        """test_browser_control_mutation_or_replacement_is_rejected preserves relevant control invariants."""
+        output = 'github.com/chromedp/chromedp v0.20.1\n'
+        sums = ('github.com/chromedp/chromedp v0.20.1 h1:browser\n'
+                'github.com/chromedp/chromedp v0.20.1/go.mod h1:browsermod\n')
+        baseline = probe.dependency_graph(output, sums)
+        variants = (
+            probe.dependency_graph(output.replace('v0.20.1', 'v0.21.0'), sums.replace('v0.20.1', 'v0.21.0')),
+            probe.dependency_graph(output, sums.replace('h1:browsermod', 'h1:changedmod')),
+            probe.dependency_graph(output, sums.replace('h1:browser\n', 'h1:changed\n')),
+        )
+        for current in variants:
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_graph_differs'):
+                probe.require_dependency_match({'accepted': baseline, 'exact': baseline, 'current': current})
+        with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_replaced_or_invalid'):
+            probe.dependency_graph(output.rstrip() + ' replaced\n', sums)
+        with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_checksum_missing'):
+            probe.dependency_graph(output, '')
+
+    def test_pdf_assertion_dependency_drift_is_bound_by_resolver(self):
+        """test_pdf_assertion_dependency_drift_is_bound_by_resolver rejects changed test-only PDF dependencies."""
+        browser = 'github.com/chromedp/chromedp v0.20.1\n'
+        pdf = 'github.com/pdfcpu/pdfcpu v0.16.1\n'
+        sums = ('github.com/chromedp/chromedp v0.20.1 h1:browser\n'
+                'github.com/chromedp/chromedp v0.20.1/go.mod h1:browsermod\n'
+                'github.com/pdfcpu/pdfcpu v0.16.1 h1:pdf\n'
+                'github.com/pdfcpu/pdfcpu v0.16.1/go.mod h1:pdfmod\n')
+        def selected(args, **kwargs):
+            """selected models go list selecting PDF only when its actual test dependency root is supplied."""
+            output = browser + (pdf if 'github.com/pdfcpu/pdfcpu/pkg/api' in args else '')
+            return subprocess.CompletedProcess(args, 0, output.encode(), b'')
+        with tempfile.TemporaryDirectory(prefix='probe-pdf-dependency-contract-') as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'go.sum').write_text(sums)
+            with mock.patch.object(probe.subprocess, 'run', side_effect=selected):
+                baseline = probe.dependency_snapshot(root)
+                (root / 'go.sum').write_text(sums.replace('h1:pdf\n', 'h1:changedpdf\n'))
+                changed = probe.dependency_snapshot(root)
+        with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_graph_differs'):
+            probe.require_dependency_match({'accepted': baseline, 'exact': baseline, 'current': changed})
+
+    def test_dependency_snapshot_is_offline_readonly_and_hides_prerequisite_errors(self):
+        """test_dependency_snapshot_is_offline_readonly_and_hides_prerequisite_errors preserves cache-only failures."""
+        failure = subprocess.CompletedProcess([], 1, b'', b'private-module-canary')
+        with mock.patch.object(probe.subprocess, 'run', return_value=failure) as execute:
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_graph_unavailable') as caught:
+                probe.dependency_snapshot(pathlib.Path('/owned'))
+        self.assertNotIn('canary', str(caught.exception))
+        self.assertIn('-mod=readonly', execute.call_args.args[0])
+        self.assertEqual(execute.call_args.kwargs['env']['GOPROXY'], 'off')
+        self.assertEqual(execute.call_args.kwargs['env']['GOSUMDB'], 'off')
+        self.assertEqual(execute.call_args.kwargs['env']['GONOPROXY'], 'none')
+
+
+
+class ReviewedSDKTransitionContracts(unittest.TestCase):
+    """ReviewedSDKTransitionContracts model exact dependency and cache boundaries without Go/network."""
+
+    def snapshots(self, policy):
+        """snapshots returns truthful inherited old SDK and reviewed current SDK profiles."""
+        module = policy['module']
+        other = ('github.com/chromedp/chromedp', 'v0.20.1', 'h1:browser', 'h1:browsermod')
+        return {role: tuple(sorted(((module, *policy[role]), other)))
+                for role in ('accepted', 'exact', 'current')}
+
+    def test_exact_transition_keeps_historical_profiles_and_six_cells(self):
+        """test_exact_transition_keeps_historical_profiles_and_six_cells permits only the reviewed change."""
+        policy = probe.reviewed_transition()
+        snapshots = self.snapshots(policy)
+        probe.require_dependency_match(snapshots, policy)
+        self.assertNotEqual(snapshots['accepted'], snapshots['current'])
+        self.assertEqual(snapshots['accepted'], snapshots['exact'])
+        self.assertEqual(len(probe.CELLS), 6)
+        self.assertEqual([row[1] for row in probe.CELLS], ['accepted', 'exact', 'current', 'current', 'current', 'current'])
+
+    def test_unreviewed_sdk_version_or_checksums_fail(self):
+        """test_unreviewed_sdk_version_or_checksums_fail rejects any profile outside the reviewed tuple."""
+        policy = probe.reviewed_transition()
+        for role in ('accepted', 'exact', 'current'):
+            for column in (1, 2, 3):
+                with self.subTest(role=role, column=column):
+                    snapshots = self.snapshots(policy)
+                    changed = []
+                    for row in snapshots[role]:
+                        values = list(row)
+                        if row[0] == policy['module']:
+                            values[column] = 'unreviewed-value'
+                        changed.append(tuple(values))
+                    snapshots[role] = tuple(changed)
+                    with self.assertRaisesRegex(probe.ProbeError, 'browser_sdk_profile_differs'):
+                        probe.require_dependency_match(snapshots, policy)
+        snapshots = self.snapshots(policy)
+        snapshots['current'] = tuple(row for row in snapshots['current'] if row[0] != policy['module'])
+        with self.assertRaisesRegex(probe.ProbeError, 'browser_sdk_profile_differs'):
+            probe.require_dependency_match(snapshots, policy)
+
+    def test_other_module_and_root_changes_fail(self):
+        """test_other_module_and_root_changes_fail prevents an SDK transition from exempting other controls."""
+        policy = probe.reviewed_transition()
+        for column in (0, 1, 2, 3):
+            snapshots = self.snapshots(policy)
+            changed = []
+            for row in snapshots['current']:
+                values = list(row)
+                if row[0] != policy['module']:
+                    values[column] = 'unreviewed-other'
+                changed.append(tuple(values))
+            snapshots['current'] = tuple(changed)
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_graph_differs'):
+                probe.require_dependency_match(snapshots, policy)
+        with mock.patch.object(probe, 'CONTROL_IMPORTS', (*probe.CONTROL_IMPORTS, 'example.test/unreviewed/root')):
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_roots_differ'):
+                probe.reviewed_transition()
+
+    @contextlib.contextmanager
+    def cached_module(self):
+        """cached_module supplies an owned synthetic cache without pretending the zip is a real Go archive."""
+        with tempfile.TemporaryDirectory(prefix='browser-module-cache-contract-') as temporary:
+            root = pathlib.Path(temporary)
+            directory = root / 'module'
+            directory.mkdir()
+            modfile = root / 'v1.0.0.mod'
+            modfile.write_bytes(b'module example.test/module\n')
+            checksum = 'h1:synthetic-zip'
+            line = probe.hashlib.sha256(modfile.read_bytes()).hexdigest() + '  go.mod\n'
+            modsum = 'h1:' + probe.base64.b64encode(probe.hashlib.sha256(line.encode()).digest()).decode()
+            modfile.with_suffix('.zip').write_bytes(b'synthetic archive; actual verification is mocked')
+            modfile.with_suffix('.ziphash').write_text(checksum)
+            entry = {'Path': 'example.test/module', 'Version': 'v1.0.0', 'Sum': checksum,
+                     'GoModSum': modsum, 'Dir': str(directory), 'GoMod': str(modfile)}
+            yield root, entry, ((entry['Path'], entry['Version'], checksum, modsum),)
+
+    def execute_cache(self, root, entry, graph, verify_exit=0):
+        """execute_cache runs the real metadata checks with mocked Go commands and private stderr controls."""
+        metadata = subprocess.CompletedProcess([], 0, json.dumps(entry).encode(), b'')
+        verified = subprocess.CompletedProcess([], verify_exit, b'', b'private-cache-canary')
+        with mock.patch.object(probe.subprocess, 'run', side_effect=[metadata, verified]) as execute:
+            probe.verify_dependency_cache(root, graph)
+        return execute
+
+    def test_cache_presence_identity_and_readonly_verification(self):
+        """test_cache_presence_identity_and_readonly_verification verifies the explicit offline cache boundary."""
+        with self.cached_module() as (root, entry, graph):
+            execute = self.execute_cache(root, entry, graph)
+            self.assertEqual(execute.call_args_list[1].args[0], ['go', 'mod', 'verify'])
+            for call in execute.call_args_list:
+                self.assertEqual(call.kwargs['env']['GOPROXY'], 'off')
+                self.assertEqual(call.kwargs['env']['GOSUMDB'], 'off')
+                self.assertEqual(call.kwargs['env']['GOFLAGS'], '-mod=readonly')
+
+    def test_missing_replaced_or_mismatched_cache_fails(self):
+        """test_missing_replaced_or_mismatched_cache_fails rejects gaps before a browser can start."""
+        for field in ('Version', 'Sum', 'GoModSum', 'Replace', 'Dir'):
+            with self.subTest(field=field), self.cached_module() as (root, entry, graph):
+                entry[field] = {'Path': 'example.test/replaced'} if field == 'Replace' else 'unreviewed-value'
+                with self.assertRaises(probe.ProbeError):
+                    self.execute_cache(root, entry, graph)
+        for suffix in ('.zip', '.ziphash', '.mod'):
+            with self.subTest(missing=suffix), self.cached_module() as (root, entry, graph):
+                pathlib.Path(entry['GoMod']).with_suffix(suffix).unlink()
+                with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_cache_incomplete'):
+                    self.execute_cache(root, entry, graph)
+
+    def test_cache_bytes_or_verify_failure_are_visible_without_raw_errors(self):
+        """test_cache_bytes_or_verify_failure_are_visible_without_raw_errors covers tamper and verification failure."""
+        for suffix in ('.ziphash', '.mod'):
+            with self.subTest(tampered=suffix), self.cached_module() as (root, entry, graph):
+                pathlib.Path(entry['GoMod']).with_suffix(suffix).write_text('changed-cache')
+                with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_cache_identity_differs'):
+                    self.execute_cache(root, entry, graph)
+        with self.cached_module() as (root, entry, graph):
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_cache_verify_failed') as caught:
+                self.execute_cache(root, entry, graph, verify_exit=1)
+            self.assertNotIn('canary', str(caught.exception))
+
+    def test_missing_cache_prerequisite_has_fixed_error(self):
+        """test_missing_cache_prerequisite_has_fixed_error does not expose raw Go diagnostics."""
+        failure = subprocess.CompletedProcess([], 1, b'', b'private-cache-canary')
+        with mock.patch.object(probe.subprocess, 'run', return_value=failure):
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_cache_unavailable') as caught:
+                probe.verify_dependency_cache(pathlib.Path('/owned'), (('example.test/module', 'v1', 'h1:x', 'h1:y'),))
+        self.assertNotIn('canary', str(caught.exception))
+
+
+
+class CachePreparationContracts(unittest.TestCase):
+    """CachePreparationContracts verify the explicit preparation boundary without fetching or running Go."""
+
+    @contextlib.contextmanager
+    def profile(self, role='accepted'):
+        """profile creates only reviewed public module bytes in an owned temporary directory."""
+        policy = probe.reviewed_transition()
+        with tempfile.TemporaryDirectory(prefix='browser-preparation-contract-') as temporary:
+            root = pathlib.Path(temporary)
+            module, row = policy['module'], policy[role]
+            (root / 'go.mod').write_text('module example.test/fixture\n\ngo 1.27.0\n\nrequire ' + module + ' ' + row[0] + '\n')
+            (root / 'go.sum').write_text(module + ' ' + row[0] + ' ' + row[1] + '\n' +
+                                       module + ' ' + row[0] + '/go.mod ' + row[2] + '\n')
+            yield root, policy
+
+    def test_explicit_preparation_uses_bound_copies_and_public_checked_proxy(self):
+        """test_explicit_preparation_uses_bound_copies_and_public_checked_proxy preserves original manifests."""
+        for role in ('accepted', 'exact', 'current'):
+            with self.subTest(role=role), self.profile(role) as (root, policy):
+                before = [(root / name).read_bytes() for name in ('go.mod', 'go.sum')]
+                def download(args, **kwargs):
+                    """download checks actual preparation arguments and copied input bytes before returning success."""
+                    self.assertEqual(args, ['go', 'mod', 'download', '-json', policy['module'] + '@' + policy[role][0]])
+                    self.assertNotEqual(kwargs['cwd'], root)
+                    self.assertEqual([(kwargs['cwd'] / name).read_bytes() for name in ('go.mod', 'go.sum')], before)
+                    self.assertEqual(kwargs['timeout'], 180)
+                    env = kwargs['env']
+                    self.assertEqual(env['GOPROXY'], 'https://proxy.golang.org')
+                    self.assertEqual(env['GOSUMDB'], 'sum.golang.org')
+                    self.assertEqual(env['GOAUTH'], 'off')
+                    self.assertEqual(env['GONOPROXY'], 'none')
+                    self.assertEqual(env['GONOSUMDB'], 'none')
+                    self.assertEqual(env['GOWORK'], 'off')
+                    self.assertEqual(env['GOFLAGS'], '-mod=readonly')
+                    return subprocess.CompletedProcess(args, 0, json.dumps(dict(zip(
+                        ('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy[role])))).encode(), b'')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download):
+                    result = probe.prepare_dependency_cache(root, role, policy)
+                self.assertEqual(result['status'], 'cache_prepared_not_qualified')
+                self.assertEqual([(root / name).read_bytes() for name in ('go.mod', 'go.sum')], before)
+
+    def test_missing_mismatched_or_replaced_profile_never_fetches(self):
+        """test_missing_mismatched_or_replaced_profile_never_fetches rejects unreviewed inputs before Go starts."""
+        for mutation in ('version', 'checksum', 'missing checksum', 'replacement'):
+            with self.subTest(mutation=mutation), self.profile() as (root, policy):
+                if mutation == 'version':
+                    path = root / 'go.mod'
+                    path.write_text(path.read_text().replace(policy['accepted'][0], 'v6.9.9'))
+                elif mutation == 'checksum':
+                    path = root / 'go.sum'
+                    path.write_text(path.read_text().replace(policy['accepted'][1], 'h1:unreviewed'))
+                elif mutation == 'missing checksum':
+                    (root / 'go.sum').write_text('')
+                else:
+                    path = root / 'go.mod'
+                    path.write_text(path.read_text() + '\nreplace example.test/unreviewed => ./private\n')
+                with mock.patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaises(probe.ProbeError):
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+                execute.assert_not_called()
+
+    def test_preparation_errors_or_manifest_changes_fail_visibly(self):
+        """test_preparation_errors_or_manifest_changes_fail_visibly never treat download failure as acceptance."""
+        for outcome in ('failure', 'timeout', 'changed copy'):
+            with self.subTest(outcome=outcome), self.profile() as (root, policy):
+                def download(args, **kwargs):
+                    """download models each failure without contacting a proxy."""
+                    if outcome == 'timeout':
+                        raise subprocess.TimeoutExpired(args, 180, stderr=b'private-preparation-canary')
+                    if outcome == 'changed copy':
+                        (kwargs['cwd'] / 'go.sum').write_text('changed unreviewed manifest')
+                    return subprocess.CompletedProcess(args, 1 if outcome == 'failure' else 0,
+                                                       b'', b'private-preparation-canary')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download):
+                    with self.assertRaises(probe.ProbeError) as caught:
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+                self.assertNotIn('canary', str(caught.exception))
+
+    def test_preparation_rejects_unconfirmed_download_metadata(self):
+        """test_preparation_rejects_unconfirmed_download_metadata requires checksum-confirmed exact SDK output."""
+        for field in ('Path', 'Version', 'Sum', 'GoModSum', 'Error', 'invalid JSON'):
+            with self.subTest(field=field), self.profile() as (root, policy):
+                result = dict(zip(('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy['accepted'])))
+                result[field] = 'unreviewed-download'
+                output = b'not-json' if field == 'invalid JSON' else json.dumps(result).encode()
+                with mock.patch.object(probe.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, output, b'')):
+                    with self.assertRaises(probe.ProbeError):
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+
+    def test_preparation_report_is_not_browser_qualification(self):
+        """test_preparation_report_is_not_browser_qualification keeps preparation separate from all six cells."""
+        with tempfile.TemporaryDirectory(prefix='browser-preparation-report-') as temporary:
+            target = pathlib.Path(temporary) / 'report.json'
+            paths = {'preparation': [{'role': 'accepted', 'status': 'cache_prepared_not_qualified'}]}
+            with mock.patch.object(probe, 'checkouts_for_ci', return_value=contextlib.nullcontext(paths)) as checkouts, \
+                 mock.patch.object(probe, 'run_matrix') as matrix, \
+                 mock.patch.object(probe, 'PREPARATION_REPORT_PATH', target), contextlib.redirect_stdout(io.StringIO()):
+                result = probe.prepare_cache_report(pathlib.Path('/owned'), '1' * 40)
+            self.assertEqual(result, 0)
+            checkouts.assert_called_once_with(pathlib.Path('/owned'), '1' * 40, prepare_cache=True)
+            matrix.assert_not_called()
+            report = json.loads(target.read_text())
+            self.assertFalse(report['qualified'])
+            self.assertEqual(report['status'], 'cache_prepared_not_qualified')
+            self.assertNotIn('allCellsPassed', report)
 
 
 if __name__ == '__main__':
