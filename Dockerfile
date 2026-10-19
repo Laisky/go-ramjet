@@ -59,16 +59,26 @@ ADD . .
 COPY --from=nodebuild /app/web/dist ./web/dist
 ENV GOOS=linux
 ENV GOARCH=amd64
-RUN go build \
+# Keep source paths: gojieba uses runtime.Caller to locate its dictionaries.
+RUN go build -ldflags="-s -w" \
     && CGO_ENABLED=0 go build -o /goapp/crawler-browser-launcher ./cmd/crawler-browser-launcher
+
+# Collect runtime data without shipping SDK headers, foreign architectures, or
+# Jieba source/tests. Preserve license/notice paths from both distributions.
+RUN mkdir -p /runtime-assets/speech/lib /runtime-assets/gojieba/deps/cppjieba \
+    && cp -a "$SPEECHSDK_ROOT/lib/x64" /runtime-assets/speech/lib/ \
+    && find "$SPEECHSDK_ROOT" -maxdepth 1 -type f -exec cp -a {} /runtime-assets/speech/ \; \
+    && cd /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7 \
+    && cp -a deps/cppjieba/dict /runtime-assets/gojieba/deps/cppjieba/ \
+    && find . -type f \( -iname '*license*' -o -iname '*copying*' -o -iname '*notice*' \) \
+        -exec cp --parents {} /runtime-assets/gojieba/ \;
 
 # =====================================
 
 # copy executable file and certs to a pure container
 FROM debian:bookworm
 
-RUN apt-get update
-RUN apt-get install -y --no-install-recommends ca-certificates haveged wget curl gnupg \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates haveged wget curl gnupg \
     # --------------------------------------------
     # for google-chrome
     # --------------------------------------------
@@ -79,7 +89,8 @@ RUN apt-get install -y --no-install-recommends ca-certificates haveged wget curl
     # --------------------------------------------
     # general
     # --------------------------------------------
-    && update-ca-certificates 2>/dev/null || true
+    && (update-ca-certificates 2>/dev/null || true) \
+    && rm -rf /var/lib/apt/lists/*
 
 # install google-chrome from the official Google APT repository
 RUN mkdir -p /etc/apt/keyrings \
@@ -89,14 +100,16 @@ RUN mkdir -p /etc/apt/keyrings \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
     > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends google-chrome-stable
+    && apt-get install -y --no-install-recommends google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
 
 # install CJK + emoji + general Unicode fonts so headless Chrome can render
 # non-Latin scripts (Chinese / Japanese / Korean) in generated PDFs. Without
 # fonts-noto-cjk Chrome falls back to tofu/replacement glyphs for any CJK
 # character regardless of the page's @font-face declarations.
-RUN apt-get install -y --no-install-recommends \
-    fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-cjk fonts-noto-color-emoji fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
 
 # install pg_dump from PGDG
 # Use the Debian bookworm codename directly to avoid needing lsb_release
@@ -106,24 +119,26 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
     > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-17
+    && apt-get install -y --no-install-recommends postgresql-client-17 \
+    && rm -rf /var/lib/apt/lists/*
 
-# install azure sdk
-RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
+# The runtime needs OpenSSL shared libraries, not headers or static archives.
+RUN apt-get update && apt-get install -y \
+    libssl3 ca-certificates libasound2 wget \
+    && rm -rf /var/lib/apt/lists/*
 ENV SPEECHSDK_ROOT=/opt/azure/speech
 ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
 ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
 ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 RUN mkdir -p $SPEECHSDK_ROOT
-COPY --from=gobuild /opt/azure/speech $SPEECHSDK_ROOT
-
-# apt finished, clean cache
-RUN rm -rf /var/lib/apt/lists/*
+# Retain every x64 extension and SDK notice; other architectures are build inputs.
+COPY --from=gobuild /runtime-assets/speech $SPEECHSDK_ROOT
 
 WORKDIR /app
 
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs
-COPY --from=gobuild /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7 /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7
+# Preserve the default runtime.Caller dictionary path and third-party notices.
+COPY --from=gobuild /runtime-assets/gojieba /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7
 COPY --from=gobuild /goapp/go-ramjet /app/go-ramjet
 COPY --from=gobuild /goapp/crawler-browser-launcher /usr/local/bin/crawler-browser-launcher
 COPY --from=gobuild /goapp/web/dist /app/web/dist
