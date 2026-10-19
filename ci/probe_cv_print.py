@@ -5,6 +5,7 @@ This module has no import side effects. Only the hosted CI entry point invokes
 browsers. Raw Go test output stays in memory for hashes and finite projections.
 """
 
+import argparse
 import base64
 import contextlib
 import datetime
@@ -21,6 +22,7 @@ import tempfile
 import time
 
 REPORT_PATH = pathlib.Path('/tmp/task02-cv-print-probe-report.json')
+PREPARATION_REPORT_PATH = pathlib.Path('/tmp/task02-cv-print-cache-preparation.json')
 ACCEPTED = '3d2c5dc0cae3f26c1600f0f23701e2b1cc26f147'
 EXACT = '2fd1f2586c2188935675851101626c36490435aa'
 CONTROL_IMPORTS = ('github.com/chromedp/chromedp', 'github.com/chromedp/cdproto/page',
@@ -545,6 +547,46 @@ def require_dependency_match(snapshots, policy=None):
     require(snapshots['accepted'] == normalized, 'browser_dependency_graph_differs')
 
 
+def prepare_dependency_cache(root, role, policy):
+    """prepare_dependency_cache downloads public checked dependencies from a bound immutable manifest copy."""
+    require(role in ('accepted', 'exact', 'current'), 'browser_dependency_role_invalid')
+    module, expected = policy['module'], policy[role]
+    modbytes, sumbytes = (root / 'go.mod').read_bytes(), (root / 'go.sum').read_bytes()
+    modtext = modbytes.decode()
+    versions = re.findall(r'(?m)^\s*(?:require\s+)?' + re.escape(module) + r'\s+(\S+)', modtext)
+    require(versions == [expected[0]], 'browser_preparation_profile_differs')
+    require(not re.search(r'(?m)^\s*replace\b', modtext), 'browser_preparation_replacement_rejected')
+    profile = dependency_graph(module + ' ' + expected[0], sumbytes.decode())
+    require(profile == ((module, *expected),), 'browser_preparation_profile_differs')
+    environment = os.environ.copy()
+    environment.update(GOPROXY='https://proxy.golang.org', GOSUMDB='sum.golang.org', GOPRIVATE='',
+                       GONOPROXY='none', GONOSUMDB='none', GOAUTH='off', GOTOOLCHAIN='local',
+                       GOWORK='off', GOFLAGS='-mod=readonly')
+    with tempfile.TemporaryDirectory(prefix='cv-browser-module-profile-') as temporary:
+        owner = pathlib.Path(temporary)
+        (owner / 'go.mod').write_bytes(modbytes)
+        (owner / 'go.sum').write_bytes(sumbytes)
+        try:
+            process = subprocess.run(['go', 'mod', 'download', '-json', module + '@' + expected[0]], cwd=owner,
+                                     env=environment, capture_output=True, timeout=180)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ProbeError('browser_dependency_preparation_unavailable') from error
+        require((owner / 'go.mod').read_bytes() == modbytes and (owner / 'go.sum').read_bytes() == sumbytes,
+                'browser_dependency_preparation_changed_manifest')
+        require(process.returncode == 0, 'browser_dependency_preparation_failed')
+        try:
+            downloaded = json.loads(process.stdout)
+        except (ValueError, UnicodeError) as error:
+            raise ProbeError('browser_dependency_preparation_metadata_invalid') from error
+        require(isinstance(downloaded, dict) and not downloaded.get('Error') and
+                tuple(downloaded.get(key) for key in ('Path', 'Version', 'Sum', 'GoModSum')) ==
+                (module, *expected), 'browser_dependency_preparation_profile_differs')
+    require((root / 'go.mod').read_bytes() == modbytes and (root / 'go.sum').read_bytes() == sumbytes,
+            'browser_dependency_preparation_changed_manifest')
+    return {'role': role, 'sdkProfile': expected, 'goModSHA256': digest(modbytes),
+            'goSumSHA256': digest(sumbytes), 'status': 'cache_prepared_not_qualified'}
+
+
 def verify_dependency_cache(root, graph):
     """verify_dependency_cache requires selected cached artifacts and verifies cached bytes without fetching."""
     environment = os.environ.copy()
@@ -587,7 +629,7 @@ def verify_dependency_cache(root, graph):
 
 
 @contextlib.contextmanager
-def checkouts_for_ci(root, expected_head=None):
+def checkouts_for_ci(root, expected_head=None, prepare_cache=False):
     """checkouts_for_ci yields exact owned baseline/current bindings after validating source and module identities."""
     require_clean(root, 'current_checkout_not_clean')
     policy = reviewed_transition()
@@ -614,17 +656,24 @@ def checkouts_for_ci(root, expected_head=None):
                 require(git(target, 'rev-parse', 'HEAD') == revision, 'baseline_checkout_not_exact_clean')
                 require_clean(target, 'baseline_checkout_not_exact_clean')
                 paths[role] = {'path': target, 'head': revision, 'tree': git(target, 'rev-parse', 'HEAD^{tree}')}
-            snapshots = {}
-            for role in ('accepted', 'exact', 'current'):
-                snapshots[role] = dependency_snapshot(paths[role]['path'])
-                verify_dependency_cache(paths[role]['path'], snapshots[role])
-                require_clean(paths[role]['path'], 'module_metadata_changed_during_graph')
-            require_dependency_match(snapshots, policy)
-            paths['dependencyBinding'] = {'status': 'reviewed_sdk_transition_verified',
-                                          'moduleCount': len(snapshots['current']),
-                                          'sdkModule': policy['module'], 'acceptedSDK': policy['accepted'],
-                                          'exactSDK': policy['exact'], 'currentSDK': policy['current'],
-                                          'cacheVerification': 'selected_artifacts_present_and_go_mod_verify'}
+            if prepare_cache:
+                paths['preparation'] = []
+                for role in ('accepted', 'exact', 'current'):
+                    prepared = prepare_dependency_cache(paths[role]['path'], role, policy)
+                    require_clean(paths[role]['path'], 'module_metadata_changed_during_preparation')
+                    paths['preparation'].append(prepared)
+            else:
+                snapshots = {}
+                for role in ('accepted', 'exact', 'current'):
+                    snapshots[role] = dependency_snapshot(paths[role]['path'])
+                    verify_dependency_cache(paths[role]['path'], snapshots[role])
+                    require_clean(paths[role]['path'], 'module_metadata_changed_during_graph')
+                require_dependency_match(snapshots, policy)
+                paths['dependencyBinding'] = {'status': 'reviewed_sdk_transition_verified',
+                                              'moduleCount': len(snapshots['current']),
+                                              'sdkModule': policy['module'], 'acceptedSDK': policy['accepted'],
+                                              'exactSDK': policy['exact'], 'currentSDK': policy['current'],
+                                              'cacheVerification': 'selected_artifacts_present_and_go_mod_verify'}
             yield paths
             for role in ('accepted', 'exact', 'current'):
                 entry = paths[role]
@@ -640,9 +689,34 @@ def save_report(report, target=REPORT_PATH):
     target.write_text(json.dumps(report, indent=2) + '\n')
 
 
-def main():
+def prepare_cache_report(root, expected_head):
+    """prepare_cache_report reports preparation separately and never marks browser qualification successful."""
+    report = {'schemaVersion': 1, 'startedAtUtc': stamp(), 'status': 'preparation_started',
+              'qualified': False, 'profiles': [], 'rawOutputPersisted': False}
+    save_report(report, PREPARATION_REPORT_PATH)
+    try:
+        with checkouts_for_ci(root, expected_head, prepare_cache=True) as checkouts:
+            report['profiles'] = checkouts['preparation']
+            report['prSourceBinding'] = checkouts.get('prSourceBinding', {'status': 'not_requested'})
+        report['status'] = 'cache_prepared_not_qualified'
+    except Exception as error:
+        report.update(status='preparation_failed',
+                      marker=str(error) if isinstance(error, ProbeError) else 'internal_failure')
+    report['finishedAtUtc'] = stamp()
+    save_report(report, PREPARATION_REPORT_PATH)
+    print('CV_PRINT_PROBE_PREPARATION ' + json.dumps(report, sort_keys=True))
+    return 0 if report['status'] == 'cache_prepared_not_qualified' else 1
+
+
+def main(argv=None):
     """main prepares owned checkouts, records the six-cell probe report and returns a failing status unless every cell passes."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--prepare-cache', action='store_true',
+                        help='explicitly prepare public checksum-verified profiles; does not run or qualify browsers')
+    args = parser.parse_args(argv)
     root = pathlib.Path(__file__).resolve().parents[1]
+    if args.prepare_cache:
+        return prepare_cache_report(root, os.environ.get('CV_PRINT_PROBE_EXPECTED_HEAD'))
     report = {'schemaVersion': 1, 'startedAtUtc': stamp(), 'complete': False, 'cells': [],
               'status': 'setup_started', 'rawOutputPersisted': False}
     save_report(report)

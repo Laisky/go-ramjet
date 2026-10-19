@@ -536,5 +536,113 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
         self.assertNotIn('canary', str(caught.exception))
 
 
+
+class CachePreparationContracts(unittest.TestCase):
+    """CachePreparationContracts verify the explicit preparation boundary without fetching or running Go."""
+
+    @contextlib.contextmanager
+    def profile(self, role='accepted'):
+        """profile creates only reviewed public module bytes in an owned temporary directory."""
+        policy = probe.reviewed_transition()
+        with tempfile.TemporaryDirectory(prefix='browser-preparation-contract-') as temporary:
+            root = pathlib.Path(temporary)
+            module, row = policy['module'], policy[role]
+            (root / 'go.mod').write_text('module example.test/fixture\n\ngo 1.27.0\n\nrequire ' + module + ' ' + row[0] + '\n')
+            (root / 'go.sum').write_text(module + ' ' + row[0] + ' ' + row[1] + '\n' +
+                                       module + ' ' + row[0] + '/go.mod ' + row[2] + '\n')
+            yield root, policy
+
+    def test_explicit_preparation_uses_bound_copies_and_public_checked_proxy(self):
+        """test_explicit_preparation_uses_bound_copies_and_public_checked_proxy preserves original manifests."""
+        for role in ('accepted', 'exact', 'current'):
+            with self.subTest(role=role), self.profile(role) as (root, policy):
+                before = [(root / name).read_bytes() for name in ('go.mod', 'go.sum')]
+                def download(args, **kwargs):
+                    """download checks actual preparation arguments and copied input bytes before returning success."""
+                    self.assertEqual(args, ['go', 'mod', 'download', '-json', policy['module'] + '@' + policy[role][0]])
+                    self.assertNotEqual(kwargs['cwd'], root)
+                    self.assertEqual([(kwargs['cwd'] / name).read_bytes() for name in ('go.mod', 'go.sum')], before)
+                    self.assertEqual(kwargs['timeout'], 180)
+                    env = kwargs['env']
+                    self.assertEqual(env['GOPROXY'], 'https://proxy.golang.org')
+                    self.assertEqual(env['GOSUMDB'], 'sum.golang.org')
+                    self.assertEqual(env['GOAUTH'], 'off')
+                    self.assertEqual(env['GONOPROXY'], 'none')
+                    self.assertEqual(env['GONOSUMDB'], 'none')
+                    self.assertEqual(env['GOWORK'], 'off')
+                    self.assertEqual(env['GOFLAGS'], '-mod=readonly')
+                    return subprocess.CompletedProcess(args, 0, json.dumps(dict(zip(
+                        ('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy[role])))).encode(), b'')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download):
+                    result = probe.prepare_dependency_cache(root, role, policy)
+                self.assertEqual(result['status'], 'cache_prepared_not_qualified')
+                self.assertEqual([(root / name).read_bytes() for name in ('go.mod', 'go.sum')], before)
+
+    def test_missing_mismatched_or_replaced_profile_never_fetches(self):
+        """test_missing_mismatched_or_replaced_profile_never_fetches rejects unreviewed inputs before Go starts."""
+        for mutation in ('version', 'checksum', 'missing checksum', 'replacement'):
+            with self.subTest(mutation=mutation), self.profile() as (root, policy):
+                if mutation == 'version':
+                    path = root / 'go.mod'
+                    path.write_text(path.read_text().replace(policy['accepted'][0], 'v6.9.9'))
+                elif mutation == 'checksum':
+                    path = root / 'go.sum'
+                    path.write_text(path.read_text().replace(policy['accepted'][1], 'h1:unreviewed'))
+                elif mutation == 'missing checksum':
+                    (root / 'go.sum').write_text('')
+                else:
+                    path = root / 'go.mod'
+                    path.write_text(path.read_text() + '\nreplace example.test/unreviewed => ./private\n')
+                with mock.patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaises(probe.ProbeError):
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+                execute.assert_not_called()
+
+    def test_preparation_errors_or_manifest_changes_fail_visibly(self):
+        """test_preparation_errors_or_manifest_changes_fail_visibly never treat download failure as acceptance."""
+        for outcome in ('failure', 'timeout', 'changed copy'):
+            with self.subTest(outcome=outcome), self.profile() as (root, policy):
+                def download(args, **kwargs):
+                    """download models each failure without contacting a proxy."""
+                    if outcome == 'timeout':
+                        raise subprocess.TimeoutExpired(args, 180, stderr=b'private-preparation-canary')
+                    if outcome == 'changed copy':
+                        (kwargs['cwd'] / 'go.sum').write_text('changed unreviewed manifest')
+                    return subprocess.CompletedProcess(args, 1 if outcome == 'failure' else 0,
+                                                       b'', b'private-preparation-canary')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download):
+                    with self.assertRaises(probe.ProbeError) as caught:
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+                self.assertNotIn('canary', str(caught.exception))
+
+    def test_preparation_rejects_unconfirmed_download_metadata(self):
+        """test_preparation_rejects_unconfirmed_download_metadata requires checksum-confirmed exact SDK output."""
+        for field in ('Path', 'Version', 'Sum', 'GoModSum', 'Error', 'invalid JSON'):
+            with self.subTest(field=field), self.profile() as (root, policy):
+                result = dict(zip(('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy['accepted'])))
+                result[field] = 'unreviewed-download'
+                output = b'not-json' if field == 'invalid JSON' else json.dumps(result).encode()
+                with mock.patch.object(probe.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, output, b'')):
+                    with self.assertRaises(probe.ProbeError):
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+
+    def test_preparation_report_is_not_browser_qualification(self):
+        """test_preparation_report_is_not_browser_qualification keeps preparation separate from all six cells."""
+        with tempfile.TemporaryDirectory(prefix='browser-preparation-report-') as temporary:
+            target = pathlib.Path(temporary) / 'report.json'
+            paths = {'preparation': [{'role': 'accepted', 'status': 'cache_prepared_not_qualified'}]}
+            with mock.patch.object(probe, 'checkouts_for_ci', return_value=contextlib.nullcontext(paths)) as checkouts, \
+                 mock.patch.object(probe, 'run_matrix') as matrix, \
+                 mock.patch.object(probe, 'PREPARATION_REPORT_PATH', target), contextlib.redirect_stdout(io.StringIO()):
+                result = probe.prepare_cache_report(pathlib.Path('/owned'), '1' * 40)
+            self.assertEqual(result, 0)
+            checkouts.assert_called_once_with(pathlib.Path('/owned'), '1' * 40, prepare_cache=True)
+            matrix.assert_not_called()
+            report = json.loads(target.read_text())
+            self.assertFalse(report['qualified'])
+            self.assertEqual(report['status'], 'cache_prepared_not_qualified')
+            self.assertNotIn('allCellsPassed', report)
+
+
 if __name__ == '__main__':
     unittest.main()

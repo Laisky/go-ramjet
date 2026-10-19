@@ -125,6 +125,13 @@ jobs:
       - name: Run Go tests
         run: go test ./... -count=1
 
+      - name: Prepare immutable browser dependency cache profiles
+        id: cv_print_prepare
+        timeout-minutes: 10
+        env:
+          CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B ci/probe_cv_print.py --prepare-cache
+
       - name: Run browser dependency integration tests
         id: cv_print_probe
         env:
@@ -136,11 +143,13 @@ jobs:
           python3 ci/probe_cv_print.py
 
       - name: Upload bounded CV print diagnostic evidence
-        if: always() && steps.cv_print_probe.outcome != 'skipped'
+        if: always() && (steps.cv_print_prepare.outcome != 'skipped' || steps.cv_print_probe.outcome != 'skipped')
         uses: actions/upload-artifact@v5
         with:
           name: cv-print-diagnostic-evidence
-          path: /tmp/task02-cv-print-probe-report.json
+          path: |
+            /tmp/task02-cv-print-cache-preparation.json
+            /tmp/task02-cv-print-probe-report.json
           if-no-files-found: error
 
       - name: Verify browser process network confinement
