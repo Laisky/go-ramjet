@@ -5,6 +5,7 @@ This module has no import side effects. Only the hosted CI entry point invokes
 browsers. Raw Go test output stays in memory for hashes and finite projections.
 """
 
+import base64
 import contextlib
 import datetime
 import hashlib
@@ -22,8 +23,15 @@ import time
 REPORT_PATH = pathlib.Path('/tmp/task02-cv-print-probe-report.json')
 ACCEPTED = '3d2c5dc0cae3f26c1600f0f23701e2b1cc26f147'
 EXACT = '2fd1f2586c2188935675851101626c36490435aa'
-MODULE_BLOBS = {'go.mod': 'a756744ff35542a652e5eaf5aa3a5d908379627d',
-                'go.sum': '2b5f1468f94138a6dbf0f108972a741d46397aa0'}
+CONTROL_IMPORTS = ('github.com/chromedp/chromedp', 'github.com/chromedp/cdproto/page',
+                   'github.com/chromedp/cdproto/runtime', 'github.com/chromedp/cdproto/fetch',
+                   'github.com/chromedp/cdproto/network',
+                   'github.com/Laisky/laisky-blog-graphql/library/crawleregress',
+                   'github.com/yuin/goldmark/v2/renderer/html',
+                   # Concrete imports used by the preserved PDF assertions and renderer test setup.
+                   'github.com/pdfcpu/pdfcpu/pkg/api', 'github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model',
+                   'github.com/stretchr/testify/require', 'github.com/Laisky/gin-middlewares/v7',
+                   'github.com/Laisky/laisky-blog-graphql/library/db/redis')
 CV_PACKAGE = 'github.com/Laisky/go-ramjet/internal/tasks/cv'
 TASK_PACKAGE = 'github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks'
 PACKAGES = {CV_PACKAGE: 'cv', TASK_PACKAGE: 'renderer'}
@@ -317,7 +325,8 @@ def run_matrix(checkouts, environ, execute=run_browser, on_cell=None):
               'paidProductionCalls': False, 'rawOutputPersisted': False,
               'testDeadlinesOrContextsChanged': False, 'testParallelismOverridden': False,
               'runnerMetadata': runner_metadata(environ),
-              'prSourceBinding': checkouts.get('prSourceBinding', {'status': 'not_requested'})}
+              'prSourceBinding': checkouts.get('prSourceBinding', {'status': 'not_requested'}),
+              'dependencyBinding': checkouts.get('dependencyBinding', {'status': 'not_requested'})}
     blocked = False
     for cell in CELLS:
         name, source, mode, serial, instrumented = cell
@@ -450,13 +459,138 @@ def require_clean(root, marker):
         raise ProbeError(marker, dirty_metadata(status, tracked))
 
 
+
+def dependency_graph(output, checksums):
+    """dependency_graph returns selected browser module identities and their tracked checksums only."""
+    sums = {}
+    for line in checksums.splitlines():
+        parts = line.split()
+        require(len(parts) == 3, 'dependency_checksum_invalid')
+        key = tuple(parts[:2])
+        require(key not in sums or sums[key] == parts[2], 'dependency_checksum_conflict')
+        sums[key] = parts[2]
+    selected = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        require(len(parts) == 2, 'browser_dependency_replaced_or_invalid')
+        path, version = parts
+        require(path not in selected or selected[path] == version, 'browser_dependency_graph_invalid')
+        selected[path] = version
+    require(bool(selected), 'browser_dependency_graph_empty')
+    graph = []
+    for path, version in sorted(selected.items()):
+        require((path, version) in sums and (path, version + '/go.mod') in sums,
+                'browser_dependency_checksum_missing')
+        graph.append((path, version, sums[(path, version)], sums[(path, version + '/go.mod')]))
+    return tuple(graph)
+
+
+def dependency_snapshot(root):
+    """dependency_snapshot resolves browser dependencies offline without changing module metadata."""
+    environment = os.environ.copy()
+    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none')
+    template = '{{if .Module}}{{.Module.Path}} {{.Module.Version}}{{if .Module.Replace}} replaced{{end}}{{end}}'
+    try:
+        process = subprocess.run(['go', 'list', '-mod=readonly', '-deps', '-f', template, *CONTROL_IMPORTS],
+                                 cwd=root, env=environment, capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ProbeError('browser_dependency_graph_unavailable') from error
+    require(process.returncode == 0, 'browser_dependency_graph_unavailable')
+    try:
+        return dependency_graph(process.stdout.decode(), (root / 'go.sum').read_text())
+    except UnicodeError as error:
+        raise ProbeError('browser_dependency_graph_invalid') from error
+
+
+def reviewed_transition(path=None):
+    """reviewed_transition loads the source-reviewed roots and exact SDK profiles, never runtime policy."""
+    target = path or pathlib.Path(__file__).with_name('cv-browser-dependency-transition.json')
+    try:
+        policy = json.loads(target.read_text())
+    except (OSError, ValueError) as error:
+        raise ProbeError('browser_dependency_policy_unavailable') from error
+    require(isinstance(policy, dict), 'browser_dependency_policy_invalid')
+    require(set(policy) == {'schemaVersion', 'controlImports', 'module', 'accepted', 'exact', 'current'},
+            'browser_dependency_policy_invalid')
+    require(policy['schemaVersion'] == 1 and policy['module'] == 'github.com/Laisky/go-utils/v6',
+            'browser_dependency_policy_invalid')
+    require(policy['controlImports'] == list(CONTROL_IMPORTS), 'browser_dependency_roots_differ')
+    for role in ('accepted', 'exact', 'current'):
+        row = policy[role]
+        require(isinstance(row, list) and len(row) == 3 and all(isinstance(value, str) for value in row),
+                'browser_dependency_policy_invalid')
+        require(bool(re.fullmatch(r'v6[.][0-9]+[.][0-9]+-0[.][0-9]{14}-[0-9a-f]{12}', row[0])) and
+                all(re.fullmatch(r'h1:[A-Za-z0-9+/]{43}=', value) for value in row[1:]),
+                'browser_dependency_policy_invalid')
+    require(policy['accepted'] == policy['exact'] and policy['current'] != policy['accepted'],
+            'browser_dependency_policy_invalid')
+    return policy
+
+
+def require_dependency_match(snapshots, policy=None):
+    """require_dependency_match permits only the exact reviewed SDK transition; every other tuple stays identical."""
+    require(set(snapshots) == {'accepted', 'exact', 'current'}, 'browser_dependency_roles_incomplete')
+    if policy is None:
+        require(snapshots['accepted'] == snapshots['exact'] == snapshots['current'],
+                'browser_dependency_graph_differs')
+        return
+    module = policy['module']
+    for role in ('accepted', 'exact', 'current'):
+        actual = tuple(row for row in snapshots[role] if row[0] == module)
+        require(actual == ((module, *policy[role]),), 'browser_sdk_profile_differs')
+    require(snapshots['accepted'] == snapshots['exact'], 'browser_dependency_graph_differs')
+    normalized = tuple((module, *policy['accepted']) if row[0] == module else row for row in snapshots['current'])
+    require(snapshots['accepted'] == normalized, 'browser_dependency_graph_differs')
+
+
+def verify_dependency_cache(root, graph):
+    """verify_dependency_cache requires selected cached artifacts and verifies cached bytes without fetching."""
+    environment = os.environ.copy()
+    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none', GOFLAGS='-mod=readonly')
+    modules = [row[0] for row in graph]
+    try:
+        metadata = subprocess.run(['go', 'list', '-mod=readonly', '-m', '-json', *modules],
+                                  cwd=root, env=environment, capture_output=True, timeout=60)
+        require(metadata.returncode == 0, 'browser_dependency_cache_unavailable')
+        decoder, pending, found = json.JSONDecoder(), metadata.stdout.decode(), {}
+        while pending.strip():
+            entry, consumed = decoder.raw_decode(pending.lstrip())
+            pending = pending.lstrip()[consumed:]
+            require(isinstance(entry, dict) and entry.get('Path') not in found,
+                    'browser_dependency_cache_invalid')
+            found[entry.get('Path')] = entry
+        require(set(found) == set(modules), 'browser_dependency_cache_incomplete')
+        for module, version, checksum, mod_checksum in graph:
+            entry = found[module]
+            require(not entry.get('Replace') and not entry.get('Error'), 'browser_dependency_cache_invalid')
+            require((entry.get('Version'), entry.get('Sum'), entry.get('GoModSum')) ==
+                    (version, checksum, mod_checksum), 'browser_dependency_cache_identity_differs')
+            directory, modfile = pathlib.Path(entry.get('Dir', '')), pathlib.Path(entry.get('GoMod', ''))
+            require(bool(entry.get('Dir')) and bool(entry.get('GoMod')) and directory.is_dir() and modfile.is_file(),
+                    'browser_dependency_cache_incomplete')
+            archive, ziphash = modfile.with_suffix('.zip'), modfile.with_suffix('.ziphash')
+            require(archive.is_file() and ziphash.is_file(), 'browser_dependency_cache_incomplete')
+            require(ziphash.read_text().strip() == checksum, 'browser_dependency_cache_identity_differs')
+            # Go's module-file checksum is dirhash.Hash1 over the single name go.mod.
+            line = hashlib.sha256(modfile.read_bytes()).hexdigest() + '  go.mod\n'
+            actual = 'h1:' + base64.b64encode(hashlib.sha256(line.encode()).digest()).decode()
+            require(actual == mod_checksum, 'browser_dependency_cache_identity_differs')
+        verified = subprocess.run(['go', 'mod', 'verify'], cwd=root, env=environment,
+                                  capture_output=True, timeout=120)
+        require(verified.returncode == 0, 'browser_dependency_cache_verify_failed')
+    except ProbeError:
+        raise
+    except (OSError, ValueError, UnicodeError, subprocess.TimeoutExpired) as error:
+        raise ProbeError('browser_dependency_cache_unavailable') from error
+
+
 @contextlib.contextmanager
 def checkouts_for_ci(root, expected_head=None):
     """checkouts_for_ci yields exact owned baseline/current bindings after validating source and module identities."""
     require_clean(root, 'current_checkout_not_clean')
-    for revision in (ACCEPTED, EXACT, 'HEAD'):
-        for filename, expected in MODULE_BLOBS.items():
-            require(git(root, 'rev-parse', revision + ':' + filename) == expected, 'module_bytes_differ')
+    policy = reviewed_transition()
     created = []
     with tempfile.TemporaryDirectory(prefix='task02-cv-probe-') as temporary:
         owner = pathlib.Path(temporary).resolve()
@@ -480,6 +614,17 @@ def checkouts_for_ci(root, expected_head=None):
                 require(git(target, 'rev-parse', 'HEAD') == revision, 'baseline_checkout_not_exact_clean')
                 require_clean(target, 'baseline_checkout_not_exact_clean')
                 paths[role] = {'path': target, 'head': revision, 'tree': git(target, 'rev-parse', 'HEAD^{tree}')}
+            snapshots = {}
+            for role in ('accepted', 'exact', 'current'):
+                snapshots[role] = dependency_snapshot(paths[role]['path'])
+                verify_dependency_cache(paths[role]['path'], snapshots[role])
+                require_clean(paths[role]['path'], 'module_metadata_changed_during_graph')
+            require_dependency_match(snapshots, policy)
+            paths['dependencyBinding'] = {'status': 'reviewed_sdk_transition_verified',
+                                          'moduleCount': len(snapshots['current']),
+                                          'sdkModule': policy['module'], 'acceptedSDK': policy['accepted'],
+                                          'exactSDK': policy['exact'], 'currentSDK': policy['current'],
+                                          'cacheVerification': 'selected_artifacts_present_and_go_mod_verify'}
             yield paths
             for role in ('accepted', 'exact', 'current'):
                 entry = paths[role]

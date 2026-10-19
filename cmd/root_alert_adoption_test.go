@@ -136,3 +136,39 @@ func TestStartupAlertCoreRejectsWholeOversizeRecord(t *testing.T) {
 	}
 	require.Zero(t, hits.Load())
 }
+
+// TestStartupAlertCoreSnapshotsSmallBoundFields isolates eager bound-context fidelity
+// below the legacy default budget, independently of the large-entry control.
+func TestStartupAlertCoreSnapshotsSmallBoundFields(t *testing.T) {
+	_, failures, messages, hits := startupAlertAdoptionFixture(t)
+	chosen := []byte{0xff, 0, 0xfe, 'a'}
+	expected := bytes.Clone(chosen)
+	target := "https://example.invalid/original?api_key=SYNTHETIC_CHOSEN_QUERY#fragment"
+	logger := appLog.Logger.Named("run_dynamic_web_crawler.verified_crawler_task").
+		With(zap.String("request_id", "small-bound-request")).
+		With(zap.Namespace("chosen"), zap.Binary("snapshot", chosen), zap.String("url", target))
+	chosen[0] = 'X'
+	logger.Error("synthetic small original failure", zap.String("future_field", "original chosen value"))
+	var message string
+	select {
+	case message = <-messages:
+	case <-time.After(3 * time.Second):
+		t.Fatal("actual startup small-context alert missing")
+	}
+	require.Less(t, len(message), 16*1024, "this control must not exercise the legacy size limit")
+	record := startupAlertJSON(t, message)
+	hostname, err := os.Hostname()
+	require.NoError(t, err)
+	require.Equal(t, hostname, record["host"])
+	require.Equal(t, "small-bound-request", record["request_id"])
+	nested, ok := record["chosen"].(map[string]any)
+	require.True(t, ok)
+	bound, err := base64.StdEncoding.DecodeString(nested["snapshot"].(string))
+	require.NoError(t, err)
+	require.Equal(t, expected, bound)
+	require.Equal(t, target, nested["url"])
+	require.Equal(t, "original chosen value", nested["future_field"])
+	require.Empty(t, failures.String())
+	require.NotContains(t, message, "synthetic-transport-token")
+	require.EqualValues(t, 1, hits.Load())
+}

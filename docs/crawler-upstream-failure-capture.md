@@ -52,3 +52,23 @@ mount requirement or custom payload codec. Complete field delivery through the
 existing logging/alert pipeline must be qualified separately with its owners;
 a successful local HTTP fixture does not establish real notification delivery,
 backend retention or absence of downstream size limits.
+
+
+## Existing HTTP alert delivery
+
+Startup attaches the shared SDK's faithful alert core before application loggers
+bind context. Reviewed crawler/operation scopes retain their chosen bound and
+call-site fields, including namespaces, binary values and original URLs. The
+application explicitly selects a 1 MiB complete-message budget instead of the
+SDK's 16 KiB default. Entries exceeding that budget fail as whole records; no
+shortened fragment is sent, and ordinary local logging/business outcomes remain
+unchanged. Unrelated logger scopes retain their existing metadata-only alert
+policy. Transport authorization is separate from application-selected fields.
+
+The shared SDK sends asynchronously: a nil Send result confirms local queue
+admission, not remote receipt. The existing receiver must separately confirm
+GraphQL and provider completion. There is no added archive, storage API, retry,
+listener or persistent mount. Synthetic startup and caller/SDK/nginx/receiver
+tests cover complete chosen content, context snapshots, single delivery and
+whole-record rejection; they do not establish every future production delivery,
+human reading, downstream retention or a downloaded attachment hash.
