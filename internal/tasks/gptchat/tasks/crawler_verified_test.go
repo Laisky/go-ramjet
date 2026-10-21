@@ -49,6 +49,7 @@ func preserveVerifiedWorkerSeams(t *testing.T) {
 		admitHTMLCrawlerURL, enqueueAdmittedHTMLCrawlerTask, loadVerifiedHTMLCrawlerTask, webFetchProxies = admit, enqueue, load, proxies
 	})
 	t.Setenv("CRAWLER_HTTP_PROXY", "")
+	webFetchProxies = []webFetchProxy{}
 }
 
 // countingVerifiedProxy detects any unintended transmission to an external fallback.
@@ -98,9 +99,9 @@ func TestVerifiedTaskLegacyEnvelopeLoss(t *testing.T) {
 	require.NoError(t, crawleregress.VerifyReceipt(context.Background(), task.TaskID, task.Url, *task.Egress, modern.EgressReceipt))
 }
 
-// TestVerifiedTaskNoExternalFallbacks covers all legacy fallback triggers while
-// asserting that the secure task worker never invokes external fetch/conversion.
-func TestVerifiedTaskNoExternalFallbacks(t *testing.T) {
+// TestVerifiedDirectAcquisitionDoesNotInvokeProviders keeps the direct attempt
+// independent from provider orchestration and preserves old caller behavior.
+func TestVerifiedDirectAcquisitionDoesNotInvokeProviders(t *testing.T) {
 	for _, tc := range []struct {
 		name, html, code string
 		renderErr        error

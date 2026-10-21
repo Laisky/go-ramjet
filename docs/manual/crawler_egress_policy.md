@@ -2,6 +2,11 @@
 
 The candidate consumes the versioned GraphQL crawler contract through the immutable module pin recorded in `go.mod`. The server policy remains enabled. The incident investigation and shared contract are recorded in [GraphQL PR 64](https://github.com/Laisky/laisky-blog-graphql/pull/64).
 
+For the additive content-first acquisition flow in issue 94, including provider
+provenance, compatibility and rollout instructions, see
+[the content-first crawler HOWTO](crawler_content_first.md). Direct acquisition
+continues to use the transport and receipt boundaries documented here.
+
 ## Historical finding
 
 The running worker was built from `bb26ec77f68fe5a28535f6def19635dc6014b8bb` and used a May 2026 GraphQL task model without Egress or RequestChain. Its JSON round-trip loses the newer policy and evidence fields. Synthetic tests reproduce secure-server rejection of this old-model result. The nearby worker task was saved successfully 443 ms before the reported GraphQL alert. GraphQL logs retained only data beginning 19.5 hours after the alert, so the exact request-level cause cannot be established. There was no observed DNS, timeout, or upstream worker error in the retained incident window.
@@ -10,7 +15,7 @@ The empty alert object was separately reproduced with the deployed SDK revision:
 
 ## Enforced transport
 
-Chrome renders using CDP pipes and Fetch interception. Each allowed GET or HEAD is fulfilled through a separate Go transport that dials admitted public IP literals, verifies TLS using the requested hostname, preserves HTTP Host, and records the actual peer and decoded body size. Environment proxies, credentials, remote conversion, browser proxy fallbacks, and direct browser Internet sockets are not used by this path. Unrequested subresources are denied without outbound traffic. Allowed new origins must be separately admitted and pinned. Redirects and aggregate resource budgets remain bounded.
+During direct acquisition, Chrome renders using CDP pipes and Fetch interception. Each allowed GET or HEAD is fulfilled through a separate Go transport that dials admitted public IP literals, verifies TLS using the requested hostname, preserves HTTP Host, and records the actual peer and decoded body size. Environment proxies, credentials, remote conversion, browser proxy fallbacks, and direct browser Internet sockets are not used by this direct route. Eligible acquisition failures may subsequently use a configured provider under the explicit capability described in the linked HOWTO. Unrequested subresources are denied without outbound traffic. Allowed new origins must be separately admitted and pinned. Redirects and aggregate resource budgets remain bounded.
 
 The launcher is mandatory on Linux amd64. Before executing the fixed Chrome binary, it checks the CDP pipe descriptors, closes higher inherited descriptors, sets no_new_privs, and installs a synchronized inherited seccomp filter. It permits Unix IPC but denies Internet and other non-Unix sockets, foreign ABIs, x32, and io_uring. This process filter affects Chrome descendants only; the parent Go fetcher retains its transport. Unsupported platforms, missing launchers, or installation failures fail closed. No host security or network setting is changed.
 

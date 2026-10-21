@@ -16,7 +16,7 @@ var (
 )
 
 // submitAdmittedHTMLCrawlerTask admits target before mutation and returns the
-// submitted task snapshot, which the result consumer uses to verify its receipt.
+// submitted task snapshot, which the result consumer uses to verify acquisition.
 func submitAdmittedHTMLCrawlerTask(ctx context.Context, target string, outputMarkdown bool) (*rlibs.HTMLCrawlerTask, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
@@ -30,6 +30,7 @@ func submitAdmittedHTMLCrawlerTask(ctx context.Context, target string, outputMar
 	}
 	policy := admission.Policy(crawleregress.DefaultMaxRedirects, false)
 	task := rlibs.NewHTMLCrawlerTaskWithEgress(target, "", outputMarkdown, &policy)
+	task.AllowProviderFallback = true
 	if err := enqueueAdmittedHTMLCrawlerTask(ctx, task); err != nil {
 		return nil, errors.Wrap(err, "enqueue admitted crawler task")
 	}
@@ -65,7 +66,14 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 			if crawleregress.PolicyDigest(task.Url, *task.Egress) != crawleregress.PolicyDigest(submitted.Url, *submitted.Egress) {
 				return nil, crawlerFailure("result_invalid", "verification", nil)
 			}
-			if err := crawleregress.VerifyReceipt(ctx, submitted.TaskID, submitted.Url, *submitted.Egress, task.EgressReceipt); err != nil {
+			if task.AllowProviderFallback && !submitted.AllowProviderFallback {
+				return nil, crawlerFailure("result_invalid", "verification", nil)
+			}
+			if task.Acquisition != nil && task.Acquisition.Method == crawleregress.AcquisitionProvider && (!task.AllowProviderFallback || len(task.RequestChain) != 0) {
+				return nil, crawlerFailure("result_invalid", "verification", nil)
+			}
+			if err := crawleregress.VerifyAcquisition(ctx, submitted.TaskID, submitted.Url, *submitted.Egress,
+				submitted.AllowProviderFallback, task.Acquisition, task.EgressReceipt); err != nil {
 				return nil, crawlerFailure("evidence_rejected", "verification", err)
 			}
 			if len(task.ResultHTML) > rendererMaxResponseBytes || len(task.ResultMarkdown) > rendererMaxResponseBytes {

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +27,19 @@ import (
 	appLog "github.com/Laisky/go-ramjet/library/log"
 )
 
+// serviceHeaderTimeout reproduces a transport header timeout independently of
+// caller or worker cancellation; no historical request timing is asserted.
+type serviceHeaderTimeout struct{}
+
+// Error uses the standard transport's header-timeout diagnostic text.
+func (serviceHeaderTimeout) Error() string { return "net/http: timeout awaiting response headers" }
+
+// Timeout marks this deterministic fixture error as a typed transport timeout.
+func (serviceHeaderTimeout) Timeout() bool { return true }
+
+// Temporary satisfies net.Error for the synthetic transport failure.
+func (serviceHeaderTimeout) Temporary() bool { return true }
+
 // TestCrawlerServicePathWorker is a test-binary helper driven by the GraphQL
 // socket integration test. Redis and all HTTP traffic are owned local fixtures.
 // It runs the real worker processor, egress HTTP fetcher, local conversion,
@@ -39,7 +54,7 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 	preserveVerifiedWorkerSeams(t)
 	client := redis.NewClient(&redis.Options{Network: "unix", Addr: socket, Protocol: 2, DisableIdentity: true, MaxRetries: -1})
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	t.Cleanup(cancel)
 	require.NoError(t, client.Ping(ctx).Err())
 
@@ -66,6 +81,9 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 		switch r.URL.Path {
 		case "/challenge":
 			body = "<html><body><div id=\"cf-chl-widget\">service-body-canary</div></body></html>"
+		case "/provider-challenge", "/provider-error", "/forged-provider-result":
+			w.WriteHeader(http.StatusForbidden)
+			body = "<html><body><div id=\"cf-chl-widget\">service-body-canary</div></body></html>"
 		case "/quoted-challenge":
 			body = "<html><body><h1>service-body-canary</h1><pre>cf-chl-widget _cf_chl_opt challenge-platform challenge-error-text</pre></body></html>"
 		}
@@ -74,12 +92,50 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 	}))
 	t.Cleanup(fixture.Close)
 	deps := rendererTestDependencies(t, fixture, "93.184.216.34", &hits)
+	var providerHits atomic.Int32
+	var providerMu sync.Mutex
+	providerRequests := map[string]int{}
+	providerFixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "reader.example", r.Host)
+		for _, name := range []string{"Authorization", "Cookie", "X-Api-Key", "Referer"} {
+			require.Empty(t, r.Header.Get(name))
+		}
+		target, parseErr := url.Parse(strings.TrimPrefix(r.URL.RequestURI(), "/"))
+		require.NoError(t, parseErr)
+		require.Equal(t, "http", target.Scheme)
+		require.Equal(t, "93.184.216.34", target.Host)
+		require.Equal(t, "service-query-canary", target.Query().Get("private"))
+		providerMu.Lock()
+		providerRequests[target.Path]++
+		providerMu.Unlock()
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if target.Path == "/provider-error" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, writeErr := fmt.Fprint(w, "service-provider-error-canary")
+			require.NoError(t, writeErr)
+			return
+		}
+		_, writeErr := fmt.Fprint(w, "# service-provider-canary\n\nOwned provider content.")
+		require.NoError(t, writeErr)
+	}))
+	t.Cleanup(providerFixture.Close)
+	providerCtx := withVerifiedWebFetchClient(ctx, rendererTestDependencies(t, providerFixture, "1.1.1.1", &providerHits))
 	fetchVerifiedHTMLContent = func(renderCtx context.Context, task *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
 		require.Empty(t, task.APIKey)
 		parsed, parseErr := url.Parse(task.Url)
 		require.NoError(t, parseErr)
 		if parsed.Path == "/render-failure" {
 			return "", nil, errors.New("navigation failed: https://private.invalid/?key=service-secret-canary")
+		}
+		if parsed.Path == "/provider-timeout" {
+			require.NoError(t, renderCtx.Err(), "transport timeout must not cancel the worker")
+			timeout := &url.Error{Op: "Get", URL: task.Url, Err: serviceHeaderTimeout{}}
+			var typed net.Error
+			require.ErrorAs(t, timeout, &typed)
+			require.True(t, typed.Timeout())
+			require.NotErrorIs(t, timeout, context.DeadlineExceeded)
+			return "", nil, timeout
 		}
 		fetcher, fetchErr := newRendererEgressFetcher(renderCtx, task.TaskID, task.Url, *task.Egress, deps)
 		if fetchErr != nil {
@@ -120,6 +176,12 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 				receipt.Origins = append([]crawleregress.Origin(nil), receipt.Origins...)
 				receipt.Origins[0].PeerAddress = "127.0.0.1"
 				published.EgressReceipt = &receipt
+			case "/forged-provider-result":
+				require.NotNil(t, task.Acquisition)
+				require.Equal(t, crawleregress.AcquisitionProvider, task.Acquisition.Method)
+				require.Nil(t, task.EgressReceipt)
+				require.Empty(t, task.RequestChain)
+				published.RequestChain = []string{task.Url}
 			}
 		}
 		raw, encodeErr := encodeHTMLCrawlerTaskResult(publishCtx, &published)
@@ -137,13 +199,39 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 		return nil
 	}
 	require.NoError(t, client.Set(ctx, "service-path/worker-ready", "ready", time.Minute).Err())
-	for range 8 {
+	for range 12 {
 		task, popErr := popHTMLCrawlerTaskUsingClient(ctx, client)
 		require.NoError(t, popErr)
 		require.Empty(t, task.APIKey)
 		require.Equal(t, []string{"93.184.216.34"}, task.Egress.Addresses)
-		require.NoError(t, processHTMLCrawlerTask(ctx, task))
+		require.True(t, task.AllowProviderFallback, "actual MCP producer advertises the additive capability")
+		parsed, parseErr := url.Parse(task.Url)
+		require.NoError(t, parseErr)
+		webFetchProxies = []webFetchProxy{}
+		taskCtx := ctx
+		if strings.HasPrefix(parsed.Path, "/provider-") || parsed.Path == "/forged-provider-result" {
+			webFetchProxies = []webFetchProxy{prefixedWebFetchProxy{name: "service-reader", prefix: "http://reader.example/"}}
+			taskCtx = providerCtx
+		}
+		require.NoError(t, processHTMLCrawlerTask(taskCtx, task))
+		require.NoError(t, taskCtx.Err(), "all fixture acquisitions use a live worker context")
+		if task.Status == rlibs.TaskStatusSuccess {
+			for _, key := range []string{crawlerRecordKey(task.TaskID), crawlerLatestKey(task.Url)} {
+				raw, readErr := client.Get(ctx, key).Bytes()
+				require.NoError(t, readErr)
+				var record CrawlRecord
+				require.NoError(t, json.Unmarshal(raw, &record))
+				require.Equal(t, task.TaskID, record.TaskID)
+				require.Equal(t, task.Url, record.URL)
+				require.Equal(t, task.Acquisition, record.Acquisition, "both persisted record indexes retain truthful provenance")
+				require.Equal(t, task.ResultHTML, record.RawBody)
+			}
+		}
 	}
-	require.EqualValues(t, 7, hits.Load(), "render-failure must not contact even the local fixture")
+	require.EqualValues(t, 10, hits.Load(), "render-failure and typed timeout never contact even the local direct fixture")
+	require.EqualValues(t, 4, providerHits.Load(), "only explicit provider cases may contact the pinned provider fixture")
+	providerMu.Lock()
+	require.Equal(t, map[string]int{"/provider-challenge": 1, "/provider-timeout": 1, "/provider-error": 1, "/forged-provider-result": 1}, providerRequests)
+	providerMu.Unlock()
 	require.NoError(t, client.Set(ctx, "service-path/worker-done", "done", time.Minute).Err())
 }

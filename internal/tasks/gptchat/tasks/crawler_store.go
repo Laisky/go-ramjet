@@ -10,6 +10,7 @@ import (
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/Laisky/go-utils/v6/json"
+	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/Laisky/zap"
 	"github.com/redis/go-redis/v9"
 
@@ -38,6 +39,8 @@ type CrawlRecord struct {
 	URL          string    `json:"url"`
 	RawBody      []byte    `json:"raw_body"`
 	Markdown     *string   `json:"markdown,omitempty"`
+	// Acquisition is absent in historical records, which remain readable.
+	Acquisition *crawleregress.Acquisition `json:"acquisition,omitempty"`
 }
 
 // apiKeyPrefix returns the first 9 characters of the api key.

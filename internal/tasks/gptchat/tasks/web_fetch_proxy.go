@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -159,7 +158,7 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-token", p.apiKey)
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "new scrapeless http client")
 	}
@@ -170,7 +169,7 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrap(err, "read scrapeless body")
 	}
@@ -222,7 +221,7 @@ func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "new firecrawl http client")
 	}
@@ -233,7 +232,7 @@ func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (st
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrap(err, "read firecrawl body")
 	}
@@ -580,7 +579,7 @@ func fetchByWebFetchProxyPrefix(ctx context.Context, proxyName, prefix, targetUR
 		return "", errors.Wrapf(err, "new %s request", proxyName)
 	}
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrapf(err, "new %s http client", proxyName)
 	}
@@ -595,7 +594,7 @@ func fetchByWebFetchProxyPrefix(ctx context.Context, proxyName, prefix, targetUR
 		return "", errors.Errorf("%s request failed: %d", proxyName, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrapf(err, "read %s body", proxyName)
 	}

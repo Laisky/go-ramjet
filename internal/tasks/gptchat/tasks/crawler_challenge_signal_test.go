@@ -178,12 +178,15 @@ func TestCrawlerChallengeSignalWorkerSerialization(t *testing.T) {
 			for _, content := range []string{"private-body-canary", "private-resource.invalid", "private-key-canary", "_cf_chl_opt"} {
 				require.NotContains(t, wire, content)
 			}
-			legacy, err := rlibs.NewHTMLCrawlerTaskFromString(wire)
+			current, err := rlibs.NewHTMLCrawlerTaskFromString(wire)
 			require.NoError(t, err)
+			require.Equal(t, tc.signal, current.FailureSignal, "the current DTO retains the optional extension")
+			legacy, oldWire := roundTripLegacyCrawlerTask(t, wire)
+			require.Equal(t, taskID, legacy.TaskID)
+			require.Equal(t, current.Url, legacy.Url)
 			require.Equal(t, rlibs.TaskStatusFailed, legacy.Status)
+			require.NotNil(t, legacy.FailedReason)
 			require.Equal(t, "challenge", *legacy.FailedReason)
-			oldWire, err := legacy.ToString()
-			require.NoError(t, err)
 			require.NotContains(t, oldWire, "failure_signal", "legacy DTO must ignore the optional extension")
 		})
 	}

@@ -122,7 +122,7 @@ func renderVerifiedHTMLWithDependencies(ctx context.Context, task *rlibs.HTMLCra
 	}
 	blocked := func() {
 		if blockedRequests.Add(1) > rendererMaxRequests {
-			fail(errors.New("renderer blocked request budget exhausted"))
+			fail(crawlerEnforcementFailure(errors.New("renderer blocked request budget exhausted")))
 		}
 	}
 	p, err := startRendererDenyProxy(renderCtx, blocked, fail)
@@ -161,7 +161,7 @@ func renderVerifiedHTMLWithDependencies(ctx context.Context, task *rlibs.HTMLCra
 			}
 			observedRequests++
 			if observedRequests > rendererMaxRequests || event.Request == nil {
-				fail(errors.New("renderer intercepted request budget exhausted"))
+				fail(crawlerEnforcementFailure(errors.New("renderer intercepted request budget exhausted")))
 				return
 			}
 			failureMu.Lock()
@@ -306,7 +306,7 @@ func finishRendererSnapshot(ctx context.Context, html string, observedFailure, c
 		return "", nil, errors.Wrap(err, "verified renderer failed")
 	}
 	if len(html) > crawleregress.MaxResponseBytes {
-		return "", nil, errors.Errorf("renderer DOM response budget exhausted")
+		return "", nil, crawlerEnforcementFailure(errors.Errorf("renderer DOM response budget exhausted"))
 	}
 	receipt, err := f.seal(ctx)
 	if err != nil {

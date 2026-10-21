@@ -53,10 +53,10 @@ func newRendererEgressFetcher(ctx context.Context, taskID, target string, policy
 	policy = crawleregress.ClonePolicy(policy)
 	admission, err := crawleregress.ValidatePolicy(ctx, target, policy)
 	if err != nil {
-		return nil, errors.Wrap(err, "validate renderer target")
+		return nil, crawlerEnforcementFailure(errors.Wrap(err, "validate renderer target"))
 	}
 	if taskID == "" || admission.Host != policy.Host || policy.MaxRedirects < 0 || policy.MaxRedirects > 20 {
-		return nil, errors.Errorf("invalid renderer policy")
+		return nil, crawlerEnforcementFailure(errors.Errorf("invalid renderer policy"))
 	}
 	if deps.resolve == nil {
 		deps.resolve = net.DefaultResolver.LookupIPAddr
@@ -143,7 +143,7 @@ func (f *rendererEgressFetcher) prepare(ctx context.Context, id, parent, raw, ki
 func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind, method string, headers http.Header) (response *http.Response, body []byte, resultErr error) {
 	admission, err := f.prepare(ctx, id, parent, raw, kind, method)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "prepare renderer request")
+		return nil, nil, crawlerEnforcementFailure(errors.Wrap(err, "prepare renderer request"))
 	}
 	var peer string
 	originIndex := -1
@@ -158,7 +158,7 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	transport.DialContext = func(dialCtx context.Context, network, address string) (net.Conn, error) {
 		expected := net.JoinHostPort(admission.Host, strconv.Itoa(admission.Port))
 		if address != expected || network != "tcp" {
-			return nil, errors.Errorf("renderer dial target mismatch")
+			return nil, crawlerEnforcementFailure(errors.Errorf("renderer dial target mismatch"))
 		}
 		var lastErr error
 		for _, pinned := range admission.Addresses {
@@ -170,11 +170,11 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 			actual, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 			if err != nil {
 				closeErr := conn.Close()
-				return nil, errors.Wrap(errors.Join(err, closeErr), "invalid renderer peer")
+				return nil, crawlerEnforcementFailure(errors.Wrap(errors.Join(err, closeErr), "invalid renderer peer"))
 			}
 			if !containsRendererAddress(admission.Addresses, actual) || port != strconv.Itoa(admission.Port) {
 				closeErr := conn.Close()
-				return nil, errors.Wrap(errors.Join(errors.New("renderer peer outside admitted pins"), closeErr), "reject renderer peer")
+				return nil, crawlerEnforcementFailure(errors.Wrap(errors.Join(errors.New("renderer peer outside admitted pins"), closeErr), "reject renderer peer"))
 			}
 			peer = net.ParseIP(actual).String()
 			f.mu.Lock()
@@ -302,17 +302,17 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	if len(body) > rendererMaxResponseBytes {
 		observedResponse.FailurePhase = "budget"
 		observedResponse.DecodedBodyComplete = false
-		return nil, nil, errors.Errorf("renderer response budget exhausted")
+		return nil, nil, crawlerEnforcementFailure(errors.Errorf("renderer response budget exhausted"))
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.sealed {
 		observedResponse.FailurePhase = "post_read"
-		return nil, nil, errors.Errorf("renderer evidence sealed during request")
+		return nil, nil, crawlerEnforcementFailure(errors.Errorf("renderer evidence sealed during request"))
 	}
 	if peer == "" {
 		observedResponse.FailurePhase = "post_read"
-		return nil, nil, errors.Errorf("renderer connection evidence missing")
+		return nil, nil, crawlerEnforcementFailure(errors.Errorf("renderer connection evidence missing"))
 	}
 	return response, body, nil
 }
@@ -329,7 +329,7 @@ func (r *rendererBudgetReader) Read(buffer []byte) (int, error) {
 	defer r.fetcher.bodyMu.Unlock()
 	remaining := int64(rendererMaxTotalBytes) - r.fetcher.bytes
 	if remaining < 0 {
-		return 0, errors.Errorf("renderer total response budget exhausted")
+		return 0, crawlerEnforcementFailure(errors.Errorf("renderer total response budget exhausted"))
 	}
 	if int64(len(buffer)) > remaining+1 {
 		buffer = buffer[:remaining+1]
@@ -337,7 +337,7 @@ func (r *rendererBudgetReader) Read(buffer []byte) (int, error) {
 	n, err := r.reader.Read(buffer)
 	r.fetcher.bytes += int64(n)
 	if r.fetcher.bytes > rendererMaxTotalBytes {
-		return n, errors.Wrap(errors.Join(errors.New("renderer total response budget exhausted"), err), "read renderer body")
+		return n, crawlerEnforcementFailure(errors.Wrap(errors.Join(errors.New("renderer total response budget exhausted"), err), "read renderer body"))
 	}
 	return n, err
 }
@@ -362,7 +362,7 @@ func (f *rendererEgressFetcher) seal(ctx context.Context) (*crawleregress.Receip
 	defer f.mu.Unlock()
 	f.sealed = true
 	if err := crawleregress.VerifyReceipt(ctx, f.receipt.TaskID, f.target, f.policy, f.receipt); err != nil {
-		return nil, errors.Wrap(err, "verify renderer receipt")
+		return nil, crawlerEnforcementFailure(errors.Wrap(err, "verify renderer receipt"))
 	}
 	copyReceipt := *f.receipt
 	copyReceipt.Origins = slices.Clone(f.receipt.Origins)
