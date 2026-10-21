@@ -492,7 +492,7 @@ def dependency_graph(output, checksums):
 def dependency_snapshot(root):
     """dependency_snapshot resolves browser dependencies offline without changing module metadata."""
     environment = os.environ.copy()
-    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none')
+    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none', GOWORK='off')
     template = '{{if .Module}}{{.Module.Path}} {{.Module.Version}}{{if .Module.Replace}} replaced{{end}}{{end}}'
     try:
         process = subprocess.run(['go', 'list', '-mod=readonly', '-deps', '-f', template, *CONTROL_IMPORTS],
@@ -506,58 +506,81 @@ def dependency_snapshot(root):
         raise ProbeError('browser_dependency_graph_invalid') from error
 
 
+def unique_policy_fields(pairs):
+    """unique_policy_fields rejects duplicate manifest fields before any reviewed profile is selected."""
+    require(len(dict(pairs)) == len(pairs), 'browser_dependency_policy_invalid')
+    return dict(pairs)
+
+
+def reviewed_profiles(policy):
+    """reviewed_profiles returns the SDK and optional exact shared crawler companion, never arbitrary modules."""
+    return (policy,) + ((policy['sharedCrawler'],) if policy['schemaVersion'] == 2 else ())
+
+
 def reviewed_transition(path=None):
-    """reviewed_transition loads the source-reviewed roots and exact SDK profiles, never runtime policy."""
+    """reviewed_transition loads exact source-reviewed SDK/crawler profiles, preserving the SDK-only v1 format."""
     target = path or pathlib.Path(__file__).with_name('cv-browser-dependency-transition.json')
     try:
-        policy = json.loads(target.read_text())
+        policy = json.loads(target.read_text(), object_pairs_hook=unique_policy_fields)
     except (OSError, ValueError) as error:
         raise ProbeError('browser_dependency_policy_unavailable') from error
     require(isinstance(policy, dict), 'browser_dependency_policy_invalid')
-    require(set(policy) == {'schemaVersion', 'controlImports', 'module', 'accepted', 'exact', 'current'},
-            'browser_dependency_policy_invalid')
-    require(policy['schemaVersion'] == 1 and policy['module'] == 'github.com/Laisky/go-utils/v6',
-            'browser_dependency_policy_invalid')
+    version = policy.get('schemaVersion')
+    require(type(version) is int and version in (1, 2), 'browser_dependency_policy_invalid')
+    require(set(policy) == {'schemaVersion', 'controlImports', 'module', 'accepted', 'exact', 'current'} |
+            ({'sharedCrawler'} if version == 2 else set()), 'browser_dependency_policy_invalid')
+    require(policy['module'] == 'github.com/Laisky/go-utils/v6', 'browser_dependency_policy_invalid')
+    if version == 2:
+        companion = policy['sharedCrawler']
+        require(isinstance(companion, dict) and set(companion) == {'module', 'accepted', 'exact', 'current'} and
+                companion['module'] == 'github.com/Laisky/laisky-blog-graphql', 'browser_dependency_policy_invalid')
     require(policy['controlImports'] == list(CONTROL_IMPORTS), 'browser_dependency_roots_differ')
-    for role in ('accepted', 'exact', 'current'):
-        row = policy[role]
-        require(isinstance(row, list) and len(row) == 3 and all(isinstance(value, str) for value in row),
+    for profile in reviewed_profiles(policy):
+        major = '6' if profile is policy else '1'
+        for role in ('accepted', 'exact', 'current'):
+            row = profile[role]
+            require(isinstance(row, list) and len(row) == 3 and all(isinstance(value, str) for value in row),
+                    'browser_dependency_policy_invalid')
+            require(bool(re.fullmatch(r'v' + major + r'[.][0-9]+[.][0-9]+-0[.][0-9]{14}-[0-9a-f]{12}', row[0])) and
+                    all(re.fullmatch(r'h1:[A-Za-z0-9+/]{43}=', value) for value in row[1:]),
+                    'browser_dependency_policy_invalid')
+        require(profile['accepted'] == profile['exact'] and profile['current'] != profile['accepted'],
                 'browser_dependency_policy_invalid')
-        require(bool(re.fullmatch(r'v6[.][0-9]+[.][0-9]+-0[.][0-9]{14}-[0-9a-f]{12}', row[0])) and
-                all(re.fullmatch(r'h1:[A-Za-z0-9+/]{43}=', value) for value in row[1:]),
-                'browser_dependency_policy_invalid')
-    require(policy['accepted'] == policy['exact'] and policy['current'] != policy['accepted'],
-            'browser_dependency_policy_invalid')
     return policy
 
 
 def require_dependency_match(snapshots, policy=None):
-    """require_dependency_match permits only the exact reviewed SDK transition; every other tuple stays identical."""
+    """require_dependency_match permits only exact reviewed transitions; every other tuple stays identical."""
     require(set(snapshots) == {'accepted', 'exact', 'current'}, 'browser_dependency_roles_incomplete')
     if policy is None:
         require(snapshots['accepted'] == snapshots['exact'] == snapshots['current'],
                 'browser_dependency_graph_differs')
         return
-    module = policy['module']
-    for role in ('accepted', 'exact', 'current'):
-        actual = tuple(row for row in snapshots[role] if row[0] == module)
-        require(actual == ((module, *policy[role]),), 'browser_sdk_profile_differs')
+    inherited = {}
+    for profile in reviewed_profiles(policy):
+        module = profile['module']
+        marker = 'browser_sdk_profile_differs' if profile is policy else 'browser_crawler_profile_differs'
+        for role in ('accepted', 'exact', 'current'):
+            actual = tuple(row for row in snapshots[role] if row[0] == module)
+            require(actual == ((module, *profile[role]),), marker)
+        inherited[module] = (module, *profile['accepted'])
     require(snapshots['accepted'] == snapshots['exact'], 'browser_dependency_graph_differs')
-    normalized = tuple((module, *policy['accepted']) if row[0] == module else row for row in snapshots['current'])
+    normalized = tuple(inherited.get(row[0], row) for row in snapshots['current'])
     require(snapshots['accepted'] == normalized, 'browser_dependency_graph_differs')
 
 
 def prepare_dependency_cache(root, role, policy):
     """prepare_dependency_cache downloads public checked dependencies from a bound immutable manifest copy."""
     require(role in ('accepted', 'exact', 'current'), 'browser_dependency_role_invalid')
-    module, expected = policy['module'], policy[role]
     modbytes, sumbytes = (root / 'go.mod').read_bytes(), (root / 'go.sum').read_bytes()
     modtext = modbytes.decode()
-    versions = re.findall(r'(?m)^\s*(?:require\s+)?' + re.escape(module) + r'\s+(\S+)', modtext)
-    require(versions == [expected[0]], 'browser_preparation_profile_differs')
     require(not re.search(r'(?m)^\s*replace\b', modtext), 'browser_preparation_replacement_rejected')
-    profile = dependency_graph(module + ' ' + expected[0], sumbytes.decode())
-    require(profile == ((module, *expected),), 'browser_preparation_profile_differs')
+    for profile in reviewed_profiles(policy):
+        module, expected = profile['module'], profile[role]
+        versions = re.findall(r'(?m)^\s*(?:require\s+)?' + re.escape(module) + r'\s+(\S+)', modtext)
+        require(versions == [expected[0]], 'browser_preparation_profile_differs')
+        graph = dependency_graph(module + ' ' + expected[0], sumbytes.decode())
+        require(graph == ((module, *expected),), 'browser_preparation_profile_differs')
     environment = os.environ.copy()
     environment.update(GOPROXY='https://proxy.golang.org', GOSUMDB='sum.golang.org', GOPRIVATE='',
                        GONOPROXY='none', GONOSUMDB='none', GOAUTH='off', GOTOOLCHAIN='local',
@@ -566,31 +589,34 @@ def prepare_dependency_cache(root, role, policy):
         owner = pathlib.Path(temporary)
         (owner / 'go.mod').write_bytes(modbytes)
         (owner / 'go.sum').write_bytes(sumbytes)
-        try:
-            process = subprocess.run(['go', 'mod', 'download', '-json', module + '@' + expected[0]], cwd=owner,
-                                     env=environment, capture_output=True, timeout=180)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise ProbeError('browser_dependency_preparation_unavailable') from error
-        require((owner / 'go.mod').read_bytes() == modbytes and (owner / 'go.sum').read_bytes() == sumbytes,
-                'browser_dependency_preparation_changed_manifest')
-        require(process.returncode == 0, 'browser_dependency_preparation_failed')
-        try:
-            downloaded = json.loads(process.stdout)
-        except (ValueError, UnicodeError) as error:
-            raise ProbeError('browser_dependency_preparation_metadata_invalid') from error
-        require(isinstance(downloaded, dict) and not downloaded.get('Error') and
-                tuple(downloaded.get(key) for key in ('Path', 'Version', 'Sum', 'GoModSum')) ==
-                (module, *expected), 'browser_dependency_preparation_profile_differs')
+        for profile in reviewed_profiles(policy):
+            module, expected = profile['module'], profile[role]
+            try:
+                process = subprocess.run(['go', 'mod', 'download', '-json', module + '@' + expected[0]], cwd=owner,
+                                         env=environment, capture_output=True, timeout=180)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                raise ProbeError('browser_dependency_preparation_unavailable') from error
+            require((owner / 'go.mod').read_bytes() == modbytes and (owner / 'go.sum').read_bytes() == sumbytes,
+                    'browser_dependency_preparation_changed_manifest')
+            require(process.returncode == 0, 'browser_dependency_preparation_failed')
+            try:
+                downloaded = json.loads(process.stdout)
+            except (ValueError, UnicodeError) as error:
+                raise ProbeError('browser_dependency_preparation_metadata_invalid') from error
+            require(isinstance(downloaded, dict) and not downloaded.get('Error') and
+                    tuple(downloaded.get(key) for key in ('Path', 'Version', 'Sum', 'GoModSum')) ==
+                    (module, *expected), 'browser_dependency_preparation_profile_differs')
     require((root / 'go.mod').read_bytes() == modbytes and (root / 'go.sum').read_bytes() == sumbytes,
             'browser_dependency_preparation_changed_manifest')
-    return {'role': role, 'sdkProfile': expected, 'goModSHA256': digest(modbytes),
-            'goSumSHA256': digest(sumbytes), 'status': 'cache_prepared_not_qualified'}
+    return {'role': role, 'sdkProfile': policy[role], 'goModSHA256': digest(modbytes),
+            'goSumSHA256': digest(sumbytes), 'status': 'cache_prepared_not_qualified',
+            **({'sharedCrawlerProfile': policy['sharedCrawler'][role]} if policy['schemaVersion'] == 2 else {})}
 
 
 def verify_dependency_cache(root, graph):
     """verify_dependency_cache requires selected cached artifacts and verifies cached bytes without fetching."""
     environment = os.environ.copy()
-    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none', GOFLAGS='-mod=readonly')
+    environment.update(GOPROXY='off', GOSUMDB='off', GOTOOLCHAIN='local', GONOPROXY='none', GOFLAGS='-mod=readonly', GOWORK='off')
     modules = [row[0] for row in graph]
     try:
         metadata = subprocess.run(['go', 'list', '-mod=readonly', '-m', '-json', *modules],
@@ -674,6 +700,11 @@ def checkouts_for_ci(root, expected_head=None, prepare_cache=False):
                                               'sdkModule': policy['module'], 'acceptedSDK': policy['accepted'],
                                               'exactSDK': policy['exact'], 'currentSDK': policy['current'],
                                               'cacheVerification': 'selected_artifacts_present_and_go_mod_verify'}
+                if policy['schemaVersion'] == 2:
+                    companion = policy['sharedCrawler']
+                    paths['dependencyBinding'].update(sharedCrawlerModule=companion['module'],
+                        acceptedSharedCrawler=companion['accepted'], exactSharedCrawler=companion['exact'],
+                        currentSharedCrawler=companion['current'])
             yield paths
             for role in ('accepted', 'exact', 'current'):
                 entry = paths[role]
