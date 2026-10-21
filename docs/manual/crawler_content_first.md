@@ -168,24 +168,60 @@ actual public peers and SQL call-log persistence remain explicit fixture seams.
 Real-browser and live-provider qualification is separate; missing fixture
 prerequisites or skipped tests are not successful production acceptance.
 
-Final standalone acceptance used Go 1.27.2, `TZ=UTC`, `GOWORK=off`, read-only
-module resolution and the published companion pin above:
+Standalone acceptance used `TZ=UTC`, `GOWORK=off`, read-only module resolution
+and the published companion pin above. Initial qualification used Go 1.27.2;
+the complete worker/logging suites and both-process service path were rerun on
+the final Go 1.27.3 toolchain after the CI security finding described below:
 
-| Check | Recorded result |
-| --- | --- |
-| Complete worker and logging package race suites | PASS; 292 tests/subtests passed, zero failures. |
-| Paired service path with race detection in both processes | PASS; all 15 subcases, zero skips (12.871 seconds for the GraphQL package). |
-| Complete shared `crawleregress`, `search`, `db/redis` race suites | PASS with workspace disabled. |
-| Targeted MCP tools `TestWebFetch` race suite | PASS with workspace disabled. |
-| Relevant worker/shared/MCP-tools `go vet` | PASS. |
-| Pinned golangci-lint 2.14.0 on both changed production scopes | PASS; zero issues. |
-| Changed-file gofmt/goimports and diff checks | PASS. |
+| Check | Toolchain | Recorded result |
+| --- | --- | --- |
+| Complete worker and logging package race suites | Go 1.27.3 | PASS; 292 tests/subtests passed, zero failures. |
+| Paired service path with race detection in both processes | Go 1.27.3 | PASS; all 15 subcases, zero skips (13.472 seconds for the GraphQL package). |
+| Complete shared `crawleregress`, `search`, `db/redis` race suites | Go 1.27.2 | PASS with workspace disabled. |
+| Targeted MCP tools `TestWebFetch` race suite | Go 1.27.2 | PASS with workspace disabled. |
+| Relevant worker/shared/MCP-tools `go vet` | Go 1.27.2 | PASS. |
+| Pinned golangci-lint 2.14.0 on both changed production scopes | Go 1.27.2 | PASS; zero issues. |
+| Changed-file gofmt/goimports and diff checks | Both | PASS. |
+| `go mod tidy -diff` | Go 1.27.3 | PASS; no module metadata changes. |
+| `govulncheck` on auditlog and crawler task packages | Go 1.27.3 | PASS; zero reachable vulnerabilities and zero vulnerabilities in imported packages. |
 
 The ordinary worker package run reported 13 skipped prerequisites: ten
 real-browser cases, two opt-in live-worker cases and the service helper. The
 service helper was subsequently executed by the successful explicit paired
 test. The browser/live-provider prerequisites were not available in this source
 acceptance environment; no result is inferred for them.
+
+## CI qualification follow-ups
+
+The initial PR head passed the hosted complete Go test run, then the browser
+probe stopped before any browser cell with `browser_dependency_graph_unavailable`.
+The setup artifact did not expose the underlying Go error, so it does not prove
+which cache entry was absent. Behavioral regressions independently established
+two required corrections: preparation omitted the historical shared crawler
+module, and the original exact-graph matcher rejected its intended new pin.
+
+The same source-reviewed manifest now names the exact old/new shared crawler
+version, module checksum and `go.mod` checksum in addition to the existing SDK
+transition. Preparation validates both profiles before downloading and verifies
+the returned tuples without modifying source or copied manifests. Offline graph
+and cache verification remain mandatory. Only these two reviewed module tuples
+may differ; the other 65 selected module tuples must match. All six original
+browser cells and the SDK-only schema version 1 remain supported. The 38 Python
+contracts pass; real accepted/exact/current manifests each resolve and verify all
+67 selected cached modules offline. The original matcher rejects those graphs
+and the updated exact matcher accepts them. Full browser qualification remains
+a hosted CI check on the final PR head, distinct from cache preparation.
+
+Hosted `govulncheck` also reported reachable
+[GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809) in the pre-existing
+`crypto/x509.Certificate.Verify` call in `auditlog.Log.ValidRootCA`.
+The advisory affects Go versions before 1.27.3; the application call and its
+source file are unchanged from the base. The module, container builder and
+explicit verification workflow pins are updated together from Go 1.27.2 to
+1.27.3. No application certificate workaround or scanner suppression is added.
+The final targeted scan is clear at the reachable-symbol and imported-package
+levels; it still reports one vulnerability in a required module that these
+packages do not call. The repository-wide scan remains part of hosted CI.
 
 ## HOWTO: rollout and rollback
 
