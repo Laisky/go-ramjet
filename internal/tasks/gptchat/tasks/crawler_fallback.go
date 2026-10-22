@@ -14,8 +14,6 @@ import (
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	htmlrenderer "github.com/yuin/goldmark/v2/renderer/html"
-
-	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 // crawlerContent holds accepted content and its actual acquisition provenance.
