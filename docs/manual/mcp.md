@@ -195,6 +195,11 @@ openai:
   # are only hit when the free tier fails. An explicit priority (including 0 or a
   # negative value, e.g. for "always last") is honored as written.
   web_fetch:
+    # Verified crawler fallback refuses to share any query-bearing target URL
+    # with third-party providers unless an operator explicitly allows it.
+    # Enable only when path and query disclosure to your configured providers
+    # is acceptable; direct fetches and legacy explicit proxy calls are unchanged.
+    allow_query_forwarding: false
     jina:
       enabled: true
       prefix: https://r.jina.ai/
