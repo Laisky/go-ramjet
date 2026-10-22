@@ -8,6 +8,8 @@ import (
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/stretchr/testify/require"
+
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 // TestCrawlerProviderQueryRequiresExplicitPolicy reproduces accidental
@@ -61,4 +63,38 @@ func TestCrawlerProviderQueryRequiresExplicitPolicy(t *testing.T) {
 			require.Zero(t, calls.Load(), "no provider may observe or receive the URL")
 		})
 	}
+}
+
+// TestCrawlerProviderQueryOperatorOptIn preserves exact-query retrieval where
+// an operator explicitly accepts disclosure to the configured providers.
+func TestCrawlerProviderQueryOperatorOptIn(t *testing.T) {
+	preserveVerifiedWorkerSeams(t)
+	originalConfig := iconfig.Config
+	iconfig.Config = &iconfig.OpenAI{WebFetch: iconfig.WebFetchConfig{AllowQueryForwarding: true}}
+	t.Cleanup(func() { iconfig.Config = originalConfig })
+
+	const target = "http://example.com/article?customA=canary%2Btoken&view=one"
+	task := fallbackTestTask(t, true)
+	task.Url = target
+	fetchVerifiedHTMLContent = func(_ context.Context, direct *rlibs.HTMLCrawlerTask) (string, *crawleregress.Receipt, error) {
+		return "<body><div id=\"cf-chl-widget\"></div></body>", verifiedTestReceipt(direct), nil
+	}
+	calls := 0
+	webFetchProxies = []webFetchProxy{fallbackTestProxy{name: "fixture", fetch: func(_ context.Context, received string) (string, error) {
+		calls++
+		require.Equal(t, target, received, "operator-authorized provider receives the exact original query")
+		return "# Opted-in article", nil
+	}}}
+	result, err := acquireCrawlerContent(t.Context(), task)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 1, calls)
+	require.Equal(t, crawleregress.AcquisitionProvider, result.acquisition.Method)
+	require.Equal(t, "# Opted-in article", result.markdown)
+	require.Nil(t, result.receipt)
+
+	// Query authorization does not authorize userinfo or URL fragments.
+	require.False(t, crawlerProviderURLPermitted("https://alice:password@example.com/article"))
+	require.False(t, crawlerProviderURLPermitted("https://example.com/article#token-canary"))
+	require.True(t, crawlerProviderURLPermitted(target))
 }
