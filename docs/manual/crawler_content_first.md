@@ -56,11 +56,20 @@ The existing task/result JSON envelope gains two optional fields:
 
 Only the producer's independent submitted snapshot grants the capability.
 Returned metadata cannot opt a direct-only request into provider acceptance.
-This wire flag advertises protocol support; effective worker configuration permits
-automatic forwarding of the whole eligible target URL, including path and query.
-Existing defaults enable Jina and Defuddle unless disabled. Public destination
-admission does not determine whether URL contents are confidential. No query-name
-or secret-name heuristics are introduced.
+This wire flag advertises protocol support, not user consent to disclose
+credentials. In verified fallback, query-free public URLs continue to reach
+configured providers (Jina and Defuddle remain enabled by default). By default
+the worker refuses to send a target containing any query string, including an
+empty `?` delimiter, to a provider. Operators who explicitly accept forwarding
+all query values to configured third parties may set
+`web_fetch.allow_query_forwarding: true` in the GPTChat worker configuration.
+This opt-in forwards the **exact original URL**: no query-name or secret-name
+heuristics remove only selected fields. URL userinfo and fragments are never
+forwarded by verified fallback. Direct acquisition and legacy explicit proxy
+calls retain their existing behavior. An opt-out fallback keeps the original
+direct failure and never sends a substituted, semantically different URL.
+Public destination admission does not establish that path or query contents
+are nonconfidential, even when this option is enabled.
 Absent acquisition metadata and explicit `direct` metadata still require the
 existing receipt. A provider result requires an opted-in public target, echoed
 capability, valid bounded provider identifier, no direct receipt, and no direct
@@ -244,6 +253,28 @@ explicit verification workflow pins are updated together from Go 1.27.2 to
 The final targeted scan is clear at the reachable-symbol and imported-package
 levels; it still reports one vulnerability in a required module that these
 packages do not call. The repository-wide scan remains part of hosted CI.
+
+### October 22 reviewer follow-up: URL disclosure boundary
+
+CodeRabbit's new finding in companion PR 77 is valid: the previously automatic
+`proxy.Fetch(ctx, task.Url)` sent arbitrary query values to all configured
+providers. The test-only commit [`1959d3d`](https://github.com/Laisky/go-ramjet/commit/1959d3dce87ea6f0794edb0863f425a9eab37aec)
+reproduced the behavior in hosted CI: both unapproved-query cases failed,
+while query-free provider recovery and direct query-target retrieval passed
+as independent controls. The regression is retained in
+`crawler_provider_query_policy_test.go`.
+
+The worker now checks the URL once before *any* provider adapter can receive
+it, instead of distributing secret-name heuristics among Jina, Defuddle,
+Scrapeless and Firecrawl. Operators can explicitly restore the old full-query
+provider behavior with the configuration setting above, including query URLs
+needed to identify public articles. This is an intentional privacy-first
+change to previously planned provider recovery for query-bearing URLs; the
+direct path, legacy adapter API, task JSON contract and stored data are
+unchanged. During rollout decide whether third-party disclosure is acceptable
+for this deployment, and configure the setting accordingly. A URL path can
+also contain secrets; this query-specific control does not claim to detect
+every credential-bearing URL. Review provider trust and input-source policy.
 
 ## HOWTO: rollout and rollback
 
