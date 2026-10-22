@@ -170,6 +170,60 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           govulncheck ./...
 
+      # Qualify cross-repository behavior only for PR #95; normal CI stays fast.
+      - name: Checkout issue 94 companion caller
+        if: github.event.pull_request.number == 95
+        uses: actions/checkout@v6
+        with:
+          repository: Laisky/laisky-blog-graphql
+          ref: fd61b61a40178be8884608bfc132f5670260d20f
+          path: paired-caller
+          persist-credentials: false
+
+      - name: Run issue 94 paired service behavior (race)
+        if: github.event.pull_request.number == 95
+        timeout-minutes: 20
+        shell: bash
+        env:
+          EXPECTED_WORKER_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_CALLER_HEAD: fd61b61a40178be8884608bfc132f5670260d20f
+        run: |
+          set -euo pipefail
+          # Assert the actual PR head rather than the synthetic merge commit.
+          git checkout --detach "$EXPECTED_WORKER_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_WORKER_HEAD"
+          test "$(git -C paired-caller rev-parse HEAD)" = "$EXPECTED_CALLER_HEAD"
+          echo "Worker head: $(git rev-parse HEAD)"
+          echo "Caller head: $(git -C paired-caller rev-parse HEAD)"
+          go version
+          if ! command -v redis-server >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends redis-server
+          fi
+          redis-server --version
+          go work init . ./paired-caller
+          go test -mod=readonly -race -c \
+            -o "$RUNNER_TEMP/issue94-ramjet-service-race.test" \
+            ./internal/tasks/gptchat/tasks
+          (
+            cd paired-caller
+            CRAWLER_SERVICE_TEST_WORKER_BINARY="$RUNNER_TEMP/issue94-ramjet-service-race.test" \
+              go test -mod=readonly -race -count=1 -timeout=3m \
+                ./internal/mcp -run '^TestMCPWebFetchServicePath$' -v \
+              | tee "$RUNNER_TEMP/issue94-paired.log"
+          )
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          report = pathlib.Path(os.environ["RUNNER_TEMP"], "issue94-paired.log").read_text()
+          passed = re.findall(r"^\s+--- PASS: TestMCPWebFetchServicePath/", report, re.M)
+          skipped = re.findall(r"^\s+--- SKIP: TestMCPWebFetchServicePath/", report, re.M)
+          if len(passed) != 15 or skipped:
+              raise SystemExit(f"expected 15 passed paired subcases, got {len(passed)}; skipped {len(skipped)}")
+          print(f"Paired service acceptance: {len(passed)}/15 passed; zero skipped")
+          PY
+
   frontend:
     name: Frontend tests, lint, and build
     runs-on: ubuntu-latest

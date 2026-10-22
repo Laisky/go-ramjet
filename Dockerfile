@@ -20,7 +20,7 @@ RUN VITE_CHAT_SENTRY_ENABLED="$VITE_CHAT_SENTRY_ENABLED" \
 
 # =====================================
 
-FROM golang:1.27.2-bookworm AS gobuild
+FROM golang:1.27.3-bookworm AS gobuild
 
 # install dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc git \

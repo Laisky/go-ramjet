@@ -87,6 +87,7 @@ func fetchVerifiedCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) 
 	renderTask.Egress = &renderPolicy
 	renderTask.RequestChain = nil
 	renderTask.EgressReceipt = nil
+	renderTask.Acquisition = nil
 	renderTask.ResultHTML = nil
 	renderTask.ResultMarkdown = nil
 	htmlContent, receipt, err := fetchVerifiedHTMLContent(ctx, &renderTask)
@@ -167,7 +168,7 @@ func extractVerifiedHTMLBody(ctx context.Context, content string, outputMarkdown
 }
 
 // processHTMLCrawlerTask executes task and publishes its terminal status with
-// safe failure diagnostics; successful bodies require verified connection evidence.
+// safe failure diagnostics and explicit direct or provider acquisition provenance.
 func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) error {
 	if task == nil {
 		return crawlerFailure("task_missing", "admission", nil)
@@ -192,6 +193,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 			fields = append(fields, capture.fields()...)
 			fields = append(fields, zap.String("stage", stage), zap.String("category", code), zap.String("error_code", code))
 			fields = append(fields, crawlerFailureContextFields(failure)...)
+			fields = append(fields, crawlerProviderFailureFields(failure)...)
 			if contextValue := crawlerFailureContextFrom(failure); contextValue == nil || contextValue.UpstreamStatus == nil {
 				fields = append(fields, crawlerUpstreamStatusFields(failure)...)
 			}
@@ -209,15 +211,16 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		logger.Info("crawler terminal result published",
 			crawlerLifecycleFields(ctx, task.TaskID, "result_published", task.Status, "success", startedAt)...)
 	}
-	// Secure rendering and local conversion have no use for a provider token.
+	// The caller's token is never used by rendering, conversion, or provider adapters.
 	task.APIKey = ""
 	task.ResultHTML, task.ResultMarkdown, task.RequestChain = nil, nil, nil
 	task.EgressReceipt, task.FailedReason, task.FinishedAt = nil, nil, nil
+	task.Acquisition = nil
 	task.Status = rlibs.TaskStatusRunning
 	if err := publishHTMLCrawlerTask(ctx, task); err != nil {
 		return publishFailure(errors.Wrap(err, "publish crawler running state"), false)
 	}
-	body, markdown, receipt, fetchErr := fetchVerifiedCrawlerTask(ctx, task)
+	content, fetchErr := acquireCrawlerContent(ctx, task)
 	if err := ctx.Err(); err != nil {
 		// Accepted work needs a terminal state even when its independent worker context ends.
 		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), 5*time.Second)
@@ -248,11 +251,15 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 		processingComplete(fetchErr)
 		ctx = withCrawlerFailure(ctx, fetchErr)
 	} else {
+		body, markdown, receipt := content.body, content.markdown, content.receipt
 		task.Status, task.ResultHTML = rlibs.TaskStatusSuccess, body
 		task.ResultMarkdown, task.EgressReceipt = []byte(markdown), receipt
-		for _, origin := range receipt.Origins {
-			if origin.Kind == crawleregress.OriginDocument {
-				task.RequestChain = append(task.RequestChain, origin.URL)
+		task.Acquisition = content.acquisition
+		if receipt != nil {
+			for _, origin := range receipt.Origins {
+				if origin.Kind == crawleregress.OriginDocument {
+					task.RequestChain = append(task.RequestChain, origin.URL)
+				}
 			}
 		}
 		processingComplete(nil)
@@ -261,7 +268,7 @@ func processHTMLCrawlerTask(ctx context.Context, task *rlibs.HTMLCrawlerTask) er
 			markdownPtr = &markdown
 		}
 		record := &CrawlRecord{TaskID: task.TaskID, CrawledAt: now,
-			URL: task.Url, RawBody: body, Markdown: markdownPtr}
+			URL: task.Url, RawBody: body, Markdown: markdownPtr, Acquisition: content.acquisition}
 		if err := persistVerifiedCrawlRecord(ctx, record); err != nil {
 			fields := crawlerLifecycleFields(ctx, task.TaskID, "audit_persistence_failed", task.Status, "", startedAt)
 			fields = append(fields, capture.fields()...)

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -159,7 +158,7 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-token", p.apiKey)
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "new scrapeless http client")
 	}
@@ -170,7 +169,7 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrap(err, "read scrapeless body")
 	}
@@ -179,7 +178,7 @@ func (p scrapelessWebFetchProxy) Fetch(ctx context.Context, targetURL string) (s
 		return "", errors.Errorf("scrapeless request failed: %d body=%s", resp.StatusCode, truncateForLog(string(body), 256))
 	}
 
-	content, err := extractScrapelessContent(body)
+	content, err := extractScrapelessContent(ctx, body)
 	if err != nil {
 		return "", errors.Wrap(err, "extract scrapeless content")
 	}
@@ -222,7 +221,7 @@ func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "new firecrawl http client")
 	}
@@ -233,7 +232,7 @@ func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (st
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger)
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrap(err, "read firecrawl body")
 	}
@@ -242,7 +241,7 @@ func (p firecrawlWebFetchProxy) Fetch(ctx context.Context, targetURL string) (st
 		return "", errors.Errorf("firecrawl request failed: %d body=%s", resp.StatusCode, truncateForLog(string(body), 256))
 	}
 
-	content, err := extractFirecrawlContent(body)
+	content, err := extractFirecrawlContent(ctx, body)
 	if err != nil {
 		return "", errors.Wrap(err, "extract firecrawl content")
 	}
@@ -433,7 +432,7 @@ func currentWebFetchConfig() iconfig.WebFetchConfig {
 }
 
 // extractFirecrawlContent extracts the markdown payload from a Firecrawl scrape response.
-func extractFirecrawlContent(body []byte) (string, error) {
+func extractFirecrawlContent(ctx context.Context, body []byte) (string, error) {
 	var resp firecrawlResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return "", errors.Wrap(err, "unmarshal firecrawl body")
@@ -459,7 +458,7 @@ func extractFirecrawlContent(body []byte) (string, error) {
 	if content == "" {
 		return "", errors.New("firecrawl returned empty content")
 	}
-	if isCloudflareChallenge(content) {
+	if rejectWebFetchProxyChallenge(ctx, content) {
 		return "", errors.New("firecrawl returned cloudflare challenge")
 	}
 
@@ -467,13 +466,13 @@ func extractFirecrawlContent(body []byte) (string, error) {
 }
 
 // extractScrapelessContent extracts the first useful string payload from a Scrapeless response.
-func extractScrapelessContent(body []byte) (string, error) {
+func extractScrapelessContent(ctx context.Context, body []byte) (string, error) {
 	content := strings.TrimSpace(string(body))
 	if content == "" {
 		return "", errors.New("scrapeless returned empty body")
 	}
 	if content[0] != '{' && content[0] != '[' {
-		if isCloudflareChallenge(content) {
+		if rejectWebFetchProxyChallenge(ctx, content) {
 			return "", errors.New("scrapeless returned cloudflare challenge")
 		}
 
@@ -486,7 +485,7 @@ func extractScrapelessContent(body []byte) (string, error) {
 	}
 
 	if extracted := findFirstStringValue(payload, "content", "html", "body", "markdown", "text", "data"); extracted != "" {
-		if isCloudflareChallenge(extracted) {
+		if rejectWebFetchProxyChallenge(ctx, extracted) {
 			return "", errors.New("scrapeless returned cloudflare challenge")
 		}
 
@@ -580,7 +579,7 @@ func fetchByWebFetchProxyPrefix(ctx context.Context, proxyName, prefix, targetUR
 		return "", errors.Wrapf(err, "new %s request", proxyName)
 	}
 
-	cli, err := newCrawlerHTTPClient()
+	cli, err := newWebFetchProxyHTTPClient(ctx)
 	if err != nil {
 		return "", errors.Wrapf(err, "new %s http client", proxyName)
 	}
@@ -595,7 +594,7 @@ func fetchByWebFetchProxyPrefix(ctx context.Context, proxyName, prefix, targetUR
 		return "", errors.Errorf("%s request failed: %d", proxyName, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWebFetchProxyHTTPBody(ctx, resp)
 	if err != nil {
 		return "", errors.Wrapf(err, "read %s body", proxyName)
 	}
@@ -604,7 +603,7 @@ func fetchByWebFetchProxyPrefix(ctx context.Context, proxyName, prefix, targetUR
 	if strings.TrimSpace(content) == "" {
 		return "", errors.Errorf("%s returned empty body", proxyName)
 	}
-	if isCloudflareChallenge(content) {
+	if rejectWebFetchProxyChallenge(ctx, content) {
 		return "", errors.Errorf("%s returned cloudflare challenge", proxyName)
 	}
 

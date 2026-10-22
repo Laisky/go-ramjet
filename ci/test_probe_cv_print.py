@@ -50,6 +50,21 @@ def result(stdout, **changes):
     return value
 
 
+def shared_crawler_policy():
+    """shared_crawler_policy binds the inherited crawler contract and the exact reviewed worker pin."""
+    policy = probe.reviewed_transition()
+    policy['schemaVersion'] = 2
+    baseline = ['v1.0.2-0.20261011035106-d58d6c75a705',
+                'h1:qQl7/KNGskIiioeWMvXBhTShXVEATElnuEYJqecd3gY=',
+                'h1:ObKqjd9M67C/0VJnJxuWtbzewBzz/J5tH6YWs4gy/YE=']
+    policy['sharedCrawler'] = {'module': 'github.com/Laisky/laisky-blog-graphql',
+        'accepted': baseline, 'exact': list(baseline),
+        'current': ['v1.0.2-0.20261021132434-f1aa1b9483de',
+                    'h1:unDEfbTPz26ScuLl7Pu4gHEK0JOf3fAR9nzALdX7+8g=',
+                    'h1:9z+qfn+yAvmkNtl++OBECSA1bRBa0UZciPtKAVJV9DE=']}
+    return policy
+
+
 class DriverContracts(unittest.TestCase):
     def checkouts(self):
         """checkouts returns fixed owned paths and immutable source bindings for mocked matrix contracts."""
@@ -404,6 +419,7 @@ class DriverContracts(unittest.TestCase):
         self.assertEqual(execute.call_args.kwargs['env']['GOPROXY'], 'off')
         self.assertEqual(execute.call_args.kwargs['env']['GOSUMDB'], 'off')
         self.assertEqual(execute.call_args.kwargs['env']['GONOPROXY'], 'none')
+        self.assertEqual(execute.call_args.kwargs['env']['GOWORK'], 'off')
 
 
 
@@ -411,11 +427,20 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
     """ReviewedSDKTransitionContracts model exact dependency and cache boundaries without Go/network."""
 
     def snapshots(self, policy):
-        """snapshots returns truthful inherited old SDK and reviewed current SDK profiles."""
-        module = policy['module']
+        """snapshots returns immutable inherited and reviewed candidate module profiles."""
         other = ('github.com/chromedp/chromedp', 'v0.20.1', 'h1:browser', 'h1:browsermod')
-        return {role: tuple(sorted(((module, *policy[role]), other)))
+        profiles = (policy,) + ((policy['sharedCrawler'],) if 'sharedCrawler' in policy else ())
+        return {role: tuple(sorted([(profile['module'], *profile[role]) for profile in profiles] + [other]))
                 for role in ('accepted', 'exact', 'current')}
+
+    def test_reviewed_shared_crawler_pin_preserves_historical_graph(self):
+        """test_reviewed_shared_crawler_pin_preserves_historical_graph accepts the two exact reviewed changes."""
+        policy = shared_crawler_policy()
+        snapshots = self.snapshots(policy)
+        probe.require_dependency_match(snapshots, policy)
+        self.assertEqual(snapshots['accepted'], snapshots['exact'])
+        self.assertNotEqual(snapshots['accepted'], snapshots['current'])
+        self.assertEqual(len(probe.CELLS), 6)
 
     def test_exact_transition_keeps_historical_profiles_and_six_cells(self):
         """test_exact_transition_keeps_historical_profiles_and_six_cells permits only the reviewed change."""
@@ -427,26 +452,61 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
         self.assertEqual(len(probe.CELLS), 6)
         self.assertEqual([row[1] for row in probe.CELLS], ['accepted', 'exact', 'current', 'current', 'current', 'current'])
 
-    def test_unreviewed_sdk_version_or_checksums_fail(self):
-        """test_unreviewed_sdk_version_or_checksums_fail rejects any profile outside the reviewed tuple."""
+    def test_unreviewed_versions_checksums_missing_or_duplicate_profiles_fail(self):
+        """test_unreviewed_versions_checksums_missing_or_duplicate_profiles_fail binds both modules in every role."""
         policy = probe.reviewed_transition()
-        for role in ('accepted', 'exact', 'current'):
-            for column in (1, 2, 3):
-                with self.subTest(role=role, column=column):
-                    snapshots = self.snapshots(policy)
-                    changed = []
-                    for row in snapshots[role]:
-                        values = list(row)
-                        if row[0] == policy['module']:
-                            values[column] = 'unreviewed-value'
-                        changed.append(tuple(values))
-                    snapshots[role] = tuple(changed)
-                    with self.assertRaisesRegex(probe.ProbeError, 'browser_sdk_profile_differs'):
-                        probe.require_dependency_match(snapshots, policy)
-        snapshots = self.snapshots(policy)
-        snapshots['current'] = tuple(row for row in snapshots['current'] if row[0] != policy['module'])
-        with self.assertRaisesRegex(probe.ProbeError, 'browser_sdk_profile_differs'):
-            probe.require_dependency_match(snapshots, policy)
+        for profile, marker in ((policy, 'browser_sdk_profile_differs'),
+                                (policy['sharedCrawler'], 'browser_crawler_profile_differs')):
+            for role in ('accepted', 'exact', 'current'):
+                for change in (1, 2, 3, 'missing', 'duplicate'):
+                    with self.subTest(module=profile['module'], role=role, change=change):
+                        snapshots = self.snapshots(policy)
+                        changed = list(snapshots[role])
+                        index = next(i for i, row in enumerate(changed) if row[0] == profile['module'])
+                        if change == 'missing':
+                            changed.pop(index)
+                        elif change == 'duplicate':
+                            changed.append(changed[index])
+                        else:
+                            values = list(changed[index])
+                            values[change] = 'unreviewed-value'
+                            changed[index] = tuple(values)
+                        snapshots[role] = tuple(changed)
+                        with self.assertRaisesRegex(probe.ProbeError, marker):
+                            probe.require_dependency_match(snapshots, policy)
+
+    def test_manifest_preserves_v1_and_rejects_unreviewed_companions(self):
+        """test_manifest_preserves_v1_and_rejects_unreviewed_companions keeps the manifest exact and source-owned."""
+        policy = shared_crawler_policy()
+        self.assertEqual(probe.reviewed_transition(), policy)
+        legacy = {key: value for key, value in policy.items() if key != 'sharedCrawler'}
+        legacy['schemaVersion'] = 1
+        with tempfile.TemporaryDirectory(prefix='browser-reviewed-policy-') as temporary:
+            path = pathlib.Path(temporary) / 'policy.json'
+            path.write_text(json.dumps(legacy))
+            self.assertEqual(probe.reviewed_transition(path), legacy)
+            probe.require_dependency_match(self.snapshots(legacy), legacy)
+            with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_graph_differs'):
+                probe.require_dependency_match(self.snapshots(policy), legacy)
+            mutations = ((('schemaVersion',), 3), (('unknown',), []),
+                (('sharedCrawler',), None),
+                (('sharedCrawler', 'module'), 'example.test/unreviewed'), (('sharedCrawler', 'unknown'), []),
+                (('sharedCrawler', 'accepted', 0), 'latest'), (('sharedCrawler', 'accepted', 1), 'h1:invalid'),
+                (('sharedCrawler', 'exact'), policy['sharedCrawler']['current']),
+                (('sharedCrawler', 'current'), policy['sharedCrawler']['accepted']))
+            for keys, value in mutations:
+                changed = json.loads(json.dumps(policy))
+                target = changed
+                for key in keys[:-1]:
+                    target = target[key]
+                target[keys[-1]] = value
+                path.write_text(json.dumps(changed))
+                with self.subTest(keys=keys), self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_policy_invalid'):
+                    probe.reviewed_transition(path)
+            for field in ('schemaVersion', 'module'):
+                path.write_text(json.dumps(policy).replace('"' + field + '":', '"' + field + '": null, "' + field + '":'))
+                with self.assertRaisesRegex(probe.ProbeError, 'browser_dependency_policy_invalid'):
+                    probe.reviewed_transition(path)
 
     def test_other_module_and_root_changes_fail(self):
         """test_other_module_and_root_changes_fail prevents an SDK transition from exempting other controls."""
@@ -456,7 +516,7 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
             changed = []
             for row in snapshots['current']:
                 values = list(row)
-                if row[0] != policy['module']:
+                if row[0] == 'github.com/chromedp/chromedp':
                     values[column] = 'unreviewed-other'
                 changed.append(tuple(values))
             snapshots['current'] = tuple(changed)
@@ -541,16 +601,51 @@ class CachePreparationContracts(unittest.TestCase):
     """CachePreparationContracts verify the explicit preparation boundary without fetching or running Go."""
 
     @contextlib.contextmanager
-    def profile(self, role='accepted'):
+    def profile(self, role='accepted', policy=None):
         """profile creates only reviewed public module bytes in an owned temporary directory."""
-        policy = probe.reviewed_transition()
+        policy = policy or probe.reviewed_transition()
         with tempfile.TemporaryDirectory(prefix='browser-preparation-contract-') as temporary:
             root = pathlib.Path(temporary)
-            module, row = policy['module'], policy[role]
-            (root / 'go.mod').write_text('module example.test/fixture\n\ngo 1.27.0\n\nrequire ' + module + ' ' + row[0] + '\n')
-            (root / 'go.sum').write_text(module + ' ' + row[0] + ' ' + row[1] + '\n' +
-                                       module + ' ' + row[0] + '/go.mod ' + row[2] + '\n')
+            profiles = (policy,) + ((policy['sharedCrawler'],) if 'sharedCrawler' in policy else ())
+            (root / 'go.mod').write_text('module example.test/fixture\n\ngo 1.27.0\n\n' + ''.join(
+                'require ' + profile['module'] + ' ' + profile[role][0] + '\n' for profile in profiles))
+            (root / 'go.sum').write_text(''.join(profile['module'] + ' ' + profile[role][0] + suffix + ' ' + checksum + '\n'
+                for profile in profiles for suffix, checksum in (('', profile[role][1]), ('/go.mod', profile[role][2]))))
             yield root, policy
+
+    def test_preparation_warms_exact_historical_and_current_crawler_cache(self):
+        """test_preparation_warms_exact_historical_and_current_crawler_cache requires both pinned modules."""
+        policy = shared_crawler_policy()
+        for role in ('accepted', 'exact', 'current'):
+            with self.subTest(role=role), self.profile(role, policy) as (root, _):
+                profiles = (policy, policy['sharedCrawler'])
+                wanted = {profile['module'] + '@' + profile[role][0]: profile for profile in profiles}
+                def download(args, **kwargs):
+                    """download models an initially absent cache entry becoming present only for the requested pin."""
+                    profile = wanted[args[-1]]
+                    return subprocess.CompletedProcess(args, 0, json.dumps(dict(zip(
+                        ('Path', 'Version', 'Sum', 'GoModSum'), (profile['module'], *profile[role])))).encode(), b'')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download) as execute:
+                    result = probe.prepare_dependency_cache(root, role, policy)
+                self.assertEqual({call.args[0][-1] for call in execute.call_args_list}, set(wanted))
+                self.assertEqual(result['sdkProfile'], policy[role])
+                self.assertEqual(result['sharedCrawlerProfile'], policy['sharedCrawler'][role])
+                self.assertEqual(result['status'], 'cache_prepared_not_qualified')
+
+    def test_legacy_policy_preparation_preserves_sdk_only_report(self):
+        """test_legacy_policy_preparation_preserves_sdk_only_report retains the v1 preparation contract."""
+        policy = probe.reviewed_transition()
+        policy.pop('sharedCrawler')
+        policy['schemaVersion'] = 1
+        with self.profile(policy=policy) as (root, _):
+            metadata = dict(zip(('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy['accepted'])))
+            with mock.patch.object(probe.subprocess, 'run', return_value=subprocess.CompletedProcess(
+                    [], 0, json.dumps(metadata).encode(), b'')) as execute:
+                result = probe.prepare_dependency_cache(root, 'accepted', policy)
+            self.assertEqual(execute.call_count, 1)
+            self.assertEqual(execute.call_args.args[0][-1], policy['module'] + '@' + policy['accepted'][0])
+            self.assertEqual(result['sdkProfile'], policy['accepted'])
+            self.assertNotIn('sharedCrawlerProfile', result)
 
     def test_explicit_preparation_uses_bound_copies_and_public_checked_proxy(self):
         """test_explicit_preparation_uses_bound_copies_and_public_checked_proxy preserves original manifests."""
@@ -559,7 +654,8 @@ class CachePreparationContracts(unittest.TestCase):
                 before = [(root / name).read_bytes() for name in ('go.mod', 'go.sum')]
                 def download(args, **kwargs):
                     """download checks actual preparation arguments and copied input bytes before returning success."""
-                    self.assertEqual(args, ['go', 'mod', 'download', '-json', policy['module'] + '@' + policy[role][0]])
+                    profile = next(profile for profile in (policy, policy['sharedCrawler']) if args[-1].startswith(profile['module'] + '@'))
+                    self.assertEqual(args, ['go', 'mod', 'download', '-json', profile['module'] + '@' + profile[role][0]])
                     self.assertNotEqual(kwargs['cwd'], root)
                     self.assertEqual([(kwargs['cwd'] / name).read_bytes() for name in ('go.mod', 'go.sum')], before)
                     self.assertEqual(kwargs['timeout'], 180)
@@ -572,7 +668,7 @@ class CachePreparationContracts(unittest.TestCase):
                     self.assertEqual(env['GOWORK'], 'off')
                     self.assertEqual(env['GOFLAGS'], '-mod=readonly')
                     return subprocess.CompletedProcess(args, 0, json.dumps(dict(zip(
-                        ('Path', 'Version', 'Sum', 'GoModSum'), (policy['module'], *policy[role])))).encode(), b'')
+                        ('Path', 'Version', 'Sum', 'GoModSum'), (profile['module'], *profile[role])))).encode(), b'')
                 with mock.patch.object(probe.subprocess, 'run', side_effect=download):
                     result = probe.prepare_dependency_cache(root, role, policy)
                 self.assertEqual(result['status'], 'cache_prepared_not_qualified')
@@ -597,6 +693,46 @@ class CachePreparationContracts(unittest.TestCase):
                     with self.assertRaises(probe.ProbeError):
                         probe.prepare_dependency_cache(root, 'accepted', policy)
                 execute.assert_not_called()
+
+    def test_invalid_crawler_manifest_prevents_all_cache_downloads(self):
+        """test_invalid_crawler_manifest_prevents_all_cache_downloads validates the companion before preparation."""
+        for mutation in ('version', 'checksum', 'missing checksum'):
+            with self.subTest(mutation=mutation), self.profile() as (root, policy):
+                companion = policy['sharedCrawler']
+                if mutation == 'version':
+                    path = root / 'go.mod'
+                    path.write_text(path.read_text().replace(companion['accepted'][0], 'v1.9.9'))
+                else:
+                    path = root / 'go.sum'
+                    contents = path.read_text()
+                    path.write_text(contents.replace(companion['accepted'][1], 'h1:unreviewed') if mutation == 'checksum'
+                                    else '\n'.join(line for line in contents.splitlines() if not line.startswith(companion['module'])))
+                with mock.patch.object(probe.subprocess, 'run') as execute, self.assertRaises(probe.ProbeError):
+                    probe.prepare_dependency_cache(root, 'accepted', policy)
+                execute.assert_not_called()
+
+    def test_sdk_cache_success_cannot_mask_crawler_preparation_failure(self):
+        """test_sdk_cache_success_cannot_mask_crawler_preparation_failure fails closed after the SDK is prepared."""
+        for outcome in ('failure', 'timeout', 'Path', 'Version', 'Sum', 'GoModSum', 'Error', 'invalid JSON', 'changed copy'):
+            with self.subTest(outcome=outcome), self.profile() as (root, policy):
+                def download(args, **kwargs):
+                    """download succeeds for the SDK and then models an independently failing crawler download."""
+                    companion = args[-1].startswith(policy['sharedCrawler']['module'] + '@')
+                    if companion and outcome == 'timeout':
+                        raise subprocess.TimeoutExpired(args, 180, stderr=b'private-companion-canary')
+                    profile = policy['sharedCrawler'] if companion else policy
+                    metadata = dict(zip(('Path', 'Version', 'Sum', 'GoModSum'), (profile['module'], *profile['accepted'])))
+                    if companion and outcome in ('Path', 'Version', 'Sum', 'GoModSum', 'Error'):
+                        metadata[outcome] = 'unreviewed-value'
+                    if companion and outcome == 'changed copy':
+                        (kwargs['cwd'] / 'go.sum').write_text('unreviewed')
+                    output = b'not-json' if companion and outcome == 'invalid JSON' else json.dumps(metadata).encode()
+                    return subprocess.CompletedProcess(args, int(companion and outcome == 'failure'), output, b'private-companion-canary')
+                with mock.patch.object(probe.subprocess, 'run', side_effect=download) as execute:
+                    with self.assertRaises(probe.ProbeError) as caught:
+                        probe.prepare_dependency_cache(root, 'accepted', policy)
+                self.assertEqual(execute.call_count, 2)
+                self.assertNotIn('canary', str(caught.exception))
 
     def test_preparation_errors_or_manifest_changes_fail_visibly(self):
         """test_preparation_errors_or_manifest_changes_fail_visibly never treat download failure as acceptance."""

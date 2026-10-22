@@ -1,6 +1,6 @@
 module github.com/Laisky/go-ramjet
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
@@ -10,7 +10,7 @@ require (
 	github.com/Laisky/go-config/v2 v2.0.1-0.20221228035026-c6f14ec82d99
 	github.com/Laisky/go-utils/v6 v6.4.1-0.20261018220713-6eec9bb2d888
 	github.com/Laisky/graphql v1.0.6
-	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20261011035106-d58d6c75a705
+	github.com/Laisky/laisky-blog-graphql v1.0.2-0.20261021132434-f1aa1b9483de
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061

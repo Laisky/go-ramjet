@@ -127,7 +127,8 @@ func TestVerifiedChallengeDetectionSemanticControls(t *testing.T) {
 	}
 }
 
-// TestCrawlerResultExtendedEncoderCompatibility checks the real encoder and old pinned queue decoder.
+// TestCrawlerResultExtendedEncoderCompatibility checks the real encoder against
+// the frozen old queue schema and the current metadata-aware decoder.
 func TestCrawlerResultExtendedEncoderCompatibility(t *testing.T) {
 	task := verifiedTestTask()
 	task.TaskID = "37b25fb8-4974-4a11-a5f5-b2f6c296025c"
@@ -155,19 +156,26 @@ func TestCrawlerResultExtendedEncoderCompatibility(t *testing.T) {
 	}
 	fixture, err := os.ReadFile(fixturePath)
 	require.NoError(t, err)
-	oldDecoder, err := rlibs.NewHTMLCrawlerTaskFromString(string(fixture))
-	require.NoError(t, err, "the pinned legacy model ignores optional metadata")
+	current, err := rlibs.NewHTMLCrawlerTaskFromString(string(fixture))
+	require.NoError(t, err)
+	require.Equal(t, "conversion", current.FailureStage)
+	require.Equal(t, category, current.FailureCategory)
+	oldDecoder, oldPayload := roundTripLegacyCrawlerTask(t, string(fixture))
 	require.Equal(t, task.TaskID, oldDecoder.TaskID)
 	require.Equal(t, task.Url, oldDecoder.Url)
 	require.Equal(t, task.Status, oldDecoder.Status)
+	require.Equal(t, task.FailedReason, oldDecoder.FailedReason)
+	require.Equal(t, task.FinishedAt, oldDecoder.FinishedAt)
 	require.Equal(t, task.OutputMarkdown, oldDecoder.OutputMarkdown)
-	require.Equal(t, task.Egress, oldDecoder.Egress)
+	require.NotNil(t, oldDecoder.Egress)
+	require.Equal(t, task.Egress.Host, oldDecoder.Egress.Host)
+	require.Equal(t, task.Egress.Addresses, oldDecoder.Egress.Addresses)
+	require.Equal(t, task.Egress.MaxRedirects, oldDecoder.Egress.MaxRedirects)
+	require.Equal(t, task.Egress.AllowSubresources, oldDecoder.Egress.AllowSubresources)
 	require.Empty(t, oldDecoder.APIKey)
 	require.Empty(t, oldDecoder.ResultHTML)
 	require.Empty(t, oldDecoder.ResultMarkdown)
 	require.Nil(t, oldDecoder.EgressReceipt)
-	oldPayload, err := oldDecoder.ToString()
-	require.NoError(t, err)
 	require.NotContains(t, oldPayload, "failure_stage")
 	require.NotContains(t, oldPayload, "failure_category")
 	for _, status := range []string{rlibs.TaskStatusRunning, rlibs.TaskStatusSuccess} {

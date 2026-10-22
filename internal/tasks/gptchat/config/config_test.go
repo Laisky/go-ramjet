@@ -163,3 +163,18 @@ func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 	require.Equal(t, VoicePluginWhisper, user.Voice.Plugin)
 	require.Equal(t, "gpt-realtime-2.1-mini", user.Voice.RealtimeModel)
 }
+
+// TestSetupConfigWebFetchQueryForwarding checks the actual mapstructure wire
+// setting. The query-disclosure policy defaults to false and requires an
+// operator override in the worker's openai.web_fetch configuration.
+func TestSetupConfigWebFetchQueryForwarding(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "realtime")
+	gconfig.Shared.Set("openai.voice.realtime_model", "")
+	t.Cleanup(func() { gconfig.Shared.Set("openai.web_fetch.allow_query_forwarding", false) })
+	for _, enabled := range []bool{false, true} {
+		gconfig.Shared.Set("openai.web_fetch.allow_query_forwarding", enabled)
+		require.NoError(t, SetupConfig())
+		require.Equal(t, enabled, Config.WebFetch.AllowQueryForwarding)
+	}
+}
