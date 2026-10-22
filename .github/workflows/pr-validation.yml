@@ -170,9 +170,7 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           govulncheck ./...
 
-
-      # This companion verification is deliberately limited to issue #94's PR.
-      # General CI remains fast; this checks the exact two reviewed source heads.
+      # Qualify cross-repository behavior only for PR #95, without adding work to normal CI.
       - name: Checkout issue 94 companion caller
         if: github.event.pull_request.number == 95
         uses: actions/checkout@v6
@@ -187,14 +185,14 @@ jobs:
         timeout-minutes: 20
         shell: bash
         env:
-          EXPECTED_WORKER_HEAD: {{ github.event.pull_request.head.sha }}
+          EXPECTED_WORKER_HEAD: ${{ github.event.pull_request.head.sha }}
           EXPECTED_CALLER_HEAD: fd61b61a40178be8884608bfc132f5670260d20f
         run: |
           set -euo pipefail
-          # Checkout the *actual* PR head, not the synthetic GitHub merge commit.
-          git checkout --detach "{EXPECTED_WORKER_HEAD}"
-          test "$(git rev-parse HEAD)" = "{EXPECTED_WORKER_HEAD}"
-          test "$(git -C paired-caller rev-parse HEAD)" = "{EXPECTED_CALLER_HEAD}"
+          # Assert the actual PR head rather than the synthetic merge commit.
+          git checkout --detach "$EXPECTED_WORKER_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_WORKER_HEAD"
+          test "$(git -C paired-caller rev-parse HEAD)" = "$EXPECTED_CALLER_HEAD"
           echo "Worker head: $(git rev-parse HEAD)"
           echo "Caller head: $(git -C paired-caller rev-parse HEAD)"
           go version
@@ -205,11 +203,11 @@ jobs:
           redis-server --version
           go work init . ./paired-caller
           go test -mod=readonly -race -c \
-            -o "{RUNNER_TEMP}/issue94-ramjet-service-race.test" \
+            -o "$RUNNER_TEMP/issue94-ramjet-service-race.test" \
             ./internal/tasks/gptchat/tasks
           (
             cd paired-caller
-            CRAWLER_SERVICE_TEST_WORKER_BINARY="{RUNNER_TEMP}/issue94-ramjet-service-race.test" \
+            CRAWLER_SERVICE_TEST_WORKER_BINARY="$RUNNER_TEMP/issue94-ramjet-service-race.test" \
               go test -mod=readonly -race -count=1 -timeout=3m \
                 ./internal/mcp -run '^TestMCPWebFetchServicePath
     runs-on: ubuntu-latest
@@ -372,18 +370,18 @@ jobs:
           cache-from: type=gha,scope=pr-production-image
           cache-to: type=gha,mode=max,scope=pr-production-image
  -v \
-              | tee "{RUNNER_TEMP}/issue94-paired.log"
+              | tee "$RUNNER_TEMP/issue94-paired.log"
           )
           python3 - <<'PY'
           import os
           import pathlib
           import re
           report = pathlib.Path(os.environ["RUNNER_TEMP"], "issue94-paired.log").read_text()
-          cases = re.findall(r"^\s+--- PASS: TestMCPWebFetchServicePath/", report, re.M)
+          passed = re.findall(r"^\s+--- PASS: TestMCPWebFetchServicePath/", report, re.M)
           skipped = re.findall(r"^\s+--- SKIP: TestMCPWebFetchServicePath/", report, re.M)
-          if len(cases) != 15 or skipped:
-              raise SystemExit(f"expected 15 passed paired subcases, got {len(cases)}; skipped {len(skipped)}")
-          print(f"Paired service acceptance: {len(cases)}/15 passed; zero skipped")
+          if len(passed) != 15 or skipped:
+              raise SystemExit(f"expected 15 passed paired subcases, got {len(passed)}; skipped {len(skipped)}")
+          print(f"Paired service acceptance: {len(passed)}/15 passed; zero skipped")
           PY
 
   frontend:
