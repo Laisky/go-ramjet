@@ -3,6 +3,7 @@ package tasks
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -13,6 +14,8 @@ import (
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	htmlrenderer "github.com/yuin/goldmark/v2/renderer/html"
+
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 // crawlerContent holds accepted content and its actual acquisition provenance.
@@ -90,9 +93,31 @@ func crawlerFallbackEligible(ctx context.Context, task *rlibs.HTMLCrawlerTask, e
 	}
 }
 
+// crawlerProviderURLPermitted is the single provider-disclosure boundary for
+// verified fallback. It deliberately does not guess which query names contain
+// credentials: any query requires an explicit operator policy choice. Userinfo
+// and fragments are never needed for server-side acquisition by a provider.
+func crawlerProviderURLPermitted(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.User != nil || parsed.Fragment != "" || parsed.RawFragment != "" {
+		return false
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return currentWebFetchConfig().AllowQueryForwarding
+	}
+	return true
+}
+
 // acquireCrawlerProviderContent reuses configured adapters and priority order,
 // accepting only usable content with explicit provider provenance.
 func acquireCrawlerProviderContent(ctx context.Context, task *rlibs.HTMLCrawlerTask, directErr error) (*crawlerContent, error) {
+	if !crawlerProviderURLPermitted(task.Url) {
+		gmw.GetLogger(ctx).Named("crawler_provider_fallback").Debug("crawler provider fallback skipped by URL disclosure policy",
+			zap.String("task_id", crawlerLogTaskID(task.TaskID)), zap.String("reason", "target_url_not_authorized"))
+		// Keep the original direct failure and diagnostics. In particular, do
+		// not transmit a sanitized but semantically different URL to a provider.
+		return nil, directErr
+	}
 	proxies, err := registeredWebFetchProxies()
 	if err != nil {
 		return nil, crawlerFailure("render_failed", "render", errors.Join(directErr,
