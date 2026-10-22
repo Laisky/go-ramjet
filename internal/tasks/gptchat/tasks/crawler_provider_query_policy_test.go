@@ -17,6 +17,9 @@ import (
 // It intentionally uses unrecognizable parameter names: name heuristics are
 // not a security boundary. The policy applies only to verified fallback.
 func TestCrawlerProviderQueryRequiresExplicitPolicy(t *testing.T) {
+	originalConfig := iconfig.Config
+	iconfig.Config = nil // Assert the shipped no-override default, not another test's config.
+	t.Cleanup(func() { iconfig.Config = originalConfig })
 	for _, tc := range []struct {
 		name, target string
 		directOK     bool
