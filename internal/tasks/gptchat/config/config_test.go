@@ -164,7 +164,6 @@ func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 	require.Equal(t, "gpt-realtime-2.1-mini", user.Voice.RealtimeModel)
 }
 
-
 // TestSetupConfigWebFetchQueryForwarding checks the actual mapstructure wire
 // setting. The query-disclosure policy defaults to false and requires an
 // operator override in the worker's openai.web_fetch configuration.
