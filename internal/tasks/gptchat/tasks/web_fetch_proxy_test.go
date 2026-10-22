@@ -189,25 +189,25 @@ func Test_webFetchProviderPriority(t *testing.T) {
 // Test_extractFirecrawlContent verifies Firecrawl scrape responses produce markdown content.
 func Test_extractFirecrawlContent(t *testing.T) {
 	t.Run("markdown", func(t *testing.T) {
-		body, err := extractFirecrawlContent([]byte(`{"success":true,"data":{"markdown":"# Hello\nworld","metadata":{"statusCode":200}}}`))
+		body, err := extractFirecrawlContent(t.Context(), []byte(`{"success":true,"data":{"markdown":"# Hello\nworld","metadata":{"statusCode":200}}}`))
 		require.NoError(t, err)
 		require.Equal(t, "# Hello\nworld", body)
 	})
 
 	t.Run("target failure status", func(t *testing.T) {
-		_, err := extractFirecrawlContent([]byte(`{"success":true,"data":{"markdown":"Not Found","metadata":{"statusCode":404}}}`))
+		_, err := extractFirecrawlContent(t.Context(), []byte(`{"success":true,"data":{"markdown":"Not Found","metadata":{"statusCode":404}}}`))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "status 404")
 	})
 
 	t.Run("error response", func(t *testing.T) {
-		_, err := extractFirecrawlContent([]byte(`{"success":false,"error":"Unauthorized: Invalid token"}`))
+		_, err := extractFirecrawlContent(t.Context(), []byte(`{"success":false,"error":"Unauthorized: Invalid token"}`))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Unauthorized")
 	})
 
 	t.Run("empty content", func(t *testing.T) {
-		_, err := extractFirecrawlContent([]byte(`{"success":true,"data":{"markdown":""}}`))
+		_, err := extractFirecrawlContent(t.Context(), []byte(`{"success":true,"data":{"markdown":""}}`))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "empty content")
 	})
@@ -215,7 +215,7 @@ func Test_extractFirecrawlContent(t *testing.T) {
 
 // Test_extractScrapelessContent verifies nested Scrapeless JSON payloads can produce content.
 func Test_extractScrapelessContent(t *testing.T) {
-	body, err := extractScrapelessContent([]byte(`{"data":{"content":"<html><body>ok</body></html>"}}`))
+	body, err := extractScrapelessContent(t.Context(), []byte(`{"data":{"content":"<html><body>ok</body></html>"}}`))
 	require.NoError(t, err)
 	require.Equal(t, "<html><body>ok</body></html>", body)
 }

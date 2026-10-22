@@ -51,7 +51,16 @@ type verifiedWebFetchTransport struct{ deps rendererNetworkDependencies }
 
 // RoundTrip sends request only to admitted public provider peers and returns its
 // response without automatic redirects, environment proxies or cookie storage.
+// Configured provider API credentials require HTTPS before any network activity.
 func (t verifiedWebFetchTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL.Scheme != "https" &&
+		(request.Header.Get("Authorization") != "" || request.Header.Get("X-Api-Token") != "") {
+		err := errors.New("provider credentials require HTTPS")
+		if request.Body != nil {
+			err = errors.Join(err, request.Body.Close())
+		}
+		return nil, errors.WithStack(err)
+	}
 	lookup := t.deps.resolve
 	if lookup == nil {
 		lookup = net.DefaultResolver.LookupIPAddr

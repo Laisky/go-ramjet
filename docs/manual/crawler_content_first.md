@@ -2,7 +2,7 @@
 
 Task: **20261013-02**. Source correction for
 [go-ramjet issue 94](https://github.com/Laisky/go-ramjet/issues/94), prepared
-2026-10-21. This document describes source and synthetic acceptance; it does not
+2026-10-21 and updated 2026-10-22. This document describes source and synthetic acceptance; it does not
 claim a release or production recovery.
 
 ## Problem and system correction
@@ -28,8 +28,8 @@ Both consumers use its `VerifyAcquisition` helper.
 | Condition | Result |
 | --- | --- |
 | Direct content and valid receipt | Return direct content; no provider request. |
-| Active direct challenge, transport/header timeout, empty output or conversion failure | If the caller opted in and the worker context remains live, try configured providers. |
-| Policy/private-target/unsafe-redirect/peer/evidence/resource-budget denial | Terminal failure; no provider request. |
+| Active direct challenge, transport/header timeout, failed DNS lookup for a new renderer origin, empty output or conversion failure | If the caller supports provider acquisition and the worker context remains live, try configured providers. |
+| Policy/private-target/unsafe-redirect/peer/TLS-certificate/evidence/resource-budget denial | Terminal failure; no provider request. |
 | Empty provider output, active challenge, recognized Jina failure envelope, adapter error or oversized content | Try the next provider within the same context. |
 | Usable provider content | Return provider provenance without a direct receipt or request chain. |
 | Caller/worker context canceled or expired | Stop waiting/attempts under that context and reject late success. |
@@ -38,8 +38,10 @@ An ordinary HTTP 403 with useful content remains a direct success. Articles abou
 HTTP errors, HTML examples in `<pre>/<code>`, and fenced or inline Markdown code
 are not classified as active challenges. HTML fragments and documents are
 converted locally; Markdown is preserved as Markdown and rendered locally when
-HTML output is requested. Empty structural HTML is unusable for opted-in tasks,
-while image-only or canvas HTML retains its existing useful-content behavior.
+HTML output is requested, including GFM tables, strikethrough and task lists.
+HTML output does not require a successful Markdown conversion. Empty structural
+HTML is unusable for capable tasks, while image-only or canvas HTML retains its
+existing useful-content behavior.
 
 ## Provenance and enforcement boundaries
 
@@ -54,6 +56,11 @@ The existing task/result JSON envelope gains two optional fields:
 
 Only the producer's independent submitted snapshot grants the capability.
 Returned metadata cannot opt a direct-only request into provider acceptance.
+This wire flag advertises protocol support; effective worker configuration permits
+automatic forwarding of the whole eligible target URL, including path and query.
+Existing defaults enable Jina and Defuddle unless disabled. Public destination
+admission does not determine whether URL contents are confidential. No query-name
+or secret-name heuristics are introduced.
 Absent acquisition metadata and explicit `direct` metadata still require the
 existing receipt. A provider result requires an opted-in public target, echoed
 capability, valid bounded provider identifier, no direct receipt, and no direct
@@ -66,6 +73,11 @@ pinned dialing, actual-peer checking, hostname-verified TLS, no environment
 proxy, no automatic redirects, no cookies and bounded response reads. Wire and
 decoded gzip bodies each retain the existing 16 MiB response budget. The scoped
 client has a 30-second maximum and inherits the remaining worker context.
+The Firecrawl `Authorization` and Scrapeless `X-Api-Token` credentials require
+HTTPS before any provider DNS lookup or connection. Anonymous HTTP prefix
+providers remain compatible. Direct TLS certificate verification failures are
+terminal; actual DNS lookup errors for new renderer origins remain transport
+failures. Empty, private, mixed or rebound DNS answers remain terminal denials.
 The legacy adapter path keeps its previous client behavior.
 
 This verifies the connection to the configured provider endpoint. It does not
@@ -190,6 +202,16 @@ real-browser cases, two opt-in live-worker cases and the service helper. The
 service helper was subsequently executed by the successful explicit paired
 test. The browser/live-provider prerequisites were not available in this source
 acceptance environment; no result is inferred for them.
+
+### October 22 review follow-up
+
+The follow-up reproduced and corrected TLS/DNS classification, credentialed
+provider HTTP, GFM rendering, HTML-only conversion and adapter-level quoted
+challenge handling. The exact test-only source tree, RED cases, acceptance
+commands and compatibility controls are recorded in
+[the continuation of task 20261013-02](../../tasks/20261022_20261013-02.md).
+The tables above retain their October 21 measurements; the task record contains
+the current-source results.
 
 ## CI qualification follow-ups
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
 	"github.com/Laisky/zap"
+	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	htmlrenderer "github.com/yuin/goldmark/v2/renderer/html"
 )
@@ -166,24 +167,24 @@ func prepareCrawlerProviderContent(ctx context.Context, content string, outputMa
 		// Provider conversion must not replace the original direct-render capture.
 		conversionCtx := context.WithValue(ctx, crawlerCaptureKey{}, (*crawlerFailureCapture)(nil))
 		conversionCtx = context.WithValue(conversionCtx, crawlerContextKey{}, (*crawlerContextObservation)(nil))
-		body, markdown, err = extractVerifiedHTMLBody(conversionCtx, content, true)
+		body, markdown, err = extractVerifiedHTMLBody(conversionCtx, content, outputMarkdown)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		source := []byte(content)
-		document := parser.New().Parse(source)
+		document := parser.New(parser.WithExtensions(extension.GFMParser)).Parse(source)
 		var rendered bytes.Buffer
 		// Parse Markdown quotes/code before detecting active HTML. The detector
 		// needs raw HTML; published HTML retains the default safe rendering.
-		if err := htmlrenderer.New(htmlrenderer.WithUnsafe()).Render(&rendered, source, document); err != nil {
+		if err := htmlrenderer.New(htmlrenderer.WithExtensions(extension.GFMHTMLRenderer), htmlrenderer.WithUnsafe()).Render(&rendered, source, document); err != nil {
 			return nil, errors.Wrap(err, "render provider Markdown for challenge detection")
 		}
 		if rendered.Len() > rendererMaxResponseBytes || isCloudflareChallenge(rendered.String()) {
 			return nil, errors.New("provider returned oversized or active challenge content")
 		}
 		rendered.Reset()
-		if err := htmlrenderer.New().Render(&rendered, source, document); err != nil {
+		if err := htmlrenderer.New(htmlrenderer.WithExtensions(extension.GFMHTMLRenderer)).Render(&rendered, source, document); err != nil {
 			return nil, errors.Wrap(err, "render provider Markdown locally")
 		}
 		body = append([]byte("<body>"), rendered.Bytes()...)

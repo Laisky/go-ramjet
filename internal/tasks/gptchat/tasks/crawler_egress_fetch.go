@@ -32,6 +32,16 @@ type rendererNetworkDependencies struct {
 	rootCAs *x509.CertPool
 }
 
+// rendererResolutionError preserves a resolver failure separately from URL or
+// public-address policy rejection, without exposing the resolver's raw message.
+type rendererResolutionError struct{ cause error }
+
+// Error returns a safe description of the failed renderer hostname lookup.
+func (e *rendererResolutionError) Error() string { return "renderer hostname resolution failed" }
+
+// Unwrap retains the resolver cause for timeout and cancellation classification.
+func (e *rendererResolutionError) Unwrap() error { return e.cause }
+
 // rendererEgressFetcher admits each request, pins the connection, and records actual peers.
 type rendererEgressFetcher struct {
 	mu        sync.Mutex
@@ -120,8 +130,19 @@ func (f *rendererEgressFetcher) prepare(ctx context.Context, id, parent, raw, ki
 	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
 	addresses, exists := f.pins[host]
 	if !exists {
-		admission, err := crawleregress.AdmitURLWithResolver(ctx, raw, f.deps.resolve)
+		// Shared admission sanitizes resolver errors into input errors. Preserve
+		// the cause at the lookup boundary so transport failures are not mistaken
+		// for rejected destinations. An empty or private answer stays terminal.
+		var resolutionErr error
+		admission, err := crawleregress.AdmitURLWithResolver(ctx, raw, func(lookupCtx context.Context, host string) ([]net.IPAddr, error) {
+			var resolved []net.IPAddr
+			resolved, resolutionErr = f.deps.resolve(lookupCtx, host)
+			return resolved, resolutionErr
+		})
 		if err != nil {
+			if resolutionErr != nil {
+				return crawleregress.Admission{}, errors.WithStack(&rendererResolutionError{cause: resolutionErr})
+			}
 			return crawleregress.Admission{}, errors.Wrap(err, "admit renderer origin")
 		}
 		addresses = slices.Clone(admission.Addresses)
@@ -143,7 +164,11 @@ func (f *rendererEgressFetcher) prepare(ctx context.Context, id, parent, raw, ki
 func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind, method string, headers http.Header) (response *http.Response, body []byte, resultErr error) {
 	admission, err := f.prepare(ctx, id, parent, raw, kind, method)
 	if err != nil {
-		return nil, nil, crawlerEnforcementFailure(errors.Wrap(err, "prepare renderer request"))
+		var resolution *rendererResolutionError
+		if !errors.As(err, &resolution) {
+			err = crawlerEnforcementFailure(err)
+		}
+		return nil, nil, errors.Wrap(err, "prepare renderer request")
 	}
 	var peer string
 	originIndex := -1
@@ -199,6 +224,10 @@ func (f *rendererEgressFetcher) fetch(ctx context.Context, id, parent, raw, kind
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err = client.Do(req)
 	if err != nil {
+		var verification *tls.CertificateVerificationError
+		if errors.As(err, &verification) {
+			err = crawlerEnforcementFailure(err)
+		}
 		return nil, nil, errors.Wrap(err, "renderer exchange")
 	}
 	// Preserve selected upstream facts before browser fulfillment removes framing headers.
