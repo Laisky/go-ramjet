@@ -24,6 +24,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
+	iconfig "github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	appLog "github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -52,6 +53,12 @@ func TestCrawlerServicePathWorker(t *testing.T) {
 	}
 	require.True(t, strings.HasSuffix(socket, "/redis.sock"), "helper requires an owned disposable Redis socket")
 	preserveVerifiedWorkerSeams(t)
+	// The caller service matrix intentionally passes an owned synthetic query
+	// canary and verifies its exact receipt by the provider. This isolated
+	// test-binary worker explicitly opts in; production remains denied by default.
+	originalConfig := iconfig.Config
+	iconfig.Config = &iconfig.OpenAI{WebFetch: iconfig.WebFetchConfig{AllowQueryForwarding: true}}
+	t.Cleanup(func() { iconfig.Config = originalConfig })
 	client := redis.NewClient(&redis.Options{Network: "unix", Addr: socket, Protocol: 2, DisableIdentity: true, MaxRetries: -1})
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
