@@ -69,7 +69,7 @@ func TestVerifiedProviderHTTPAdapters(t *testing.T) {
 	for _, fixture := range providerHTTPFixtures() {
 		t.Run(fixture.name, func(t *testing.T) {
 			var requests, dials atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 				requests.Add(1)
 				require.Equal(t, "example.com", request.Host)
 				require.Equal(t, fixture.authorization, request.Header.Get("Authorization"))
@@ -91,10 +91,12 @@ func TestVerifiedProviderHTTPAdapters(t *testing.T) {
 			t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
 			t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
 			deps := rendererTestDependencies(t, server, "93.184.216.34", &dials)
+			deps.rootCAs = x509.NewCertPool()
+			deps.rootCAs.AddCert(server.Certificate())
 			ctx := withVerifiedWebFetchClient(t.Context(), deps)
 			// The worker enables enforcement again without replacing owned test dependencies.
 			ctx = withVerifiedWebFetchClient(ctx, rendererNetworkDependencies{})
-			body, err := fixture.provider("http://EXAMPLE.COM.:80").Fetch(ctx, "https://example.org/document")
+			body, err := fixture.provider("https://EXAMPLE.COM.:443").Fetch(ctx, "https://example.org/document")
 			require.NoError(t, err)
 			require.Equal(t, "provider-content", body)
 			require.EqualValues(t, 1, requests.Load())
@@ -109,7 +111,7 @@ func TestVerifiedProviderHTTPRejectsRedirects(t *testing.T) {
 	for _, fixture := range providerHTTPFixtures() {
 		t.Run(fixture.name, func(t *testing.T) {
 			var requests, dials atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 				requests.Add(1)
 				if request.Host == "redirect.example" {
 					t.Error("provider redirect must never be requested")
@@ -121,8 +123,11 @@ func TestVerifiedProviderHTTPRejectsRedirects(t *testing.T) {
 				w.WriteHeader(http.StatusTemporaryRedirect)
 			}))
 			t.Cleanup(server.Close)
-			ctx := withVerifiedWebFetchClient(t.Context(), rendererTestDependencies(t, server, "93.184.216.34", &dials))
-			body, err := fixture.provider("http://example.com").Fetch(ctx, "https://example.org/document")
+			deps := rendererTestDependencies(t, server, "93.184.216.34", &dials)
+			deps.rootCAs = x509.NewCertPool()
+			deps.rootCAs.AddCert(server.Certificate())
+			ctx := withVerifiedWebFetchClient(t.Context(), deps)
+			body, err := fixture.provider("https://example.com").Fetch(ctx, "https://example.org/document")
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "307")
 			require.Empty(t, body)
