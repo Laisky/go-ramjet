@@ -356,6 +356,11 @@ type AgentLoopSubagentConfig struct {
 
 // WebFetchConfig configures available web fetch proxy providers.
 type WebFetchConfig struct {
+	// AllowQueryForwarding explicitly permits the verified crawler fallback to
+	// send query-bearing target URLs to configured third-party providers. False
+	// by default: opaque query values may contain bearer/session credentials.
+	// This does not change direct acquisition or the legacy explicit proxy API.
+	AllowQueryForwarding bool `json:"allow_query_forwarding,omitempty" mapstructure:"allow_query_forwarding"`
 	// Jina configures the Jina proxy provider.
 	Jina PrefixWebFetchProxyConfig `json:"jina" mapstructure:"jina"`
 	// Defuddle configures the Defuddle proxy provider.
