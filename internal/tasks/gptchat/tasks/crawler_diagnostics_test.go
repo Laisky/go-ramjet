@@ -88,6 +88,17 @@ func TestVerifiedChallengeDetectionSemanticControls(t *testing.T) {
 		name, content string
 		challenge     bool
 	}{
+		{name: "readable_jsd_script", content: `<html><head><script src="/cdn-cgi/challenge-platform/scripts/jsd/api.js?onload=onload"></script></head><body><article><h1>Manage DID</h1><p>Readable article content.</p></article></body></html>`},
+		{name: "injected_jsd_script", content: `<html><head><script src="/cdn-cgi/challenge-platform/h/g/scripts/jsd/main.js"></script></head><body><article>Readable content</article></body></html>`},
+		{name: "jsd_with_challenge_title", content: `<html><head><title>Just a moment...</title><script src="/cdn-cgi/challenge-platform/h/g/jsd/r"></script></head><body><article>Readable content</article></body></html>`},
+		{name: "turnstile_api", content: `<script src="/cdn-cgi/challenge-platform/h/g/orchestrate/chl_api/v1"></script><article>Contact</article>`},
+		{name: "mode_prefix_only", content: `<script src="/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page_example/v1"></script><article>Content</article>`},
+		{name: "malformed_url", content: `<script src="http://[invalid/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1"></script><article>Content</article>`},
+		{name: "localized_managed", content: `<html><head><title>Veuillez patienter</title><script src="/cdn-cgi/challenge-platform/h/g/orchestrate/managed/v1"></script></head><body>Verification</body></html>`, challenge: true},
+		{name: "legacy_js_challenge", content: `<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/jsch/v1"></script>`, challenge: true},
+		{name: "truncated_error", content: `<html><body><div id="challenge-error-text">Blocked`, challenge: true},
+		{name: "article_with_widget", content: `<article>Readable content</article><div id="cf-chl-widget"></div>`, challenge: true},
+		{name: "article_with_assignment", content: `<article>Readable content</article><script>window._cf_chl_opt = {};</script>`, challenge: true},
 		{name: "ordinary_phrase", content: "<html><body><article><p>Just a moment... the speaker said.</p></article></body></html>"},
 		{name: "ordinary_verification_phrase", content: "<html><body><article>Verification is taking longer than expected in this example.</article></body></html>"},
 		{name: "active_script_after_division", content: "<html><body><script>const ratio = 1/2; window._cf_chl_opt = {mode: \"managed\"};</script></body></html>", challenge: true},
