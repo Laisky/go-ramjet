@@ -53,7 +53,7 @@ func findCloudflareChallengeSignal(node *html.Node) crawlerChallengeSignal {
 				if err != nil {
 					continue
 				}
-				if strings.HasPrefix(source.Path, "/cdn-cgi/challenge-platform/") {
+				if isCloudflareInterstitialScript(source.Path) {
 					return crawlerChallengePlatformScript
 				}
 			}
@@ -72,6 +72,24 @@ func findCloudflareChallengeSignal(node *html.Node) crawlerChallengeSignal {
 		}
 	}
 	return ""
+}
+
+// isCloudflareInterstitialScript reports whether path matches an observed interstitial script pattern.
+func isCloudflareInterstitialScript(path string) bool {
+	const prefix = "/cdn-cgi/challenge-platform/"
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	segments := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	for i := 0; i+1 < len(segments); i++ {
+		if segments[i] == "orchestrate" {
+			switch segments[i+1] {
+			case "chl_page", "managed", "jsch":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasCloudflareAssignment scans assignment tokens while excluding quoted strings and comments.

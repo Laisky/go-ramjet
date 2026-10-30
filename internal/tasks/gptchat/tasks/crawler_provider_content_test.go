@@ -43,6 +43,7 @@ func TestCrawlerProviderHTMLFragments(t *testing.T) {
 	for _, content := range []string{
 		"<article><h1>Article</h1><p>Useful body</p></article>",
 		"<!-- source annotation -->\n<article><h1>Article</h1><p>Useful body</p></article>",
+		`<html><head><script src="/cdn-cgi/challenge-platform/scripts/jsd/api.js"></script></head><body><h1>Article</h1><p>Useful body</p></body></html>`,
 		"<html><body><h1>Article</h1><p>Useful body</p></body></html>",
 	} {
 		for _, markdown := range []bool{true, false} {
