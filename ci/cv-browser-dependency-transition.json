@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "controlImports": [
     "github.com/chromedp/chromedp",
     "github.com/chromedp/cdproto/page",
@@ -26,9 +26,9 @@
     "h1:vR5j5xG7ZrBcGIC3HMoLbC0TC8aTXu7voSDR78cOr58="
   ],
   "current": [
-    "v6.4.1-0.20261018220713-6eec9bb2d888",
-    "h1:HsNkITiXk2W6yBco0nIOEMIts/Oz3FuT0MDReXraokA=",
-    "h1:vR5j5xG7ZrBcGIC3HMoLbC0TC8aTXu7voSDR78cOr58="
+    "v6.4.1-0.20261028151721-188dec4c3b75",
+    "h1:/4kYgZOIBWExGVx+Ipp9vCymDEsaBzrSN/QEabcWkK8=",
+    "h1:vLvMjPljlwj2GPBNx6wsc5CEl0vTcmQhwW2QCD1g12E="
   ],
   "sharedCrawler": {
     "module": "github.com/Laisky/laisky-blog-graphql",
@@ -47,5 +47,169 @@
       "h1:unDEfbTPz26ScuLl7Pu4gHEK0JOf3fAR9nzALdX7+8g=",
       "h1:9z+qfn+yAvmkNtl++OBECSA1bRBa0UZciPtKAVJV9DE="
     ]
-  }
+  },
+  "additionalTransitions": [
+    {
+      "module": "github.com/Laisky/gin-middlewares/v7",
+      "accepted": [
+        "v7.0.3-0.20260320133617-ccf155d4ffea",
+        "h1:wk5aGPVmNq9yx3B09SYzXQpQrIRsNHJ+/OL5A4PdoEk=",
+        "h1:UcIzwMbD/FZNk+f978WUp4MmnCYQzhm26yXa4X9MKL4="
+      ],
+      "exact": [
+        "v7.0.3-0.20260320133617-ccf155d4ffea",
+        "h1:wk5aGPVmNq9yx3B09SYzXQpQrIRsNHJ+/OL5A4PdoEk=",
+        "h1:UcIzwMbD/FZNk+f978WUp4MmnCYQzhm26yXa4X9MKL4="
+      ],
+      "current": [
+        "v7.0.3-0.20261028171254-114404b102a5",
+        "h1:Rt+yw/3dcHEyPLvs9ox6dh7pu9nrFzaW7ERs4HS53as=",
+        "h1:t1NO4Ifm5MEq6a8xRpB+3U8ol4AxtRg+Y4PQZ3vthwU="
+      ]
+    },
+    {
+      "module": "github.com/gabriel-vasile/mimetype",
+      "accepted": [
+        "v1.4.15",
+        "h1:05iP/CYtZ/w455R/KZM6rZ5ieAdh99UPtd+d3YzLmaI=",
+        "h1:azpTcoLcDZRNgFou5j+APrqQx9HqVPWa6ijYQIIVswQ="
+      ],
+      "exact": [
+        "v1.4.15",
+        "h1:05iP/CYtZ/w455R/KZM6rZ5ieAdh99UPtd+d3YzLmaI=",
+        "h1:azpTcoLcDZRNgFou5j+APrqQx9HqVPWa6ijYQIIVswQ="
+      ],
+      "current": [
+        "v1.4.16",
+        "h1:5izNFuvA37st1dDRAcA7TtmngBmRgiIPDmTtiEvjx1E=",
+        "h1:3oFFwxX8kTklZwzIl2aQEDZT0lKY8xH92ST88bAwba4="
+      ]
+    },
+    {
+      "module": "github.com/gammazero/deque",
+      "accepted": [
+        "v1.2.1",
+        "h1:9fnQVFCCZ9/NOc7ccTNqzoKd1tCWOqeI05/lPqFPMGQ=",
+        "h1:5nSFkzVm+afG9+gy0VIowlqVAW4N8zNcMne+CMQVD2g="
+      ],
+      "exact": [
+        "v1.2.1",
+        "h1:9fnQVFCCZ9/NOc7ccTNqzoKd1tCWOqeI05/lPqFPMGQ=",
+        "h1:5nSFkzVm+afG9+gy0VIowlqVAW4N8zNcMne+CMQVD2g="
+      ],
+      "current": [
+        "v1.2.2",
+        "h1:zD+4g/JzU5MdHWiPzMeG7OeFW5plbhYKqHfSNDnQ3E8=",
+        "h1:b0Hd32YGkBkCvq+lAX5i2bKhsBc9AJNZvv4vqNqsvJc="
+      ]
+    },
+    {
+      "module": "golang.org/x/crypto",
+      "accepted": [
+        "v0.57.0",
+        "h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M=",
+        "h1:Fdz0i5U6CoizGwLda9DttjSk6qlZo25zYNtR+ycvuZA="
+      ],
+      "exact": [
+        "v0.57.0",
+        "h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M=",
+        "h1:Fdz0i5U6CoizGwLda9DttjSk6qlZo25zYNtR+ycvuZA="
+      ],
+      "current": [
+        "v0.58.0",
+        "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54=",
+        "h1:Xh+kl5A+M0gMiWDytH2Hhr5Z7WbNCpv/eB/EFgfSk+w="
+      ]
+    },
+    {
+      "module": "golang.org/x/net",
+      "accepted": [
+        "v0.60.0",
+        "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=",
+        "h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg="
+      ],
+      "exact": [
+        "v0.60.0",
+        "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=",
+        "h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg="
+      ],
+      "current": [
+        "v0.62.0",
+        "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
+        "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI="
+      ]
+    },
+    {
+      "module": "golang.org/x/sync",
+      "accepted": [
+        "v0.23.0",
+        "h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk=",
+        "h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0="
+      ],
+      "exact": [
+        "v0.23.0",
+        "h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk=",
+        "h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0="
+      ],
+      "current": [
+        "v0.24.0",
+        "h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA=",
+        "h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0="
+      ]
+    },
+    {
+      "module": "golang.org/x/sys",
+      "accepted": [
+        "v0.48.0",
+        "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=",
+        "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+      ],
+      "exact": [
+        "v0.48.0",
+        "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=",
+        "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+      ],
+      "current": [
+        "v0.49.0",
+        "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=",
+        "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+      ]
+    },
+    {
+      "module": "golang.org/x/term",
+      "accepted": [
+        "v0.46.0",
+        "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE=",
+        "h1:+K02xbkittuwc0Am4abfA3Fc+XRGXkvBXNO88NCXPoc="
+      ],
+      "exact": [
+        "v0.46.0",
+        "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE=",
+        "h1:+K02xbkittuwc0Am4abfA3Fc+XRGXkvBXNO88NCXPoc="
+      ],
+      "current": [
+        "v0.47.0",
+        "h1:cpyOwQkr2Nzxe2p6KnrTG7Ei2wtzjsuSjhpXXepZ/BM=",
+        "h1:efAfAuG6RKABvg1ArGebRkvX6LXul14SM67o2e4mUCY="
+      ]
+    },
+    {
+      "module": "golang.org/x/text",
+      "accepted": [
+        "v0.42.0",
+        "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=",
+        "h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E="
+      ],
+      "exact": [
+        "v0.42.0",
+        "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=",
+        "h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E="
+      ],
+      "current": [
+        "v0.43.0",
+        "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=",
+        "h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s="
+      ]
+    }
+  ]
 }

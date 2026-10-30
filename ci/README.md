@@ -63,3 +63,14 @@ verification and do not qualify real browsers. Actual qualification remains
 browser tools and coordinated validation lease. Reports keep the original SDK
 fields and add distinct shared crawler profiles; passing inherited controls alone
 does not accept the update. The SDK-only schema keeps its original report shape.
+
+## Exact browser graph transition for the dependency update
+
+Schema 3 retains the historical SDK and crawler profiles, roots, and six cells.
+It also binds exactly nine additional selected modules, each with accepted, exact
+and current version/module/go.mod checksums. Gin is a direct browser control root;
+MIME detection is selected through Gin validation; deque is selected by the SDK;
+x/crypto, x/net, x/sync, x/sys, x/term and x/text are selected transitive packages.
+All other module identities remain identical. Unknown modules, changed roots,
+replacements, missing artifacts and mismatched checksums still fail closed.
+The six-cell browser run is required; cache preparation alone is not acceptance.
