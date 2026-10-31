@@ -629,6 +629,31 @@ def prepare_dependency_cache(root, role, policy):
             **({'additionalProfiles': policy['additionalTransitions']} if policy['schemaVersion'] == 3 else {})}
 
 
+def prepare_manifest_graph(root):
+    """Hydrate a bound manifest graph before offline verification without changing source."""
+    modbytes, sumbytes = (root / 'go.mod').read_bytes(), (root / 'go.sum').read_bytes()
+    environment = os.environ.copy()
+    environment.update(GOPROXY='https://proxy.golang.org', GOSUMDB='sum.golang.org', GOPRIVATE='',
+                       GONOPROXY='none', GONOSUMDB='none', GOAUTH='off', GOTOOLCHAIN='local',
+                       GOWORK='off', GOFLAGS='-mod=readonly')
+    try:
+        with tempfile.TemporaryDirectory(prefix='cv-browser-module-graph-') as temporary:
+            owner = pathlib.Path(temporary)
+            (owner / 'go.mod').write_bytes(modbytes)
+            (owner / 'go.sum').write_bytes(sumbytes)
+            process = subprocess.run(['go', 'mod', 'download'], cwd=owner, env=environment,
+                                     capture_output=True, timeout=300)
+            require((owner / 'go.mod').read_bytes() == modbytes and (owner / 'go.sum').read_bytes() == sumbytes,
+                    'browser_dependency_preparation_changed_manifest')
+            require(process.returncode == 0, 'browser_dependency_graph_preparation_failed')
+    except ProbeError:
+        raise
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ProbeError('browser_dependency_preparation_unavailable') from error
+    require((root / 'go.mod').read_bytes() == modbytes and (root / 'go.sum').read_bytes() == sumbytes,
+            'browser_dependency_preparation_changed_manifest')
+
+
 def verify_dependency_cache(root, graph):
     """verify_dependency_cache requires selected cached artifacts and verifies cached bytes without fetching."""
     environment = os.environ.copy()
@@ -702,6 +727,7 @@ def checkouts_for_ci(root, expected_head=None, prepare_cache=False):
                 paths['preparation'] = []
                 for role in ('accepted', 'exact', 'current'):
                     prepared = prepare_dependency_cache(paths[role]['path'], role, policy)
+                    prepare_manifest_graph(paths[role]['path'])
                     require_clean(paths[role]['path'], 'module_metadata_changed_during_preparation')
                     paths['preparation'].append(prepared)
             else:
