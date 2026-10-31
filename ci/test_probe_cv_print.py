@@ -53,6 +53,7 @@ def result(stdout, **changes):
 def shared_crawler_policy():
     """shared_crawler_policy binds the inherited crawler contract and the exact reviewed worker pin."""
     policy = probe.reviewed_transition()
+    policy.pop('additionalTransitions', None)
     policy['schemaVersion'] = 2
     baseline = ['v1.0.2-0.20261011035106-d58d6c75a705',
                 'h1:qQl7/KNGskIiioeWMvXBhTShXVEATElnuEYJqecd3gY=',
@@ -444,7 +445,7 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
 
     def test_exact_transition_keeps_historical_profiles_and_six_cells(self):
         """test_exact_transition_keeps_historical_profiles_and_six_cells permits only the reviewed change."""
-        policy = probe.reviewed_transition()
+        policy = shared_crawler_policy()
         snapshots = self.snapshots(policy)
         probe.require_dependency_match(snapshots, policy)
         self.assertNotEqual(snapshots['accepted'], snapshots['current'])
@@ -454,7 +455,7 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
 
     def test_unreviewed_versions_checksums_missing_or_duplicate_profiles_fail(self):
         """test_unreviewed_versions_checksums_missing_or_duplicate_profiles_fail binds both modules in every role."""
-        policy = probe.reviewed_transition()
+        policy = shared_crawler_policy()
         for profile, marker in ((policy, 'browser_sdk_profile_differs'),
                                 (policy['sharedCrawler'], 'browser_crawler_profile_differs')):
             for role in ('accepted', 'exact', 'current'):
@@ -478,7 +479,7 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
     def test_manifest_preserves_v1_and_rejects_unreviewed_companions(self):
         """test_manifest_preserves_v1_and_rejects_unreviewed_companions keeps the manifest exact and source-owned."""
         policy = shared_crawler_policy()
-        self.assertEqual(probe.reviewed_transition(), policy)
+        self.assertEqual(probe.reviewed_transition()['sharedCrawler'], policy['sharedCrawler'])
         legacy = {key: value for key, value in policy.items() if key != 'sharedCrawler'}
         legacy['schemaVersion'] = 1
         with tempfile.TemporaryDirectory(prefix='browser-reviewed-policy-') as temporary:
@@ -510,7 +511,7 @@ class ReviewedSDKTransitionContracts(unittest.TestCase):
 
     def test_other_module_and_root_changes_fail(self):
         """test_other_module_and_root_changes_fail prevents an SDK transition from exempting other controls."""
-        policy = probe.reviewed_transition()
+        policy = shared_crawler_policy()
         for column in (0, 1, 2, 3):
             snapshots = self.snapshots(policy)
             changed = []
@@ -603,7 +604,7 @@ class CachePreparationContracts(unittest.TestCase):
     @contextlib.contextmanager
     def profile(self, role='accepted', policy=None):
         """profile creates only reviewed public module bytes in an owned temporary directory."""
-        policy = policy or probe.reviewed_transition()
+        policy = policy or shared_crawler_policy()
         with tempfile.TemporaryDirectory(prefix='browser-preparation-contract-') as temporary:
             root = pathlib.Path(temporary)
             profiles = (policy,) + ((policy['sharedCrawler'],) if 'sharedCrawler' in policy else ())
@@ -634,7 +635,7 @@ class CachePreparationContracts(unittest.TestCase):
 
     def test_legacy_policy_preparation_preserves_sdk_only_report(self):
         """test_legacy_policy_preparation_preserves_sdk_only_report retains the v1 preparation contract."""
-        policy = probe.reviewed_transition()
+        policy = shared_crawler_policy()
         policy.pop('sharedCrawler')
         policy['schemaVersion'] = 1
         with self.profile(policy=policy) as (root, _):
@@ -781,4 +782,5 @@ class CachePreparationContracts(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    from test_browser_transition_v3 import BrowserTransitionV3Contracts
     unittest.main()

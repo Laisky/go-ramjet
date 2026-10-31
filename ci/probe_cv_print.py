@@ -34,6 +34,17 @@ CONTROL_IMPORTS = ('github.com/chromedp/chromedp', 'github.com/chromedp/cdproto/
                    'github.com/pdfcpu/pdfcpu/pkg/api', 'github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model',
                    'github.com/stretchr/testify/require', 'github.com/Laisky/gin-middlewares/v7',
                    'github.com/Laisky/laisky-blog-graphql/library/db/redis')
+EXTRA_TRANSITION_MODULES = (
+    'github.com/Laisky/gin-middlewares/v7',
+    'github.com/gabriel-vasile/mimetype',
+    'github.com/gammazero/deque',
+    'golang.org/x/crypto',
+    'golang.org/x/net',
+    'golang.org/x/sync',
+    'golang.org/x/sys',
+    'golang.org/x/term',
+    'golang.org/x/text',
+)
 CV_PACKAGE = 'github.com/Laisky/go-ramjet/internal/tasks/cv'
 TASK_PACKAGE = 'github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks'
 PACKAGES = {CV_PACKAGE: 'cv', TASK_PACKAGE: 'renderer'}
@@ -514,7 +525,7 @@ def unique_policy_fields(pairs):
 
 def reviewed_profiles(policy):
     """reviewed_profiles returns the SDK and optional exact shared crawler companion, never arbitrary modules."""
-    return (policy,) + ((policy['sharedCrawler'],) if policy['schemaVersion'] == 2 else ())
+    return (policy,) + ((policy['sharedCrawler'],) if policy['schemaVersion'] >= 2 else ()) + (tuple(policy['additionalTransitions']) if policy['schemaVersion'] == 3 else ())
 
 
 def reviewed_transition(path=None):
@@ -526,22 +537,26 @@ def reviewed_transition(path=None):
         raise ProbeError('browser_dependency_policy_unavailable') from error
     require(isinstance(policy, dict), 'browser_dependency_policy_invalid')
     version = policy.get('schemaVersion')
-    require(type(version) is int and version in (1, 2), 'browser_dependency_policy_invalid')
+    require(type(version) is int and version in (1, 2, 3), 'browser_dependency_policy_invalid')
     require(set(policy) == {'schemaVersion', 'controlImports', 'module', 'accepted', 'exact', 'current'} |
-            ({'sharedCrawler'} if version == 2 else set()), 'browser_dependency_policy_invalid')
+            ({'sharedCrawler'} if version >= 2 else set()) | ({'additionalTransitions'} if version == 3 else set()), 'browser_dependency_policy_invalid')
     require(policy['module'] == 'github.com/Laisky/go-utils/v6', 'browser_dependency_policy_invalid')
-    if version == 2:
+    if version >= 2:
         companion = policy['sharedCrawler']
         require(isinstance(companion, dict) and set(companion) == {'module', 'accepted', 'exact', 'current'} and
                 companion['module'] == 'github.com/Laisky/laisky-blog-graphql', 'browser_dependency_policy_invalid')
+    if version == 3:
+        extra = policy['additionalTransitions']
+        require(isinstance(extra, list) and all(isinstance(item, dict) and set(item) == {'module', 'accepted', 'exact', 'current'} for item in extra), 'browser_dependency_policy_invalid')
+        require(tuple(item['module'] for item in extra) == EXTRA_TRANSITION_MODULES, 'browser_dependency_policy_invalid')
     require(policy['controlImports'] == list(CONTROL_IMPORTS), 'browser_dependency_roots_differ')
     for profile in reviewed_profiles(policy):
-        major = '6' if profile is policy else '1'
+        major = '6' if profile is policy else ('1' if profile is policy.get('sharedCrawler') else '[0-9]+')
         for role in ('accepted', 'exact', 'current'):
             row = profile[role]
             require(isinstance(row, list) and len(row) == 3 and all(isinstance(value, str) for value in row),
                     'browser_dependency_policy_invalid')
-            require(bool(re.fullmatch(r'v' + major + r'[.][0-9]+[.][0-9]+-0[.][0-9]{14}-[0-9a-f]{12}', row[0])) and
+            require(bool(re.fullmatch(r'v' + major + r'[.][0-9]+[.][0-9]+' + (r'(?:-0[.][0-9]{14}-[0-9a-f]{12})?' if major == '[0-9]+' else r'-0[.][0-9]{14}-[0-9a-f]{12}'), row[0])) and
                     all(re.fullmatch(r'h1:[A-Za-z0-9+/]{43}=', value) for value in row[1:]),
                     'browser_dependency_policy_invalid')
         require(profile['accepted'] == profile['exact'] and profile['current'] != profile['accepted'],
@@ -559,7 +574,7 @@ def require_dependency_match(snapshots, policy=None):
     inherited = {}
     for profile in reviewed_profiles(policy):
         module = profile['module']
-        marker = 'browser_sdk_profile_differs' if profile is policy else 'browser_crawler_profile_differs'
+        marker = 'browser_sdk_profile_differs' if profile is policy else ('browser_crawler_profile_differs' if profile is policy.get('sharedCrawler') else 'browser_reviewed_profile_differs')
         for role in ('accepted', 'exact', 'current'):
             actual = tuple(row for row in snapshots[role] if row[0] == module)
             require(actual == ((module, *profile[role]),), marker)
@@ -610,7 +625,33 @@ def prepare_dependency_cache(root, role, policy):
             'browser_dependency_preparation_changed_manifest')
     return {'role': role, 'sdkProfile': policy[role], 'goModSHA256': digest(modbytes),
             'goSumSHA256': digest(sumbytes), 'status': 'cache_prepared_not_qualified',
-            **({'sharedCrawlerProfile': policy['sharedCrawler'][role]} if policy['schemaVersion'] == 2 else {})}
+            **({'sharedCrawlerProfile': policy['sharedCrawler'][role]} if policy['schemaVersion'] >= 2 else {}),
+            **({'additionalProfiles': policy['additionalTransitions']} if policy['schemaVersion'] == 3 else {})}
+
+
+def prepare_manifest_graph(root):
+    """Hydrate a bound manifest graph before offline verification without changing source."""
+    modbytes, sumbytes = (root / 'go.mod').read_bytes(), (root / 'go.sum').read_bytes()
+    environment = os.environ.copy()
+    environment.update(GOPROXY='https://proxy.golang.org', GOSUMDB='sum.golang.org', GOPRIVATE='',
+                       GONOPROXY='none', GONOSUMDB='none', GOAUTH='off', GOTOOLCHAIN='local',
+                       GOWORK='off', GOFLAGS='-mod=readonly')
+    try:
+        with tempfile.TemporaryDirectory(prefix='cv-browser-module-graph-') as temporary:
+            owner = pathlib.Path(temporary)
+            (owner / 'go.mod').write_bytes(modbytes)
+            (owner / 'go.sum').write_bytes(sumbytes)
+            process = subprocess.run(['go', 'mod', 'download'], cwd=owner, env=environment,
+                                     capture_output=True, timeout=300)
+            require((owner / 'go.mod').read_bytes() == modbytes and (owner / 'go.sum').read_bytes() == sumbytes,
+                    'browser_dependency_preparation_changed_manifest')
+            require(process.returncode == 0, 'browser_dependency_graph_preparation_failed')
+    except ProbeError:
+        raise
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ProbeError('browser_dependency_preparation_unavailable') from error
+    require((root / 'go.mod').read_bytes() == modbytes and (root / 'go.sum').read_bytes() == sumbytes,
+            'browser_dependency_preparation_changed_manifest')
 
 
 def verify_dependency_cache(root, graph):
@@ -686,6 +727,7 @@ def checkouts_for_ci(root, expected_head=None, prepare_cache=False):
                 paths['preparation'] = []
                 for role in ('accepted', 'exact', 'current'):
                     prepared = prepare_dependency_cache(paths[role]['path'], role, policy)
+                    prepare_manifest_graph(paths[role]['path'])
                     require_clean(paths[role]['path'], 'module_metadata_changed_during_preparation')
                     paths['preparation'].append(prepared)
             else:
@@ -700,11 +742,13 @@ def checkouts_for_ci(root, expected_head=None, prepare_cache=False):
                                               'sdkModule': policy['module'], 'acceptedSDK': policy['accepted'],
                                               'exactSDK': policy['exact'], 'currentSDK': policy['current'],
                                               'cacheVerification': 'selected_artifacts_present_and_go_mod_verify'}
-                if policy['schemaVersion'] == 2:
+                if policy['schemaVersion'] >= 2:
                     companion = policy['sharedCrawler']
                     paths['dependencyBinding'].update(sharedCrawlerModule=companion['module'],
                         acceptedSharedCrawler=companion['accepted'], exactSharedCrawler=companion['exact'],
                         currentSharedCrawler=companion['current'])
+                if policy['schemaVersion'] == 3:
+                    paths['dependencyBinding']['additionalTransitions'] = policy['additionalTransitions']
             yield paths
             for role in ('accepted', 'exact', 'current'):
                 entry = paths[role]
