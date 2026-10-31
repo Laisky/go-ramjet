@@ -74,3 +74,16 @@ x/crypto, x/net, x/sync, x/sys, x/term and x/text are selected transitive packag
 All other module identities remain identical. Unknown modules, changed roots,
 replacements, missing artifacts and mismatched checksums still fail closed.
 The six-cell browser run is required; cache preparation alone is not acceptance.
+
+
+### Fast PR checks and full qualification
+
+PR validation runs format, unit and regression checks once. A current-source
+browser smoke runs when Go, dependency or browser CI inputs change; it retains
+the browser identity and network controls. The historical six-cell browser
+matrix, SPA benchmark and production-image build run through the
+`pull-request-validation` workflow's manual dispatch with an explicit base
+commit. Optional issue-94 paired-service qualification is available there.
+The separate `Bolt verification` workflow is manually dispatched with a base
+commit for full head verification and the renderer benchmark. Select the
+candidate branch and record its exact commit before release qualification.

@@ -4,12 +4,23 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Base commit to compare for formatting
+        required: true
+        type: string
+      run_paired:
+        description: Run issue 94 paired-service qualification
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: pull-request-validation-${{ github.event.pull_request.number }}
+  group: pull-request-validation-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -25,6 +36,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Detect browser-relevant changes
+        id: browser_scope
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B ci/fast_ci_scope.py "$BASE_SHA" "$HEAD_SHA"
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -52,8 +71,8 @@ jobs:
       - name: Verify changed Go formatting
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           go install golang.org/x/tools/cmd/goimports@v0.51.0
           mapfile -t go_files < <(
@@ -123,22 +142,32 @@ jobs:
         run: |
           python3 -B ci/test_probe_cv_print.py
           python3 -B ci/test_browser_cache_graph.py
+          python3 -B ci/test_fast_ci.py
 
       - name: Run Go tests
         run: go test ./... -count=1
 
-      - name: Prepare immutable browser dependency cache profiles
-        id: cv_print_prepare
-        timeout-minutes: 10
-        env:
-          CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: python3 -B ci/probe_cv_print.py --prepare-cache
-
-      - name: Run browser dependency integration tests
-        id: cv_print_probe
+      - name: Run current browser smoke
+        if: github.event_name == 'pull_request' && steps.browser_scope.outputs.browser == 'true'
         env:
           CRAWLER_HTTP_PROXY: ''
           CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -B ci/probe_cv_smoke.py
+
+      - name: Prepare immutable browser dependency cache profiles
+        if: github.event_name == 'workflow_dispatch'
+        id: cv_print_prepare
+        timeout-minutes: 10
+        env:
+          CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 -B ci/probe_cv_print.py --prepare-cache
+
+      - name: Run browser dependency integration tests
+        if: github.event_name == 'workflow_dispatch'
+        id: cv_print_probe
+        env:
+          CRAWLER_HTTP_PROXY: ''
+          CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           command -v google-chrome || command -v chromium
           command -v pdftotext
@@ -153,9 +182,6 @@ jobs:
             /tmp/task02-cv-print-cache-preparation.json
             /tmp/task02-cv-print-probe-report.json
           if-no-files-found: error
-
-      - name: Verify browser process network confinement
-        run: go test ./cmd/crawler-browser-launcher -count=1
 
       - name: Run go vet
         run: go vet ./...
@@ -174,7 +200,7 @@ jobs:
 
       # Qualify cross-repository behavior only for PR #95; normal CI stays fast.
       - name: Checkout issue 94 companion caller
-        if: github.event.pull_request.number == 95
+        if: github.event.pull_request.number == 95 || (github.event_name == 'workflow_dispatch' && inputs.run_paired)
         uses: actions/checkout@v6
         with:
           repository: Laisky/laisky-blog-graphql
@@ -183,11 +209,11 @@ jobs:
           persist-credentials: false
 
       - name: Run issue 94 paired service behavior (race)
-        if: github.event.pull_request.number == 95
+        if: github.event.pull_request.number == 95 || (github.event_name == 'workflow_dispatch' && inputs.run_paired)
         timeout-minutes: 20
         shell: bash
         env:
-          EXPECTED_WORKER_HEAD: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_WORKER_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           EXPECTED_CALLER_HEAD: fd61b61a40178be8884608bfc132f5670260d20f
         run: |
           set -euo pipefail
@@ -250,8 +276,8 @@ jobs:
       - name: Check changed frontend formatting
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mapfile -t frontend_files < <(
             git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}" -- web \
@@ -277,6 +303,7 @@ jobs:
         run: pnpm -C web build
 
   benchmark:
+    if: github.event_name == 'workflow_dispatch'
     name: SPA metadata benchmark
     runs-on: ubuntu-latest
     steps:
@@ -364,6 +391,7 @@ jobs:
           PY
 
   image:
+    if: github.event_name == 'workflow_dispatch'
     name: Production image build
     runs-on: ubuntu-latest
     needs:
