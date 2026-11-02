@@ -11,7 +11,7 @@
 export const ChatModelGPT6Astra = 'gpt-6-astra'
 export const ChatModelGPT5Dot6 = 'gpt-5.6'
 export const ChatModelGPT6Sol = 'gpt-6.1-sol'
-export const ChatModelGPT5Dot6Astra = 'gpt-6-astra'
+export const ChatModelGPT6Dot1Terra = 'gpt-6.1-terra'
 export const ChatModelGPT6Luna = 'gpt-6-luna'
 // export const ChatModelGPT5Dot1 = 'gpt-5.1'
 // export const ChatModelGPT5Dot1Codex = 'gpt-5.1-codex'
@@ -39,7 +39,7 @@ export const ChatModelClaudeMythos51 = 'claude-mythos-5-1'
 export const ChatModelClaudeSonnet5 = 'claude-sonnet-5-5'
 export const ChatModelClaude45Haiku = 'claude-haiku-4-5'
 // export const ChatModelGemini25Pro = 'gemini-2.5-pro'
-export const ChatModelGemini3dot1Pro = 'gemini-3.1-pro-preview'
+export const ChatModelGemini4Argon = 'gemini-4-argon'
 export const ChatModelGemini35FlashLite = 'gemini-3.5-flash-lite'
 export const ChatModelGemini38Flash = 'gemini-3.8-flash'
 export const ChatModelGemini31FlashImage = 'gemini-3.1-flash-image-preview'
@@ -90,7 +90,7 @@ export const ChatModels = [
   ChatModelGPT6Astra,
   ChatModelGPT5Dot6,
   ChatModelGPT6Sol,
-  ChatModelGPT5Dot6Astra,
+  ChatModelGPT6Dot1Terra,
   ChatModelGPT6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
@@ -124,7 +124,7 @@ export const ChatModels = [
   ChatModelGlm5Dot3,
   ChatModelGrok4Dot7,
   // ChatModelGemini25Pro,
-  ChatModelGemini3dot1Pro,
+  ChatModelGemini4Argon,
   ChatModelGemini35FlashLite,
   ChatModelGemini38Flash,
   ChatModelGemini31FlashImage,
@@ -140,7 +140,7 @@ export const VisionModels = [
   ChatModelGPT6Astra,
   ChatModelGPT5Dot6,
   ChatModelGPT6Sol,
-  ChatModelGPT5Dot6Astra,
+  ChatModelGPT6Dot1Terra,
   ChatModelGPT6Luna,
   // ChatModelGPT5Dot1Codex,
   ChatModelGPT5Dot3Codex,
@@ -149,7 +149,7 @@ export const VisionModels = [
   // ChatModelGPT5Pro,
   ChatModelGPT4OMini,
   // ChatModelGemini25Pro,
-  ChatModelGemini3dot1Pro,
+  ChatModelGemini4Argon,
   ChatModelGemini35FlashLite,
   ChatModelGemini38Flash,
   ChatModelGemini31FlashImage,
@@ -239,7 +239,7 @@ export const ModelCategories: Record<string, string[]> = {
     ChatModelGPT6Astra,
     ChatModelGPT5Dot6,
     ChatModelGPT6Sol,
-    ChatModelGPT5Dot6Astra,
+    ChatModelGPT6Dot1Terra,
     ChatModelGPT6Luna,
     // ChatModelGPT5Dot1Codex,
     ChatModelGPT5Dot3Codex,
@@ -266,7 +266,7 @@ export const ModelCategories: Record<string, string[]> = {
   ],
   Google: [
     // ChatModelGemini25Pro,
-    ChatModelGemini3dot1Pro,
+    ChatModelGemini4Argon,
     ChatModelGemini35FlashLite,
     ChatModelGemini38Flash,
     ChatModelGemini31FlashImage,
