@@ -113,7 +113,7 @@ func TestCrawlerChallengeSignalWorkerSerialization(t *testing.T) {
 		{"widget_class", `<div class="other cf-chl-widget">private-body-canary</div>`, "widget_element"},
 		{"error_id", `<div id="challenge-error-text">private-body-canary</div>`, "error_element"},
 		{"error_class", `<div class="challenge-error-text">private-body-canary</div>`, "error_element"},
-		{"platform_script", `<script src="https://private-resource.invalid/cdn-cgi/challenge-platform/h/g?api_key=private-key-canary"></script>`, "challenge_platform_script"},
+		{"platform_script", `<script src="https://private-resource.invalid/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?api_key=private-key-canary"></script>`, "challenge_platform_script"},
 		{"options_assignment", `<script>window._cf_chl_opt = {private: "private-body-canary"};</script>`, "challenge_options_assignment"},
 		{"first_dom_match", `<div id="challenge-error-text"></div><div id="cf-chl-widget"></div>`, "error_element"},
 		{"first_attribute_match", `<div id="cf-chl-widget" class="challenge-error-text"></div>`, "widget_element"},
