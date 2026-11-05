@@ -3,7 +3,6 @@ package log
 
 import (
 	glog "github.com/Laisky/go-utils/v6/log"
-	"github.com/Laisky/zap"
 )
 
 var Logger glog.Logger
@@ -15,5 +14,5 @@ func init() {
 		panic(err)
 	}
 
-	Logger.WithOptions(zap.HooksWithFields())
+	Logger = Logger.WithOptions(privateOTLPOption())
 }

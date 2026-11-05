@@ -2,10 +2,13 @@
 package web
 
 import (
+	"context"
+	stderrors "errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
@@ -71,6 +74,13 @@ func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // RunServer starts the HTTP server on the provided address and blocks until it exits, returning no value.
 func RunServer(addr string) {
+	if err := RunServerContext(context.Background(), addr); err != nil {
+		log.Logger.Panic("Server exit", zap.Error(err))
+	}
+}
+
+// RunServerContext serves requests until cancellation, then bounds graceful draining.
+func RunServerContext(ctx context.Context, addr string) error {
 	if err := gmw.EnableMetric(Server); err != nil {
 		log.Logger.Panic("enable metrics", zap.Error(err))
 	}
@@ -96,5 +106,38 @@ func RunServer(addr string) {
 	}
 
 	log.Logger.Info("listening on http", zap.String("addr", addr))
-	log.Logger.Panic("Server exit", zap.Error(httpSrv.ListenAndServe()))
+	return serveUntilCanceled(ctx, httpSrv)
+}
+
+// serveUntilCanceled stops HTTP admission on cancellation and waits for bounded draining.
+func serveUntilCanceled(ctx context.Context, server *http.Server) error {
+	done := make(chan struct{})
+	drained := make(chan error, 1)
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				if closeErr := server.Close(); closeErr != nil {
+					drained <- errors.Wrap(closeErr, "close HTTP server")
+					return
+				}
+				drained <- errors.Wrap(err, "drain HTTP server")
+				return
+			}
+			drained <- nil
+		case <-done:
+			drained <- nil
+		}
+	}()
+	err := server.ListenAndServe()
+	close(done)
+	if drainErr := <-drained; drainErr != nil {
+		return drainErr
+	}
+	if err != nil && !stderrors.Is(err, http.ErrServerClosed) {
+		return errors.Wrap(err, "serve HTTP")
+	}
+	return nil
 }
