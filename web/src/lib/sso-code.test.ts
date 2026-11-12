@@ -74,6 +74,10 @@ describe('registered SSO migration', () => {
   })
   it.each([
     'wrong-app',
+    'root-landing-mismatch',
+    'unknown-route',
+    'backslash-return',
+    'control-return',
     'expired',
     'future',
     'duplicate-state',
@@ -86,6 +90,11 @@ describe('registered SSO migration', () => {
     const pending = JSON.parse(
       sessionStorage.getItem('ramjet_sso_code_pending')!,
     )
+    if (problem === 'wrong-app') pending.app = 'chat'
+    if (problem === 'root-landing-mismatch') pending.returnTo = '/'
+    if (problem === 'unknown-route') pending.returnTo = '/other'
+    if (problem === 'backslash-return') pending.returnTo = '/\\other-host/'
+    if (problem === 'control-return') pending.returnTo = '/\t/other-host/'
     if (problem === 'expired') pending.created -= 600001
     if (problem === 'future') pending.created += 60000
     if (problem === 'external-return') pending.returnTo = '//attacker.example/'
@@ -102,7 +111,11 @@ describe('registered SSO migration', () => {
         (problem === 'duplicate-state' ? '&sso_state=' + pending.state : ''),
     )
     vi.stubGlobal('fetch', vi.fn())
-    await completeCodeSignIn(problem === 'wrong-app' ? 'chat' : 'cv')
+    await completeCodeSignIn(
+      problem === 'wrong-app' || problem === 'root-landing-mismatch'
+        ? 'chat'
+        : 'cv',
+    )
     expect(fetch).not.toHaveBeenCalled()
     expect(readCodeSession('cv')).toBeNull()
     expect(location.search).toBe('')
@@ -136,6 +149,7 @@ describe('registered SSO migration', () => {
   )
 
   it('retains a successfully exchanged session in memory when persistence is unavailable', async () => {
+    history.replaceState(null, '', '/gptchat')
     await beginCodeSignIn('chat')
     const pending = JSON.parse(
       sessionStorage.getItem('ramjet_sso_code_pending')!,

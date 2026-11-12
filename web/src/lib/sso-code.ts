@@ -50,6 +50,34 @@ function equalState(a: string, b: string): boolean {
   return difference === 0
 }
 
+/** registryClient binds issuer registration to a hostname, independently of the app route. */
+function registryClient(hostname: string, app: SsoApp): string {
+  const hosts: Record<string, string> = {
+    'cv.laisky.com': 'ramjet-cv',
+    'chat.laisky.com': 'ramjet-chat',
+    'chat2.laisky.com': 'ramjet-chat2',
+  }
+  return Object.hasOwn(hosts, hostname) ? hosts[hostname] : 'ramjet-' + app
+}
+
+/** returnApp validates a stored route against the actual SPA routes and root landing app. */
+function returnApp(returnTo: unknown, landing: SsoApp | null): SsoApp | null {
+  if (
+    typeof returnTo !== 'string' ||
+    !returnTo.startsWith('/') ||
+    returnTo.startsWith('//') ||
+    returnTo.includes('\\') ||
+    /[\p{Cc}]/u.test(returnTo)
+  )
+    return null
+  const parsed = new URL(returnTo, window.location.origin)
+  if (parsed.origin !== window.location.origin) return null
+  const path = parsed.pathname.toLowerCase().replace(/\/+$/, '') || '/'
+  if (path === '/cv') return 'cv'
+  if (path === '/gptchat') return 'chat'
+  return path === '/' ? landing : null
+}
+
 /** beginCodeSignIn stores tab-local PKCE state and builds a registered callback request. */
 export async function beginCodeSignIn(app: SsoApp): Promise<string> {
   const current = new URL(window.location.href)
@@ -82,7 +110,7 @@ export async function beginCodeSignIn(app: SsoApp): Promise<string> {
   sessionStorage.setItem(pendingKey, JSON.stringify(pending))
   callback.search = new URLSearchParams({
     sso_flow: 'code',
-    sso_client_id: 'ramjet-' + app,
+    sso_client_id: registryClient(current.hostname, app),
     sso_state: state,
     sso_challenge: challenge,
     sso_challenge_method: 'S256',
@@ -116,12 +144,12 @@ export async function completeCodeSignIn(app: SsoApp | null): Promise<void> {
   } catch {
     return
   }
-  if (
-    app === null &&
-    pending &&
-    (pending.app === 'cv' || pending.app === 'chat')
-  )
-    app = pending.app
+  // App identity comes from the bound return route, not the callback root's host theme.
+  // This preserves /cv and /gptchat on all supported hosts without mixing sessions.
+  if (!pending || (pending.app !== 'cv' && pending.app !== 'chat')) return
+  const targetApp = returnApp(pending?.returnTo, app || pending?.app)
+  if (!targetApp || pending?.app !== targetApp) return
+  app = targetApp
   if (
     !pending ||
     !app ||
@@ -153,7 +181,7 @@ export async function completeCodeSignIn(app: SsoApp | null): Promise<void> {
       referrerPolicy: 'no-referrer',
       signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({
-        client_id: 'ramjet-' + app,
+        client_id: registryClient(url.hostname, app),
         redirect_uri: pending.callback,
         code: codes[0],
         state: states[0],
