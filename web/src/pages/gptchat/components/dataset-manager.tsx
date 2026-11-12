@@ -389,7 +389,13 @@ function DatasetManagerContent({
                 variant="outline"
                 onClick={() => {
                   try {
-                    window.location.assign(ownershipSignInURL())
+                    void ownershipSignInURL()
+                      .then((url) => window.location.assign(url))
+                      .catch(() =>
+                        window.alert(
+                          'Unable to start SSO. Please allow session storage and try again.',
+                        ),
+                      )
                   } catch {
                     setDatasetError(
                       'Sign-in needs browser session storage. Please enable it and try again.',
