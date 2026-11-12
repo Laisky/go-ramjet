@@ -10,6 +10,7 @@ Register these clients at the issuer before deploying this consumer:
 | --- | --- |
 | ramjet-cv | https://cv.laisky.com/ |
 | ramjet-chat | https://chat.laisky.com/ |
+| ramjet-chat | https://chat2.laisky.com/ |
 
 These are public browser clients, without client secrets. The issuer must allow
 the corresponding origins for its token-exchange CORS responses. Registration
@@ -61,3 +62,10 @@ History retrieval and recording: the coordinator reported FileIO access denied.
 That denial was not bypassed or retried in this work. FileIO search/readback is
 therefore incomplete; this document and the PR description retain task evidence
 until authorized access is restored. No credentials or request payloads are saved.
+
+Acceptance checks: 57 focused tests passed, TypeScript build check passed, and
+targeted ESLint passed. Production Vite build passed (existing chunk warnings).
+The first full-suite run after fixture migration passed 667/669 tests; two
+chat-domain renders hit their unchanged 5-second timeout under parallel load.
+A bounded-worker full-suite rerun is recorded in the PR description. The separate
+private source-map contract tests passed in pnpm test before Vitest ran.
