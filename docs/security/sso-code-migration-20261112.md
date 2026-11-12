@@ -69,3 +69,11 @@ The first full-suite run after fixture migration passed 667/669 tests; two
 chat-domain renders hit their unchanged 5-second timeout under parallel load.
 A bounded-worker full-suite rerun is recorded in the PR description. The separate
 private source-map contract tests passed in pnpm test before Vitest ran.
+
+## Resumed acceptance (2026-11-12)
+
+- The prior frontend timeout did not reproduce in GitHub Actions: full frontend tests, lint, and build succeeded for `3a5458e` (run `43153639201`). This is evidence against changing application behavior or loosening test timeouts.
+- The same run stopped backend validation in release-contract tests: three `KeyError: password` failures. Reproduced locally before the fix. The workflow already uses SSH key authentication and host fingerprint verification; the contract was stale. Updated the assertion without changing deployment credentials/settings, retained `latest`, and added negative controls for missing/changed keys/fingerprints and password reintroduction. All 29 contracts pass.
+- Verified that the logger dependency redacts generic `code`/`token`, but not `sso_code`/`sso_token`. Behavioral requests reproduced these credentials reaching the inner HTTP handler before logger/recovery. The outer HTTP normalization boundary now redacts both fields and RequestURI before any middleware; browser URL processing is unaffected. Duplicate, mixed-case, percent-encoded, malformed-name/value cases are regression coverage; ordinary valid query bytes are unchanged. The library/web race suite passes (1.102s); registered cv/chat/chat2 root callbacks return the SPA without a redirect. Full `go test ./... -count=1` and `go vet ./...` pass; golangci-lint reports zero issues.
+- FileIO evidence retrieval/storage remains unavailable due the prior authorization denial. No later search or verified FileIO closeout is claimed. Private local instruction-file access was also denied; no bypass was attempted.
+- This remains a Draft client migration. Registry activation, merge and deployment are not claimed complete; full backend acceptance and independent review are required before readiness.

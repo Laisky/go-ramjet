@@ -50,6 +50,7 @@ type normalizeHandler struct {
 
 // ServeHTTP normalizes the request URL in r and forwards it to h.handler, returning no value.
 func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	redactSSOQuery(r)
 	// Nginx's proxy_pass might merge the prefix with the next component
 	// if trailing slashes are mismatched.
 	// e.g., /gptchat/version -> /gptchatversion

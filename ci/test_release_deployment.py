@@ -552,10 +552,12 @@ class ReleaseWorkflowWiringContract(unittest.TestCase):
         self.assertEqual(len(ssh), 1)
         self.assert_required_step(ssh[0])
         inputs = ssh[0]["with"]
-        self.assertEqual({key: inputs[key] for key in ("host", "username", "password", "port")}, {
+        self.assertEqual({key: inputs.get(key) for key in ("host", "username", "key", "fingerprint", "port")}, {
             "host": "${{ secrets.TARGET_HOST }}", "username": "${{ secrets.TARGET_HOST_USERNAME }}",
-            "password": "${{ secrets.TARGET_HOST_PASSWORD }}", "port": "${{ secrets.TARGET_HOST_SSH_PORT }}",
+            "key": "${{ secrets.TARGET_HOST_SSH_KEY }}",
+            "fingerprint": "${{ secrets.TARGET_HOST_FINGERPRINT }}", "port": "${{ secrets.TARGET_HOST_SSH_PORT }}",
         })
+        self.assertNotIn("password", inputs)
         self.assertIsInstance(inputs["script"], str)
         self.assertTrue(inputs["script"].strip())
 
@@ -654,6 +656,11 @@ class ReleaseWorkflowWiringContract(unittest.TestCase):
             ("wrong-output", lambda model: build(model).update({"build-args": "${{ steps.unrelated.outputs.build_args }}"})),
             ("late-helper", delay_bridge),
             ("changed-ssh-target", lambda model: ssh_step(model)["with"].update(host="unreviewed-host")),
+            ("missing-host-fingerprint", lambda model: ssh_step(model)["with"].pop("fingerprint")),
+            ("changed-host-fingerprint", lambda model: ssh_step(model)["with"].update(fingerprint="unreviewed")),
+            ("missing-ssh-key", lambda model: ssh_step(model)["with"].pop("key")),
+            ("changed-ssh-key", lambda model: ssh_step(model)["with"].update(key="unreviewed")),
+            ("password-auth-restored", lambda model: ssh_step(model)["with"].update(password="unreviewed")),
             ("ssh-skipped", lambda model: ssh_step(model).update({"if": False})),
             ("ssh-failure-ignored", lambda model: ssh_step(model).update({"continue-on-error": True})),
         )
