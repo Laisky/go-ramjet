@@ -40,3 +40,38 @@ it('keeps the CV host client binding while completing Chat on its supported cros
     '/gptchat?theme=dark#draft',
   )
 })
+
+it.each(['network', 'http', 'invalid-json', 'invalid-token'])(
+  'restores a validated cross-route and preserves both sessions after %s failure',
+  async (failure) => {
+    vi.stubGlobal('crypto', webcrypto)
+    const returnTo = '/gptchat?tab=data#draft'
+    history.replaceState(null, '', returnTo)
+    localStorage.setItem('cv_sso_token', 'existing-cv')
+    localStorage.setItem('gptchat_ownership_sso_token', 'existing-chat')
+    await beginCodeSignIn('chat')
+    const pending = JSON.parse(
+      sessionStorage.getItem('ramjet_sso_code_pending')!,
+    )
+    history.replaceState(
+      null,
+      '',
+      '/?sso_code=single-use&sso_state=' + pending.state,
+    )
+    const fetcher = vi.fn(async () => {
+      if (failure === 'network') throw new Error('Offline')
+      if (failure === 'invalid-json') return new Response('not-json')
+      return new Response(
+        JSON.stringify({ token_type: 'Bearer', access_token: 'bad token' }),
+        { status: failure === 'http' ? 400 : 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetcher)
+    await completeCodeSignIn('cv')
+    expect(location.pathname + location.search + location.hash).toBe(returnTo)
+    expect(readCodeSession('chat')).toBe('existing-chat')
+    expect(readCodeSession('cv')).toBe('existing-cv')
+    await completeCodeSignIn('cv')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  },
+)

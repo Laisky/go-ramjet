@@ -171,6 +171,8 @@ export async function completeCodeSignIn(app: SsoApp | null): Promise<void> {
     pending.returnTo.includes('\\')
   )
     return
+  // Remember the scrubbed callback so completion cannot overwrite newer navigation.
+  const callbackLocation = window.location.href
   try {
     const response = await fetch(issuer + '/sso/token', {
       method: 'POST',
@@ -203,8 +205,11 @@ export async function completeCodeSignIn(app: SsoApp | null): Promise<void> {
     } catch {
       volatileSessions[app] = body.access_token
     }
-    history.replaceState(history.state, document.title, pending.returnTo)
   } catch {
     // Preserve established sessions; a lost exchange requires a fresh sign-in.
+  } finally {
+    // Restore validated context on every exchange outcome, before app bootstrap.
+    if (window.location.href === callbackLocation)
+      history.replaceState(history.state, document.title, pending.returnTo)
   }
 }

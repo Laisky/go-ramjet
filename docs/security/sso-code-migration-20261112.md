@@ -93,3 +93,38 @@ This covers conventional existing routes without wildcard permissions or duplica
 - Exact-head CI on `46c760f` passed full frontend, backend tests/browser smoke/vet/lint but failed govulncheck because CI selected module minimum Go1.27.3 (`GO-2026-6859`), while local acceptance used Go1.27.4. Synchronized the module minimum, Docker builder and auxiliary Go CI pin to1.27.4. Service image `latest` is unchanged. Local full Go acceptance and zero-reachable scan were already run with1.27.4; new exact-head CI must verify the selection.
 
 Independent static review found no remaining P2 in the callback redaction/route binding. Added explicit root-landing mismatch, unknown-route, backslash and control-character negative controls; return URLs must remain same-origin. Full frontend recheck, TypeScript and ESLint pass. This is not live browser/issuer acceptance.
+
+
+## Callback privacy follow-up (2026-11-13)
+
+Credential-bearing callback responses now emit `Referrer-Policy: no-referrer`
+before the document loads same-origin assets. JavaScript URL scrubbing remains
+necessary but is not a substitute for that response header. The HTTP boundary
+also removes `sso_code` and `sso_token` query values from incoming `Referer`
+headers before application logging, including encoded names and duplicate header
+values. Ordinary routes retain their existing referrer policy and unrelated
+query/referrer bytes are preserved.
+
+Synthetic request regressions reproduced the old permissive callback policy and
+credentials reaching an inner logging handler, then passed after hardening.
+These are application-boundary controls, not evidence that production ingress
+logs are clean. No production leak was established. A reverse proxy receives
+the initial callback request before the application can sanitize it. Repository
+inspection found development proxy examples but no production ingress log format.
+
+Before rollout, the operator must verify the actual ingress/CDN access-log and
+tracing configuration excludes callback query strings and raw Referer values,
+and preserves the callback response policy. Use a synthetic, non-redeemable
+canary to request the callback document and same-origin assets; inspect the
+browser network Referer headers and each ingress/application log sink. Never
+use a live authorization code or bearer token as the canary. This live proxy and
+browser acceptance is still pending; this change does not alter production
+configuration or claim to sanitize logs already captured upstream.
+
+### P2 failed-exchange route recovery acceptance (2026-11-13)
+
+- Reproduced ten failing route assertions on the pre-fix implementation: network failure, HTTP rejection, malformed response JSON/body/token, timeout, and CV-host GPTChat cross-route callbacks. Existing sessions and invalid-context controls remained intact.
+- Restore the fully validated return path in the exchange finalizer, after callback scrubbing and session handling but before SPA bootstrap. Restore only while the browser remains at the scrubbed callback; newer navigation wins. Invalid/expired/mismatched contexts still cannot select a destination.
+- Permanent regressions cover failure return paths, separate CV/chat sessions, one-shot consumption, newer navigation during success/failure, and the existing actual SPA bootstrap ordering.
+- Final acceptance: 685 frontend tests across 82 files passed with two workers; ESLint, TypeScript/Vite build, Go web race tests and Go vet passed. Initial unrestricted suite had two render timeouts; both pass focused and in the bounded full suite. An initial early-restoration implementation failed bootstrap ordering and was corrected before publishing.
+- This is repository-level acceptance, not proof of deployed ingress log confidentiality or a production browser round trip; the live privacy gates above remain open.

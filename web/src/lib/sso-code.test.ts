@@ -121,7 +121,14 @@ describe('registered SSO migration', () => {
     expect(location.search).toBe('')
   })
 
-  it.each(['network', 'http', 'malformed'])(
+  it.each([
+    'network',
+    'http',
+    'malformed',
+    'invalid-json',
+    'null-body',
+    'timeout',
+  ])(
     'preserves established sessions after %s failure and never retries a consumed callback',
     async (failure) => {
       await beginCodeSignIn('cv')
@@ -134,6 +141,10 @@ describe('registered SSO migration', () => {
         'fetch',
         vi.fn(async () => {
           if (failure === 'network') throw new Error('Network unavailable')
+          if (failure === 'timeout')
+            throw new DOMException('Timed out', 'TimeoutError')
+          if (failure === 'invalid-json') return new Response('not-json')
+          if (failure === 'null-body') return new Response('null')
           return new Response(
             JSON.stringify({ token_type: 'Bearer', access_token: 'bad token' }),
             { status: failure === 'http' ? 400 : 200 },
@@ -145,6 +156,43 @@ describe('registered SSO migration', () => {
       expect(readCodeSession('cv')).toBe('existing')
       expect(fetch).toHaveBeenCalledTimes(1)
       expect(sessionStorage.getItem('ramjet_sso_code_pending')).toBeNull()
+      expect(location.pathname + location.search + location.hash).toBe(
+        '/cv?tab=edit#details',
+      )
+    },
+  )
+
+  it.each([true, false])(
+    'does not overwrite newer navigation when exchange success=%s',
+    async (success) => {
+      await beginCodeSignIn('cv')
+      const pending = JSON.parse(
+        sessionStorage.getItem('ramjet_sso_code_pending')!,
+      )
+      history.replaceState(null, '', '/?sso_code=x&sso_state=' + pending.state)
+      let finish!: (response: Response) => void
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise<Response>((resolve) => {
+              finish = resolve
+            }),
+        ),
+      )
+      const completion = completeCodeSignIn('cv')
+      expect(location.pathname + location.search + location.hash).toBe('/')
+      history.replaceState(null, '', '/gptchat?tab=new#navigation')
+      finish(
+        new Response(
+          JSON.stringify({ token_type: 'Bearer', access_token: 'new-token' }),
+          { status: success ? 200 : 400 },
+        ),
+      )
+      await completion
+      expect(location.pathname + location.search + location.hash).toBe(
+        '/gptchat?tab=new#navigation',
+      )
     },
   )
 

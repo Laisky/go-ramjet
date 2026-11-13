@@ -40,7 +40,9 @@ func securityMiddleware(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("X-Frame-Options", "SAMEORIGIN")
 	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
-	c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	if c.Writer.Header().Get("Referrer-Policy") == "" {
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+	}
 	c.Next()
 }
 
@@ -50,7 +52,11 @@ type normalizeHandler struct {
 
 // ServeHTTP normalizes the request URL in r and forwards it to h.handler, returning no value.
 func (h *normalizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	redactSSOQuery(r)
+	if redactSSOQuery(r) {
+		// The response policy applies before parser-initiated asset requests, unlike JS URL scrubbing.
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
+	redactSSOReferer(r)
 	// Nginx's proxy_pass might merge the prefix with the next component
 	// if trailing slashes are mismatched.
 	// e.g., /gptchat/version -> /gptchatversion
