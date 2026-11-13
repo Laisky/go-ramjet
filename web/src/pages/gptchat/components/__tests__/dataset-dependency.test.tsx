@@ -108,7 +108,8 @@ describe('dataset request lifecycle', () => {
     ).toBeDisabled()
   })
 
-  it('uses the bootstrap-admitted session and keeps the model key separate', async () => {
+  it('keeps the established session and model key separate from a legacy callback', async () => {
+    localStorage.setItem('gptchat_ownership_sso_token', 'callback-session')
     history.replaceState(
       null,
       '',

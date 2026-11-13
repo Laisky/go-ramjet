@@ -1,6 +1,6 @@
 module github.com/Laisky/go-ramjet
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
@@ -68,7 +68,7 @@ require (
 	github.com/Laisky/pprof v0.0.0-20231102060718-a7a7fd2965ee // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alexvec/go-bip39 v1.1.0 // indirect
-	github.com/andybalholm/brotli v1.2.6 // indirect
+	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/andybalholm/cascadia v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect

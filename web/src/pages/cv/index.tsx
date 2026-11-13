@@ -1,3 +1,4 @@
+import { beginCodeSignIn } from '@/lib/sso-code'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Activity,
@@ -170,9 +171,8 @@ function buildAuthHeaders(token: string | null): HeadersInit {
 /**
  * buildSSORedirectURL builds the SSO login redirect URL for the current page.
  */
-function buildSSORedirectURL(): string {
-  const currentURL = window.location.href
-  return `https://sso.laisky.com/?redirect_to=${encodeURIComponent(currentURL)}`
+function buildSSORedirectURL(): Promise<string> {
+  return beginCodeSignIn('cv')
 }
 
 /**
@@ -487,7 +487,13 @@ export function CVPage() {
 
   // handleLogin redirects to the SSO login page.
   const handleLogin = useCallback(() => {
-    window.location.assign(buildSSORedirectURL())
+    void buildSSORedirectURL()
+      .then((url) => window.location.assign(url))
+      .catch(() =>
+        window.alert(
+          'Unable to start SSO. Please allow session storage and try again.',
+        ),
+      )
   }, [])
 
   // handleEditorOpenChange syncs editor open state and clears draft on close.

@@ -87,8 +87,9 @@ describe('CVPage SSO owner session', () => {
     window.history.replaceState({}, '', '/')
   })
 
-  it('consumes the callback token before any request and enables editing for the verified owner', async () => {
-    window.history.replaceState({}, '', '/?sso_token=owner-jwt&tab=cv')
+  it('rejects a legacy callback before any request and keeps verified stored owner access', async () => {
+    window.localStorage.setItem('cv_sso_token', 'owner-jwt')
+    window.history.replaceState({}, '', '/?sso_token=forged&tab=cv')
     const { fetchMock, seen } = stubCVBackend(ownerSession)
 
     render(<CVPage />)
