@@ -83,12 +83,12 @@ private source-map contract tests passed in pnpm test before Vitest ran.
 
 The shared SPA supports `/`, `/cv`, and `/gptchat` on each host. Reproduced Chat sign-in from `cv.laisky.com/gptchat`: it incorrectly requested `ramjet-chat` for a hostname owned by `ramjet-cv`. Root callback bootstrap also used the host theme rather than the initiating app. Registration now follows hostname, while the PKCE-bound validated return route determines the distinct application session. Reciprocal CV-on-chat/chat2 tests preserve the other session and restore path/query/fragment. Full frontend suite: 676 tests across 82 files pass; TypeScript and repository-wide ESLint pass.
 
-Staged plan (requires explicit configuration approval, not executed):
-1. For each of the three per-host clients above, temporarily register five exact HTTPS callback paths: `/`, `/cv`, `/cv/`, `/gptchat`, `/gptchat/`, with per-client `legacy_token_redirect: allow`. Five entries per client is below the issuer limit of eight. Keep global legacy compatibility for unmigrated consumers.
-2. Deploy the new consumer with `latest`, verify code sign-in and separate established sessions at both application routes on all three hosts, plus return query/hash and replay rejection.
-3. Remove the four non-root temporary callbacks and the per-client legacy allowance after acceptance. Do not retire the global legacy mode until other consumers are migrated.
+Rollout (executed 2026-11-16):
+1. Register each per-host client with its root callback only (`https://cv.laisky.com/`, `https://chat.laisky.com/`, `https://chat2.laisky.com/`) and per-client `legacy_token_redirect: allow`, keeping the global legacy mode on. The consumer only ever sends the root callback and completion requires the root path, so extra route callbacks are not needed. On a production host the issuer does not consult registered paths for the legacy handoff, so the per-client allowance alone keeps the old consumer working during the deploy.
+2. Deploy the new consumer with `latest` and verify that each host's sign-in produces a code request the issuer accepts.
+3. Remove the per-client legacy allowance and set the issuer's global `legacy_token_redirect: deny` once no consumer reads `sso_token`.
 
-This covers conventional existing routes without wildcard permissions or duplicate hostname ownership. React also accepts unusual mixed-case route spellings; legacy callbacks from such old tabs may require refresh/restart because issuer matching is exact. Likewise, already-in-flight bearer callbacks intentionally restart sign-in after consumer deployment. No zero-interruption guarantee is claimed for those cases. Alternate client IDs cannot share a hostname under issuer validation, so they do not solve staging.
+Already-in-flight bearer callbacks from old tabs intentionally restart sign-in after the consumer deployment. Alternate client IDs cannot share a hostname under issuer validation, so they do not solve staging.
 
 - Exact-head CI on `46c760f` passed full frontend, backend tests/browser smoke/vet/lint but failed govulncheck because CI selected module minimum Go1.27.3 (`GO-2026-6859`), while local acceptance used Go1.27.4. Synchronized the module minimum, Docker builder and auxiliary Go CI pin to1.27.4. Service image `latest` is unchanged. Local full Go acceptance and zero-reachable scan were already run with1.27.4; new exact-head CI must verify the selection.
 
