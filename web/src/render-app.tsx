@@ -1,0 +1,33 @@
+import '@/telemetry/instrument'
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import { ThemeProvider } from 'next-themes'
+
+import { getReactErrorOptions } from '@/telemetry/react-errors'
+import { App } from '@/app'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { bootstrapSite } from '@/site/site-meta'
+import '@/styles/globals.css'
+import '@/styles/cv.css'
+import '@/styles/site-themes.css'
+
+bootstrapSite()
+
+const container = document.getElementById('root')!
+const errorOptions = getReactErrorOptions()
+const root = errorOptions
+  ? ReactDOM.createRoot(container, errorOptions)
+  : ReactDOM.createRoot(container)
+
+root.render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
+  </React.StrictMode>,
+)

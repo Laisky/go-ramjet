@@ -1,35 +1,11 @@
-import '@/telemetry/instrument'
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import { ThemeProvider } from 'next-themes'
+import { completeCodeSignIn } from '@/lib/sso-code'
+import { resolveSiteId } from '@/site/site-meta'
 
-import { getReactErrorOptions } from '@/telemetry/react-errors'
-import { App } from '@/app'
-import { ErrorBoundary } from '@/components/error-boundary'
-import { bootstrapSite, resolveSiteId } from '@/site/site-meta'
-import { bootstrapOwnershipSession } from '@/pages/gptchat/utils/ownership-session'
-import '@/styles/globals.css'
-import '@/styles/cv.css'
-import '@/styles/site-themes.css'
-
-bootstrapOwnershipSession(resolveSiteId())
-bootstrapSite()
-
-const container = document.getElementById('root')!
-const errorOptions = getReactErrorOptions()
-const root = errorOptions
-  ? ReactDOM.createRoot(container, errorOptions)
-  : ReactDOM.createRoot(container)
-
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ThemeProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+/** start completes the one-time callback before telemetry, app modules or React can load. */
+export async function start(): Promise<void> {
+  const site = resolveSiteId()
+  const app = site === 'cv' || site === 'chat' ? site : null
+  await completeCodeSignIn(app)
+  await import('./render-app')
+}
+export const ready = start()

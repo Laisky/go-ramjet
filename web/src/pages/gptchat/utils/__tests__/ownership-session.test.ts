@@ -20,25 +20,6 @@ describe('GPTChat ownership session', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
-  it('scrubs a matching callback and retains the exact session in its own slot', () => {
-    localStorage.setItem('cv_sso_token', 'cv-session')
-    sessionStorage.setItem(GPTCHAT_SSO_STATE_KEY, state)
-    history.replaceState(
-      null,
-      '',
-      '/gptchat?tab=data&sso_token=original.session.signature&state=' +
-        state +
-        '#datasets',
-    )
-    expect(consumeOwnershipSession()).toBe('original.session.signature')
-    expect(location.search).toBe('?tab=data')
-    expect(location.hash).toBe('#datasets')
-    expect(readOwnershipSession()).toBe('original.session.signature')
-    expect(localStorage.getItem('cv_sso_token')).toBe('cv-session')
-    expect(sessionStorage.getItem(GPTCHAT_SSO_STATE_KEY)).toBeNull()
-    expect(consumeOwnershipSession()).toBe('original.session.signature')
-  })
-
   it('does not reuse CV or model keys as ownership sessions', () => {
     localStorage.setItem('cv_sso_token', 'cv-session')
     localStorage.setItem('api_token', 'model-key')
@@ -86,21 +67,6 @@ describe('GPTChat ownership session', () => {
     expect(location.search).toBe('')
   })
 
-  it('retains a scrubbed session across repeated initialization when persistence is unavailable', () => {
-    sessionStorage.setItem(GPTCHAT_SSO_STATE_KEY, state)
-    history.replaceState(
-      null,
-      '',
-      '/gptchat?sso_token=synthetic-session&state=' + state,
-    )
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('Unavailable')
-    })
-    expect(consumeOwnershipSession()).toBe('synthetic-session')
-    expect(location.search).toBe('')
-    expect(consumeOwnershipSession()).toBe('synthetic-session')
-  })
-
   it('signs out only GPTChat and keeps CV storage intact', () => {
     localStorage.setItem(GPTCHAT_SSO_STORAGE_KEY, 'gptchat-session')
     localStorage.setItem('cv_sso_token', 'cv-session')
@@ -109,35 +75,11 @@ describe('GPTChat ownership session', () => {
     expect(localStorage.getItem('cv_sso_token')).toBe('cv-session')
   })
 
-  it('creates fresh cryptographic state and binds the SSO redirect to it', () => {
-    history.replaceState(
-      null,
-      '',
-      '/gptchat?tab=data&sso_token=secret&state=old#datasets',
-    )
-    vi.spyOn(window.crypto, 'getRandomValues').mockImplementation((array) => {
-      ;(array as Uint8Array).fill(3)
-      return array
-    })
-    const redirect = new URL(ownershipSignInURL())
-    const expected = '03'.repeat(32)
-    expect(redirect.origin).toBe('https://sso.laisky.com')
-    expect(redirect.searchParams.get('state')).toBe(expected)
-    const callback = new URL(redirect.searchParams.get('redirect_to')!)
-    expect(callback.origin).toBe(location.origin)
-    expect(callback.pathname).toBe('/gptchat')
-    expect(callback.searchParams.get('sso_token')).toBeNull()
-    expect(callback.searchParams.get('state')).toBe(expected)
-    expect(callback.searchParams.get('tab')).toBe('data')
-    expect(callback.hash).toBe('#datasets')
-    expect(sessionStorage.getItem(GPTCHAT_SSO_STATE_KEY)).toBe(expected)
-  })
-
-  it('fails closed if pending sign-in state cannot be persisted', () => {
+  it('fails closed if pending sign-in state cannot be persisted', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Unavailable')
     })
-    expect(() => ownershipSignInURL()).toThrow('Unavailable')
+    await expect(ownershipSignInURL()).rejects.toThrow()
   })
 
   it('preserves the original session in the separate header', () => {

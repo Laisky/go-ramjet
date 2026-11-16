@@ -19,7 +19,7 @@ concurrency:
 env:
   BASE_SHA: ${{ inputs.base_sha }}
   HEAD_SHA: ${{ github.sha }}
-  GO_VERSION: 1.27.3
+  GO_VERSION: 1.27.4
   SPEECHSDK_VERSION: 1.52.0
   RUN_GPT_HTTP_IT: ''
   RUN_GPT_S3_IT: ''

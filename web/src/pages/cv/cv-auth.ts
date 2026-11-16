@@ -1,3 +1,4 @@
+import { clearCodeSession, readCodeSession } from '@/lib/sso-code'
 /**
  * CV editing authorization helpers.
  *
@@ -25,34 +26,22 @@ export type CvAuthStatus =
  * readStoredAuthToken returns the persisted SSO token, or null.
  */
 export function readStoredAuthToken(): string | null {
-  try {
-    const token = window.localStorage.getItem(CV_AUTH_TOKEN_STORAGE_KEY)?.trim()
-    return token ? token : null
-  } catch {
-    return null
-  }
+  return readCodeSession('cv')
 }
 
 /**
  * clearAuthToken removes the persisted SSO token.
  */
 export function clearAuthToken() {
-  try {
-    window.localStorage.removeItem(CV_AUTH_TOKEN_STORAGE_KEY)
-  } catch {
-    // localStorage may be unavailable; nothing is persisted then.
-  }
+  clearCodeSession('cv')
 }
 
 /**
- * consumeAuthTokenFromLocation handles the SSO callback synchronously: it moves
- * an sso_token from the URL into storage and scrubs it from the address bar
- * before the page issues any request, so the token never appears in history,
- * referrers or request logs. It returns the effective session token.
+ * consumeAuthTokenFromLocation rejects obsolete URL bearers and preserves established sessions.
+ * The SPA bootstrap alone admits new sessions through a bound code exchange.
  */
 export function consumeAuthTokenFromLocation(): string | null {
   const params = new URLSearchParams(window.location.search)
-  const token = params.get(SSO_TOKEN_PARAM)?.trim()
   if (params.has(SSO_TOKEN_PARAM)) {
     params.delete(SSO_TOKEN_PARAM)
     const rest = params.toString()
@@ -61,14 +50,6 @@ export function consumeAuthTokenFromLocation(): string | null {
       document.title,
       `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`,
     )
-  }
-  if (token) {
-    try {
-      window.localStorage.setItem(CV_AUTH_TOKEN_STORAGE_KEY, token)
-    } catch {
-      // Without storage the token still authorizes this page view.
-    }
-    return token
   }
   return readStoredAuthToken()
 }

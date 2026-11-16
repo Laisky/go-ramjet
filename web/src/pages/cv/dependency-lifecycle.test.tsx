@@ -43,7 +43,7 @@ describe('CV dependency lifecycle compatibility', () => {
   })
 
   it.each(['stored', 'redirect'])(
-    'uses the %s token on the first content request',
+    'preserves stored authorization with %s URL input',
     async (source) => {
       localStorage.setItem('cv_sso_token', 'stored-token')
       if (source === 'redirect')
@@ -59,10 +59,10 @@ describe('CV dependency lifecycle compatibility', () => {
         .mock.calls.filter(([input]) => String(input) === '/cv/content')
       expect(calls).toHaveLength(1)
       expect(calls[0][1]?.headers).toEqual({
-        Authorization: `Bearer ${source}-token`,
+        Authorization: 'Bearer stored-token',
       })
       expect(window.location.search).not.toContain('sso_token')
-      expect(localStorage.getItem('cv_sso_token')).toBe(`${source}-token`)
+      expect(localStorage.getItem('cv_sso_token')).toBe('stored-token')
     },
   )
 
