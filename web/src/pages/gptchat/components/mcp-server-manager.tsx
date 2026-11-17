@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { SecretInput } from '@/components/ui/secret-input'
 import { Switch } from '@/components/ui/switch'
 import {
   ChevronDown,
@@ -178,13 +179,15 @@ export function McpServerManager({
                   setFormData({ ...formData, url: e.target.value })
                 }
               />
-              <Input
+              <SecretInput
+                name="mcp-server-api-key"
+                label="MCP server API key"
                 placeholder="API Key (Optional)"
                 className="h-8 text-sm"
-                type="password"
-                value={formData.api_key}
-                onChange={(e) =>
-                  setFormData({ ...formData, api_key: e.target.value })
+                iconClassName="h-3.5 w-3.5"
+                value={formData.api_key || ''}
+                onValueChange={(apiKey) =>
+                  setFormData({ ...formData, api_key: apiKey })
                 }
               />
             </div>

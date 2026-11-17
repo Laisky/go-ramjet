@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
-import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
 import {
   DefaultSessionConfig,
   type ChatMessageData,
@@ -12,220 +11,32 @@ import {
   type SessionHistoryItem,
 } from '../types'
 import {
+  createFreeTierToken,
+  describeApiTokenKind,
+  hasUsableApiToken,
+  isApiTokenClobberedBySyncKey,
+} from '../utils/api-token'
+import {
   generateChatId,
   getChatDataKey,
   getSessionHistoryKey,
 } from '../utils/chat-storage'
 import {
-  applyUrlOverridesToConfig,
   DEFAULT_SESSION_ID,
   getActiveSessionId,
   getSessionConfigKey,
-  normalizeConfigNumericFields,
   normalizeRetiredResearchConfig,
 } from '../utils/config-helpers'
 import {
   exportAllData as exportData,
   importAllData as importData,
 } from '../utils/data-sync'
-
-async function getSessionOrderFromKv(): Promise<number[]> {
-  const raw = await kvGet<number[] | { data: number[]; updated_at: number }>(
-    StorageKeys.SESSION_ORDER,
-  )
-  return Array.isArray(raw) ? raw : raw?.data || []
-}
-
-async function setSessionOrderToKv(order: number[]): Promise<void> {
-  await kvSet(StorageKeys.SESSION_ORDER, {
-    data: order,
-    updated_at: Date.now(),
-  })
-}
-
-/**
- * createFreeTierToken builds a random free-tier token for anonymous sessions.
- */
-function createFreeTierToken(): string {
-  const randomStr =
-    Math.random().toString(36).substring(2, 18) +
-    Math.random().toString(36).substring(2, 18)
-  return `FREETIER-${randomStr}`
-}
-
-/**
- * describeApiTokenKind summarizes the token shape without exposing secret material.
- */
-function describeApiTokenKind(token?: string): string {
-  const trimmed = token?.trim() || ''
-  if (!trimmed) return 'missing'
-  if (trimmed === 'DEFAULT_PROXY_TOKEN') return 'legacy-default'
-  if (trimmed.startsWith('FREETIER-')) return 'freetier'
-  if (trimmed.startsWith('sk-') || trimmed.startsWith('laisky-')) {
-    return 'byok'
-  }
-  return 'custom'
-}
-
-interface HydratedSessionConfigResult {
-  config: SessionConfig
-  savedConfig: SessionConfig | null
-  changed: boolean
-}
-
-/**
- * mergeSessionConfigs overlays the current config onto a loaded config while keeping nested switches intact.
- */
-function mergeSessionConfigs(
-  baseConfig: SessionConfig,
-  overrideConfig: SessionConfig,
-): SessionConfig {
-  return normalizeConfigNumericFields({
-    ...baseConfig,
-    ...overrideConfig,
-    chat_switch: {
-      ...baseConfig.chat_switch,
-      ...overrideConfig.chat_switch,
-    },
-  })
-}
-
-/**
- * hydrateSessionConfig reads, normalizes, and repairs a session config before use.
- */
-async function hydrateSessionConfig(
-  sessionId: number,
-  options?: {
-    fallbackConfig?: SessionConfig
-    applyUrlOverrides?: boolean
-  },
-): Promise<HydratedSessionConfigResult> {
-  const key = getSessionConfigKey(sessionId)
-  const savedConfig = await kvGet<SessionConfig>(key)
-  const fallbackConfig = options?.fallbackConfig
-
-  console.debug(`[useConfig] hydrate session ${sessionId} config`, {
-    hasSavedConfig: !!savedConfig,
-    savedApiTokenKind: describeApiTokenKind(savedConfig?.api_token),
-    fallbackApiTokenKind: describeApiTokenKind(fallbackConfig?.api_token),
-    legacySelectedModel: (savedConfig as Record<string, unknown> | null)
-      ?.selected_model,
-  })
-
-  let finalConfig: SessionConfig = {
-    ...DefaultSessionConfig,
-  }
-
-  if (savedConfig) {
-    finalConfig = normalizeConfigNumericFields({
-      ...finalConfig,
-      ...savedConfig,
-      chat_switch: {
-        ...finalConfig.chat_switch,
-        ...savedConfig.chat_switch,
-      },
-    })
-  }
-
-  let configChanged =
-    !!savedConfig &&
-    (savedConfig.selected_model !== finalConfig.selected_model ||
-      savedConfig.selected_chat_model !== finalConfig.selected_chat_model ||
-      savedConfig.selected_draw_model !== finalConfig.selected_draw_model)
-
-  const hasSelectedChatModel =
-    savedConfig &&
-    Object.prototype.hasOwnProperty.call(savedConfig, 'selected_chat_model')
-  if (!hasSelectedChatModel) {
-    console.debug(
-      `[useConfig] migrating legacy selected_model to selected_chat_model: ${finalConfig.selected_model}`,
-    )
-    finalConfig.selected_chat_model = isImageModel(finalConfig.selected_model)
-      ? DefaultModel
-      : finalConfig.selected_model || DefaultModel
-    configChanged = true
-  }
-
-  const hasSelectedDrawModel =
-    savedConfig &&
-    Object.prototype.hasOwnProperty.call(savedConfig, 'selected_draw_model')
-  if (!hasSelectedDrawModel) {
-    console.debug(
-      `[useConfig] migrating legacy selected_model to selected_draw_model: ${finalConfig.selected_model}`,
-    )
-    finalConfig.selected_draw_model = isImageModel(finalConfig.selected_model)
-      ? finalConfig.selected_model
-      : ImageModelFluxDev
-    configChanged = true
-  }
-
-  if (!finalConfig.selected_model) {
-    finalConfig.selected_model = finalConfig.selected_chat_model
-    configChanged = true
-  }
-
-  let globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
-  if (!globalSyncKey) {
-    if (finalConfig.sync_key) {
-      globalSyncKey = finalConfig.sync_key
-    } else if (fallbackConfig?.sync_key) {
-      globalSyncKey = fallbackConfig.sync_key
-    } else {
-      globalSyncKey =
-        'sync-' +
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15)
-    }
-    await kvSet(StorageKeys.SYNC_KEY, globalSyncKey)
-  }
-  finalConfig.sync_key = globalSyncKey
-
-  const fallbackApiToken = fallbackConfig?.api_token?.trim() || ''
-  if (
-    !finalConfig.api_token ||
-    finalConfig.api_token === 'DEFAULT_PROXY_TOKEN'
-  ) {
-    if (fallbackApiToken && fallbackApiToken !== 'DEFAULT_PROXY_TOKEN') {
-      finalConfig.api_token = fallbackApiToken
-      console.debug('[useConfig] preserved fallback API token for session', {
-        sessionId,
-        apiTokenKind: describeApiTokenKind(finalConfig.api_token),
-      })
-    } else {
-      finalConfig.api_token = createFreeTierToken()
-      console.debug('[useConfig] generated FREETIER token for session', {
-        sessionId,
-        apiTokenKind: describeApiTokenKind(finalConfig.api_token),
-      })
-    }
-    configChanged = true
-  }
-
-  if (!finalConfig.api_base) {
-    finalConfig.api_base =
-      fallbackConfig?.api_base || DefaultSessionConfig.api_base
-    configChanged = true
-  }
-
-  if (!finalConfig.session_name) {
-    finalConfig.session_name = `Chat Session ${sessionId}`
-    configChanged = true
-  }
-
-  if (options?.applyUrlOverrides) {
-    const overrideResult = applyUrlOverridesToConfig(finalConfig)
-    if (overrideResult.mutated) {
-      finalConfig = overrideResult.config
-      configChanged = true
-    }
-  }
-
-  return {
-    config: finalConfig,
-    savedConfig,
-    changed: configChanged,
-  }
-}
+import {
+  getSessionOrderFromKv,
+  hydrateSessionConfig,
+  mergeSessionConfigs,
+  setSessionOrderToKv,
+} from './session-config-hydration'
 
 /**
  * Hook for managing session configuration
@@ -414,27 +225,48 @@ export function useConfig() {
     }
 
     const baseConfig = configRef.current
+    const nextSyncKey = updates.sync_key ?? baseConfig.sync_key
+    let acceptedUpdates = updates
+    if (
+      updates.api_token !== undefined &&
+      isApiTokenClobberedBySyncKey(updates.api_token, nextSyncKey)
+    ) {
+      // A non-API-shaped token identical to the sync key is the signature of
+      // password-manager autofill, never a deliberate edit; drop it.
+      const { api_token: rejectedApiToken, ...rest } = updates
+      acceptedUpdates = rest
+      console.warn(
+        `[useConfig] rejected API token update copying sync key: session=${sessionIdRef.current} rejectedKind=${describeApiTokenKind(rejectedApiToken)}`,
+      )
+    }
+
     const newConfig = normalizeRetiredResearchConfig({
       ...baseConfig,
-      ...updates,
+      ...acceptedUpdates,
       chat_switch: {
         ...baseConfig.chat_switch,
-        ...(updates.chat_switch || {}),
+        ...(acceptedUpdates.chat_switch || {}),
       },
-      sync_key: updates.sync_key ?? baseConfig.sync_key,
+      sync_key: nextSyncKey,
       updated_at: Date.now(),
     })
+    if (
+      newConfig.api_token_reset_required &&
+      hasUsableApiToken(newConfig.api_token, newConfig.sync_key)
+    ) {
+      newConfig.api_token_reset_required = false
+    }
 
     configRef.current = newConfig
     setConfigState(newConfig)
 
     console.debug('[useConfig] queued config update', {
       sessionId: sessionIdRef.current,
-      updatedKeys: Object.keys(updates),
-      chatSwitchKeys: updates.chat_switch
-        ? Object.keys(updates.chat_switch)
+      updatedKeys: Object.keys(acceptedUpdates),
+      chatSwitchKeys: acceptedUpdates.chat_switch
+        ? Object.keys(acceptedUpdates.chat_switch)
         : [],
-      hasApiTokenUpdate: updates.api_token !== undefined,
+      hasApiTokenUpdate: acceptedUpdates.api_token !== undefined,
       apiTokenLength:
         typeof newConfig.api_token === 'string'
           ? newConfig.api_token.length
@@ -455,7 +287,7 @@ export function useConfig() {
       console.debug('[useConfig] persisted config update', {
         sessionId: sessionIdRef.current,
         updatedAt: newConfig.updated_at,
-        updatedKeys: Object.keys(updates),
+        updatedKeys: Object.keys(acceptedUpdates),
         apiTokenKind: describeApiTokenKind(newConfig.api_token),
       })
     } catch (error) {

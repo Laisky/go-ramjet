@@ -67,6 +67,13 @@ export interface SessionConfig {
   chat_switch: ChatSwitch
   mcp_servers?: McpServerConfig[]
   sync_key?: string
+  /**
+   * api_token_reset_required is set when this session's API token was
+   * overwritten by the sync key and could not be restored from another
+   * session; the UI keeps alerting until the user enters a new key or
+   * dismisses the alert. Absent in configs written before the flag existed.
+   */
+  api_token_reset_required?: boolean
   session_name?: string
   session_visible?: boolean
   updated_at?: number

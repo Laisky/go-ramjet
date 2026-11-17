@@ -1,8 +1,8 @@
-import { Download, Eye, EyeOff, Loader2, Upload } from 'lucide-react'
+import { Download, Loader2, Upload } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SecretInput } from '@/components/ui/secret-input'
 import type { SessionConfig } from '../types'
 import { api } from '../utils/api'
 
@@ -20,7 +20,6 @@ export function DataSyncManager({
   onImportData,
 }: DataSyncManagerProps) {
   const [isSyncing, setIsSyncing] = useState(false)
-  const [showSyncKey, setShowSyncKey] = useState(false)
 
   const handleDownload = async () => {
     if (!config.sync_key) {
@@ -71,29 +70,22 @@ export function DataSyncManager({
       <label className="mb-2 block text-sm font-medium">Data Sync</label>
 
       <div className="mb-2">
-        <label className="mb-1 block text-xs text-muted-foreground">
+        <label
+          htmlFor="cfg-sync-key"
+          className="mb-1 block text-xs text-muted-foreground"
+        >
           Sync Key
         </label>
-        <div className="relative">
-          <Input
-            type={showSyncKey ? 'text' : 'password'}
-            value={config.sync_key || ''}
-            onChange={(e) => onConfigChange({ sync_key: e.target.value })}
-            placeholder="sync-..."
-            className="pr-10 text-xs"
-          />
-          <button
-            type="button"
-            onClick={() => setShowSyncKey(!showSyncKey)}
-            className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
-          >
-            {showSyncKey ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </button>
-        </div>
+        <SecretInput
+          id="cfg-sync-key"
+          name="gptchat-sync-key"
+          label="sync key"
+          value={config.sync_key || ''}
+          onValueChange={(syncKey) => onConfigChange({ sync_key: syncKey })}
+          placeholder="sync-..."
+          className="text-xs"
+          iconClassName="h-3.5 w-3.5"
+        />
       </div>
 
       <div className="flex gap-2">

@@ -2,12 +2,11 @@
  * Configuration sidebar for chat settings.
  */
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Eye, EyeOff, Settings, Trash2, User, X } from 'lucide-react'
-import { useState } from 'react'
+import { Settings, Trash2, User, X } from 'lucide-react'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SecretInput } from '@/components/ui/secret-input'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmAction } from './confirm-action'
 import { DataSyncManager } from './data-sync-manager'
@@ -22,6 +21,8 @@ import type { PromptShortcut, SessionConfig } from '../types'
 export interface ConfigSidebarProps {
   isOpen: boolean
   onClose: () => void
+  /** initialFocus 'api-key' focuses and selects the API key field on open. */
+  initialFocus?: 'api-key'
   config: SessionConfig
   onConfigChange: (updates: Partial<SessionConfig>) => void
   onClearChats: () => void
@@ -53,6 +54,7 @@ export interface ConfigSidebarProps {
 export function ConfigSidebar({
   isOpen,
   onClose,
+  initialFocus,
   config,
   onConfigChange,
   onClearChats,
@@ -75,8 +77,6 @@ export function ConfigSidebar({
   onPurgeAllSessions,
   onExportSession,
 }: ConfigSidebarProps) {
-  const [showApiKey, setShowApiKey] = useState(false)
-
   const { user } = useUser(config.api_token)
 
   return (
@@ -91,6 +91,15 @@ export function ConfigSidebar({
         <DialogPrimitive.Content
           className="fixed inset-y-0 right-0 z-50 ml-auto w-full max-w-md overflow-y-auto bg-card text-card-foreground p-4 shadow-lg outline-none"
           aria-label="Settings"
+          onOpenAutoFocus={(e) => {
+            if (initialFocus !== 'api-key') return
+            const apiKeyInput = document.getElementById('cfg-api-key')
+            if (apiKeyInput instanceof HTMLInputElement) {
+              e.preventDefault()
+              apiKeyInput.focus()
+              apiKeyInput.select()
+            }
+          }}
         >
           {/* Header */}
           <div className="mb-4 flex items-center justify-between">
@@ -162,30 +171,16 @@ export function ConfigSidebar({
               >
                 API Key
               </label>
-              <div className="relative">
-                <Input
-                  id="cfg-api-key"
-                  type={showApiKey ? 'text' : 'password'}
-                  value={config.api_token}
-                  onChange={(e) =>
-                    onConfigChange({ api_token: e.target.value })
-                  }
-                  placeholder="sk-..."
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
-                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
-                >
-                  {showApiKey ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
+              <SecretInput
+                id="cfg-api-key"
+                name="gptchat-api-key"
+                label="API key"
+                value={config.api_token}
+                onValueChange={(apiToken) =>
+                  onConfigChange({ api_token: apiToken })
+                }
+                placeholder="sk-..."
+              />
             </div>
 
             {/* Model Selection */}

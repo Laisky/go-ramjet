@@ -19,6 +19,7 @@ import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
+  ApiKeyResetAlert,
   ChatInput,
   ChatMessage,
   ChatSearch,
@@ -126,6 +127,7 @@ export function GPTChatPage() {
   }, [])
 
   const [configOpen, setConfigOpen] = useState(false)
+  const [configFocus, setConfigFocus] = useState<'api-key'>()
   const {
     promptShortcuts,
     handleSavePrompt,
@@ -706,6 +708,18 @@ export function GPTChatPage() {
             </div>
           )}
 
+          {config.api_token_reset_required && !configLoading && (
+            <ApiKeyResetAlert
+              onResetApiKey={() => {
+                setConfigFocus('api-key')
+                setConfigOpen(true)
+              }}
+              onDismiss={() =>
+                updateConfig({ api_token_reset_required: false })
+              }
+            />
+          )}
+
           {/* Error display */}
           {error && (
             <div className="mx-4 mt-2 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -835,7 +849,11 @@ export function GPTChatPage() {
         <Suspense fallback={null}>
           <ConfigSidebar
             isOpen={configOpen}
-            onClose={() => setConfigOpen(false)}
+            onClose={() => {
+              setConfigOpen(false)
+              setConfigFocus(undefined)
+            }}
+            initialFocus={configFocus}
             config={config}
             onConfigChange={handleConfigChange}
             onClearChats={handleClearChats}
