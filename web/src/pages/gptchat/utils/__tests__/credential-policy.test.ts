@@ -8,6 +8,7 @@ import {
   isSyncKeyReusedAsApiToken,
   isUserSuppliedApiToken,
   repairStoredApiToken,
+  restoringApiTokenNeedsRotation,
   validateCredentialUpdate,
 } from '../credential-policy'
 
@@ -331,5 +332,101 @@ describe('findApiTokenCandidates', () => {
       }),
     }))
     expect(findApiTokenCandidates(entries, target, 3)).toHaveLength(3)
+  })
+})
+
+describe('ambiguous legacy pairs (custom API key equal to the sync key)', () => {
+  const CUSTOM = 'my-custom-provider-token'
+
+  it('sets the value aside instead of discarding it', () => {
+    const { config: repaired, outcome } = repairStoredApiToken(
+      config({ api_token: CUSTOM, sync_key: CUSTOM }),
+      [CUSTOM],
+    )
+
+    expect(outcome).toBe('reset-required')
+    expect(repaired.api_token).toMatch(/^FREETIER-/)
+    expect(repaired.api_token_before_reset).toBe(CUSTOM)
+  })
+
+  it('never keeps a value with a generated sync-key shape', () => {
+    const { config: repaired } = repairStoredApiToken(
+      config({ api_token: SYNC_KEY }),
+      [SYNC_KEY],
+    )
+
+    expect(repaired.api_token_reset_required).toBe(true)
+    expect(repaired.api_token_before_reset).toBeUndefined()
+  })
+
+  it('needs a rotation to restore only while the value is still the sync key', () => {
+    expect(
+      restoringApiTokenNeedsRotation({
+        api_token_before_reset: CUSTOM,
+        sync_key: CUSTOM,
+      }),
+    ).toBe(true)
+    expect(
+      restoringApiTokenNeedsRotation({
+        api_token_before_reset: CUSTOM,
+        sync_key: SYNC_KEY,
+      }),
+    ).toBe(false)
+    expect(restoringApiTokenNeedsRotation({ sync_key: SYNC_KEY })).toBe(false)
+  })
+
+  it('forgets the set-aside value whenever the reset ends', () => {
+    const pending = config({
+      api_token: 'FREETIER-x',
+      api_token_reset_required: true,
+      api_token_before_reset: CUSTOM,
+    })
+
+    for (const updates of [
+      { api_token: 'sk-new' },
+      { api_token_reset_required: false },
+    ]) {
+      const { accepted } = validateCredentialUpdate(pending, updates)
+      expect(accepted.api_token_reset_required).toBe(false)
+      expect('api_token_before_reset' in accepted).toBe(true)
+      expect(accepted.api_token_before_reset).toBeUndefined()
+    }
+    expect(
+      'api_token_before_reset' in
+        validateCredentialUpdate(pending, { system_prompt: 'x' }).accepted,
+    ).toBe(false)
+  })
+})
+
+describe('validateCredentialUpdate across sessions', () => {
+  it('refuses a sync key that is the API key of another session', () => {
+    const { accepted, rejections } = validateCredentialUpdate(
+      config({ api_token: 'sk-active' }),
+      { sync_key: 'sk-other-session' },
+      { otherApiTokens: ['FREETIER-a', 'sk-other-session'] },
+    )
+
+    expect(accepted.sync_key).toBeUndefined()
+    expect(rejections).toEqual([
+      { field: 'sync_key', reason: 'sync-key-is-api-token' },
+    ])
+  })
+
+  it('accepts a sync key no session uses, and an unchanged one', () => {
+    const others = { otherApiTokens: ['sk-other-session'] }
+    expect(
+      validateCredentialUpdate(
+        config(),
+        { sync_key: 'sync-fresh123456' },
+        others,
+      ).rejections,
+    ).toEqual([])
+    expect(
+      validateCredentialUpdate(
+        config({ sync_key: 'sk-other-session' }),
+        { sync_key: 'sk-other-session' },
+        others,
+      ).rejections,
+    ).toEqual([])
   })
 })

@@ -7,23 +7,21 @@ import { createLatestValueWriter } from '@/utils/latest-value-writer'
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
 import {
   DefaultSessionConfig,
-  type ChatMessageData,
   type SessionConfig,
   type SessionHistoryItem,
 } from '../types'
 import { createFreeTierToken, describeApiTokenKind } from '../utils/api-token'
-import {
-  generateChatId,
-  getChatDataKey,
-  getSessionHistoryKey,
-} from '../utils/chat-storage'
+import { getChatDataKey, getSessionHistoryKey } from '../utils/chat-storage'
 import {
   DEFAULT_SESSION_ID,
   getActiveSessionId,
   getSessionConfigKey,
   normalizeRetiredResearchConfig,
 } from '../utils/config-helpers'
-import { validateCredentialUpdate } from '../utils/credential-policy'
+import {
+  type ConfigUpdateResult,
+  validateCredentialUpdate,
+} from '../utils/credential-policy'
 import {
   exportAllData as exportData,
   importAllData as importData,
@@ -32,7 +30,12 @@ import {
   hydrateSessionConfig,
   mergeSessionConfigs,
 } from './session-config-hydration'
-import { repairStoredSessionCredentials } from './session-credentials'
+import { copyStoredSession } from './session-copy'
+import {
+  listStoredApiTokens,
+  rebindStoredSyncKey,
+  repairStoredSessionCredentials,
+} from './session-credentials'
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
@@ -122,7 +125,9 @@ export function useConfig() {
           visible: conf?.session_visible ?? true,
         })
       } catch (e) {
-        console.error('Failed to load session config for key', key, e)
+        console.error(
+          `[useConfig] failed to load session config ${key}: ${String(e)}`,
+        )
       }
     }
 
@@ -170,13 +175,7 @@ export function useConfig() {
           finalConfig = mergeSessionConfigs(finalConfig, currentConfig)
           changed = true
           console.debug(
-            '[useConfig] keeping newer in-memory config after load',
-            {
-              sessionId: activeSessionId,
-              currentUpdatedAt,
-              loadedUpdatedAt,
-              apiTokenKind: describeApiTokenKind(finalConfig.api_token),
-            },
+            `[useConfig] keeping newer in-memory config after load: session=${activeSessionId} current=${currentUpdatedAt} loaded=${loadedUpdatedAt} apiTokenKind=${describeApiTokenKind(finalConfig.api_token)}`,
           )
         }
 
@@ -195,6 +194,7 @@ export function useConfig() {
           const repaired = await repairStoredSessionCredentials(
             finalConfig.sync_key || '',
             activeSessionId,
+            persistQueue.write,
           )
           if (repaired.length > 0) {
             console.warn(
@@ -202,13 +202,15 @@ export function useConfig() {
             )
           }
         } catch (error) {
-          console.error('Failed to repair stored session credentials:', error)
+          console.error(
+            `[useConfig] failed to repair stored session credentials: ${String(error)}`,
+          )
         }
 
         // Load all sessions
         await loadSessions()
       } catch (error) {
-        console.error('Failed to load config:', error)
+        console.error(`[useConfig] failed to load config: ${String(error)}`)
       } finally {
         setIsLoading(false)
       }
@@ -218,35 +220,50 @@ export function useConfig() {
   }, [applySessionState, loadSessions, persistQueue])
 
   /**
-   * updateConfig merges updates into the active session config and persists
+   * updateConfig merges updates into the active session config and stores
    * it. Credential fields go through validateCredentialUpdate: a field that
-   * would make the API token and the sync key equal is dropped while every
+   * would make an API token and the sync key equal is dropped while every
    * other field still applies, and saving a key of the user's own completes
-   * a pending API key reset. The write targets the session that was active
-   * when the update was made, even if the user switches sessions meanwhile.
+   * a pending API key reset. A new sync key is checked against the API key
+   * of every stored session, and once stored it is copied into every
+   * session config. The write targets the session that was active when the
+   * update was applied, even if the user switches sessions meanwhile.
+   * It resolves with the dropped credential fields once the update is
+   * stored. It rejects when storing fails, and the in-memory config then
+   * reverts unless a newer update has been applied on top of it.
    */
   const updateConfig = useCallback(
-    async (updates: Partial<SessionConfig>) => {
-      let activeSessionId = sessionIdRef.current
+    async (updates: Partial<SessionConfig>): Promise<ConfigUpdateResult> => {
       if (!hydratedRef.current) {
-        if (!activeSessionId || activeSessionId === DEFAULT_SESSION_ID) {
-          activeSessionId = await getActiveSessionId()
+        let hydrateSessionId = sessionIdRef.current
+        if (!hydrateSessionId || hydrateSessionId === DEFAULT_SESSION_ID) {
+          hydrateSessionId = await getActiveSessionId()
         }
 
-        const hydrated = await hydrateSessionConfig(activeSessionId, {
+        const hydrated = await hydrateSessionConfig(hydrateSessionId, {
           fallbackConfig: configRef.current,
           applyUrlOverrides: false,
         })
         configRef.current = hydrated.config
-        sessionIdRef.current = activeSessionId
+        sessionIdRef.current = hydrateSessionId
         setConfigState(hydrated.config)
-        setSessionId(activeSessionId)
+        setSessionId(hydrateSessionId)
         hydratedRef.current = true
 
-        console.debug('[useConfig] hydrated config before queued update', {
-          sessionId: activeSessionId,
-          apiTokenKind: describeApiTokenKind(hydrated.config.api_token),
-        })
+        console.debug(
+          `[useConfig] hydrated config before queued update: session=${hydrateSessionId} apiTokenKind=${describeApiTokenKind(hydrated.config.api_token)}`,
+        )
+      }
+
+      // A new sync key must not copy the API key of any stored session.
+      // Pending writes land first, so the check sees every key.
+      let otherApiTokens: string[] = []
+      if (
+        updates.sync_key !== undefined &&
+        updates.sync_key !== configRef.current.sync_key
+      ) {
+        await persistQueue.whenIdle()
+        otherApiTokens = await listStoredApiTokens()
       }
 
       const targetSessionId = sessionIdRef.current
@@ -254,11 +271,15 @@ export function useConfig() {
       const { accepted, rejections } = validateCredentialUpdate(
         baseConfig,
         updates,
+        { otherApiTokens },
       )
       for (const rejection of rejections) {
         console.warn(
           `[useConfig] rejected ${rejection.field} update: session=${targetSessionId} reason=${rejection.reason}`,
         )
+      }
+      if (Object.keys(accepted).length === 0) {
+        return { rejections }
       }
 
       const newConfig = normalizeRetiredResearchConfig({
@@ -271,43 +292,62 @@ export function useConfig() {
         sync_key: accepted.sync_key ?? baseConfig.sync_key,
         updated_at: Date.now(),
       })
+      const nextSyncKey =
+        accepted.sync_key !== undefined &&
+        accepted.sync_key !== baseConfig.sync_key
+          ? accepted.sync_key
+          : undefined
 
       configRef.current = newConfig
       setConfigState(newConfig)
 
-      console.debug('[useConfig] queued config update', {
-        sessionId: targetSessionId,
-        updatedKeys: Object.keys(accepted),
-        chatSwitchKeys: accepted.chat_switch
-          ? Object.keys(accepted.chat_switch)
-          : [],
-        hasApiTokenUpdate: accepted.api_token !== undefined,
-        apiTokenKind: describeApiTokenKind(newConfig.api_token),
-        systemPromptLength:
-          typeof newConfig.system_prompt === 'string'
-            ? newConfig.system_prompt.length
-            : 0,
-      })
-
-      // Enqueue every write before awaiting any of them, so a later update
-      // can never slip an older config in between.
-      const writes: Promise<void>[] = []
-      if (accepted.sync_key !== undefined) {
-        writes.push(persistQueue.write(StorageKeys.SYNC_KEY, accepted.sync_key))
-      }
-      writes.push(
-        persistQueue.write(getSessionConfigKey(targetSessionId), newConfig),
+      console.debug(
+        `[useConfig] queued config update: session=${targetSessionId} keys=${Object.keys(accepted).join(',')} apiTokenKind=${describeApiTokenKind(newConfig.api_token)}`,
       )
+
       try {
-        await Promise.all(writes)
-        console.debug('[useConfig] persisted config update', {
-          sessionId: targetSessionId,
-          updatedAt: newConfig.updated_at,
-          updatedKeys: Object.keys(accepted),
-        })
+        // The config write is enqueued before any await, so a later update
+        // can never slip an older config in between. The browser-wide sync
+        // key follows only once the config holding it is stored.
+        await persistQueue.write(
+          getSessionConfigKey(targetSessionId),
+          newConfig,
+        )
+        if (nextSyncKey !== undefined) {
+          await persistQueue.write(StorageKeys.SYNC_KEY, nextSyncKey)
+        }
       } catch (error) {
-        console.error('Failed to save config:', error)
+        if (configRef.current === newConfig) {
+          configRef.current = baseConfig
+          setConfigState(baseConfig)
+        }
+        throw new Error(
+          `saving the config of session ${targetSessionId} failed: ${String(error)}`,
+          { cause: error },
+        )
       }
+
+      if (nextSyncKey !== undefined) {
+        try {
+          await persistQueue.whenIdle()
+          await rebindStoredSyncKey(
+            nextSyncKey,
+            targetSessionId,
+            persistQueue.write,
+          )
+        } catch (error) {
+          // The key itself is stored; loading or exporting a session binds
+          // a stale copy again, so this only needs a note.
+          console.warn(
+            `[useConfig] failed to copy the new sync key into every session: ${String(error)}`,
+          )
+        }
+      }
+
+      console.debug(
+        `[useConfig] persisted config update: session=${targetSessionId} updatedAt=${newConfig.updated_at}`,
+      )
+      return { rejections }
     },
     [persistQueue],
   )
@@ -324,51 +364,59 @@ export function useConfig() {
   )
 
   /**
-   * Switch to a different session
+   * loadSessionIntoState makes targetSessionId the session held in memory:
+   * pending writes land, its stored config is hydrated and repaired, and a
+   * corrected config is written back. It also refreshes the session list.
+   */
+  const loadSessionIntoState = useCallback(
+    async (targetSessionId: number) => {
+      await persistQueue.whenIdle()
+      sessionIdRef.current = targetSessionId
+
+      const {
+        config: nextConfig,
+        savedConfig,
+        changed,
+      } = await hydrateSessionConfig(targetSessionId, {
+        fallbackConfig: configRef.current,
+        applyUrlOverrides: false,
+      })
+
+      applySessionState(targetSessionId, {
+        ...nextConfig,
+        updated_at: nextConfig.updated_at || Date.now(),
+      })
+
+      if (changed || !savedConfig) {
+        await persistQueue.write(
+          getSessionConfigKey(targetSessionId),
+          configRef.current,
+        )
+      }
+
+      console.debug(
+        `[useConfig] loaded session ${targetSessionId}: saved=${!!savedConfig} apiTokenKind=${describeApiTokenKind(configRef.current.api_token)}`,
+      )
+
+      await loadSessions()
+    },
+    [applySessionState, loadSessions, persistQueue],
+  )
+
+  /**
+   * switchSession makes newSessionId the active session.
    */
   const switchSession = useCallback(
     async (newSessionId: number) => {
       setIsLoading(true)
       try {
         await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
-        // Let writes of the previous session land before reading storage.
-        await persistQueue.whenIdle()
-        sessionIdRef.current = newSessionId
-
-        const {
-          config: nextConfig,
-          savedConfig,
-          changed,
-        } = await hydrateSessionConfig(newSessionId, {
-          fallbackConfig: configRef.current,
-          applyUrlOverrides: false,
-        })
-
-        applySessionState(newSessionId, {
-          ...nextConfig,
-          updated_at: nextConfig.updated_at || Date.now(),
-        })
-
-        if (changed || !savedConfig) {
-          await persistQueue.write(
-            getSessionConfigKey(newSessionId),
-            configRef.current,
-          )
-        }
-
-        console.debug('[useConfig] switched session', {
-          sessionId: newSessionId,
-          hasSavedConfig: !!savedConfig,
-          apiTokenKind: describeApiTokenKind(configRef.current.api_token),
-        })
-
-        // Refresh list to ensure names are up to date if we defaulted above
-        await loadSessions()
+        await loadSessionIntoState(newSessionId)
       } finally {
         setIsLoading(false)
       }
     },
-    [applySessionState, loadSessions, persistQueue],
+    [loadSessionIntoState],
   )
 
   /**
@@ -463,158 +511,42 @@ export function useConfig() {
     [sessionId, switchSession, loadSessions, persistQueue],
   )
 
+  /**
+   * duplicateSession copies sourceSessionId, history included, into a new
+   * session. It returns the new session id.
+   */
   const duplicateSession = useCallback(
     async (sourceSessionId: number) => {
-      const sessionKeys = await kvList()
-      const sessionIds = sessionKeys
-        .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
-        .map((k) =>
-          parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10),
-        )
-        .filter((id) => !Number.isNaN(id))
-
-      const newSessionId =
-        sessionIds.length > 0 ? Math.max(...sessionIds) + 1 : DEFAULT_SESSION_ID
-
-      const sourceConfigKey = getSessionConfigKey(sourceSessionId)
-      const sourceConfig =
-        (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
-      const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
-      const duplicatedConfig: SessionConfig = {
-        ...sourceConfig,
-        session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Copy`,
-        updated_at: Date.now(),
-        sync_key: globalSyncKey || sourceConfig.sync_key,
-      }
-
-      await kvSet(getSessionConfigKey(newSessionId), duplicatedConfig)
-
-      const sourceHistory =
-        (await kvGet<SessionHistoryItem[]>(
-          getSessionHistoryKey(sourceSessionId),
-        )) || []
-      const historyKey = getSessionHistoryKey(newSessionId)
-      const idMap = new Map<string, string>()
-      const duplicatedHistory: SessionHistoryItem[] = []
-
-      for (const item of sourceHistory) {
-        if (!item.chatID) {
-          continue
-        }
-
-        let nextChatId = idMap.get(item.chatID)
-        if (!nextChatId) {
-          nextChatId = generateChatId()
-          idMap.set(item.chatID, nextChatId)
-        }
-
-        duplicatedHistory.push({ ...item, chatID: nextChatId })
-
-        const chatData = await kvGet<ChatMessageData>(
-          getChatDataKey(item.chatID, item.role),
-        )
-        if (chatData) {
-          await kvSet(getChatDataKey(nextChatId, item.role), {
-            ...chatData,
-            chatID: nextChatId,
-          })
-        }
-      }
-
-      await kvSet(historyKey, duplicatedHistory)
-
-      // Update session order
-      const sessionOrder = await getSessionOrderFromKv()
-      if (!sessionOrder.includes(newSessionId)) {
-        sessionOrder.push(newSessionId)
-        await setSessionOrderToKv(sessionOrder)
-      }
-
+      await persistQueue.whenIdle()
+      const newSessionId = await copyStoredSession(sourceSessionId, {
+        nameSuffix: 'Copy',
+      })
       await loadSessions()
       return newSessionId
     },
-    [loadSessions],
+    [loadSessions, persistQueue],
   )
 
+  /**
+   * forkSession copies sourceSessionId into a new session, keeping the
+   * history up to the message upToChatId/upToRole. It returns the new
+   * session id.
+   */
   const forkSession = useCallback(
     async (
       sourceSessionId: number,
       upToChatId: string,
       upToRole: 'user' | 'assistant',
     ) => {
-      const sessionKeys = await kvList()
-      const sessionIds = sessionKeys
-        .filter((k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX))
-        .map((k) =>
-          parseInt(k.replace(StorageKeys.SESSION_CONFIG_PREFIX, ''), 10),
-        )
-        .filter((id) => !Number.isNaN(id))
-
-      const newSessionId =
-        sessionIds.length > 0 ? Math.max(...sessionIds) + 1 : DEFAULT_SESSION_ID
-
-      const sourceConfigKey = getSessionConfigKey(sourceSessionId)
-      const sourceConfig =
-        (await kvGet<SessionConfig>(sourceConfigKey)) || DefaultSessionConfig
-      const globalSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
-      const forkedConfig: SessionConfig = {
-        ...sourceConfig,
-        session_name: `${sourceConfig.session_name || `Chat Session ${sourceSessionId}`} Fork`,
-        updated_at: Date.now(),
-        sync_key: globalSyncKey || sourceConfig.sync_key,
-      }
-
-      await kvSet(getSessionConfigKey(newSessionId), forkedConfig)
-
-      const sourceHistory =
-        (await kvGet<SessionHistoryItem[]>(
-          getSessionHistoryKey(sourceSessionId),
-        )) || []
-      const historyKey = getSessionHistoryKey(newSessionId)
-      const idMap = new Map<string, string>()
-      const forkedHistory: SessionHistoryItem[] = []
-
-      for (const item of sourceHistory) {
-        if (!item.chatID) {
-          continue
-        }
-
-        let nextChatId = idMap.get(item.chatID)
-        if (!nextChatId) {
-          nextChatId = generateChatId()
-          idMap.set(item.chatID, nextChatId)
-        }
-
-        forkedHistory.push({ ...item, chatID: nextChatId })
-
-        const chatData = await kvGet<ChatMessageData>(
-          getChatDataKey(item.chatID, item.role),
-        )
-        if (chatData) {
-          await kvSet(getChatDataKey(nextChatId, item.role), {
-            ...chatData,
-            chatID: nextChatId,
-          })
-        }
-
-        if (item.chatID === upToChatId && item.role === upToRole) {
-          break
-        }
-      }
-
-      await kvSet(historyKey, forkedHistory)
-
-      // Update session order
-      const sessionOrder = await getSessionOrderFromKv()
-      if (!sessionOrder.includes(newSessionId)) {
-        sessionOrder.push(newSessionId)
-        await setSessionOrderToKv(sessionOrder)
-      }
-
+      await persistQueue.whenIdle()
+      const newSessionId = await copyStoredSession(sourceSessionId, {
+        nameSuffix: 'Fork',
+        upTo: { chatId: upToChatId, role: upToRole },
+      })
       await loadSessions()
       return newSessionId
     },
-    [loadSessions],
+    [loadSessions, persistQueue],
   )
 
   const purgeAllSessions = useCallback(async () => {
@@ -719,23 +651,32 @@ export function useConfig() {
   )
 
   /**
-   * Export all data (sessions, configs, shortcuts) for sync
+   * exportAllData collects all local data (sessions, configs, shortcuts)
+   * for sync once every pending config write has landed, so the snapshot
+   * holds the newest config. It returns the export.
    */
   const exportAllData = useCallback(async () => {
+    await persistQueue.whenIdle()
     return exportData()
-  }, [])
+  }, [persistQueue])
 
   /**
-   * Import data (overwrite existing)
+   * importAllData applies a cloud backup to local data in mode ('merge' or
+   * 'download') once pending config writes have landed, then reloads the
+   * active session from storage, so a later update builds on the imported
+   * config instead of overwriting it with the stale one held in memory.
    */
   const importAllData = useCallback(
     async (
       data: Record<string, unknown>,
       mode: 'merge' | 'download' = 'merge',
     ) => {
-      return importData(data, sessionId, mode)
+      await persistQueue.whenIdle()
+      const activeSessionId = sessionIdRef.current
+      await importData(data, activeSessionId, mode)
+      await loadSessionIntoState(activeSessionId)
     },
-    [sessionId],
+    [loadSessionIntoState, persistQueue],
   )
 
   return {

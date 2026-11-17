@@ -120,13 +120,9 @@ export async function hydrateSessionConfig(
   const savedConfig = await kvGet<SessionConfig>(key)
   const fallbackConfig = options?.fallbackConfig
 
-  console.debug(`[useConfig] hydrate session ${sessionId} config`, {
-    hasSavedConfig: !!savedConfig,
-    savedApiTokenKind: describeApiTokenKind(savedConfig?.api_token),
-    fallbackApiTokenKind: describeApiTokenKind(fallbackConfig?.api_token),
-    legacySelectedModel: (savedConfig as Record<string, unknown> | null)
-      ?.selected_model,
-  })
+  console.debug(
+    `[useConfig] hydrate session ${sessionId} config: saved=${!!savedConfig} savedApiTokenKind=${describeApiTokenKind(savedConfig?.api_token)} fallbackApiTokenKind=${describeApiTokenKind(fallbackConfig?.api_token)}`,
+  )
 
   let finalConfig: SessionConfig = {
     ...DefaultSessionConfig,
@@ -180,7 +176,13 @@ export async function hydrateSessionConfig(
     configChanged = true
   }
 
+  // The browser-wide key is authoritative. A stale per-session copy (left
+  // by a sync key change or an older import) is corrected in storage too,
+  // so nothing exports or reads an older key.
   const globalSyncKey = await resolveGlobalSyncKey(finalConfig, fallbackConfig)
+  if (savedConfig && savedConfig.sync_key !== globalSyncKey) {
+    configChanged = true
+  }
   finalConfig.sync_key = globalSyncKey
 
   // A missing config inherits the endpoint together with the token below, as
@@ -246,11 +248,9 @@ export async function hydrateSessionConfig(
       globalSyncKey,
     )
     finalConfig.api_token = fallbackApiToken || createFreeTierToken()
-    console.debug('[useConfig] filled missing API token for session', {
-      sessionId,
-      source: fallbackApiToken ? 'fallback-session' : 'generated',
-      apiTokenKind: describeApiTokenKind(finalConfig.api_token),
-    })
+    console.debug(
+      `[useConfig] filled missing API token: session=${sessionId} source=${fallbackApiToken ? 'fallback-session' : 'generated'} apiTokenKind=${describeApiTokenKind(finalConfig.api_token)}`,
+    )
     configChanged = true
   }
 

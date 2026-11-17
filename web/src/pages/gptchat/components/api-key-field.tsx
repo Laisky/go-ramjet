@@ -4,7 +4,7 @@
 import { SecretField } from '@/components/ui/secret-field'
 import type { SessionConfig } from '../types'
 import { maskSecretHint } from '../utils/api-token'
-import { validateCredentialUpdate } from '../utils/credential-policy'
+import type { ConfigUpdateHandler } from '../utils/credential-policy'
 
 /**
  * API_KEY_INPUT_ID is the DOM id of the API key editor input; the sidebar
@@ -23,20 +23,22 @@ const API_KEY_IS_SYNC_KEY_MESSAGE =
 
 /**
  * ApiKeyFieldProps configures ApiKeyField. config is the active session
- * config, onConfigChange persists a partial update of it, and
- * defaultEditing opens the editor on mount.
+ * config, onConfigChange stores a partial update of it and reports the
+ * credential fields it refused, and defaultEditing opens the editor on
+ * mount.
  */
 export interface ApiKeyFieldProps {
   config: SessionConfig
-  onConfigChange: (updates: Partial<SessionConfig>) => void | Promise<void>
+  onConfigChange: ConfigUpdateHandler
   defaultEditing?: boolean
 }
 
 /**
- * ApiKeyField renders the API key as a write-only field. A new key is
- * checked against the credential policy before it is saved, and the field
- * explains a rejection instead of dropping the value silently. Saving a key
- * of the user's own completes a pending API key reset.
+ * ApiKeyField renders the API key as a write-only field. The config hook
+ * checks a new key against the credential policy while storing it; the
+ * field explains a refusal instead of dropping the value silently, and a
+ * failed write keeps the editor open (see SecretField). Saving a key of the
+ * user's own completes a pending API key reset.
  * It returns the labelled field.
  */
 export function ApiKeyField({
@@ -45,11 +47,10 @@ export function ApiKeyField({
   defaultEditing,
 }: ApiKeyFieldProps) {
   const handleSave = async (apiToken: string) => {
-    const { rejections } = validateCredentialUpdate(config, {
-      api_token: apiToken,
-    })
-    if (rejections.length > 0) return API_KEY_IS_SYNC_KEY_MESSAGE
-    await onConfigChange({ api_token: apiToken })
+    const result = await onConfigChange({ api_token: apiToken })
+    if (result?.rejections.some((r) => r.field === 'api_token')) {
+      return API_KEY_IS_SYNC_KEY_MESSAGE
+    }
   }
 
   return (

@@ -61,7 +61,8 @@ function rebindExport(data: unknown, newKey: string): Record<string, unknown> {
  *      exists only in the cloud is lost;
  *   2. upload everything under a fresh key; if this fails, nothing local
  *      has changed and the old backup is intact;
- *   3. persist the fresh key locally;
+ *   3. persist the fresh key locally; if this fails, the backup uploaded in
+ *      step 2 is deleted again, best effort, since no device has its key;
  *   4. delete the old backup, best effort.
  * It returns the new key and whether step 4 succeeded. It rejects if any of
  * steps 1-3 fails.
@@ -77,7 +78,18 @@ export async function rotateSyncKey(
 
   const newKey = (deps.createKey ?? createSyncKey)()
   await deps.upload(newKey, rebindExport(await deps.exportData(), newKey))
-  await deps.persistSyncKey(newKey)
+  try {
+    await deps.persistSyncKey(newKey)
+  } catch (error) {
+    try {
+      await deps.removeBackup(newKey)
+    } catch (cleanupError) {
+      console.warn(
+        `[sync-key-rotation] failed to delete the unused new backup: ${String(cleanupError)}`,
+      )
+    }
+    throw error
+  }
 
   let oldBackupDeleted = true
   try {

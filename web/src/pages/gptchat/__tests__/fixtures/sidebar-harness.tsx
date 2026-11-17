@@ -11,17 +11,26 @@ import { vi } from 'vitest'
 
 import { ConfigSidebar } from '../../components/config-sidebar'
 import { useConfig } from '../../hooks/use-config'
+import { useConfigHandlers } from '../../hooks/use-config-handlers'
 import type { SessionConfig } from '../../types'
 import { sessionConfig, SYNC_KEY } from './credential-store'
 import { installStore } from './storage-mock'
 
 /**
  * SidebarHarness wires the real useConfig hook to the real ConfigSidebar
- * the way the GPTChat page does, exposes the reset flag for assertions,
- * and lets the test close the sidebar.
+ * through the page's own config handlers (useConfigHandlers), exposes the
+ * reset flag for assertions, and lets the test close the sidebar. Cloud
+ * export and import are stubbed.
  */
 export function SidebarHarness() {
-  const { config, updateConfig, isLoading } = useConfig()
+  const { config, updateConfig, isLoading, exportAllData, importAllData } =
+    useConfig()
+  const { handleConfigChange, handleReset } = useConfigHandlers({
+    config,
+    updateConfig,
+    exportAllData,
+    importAllData,
+  })
   const [open, setOpen] = useState(true)
   if (isLoading) return null
 
@@ -34,9 +43,9 @@ export function SidebarHarness() {
         isOpen={open}
         onClose={() => setOpen(false)}
         config={config}
-        onConfigChange={updateConfig}
+        onConfigChange={handleConfigChange}
         onClearChats={vi.fn()}
-        onReset={vi.fn()}
+        onReset={handleReset}
         onExportData={vi.fn().mockResolvedValue({})}
         onImportData={vi.fn().mockResolvedValue(undefined)}
       />

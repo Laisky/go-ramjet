@@ -7,6 +7,10 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { SessionConfig } from '../types'
 import {
+  type ConfigUpdateHandler,
+  restoringApiTokenNeedsRotation,
+} from '../utils/credential-policy'
+import {
   type ApiTokenChoice,
   listApiTokenChoices,
   readAdoptableApiToken,
@@ -14,12 +18,16 @@ import {
 
 /**
  * UseApiTokenRecoveryOptions configures useApiTokenRecovery: sessionId and
- * config describe the active session, and updateConfig persists an update.
+ * config describe the active session, updateConfig stores an update, and
+ * rotateSyncKey moves the cloud backup to a new sync key (see
+ * useSyncKeyRotation); it is needed only to restore a key that is also the
+ * sync key.
  */
 export interface UseApiTokenRecoveryOptions {
   sessionId: number
   config: SessionConfig
-  updateConfig: (updates: Partial<SessionConfig>) => Promise<void>
+  updateConfig: ConfigUpdateHandler
+  rotateSyncKey?: (oldKey: string) => Promise<unknown>
 }
 
 /**
@@ -27,13 +35,19 @@ export interface UseApiTokenRecoveryOptions {
  * an API key reset. Nothing is adopted without the user's choice. Another
  * session on the same endpoint may belong to another account, so only the
  * user can say whether its key is the right one.
- * It returns the choices, and adopt(sourceSessionId), which resolves to
- * false when that key is no longer a valid choice.
+ * It returns the choices; adopt(sourceSessionId), which resolves to false
+ * when that key is no longer a valid choice; needsRotation, which tells
+ * whether restoring the set-aside key rotates the sync key first; and
+ * restorePrevious(), which restores the key the reset set aside
+ * (api_token_before_reset), rotating the sync key first when the two are
+ * still equal. restorePrevious resolves to false when there is no such key
+ * and rejects when rotating or storing fails, leaving the reset pending.
  */
 export function useApiTokenRecovery({
   sessionId,
   config,
   updateConfig,
+  rotateSyncKey,
 }: UseApiTokenRecoveryOptions) {
   const [choices, setChoices] = useState<ApiTokenChoice[]>([])
   const [reloadToken, setReloadToken] = useState(0)
@@ -72,5 +86,30 @@ export function useApiTokenRecovery({
     [apiBase, syncKey, updateConfig],
   )
 
-  return { choices: pending ? choices : [], adopt }
+  const previousToken = config.api_token_before_reset?.trim() || ''
+  const needsRotation = restoringApiTokenNeedsRotation(config)
+
+  const restorePrevious = useCallback(async (): Promise<boolean> => {
+    if (!previousToken) return false
+    if (needsRotation) {
+      if (!rotateSyncKey) {
+        throw new Error('restoring this API key needs a sync key rotation')
+      }
+      await rotateSyncKey(syncKey || '')
+    }
+    const { rejections } = await updateConfig({ api_token: previousToken })
+    if (rejections.length > 0) {
+      throw new Error(
+        `the API key was refused: ${rejections.map((r) => r.reason).join(',')}`,
+      )
+    }
+    return true
+  }, [needsRotation, previousToken, rotateSyncKey, syncKey, updateConfig])
+
+  return {
+    choices: pending ? choices : [],
+    adopt,
+    needsRotation,
+    restorePrevious,
+  }
 }

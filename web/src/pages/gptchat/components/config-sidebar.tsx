@@ -18,14 +18,21 @@ import { SessionManager } from './session-manager'
 
 import { useUser } from '../hooks/use-user'
 import type { PromptShortcut, SessionConfig } from '../types'
+import type { ConfigUpdateHandler } from '../utils/credential-policy'
 
+/**
+ * ConfigSidebarProps configures ConfigSidebar. onConfigChange stores a
+ * partial update of the active session config: it resolves once the update
+ * is stored, reporting the credential fields it refused, and rejects when
+ * storing failed, which the secret editors show to the user.
+ */
 export interface ConfigSidebarProps {
   isOpen: boolean
   onClose: () => void
   /** initialFocus 'api-key' opens the API key editor, focused, on open. */
   initialFocus?: 'api-key'
   config: SessionConfig
-  onConfigChange: (updates: Partial<SessionConfig>) => void
+  onConfigChange: ConfigUpdateHandler
   onClearChats: () => void
   onReset: () => void
   promptShortcuts?: PromptShortcut[]
@@ -79,6 +86,22 @@ export function ConfigSidebar({
   onExportSession,
 }: ConfigSidebarProps) {
   const { user } = useUser(config.api_token)
+
+  /**
+   * applyChange stores updates in the background, for controls that apply
+   * as soon as they change. A failed write reverts the control (the config
+   * hook rolls its state back) and is logged here.
+   */
+  const applyChange = (updates: Partial<SessionConfig>) => {
+    const run = async () => {
+      try {
+        await onConfigChange(updates)
+      } catch (err) {
+        console.error(`[ConfigSidebar] saving settings failed: ${String(err)}`)
+      }
+    }
+    void run()
+  }
 
   return (
     <DialogPrimitive.Root
@@ -195,7 +218,7 @@ export function ConfigSidebar({
                     config.selected_model === config.selected_chat_model
                   }
                   onModelChange={(model) =>
-                    onConfigChange({
+                    applyChange({
                       selected_model: model,
                       selected_chat_model: model,
                     })
@@ -210,7 +233,7 @@ export function ConfigSidebar({
                   }
                   active={config.selected_model === config.selected_draw_model}
                   onModelChange={(model) =>
-                    onConfigChange({
+                    applyChange({
                       selected_model: model,
                       selected_draw_model: model,
                     })
@@ -239,7 +262,7 @@ export function ConfigSidebar({
                 value={config.chat_switch.draw_n_images}
                 aria-valuetext={`${config.chat_switch.draw_n_images} images`}
                 onChange={(e) =>
-                  onConfigChange({
+                  applyChange({
                     chat_switch: {
                       ...config.chat_switch,
                       draw_n_images: parseInt(e.target.value, 10),
@@ -274,7 +297,7 @@ export function ConfigSidebar({
                     : `${config.n_contexts} contexts`
                 }
                 onChange={(e) =>
-                  onConfigChange({ n_contexts: parseInt(e.target.value, 10) })
+                  applyChange({ n_contexts: parseInt(e.target.value, 10) })
                 }
                 className="w-full"
               />
@@ -300,7 +323,7 @@ export function ConfigSidebar({
                 value={config.max_tokens}
                 aria-valuetext={`${config.max_tokens} tokens`}
                 onChange={(e) =>
-                  onConfigChange({ max_tokens: parseInt(e.target.value, 10) })
+                  applyChange({ max_tokens: parseInt(e.target.value, 10) })
                 }
                 className="w-full"
               />
@@ -326,7 +349,7 @@ export function ConfigSidebar({
                 value={config.temperature}
                 aria-valuetext={`Temperature ${config.temperature.toFixed(1)}`}
                 onChange={(e) =>
-                  onConfigChange({ temperature: parseFloat(e.target.value) })
+                  applyChange({ temperature: parseFloat(e.target.value) })
                 }
                 className="w-full"
               />
@@ -352,7 +375,7 @@ export function ConfigSidebar({
                 value={config.presence_penalty}
                 aria-valuetext={`Presence penalty ${config.presence_penalty.toFixed(1)}`}
                 onChange={(e) =>
-                  onConfigChange({
+                  applyChange({
                     presence_penalty: parseFloat(e.target.value),
                   })
                 }
@@ -380,7 +403,7 @@ export function ConfigSidebar({
                 value={config.frequency_penalty}
                 aria-valuetext={`Frequency penalty ${config.frequency_penalty.toFixed(1)}`}
                 onChange={(e) =>
-                  onConfigChange({
+                  applyChange({
                     frequency_penalty: parseFloat(e.target.value),
                   })
                 }
@@ -390,7 +413,7 @@ export function ConfigSidebar({
 
             <PromptShortcutManager
               config={config}
-              onConfigChange={onConfigChange}
+              onConfigChange={applyChange}
               promptShortcuts={promptShortcuts}
               onSavePrompt={onSavePrompt}
               onEditPrompt={onEditPrompt}
@@ -414,7 +437,7 @@ export function ConfigSidebar({
                 <Switch
                   checked={config.chat_switch.enable_mcp}
                   onCheckedChange={(checked) =>
-                    onConfigChange({
+                    applyChange({
                       chat_switch: {
                         ...config.chat_switch,
                         enable_mcp: checked,
@@ -427,9 +450,7 @@ export function ConfigSidebar({
               {config.chat_switch.enable_mcp && (
                 <McpServerManager
                   servers={config.mcp_servers || []}
-                  onChange={(servers) =>
-                    onConfigChange({ mcp_servers: servers })
-                  }
+                  onChange={(servers) => applyChange({ mcp_servers: servers })}
                 />
               )}
             </div>

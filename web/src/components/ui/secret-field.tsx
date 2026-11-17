@@ -34,8 +34,10 @@ import { SecretInput } from './secret-input'
  *   - label is the secret's name in button labels ("Replace API key").
  *   - value is the stored secret; hint is its masked form (defaults to the
  *     last four characters).
- *   - onSave stores a new value; it returns an error message to keep the
- *     editor open, or nothing on success.
+ *   - onSave stores a new value; it resolves with an error message to keep
+ *     the editor open, or with nothing once the value is stored. If it
+ *     rejects, the editor stays open, the draft is kept, and the failure is
+ *     shown.
  *   - defaultEditing opens the editor on mount, for "re-enter your key" flows.
  *   - className styles the text of the hint and the input.
  */
@@ -123,6 +125,10 @@ export function SecretField({
         return
       }
       closeEditor()
+    } catch (err) {
+      // Nothing was stored: keep the draft so the user can retry.
+      console.error(`[SecretField] saving the ${label} failed: ${String(err)}`)
+      setError(`Could not save the ${label}, so it was not changed. Try again.`)
     } finally {
       setSaving(false)
     }

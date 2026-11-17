@@ -74,6 +74,14 @@ export interface SessionConfig {
    * dismisses the alert. Absent in configs written before the flag existed.
    */
   api_token_reset_required?: boolean
+  /**
+   * api_token_before_reset keeps the API token a reset set aside when it may
+   * still be the user's own key: a value without a sync-key shape that
+   * equalled the sync key. Nothing sends it anywhere. It only lets the user
+   * restore that key from the reset alert, and it is cleared once the reset
+   * ends. It never holds a generated sync key.
+   */
+  api_token_before_reset?: string
   session_name?: string
   session_visible?: boolean
   updated_at?: number

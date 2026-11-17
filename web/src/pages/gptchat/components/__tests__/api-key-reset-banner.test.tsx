@@ -138,3 +138,92 @@ describe('ApiKeyResetBanner', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ApiKeyResetBanner with a set-aside key that may be the user’s own', () => {
+  const CUSTOM = 'my-custom-provider-token'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    installStore({})
+  })
+
+  /**
+   * renderAmbiguous renders the banner for a session whose reset set CUSTOM
+   * aside while it still is the sync key.
+   */
+  function renderAmbiguous(rotateSyncKey: ReturnType<typeof vi.fn>) {
+    const updateConfig = vi.fn().mockResolvedValue({ rejections: [] })
+    render(
+      <ApiKeyResetBanner
+        sessionId={1}
+        config={sessionConfig({
+          api_token: 'FREETIER-placeholder',
+          api_token_reset_required: true,
+          api_token_before_reset: CUSTOM,
+          sync_key: CUSTOM,
+        })}
+        updateConfig={updateConfig}
+        onOpenApiKeySettings={vi.fn()}
+        rotateSyncKey={rotateSyncKey}
+      />,
+    )
+    return updateConfig
+  }
+
+  it('rotates the sync key, after confirmation, then restores the key', async () => {
+    const user = userEvent.setup()
+    const order: string[] = []
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const rotateSyncKey = vi.fn(async () => {
+      order.push('rotate')
+      return { newKey: 'sync-n3wn3wn3wn3wn3w', oldBackupDeleted: true }
+    })
+    const updateConfig = renderAmbiguous(rotateSyncKey)
+    updateConfig.mockImplementation(async () => {
+      order.push('restore')
+      return { rejections: [] }
+    })
+
+    expect(screen.getByText('Confirm this session’s API key')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: /It is my API key/ }))
+
+    await waitFor(() => {
+      expect(updateConfig).toHaveBeenCalledWith({ api_token: CUSTOM })
+    })
+    expect(rotateSyncKey).toHaveBeenCalledWith(CUSTOM)
+    expect(order).toEqual(['rotate', 'restore'])
+  })
+
+  it('changes nothing when the rotation is not confirmed', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const rotateSyncKey = vi.fn()
+    const updateConfig = renderAmbiguous(rotateSyncKey)
+
+    await user.click(screen.getByRole('button', { name: /It is my API key/ }))
+
+    expect(rotateSyncKey).not.toHaveBeenCalled()
+    expect(updateConfig).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed rotation and keeps the alert', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'alert').mockImplementation(() => undefined)
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const rotateSyncKey = vi.fn().mockRejectedValue(new Error('offline'))
+    const updateConfig = renderAmbiguous(rotateSyncKey)
+
+    await user.click(screen.getByRole('button', { name: /It is my API key/ }))
+
+    await waitFor(() => {
+      expect(window.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/restoring the api key failed/i),
+      )
+    })
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', { name: /It is my API key/ }),
+    ).toBeEnabled()
+  })
+})

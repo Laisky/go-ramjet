@@ -4,7 +4,6 @@
  * for the user to choose, and detecting a sync key that doubles as an API
  * token. The decisions themselves come from credential-policy.ts.
  */
-import { constantTimeEqual } from '@/utils/constant-time'
 import { kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
 import type { SessionConfig } from '../types'
 import { maskSecretHint } from '../utils/api-token'
@@ -57,26 +56,76 @@ async function readStoredSessionConfigs(): Promise<StoredSessionConfig[]> {
 }
 
 /**
+ * StoredValueWriter stores one value under one storage key. Callers pass
+ * their ordered writer, so these writes queue behind their pending ones.
+ */
+export type StoredValueWriter = (key: string, value: unknown) => Promise<void>
+
+/**
+ * writeDirectly is the StoredValueWriter for callers without a write queue.
+ */
+const writeDirectly: StoredValueWriter = (key, value) => kvSet(key, value)
+
+/**
  * repairStoredSessionCredentials enforces the API token invariant on every
  * stored session, not just the active one. Inactive sessions are then safe
  * to export, upload, or switch to. syncKey is the browser-wide sync key.
  * skipSessionId names the session the caller already repaired and still
- * holds in memory, so its newer in-memory state is not overwritten.
+ * holds in memory, so its newer in-memory state is not overwritten. write
+ * stores a repaired config.
  * It returns the ids of the sessions it repaired.
  */
 export async function repairStoredSessionCredentials(
   syncKey: string,
   skipSessionId?: number,
+  write: StoredValueWriter = writeDirectly,
 ): Promise<number[]> {
   const repaired: number[] = []
   for (const entry of await readStoredSessionConfigs()) {
     if (!entry.config || entry.sessionId === skipSessionId) continue
     const result = repairStoredApiToken(entry.config, [syncKey])
     if (result.outcome === 'healthy') continue
-    await kvSet(entry.key, result.config)
+    await write(entry.key, result.config)
     repaired.push(entry.sessionId)
   }
   return repaired
+}
+
+/**
+ * rebindStoredSyncKey makes every stored session config carry syncKey, the
+ * browser-wide sync key, as its own copy of it, so no stored or exported
+ * config points at an older key. updated_at is left alone: this is not a
+ * user edit and must not win a later merge. skipSessionId names a session
+ * the caller already wrote. write stores a rebound config.
+ * It returns the ids of the sessions it rebound.
+ */
+export async function rebindStoredSyncKey(
+  syncKey: string,
+  skipSessionId?: number,
+  write: StoredValueWriter = writeDirectly,
+): Promise<number[]> {
+  const rebound: number[] = []
+  if (!syncKey) return rebound
+  for (const entry of await readStoredSessionConfigs()) {
+    if (!entry.config || entry.sessionId === skipSessionId) continue
+    if (entry.config.sync_key === syncKey) continue
+    await write(entry.key, { ...entry.config, sync_key: syncKey })
+    rebound.push(entry.sessionId)
+  }
+  return rebound
+}
+
+/**
+ * listStoredApiTokens returns the API tokens of every stored session except
+ * skipSessionId, so a new sync key can be checked against all of them.
+ */
+export async function listStoredApiTokens(
+  skipSessionId?: number,
+): Promise<string[]> {
+  return (await readStoredSessionConfigs())
+    .filter((entry) => entry.sessionId !== skipSessionId)
+    .map((entry) => entry.config?.api_token?.trim() || '')
+    .filter(Boolean)
 }
 
 /**
@@ -115,19 +164,6 @@ export async function readAdoptableApiToken(
     1,
   )
   return candidate?.token ?? ''
-}
-
-/**
- * isApiTokenOfAnySession reports whether any stored session uses secret as
- * its API token, so a new sync key can be refused before it is saved.
- */
-export async function isApiTokenOfAnySession(secret: string): Promise<boolean> {
-  const value = secret.trim()
-  if (!value) return false
-  return (await readStoredSessionConfigs()).some((entry) => {
-    const token = entry.config?.api_token?.trim() || ''
-    return !!token && constantTimeEqual(token, value)
-  })
 }
 
 /**

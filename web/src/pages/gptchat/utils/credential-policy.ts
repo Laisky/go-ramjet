@@ -13,8 +13,11 @@
  *       their shape: whoever sees the API token could otherwise read the
  *       backup. Pairs stored before this rule are kept and flagged for an
  *       explicit sync-key rotation, so existing backups stay reachable.
- *   I2. A stored API token that is really a sync key is never used. It is
- *       replaced by a free-tier token and the session awaits a reset.
+ *   I2. A stored API token that is, or may be, a sync key is never used.
+ *       It is replaced by a free-tier token and the session awaits a reset.
+ *       A value without a sync-key shape that merely equals the sync key may
+ *       be the user's own key, reused on purpose, so it is set aside in
+ *       api_token_before_reset for the user to restore, never discarded.
  *   I3. A credential never moves between sessions without evidence. Either
  *       the user picks it, or it is the same session's own earlier value.
  *       A shared endpoint is not evidence, because one endpoint serves many
@@ -42,6 +45,33 @@ import {
 export interface CredentialRejection {
   field: 'api_token' | 'sync_key'
   reason: 'api-token-is-sync-key' | 'sync-key-is-api-token'
+}
+
+/**
+ * ConfigUpdateResult is what a stored config update reports back: the
+ * credential fields the policy dropped from it. An update that could not be
+ * stored rejects instead of resolving.
+ */
+export interface ConfigUpdateResult {
+  rejections: CredentialRejection[]
+}
+
+/**
+ * ConfigUpdateHandler stores a partial update of the active session config.
+ * It resolves once the update is stored, with the dropped credential fields,
+ * and rejects when storing failed.
+ */
+export type ConfigUpdateHandler = (
+  updates: Partial<SessionConfig>,
+) => Promise<ConfigUpdateResult>
+
+/**
+ * CredentialUpdateContext is what validateCredentialUpdate needs to know
+ * beyond the active session: otherApiTokens are the API tokens of every
+ * other stored session, which a new sync key must not copy either.
+ */
+export interface CredentialUpdateContext {
+  otherApiTokens?: ReadonlyArray<string | null | undefined>
 }
 
 /**
@@ -132,8 +162,11 @@ export function isUserSuppliedApiToken(
  * validateCredentialUpdate decides which credential fields of updates may be
  * applied on top of current, enforcing I1 and I2 for every write path. A
  * field is dropped only when it changes and would create a forbidden pair,
- * so re-sending an unchanged value never fails. Saving a key of the user's
- * own also completes a pending API key reset.
+ * so re-sending an unchanged value never fails. A new sync key must differ
+ * from the API token of this session and, through context.otherApiTokens,
+ * of every other stored session. Saving a key of the user's own completes
+ * a pending API key reset, and a reset that ends clears
+ * api_token_before_reset.
  * It returns the accepted updates and the rejections.
  */
 export function validateCredentialUpdate(
@@ -142,6 +175,7 @@ export function validateCredentialUpdate(
     'api_token' | 'sync_key' | 'api_token_reset_required'
   >,
   updates: Partial<SessionConfig>,
+  context: CredentialUpdateContext = {},
 ): CredentialUpdateDecision {
   const accepted: Partial<SessionConfig> = { ...updates }
   const rejections: CredentialRejection[] = []
@@ -149,7 +183,10 @@ export function validateCredentialUpdate(
   if (
     accepted.sync_key !== undefined &&
     !sameSecret(accepted.sync_key, current.sync_key) &&
-    sameSecret(accepted.sync_key, accepted.api_token ?? current.api_token)
+    [
+      accepted.api_token ?? current.api_token,
+      ...(context.otherApiTokens ?? []),
+    ].some((token) => sameSecret(accepted.sync_key, token))
   ) {
     delete accepted.sync_key
     rejections.push({ field: 'sync_key', reason: 'sync-key-is-api-token' })
@@ -172,6 +209,10 @@ export function validateCredentialUpdate(
     }
   }
 
+  if (accepted.api_token_reset_required === false) {
+    accepted.api_token_before_reset = undefined
+  }
+
   return { accepted, rejections }
 }
 
@@ -182,8 +223,10 @@ export function validateCredentialUpdate(
  * config, for example the local copy a cloud download is about to
  * overwrite, and it is only used when it holds a key of the user's own on
  * the same endpoint (I3). syncKeys lists every sync key the token must not
- * copy. It returns the possibly repaired config and the outcome; a healthy
- * config is returned unchanged.
+ * copy. A replaced token that has no sync-key shape may be the user's own
+ * key reused as the sync key, so it is kept in api_token_before_reset for
+ * the user to restore. It returns the possibly repaired config and the
+ * outcome; a healthy config is returned unchanged.
  */
 export function repairStoredApiToken(
   config: SessionConfig,
@@ -211,19 +254,39 @@ export function repairStoredApiToken(
         ...config,
         api_token: previousToken,
         api_token_reset_required: previous.api_token_reset_required === true,
+        api_token_before_reset:
+          previous.api_token_reset_required === true
+            ? previous.api_token_before_reset
+            : undefined,
       },
       outcome: 'restored-previous',
     }
   }
 
+  const replaced = config.api_token?.trim() || ''
   return {
     config: {
       ...config,
       api_token: createFreeTierToken(),
       api_token_reset_required: true,
+      api_token_before_reset: isGeneratedSyncKey(replaced)
+        ? config.api_token_before_reset
+        : replaced,
     },
     outcome: 'reset-required',
   }
+}
+
+/**
+ * restoringApiTokenNeedsRotation reports whether restoring the key a reset
+ * set aside (config.api_token_before_reset) would make the API token and
+ * the sync key equal again (I1). The sync key must then be rotated first;
+ * if it has changed since the reset, the key can be restored as is.
+ */
+export function restoringApiTokenNeedsRotation(
+  config: Pick<SessionConfig, 'api_token_before_reset' | 'sync_key'>,
+): boolean {
+  return sameSecret(config.api_token_before_reset, config.sync_key)
 }
 
 /**

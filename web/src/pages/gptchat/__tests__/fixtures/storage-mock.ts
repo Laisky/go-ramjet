@@ -24,6 +24,7 @@ export const StorageKeys = {
   SYNC_KEY: 'config_sync_key',
   CHAT_DATA_PREFIX: 'chat_data_',
   DELETED_CHAT_IDS: 'chat_deleted_chat_ids',
+  PENDING_BACKUP_DELETIONS: 'config_pending_backup_deletions',
 } as const
 
 export const kvGet: Mock = vi.fn()

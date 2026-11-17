@@ -34,10 +34,44 @@ function isSessionConfigEntry(
 }
 
 /**
+ * EXPORT_EXCLUDED_KEYS lists device-local keys that never leave the device.
+ */
+const EXPORT_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
+  'MIGRATE_V1_COMPLETED',
+  StorageKeys.PENDING_BACKUP_DELETIONS,
+])
+
+/**
+ * IMPORT_SKIPPED_KEYS lists keys a backup may carry but never overwrites
+ * locally. The sync key stays the one this device downloads with: a backup
+ * is untrusted input, and adopting its key could pair the sync key with an
+ * API key or move this device to a key that holds no backup.
+ */
+const IMPORT_SKIPPED_KEYS: ReadonlySet<string> = new Set([
+  StorageKeys.DELETED_CHAT_IDS,
+  StorageKeys.SELECTED_SESSION,
+  StorageKeys.SYNC_KEY,
+  StorageKeys.PENDING_BACKUP_DELETIONS,
+])
+
+/**
+ * bindSessionSyncKey returns config carrying syncKey as its copy of the
+ * browser-wide sync key, or config unchanged when syncKey is empty.
+ */
+function bindSessionSyncKey(
+  config: SessionConfig,
+  syncKey: string | null | undefined,
+): SessionConfig {
+  return syncKey ? { ...config, sync_key: syncKey } : config
+}
+
+/**
  * exportAllData collects every stored key (sessions, configs, shortcuts) for
- * sync. A session config whose API token is a clobbered sync key is exported
- * with a free-tier token instead, so a device that has not been updated yet
- * never receives a sync key as its API token.
+ * sync, except device-local ones. Every session config is exported bound to
+ * the browser-wide sync key, so the backup never mixes an older key in. A
+ * session config whose API token is a clobbered sync key is exported with a
+ * free-tier token instead, so a device that has not been updated yet never
+ * receives a sync key as its API token.
  * It returns the export as a key/value record.
  */
 export async function exportAllData(): Promise<Record<string, unknown>> {
@@ -45,14 +79,14 @@ export async function exportAllData(): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {}
   const syncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
 
-  // keys to exclude
-  const excludeKeys = ['MIGRATE_V1_COMPLETED']
-
   for (const key of keys) {
-    if (excludeKeys.includes(key)) continue
+    if (EXPORT_EXCLUDED_KEYS.has(key)) continue
     const value = await kvGet(key)
     data[key] = isSessionConfigEntry(key, value)
-      ? repairStoredApiToken(value, [syncKey]).config
+      ? bindSessionSyncKey(
+          repairStoredApiToken(value, [syncKey]).config,
+          syncKey,
+        )
       : value
   }
 
@@ -360,23 +394,30 @@ export async function importAllData(
 
   // 4) Overwrite non-chat keys from cloud (settings, session configs, shortcuts, etc).
   //    Do this last so chat merges don't get clobbered.
-  const syncKeys = [
-    await kvGet<string>(StorageKeys.SYNC_KEY),
+  const localSyncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
+  const incomingSyncKey =
     typeof incoming[StorageKeys.SYNC_KEY] === 'string'
       ? (incoming[StorageKeys.SYNC_KEY] as string)
-      : '',
-  ]
+      : ''
+  if (incomingSyncKey && localSyncKey && incomingSyncKey !== localSyncKey) {
+    console.warn(
+      '[data-sync] kept the local sync key; the backup names a different one',
+    )
+  }
+  const syncKeys = [localSyncKey, incomingSyncKey]
   for (const [key, rawVal] of Object.entries(incoming)) {
-    if (key === StorageKeys.DELETED_CHAT_IDS) continue
+    if (IMPORT_SKIPPED_KEYS.has(key)) continue
     if (key.startsWith(StorageKeys.CHAT_DATA_PREFIX)) continue
     if (key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX)) continue
-    if (key === StorageKeys.SELECTED_SESSION) continue
 
     const val = isSessionConfigEntry(key, rawVal)
-      ? sanitizeIncomingSessionConfig(
-          rawVal,
-          await kvGet<SessionConfig>(key),
-          syncKeys,
+      ? bindSessionSyncKey(
+          sanitizeIncomingSessionConfig(
+            rawVal,
+            await kvGet<SessionConfig>(key),
+            syncKeys,
+          ),
+          localSyncKey,
         )
       : rawVal
 

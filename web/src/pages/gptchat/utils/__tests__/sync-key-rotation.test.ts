@@ -120,3 +120,24 @@ describe('rotateSyncKey', () => {
     expect(deps.persistSyncKey).toHaveBeenCalledWith(NEW_KEY)
   })
 })
+
+describe('rotateSyncKey when the new key cannot be stored', () => {
+  it('deletes the unused new backup, keeps the old one, and rejects', async () => {
+    const { deps, calls } = fakeDeps({
+      persistSyncKey: vi.fn(async () => {
+        throw new Error('QuotaExceededError')
+      }),
+    })
+
+    await expect(rotateSyncKey(OLD_KEY, deps)).rejects.toThrow(
+      'QuotaExceededError',
+    )
+    expect(calls).toEqual([
+      `download:${OLD_KEY}`,
+      'import:merge',
+      'export',
+      `upload:${NEW_KEY}`,
+      `remove:${NEW_KEY}`,
+    ])
+  })
+})
