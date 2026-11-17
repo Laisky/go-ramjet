@@ -151,6 +151,7 @@ export function McpServerManager({
             setIsAdding(true)
           }}
           disabled={isAdding || editingId !== null}
+          aria-label="Add MCP server"
         >
           <Plus className="h-4 w-4" />
         </Button>
@@ -164,6 +165,7 @@ export function McpServerManager({
             </h4>
             <div className="space-y-2">
               <Input
+                aria-label="MCP server name"
                 placeholder="Server Name"
                 className="h-8 text-sm"
                 value={formData.name}
@@ -172,6 +174,7 @@ export function McpServerManager({
                 }
               />
               <Input
+                aria-label="MCP server URL"
                 placeholder="Server URL (e.g., https://mcp.laisky.com)"
                 className="h-8 text-sm"
                 value={formData.url}

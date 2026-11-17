@@ -11,9 +11,9 @@ import {
   type SessionHistoryItem,
 } from '../types'
 import {
+  apiTokenCollidesWithSyncKey,
   createFreeTierToken,
   describeApiTokenKind,
-  hasUsableApiToken,
   isApiTokenClobberedBySyncKey,
 } from '../utils/api-token'
 import {
@@ -32,11 +32,10 @@ import {
   importAllData as importData,
 } from '../utils/data-sync'
 import {
-  getSessionOrderFromKv,
   hydrateSessionConfig,
   mergeSessionConfigs,
-  setSessionOrderToKv,
 } from './session-config-hydration'
+import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
  * Hook for managing session configuration
@@ -195,11 +194,9 @@ export function useConfig() {
   }, [applySessionState, loadSessions])
 
   /**
-   * Apply URL parameter overrides to the current config
-   */
-
-  /**
-   * Update and persist configuration
+   * updateConfig merges updates into the active session config and persists
+   * it. An API token that would copy the sync key, or a sync key that would
+   * copy a custom API token, is dropped while the other fields still apply.
    */
   const updateConfig = useCallback(async (updates: Partial<SessionConfig>) => {
     let activeSessionId = sessionIdRef.current
@@ -225,21 +222,37 @@ export function useConfig() {
     }
 
     const baseConfig = configRef.current
-    const nextSyncKey = updates.sync_key ?? baseConfig.sync_key
-    let acceptedUpdates = updates
+    const acceptedUpdates: Partial<SessionConfig> = { ...updates }
+    // The API token and the sync key must never hold the same non-API-shaped
+    // secret, whichever field is written; drop the offending field and keep
+    // every other change, so auto-save of unrelated settings still works.
     if (
-      updates.api_token !== undefined &&
-      isApiTokenClobberedBySyncKey(updates.api_token, nextSyncKey)
+      acceptedUpdates.sync_key !== undefined &&
+      apiTokenCollidesWithSyncKey(
+        acceptedUpdates.api_token ?? baseConfig.api_token,
+        acceptedUpdates.sync_key,
+      )
     ) {
-      // A non-API-shaped token identical to the sync key is the signature of
-      // password-manager autofill, never a deliberate edit; drop it.
-      const { api_token: rejectedApiToken, ...rest } = updates
-      acceptedUpdates = rest
+      delete acceptedUpdates.sync_key
       console.warn(
-        `[useConfig] rejected API token update copying sync key: session=${sessionIdRef.current} rejectedKind=${describeApiTokenKind(rejectedApiToken)}`,
+        `[useConfig] rejected sync key update copying the API token: session=${sessionIdRef.current}`,
+      )
+    }
+    const nextSyncKey = acceptedUpdates.sync_key ?? baseConfig.sync_key
+    if (
+      acceptedUpdates.api_token !== undefined &&
+      isApiTokenClobberedBySyncKey(acceptedUpdates.api_token, nextSyncKey)
+    ) {
+      const rejectedKind = describeApiTokenKind(acceptedUpdates.api_token)
+      delete acceptedUpdates.api_token
+      console.warn(
+        `[useConfig] rejected API token update copying sync key: session=${sessionIdRef.current} rejectedKind=${rejectedKind}`,
       )
     }
 
+    // api_token_reset_required only changes through an explicit update: the
+    // settings sidebar clears it once the user finishes entering a key, so a
+    // half-typed key never silences the alert.
     const newConfig = normalizeRetiredResearchConfig({
       ...baseConfig,
       ...acceptedUpdates,
@@ -250,12 +263,6 @@ export function useConfig() {
       sync_key: nextSyncKey,
       updated_at: Date.now(),
     })
-    if (
-      newConfig.api_token_reset_required &&
-      hasUsableApiToken(newConfig.api_token, newConfig.sync_key)
-    ) {
-      newConfig.api_token_reset_required = false
-    }
 
     configRef.current = newConfig
     setConfigState(newConfig)
@@ -278,8 +285,8 @@ export function useConfig() {
     })
 
     try {
-      if (updates.sync_key !== undefined) {
-        await kvSet(StorageKeys.SYNC_KEY, updates.sync_key)
+      if (acceptedUpdates.sync_key !== undefined) {
+        await kvSet(StorageKeys.SYNC_KEY, acceptedUpdates.sync_key)
       }
 
       const key = getSessionConfigKey(sessionIdRef.current)

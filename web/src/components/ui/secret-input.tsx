@@ -14,8 +14,10 @@ import {
 
 /**
  * SecretInputProps configures SecretInput. value and onValueChange make it a
- * controlled field; label names the secret for the reveal toggle's
- * accessible name; toggleClassName and iconClassName size the reveal toggle.
+ * controlled field; label names the secret: it is the reveal toggle's
+ * accessible name and, unless the field has an id for an external
+ * `<label htmlFor>` or an explicit aria-label, the field's accessible name
+ * too; toggleClassName and iconClassName size the reveal toggle.
  */
 export interface SecretInputProps extends Omit<
   InputProps,
@@ -44,6 +46,7 @@ export function SecretInput({
   toggleClassName,
   iconClassName = 'h-4 w-4',
   spellCheck = false,
+  'aria-label': ariaLabel,
   ...props
 }: SecretInputProps) {
   const [revealed, setRevealed] = useState(false)
@@ -63,6 +66,7 @@ export function SecretInput({
       <Input
         {...props}
         {...SECRET_INPUT_OPT_OUT_ATTRIBUTES}
+        aria-label={ariaLabel ?? (props.id ? undefined : label)}
         type="text"
         value={value}
         onChange={handleChange}

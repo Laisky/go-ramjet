@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button'
 import { SecretInput } from '@/components/ui/secret-input'
 import type { SessionConfig } from '../types'
 import { api } from '../utils/api'
+import { apiTokenCollidesWithSyncKey } from '../utils/api-token'
+
+const SYNC_KEY_ERROR_ID = 'cfg-sync-key-error'
 
 interface DataSyncManagerProps {
   config: SessionConfig
@@ -20,6 +23,16 @@ export function DataSyncManager({
   onImportData,
 }: DataSyncManagerProps) {
   const [isSyncing, setIsSyncing] = useState(false)
+  const [rejectedApiToken, setRejectedApiToken] = useState(false)
+
+  const handleSyncKeyChange = (syncKey: string) => {
+    if (apiTokenCollidesWithSyncKey(config.api_token, syncKey)) {
+      setRejectedApiToken(true)
+      return
+    }
+    setRejectedApiToken(false)
+    onConfigChange({ sync_key: syncKey })
+  }
 
   const handleDownload = async () => {
     if (!config.sync_key) {
@@ -81,11 +94,23 @@ export function DataSyncManager({
           name="gptchat-sync-key"
           label="sync key"
           value={config.sync_key || ''}
-          onValueChange={(syncKey) => onConfigChange({ sync_key: syncKey })}
+          onValueChange={handleSyncKeyChange}
+          aria-invalid={rejectedApiToken || undefined}
+          aria-describedby={rejectedApiToken ? SYNC_KEY_ERROR_ID : undefined}
           placeholder="sync-..."
           className="text-xs"
           iconClassName="h-3.5 w-3.5"
         />
+        {rejectedApiToken && (
+          <p
+            id={SYNC_KEY_ERROR_ID}
+            role="alert"
+            className="mt-1 text-xs text-destructive"
+          >
+            That value is your API key, so it was not saved as the sync key.
+            Choose a different sync key; the two keys must be different.
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">

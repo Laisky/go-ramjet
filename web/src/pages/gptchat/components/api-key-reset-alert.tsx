@@ -24,8 +24,8 @@ export interface ApiKeyResetAlertProps {
 
 /**
  * ApiKeyResetAlert explains that this session's API key was overwritten by the
- * sync key and could not be restored, and walks the user through re-entering
- * it. It returns a high-contrast alert pinned below the page header; it is
+ * sync key and could not be restored without guessing between credentials,
+ * and walks the user through re-entering it. It returns a high-contrast alert pinned below the page header; it is
  * fixed rather than sticky because the page scrolls the window while its
  * ancestors clip overflow, which would detach a sticky element.
  */
@@ -47,16 +47,19 @@ export function ApiKeyResetAlert({
           </p>
           <p>
             A browser password manager overwrote this session&apos;s API key
-            with your sync key, and no other session had a copy to restore it
-            from. This session has been switched to the free tier so it keeps
-            working.
+            with your sync key, and it could not be restored safely: no other
+            session on the same API endpoint holds one unambiguous key. This
+            session has been switched to the free tier so it keeps working.
           </p>
           <ol className="list-decimal space-y-0.5 pl-5">
             <li>
               Click <strong>Re-enter API key</strong> (or open{' '}
               <strong>Settings → API Key</strong>).
             </li>
-            <li>Paste your API key; it is saved automatically.</li>
+            <li>
+              Paste your API key; it is saved automatically. Close Settings to
+              finish.
+            </li>
             <li>
               Don&apos;t have it at hand? Get it again via the{' '}
               <a

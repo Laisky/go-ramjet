@@ -6,8 +6,8 @@ import { Settings, Trash2, User, X } from 'lucide-react'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
-import { SecretInput } from '@/components/ui/secret-input'
 import { Switch } from '@/components/ui/switch'
+import { API_KEY_INPUT_ID, ApiKeyField } from './api-key-field'
 import { ConfirmAction } from './confirm-action'
 import { DataSyncManager } from './data-sync-manager'
 import { McpServerManager } from './mcp-server-manager'
@@ -17,6 +17,7 @@ import { SessionManager } from './session-manager'
 
 import { useUser } from '../hooks/use-user'
 import type { PromptShortcut, SessionConfig } from '../types'
+import { canCompleteApiTokenReset } from '../utils/api-token'
 
 export interface ConfigSidebarProps {
   isOpen: boolean
@@ -83,7 +84,13 @@ export function ConfigSidebar({
     <DialogPrimitive.Root
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open) onClose()
+        if (open) return
+        // Closing the settings is a completion action: React fires no blur
+        // when the focused API key field unmounts with the dialog.
+        if (canCompleteApiTokenReset(config)) {
+          onConfigChange({ api_token_reset_required: false })
+        }
+        onClose()
       }}
     >
       <DialogPrimitive.Portal>
@@ -93,7 +100,7 @@ export function ConfigSidebar({
           aria-label="Settings"
           onOpenAutoFocus={(e) => {
             if (initialFocus !== 'api-key') return
-            const apiKeyInput = document.getElementById('cfg-api-key')
+            const apiKeyInput = document.getElementById(API_KEY_INPUT_ID)
             if (apiKeyInput instanceof HTMLInputElement) {
               e.preventDefault()
               apiKeyInput.focus()
@@ -164,24 +171,7 @@ export function ConfigSidebar({
             )}
 
             {/* API Token */}
-            <div>
-              <label
-                htmlFor="cfg-api-key"
-                className="mb-1 block text-sm font-medium"
-              >
-                API Key
-              </label>
-              <SecretInput
-                id="cfg-api-key"
-                name="gptchat-api-key"
-                label="API key"
-                value={config.api_token}
-                onValueChange={(apiToken) =>
-                  onConfigChange({ api_token: apiToken })
-                }
-                placeholder="sk-..."
-              />
-            </div>
+            <ApiKeyField config={config} onConfigChange={onConfigChange} />
 
             {/* Model Selection */}
             <div className="space-y-2">

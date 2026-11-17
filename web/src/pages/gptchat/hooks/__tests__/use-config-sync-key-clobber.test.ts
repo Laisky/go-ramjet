@@ -77,11 +77,11 @@ describe('useConfig API token clobbered by sync key', () => {
       config_sync_key: SYNC_KEY,
       chat_user_config_1: sessionConfig({ api_token: SYNC_KEY }),
       chat_user_config_2: sessionConfig({
-        api_token: 'sk-older',
+        api_token: 'sk-user-key',
         updated_at: 100,
       }),
       chat_user_config_3: sessionConfig({
-        api_token: 'sk-newest',
+        api_token: 'sk-user-key',
         updated_at: 200,
       }),
     }
@@ -89,19 +89,19 @@ describe('useConfig API token clobbered by sync key', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-newest')
+    expect(result.current.config.api_token).toBe('sk-user-key')
     expect((store.chat_user_config_1 as SessionConfig).api_token).toBe(
-      'sk-newest',
+      'sk-user-key',
     )
     expect(result.current.config.sync_key).toBe(SYNC_KEY)
     expect(result.current.config.api_token_reset_required).toBeFalsy()
   })
 
-  it('detects a token holding an older sync key by its prefix', async () => {
+  it('detects a token holding an older generated sync key', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
-      chat_user_config_1: sessionConfig({ api_token: 'sync-previous-key' }),
+      chat_user_config_1: sessionConfig({ api_token: 'sync-0ld3r5ync4ey99' }),
       chat_user_config_2: sessionConfig({ api_token: 'sk-sibling' }),
     }
     installStore(store)
@@ -168,7 +168,7 @@ describe('useConfig API token clobbered by sync key', () => {
     ).toBe(false)
   })
 
-  it('clears the alert when the user enters a new API key', async () => {
+  it('clears the alert only once the user completes entering a new key', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -184,6 +184,12 @@ describe('useConfig API token clobbered by sync key', () => {
     })
 
     expect(result.current.config.api_token).toBe('sk-re-entered')
+    expect(result.current.config.api_token_reset_required).toBe(true)
+
+    await act(async () => {
+      await result.current.updateConfig({ api_token_reset_required: false })
+    })
+
     expect(result.current.config.api_token_reset_required).toBe(false)
     expect(
       (store.chat_user_config_1 as SessionConfig).api_token_reset_required,
@@ -285,7 +291,7 @@ describe('useConfig API token clobbered by sync key', () => {
     )
   })
 
-  it('rejects an API token update carrying the sync key prefix', async () => {
+  it('rejects an API token update carrying an older generated sync key', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -296,7 +302,7 @@ describe('useConfig API token clobbered by sync key', () => {
     const { result } = await renderLoadedConfig()
 
     await act(async () => {
-      await result.current.updateConfig({ api_token: 'sync-older-key' })
+      await result.current.updateConfig({ api_token: 'sync-0ld3r5ync4ey99' })
     })
 
     expect(result.current.config.api_token).toBe('sk-original')
@@ -320,5 +326,54 @@ describe('useConfig API token clobbered by sync key', () => {
     expect((store.chat_user_config_1 as SessionConfig).api_token).toBe(
       'sk-replacement',
     )
+  })
+})
+
+describe('useConfig sync key writes honor the API token invariant', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('rejects a sync key that copies a custom API token', async () => {
+    const store: Record<string, unknown> = {
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({ api_token: 'paid-token-12345' }),
+    }
+    installStore(store)
+
+    const { result } = await renderLoadedConfig()
+
+    await act(async () => {
+      await result.current.updateConfig({
+        sync_key: 'paid-token-12345',
+        system_prompt: 'still saved',
+      })
+    })
+
+    expect(result.current.config.sync_key).toBe(SYNC_KEY)
+    expect(result.current.config.system_prompt).toBe('still saved')
+    expect(store.config_sync_key).toBe(SYNC_KEY)
+    expect((store.chat_user_config_1 as SessionConfig).api_token).toBe(
+      'paid-token-12345',
+    )
+  })
+
+  it('still lets an API-shaped key double as the sync key', async () => {
+    const store: Record<string, unknown> = {
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({ api_token: 'sk-shared-secret' }),
+    }
+    installStore(store)
+
+    const { result } = await renderLoadedConfig()
+
+    await act(async () => {
+      await result.current.updateConfig({ sync_key: 'sk-shared-secret' })
+    })
+
+    expect(store.config_sync_key).toBe('sk-shared-secret')
+    expect(result.current.config.api_token).toBe('sk-shared-secret')
   })
 })
