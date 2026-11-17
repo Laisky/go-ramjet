@@ -93,6 +93,19 @@ const UrlParamAliasMap = new Map<string, string>([
   ['selected_chat_model', 'selected_chat_model'],
 ])
 
+/**
+ * UrlProtectedConfigKeys lists config fields a URL may never set. A link is
+ * untrusted input: the sync key decides where the cloud backup is uploaded
+ * and who can decrypt it, MCP servers carry their own endpoints and
+ * credentials, and the remaining fields are internal state.
+ */
+const UrlProtectedConfigKeys = new Set([
+  'sync_key',
+  'mcp_servers',
+  'api_token_reset_required',
+  'updated_at',
+])
+
 function normalizeUrlParamKey(key: string): string {
   return key
     .trim()
@@ -268,6 +281,12 @@ export function normalizeConfigNumericFields(
   }
 }
 
+/**
+ * applyUrlOverridesToConfig applies the page URL's query parameters to config
+ * and removes every consumed or protected parameter from the address bar.
+ * Fields in UrlProtectedConfigKeys are never set from a URL.
+ * It returns the resulting config and whether any field changed.
+ */
 export function applyUrlOverridesToConfig(config: SessionConfig): {
   config: SessionConfig
   mutated: boolean
@@ -282,6 +301,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
   }
 
   const updatedConfig = deepCloneConfig(config)
+  let strippedProtected = false
 
   entries.forEach(([rawKey, rawValue]) => {
     const normalizedKey = normalizeUrlParamKey(rawKey)
@@ -292,6 +312,14 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
 
     const pathSegments = targetPath.split('.')
     const rootKey = pathSegments[0]
+    if (UrlProtectedConfigKeys.has(rootKey)) {
+      // Drop it from the address bar too, so the value is not kept in
+      // history or bookmarks.
+      console.warn(`[config] ignored protected URL parameter: ${rootKey}`)
+      searchParams.delete(rawKey)
+      strippedProtected = true
+      return
+    }
     if (rootKey !== 'chat_switch' && !(rootKey in updatedConfig)) {
       return
     }
@@ -338,7 +366,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
     searchParams.delete(rawKey)
   })
 
-  if (mutated) {
+  if (mutated || strippedProtected) {
     const newSearch = searchParams.toString()
     window.history.replaceState(
       {},

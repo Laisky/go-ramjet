@@ -1,85 +1,77 @@
 /**
  * API key field of the GPTChat settings sidebar.
  */
-import { useState } from 'react'
-
-import { SecretInput } from '@/components/ui/secret-input'
+import { SecretField } from '@/components/ui/secret-field'
 import type { SessionConfig } from '../types'
-import {
-  canCompleteApiTokenReset,
-  isApiTokenClobberedBySyncKey,
-} from '../utils/api-token'
+import { maskSecretHint } from '../utils/api-token'
+import { validateCredentialUpdate } from '../utils/credential-policy'
 
 /**
- * API_KEY_INPUT_ID is the DOM id of the API key input; the sidebar focuses it
- * when opened from the API key reset alert.
+ * API_KEY_INPUT_ID is the DOM id of the API key editor input; the sidebar
+ * focuses it when opened from the API key reset alert.
  */
 export const API_KEY_INPUT_ID = 'cfg-api-key'
 
-const API_KEY_ERROR_ID = 'cfg-api-key-error'
+const API_KEY_LABEL_ID = 'cfg-api-key-label'
 
 /**
- * ApiKeyFieldProps configures ApiKeyField: config is the active session
- * config and onConfigChange persists a partial update of it.
+ * API_KEY_IS_SYNC_KEY_MESSAGE explains why a sync key cannot be saved as
+ * the API key.
+ */
+const API_KEY_IS_SYNC_KEY_MESSAGE =
+  'That value is your sync key (or an older one), so it was not saved as the API key. Enter your API key instead; the two keys must be different.'
+
+/**
+ * ApiKeyFieldProps configures ApiKeyField. config is the active session
+ * config, onConfigChange persists a partial update of it, and
+ * defaultEditing opens the editor on mount.
  */
 export interface ApiKeyFieldProps {
   config: SessionConfig
-  onConfigChange: (updates: Partial<SessionConfig>) => void
+  onConfigChange: (updates: Partial<SessionConfig>) => void | Promise<void>
+  defaultEditing?: boolean
 }
 
 /**
- * ApiKeyField renders the labelled API key input. A value that is the sync
- * key is not saved; the field explains why instead of silently dropping it.
- * Leaving the field completes a pending API key reset once the session holds
- * a key of the user's own. It returns the field with its label and feedback.
+ * ApiKeyField renders the API key as a write-only field. A new key is
+ * checked against the credential policy before it is saved, and the field
+ * explains a rejection instead of dropping the value silently. Saving a key
+ * of the user's own completes a pending API key reset.
+ * It returns the labelled field.
  */
-export function ApiKeyField({ config, onConfigChange }: ApiKeyFieldProps) {
-  const [rejectedSyncKey, setRejectedSyncKey] = useState(false)
-
-  const handleValueChange = (apiToken: string) => {
-    if (isApiTokenClobberedBySyncKey(apiToken, config.sync_key)) {
-      setRejectedSyncKey(true)
-      return
-    }
-    setRejectedSyncKey(false)
-    onConfigChange({ api_token: apiToken })
-  }
-
-  const handleBlur = () => {
-    if (canCompleteApiTokenReset(config)) {
-      onConfigChange({ api_token_reset_required: false })
-    }
+export function ApiKeyField({
+  config,
+  onConfigChange,
+  defaultEditing,
+}: ApiKeyFieldProps) {
+  const handleSave = async (apiToken: string) => {
+    const { rejections } = validateCredentialUpdate(config, {
+      api_token: apiToken,
+    })
+    if (rejections.length > 0) return API_KEY_IS_SYNC_KEY_MESSAGE
+    await onConfigChange({ api_token: apiToken })
   }
 
   return (
     <div>
       <label
+        id={API_KEY_LABEL_ID}
         htmlFor={API_KEY_INPUT_ID}
         className="mb-1 block text-sm font-medium"
       >
         API Key
       </label>
-      <SecretInput
-        id={API_KEY_INPUT_ID}
+      <SecretField
+        inputId={API_KEY_INPUT_ID}
         name="gptchat-api-key"
         label="API key"
+        labelId={API_KEY_LABEL_ID}
         value={config.api_token}
-        onValueChange={handleValueChange}
-        onBlur={handleBlur}
-        aria-invalid={rejectedSyncKey || undefined}
-        aria-describedby={rejectedSyncKey ? API_KEY_ERROR_ID : undefined}
-        placeholder="sk-..."
+        hint={maskSecretHint(config.api_token)}
+        onSave={handleSave}
+        placeholder="Paste your API key (sk-...)"
+        defaultEditing={defaultEditing}
       />
-      {rejectedSyncKey && (
-        <p
-          id={API_KEY_ERROR_ID}
-          role="alert"
-          className="mt-1 text-xs text-destructive"
-        >
-          That value is your sync key, so it was not saved as the API key. Enter
-          your API key instead; the two keys must be different.
-        </p>
-      )}
     </div>
   )
 }

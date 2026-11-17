@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { createLatestValueWriter } from '@/utils/latest-value-writer'
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
 import {
   DefaultSessionConfig,
@@ -10,12 +11,7 @@ import {
   type SessionConfig,
   type SessionHistoryItem,
 } from '../types'
-import {
-  apiTokenCollidesWithSyncKey,
-  createFreeTierToken,
-  describeApiTokenKind,
-  isApiTokenClobberedBySyncKey,
-} from '../utils/api-token'
+import { createFreeTierToken, describeApiTokenKind } from '../utils/api-token'
 import {
   generateChatId,
   getChatDataKey,
@@ -27,6 +23,7 @@ import {
   getSessionConfigKey,
   normalizeRetiredResearchConfig,
 } from '../utils/config-helpers'
+import { validateCredentialUpdate } from '../utils/credential-policy'
 import {
   exportAllData as exportData,
   importAllData as importData,
@@ -35,6 +32,7 @@ import {
   hydrateSessionConfig,
   mergeSessionConfigs,
 } from './session-config-hydration'
+import { repairStoredSessionCredentials } from './session-credentials'
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
@@ -50,6 +48,12 @@ export function useConfig() {
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
   const hydratedRef = useRef(false)
+  // Every config write goes through one ordered queue: a write that retries
+  // inside IndexedDB can then never land after a newer one, and readers can
+  // wait for pending writes before reading storage.
+  const [persistQueue] = useState(() =>
+    createLatestValueWriter<unknown>((key, value) => kvSet(key, value)),
+  )
 
   useEffect(() => {
     configRef.current = config
@@ -140,6 +144,7 @@ export function useConfig() {
         await migrateLegacyData()
 
         const activeSessionId = await getActiveSessionId()
+        await persistQueue.whenIdle()
         const hydratedConfig = await hydrateSessionConfig(activeSessionId, {
           fallbackConfig: configRef.current,
           applyUrlOverrides: true,
@@ -176,10 +181,29 @@ export function useConfig() {
         }
 
         if (changed || !savedConfig) {
-          await kvSet(getSessionConfigKey(activeSessionId), finalConfig)
+          await persistQueue.write(
+            getSessionConfigKey(activeSessionId),
+            finalConfig,
+          )
         }
 
         applySessionState(activeSessionId, finalConfig)
+
+        // Repair inactive sessions too, so none of them is exported,
+        // uploaded, or switched to with a sync key as its API token.
+        try {
+          const repaired = await repairStoredSessionCredentials(
+            finalConfig.sync_key || '',
+            activeSessionId,
+          )
+          if (repaired.length > 0) {
+            console.warn(
+              `[useConfig] repaired clobbered API tokens of inactive sessions: ${repaired.join(',')}`,
+            )
+          }
+        } catch (error) {
+          console.error('Failed to repair stored session credentials:', error)
+        }
 
         // Load all sessions
         await loadSessions()
@@ -191,116 +215,102 @@ export function useConfig() {
     }
 
     loadConfig()
-  }, [applySessionState, loadSessions])
+  }, [applySessionState, loadSessions, persistQueue])
 
   /**
    * updateConfig merges updates into the active session config and persists
-   * it. An API token that would copy the sync key, or a sync key that would
-   * copy a custom API token, is dropped while the other fields still apply.
+   * it. Credential fields go through validateCredentialUpdate: a field that
+   * would make the API token and the sync key equal is dropped while every
+   * other field still applies, and saving a key of the user's own completes
+   * a pending API key reset. The write targets the session that was active
+   * when the update was made, even if the user switches sessions meanwhile.
    */
-  const updateConfig = useCallback(async (updates: Partial<SessionConfig>) => {
-    let activeSessionId = sessionIdRef.current
-    if (!hydratedRef.current) {
-      if (!activeSessionId || activeSessionId === DEFAULT_SESSION_ID) {
-        activeSessionId = await getActiveSessionId()
+  const updateConfig = useCallback(
+    async (updates: Partial<SessionConfig>) => {
+      let activeSessionId = sessionIdRef.current
+      if (!hydratedRef.current) {
+        if (!activeSessionId || activeSessionId === DEFAULT_SESSION_ID) {
+          activeSessionId = await getActiveSessionId()
+        }
+
+        const hydrated = await hydrateSessionConfig(activeSessionId, {
+          fallbackConfig: configRef.current,
+          applyUrlOverrides: false,
+        })
+        configRef.current = hydrated.config
+        sessionIdRef.current = activeSessionId
+        setConfigState(hydrated.config)
+        setSessionId(activeSessionId)
+        hydratedRef.current = true
+
+        console.debug('[useConfig] hydrated config before queued update', {
+          sessionId: activeSessionId,
+          apiTokenKind: describeApiTokenKind(hydrated.config.api_token),
+        })
       }
 
-      const hydrated = await hydrateSessionConfig(activeSessionId, {
-        fallbackConfig: configRef.current,
-        applyUrlOverrides: false,
-      })
-      configRef.current = hydrated.config
-      sessionIdRef.current = activeSessionId
-      setConfigState(hydrated.config)
-      setSessionId(activeSessionId)
-      hydratedRef.current = true
-
-      console.debug('[useConfig] hydrated config before queued update', {
-        sessionId: activeSessionId,
-        apiTokenKind: describeApiTokenKind(hydrated.config.api_token),
-      })
-    }
-
-    const baseConfig = configRef.current
-    const acceptedUpdates: Partial<SessionConfig> = { ...updates }
-    // The API token and the sync key must never hold the same non-API-shaped
-    // secret, whichever field is written; drop the offending field and keep
-    // every other change, so auto-save of unrelated settings still works.
-    if (
-      acceptedUpdates.sync_key !== undefined &&
-      apiTokenCollidesWithSyncKey(
-        acceptedUpdates.api_token ?? baseConfig.api_token,
-        acceptedUpdates.sync_key,
+      const targetSessionId = sessionIdRef.current
+      const baseConfig = configRef.current
+      const { accepted, rejections } = validateCredentialUpdate(
+        baseConfig,
+        updates,
       )
-    ) {
-      delete acceptedUpdates.sync_key
-      console.warn(
-        `[useConfig] rejected sync key update copying the API token: session=${sessionIdRef.current}`,
-      )
-    }
-    const nextSyncKey = acceptedUpdates.sync_key ?? baseConfig.sync_key
-    if (
-      acceptedUpdates.api_token !== undefined &&
-      isApiTokenClobberedBySyncKey(acceptedUpdates.api_token, nextSyncKey)
-    ) {
-      const rejectedKind = describeApiTokenKind(acceptedUpdates.api_token)
-      delete acceptedUpdates.api_token
-      console.warn(
-        `[useConfig] rejected API token update copying sync key: session=${sessionIdRef.current} rejectedKind=${rejectedKind}`,
-      )
-    }
-
-    // api_token_reset_required only changes through an explicit update: the
-    // settings sidebar clears it once the user finishes entering a key, so a
-    // half-typed key never silences the alert.
-    const newConfig = normalizeRetiredResearchConfig({
-      ...baseConfig,
-      ...acceptedUpdates,
-      chat_switch: {
-        ...baseConfig.chat_switch,
-        ...(acceptedUpdates.chat_switch || {}),
-      },
-      sync_key: nextSyncKey,
-      updated_at: Date.now(),
-    })
-
-    configRef.current = newConfig
-    setConfigState(newConfig)
-
-    console.debug('[useConfig] queued config update', {
-      sessionId: sessionIdRef.current,
-      updatedKeys: Object.keys(acceptedUpdates),
-      chatSwitchKeys: acceptedUpdates.chat_switch
-        ? Object.keys(acceptedUpdates.chat_switch)
-        : [],
-      hasApiTokenUpdate: acceptedUpdates.api_token !== undefined,
-      apiTokenLength:
-        typeof newConfig.api_token === 'string'
-          ? newConfig.api_token.length
-          : 0,
-      systemPromptLength:
-        typeof newConfig.system_prompt === 'string'
-          ? newConfig.system_prompt.length
-          : 0,
-    })
-
-    try {
-      if (acceptedUpdates.sync_key !== undefined) {
-        await kvSet(StorageKeys.SYNC_KEY, acceptedUpdates.sync_key)
+      for (const rejection of rejections) {
+        console.warn(
+          `[useConfig] rejected ${rejection.field} update: session=${targetSessionId} reason=${rejection.reason}`,
+        )
       }
 
-      const key = getSessionConfigKey(sessionIdRef.current)
-      await kvSet(key, newConfig)
-      console.debug('[useConfig] persisted config update', {
-        sessionId: sessionIdRef.current,
-        updatedAt: newConfig.updated_at,
-        updatedKeys: Object.keys(acceptedUpdates),
+      const newConfig = normalizeRetiredResearchConfig({
+        ...baseConfig,
+        ...accepted,
+        chat_switch: {
+          ...baseConfig.chat_switch,
+          ...(accepted.chat_switch || {}),
+        },
+        sync_key: accepted.sync_key ?? baseConfig.sync_key,
+        updated_at: Date.now(),
+      })
+
+      configRef.current = newConfig
+      setConfigState(newConfig)
+
+      console.debug('[useConfig] queued config update', {
+        sessionId: targetSessionId,
+        updatedKeys: Object.keys(accepted),
+        chatSwitchKeys: accepted.chat_switch
+          ? Object.keys(accepted.chat_switch)
+          : [],
+        hasApiTokenUpdate: accepted.api_token !== undefined,
         apiTokenKind: describeApiTokenKind(newConfig.api_token),
+        systemPromptLength:
+          typeof newConfig.system_prompt === 'string'
+            ? newConfig.system_prompt.length
+            : 0,
       })
-    } catch (error) {
-      console.error('Failed to save config:', error)
-    }
-  }, [])
+
+      // Enqueue every write before awaiting any of them, so a later update
+      // can never slip an older config in between.
+      const writes: Promise<void>[] = []
+      if (accepted.sync_key !== undefined) {
+        writes.push(persistQueue.write(StorageKeys.SYNC_KEY, accepted.sync_key))
+      }
+      writes.push(
+        persistQueue.write(getSessionConfigKey(targetSessionId), newConfig),
+      )
+      try {
+        await Promise.all(writes)
+        console.debug('[useConfig] persisted config update', {
+          sessionId: targetSessionId,
+          updatedAt: newConfig.updated_at,
+          updatedKeys: Object.keys(accepted),
+        })
+      } catch (error) {
+        console.error('Failed to save config:', error)
+      }
+    },
+    [persistQueue],
+  )
 
   /**
    * Reorder sessions
@@ -321,6 +331,8 @@ export function useConfig() {
       setIsLoading(true)
       try {
         await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
+        // Let writes of the previous session land before reading storage.
+        await persistQueue.whenIdle()
         sessionIdRef.current = newSessionId
 
         const {
@@ -338,7 +350,10 @@ export function useConfig() {
         })
 
         if (changed || !savedConfig) {
-          await kvSet(getSessionConfigKey(newSessionId), configRef.current)
+          await persistQueue.write(
+            getSessionConfigKey(newSessionId),
+            configRef.current,
+          )
         }
 
         console.debug('[useConfig] switched session', {
@@ -353,7 +368,7 @@ export function useConfig() {
         setIsLoading(false)
       }
     },
-    [applySessionState, loadSessions],
+    [applySessionState, loadSessions, persistQueue],
   )
 
   /**
@@ -405,7 +420,8 @@ export function useConfig() {
    */
   const deleteSession = useCallback(
     async (targetSessionId: number) => {
-      // Delete session config
+      // A pending write must not resurrect the deleted config.
+      await persistQueue.whenIdle()
       await kvDel(getSessionConfigKey(targetSessionId))
 
       const historyKey = getSessionHistoryKey(targetSessionId)
@@ -444,7 +460,7 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [sessionId, switchSession, loadSessions],
+    [sessionId, switchSession, loadSessions, persistQueue],
   )
 
   const duplicateSession = useCallback(
@@ -602,6 +618,7 @@ export function useConfig() {
   )
 
   const purgeAllSessions = useCallback(async () => {
+    await persistQueue.whenIdle()
     const keys = await kvList()
     for (const key of keys) {
       if (
@@ -640,7 +657,13 @@ export function useConfig() {
       },
     ])
     await loadSessions()
-  }, [applySessionState, config.api_base, config.api_token, loadSessions])
+  }, [
+    applySessionState,
+    config.api_base,
+    config.api_token,
+    loadSessions,
+    persistQueue,
+  ])
 
   /**
    * Rename a session
@@ -648,7 +671,8 @@ export function useConfig() {
   const renameSession = useCallback(
     async (targetId: number, newName: string) => {
       const key = getSessionConfigKey(targetId)
-      // We must read it first to preserve other fields
+      // Read after pending writes land, to preserve every other field.
+      await persistQueue.whenIdle()
       let conf = await kvGet<SessionConfig>(key)
       if (!conf) {
         conf = { ...DefaultSessionConfig }
@@ -656,7 +680,7 @@ export function useConfig() {
 
       conf.session_name = newName
       conf.updated_at = Date.now()
-      await kvSet(key, conf)
+      await persistQueue.write(key, conf)
 
       // If it's the current session, update state too
       if (targetId === sessionId) {
@@ -665,7 +689,7 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [applySessionState, sessionId, loadSessions],
+    [applySessionState, sessionId, loadSessions, persistQueue],
   )
 
   /**
@@ -674,6 +698,7 @@ export function useConfig() {
   const updateSessionVisibility = useCallback(
     async (targetId: number, visible: boolean) => {
       const key = getSessionConfigKey(targetId)
+      await persistQueue.whenIdle()
       let conf = await kvGet<SessionConfig>(key)
       if (!conf) {
         conf = { ...DefaultSessionConfig }
@@ -681,7 +706,7 @@ export function useConfig() {
 
       conf.session_visible = visible
       conf.updated_at = Date.now()
-      await kvSet(key, conf)
+      await persistQueue.write(key, conf)
 
       // If it's the current session, update state too
       if (targetId === sessionId) {
@@ -690,7 +715,7 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [applySessionState, sessionId, loadSessions],
+    [applySessionState, sessionId, loadSessions, persistQueue],
   )
 
   /**

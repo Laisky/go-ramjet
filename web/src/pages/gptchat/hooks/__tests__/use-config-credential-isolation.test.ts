@@ -1,35 +1,25 @@
-import { kvDel, kvGet, kvList, kvSet } from '@/utils/storage'
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
-  type Mock,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest'
-
-import { DefaultSessionConfig, type SessionConfig } from '../../types'
+  installStore,
+  PROVIDER_A,
+  PROVIDER_B,
+  renderLoadedConfig,
+  sessionConfig,
+  storedConfig,
+  SYNC_KEY,
+} from '../../__tests__/fixtures/credential-store'
 import { importAllData } from '../../utils/data-sync'
-import { useConfig } from '../use-config'
+import {
+  listApiTokenChoices,
+  readAdoptableApiToken,
+} from '../session-credentials'
 
-vi.mock('@/utils/storage', () => ({
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-  kvDel: vi.fn(),
-  kvList: vi.fn(),
-  StorageKeys: {
-    SESSION_CONFIG_PREFIX: 'chat_user_config_',
-    SELECTED_SESSION: 'config_selected_session',
-    VERSION_DATE: 'config_version_date',
-    SESSION_HISTORY_PREFIX: 'chat_user_session_',
-    SESSION_ORDER: 'config_session_order',
-    SYNC_KEY: 'config_sync_key',
-    CHAT_DATA_PREFIX: 'chat_data_',
-    DELETED_CHAT_IDS: 'chat_deleted_chat_ids',
-  },
-}))
+vi.mock(
+  '@/utils/storage',
+  () => import('../../__tests__/fixtures/storage-mock'),
+)
 
 vi.mock('@/pages/gptchat/utils/migration', () => ({
   migrateLegacyData: vi.fn().mockResolvedValue(undefined),
@@ -38,59 +28,6 @@ vi.mock('@/pages/gptchat/utils/migration', () => ({
 vi.mock('@/utils/api', () => ({
   getApiBase: () => 'http://localhost:24456',
 }))
-
-const SYNC_KEY = 'sync-k2x9q4w7p1z8m3'
-const PROVIDER_A = 'https://provider-a.example'
-const PROVIDER_B = 'https://provider-b.example'
-
-/**
- * installStore backs the mocked KV layer with an in-memory record so tests can
- * observe exactly what the hook reads and persists.
- */
-function installStore(store: Record<string, unknown>): void {
-  ;(kvGet as Mock).mockImplementation((key: string) =>
-    Promise.resolve(store[key] ?? null),
-  )
-  ;(kvSet as Mock).mockImplementation(async (key: string, value: unknown) => {
-    store[key] = value
-  })
-  ;(kvDel as Mock).mockImplementation(async (key: string) => {
-    delete store[key]
-  })
-  ;(kvList as Mock).mockImplementation(async () => Object.keys(store))
-}
-
-/**
- * sessionConfig builds a stored session config with the given overrides.
- */
-function sessionConfig(overrides: Partial<SessionConfig>): SessionConfig {
-  return {
-    ...DefaultSessionConfig,
-    sync_key: SYNC_KEY,
-    ...overrides,
-  }
-}
-
-/**
- * storedConfig reads the persisted config of the given session.
- */
-function storedConfig(
-  store: Record<string, unknown>,
-  sessionId: number,
-): SessionConfig {
-  return store[`chat_user_config_${sessionId}`] as SessionConfig
-}
-
-/**
- * renderLoadedConfig mounts useConfig and waits until hydration has finished.
- */
-async function renderLoadedConfig() {
-  const hook = renderHook(() => useConfig())
-  await waitFor(() => {
-    expect(hook.result.current.isLoading).toBe(false)
-  })
-  return hook
-}
 
 describe('useConfig credential isolation during API token recovery', () => {
   beforeEach(() => {
@@ -126,7 +63,7 @@ describe('useConfig credential isolation during API token recovery', () => {
     expect(storedConfig(store, 1).api_token).not.toBe('sk-provider-b')
   })
 
-  it('recovers the token of a sibling on the same endpoint', async () => {
+  it('offers, but never applies, the keys of siblings on the same endpoint', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -149,8 +86,21 @@ describe('useConfig credential isolation during API token recovery', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-provider-a')
-    expect(result.current.config.api_token_reset_required).toBeFalsy()
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
+    expect(result.current.config.api_token_reset_required).toBe(true)
+
+    const target = { apiBase: PROVIDER_A, syncKey: SYNC_KEY }
+    const choices = await listApiTokenChoices(1, target)
+    expect(choices).toEqual([
+      {
+        sourceSessionId: 3,
+        hint: 'sk-…er-a',
+        sessionNames: ['Chat Session 1'],
+      },
+    ])
+    expect(JSON.stringify(choices)).not.toContain('sk-provider-a')
+    expect(await readAdoptableApiToken(3, target)).toBe('sk-provider-a')
+    expect(await readAdoptableApiToken(2, target)).toBe('')
   })
 
   it('asks the user instead of guessing between distinct same-endpoint tokens', async () => {
@@ -180,7 +130,7 @@ describe('useConfig credential isolation during API token recovery', () => {
     expect(result.current.config.api_token_reset_required).toBe(true)
   })
 
-  it('treats several sessions sharing one token as a single candidate', async () => {
+  it('offers several sessions sharing one key as a single choice', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -192,7 +142,14 @@ describe('useConfig credential isolation during API token recovery', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-shared')
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
+    const choices = await listApiTokenChoices(1, {
+      apiBase: result.current.config.api_base,
+      syncKey: SYNC_KEY,
+    })
+    expect(choices).toHaveLength(1)
+    expect(choices[0].sourceSessionId).toBe(2)
+    expect(choices[0].sessionNames).toHaveLength(2)
   })
 
   it('does not hand the previous session token to a clobbered session on another endpoint', async () => {
@@ -267,7 +224,7 @@ describe('useConfig credential isolation during API token recovery', () => {
     expect(result.current.config.api_token).toBe('sk-provider-a')
   })
 
-  it('repairs a clobbered config that arrives through a sync download', async () => {
+  it('keeps the session’s own key when a download carries a clobbered copy', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -290,12 +247,34 @@ describe('useConfig credential isolation during API token recovery', () => {
       1,
       'download',
     )
-    expect(storedConfig(store, 1).api_token).toBe(SYNC_KEY)
+    // The local copy of the same session is the only key with known
+    // provenance; session 2's key may belong to another account.
+    expect(storedConfig(store, 1).api_token).toBe('sk-local')
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-from-cloud')
-    expect(storedConfig(store, 1).api_token).toBe('sk-from-cloud')
+    expect(result.current.config.api_token).toBe('sk-local')
+    expect(result.current.config.api_token_reset_required).toBeFalsy()
+  })
+
+  it('flags a downloaded clobbered session that has no local copy', async () => {
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({ api_token: 'sk-local' }),
+    })
+
+    await importAllData(
+      {
+        config_sync_key: SYNC_KEY,
+        chat_user_config_2: sessionConfig({ api_token: SYNC_KEY }),
+      },
+      1,
+      'download',
+    )
+
+    expect(storedConfig(store, 2).api_token).toMatch(/^FREETIER-/)
+    expect(storedConfig(store, 2).api_token_reset_required).toBe(true)
   })
 })
 
@@ -341,7 +320,7 @@ describe('useConfig URL overrides honor the API token invariant', () => {
     expect(result.current.config.api_token_reset_required).toBe(false)
   })
 
-  it('recovers against the endpoint chosen by the URL', async () => {
+  it('scopes key choices to the endpoint chosen by the URL', async () => {
     window.history.replaceState({}, '', `/?api_base=${PROVIDER_B}`)
     const store: Record<string, unknown> = {
       config_selected_session: 1,
@@ -364,7 +343,12 @@ describe('useConfig URL overrides honor the API token invariant', () => {
     const { result } = await renderLoadedConfig()
 
     expect(result.current.config.api_base).toBe(PROVIDER_B)
-    expect(result.current.config.api_token).toBe('sk-provider-b')
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
+    const choices = await listApiTokenChoices(1, {
+      apiBase: result.current.config.api_base,
+      syncKey: SYNC_KEY,
+    })
+    expect(choices.map((c) => c.sourceSessionId)).toEqual([3])
   })
 })
 
@@ -373,7 +357,7 @@ describe('useConfig API token reset state machine', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps the reset pending while the user is still typing a key', async () => {
+  it('keeps the reset pending when a write stores no key of the user’s own', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -385,20 +369,21 @@ describe('useConfig API token reset state machine', () => {
     installStore(store)
 
     const first = await renderLoadedConfig()
+    // "Reset settings" writes an empty token; the next load fills a
+    // free-tier one. Neither is the user's own key.
     await act(async () => {
-      await first.result.current.updateConfig({ api_token: 's' })
+      await first.result.current.updateConfig({ api_token: '' })
     })
 
-    expect(first.result.current.config.api_token).toBe('s')
     expect(first.result.current.config.api_token_reset_required).toBe(true)
     first.unmount()
 
     const { result } = await renderLoadedConfig()
-    expect(result.current.config.api_token).toBe('s')
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
     expect(result.current.config.api_token_reset_required).toBe(true)
   })
 
-  it('does not overwrite a key the user started typing with a sibling token', async () => {
+  it('never replaces a stored key with a sibling token', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,

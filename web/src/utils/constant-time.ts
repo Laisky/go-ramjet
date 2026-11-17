@@ -1,5 +1,11 @@
 /**
  * Constant-time comparison for secrets held in the browser.
+ *
+ * Threat model: this only removes the obvious early-exit timing signal.
+ * JavaScript engines can still optimize, so it is not a guarantee. Secrets
+ * compared in the browser already live in the same profile as the code
+ * comparing them, so isolation (what may be stored and sent where) is what
+ * protects them, not this function.
  */
 
 /**

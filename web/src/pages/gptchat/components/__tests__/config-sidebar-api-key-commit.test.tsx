@@ -1,28 +1,18 @@
-import { kvGet, kvList, kvSet } from '@/utils/storage'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
-import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useConfig } from '../../hooks/use-config'
-import { DefaultSessionConfig, type SessionConfig } from '../../types'
-import { ConfigSidebar } from '../config-sidebar'
+import { kvSet, SYNC_KEY } from '../../__tests__/fixtures/credential-store'
+import {
+  openSidebar,
+  storedSession1,
+} from '../../__tests__/fixtures/sidebar-harness'
 import { McpServerManager } from '../mcp-server-manager'
 
-vi.mock('@/utils/storage', () => ({
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-  kvDel: vi.fn(),
-  kvList: vi.fn(),
-  StorageKeys: {
-    SESSION_CONFIG_PREFIX: 'chat_user_config_',
-    SELECTED_SESSION: 'config_selected_session',
-    VERSION_DATE: 'config_version_date',
-    SESSION_HISTORY_PREFIX: 'chat_user_session_',
-    SESSION_ORDER: 'config_session_order',
-    SYNC_KEY: 'config_sync_key',
-  },
-}))
+vi.mock(
+  '@/utils/storage',
+  () => import('../../__tests__/fixtures/storage-mock'),
+)
 
 vi.mock('@/pages/gptchat/utils/migration', () => ({
   migrateLegacyData: vi.fn().mockResolvedValue(undefined),
@@ -53,156 +43,226 @@ vi.mock('../prompt-shortcut-manager', () => ({
   PromptShortcutManager: () => <div data-testid="prompt-shortcuts" />,
 }))
 
-const SYNC_KEY = 'sync-k2x9q4w7p1z8m3'
-
 /**
- * SidebarHarness wires the real useConfig hook to the real ConfigSidebar and
- * lets the test close the sidebar like the page does.
+ * openApiKeyEditor clicks "Replace API key" and returns the editor input.
  */
-function SidebarHarness() {
-  const { config, updateConfig, isLoading } = useConfig()
-  const [open, setOpen] = useState(true)
-  if (isLoading) return null
-
-  return (
-    <>
-      <output data-testid="reset-required">
-        {String(config.api_token_reset_required === true)}
-      </output>
-      <ConfigSidebar
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        config={config}
-        onConfigChange={updateConfig}
-        onClearChats={vi.fn()}
-        onReset={vi.fn()}
-        onExportData={vi.fn().mockResolvedValue({})}
-        onImportData={vi.fn().mockResolvedValue(undefined)}
-      />
-    </>
-  )
-}
-
-/**
- * openSidebar seeds storage with session 1 built from overrides, renders the
- * sidebar, and returns the live store.
- */
-async function openSidebar(
-  overrides: Partial<SessionConfig>,
-): Promise<Record<string, unknown>> {
-  const store: Record<string, unknown> = {
-    config_selected_session: 1,
-    config_sync_key: SYNC_KEY,
-    chat_user_config_1: {
-      ...DefaultSessionConfig,
-      sync_key: SYNC_KEY,
-      ...overrides,
-    },
-  }
-  ;(kvGet as Mock).mockImplementation((key: string) =>
-    Promise.resolve(store[key] ?? null),
-  )
-  ;(kvSet as Mock).mockImplementation(async (key: string, value: unknown) => {
-    store[key] = value
+async function openApiKeyEditor(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Replace API key' }))
+  return screen.getByLabelText<HTMLInputElement>('API Key', {
+    selector: 'input',
   })
-  ;(kvList as Mock).mockImplementation(async () => Object.keys(store))
-
-  render(<SidebarHarness />)
-  await screen.findByLabelText('API Key')
-  return store
 }
 
 /**
- * storedConfig reads the persisted config of session 1.
+ * configWrites lists the values persisted for session 1, in order.
  */
-function storedConfig(store: Record<string, unknown>): SessionConfig {
-  return store.chat_user_config_1 as SessionConfig
+function configWrites(): Array<Record<string, unknown>> {
+  return kvSet.mock.calls
+    .filter(([key]) => key === 'chat_user_config_1')
+    .map(([, value]) => value as Record<string, unknown>)
 }
 
-describe('ConfigSidebar API key feedback', () => {
+describe('ConfigSidebar API key editor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('stores a typed key only on Save, then shows its hint', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-original' })
+    const editor = await openApiKeyEditor(user)
+
+    await user.type(editor, 'sk-typed-new-key')
+    expect(storedSession1(store).api_token).toBe('sk-original')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(storedSession1(store).api_token).toBe('sk-typed-new-key')
+    })
+    expect(screen.getByText('sk-…-key')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Replace API key' }),
+    ).toHaveFocus()
+  })
+
+  it('saves a pasted key on Enter and discards a draft on Escape', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-original' })
+
+    await openApiKeyEditor(user)
+    await user.paste('sk-discarded')
+    await user.keyboard('{Escape}')
+    expect(storedSession1(store).api_token).toBe('sk-original')
+
+    const editor = await openApiKeyEditor(user)
+    expect(editor.value).toBe('')
+    await user.paste('sk-pasted')
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(storedSession1(store).api_token).toBe('sk-pasted')
+    })
   })
 
   it('explains, instead of silently dropping, a pasted sync key', async () => {
     const user = userEvent.setup()
     const store = await openSidebar({ api_token: 'sk-original' })
-    const apiKeyInput = screen.getByLabelText<HTMLInputElement>('API Key')
+    const editor = await openApiKeyEditor(user)
 
-    await user.tripleClick(apiKeyInput)
     await user.paste(SYNC_KEY)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sync key/i)
-    expect(apiKeyInput).toHaveAttribute('aria-invalid', 'true')
-    expect(apiKeyInput.value).toBe('sk-original')
-    expect(storedConfig(store).api_token).toBe('sk-original')
+    expect(editor).toHaveAttribute('aria-invalid', 'true')
+    expect(storedSession1(store).api_token).toBe('sk-original')
 
-    await user.tripleClick(apiKeyInput)
+    await user.clear(editor)
     await user.paste('sk-fixed')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(storedConfig(store).api_token).toBe('sk-fixed')
+      expect(storedSession1(store).api_token).toBe('sk-fixed')
     })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(apiKeyInput).not.toHaveAttribute('aria-invalid', 'true')
   })
 
-  it('keeps a pending reset until the user leaves the API key field', async () => {
+  it('cancels the edit, not the settings, on Escape from the Save button', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-original' })
+    await openApiKeyEditor(user)
+    await user.paste(SYNC_KEY)
+    const save = screen.getByRole('button', { name: 'Save' })
+    await user.click(save)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(save).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+
+    expect(document.getElementById('cfg-api-key')).toBeNull()
+    expect(
+      document.querySelector('[role="dialog"][aria-label="Settings"]'),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Replace API key' }),
+    ).toHaveFocus()
+    expect(storedSession1(store).api_token).toBe('sk-original')
+  })
+
+  it('completes a pending reset in the same write that stores the key', async () => {
     const user = userEvent.setup()
     const store = await openSidebar({
       api_token: 'FREETIER-placeholder',
       api_token_reset_required: true,
     })
-    const apiKeyInput = screen.getByLabelText<HTMLInputElement>('API Key')
-
-    await user.tripleClick(apiKeyInput)
-    await user.paste('sk-new-key')
-
-    await waitFor(() => {
-      expect(storedConfig(store).api_token).toBe('sk-new-key')
-    })
+    const editor = await openApiKeyEditor(user)
+    await user.type(editor, 'sk-new-key')
     expect(screen.getByTestId('reset-required')).toHaveTextContent('true')
+    const writesBefore = configWrites().length
 
-    await user.click(screen.getByLabelText('Sync Key'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('reset-required')).toHaveTextContent('false')
     })
-    expect(storedConfig(store).api_token_reset_required).toBe(false)
+    const newWrites = configWrites().slice(writesBefore)
+    expect(newWrites).toHaveLength(1)
+    expect(newWrites[0]).toMatchObject({
+      api_token: 'sk-new-key',
+      api_token_reset_required: false,
+    })
+    expect(storedSession1(store).api_token_reset_required).toBe(false)
   })
 
-  it('completes a pending reset when the sidebar is closed', async () => {
+  it('keeps the reset pending when the editor is cancelled or closed', async () => {
     const user = userEvent.setup()
     const store = await openSidebar({
       api_token: 'FREETIER-placeholder',
       api_token_reset_required: true,
     })
-    const apiKeyInput = screen.getByLabelText<HTMLInputElement>('API Key')
-
-    await user.tripleClick(apiKeyInput)
-    await user.paste('sk-new-key')
-    await user.keyboard('{Escape}')
+    const editor = await openApiKeyEditor(user)
+    await user.type(editor, 'sk-half')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await openApiKeyEditor(user)
+    await user.click(screen.getByRole('button', { name: 'Close settings' }))
 
     await waitFor(() => {
-      expect(storedConfig(store).api_token_reset_required).toBe(false)
+      expect(
+        screen.queryByRole('button', { name: 'Replace API key' }),
+      ).not.toBeInTheDocument()
+    })
+    expect(storedSession1(store).api_token).toBe('FREETIER-placeholder')
+    expect(storedSession1(store).api_token_reset_required).toBe(true)
+  })
+})
+
+describe('ConfigSidebar sync key editor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('refuses an API key as the sync key, whatever its shape', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-live-key-12345' })
+
+    await user.click(screen.getByRole('button', { name: 'Replace sync key' }))
+    await user.paste('sk-live-key-12345')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/API key/)
+    expect(store.config_sync_key).toBe(SYNC_KEY)
+  })
+
+  it('refuses the API key of another session as the sync key', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-session-one-key' })
+    store.chat_user_config_2 = {
+      ...storedSession1(store),
+      api_token: 'other-session-token',
+    }
+
+    await user.click(screen.getByRole('button', { name: 'Replace sync key' }))
+    await user.paste('other-session-token')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/API key/)
+    expect(store.config_sync_key).toBe(SYNC_KEY)
+  })
+
+  it('saves a sync key pasted from another device', async () => {
+    const user = userEvent.setup()
+    const store = await openSidebar({ api_token: 'sk-live-key-12345' })
+
+    await user.click(screen.getByRole('button', { name: 'Replace sync key' }))
+    await user.paste('sync-0ther0device0key0123')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(store.config_sync_key).toBe('sync-0ther0device0key0123')
     })
   })
 
-  it('keeps the reset pending when the field is left without a real key', async () => {
-    const user = userEvent.setup()
-    const store = await openSidebar({
-      api_token: 'FREETIER-placeholder',
-      api_token_reset_required: true,
-    })
+  it('warns about a legacy sync key that doubles as an API key', async () => {
+    await openSidebar(
+      { api_token: 'sk-reused-key-12345' },
+      'sk-reused-key-12345',
+    )
 
-    await user.click(screen.getByLabelText('API Key'))
-    await user.click(screen.getByLabelText('Sync Key'))
-    await user.keyboard('{Escape}')
+    expect(
+      await screen.findByText(/Your sync key is also an API key/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Rotate sync key' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not warn when the keys are distinct', async () => {
+    await openSidebar({ api_token: 'sk-live-key-12345' })
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('API Key')).not.toBeInTheDocument()
+      expect(screen.getByText('sync-…z8m3')).toBeInTheDocument()
     })
-    expect(storedConfig(store).api_token_reset_required).toBe(true)
+    expect(screen.queryByText(/Your sync key is also an API key/)).toBeNull()
   })
 })
 

@@ -1,4 +1,4 @@
-export { ApiKeyResetAlert } from './api-key-reset-alert'
+export { ApiKeyResetAlert, ApiKeyResetBanner } from './api-key-reset-alert'
 export { AttachmentTag } from './attachment-tag'
 export { ChatInput } from './chat-input'
 export { ChatMessage } from './chat-message'

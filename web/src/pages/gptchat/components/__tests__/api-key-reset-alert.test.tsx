@@ -56,6 +56,46 @@ describe('ApiKeyResetAlert', () => {
     await user.click(screen.getByRole('button', { name: 'Keep free tier' }))
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
+
+  it('offers sibling keys only as masked, explicit choices', async () => {
+    const user = userEvent.setup()
+    const onUseChoice = vi.fn()
+    render(
+      <ApiKeyResetAlert
+        onResetApiKey={vi.fn()}
+        onDismiss={vi.fn()}
+        onUseChoice={onUseChoice}
+        choices={[
+          { sourceSessionId: 2, hint: 'sk-…aaaa', sessionNames: ['Work'] },
+          {
+            sourceSessionId: 5,
+            hint: 'sk-…bbbb',
+            sessionNames: ['Home', 'Drafts'],
+          },
+        ]}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Use one only if it belongs to the account this session used',
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Use sk-…bbbb from Home, Drafts' }),
+    )
+    expect(onUseChoice).toHaveBeenCalledWith(5)
+  })
+
+  it('shows no choice list when no sibling holds a key', () => {
+    render(
+      <ApiKeyResetAlert
+        onResetApiKey={vi.fn()}
+        onDismiss={vi.fn()}
+        onUseChoice={vi.fn()}
+        choices={[]}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /^Use / })).toBeNull()
+  })
 })
 
 /**
@@ -80,29 +120,38 @@ function renderSidebar(initialFocus?: 'api-key') {
 }
 
 describe('ConfigSidebar initial focus', () => {
-  it('focuses and selects the API key field when opened from the alert', async () => {
+  it('opens an empty, focused API key editor when opened from the alert', async () => {
     const user = userEvent.setup()
     const { onConfigChange } = renderSidebar('api-key')
-    const apiKeyInput = screen.getByLabelText<HTMLInputElement>('API Key')
+    const apiKeyInput = await screen.findByLabelText<HTMLInputElement>(
+      'API Key',
+      { selector: 'input' },
+    )
 
     await waitFor(() => {
       expect(apiKeyInput).toHaveFocus()
     })
-    expect(apiKeyInput.selectionStart).toBe(0)
-    expect(apiKeyInput.selectionEnd).toBe(apiKeyInput.value.length)
+    expect(apiKeyInput.value).toBe('')
 
     await user.paste('sk-re-entered')
-    expect(onConfigChange).toHaveBeenLastCalledWith({
+    expect(onConfigChange).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onConfigChange).toHaveBeenCalledExactlyOnceWith({
       api_token: 'sk-re-entered',
     })
   })
 
-  it('keeps the default focus when opened normally', async () => {
+  it('shows only a masked hint when opened normally', async () => {
     renderSidebar()
 
     await waitFor(() => {
       expect(document.activeElement).not.toBe(document.body)
     })
-    expect(screen.getByLabelText('API Key')).not.toHaveFocus()
+    expect(document.getElementById('cfg-api-key')).toBeNull()
+    expect(screen.getByText('FREETIER-…lder')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Replace API key' }),
+    ).not.toHaveFocus()
   })
 })

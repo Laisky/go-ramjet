@@ -19,7 +19,7 @@ import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
-  ApiKeyResetAlert,
+  ApiKeyResetBanner,
   ChatInput,
   ChatMessage,
   ChatSearch,
@@ -709,14 +709,14 @@ export function GPTChatPage() {
           )}
 
           {config.api_token_reset_required && !configLoading && (
-            <ApiKeyResetAlert
-              onResetApiKey={() => {
+            <ApiKeyResetBanner
+              sessionId={sessionId}
+              config={config}
+              updateConfig={updateConfig}
+              onOpenApiKeySettings={() => {
                 setConfigFocus('api-key')
                 setConfigOpen(true)
               }}
-              onDismiss={() =>
-                updateConfig({ api_token_reset_required: false })
-              }
             />
           )}
 

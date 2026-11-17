@@ -6,6 +6,7 @@ import { Settings, Trash2, User, X } from 'lucide-react'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
+import { isSecretEditorEvent } from '@/components/ui/secret-input-policy'
 import { Switch } from '@/components/ui/switch'
 import { API_KEY_INPUT_ID, ApiKeyField } from './api-key-field'
 import { ConfirmAction } from './confirm-action'
@@ -17,12 +18,11 @@ import { SessionManager } from './session-manager'
 
 import { useUser } from '../hooks/use-user'
 import type { PromptShortcut, SessionConfig } from '../types'
-import { canCompleteApiTokenReset } from '../utils/api-token'
 
 export interface ConfigSidebarProps {
   isOpen: boolean
   onClose: () => void
-  /** initialFocus 'api-key' focuses and selects the API key field on open. */
+  /** initialFocus 'api-key' opens the API key editor, focused, on open. */
   initialFocus?: 'api-key'
   config: SessionConfig
   onConfigChange: (updates: Partial<SessionConfig>) => void
@@ -84,13 +84,7 @@ export function ConfigSidebar({
     <DialogPrimitive.Root
       open={isOpen}
       onOpenChange={(open) => {
-        if (open) return
-        // Closing the settings is a completion action: React fires no blur
-        // when the focused API key field unmounts with the dialog.
-        if (canCompleteApiTokenReset(config)) {
-          onConfigChange({ api_token_reset_required: false })
-        }
-        onClose()
+        if (!open) onClose()
       }}
     >
       <DialogPrimitive.Portal>
@@ -98,13 +92,15 @@ export function ConfigSidebar({
         <DialogPrimitive.Content
           className="fixed inset-y-0 right-0 z-50 ml-auto w-full max-w-md overflow-y-auto bg-card text-card-foreground p-4 shadow-lg outline-none"
           aria-label="Settings"
+          onEscapeKeyDown={(e) => {
+            if (isSecretEditorEvent(e)) e.preventDefault()
+          }}
           onOpenAutoFocus={(e) => {
             if (initialFocus !== 'api-key') return
             const apiKeyInput = document.getElementById(API_KEY_INPUT_ID)
             if (apiKeyInput instanceof HTMLInputElement) {
               e.preventDefault()
               apiKeyInput.focus()
-              apiKeyInput.select()
             }
           }}
         >
@@ -171,7 +167,11 @@ export function ConfigSidebar({
             )}
 
             {/* API Token */}
-            <ApiKeyField config={config} onConfigChange={onConfigChange} />
+            <ApiKeyField
+              config={config}
+              onConfigChange={onConfigChange}
+              defaultEditing={initialFocus === 'api-key'}
+            />
 
             {/* Model Selection */}
             <div className="space-y-2">

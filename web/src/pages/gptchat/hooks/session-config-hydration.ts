@@ -7,44 +7,25 @@
  * to it; URL overrides are applied as guarded writes; only then is the API
  * token invariant enforced, so no write path can bypass it.
  */
-import { kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
+import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
 import { DefaultSessionConfig, type SessionConfig } from '../types'
 import {
-  type ApiTokenRecovery,
   createFreeTierToken,
   createSyncKey,
   describeApiTokenKind,
-  findRecoverableApiToken,
-  isApiTokenClobberedBySyncKey,
   isSameApiEndpoint,
-  isUserSuppliedApiToken,
 } from '../utils/api-token'
+import {
+  isApiTokenClobberedBySyncKey,
+  repairStoredApiToken,
+  validateCredentialUpdate,
+} from '../utils/credential-policy'
 import {
   applyUrlOverridesToConfig,
   getSessionConfigKey,
   normalizeConfigNumericFields,
 } from '../utils/config-helpers'
-
-/**
- * recoverApiTokenFromSiblingSessions looks for the credential that
- * sessionId lost to the sync key among every other stored session config,
- * scoped to target.apiBase and target.syncKey (see findRecoverableApiToken).
- * It returns the recovery outcome.
- */
-async function recoverApiTokenFromSiblingSessions(
-  sessionId: number,
-  target: { apiBase: string; syncKey: string },
-): Promise<ApiTokenRecovery> {
-  const ownKey = getSessionConfigKey(sessionId)
-  const siblingKeys = (await kvList()).filter(
-    (k) => k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX) && k !== ownKey,
-  )
-  const siblings = await Promise.all(
-    siblingKeys.map((k) => kvGet<SessionConfig>(k)),
-  )
-  return findRecoverableApiToken(siblings, target)
-}
 
 /**
  * resolveGlobalSyncKey returns the browser-wide sync key, adopting the one
@@ -215,24 +196,25 @@ export async function hydrateSessionConfig(
     configChanged = true
   }
 
-  let urlSuppliedApiToken = false
   if (options?.applyUrlOverrides) {
     const overrideResult = applyUrlOverridesToConfig(finalConfig)
     if (overrideResult.mutated) {
       const overridden = overrideResult.config
       if (overridden.api_token !== finalConfig.api_token) {
-        if (isApiTokenClobberedBySyncKey(overridden.api_token, globalSyncKey)) {
-          // A URL is just another write path: it may not install a sync key
-          // as the API token, exactly like updateConfig.
+        // A URL is just another write path for the API token, so it obeys
+        // the same policy as updateConfig.
+        const { accepted, rejections } = validateCredentialUpdate(finalConfig, {
+          api_token: overridden.api_token,
+        })
+        if (rejections.length > 0) {
           console.warn(
             `[useConfig] ignored URL API token override copying sync key: session=${sessionId}`,
           )
-          overridden.api_token = finalConfig.api_token
-        } else {
-          urlSuppliedApiToken = isUserSuppliedApiToken(
-            overridden.api_token,
-            globalSyncKey,
-          )
+        }
+        overridden.api_token = accepted.api_token ?? finalConfig.api_token
+        if (accepted.api_token_reset_required !== undefined) {
+          overridden.api_token_reset_required =
+            accepted.api_token_reset_required
         }
       }
       finalConfig = overridden
@@ -240,46 +222,18 @@ export async function hydrateSessionConfig(
     }
   }
 
-  // Repair sessions whose API token was overwritten by the sync key (browser
-  // password-manager autofill in the settings sidebar). A session awaiting a
-  // reset retries on every load while it still has no key of the user's own,
-  // because another session may have gained one since; a key the user has
-  // started entering is never replaced.
-  const awaitingApiTokenReset = finalConfig.api_token_reset_required === true
-  const apiTokenClobbered = isApiTokenClobberedBySyncKey(
-    finalConfig.api_token,
-    globalSyncKey,
-  )
-  let apiTokenResetRequired = awaitingApiTokenReset
-  if (
-    apiTokenClobbered ||
-    (awaitingApiTokenReset &&
-      !isUserSuppliedApiToken(finalConfig.api_token, globalSyncKey))
-  ) {
-    const recovery = await recoverApiTokenFromSiblingSessions(sessionId, {
-      apiBase: finalConfig.api_base,
-      syncKey: globalSyncKey,
-    })
-    if (recovery.outcome === 'recovered') {
-      finalConfig.api_token = recovery.token
-      apiTokenResetRequired = false
-      configChanged = true
-    } else {
-      if (apiTokenClobbered) {
-        // Never send a sync key as a bearer token, and never borrow another
-        // session's credential here: a free-tier token keeps the session
-        // working while the user re-enters the key.
-        finalConfig.api_token = createFreeTierToken()
-        configChanged = true
-      }
-      apiTokenResetRequired = true
-    }
+  // A token that is really the sync key (browser password-manager autofill
+  // in the settings sidebar) is never sent anywhere. The session falls back
+  // to the free tier and the UI asks the user to re-enter or pick a key;
+  // another session's key is never adopted silently, because sharing an
+  // endpoint does not mean sharing an account.
+  const repair = repairStoredApiToken(finalConfig, [globalSyncKey])
+  if (repair.outcome !== 'healthy') {
+    finalConfig = repair.config
+    configChanged = true
     console.warn(
-      `[useConfig] API token awaiting reset: session=${sessionId} clobbered=${apiTokenClobbered} recovery=${recovery.outcome} candidates=${recovery.candidates}`,
+      `[useConfig] API token awaiting reset: session=${sessionId} outcome=${repair.outcome}`,
     )
-  }
-  if (urlSuppliedApiToken) {
-    apiTokenResetRequired = false
   }
 
   if (
@@ -297,11 +251,6 @@ export async function hydrateSessionConfig(
       source: fallbackApiToken ? 'fallback-session' : 'generated',
       apiTokenKind: describeApiTokenKind(finalConfig.api_token),
     })
-    configChanged = true
-  }
-
-  if (apiTokenResetRequired !== awaitingApiTokenReset) {
-    finalConfig.api_token_reset_required = apiTokenResetRequired
     configChanged = true
   }
 

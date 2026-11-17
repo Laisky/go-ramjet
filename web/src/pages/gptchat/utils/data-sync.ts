@@ -2,8 +2,13 @@
  * Utility functions for exporting and importing chat data.
  */
 import { kvDel, kvGet, kvList, kvSet, StorageKeys } from '@/utils/storage'
-import type { ChatMessageData, SessionHistoryItem } from '../types'
+import type {
+  ChatMessageData,
+  SessionConfig,
+  SessionHistoryItem,
+} from '../types'
 import { getChatDataKey } from './chat-storage'
+import { repairStoredApiToken } from './credential-policy'
 import {
   buildDeletedChatIdSet,
   mergeDeletedChatIds,
@@ -14,21 +19,66 @@ import {
 import { compareUuidV7, isUuidV7 } from './uuidv7'
 
 /**
- * Export all data (sessions, configs, shortcuts) for sync
+ * isSessionConfigEntry reports whether key and value form a stored session
+ * config.
+ */
+function isSessionConfigEntry(
+  key: string,
+  value: unknown,
+): value is SessionConfig {
+  return (
+    key.startsWith(StorageKeys.SESSION_CONFIG_PREFIX) &&
+    !!value &&
+    typeof value === 'object'
+  )
+}
+
+/**
+ * exportAllData collects every stored key (sessions, configs, shortcuts) for
+ * sync. A session config whose API token is a clobbered sync key is exported
+ * with a free-tier token instead, so a device that has not been updated yet
+ * never receives a sync key as its API token.
+ * It returns the export as a key/value record.
  */
 export async function exportAllData(): Promise<Record<string, unknown>> {
   const keys = await kvList()
   const data: Record<string, unknown> = {}
+  const syncKey = await kvGet<string>(StorageKeys.SYNC_KEY)
 
   // keys to exclude
   const excludeKeys = ['MIGRATE_V1_COMPLETED']
 
   for (const key of keys) {
     if (excludeKeys.includes(key)) continue
-    data[key] = await kvGet(key)
+    const value = await kvGet(key)
+    data[key] = isSessionConfigEntry(key, value)
+      ? repairStoredApiToken(value, [syncKey]).config
+      : value
   }
 
   return data
+}
+
+/**
+ * sanitizeIncomingSessionConfig enforces the API token invariant on a
+ * session config arriving from the cloud before it overwrites localConfig.
+ * A clobbered incoming token gives way to the same session's local token,
+ * the only credential with known provenance, and otherwise to a free-tier
+ * token that awaits a reset. syncKeys lists the sync keys in play.
+ * It returns the config to store.
+ */
+function sanitizeIncomingSessionConfig(
+  incoming: SessionConfig,
+  localConfig: SessionConfig | null,
+  syncKeys: ReadonlyArray<string | null | undefined>,
+): SessionConfig {
+  const { config, outcome } = repairStoredApiToken(incoming, syncKeys, {
+    previous: localConfig,
+  })
+  if (outcome !== 'healthy') {
+    console.warn(`[data-sync] repaired incoming API token: outcome=${outcome}`)
+  }
+  return config
 }
 
 /**
@@ -310,11 +360,25 @@ export async function importAllData(
 
   // 4) Overwrite non-chat keys from cloud (settings, session configs, shortcuts, etc).
   //    Do this last so chat merges don't get clobbered.
-  for (const [key, val] of Object.entries(incoming)) {
+  const syncKeys = [
+    await kvGet<string>(StorageKeys.SYNC_KEY),
+    typeof incoming[StorageKeys.SYNC_KEY] === 'string'
+      ? (incoming[StorageKeys.SYNC_KEY] as string)
+      : '',
+  ]
+  for (const [key, rawVal] of Object.entries(incoming)) {
     if (key === StorageKeys.DELETED_CHAT_IDS) continue
     if (key.startsWith(StorageKeys.CHAT_DATA_PREFIX)) continue
     if (key.startsWith(StorageKeys.SESSION_HISTORY_PREFIX)) continue
     if (key === StorageKeys.SELECTED_SESSION) continue
+
+    const val = isSessionConfigEntry(key, rawVal)
+      ? sanitizeIncomingSessionConfig(
+          rawVal,
+          await kvGet<SessionConfig>(key),
+          syncKeys,
+        )
+      : rawVal
 
     if (mode === 'download') {
       // Download mode: unconditional overwrite

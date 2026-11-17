@@ -1,24 +1,18 @@
-import { kvGet, kvList, kvSet } from '@/utils/storage'
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  installStore,
+  renderLoadedConfig,
+  sessionConfig,
+  SYNC_KEY,
+} from '../../__tests__/fixtures/credential-store'
 import { DefaultSessionConfig, type SessionConfig } from '../../types'
-import { useConfig } from '../use-config'
 
-vi.mock('@/utils/storage', () => ({
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-  kvDel: vi.fn(),
-  kvList: vi.fn(),
-  StorageKeys: {
-    SESSION_CONFIG_PREFIX: 'chat_user_config_',
-    SELECTED_SESSION: 'config_selected_session',
-    VERSION_DATE: 'config_version_date',
-    SESSION_HISTORY_PREFIX: 'chat_user_session_',
-    SESSION_ORDER: 'config_session_order',
-    SYNC_KEY: 'config_sync_key',
-  },
-}))
+vi.mock(
+  '@/utils/storage',
+  () => import('../../__tests__/fixtures/storage-mock'),
+)
 
 vi.mock('@/pages/gptchat/utils/migration', () => ({
   migrateLegacyData: vi.fn().mockResolvedValue(undefined),
@@ -28,50 +22,12 @@ vi.mock('@/utils/api', () => ({
   getApiBase: () => 'http://localhost:24456',
 }))
 
-const SYNC_KEY = 'sync-k2x9q4w7p1z8m3'
-
-/**
- * installStore backs the mocked KV layer with an in-memory record so tests can
- * observe exactly what the hook reads and persists.
- */
-function installStore(store: Record<string, unknown>): void {
-  ;(kvGet as Mock).mockImplementation((key: string) =>
-    Promise.resolve(store[key] ?? null),
-  )
-  ;(kvSet as Mock).mockImplementation(async (key: string, value: unknown) => {
-    store[key] = value
-  })
-  ;(kvList as Mock).mockImplementation(async () => Object.keys(store))
-}
-
-/**
- * sessionConfig builds a stored session config with the given overrides.
- */
-function sessionConfig(overrides: Partial<SessionConfig>): SessionConfig {
-  return {
-    ...DefaultSessionConfig,
-    sync_key: SYNC_KEY,
-    ...overrides,
-  }
-}
-
-/**
- * renderLoadedConfig mounts useConfig and waits until hydration has finished.
- */
-async function renderLoadedConfig() {
-  const hook = renderHook(() => useConfig())
-  await waitFor(() => {
-    expect(hook.result.current.isLoading).toBe(false)
-  })
-  return hook
-}
-
 describe('useConfig API token clobbered by sync key', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('restores the token from a sibling session and persists the repair', async () => {
+  it('never adopts a sibling key on its own, even when every sibling agrees', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -89,12 +45,14 @@ describe('useConfig API token clobbered by sync key', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-user-key')
-    expect((store.chat_user_config_1 as SessionConfig).api_token).toBe(
-      'sk-user-key',
-    )
+    // The siblings may belong to another account on the same endpoint; the
+    // user picks one from the alert instead.
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
+    expect(result.current.config.api_token_reset_required).toBe(true)
+    const persisted = store.chat_user_config_1 as SessionConfig
+    expect(persisted.api_token).toMatch(/^FREETIER-/)
+    expect(persisted.api_token_reset_required).toBe(true)
     expect(result.current.config.sync_key).toBe(SYNC_KEY)
-    expect(result.current.config.api_token_reset_required).toBeFalsy()
   })
 
   it('detects a token holding an older generated sync key', async () => {
@@ -108,11 +66,11 @@ describe('useConfig API token clobbered by sync key', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-sibling')
-    expect(result.current.config.api_token_reset_required).toBeFalsy()
+    expect(result.current.config.api_token).toMatch(/^FREETIER-/)
+    expect(result.current.config.api_token_reset_required).toBe(true)
   })
 
-  it('falls back to a free-tier token when no sibling holds a usable token', async () => {
+  it('falls back to a free-tier token when no sibling holds a usable token either', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -147,7 +105,7 @@ describe('useConfig API token clobbered by sync key', () => {
     expect(result.current.config.api_token_reset_required).toBe(true)
   })
 
-  it('retries recovery for a flagged session once a sibling has a token', async () => {
+  it('keeps a flagged session on the free tier until the user acts', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -161,14 +119,14 @@ describe('useConfig API token clobbered by sync key', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-entered-later')
-    expect(result.current.config.api_token_reset_required).toBe(false)
+    expect(result.current.config.api_token).toBe('FREETIER-placeholder')
+    expect(result.current.config.api_token_reset_required).toBe(true)
     expect(
       (store.chat_user_config_1 as SessionConfig).api_token_reset_required,
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('clears the alert only once the user completes entering a new key', async () => {
+  it('clears the alert in the same write that saves a key of the user’s own', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -184,16 +142,10 @@ describe('useConfig API token clobbered by sync key', () => {
     })
 
     expect(result.current.config.api_token).toBe('sk-re-entered')
-    expect(result.current.config.api_token_reset_required).toBe(true)
-
-    await act(async () => {
-      await result.current.updateConfig({ api_token_reset_required: false })
-    })
-
     expect(result.current.config.api_token_reset_required).toBe(false)
-    expect(
-      (store.chat_user_config_1 as SessionConfig).api_token_reset_required,
-    ).toBe(false)
+    const persisted = store.chat_user_config_1 as SessionConfig
+    expect(persisted.api_token).toBe('sk-re-entered')
+    expect(persisted.api_token_reset_required).toBe(false)
   })
 
   it('stops alerting when the user chooses to keep the free tier', async () => {
@@ -359,7 +311,7 @@ describe('useConfig sync key writes honor the API token invariant', () => {
     )
   })
 
-  it('still lets an API-shaped key double as the sync key', async () => {
+  it('refuses an API-shaped key as the sync key', async () => {
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -373,7 +325,10 @@ describe('useConfig sync key writes honor the API token invariant', () => {
       await result.current.updateConfig({ sync_key: 'sk-shared-secret' })
     })
 
-    expect(store.config_sync_key).toBe('sk-shared-secret')
+    // Whoever holds the API key (its provider included) could otherwise
+    // download and decrypt the cloud backup.
+    expect(store.config_sync_key).toBe(SYNC_KEY)
+    expect(result.current.config.sync_key).toBe(SYNC_KEY)
     expect(result.current.config.api_token).toBe('sk-shared-secret')
   })
 })

@@ -28,6 +28,13 @@ function setSiteMeta(siteId: string) {
   document.documentElement.dataset.theme = siteId
 }
 
+// The first GPTChatPage render compiles the whole lazy-loaded page tree,
+// which can take several seconds when the full suite runs in parallel. The
+// test timeout must exceed the wait, or a slow load times out the test
+// before waitFor can report it.
+const LAZY_PAGE_TIMEOUT_MS = 10_000
+const LAZY_PAGE_TEST_TIMEOUT_MS = 15_000
+
 describe('chat domain proxying', () => {
   beforeEach(() => {
     setSiteMeta('default')
@@ -56,28 +63,36 @@ describe('chat domain proxying', () => {
     expect(document.title).toBe('Laisky')
   })
 
-  it('renders GPTChatPage on chat.laisky.com', async () => {
-    setSiteMeta('chat')
-    renderApp('/')
+  it(
+    'renders GPTChatPage on chat.laisky.com',
+    async () => {
+      setSiteMeta('chat')
+      renderApp('/')
 
-    expect(
-      screen.queryByRole('heading', { name: 'go-ramjet' }),
-    ).not.toBeInTheDocument()
-    // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
-    await waitFor(() => expect(document.title).toBe('Chat'), {
-      timeout: 5000,
-    })
-  })
+      expect(
+        screen.queryByRole('heading', { name: 'go-ramjet' }),
+      ).not.toBeInTheDocument()
+      // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
+      await waitFor(() => expect(document.title).toBe('Chat'), {
+        timeout: LAZY_PAGE_TIMEOUT_MS,
+      })
+    },
+    LAZY_PAGE_TEST_TIMEOUT_MS,
+  )
 
-  it('renders GPTChatPage on chat2.laisky.com', async () => {
-    setSiteMeta('chat')
-    renderApp('/')
+  it(
+    'renders GPTChatPage on chat2.laisky.com',
+    async () => {
+      setSiteMeta('chat')
+      renderApp('/')
 
-    expect(
-      screen.queryByRole('heading', { name: 'go-ramjet' }),
-    ).not.toBeInTheDocument()
-    await waitFor(() => expect(document.title).toBe('Chat'), {
-      timeout: 5000,
-    })
-  })
+      expect(
+        screen.queryByRole('heading', { name: 'go-ramjet' }),
+      ).not.toBeInTheDocument()
+      await waitFor(() => expect(document.title).toBe('Chat'), {
+        timeout: LAZY_PAGE_TIMEOUT_MS,
+      })
+    },
+    LAZY_PAGE_TEST_TIMEOUT_MS,
+  )
 })

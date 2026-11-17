@@ -14,8 +14,11 @@
 
 /**
  * SECRET_INPUT_MASK_CLASS masks the characters of a text input the way a
- * password field does. `-webkit-text-security` is supported by Chromium,
- * WebKit, and Gecko (Firefox 114+).
+ * password field does. `-webkit-text-security` is non-standard but supported
+ * by Chromium, WebKit, and Gecko (Firefox 114+). Where it is missing, only a
+ * value the user is typing shows in clear text: stored secrets never reach an
+ * input (see SecretField). The mask is visual only; screen readers still
+ * announce the characters, as they do for any text input.
  */
 export const SECRET_INPUT_MASK_CLASS = '[-webkit-text-security:disc]'
 
@@ -38,11 +41,29 @@ export const SECRET_INPUT_OPT_OUT_ATTRIBUTES = {
 
 /**
  * isUserEditing reports whether a value change on input comes from the user
- * editing that field. Typing, pasting, dictation, and picking a suggestion all
- * happen while the field has focus; browser autofill of a field that merely
- * appeared on screen dispatches synthetic focus/input events without moving
- * focus into it. It returns true when input is the focused element.
+ * editing that field. Typing, pasting, dictation, and picking a suggestion
+ * all happen while the field has focus. Chrome's built-in autofill of a field
+ * that merely appeared on screen dispatches synthetic focus/input events
+ * without moving focus into it, so this check rejects that fill.
+ *
+ * It is a safeguard, not an authorization boundary: extensions such as
+ * Bitwarden call focus() before they fill. Stored secrets are therefore never
+ * placed in an input at all (see SecretField), and the credential policy
+ * validates every write. It returns true when input is the focused element.
  */
 export function isUserEditing(input: HTMLInputElement): boolean {
   return input.ownerDocument.activeElement === input
+}
+
+/**
+ * isSecretEditorEvent reports whether event started inside an open
+ * SecretField editor. A dialog's Escape handler uses it to let Escape cancel
+ * the edit instead of closing the dialog and discarding the draft unseen.
+ */
+export function isSecretEditorEvent(event: Event): boolean {
+  const target = event.target
+  return (
+    target instanceof Element &&
+    target.closest('[data-secret-editing="true"]') !== null
+  )
 }
