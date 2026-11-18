@@ -7,10 +7,16 @@ import (
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
+
+	"github.com/Laisky/go-ramjet/library/egress"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
-	admitHTMLCrawlerURL            = crawleregress.AdmitURL
+	// admitHTMLCrawlerURL applies the shared destination policy with typed refusal reasons.
+	admitHTMLCrawlerURL = func(ctx context.Context, raw string) (crawleregress.Admission, error) {
+		return egress.Admit(ctx, raw, nil)
+	}
 	enqueueAdmittedHTMLCrawlerTask = enqueueHTMLCrawlerTaskToRedis
 	loadVerifiedHTMLCrawlerTask    = getHTMLCrawlerTaskResult
 )
@@ -105,7 +111,11 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 }
 
 // crawlerAdmissionError preserves the admission cause and exposes only its safe diagnostic stage.
+// Its cause is normally an *egress.AdmissionError carrying the typed refusal reason.
 type crawlerAdmissionError struct{ cause error }
+
+// crawlerAdmissionError implements the logging package's explicit stage contract.
+var _ log.FailureStageError = (*crawlerAdmissionError)(nil)
 
 // Error retains the local causal diagnostic without changing admission behavior.
 func (e *crawlerAdmissionError) Error() string { return "admit crawler target: " + e.cause.Error() }

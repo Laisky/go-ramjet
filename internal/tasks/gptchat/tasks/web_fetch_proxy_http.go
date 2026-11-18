@@ -4,17 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
-	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
+
+	"github.com/Laisky/go-ramjet/library/egress"
 )
 
 // verifiedWebFetchClientKey identifies an explicitly scoped provider transport.
@@ -52,6 +49,7 @@ type verifiedWebFetchTransport struct{ deps rendererNetworkDependencies }
 // RoundTrip sends request only to admitted public provider peers and returns its
 // response without automatic redirects, environment proxies or cookie storage.
 // Configured provider API credentials require HTTPS before any network activity.
+// Admission, pinning and peer checks are owned by egress.PinnedTransport.
 func (t verifiedWebFetchTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "https" &&
 		(request.Header.Get("Authorization") != "" || request.Header.Get("X-Api-Token") != "") {
@@ -61,60 +59,11 @@ func (t verifiedWebFetchTransport) RoundTrip(request *http.Request) (*http.Respo
 		}
 		return nil, errors.WithStack(err)
 	}
-	lookup := t.deps.resolve
-	if lookup == nil {
-		lookup = net.DefaultResolver.LookupIPAddr
-	}
-	admission, err := crawleregress.AdmitURLWithResolver(request.Context(), request.URL.String(), lookup)
-	if err != nil {
-		if request.Body != nil {
-			err = errors.Join(err, request.Body.Close())
-		}
-		return nil, errors.Wrap(err, "admit provider endpoint")
-	}
-	canonical, err := url.Parse(crawleregress.RequestURL(request.URL.String()))
-	if err != nil {
-		if request.Body != nil {
-			err = errors.Join(err, request.Body.Close())
-		}
-		return nil, errors.Wrap(err, "canonicalize provider endpoint")
-	}
 	request = request.Clone(request.Context())
-	request.URL, request.Host = canonical, ""
 	request.Header.Set("Accept-Encoding", "gzip")
-	dial := t.deps.dial
-	if dial == nil {
-		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: -1}
-		dial = dialer.DialContext
-	}
-	transport := &http.Transport{
-		Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false, DisableCompression: true,
-		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, ServerName: admission.Host, RootCAs: t.deps.rootCAs},
-		TLSNextProto:        make(map[string]func(string, *tls.Conn) http.RoundTripper),
-		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 10 * time.Second,
-		MaxResponseHeaderBytes: 1 << 20,
-	}
-	defer transport.CloseIdleConnections()
-	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		port := strconv.Itoa(admission.Port)
-		if network != "tcp" || address != net.JoinHostPort(admission.Host, port) {
-			return nil, errors.New("provider dial target mismatch")
-		}
-		var lastErr error
-		for _, pinned := range admission.Addresses {
-			conn, dialErr := dial(ctx, "tcp", net.JoinHostPort(pinned, port))
-			if dialErr != nil {
-				lastErr = dialErr
-				continue
-			}
-			actual, actualPort, peerErr := net.SplitHostPort(conn.RemoteAddr().String())
-			if peerErr != nil || actualPort != port || !containsRendererAddress(admission.Addresses, actual) {
-				return nil, errors.Wrap(errors.Join(errors.New("provider peer outside admitted pins"), peerErr, conn.Close()), "reject provider peer")
-			}
-			return conn, nil
-		}
-		return nil, errors.Wrap(lastErr, "dial provider pins")
-	}
+	transport := egress.PinnedTransport{Deps: egress.Dependencies{
+		Resolve: t.deps.resolve, Dial: t.deps.dial, RootCAs: t.deps.rootCAs,
+	}}
 	response, err := transport.RoundTrip(request)
 	if err != nil {
 		return nil, errors.Wrap(err, "exchange with provider")

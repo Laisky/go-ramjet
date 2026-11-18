@@ -8,12 +8,7 @@ import "github.com/Laisky/zap/zapcore"
 // same bounded safe projection as the core; verified worker fields remain faithful.
 func CrawlerDiagnosticAlertHook(hook func(zapcore.Entry, []zapcore.Field) error) func(zapcore.Entry, []zapcore.Field) error {
 	return func(entry zapcore.Entry, fields []zapcore.Field) error {
-		if entry.LoggerName == reviewedCrawlerLoggerName {
-			return hook(entry, fields)
-		}
-		if entry.LoggerName == reviewedArchiveLoggerName {
-			return hook(entry, archiveAlertFields(fields))
-		}
-		return hook(entry, nil)
+		projected, _ := alertFieldsFor(entry.LoggerName, fields)
+		return hook(entry, projected)
 	}
 }

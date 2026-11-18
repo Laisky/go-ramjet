@@ -37,13 +37,11 @@ func (c *crawlerDiagnosticAlertCore) Check(entry zapcore.Entry, checked *zapcore
 
 // Write selects one existing application policy without changing the chosen entry message.
 func (c *crawlerDiagnosticAlertCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
-	if entry.LoggerName == reviewedCrawlerLoggerName {
+	projected, faithful := alertFieldsFor(entry.LoggerName, fields)
+	if faithful {
 		return c.full.Write(entry, fields)
 	}
-	if entry.LoggerName == reviewedArchiveLoggerName {
-		return c.metadata.Write(entry, archiveAlertFields(fields))
-	}
-	return c.metadata.Write(entry, nil)
+	return c.metadata.Write(entry, projected)
 }
 
 // Sync synchronizes the shared alert transport once; the SDK does not promise delivery flushing.

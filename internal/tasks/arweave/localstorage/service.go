@@ -19,13 +19,24 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
+	"github.com/Laisky/go-ramjet/library/egress"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
+	// httpcli talks only to the configured S3 endpoint, never to user-selected targets.
 	httpcli     *http.Client
 	runningUrls sync.Map
 	taskChan    = make(chan taskItem, 20)
+
+	// targetNetwork supplies the resolver and dialer used for user-selected targets; tests replace it.
+	targetNetwork egress.Dependencies
+	// targetHTTPClient fetches user-selected targets; every hop, including redirects, is admitted and pinned.
+	targetHTTPClient = egress.NewHTTPClient(30*time.Second, targetNetwork)
+	// fetchArchiveContent renders one admitted target through the verified crawler.
+	fetchArchiveContent = func(ctx context.Context, target string) ([]byte, error) {
+		return gptTasks.FetchDynamicURLContent(ctx, target, gptTasks.WithMarkdownConversion("", false))
+	}
 )
 
 func init() {
@@ -69,7 +80,9 @@ func SaveUrlContent(ctx context.Context, item taskItem) error {
 	return nil
 }
 
-// LoadContentByUrl load content by url
+// LoadContentByUrl loads a user-selected url through the shared destination policy.
+// Every hop, including redirects, must be a public destination; refusals carry an
+// *egress.AdmissionError in the returned chain.
 //
 // Note: caller should close the returned io.ReadCloser
 func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
@@ -78,13 +91,15 @@ func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, errors.Wrapf(err, "new request %s", url)
 	}
 
-	resp, err := httpcli.Do(req)
+	resp, err := targetHTTPClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %s", url)
 	}
-	// defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, errors.Wrapf(closeErr, "close unexpected status %d response for url %s", resp.StatusCode, url)
+		}
 		return nil, errors.Errorf("unexpected status code %d for url %s", resp.StatusCode, url)
 	}
 
@@ -132,6 +147,8 @@ func RunSaveUrlContent(ctx context.Context) {
 
 // saveURLContentTask processes one queued archive item and records a single attributed failure.
 // It preserves the three-minute fetch/storage budget and the existing duplicate suppression.
+// Destination-policy refusals are input errors and are logged at WARN, below the alert level;
+// every other failure, including resolver failures, remains an ERROR alert.
 func saveURLContentTask(ctx context.Context, task taskItem) {
 	if _, ok := runningUrls.Load(task.url); ok {
 		return
@@ -146,10 +163,7 @@ func saveURLContentTask(ctx context.Context, task taskItem) {
 		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
 		defer cancel()
 
-		content, err := gptTasks.FetchDynamicURLContent(taskCtx,
-			task.url,
-			gptTasks.WithMarkdownConversion("", false),
-		)
+		content, err := fetchArchiveContent(taskCtx, task.url)
 		if err != nil {
 			return errors.Wrapf(err, "fetch url %s", task.url)
 		}
@@ -175,12 +189,18 @@ func saveURLContentTask(ctx context.Context, task taskItem) {
 		return nil
 	}()
 	if err != nil {
-		log.Logger.Named("arweave.localstorage").Error("failed to fetch and save url content",
+		fields := []zap.Field{
 			zap.String("stage", stage),
 			zap.Duration("duration", time.Since(startedAt)),
 			zap.String("url", task.url),
+			zap.String("target_ref", log.ArchiveTargetRef(task.url)),
 			zap.Error(err),
-		)
+		}
+		if egress.IsExpectedRefusal(err) {
+			log.ArchiveLogger().Warn("failed to fetch and save url content", fields...)
+			return
+		}
+		log.ArchiveLogger().Error("failed to fetch and save url content", fields...)
 	}
 }
 
