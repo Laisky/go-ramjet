@@ -23,3 +23,11 @@ The archive per-item function was extracted for the actual source-path regressio
 - Scoped Go vet and golangci-lint pass; import formatting and diff checks pass.
 
 No new dependencies or CI jobs. No live-provider calls, production mutation, deployment or merge. Full repository/browser qualification is not claimed. FileIO historical searches returned unrelated score-zero results; no absence proof is claimed. FileIO closeout export was not attempted because a separate parent attempt had been denied.
+
+## Hosted browser-smoke follow-up
+
+Exact-head run https://github.com/Laisky/go-ramjet/actions/runs/44350457360 on `b3be9ed36b21014d34a3b3edbf4f40b179ee281e` passed full untagged Go tests and frontend checks, but browser smoke failed: 33 of 35 original identities passed; both PDF font controls were absent from the passing set, with three failed actions. Later vet/lint/vulnerability, manual browser qualification and image-build steps were skipped, not passed. The failure summary did not retain phase observations, so its root cause is unknown; elapsed time alone is not a timeout diagnosis.
+
+CV source, browser fixtures, driver, workflow and dependency files were unchanged against base. One bounded local run of the unchanged joint command on Go 1.27.4 and actual Chrome 157.0.8103.78 passed all 35 identities, with no failures/skips/missing coverage and confirmed cleanup. The positive PDF printed at 1,553 ms total; the negative control reached the expected font refusal at 1,045 ms. This does not prove hosted-runner equivalence, explain the original failure, or establish that it is infrastructure-only. No second browser run, changed deadline, relaxed assertion or changed confinement was used.
+
+A separate pure regression reproduced the diagnosability defect: the smoke driver computed safe phase/browser observations but omitted them from its only PR output. The follow-up prints those existing bounded, fixed-grammar observations with the existing counters. It still excludes raw stdout/stderr and fails on the original failure. It adds no job, browser attempt or workflow dependency. Five fast-CI, 44 diagnostic-driver and two cache-graph contracts pass. Original hosted failure remains retained as failed evidence; a new exact-head run must be checked independently.
