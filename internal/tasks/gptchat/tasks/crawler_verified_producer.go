@@ -23,7 +23,7 @@ func submitAdmittedHTMLCrawlerTask(ctx context.Context, target string, outputMar
 	}
 	admission, err := admitHTMLCrawlerURL(ctx, target)
 	if err != nil {
-		return nil, errors.Wrap(err, "admit crawler target")
+		return nil, errors.WithStack(&crawlerAdmissionError{cause: err})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
@@ -103,3 +103,15 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 		}
 	}
 }
+
+// crawlerAdmissionError preserves the admission cause and exposes only its safe diagnostic stage.
+type crawlerAdmissionError struct{ cause error }
+
+// Error retains the local causal diagnostic without changing admission behavior.
+func (e *crawlerAdmissionError) Error() string { return "admit crawler target: " + e.cause.Error() }
+
+// Unwrap preserves cancellation, resolver and input-error identities for callers.
+func (e *crawlerAdmissionError) Unwrap() error { return e.cause }
+
+// CrawlerFailureStage identifies admission failure without requiring error-text parsing.
+func (e *crawlerAdmissionError) CrawlerFailureStage() string { return "admission" }

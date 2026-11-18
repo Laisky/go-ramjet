@@ -124,52 +124,63 @@ func RunSaveUrlContent(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			for task := range taskChan {
-				if _, ok := runningUrls.Load(task.url); ok {
-					continue
-				}
-				runningUrls.Store(task.url, struct{}{})
-
-				err := func() error {
-					defer runningUrls.Delete(task.url)
-
-					taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
-					defer cancel()
-
-					content, err := gptTasks.FetchDynamicURLContent(taskCtx,
-						task.url,
-						gptTasks.WithMarkdownConversion("", false),
-					)
-					if err != nil {
-						return errors.Wrapf(err, "fetch url %s", task.url)
-					}
-
-					objkey := url2objkey(task.url)
-					opt := minio.PutObjectOptions{}
-					opt.Header().Add("Content-Type", "text/html")
-					_, err = config.Instance.S3Cli.PutObject(taskCtx,
-						config.Instance.S3.Bucket,
-						objkey2path(objkey),
-						bytes.NewReader(content),
-						int64(len(content)),
-						opt,
-					)
-					if err != nil {
-						return errors.Wrapf(err, "save url %s", task.url)
-					}
-
-					log.Logger.Info("save url content",
-						zap.String("url", task.url),
-						zap.String("objkey", objkey))
-					return nil
-				}()
-				if err != nil {
-					log.Logger.Error("failed to fetch and save url content",
-						zap.String("url", task.url),
-						zap.Error(err),
-					)
-				}
+				saveURLContentTask(ctx, task)
 			}
 		}()
+	}
+}
+
+// saveURLContentTask processes one queued archive item and records a single attributed failure.
+// It preserves the three-minute fetch/storage budget and the existing duplicate suppression.
+func saveURLContentTask(ctx context.Context, task taskItem) {
+	if _, ok := runningUrls.Load(task.url); ok {
+		return
+	}
+	runningUrls.Store(task.url, struct{}{})
+
+	startedAt := time.Now()
+	stage := "fetch"
+	err := func() error {
+		defer runningUrls.Delete(task.url)
+
+		taskCtx, cancel := context.WithTimeout(ctx, time.Minute*3)
+		defer cancel()
+
+		content, err := gptTasks.FetchDynamicURLContent(taskCtx,
+			task.url,
+			gptTasks.WithMarkdownConversion("", false),
+		)
+		if err != nil {
+			return errors.Wrapf(err, "fetch url %s", task.url)
+		}
+
+		stage = "save"
+		objkey := url2objkey(task.url)
+		opt := minio.PutObjectOptions{}
+		opt.Header().Add("Content-Type", "text/html")
+		_, err = config.Instance.S3Cli.PutObject(taskCtx,
+			config.Instance.S3.Bucket,
+			objkey2path(objkey),
+			bytes.NewReader(content),
+			int64(len(content)),
+			opt,
+		)
+		if err != nil {
+			return errors.Wrapf(err, "save url %s", task.url)
+		}
+
+		log.Logger.Info("save url content",
+			zap.String("url", task.url),
+			zap.String("objkey", objkey))
+		return nil
+	}()
+	if err != nil {
+		log.Logger.Named("arweave.localstorage").Error("failed to fetch and save url content",
+			zap.String("stage", stage),
+			zap.Duration("duration", time.Since(startedAt)),
+			zap.String("url", task.url),
+			zap.Error(err),
+		)
 	}
 }
 
