@@ -20,6 +20,7 @@ import (
 	gcompress "github.com/Laisky/go-utils/v6/compress"
 	gcrypto "github.com/Laisky/go-utils/v6/crypto"
 	"github.com/Laisky/go-utils/v6/json"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
@@ -273,6 +274,82 @@ func DownloadUserConfig(ctx *gin.Context) {
 	logger.Info("download user config success")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Data(200, "application/json", gzout.Bytes())
+}
+
+// deleteUserConfigResponse is the JSON body returned by DeleteUserConfig.
+type deleteUserConfigResponse struct {
+	// Deleted is the number of stored object versions (including delete
+	// markers) that were permanently removed; 0 means no backup existed.
+	Deleted int `json:"deleted"`
+}
+
+// DeleteUserConfig permanently deletes the encrypted cloud backup bound to the
+// sync key sent in the X-LAISKY-SYNC-KEY header, so that key can no longer
+// restore any configuration after the user rotates it.
+//
+// Parameters:
+//   - ctx: Current gin request context carrying the sync key header.
+//
+// Returns:
+//   - Nothing. It responds 200 with {"deleted": <n>}; deleting a backup that
+//     does not exist succeeds with {"deleted": 0}. A missing sync key or an
+//     object store failure aborts the request with an error response.
+func DeleteUserConfig(ctx *gin.Context) {
+	setNoStoreHeaders(ctx)
+	logger := gmw.GetLogger(ctx)
+	syncKey := strings.TrimSpace(ctx.Request.Header.Get("X-LAISKY-SYNC-KEY"))
+	if syncKey == "" {
+		web.AbortErr(ctx, errors.New("empty apikey"))
+		return
+	}
+
+	logger = logger.With(zap.String("sync_key_fp", syncKeyFingerprint(syncKey)))
+
+	s3cli, err := s3.GetCli()
+	if web.AbortErr(ctx, errors.Wrap(err, "get s3 client")) {
+		return
+	}
+
+	deleted, err := deleteUserConfigObjects(gmw.Ctx(ctx), logger, s3cli, config.Config.S3.Bucket, syncKey)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+
+	logger.Info("delete user config success", zap.Int("deleted", deleted))
+	ctx.JSON(http.StatusOK, deleteUserConfigResponse{Deleted: deleted})
+}
+
+// deleteUserConfigObjects removes every stored version of the cloud backup
+// object derived from syncKey, including delete markers, so no historical
+// ciphertext stays restorable.
+//
+// Parameters:
+//   - ctx: Context bounding the object store calls.
+//   - logger: Request-scoped logger; it must never carry the raw sync key.
+//   - cli: Object store client used to list and remove versions.
+//   - bucket: Bucket that stores user config backups.
+//   - syncKey: Trimmed, non-empty sync key whose backup should be deleted.
+//
+// Returns:
+//   - The number of object versions removed; 0 when no backup exists.
+//   - An error when syncKey is empty or listing/removing fails. On a partial
+//     failure the count removed before the failure is returned as well.
+func deleteUserConfigObjects(
+	ctx context.Context,
+	logger glog.Logger,
+	cli s3lib.ObjectVersionClient,
+	bucket, syncKey string,
+) (int, error) {
+	if syncKey == "" {
+		return 0, errors.New("empty sync key")
+	}
+
+	deleted, err := s3lib.RemoveAllObjectVersions(ctx, logger, cli, bucket, userConfigS3Key(syncKey))
+	if err != nil {
+		return deleted, errors.Wrapf(err, "delete user config (removed %d versions before failure)", deleted)
+	}
+
+	return deleted, nil
 }
 
 // findLastUserMessageIdx returns the index of the last user message in messages.

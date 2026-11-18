@@ -77,8 +77,9 @@ describe('storage.ts public facade — API surface', () => {
       SESSION_DRAFTS: 'chat_session_drafts',
       CHAT_DATA_PREFIX: 'chat_data_',
       DELETED_CHAT_IDS: 'deleted_chat_ids',
+      PENDING_BACKUP_DELETIONS: 'config_pending_backup_deletions',
     })
-    expect(Object.keys(StorageKeys)).toHaveLength(15)
+    expect(Object.keys(StorageKeys)).toHaveLength(16)
   })
 })
 

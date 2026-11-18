@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { secureRandomString } from '@/utils/secure-random'
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import type { SessionConfig } from '../types'
 import { api } from '../utils/api'
@@ -95,15 +96,6 @@ function DatasetManagerContent({
       loadedRequestKey !== requestKey,
     )
   const [datasetError, setDatasetError] = useState<string | null>(null)
-
-  const randomString = useCallback((length = 16) => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-    let result = ''
-    for (let i = 0; i < length; i += 1) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
-  }, [])
 
   const handleDatasetKeyChange = useCallback(async (value: string) => {
     setDatasetKey(value)
@@ -291,7 +283,8 @@ function DatasetManagerContent({
         )
         const stored = typeof raw === 'string' ? raw : raw?.data || ''
 
-        const key = stored && stored.length > 0 ? stored : randomString(16)
+        const key =
+          stored && stored.length > 0 ? stored : secureRandomString(16)
         if (!stored) {
           await kvSet(StorageKeys.CUSTOM_DATASET_PASSWORD, {
             data: key,
@@ -308,7 +301,7 @@ function DatasetManagerContent({
     return () => {
       mounted = false
     }
-  }, [randomString])
+  }, [])
 
   useEffect(() => {
     if (!datasetKey || !sessionToken) return

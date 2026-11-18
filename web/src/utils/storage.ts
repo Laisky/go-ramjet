@@ -39,6 +39,9 @@ export const StorageKeys = {
   SESSION_DRAFTS: 'chat_session_drafts',
   CHAT_DATA_PREFIX: 'chat_data_', // ${prefix}${role}_${chatID}
   DELETED_CHAT_IDS: 'deleted_chat_ids',
+  // Sync keys whose cloud backup still has to be deleted after a rotation.
+  // Device-local: never exported or imported.
+  PENDING_BACKUP_DELETIONS: 'config_pending_backup_deletions',
 } as const
 
 export type KvOperation = _KvOperation

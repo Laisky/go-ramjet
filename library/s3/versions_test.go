@@ -31,8 +31,14 @@ type fakeVersionClient struct {
 	putErrs  []error // returned on successive PutObject calls
 	putCalls int
 	removed  []string // version ids passed to RemoveObject, in order
+	// removeErrAt makes the RemoveObject call with this 1-based index fail with
+	// removeErr; zero disables injected removal failures.
+	removeErrAt int
+	removeErr   error
+	removeCalls int
 }
 
+// PutObject drains r and, unless an injected error is queued, records a new newest version of key "k".
 func (f *fakeVersionClient) PutObject(_ context.Context, _, _ string, r io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
 	_, _ = io.Copy(io.Discard, r)
 	idx := f.putCalls
@@ -49,6 +55,7 @@ func (f *fakeVersionClient) PutObject(_ context.Context, _, _ string, r io.Reade
 	return minio.UploadInfo{}, nil
 }
 
+// ListObjects streams the in-memory listing, or a single error entry when listErr is set.
 func (f *fakeVersionClient) ListObjects(_ context.Context, _ string, _ minio.ListObjectsOptions) <-chan minio.ObjectInfo {
 	ch := make(chan minio.ObjectInfo)
 	go func() {
@@ -64,11 +71,17 @@ func (f *fakeVersionClient) ListObjects(_ context.Context, _ string, _ minio.Lis
 	return ch
 }
 
-func (f *fakeVersionClient) RemoveObject(_ context.Context, _, _ string, opts minio.RemoveObjectOptions) error {
+// RemoveObject records the removed version id and drops the matching key/version entry,
+// failing instead on the call configured by removeErrAt.
+func (f *fakeVersionClient) RemoveObject(_ context.Context, _, key string, opts minio.RemoveObjectOptions) error {
+	f.removeCalls++
+	if f.removeErrAt > 0 && f.removeCalls == f.removeErrAt {
+		return f.removeErr
+	}
 	f.removed = append(f.removed, opts.VersionID)
 	kept := make([]minio.ObjectInfo, 0, len(f.list))
 	for _, o := range f.list {
-		if o.VersionID != opts.VersionID {
+		if o.Key != key || o.VersionID != opts.VersionID {
 			kept = append(kept, o)
 		}
 	}

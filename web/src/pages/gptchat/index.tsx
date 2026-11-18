@@ -19,6 +19,7 @@ import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
+  ApiKeyResetBanner,
   ChatInput,
   ChatMessage,
   ChatSearch,
@@ -33,30 +34,19 @@ import {
 import { useChat } from './hooks/use-chat'
 import { useChatScroll } from './hooks/use-chat-scroll'
 import { useConfig } from './hooks/use-config'
+import { useConfigHandlers } from './hooks/use-config-handlers'
 import { useDraft } from './hooks/use-draft'
 import { useFloatingHeader } from './hooks/use-floating-header'
 import { useMcpSync } from './hooks/use-mcp-sync'
+import { useMessageEditActions } from './hooks/use-message-edit-actions'
 import { useMessageNavigation } from './hooks/use-message-navigation'
 import { usePromptShortcuts } from './hooks/use-prompt-shortcuts'
-import { useSelection } from './hooks/use-selection'
+import { useSelectionActions } from './hooks/use-selection-actions'
 import { useTTS } from './hooks/use-tts'
 import { useUser } from './hooks/use-user'
 import { useVersionCheck } from './hooks/use-version-check'
-import {
-  ChatModels,
-  ImageModelFluxDev,
-  ImageModels,
-  getFirstAllowedModel,
-  isImageModel,
-  isModelAllowed,
-} from './models'
-import type {
-  ChatAttachment,
-  ChatMessageData,
-  SelectionData,
-  SessionConfig,
-} from './types'
-import { DefaultSessionConfig } from './types'
+import { ImageModelFluxDev, isImageModel } from './models'
+import type { ChatAttachment, ChatMessageData } from './types'
 import { exportSessionToXml } from './utils/session-export'
 
 // Lazy load heavy sidebar & modal components - only needed on user interaction
@@ -126,6 +116,7 @@ export function GPTChatPage() {
   }, [])
 
   const [configOpen, setConfigOpen] = useState(false)
+  const [configFocus, setConfigFocus] = useState<'api-key'>()
   const {
     promptShortcuts,
     handleSavePrompt,
@@ -199,13 +190,6 @@ export function GPTChatPage() {
   >(undefined)
   const { globalDraft, setGlobalDraft } = useDraft()
 
-  const [editingMessage, setEditingMessage] = useState<{
-    chatId: string
-    content: string
-    attachments?: ChatAttachment[]
-  } | null>(null)
-  const [insertingAt, setInsertingAt] = useState<number | null>(null)
-
   // Monitor footer height to adjust main content padding
   useEffect(() => {
     const footer = footerRef.current
@@ -241,11 +225,6 @@ export function GPTChatPage() {
       onNavigate: lockViewport,
     })
 
-  const { selectionData, setSelectionData } = useSelection(messagesContainerRef)
-  const [inputSelectionData, setInputSelectionData] =
-    useState<SelectionData | null>(null)
-  const activeSelectionData = inputSelectionData || selectionData
-
   const {
     requestTTS,
     stopTTS,
@@ -254,6 +233,18 @@ export function GPTChatPage() {
     audioUrl: ttsAudioUrl,
   } = useTTS({
     apiToken: config.api_token || '',
+  })
+  const {
+    activeSelectionData,
+    handleQuote,
+    handleInputSelectionChange,
+    clearSelection,
+    handleSelectionCopy,
+    handleSelectionTTS,
+  } = useSelectionActions({
+    containerRef: messagesContainerRef,
+    onPrefill: setPrefillDraft,
+    onSpeak: requestTTS,
   })
   const { user } = useUser(config.api_token)
 
@@ -265,58 +256,22 @@ export function GPTChatPage() {
     ? activeModelName || 'Message...'
     : 'Enter your API key in Settings to start chatting'
 
-  useEffect(() => {
-    const allowedModels = user?.allowed_models
-    if (
-      !allowedModels ||
-      allowedModels.length === 0 ||
-      allowedModels.includes('*')
-    ) {
-      return
-    }
-
-    const nextChatModel = isModelAllowed(chatModel, allowedModels)
-      ? chatModel
-      : getFirstAllowedModel(ChatModels, allowedModels)
-    const nextDrawModel = isModelAllowed(drawModel, allowedModels)
-      ? drawModel
-      : getFirstAllowedModel(ImageModels, allowedModels)
-
-    const nextUpdates: Partial<SessionConfig> = {}
-
-    if (nextChatModel && nextChatModel !== config.selected_chat_model) {
-      nextUpdates.selected_chat_model = nextChatModel
-    }
-
-    if (nextDrawModel && nextDrawModel !== config.selected_draw_model) {
-      nextUpdates.selected_draw_model = nextDrawModel
-    }
-
-    if (!isModelAllowed(config.selected_model, allowedModels)) {
-      const fallbackSelectedModel = isImageModel(config.selected_model)
-        ? nextDrawModel || nextChatModel
-        : nextChatModel || nextDrawModel
-
-      if (
-        fallbackSelectedModel &&
-        fallbackSelectedModel !== config.selected_model
-      ) {
-        nextUpdates.selected_model = fallbackSelectedModel
-      }
-    }
-
-    if (Object.keys(nextUpdates).length > 0) {
-      updateConfig(nextUpdates)
-    }
-  }, [
-    chatModel,
-    config.selected_chat_model,
-    config.selected_draw_model,
-    config.selected_model,
-    drawModel,
+  const {
+    handleConfigChange,
+    applyConfigInBackground,
+    handleChatSwitchChange,
+    handleChatModelChange,
+    handleDrawModelChange,
+    handleReset,
+    handleImportData,
+    rotateSyncKey,
+  } = useConfigHandlers({
+    config,
     updateConfig,
-    user?.allowed_models,
-  ])
+    exportAllData,
+    importAllData,
+    allowedModels: user?.allowed_models,
+  })
 
   // Load messages when session changes
   useEffect(() => {
@@ -325,7 +280,7 @@ export function GPTChatPage() {
     }
   }, [sessionId, loadMessages, configLoading])
 
-  useMcpSync(config, configLoading, updateConfig)
+  useMcpSync(config, configLoading, applyConfigInBackground)
 
   // Scroll to bottom when footer height changes (e.g. typing long prompt)
   // to prevent messages from being covered.
@@ -353,51 +308,6 @@ export function GPTChatPage() {
     containerRef: messagesContainerRef,
     topOffset: 48, // Height of the fixed header (top-12 = 48px)
   })
-
-  const handleConfigChange = useCallback(
-    (updates: Partial<SessionConfig>) => {
-      updateConfig(updates)
-    },
-    [updateConfig],
-  )
-
-  const handleChatSwitchChange = useCallback(
-    (updates: Partial<SessionConfig['chat_switch']>) => {
-      updateConfig({
-        chat_switch: {
-          ...config.chat_switch,
-          ...updates,
-        },
-      })
-    },
-    [config.chat_switch, updateConfig],
-  )
-
-  const handleChatModelChange = useCallback(
-    (model: string) => {
-      handleConfigChange({
-        selected_model: model,
-        selected_chat_model: model,
-      })
-    },
-    [handleConfigChange],
-  )
-
-  const handleDrawModelChange = useCallback(
-    (model: string) => {
-      handleConfigChange({
-        selected_model: model,
-        selected_draw_model: model,
-      })
-    },
-    [handleConfigChange],
-  )
-
-  const handleReset = useCallback(async () => {
-    // Reset all config except sync_key
-    const { sync_key: __unused, ...rest } = DefaultSessionConfig // eslint-disable-line @typescript-eslint/no-unused-vars
-    await updateConfig(rest)
-  }, [updateConfig])
 
   const handleSend = useCallback(
     async (content: string, attachments?: ChatAttachment[]) => {
@@ -434,56 +344,21 @@ export function GPTChatPage() {
     [forkSession, sessionId, switchSession],
   )
 
-  const handleEditResend = useCallback(
-    (payload: {
-      chatId: string
-      content: string
-      attachments?: ChatAttachment[]
-    }) => {
-      // Opening the modal doesn't change any message content yet, so there's
-      // nothing for auto-scroll to react to.  Let the current scroll mode
-      // persist untouched.
-      setEditingMessage({
-        chatId: payload.chatId,
-        content: payload.content,
-        attachments: payload.attachments,
-      })
-    },
-    [],
-  )
-
-  const handleConfirmEdit = useCallback(
-    async (newContent: string, attachments?: ChatAttachment[]) => {
-      if (!editingMessage) return
-      setEditingMessage(null)
-      // The streamingChatId anchor in useChatScroll keeps the edited message's
-      // regenerated content visible when auto-follow is active, and leaves the
-      // viewport alone when the user has scrolled away.  Forcing viewport-lock
-      // here would instead strand the user with no auto-follow even if they
-      // explicitly triggered this edit from the bottom of the conversation.
-      await editAndRetry(editingMessage.chatId, newContent, attachments)
-    },
-    [editAndRetry, editingMessage],
-  )
-
-  const handleOpenInsert = useCallback(
-    (insertAt: number) => {
-      if (chatLoading || !config.api_token) return
-      setInsertingAt(insertAt)
-    },
-    [chatLoading, config.api_token],
-  )
-
-  const handleConfirmInsert = useCallback(
-    async (content: string, attachments?: ChatAttachment[]) => {
-      if (insertingAt === null) return
-      const insertIndex = insertingAt
-      setInsertingAt(null)
-      scrollModeRef.current = 'auto-follow'
-      await insertMessageAt(insertIndex, content, attachments)
-    },
-    [insertMessageAt, insertingAt, scrollModeRef],
-  )
+  const {
+    editingMessage,
+    insertingAt,
+    handleEditResend,
+    handleConfirmEdit,
+    cancelEdit,
+    handleOpenInsert,
+    handleConfirmInsert,
+    cancelInsert,
+  } = useMessageEditActions({
+    editAndRetry,
+    insertMessageAt,
+    canInsert: !chatLoading && !!config.api_token,
+    scrollModeRef,
+  })
 
   const handleClearChats = useCallback(async () => {
     await clearMessages()
@@ -496,68 +371,12 @@ export function GPTChatPage() {
     resetScroll()
   }, [purgeAllSessions, clearMessages, resetScroll])
 
-  const handleImportData = useCallback(
-    async (data: unknown, mode: 'merge' | 'download' = 'merge') => {
-      // Accept any shape but ensure we pass an object map to storage importer
-      await importAllData((data as Record<string, unknown>) || {}, mode)
-    },
-    [importAllData],
-  )
-
   const handleDraftChange = useCallback(
     (value: string) => {
       setGlobalDraft(value)
     },
     [setGlobalDraft],
   )
-
-  const handleQuote = useCallback(
-    (text: string) => {
-      setPrefillDraft({ id: Date.now().toString(), text })
-      setSelectionData(null)
-      setInputSelectionData(null)
-    },
-    [setSelectionData],
-  )
-
-  /**
-   * handleInputSelectionChange updates selection state from the input textarea.
-   */
-  const handleInputSelectionChange = useCallback(
-    (data: SelectionData | null) => {
-      setInputSelectionData(data)
-      if (data) {
-        setSelectionData(null)
-      }
-    },
-    [setSelectionData],
-  )
-
-  /**
-   * clearSelection resets selection toolbar state.
-   */
-  const clearSelection = useCallback(() => {
-    setSelectionData(null)
-    setInputSelectionData(null)
-  }, [setSelectionData])
-
-  const handleSelectionCopy = useCallback(async () => {
-    if (activeSelectionData) {
-      try {
-        await navigator.clipboard.writeText(
-          activeSelectionData.copyText || activeSelectionData.text,
-        )
-      } catch (err) {
-        console.error('Failed to copy selection:', err)
-      }
-    }
-  }, [activeSelectionData])
-
-  const handleSelectionTTS = useCallback(() => {
-    if (activeSelectionData) {
-      requestTTS(activeSelectionData.text)
-    }
-  }, [activeSelectionData, requestTTS])
 
   return (
     <div className="theme-bg min-h-dvh w-full max-w-full overflow-x-hidden">
@@ -706,6 +525,19 @@ export function GPTChatPage() {
             </div>
           )}
 
+          {config.api_token_reset_required && !configLoading && (
+            <ApiKeyResetBanner
+              sessionId={sessionId}
+              config={config}
+              updateConfig={updateConfig}
+              rotateSyncKey={rotateSyncKey}
+              onOpenApiKeySettings={() => {
+                setConfigFocus('api-key')
+                setConfigOpen(true)
+              }}
+            />
+          )}
+
           {/* Error display */}
           {error && (
             <div className="mx-4 mt-2 shrink-0 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -835,7 +667,11 @@ export function GPTChatPage() {
         <Suspense fallback={null}>
           <ConfigSidebar
             isOpen={configOpen}
-            onClose={() => setConfigOpen(false)}
+            onClose={() => {
+              setConfigOpen(false)
+              setConfigFocus(undefined)
+            }}
+            initialFocus={configFocus}
             config={config}
             onConfigChange={handleConfigChange}
             onClearChats={handleClearChats}
@@ -882,7 +718,7 @@ export function GPTChatPage() {
             content={editingMessage.content}
             attachments={editingMessage.attachments}
             apiToken={config.api_token}
-            onClose={() => setEditingMessage(null)}
+            onClose={cancelEdit}
             onConfirm={handleConfirmEdit}
           />
         </Suspense>
@@ -896,7 +732,7 @@ export function GPTChatPage() {
             title="Insert into conversation"
             submitLabel="Send from here"
             placeholder="Ask something from this point..."
-            onClose={() => setInsertingAt(null)}
+            onClose={cancelInsert}
             onConfirm={handleConfirmInsert}
           />
         </Suspense>

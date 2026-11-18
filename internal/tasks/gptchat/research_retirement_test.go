@@ -40,4 +40,9 @@ func TestResearchRetirementRoutes(t *testing.T) {
 		require.Equal(t, http.StatusTeapot, recorder.Code, path)
 	}
 	require.Equal(t, 6, limited, "active API routes must retain rate limiting")
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/gptchat/user/config", nil))
+	require.Equal(t, http.StatusTeapot, recorder.Code, "DELETE /gptchat/user/config must be registered behind the rate limiter")
+	require.Equal(t, 7, limited, "cloud backup deletion must retain rate limiting")
 }

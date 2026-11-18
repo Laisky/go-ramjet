@@ -93,6 +93,118 @@ const UrlParamAliasMap = new Map<string, string>([
   ['selected_chat_model', 'selected_chat_model'],
 ])
 
+/**
+ * UrlProtectedConfigKeys lists config fields a URL may never set. A link is
+ * untrusted input: the sync key decides where the cloud backup is uploaded
+ * and who can decrypt it, MCP servers carry their own endpoints and
+ * credentials, and the remaining fields are internal state.
+ */
+const UrlProtectedConfigKeys = new Set([
+  'sync_key',
+  'mcp_servers',
+  'api_token_reset_required',
+  'updated_at',
+])
+
+/**
+ * UrlForbiddenPathSegments lists path segments that reach an object's
+ * prototype chain. A URL path containing any of them is always rejected.
+ */
+const UrlForbiddenPathSegments = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+])
+
+/**
+ * UrlConfigTarget is one config field a URL may set: a top-level field of
+ * SessionConfig, or a field of SessionConfig.chat_switch when parent is set.
+ * defaultValue is the field's default, whose type the URL value must match.
+ */
+interface UrlConfigTarget {
+  parent?: 'chat_switch'
+  field: string
+  defaultValue: unknown
+}
+
+/**
+ * isUrlScalarDefault reports whether value is a primitive a URL string can
+ * stand for. It takes a field's default value and returns false for objects,
+ * arrays, null and undefined, which a URL must never replace.
+ */
+function isUrlScalarDefault(value: unknown): boolean {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+}
+
+/**
+ * buildUrlSettableConfigPaths returns the explicit allowlist of config paths
+ * a URL may set, keyed by dotted path. It contains the own scalar fields of
+ * DefaultSessionConfig that are not in UrlProtectedConfigKeys, plus
+ * "chat_switch.<field>" for each own scalar field of the default chat_switch.
+ * Fields absent from DefaultSessionConfig are never URL-settable.
+ */
+function buildUrlSettableConfigPaths(): ReadonlyMap<string, UrlConfigTarget> {
+  const paths = new Map<string, UrlConfigTarget>()
+  for (const [field, value] of Object.entries(DefaultSessionConfig)) {
+    if (
+      UrlProtectedConfigKeys.has(field) ||
+      UrlForbiddenPathSegments.has(field) ||
+      !isUrlScalarDefault(value)
+    ) {
+      continue
+    }
+    paths.set(field, { field, defaultValue: value })
+  }
+  for (const [field, value] of Object.entries(
+    DefaultSessionConfig.chat_switch,
+  )) {
+    if (UrlForbiddenPathSegments.has(field) || !isUrlScalarDefault(value)) {
+      continue
+    }
+    paths.set(`chat_switch.${field}`, {
+      parent: 'chat_switch',
+      field,
+      defaultValue: value,
+    })
+  }
+  return paths
+}
+
+/** UrlSettableConfigPaths is the allowlist built by buildUrlSettableConfigPaths. */
+const UrlSettableConfigPaths = buildUrlSettableConfigPaths()
+
+/**
+ * readOwnField returns record[field] when field is an own property of record,
+ * and undefined otherwise, so inherited prototype members are never read.
+ */
+function readOwnField(record: Record<string, unknown>, field: string): unknown {
+  return Object.hasOwn(record, field) ? record[field] : undefined
+}
+
+/**
+ * resolveUrlTargetRecord returns the object that owns target's field inside
+ * config. For a chat_switch field it first replaces a missing or malformed
+ * chat_switch with a copy of the defaults. config is mutated in that case.
+ */
+function resolveUrlTargetRecord(
+  config: SessionConfig,
+  target: UrlConfigTarget,
+): Record<string, unknown> {
+  const root = config as unknown as Record<string, unknown>
+  if (!target.parent) {
+    return root
+  }
+  const parent = readOwnField(root, target.parent)
+  if (typeof parent !== 'object' || parent === null || Array.isArray(parent)) {
+    config.chat_switch = { ...DefaultSessionConfig.chat_switch }
+  }
+  return config.chat_switch as unknown as Record<string, unknown>
+}
+
 function normalizeUrlParamKey(key: string): string {
   return key
     .trim()
@@ -126,41 +238,19 @@ function parseFloatParamValue(value: unknown): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
-function getNestedConfigValue(
-  config: Record<string, unknown>,
-  pathSegments: string[],
-) {
-  return pathSegments.reduce<unknown>((acc, segment) => {
-    if (typeof acc !== 'object' || acc === null) {
-      return undefined
-    }
-    return (acc as Record<string, unknown>)[segment]
-  }, config)
-}
-
-function setNestedConfigValue(
-  config: Record<string, unknown>,
-  pathSegments: string[],
-  value: unknown,
-) {
-  let cursor: Record<string, unknown> = config
-  for (let i = 0; i < pathSegments.length - 1; i++) {
-    const segment = pathSegments[i]
-    const next = cursor[segment]
-    if (typeof next !== 'object' || next === null) {
-      cursor[segment] = {}
-    }
-    cursor = cursor[segment] as Record<string, unknown>
-  }
-  cursor[pathSegments[pathSegments.length - 1]] = value
-}
-
+/**
+ * coerceConfigValue converts the URL value rawValue for field to the type
+ * the field holds, judged by the field name and by defaultValue's type (a
+ * boolean field never stores the string "0"). It returns currentValue when
+ * rawValue does not parse.
+ */
 function coerceConfigValue(
   field: string,
   rawValue: unknown,
   currentValue: unknown,
+  defaultValue?: unknown,
 ) {
-  if (UrlConfigBooleanFields.has(field)) {
+  if (UrlConfigBooleanFields.has(field) || typeof defaultValue === 'boolean') {
     const parsed = parseBooleanParamValue(rawValue)
     return parsed === null ? currentValue : parsed
   }
@@ -177,7 +267,7 @@ function coerceConfigValue(
     const parsed = parseIntegerParamValue(rawValue)
     return parsed === null ? currentValue : parsed
   }
-  if (UrlConfigFloatFields.has(field)) {
+  if (UrlConfigFloatFields.has(field) || typeof defaultValue === 'number') {
     const parsed = parseFloatParamValue(rawValue)
     return parsed === null ? currentValue : parsed
   }
@@ -268,6 +358,14 @@ export function normalizeConfigNumericFields(
   }
 }
 
+/**
+ * applyUrlOverridesToConfig applies the page URL's query parameters to config
+ * and removes every consumed or protected parameter from the address bar.
+ * Only paths in UrlSettableConfigPaths are set; fields in
+ * UrlProtectedConfigKeys are stripped from the URL without being applied, and
+ * every other parameter is left untouched. config itself is never mutated.
+ * It returns the resulting config and whether any field changed.
+ */
 export function applyUrlOverridesToConfig(config: SessionConfig): {
   config: SessionConfig
   mutated: boolean
@@ -282,6 +380,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
   }
 
   const updatedConfig = deepCloneConfig(config)
+  let strippedProtected = false
 
   entries.forEach(([rawKey, rawValue]) => {
     const normalizedKey = normalizeUrlParamKey(rawKey)
@@ -292,38 +391,38 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
 
     const pathSegments = targetPath.split('.')
     const rootKey = pathSegments[0]
-    if (rootKey !== 'chat_switch' && !(rootKey in updatedConfig)) {
+    if (UrlProtectedConfigKeys.has(rootKey)) {
+      // Drop it from the address bar too, so the value is not kept in
+      // history or bookmarks.
+      console.warn(`[config] ignored protected URL parameter: ${rootKey}`)
+      searchParams.delete(rawKey)
+      strippedProtected = true
+      return
+    }
+    if (pathSegments.some((segment) => UrlForbiddenPathSegments.has(segment))) {
+      console.warn(`[config] ignored unsafe URL parameter path: ${targetPath}`)
+      return
+    }
+    const target = UrlSettableConfigPaths.get(targetPath)
+    if (!target) {
+      // Not a URL-settable config field; other features may read it.
       return
     }
 
-    if (rootKey === 'chat_switch') {
-      if (
-        !updatedConfig.chat_switch ||
-        typeof updatedConfig.chat_switch !== 'object'
-      ) {
-        updatedConfig.chat_switch = { ...DefaultSessionConfig.chat_switch }
-      }
-    }
-
-    const currentValue = getNestedConfigValue(
-      updatedConfig as unknown as Record<string, unknown>,
-      pathSegments,
-    )
+    const record = resolveUrlTargetRecord(updatedConfig, target)
+    const currentValue = readOwnField(record, target.field)
     const coercedValue = coerceConfigValue(
-      pathSegments[pathSegments.length - 1],
+      target.field,
       rawValue,
       currentValue,
+      target.defaultValue,
     )
     if (coercedValue === currentValue) {
       searchParams.delete(rawKey)
       return
     }
 
-    setNestedConfigValue(
-      updatedConfig as unknown as Record<string, unknown>,
-      pathSegments,
-      coercedValue,
-    )
+    record[target.field] = coercedValue
     if (
       targetPath === 'selected_model' &&
       typeof coercedValue === 'string' &&
@@ -338,7 +437,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
     searchParams.delete(rawKey)
   })
 
-  if (mutated) {
+  if (mutated || strippedProtected) {
     const newSearch = searchParams.toString()
     window.history.replaceState(
       {},

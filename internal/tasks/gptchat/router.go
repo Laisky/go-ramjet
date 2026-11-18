@@ -101,6 +101,7 @@ func registerGPTChatRoutes(grp *gin.RouterGroup, rateLimiter gin.HandlerFunc) {
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	// grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	apiWithRatelimiter.POST("/user/config", ihttp.UploadUserConfig)
+	apiWithRatelimiter.DELETE("/user/config", ihttp.DeleteUserConfig)
 	grp.GET("/user/config", ihttp.DownloadUserConfig)
 	apiWithRatelimiter.Any("/ramjet/*any", ihttp.RamjetProxyHandler)
 	grp.Any("/oneapi/*any", ihttp.OneapiProxyHandler)

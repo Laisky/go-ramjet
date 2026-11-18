@@ -3,29 +3,14 @@ import {
   decodePrivateResponse,
   requestWithDiagnostics,
 } from '@/telemetry/request-diagnostics'
+import { secureRandomString, secureRandomUUIDv4 } from '@/utils/secure-random'
 import type { McpServerConfig, McpTool } from '../types'
 
 type MutableServer = McpServerConfig & Record<string, unknown>
 
-// Helper to generate UUID v4
-function generateUUIDv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0,
-      v = c == 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
-}
-
 // Helper: Trim space
 function trimSpace(str?: string) {
   return (str || '').trim()
-}
-
-// Helper: Generate random string
-function randomString(length: number) {
-  return Math.random()
-    .toString(36)
-    .substring(2, 2 + length)
 }
 
 /**
@@ -120,7 +105,7 @@ async function ensureMCPSession(
       : String(server.mcp_session_id || ''),
   )
   if (!sessionID) {
-    sessionID = `mcp-session-${generateUUIDv4()}`
+    sessionID = `mcp-session-${secureRandomUUIDv4()}`
     // We modify the server object in place (in memory), caller should handle persistence if needed
     server.mcp_session_id = sessionID
   }
@@ -220,7 +205,7 @@ export async function syncMCPServerTools(
   // 2. Fetch Tools (JSON-RPC)
   const payload = {
     jsonrpc: '2.0',
-    id: randomString(8),
+    id: secureRandomString(8),
     method: 'tools/list',
     params: {},
   }

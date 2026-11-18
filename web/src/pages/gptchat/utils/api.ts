@@ -120,6 +120,19 @@ export const api = {
     })
   },
 
+  /**
+   * deleteUserData deletes the cloud backup that syncKey unlocks, every
+   * stored version included. Deleting a missing backup succeeds.
+   */
+  async deleteUserData(syncKey: string) {
+    await request('/user/config', {
+      method: 'DELETE',
+      headers: {
+        'X-LAISKY-SYNC-KEY': syncKey,
+      },
+    })
+  },
+
   async downloadUserData(syncKey: string) {
     try {
       const data = await request<unknown>('/user/config', {

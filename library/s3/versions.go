@@ -111,6 +111,71 @@ func KeepLatestObjectVersions(
 	return nil
 }
 
+// RemoveAllObjectVersions permanently deletes every stored version of bucket/key
+// so that no historical copy of the object survives.
+//
+// Parameters:
+//   - ctx: Context bounding the list and remove calls.
+//   - logger: Logger used for per-version debug records.
+//   - cli: Object store client; *minio.Client satisfies it directly.
+//   - bucket: Bucket holding the object.
+//   - key: Exact object key; sibling keys that merely share the prefix are left untouched.
+//
+// It lists bucket/key with versions, then removes each entry by its version id,
+// including delete markers, so a versioned bucket keeps nothing restorable. An
+// entry without a version id (the live object on an unversioned bucket) is
+// removed with empty RemoveObjectOptions. The full listing completes before any
+// removal starts, so a listing failure deletes nothing.
+//
+// Returns:
+//   - The number of entries removed. A missing object yields (0, nil). When a
+//     removal fails, the count of entries removed before the failure is
+//     returned together with the wrapped error.
+//   - An error when listing or removing fails.
+func RemoveAllObjectVersions(
+	ctx context.Context,
+	logger glog.Logger,
+	cli ObjectVersionClient,
+	bucket, key string,
+) (int, error) {
+	listCtx, cancel := context.WithCancel(ctx)
+	defer cancel() // Stop the lister goroutine if we return early on an error.
+
+	opts := minio.ListObjectsOptions{
+		Prefix:       key,
+		Recursive:    false,
+		WithVersions: true,
+	}
+
+	var entries []minio.ObjectInfo
+	for object := range cli.ListObjects(listCtx, bucket, opts) {
+		if object.Err != nil {
+			return 0, errors.Wrap(object.Err, "list object versions")
+		}
+		if object.Key != key { // Prefix may match sibling keys; require exact match.
+			continue
+		}
+		entries = append(entries, object)
+	}
+
+	removed := 0
+	for _, entry := range entries {
+		removeOpts := minio.RemoveObjectOptions{VersionID: entry.VersionID}
+		if err := cli.RemoveObject(ctx, bucket, key, removeOpts); err != nil {
+			return removed, errors.Wrapf(err, "remove object version %q (delete marker: %t)",
+				entry.VersionID, entry.IsDeleteMarker)
+		}
+		removed++
+		logger.Debug("removed object version",
+			zap.String("bucket", bucket),
+			zap.String("object", key),
+			zap.String("version", entry.VersionID),
+			zap.Bool("delete_marker", entry.IsDeleteMarker))
+	}
+
+	return removed, nil
+}
+
 // PutObjectCappingVersions uploads reader to bucket/key while keeping the number
 // of retained object versions at or below keep.
 //

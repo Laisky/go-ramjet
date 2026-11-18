@@ -1,18 +1,99 @@
-import { Download, Eye, EyeOff, Loader2, Upload } from 'lucide-react'
-import { useState } from 'react'
+/**
+ * Data Sync section of the GPTChat settings sidebar: the sync key, cloud
+ * upload/download, and sync key rotation.
+ */
+import {
+  Download,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SecretField } from '@/components/ui/secret-field'
+import { findSessionsReusingSyncKey } from '../hooks/session-credentials'
+import {
+  usePendingBackupDeletions,
+  useSyncKeyRotation,
+} from '../hooks/use-sync-key-rotation'
 import type { SessionConfig } from '../types'
 import { api } from '../utils/api'
+import { maskSecretHint } from '../utils/api-token'
+import {
+  type ConfigUpdateHandler,
+  isSyncKeyReusedAsApiToken,
+} from '../utils/credential-policy'
 
+const SYNC_KEY_INPUT_ID = 'cfg-sync-key'
+const SYNC_KEY_LABEL_ID = 'cfg-sync-key-label'
+
+/**
+ * SYNC_KEY_IS_API_TOKEN_MESSAGE explains why an API key cannot double as
+ * the sync key.
+ */
+const SYNC_KEY_IS_API_TOKEN_MESSAGE =
+  'That value is an API key of one of your sessions, so it was not saved as the sync key. Anyone who has the API key could read your cloud backup; choose a different sync key.'
+
+/**
+ * DataSyncManagerProps configures DataSyncManager: config is the active
+ * session config, onConfigChange stores a partial update of it and reports
+ * the credential fields it refused, and onExportData / onImportData move
+ * all local data to and from the cloud.
+ */
 interface DataSyncManagerProps {
   config: SessionConfig
-  onConfigChange: (updates: Partial<SessionConfig>) => void
+  onConfigChange: ConfigUpdateHandler
   onExportData: () => Promise<unknown>
   onImportData: (data: unknown, mode?: 'merge' | 'download') => Promise<void>
 }
 
+/**
+ * rotationMessage tells the user where the backup is after a rotation to
+ * newKey, and whether the old backup still has to be deleted.
+ */
+function rotationMessage(newKey: string, oldBackupDeleted: boolean): string {
+  const moved = `Your new sync key (${maskSecretHint(newKey)}) is saved and your backup moved to it. Copy it from Settings → Data Sync and enter it on your other devices.`
+  return oldBackupDeleted
+    ? moved
+    : `${moved} The backup under the old key could not be deleted yet, so the old key can still read it: click "Delete old backup" in Settings → Data Sync to try again.`
+}
+
+/**
+ * useSyncKeyReuse reports whether syncKey is also the API token of the
+ * active session (apiToken) or of any stored session. Such a key lets
+ * whoever holds that API token read the cloud backup.
+ * It returns true while the reuse persists.
+ */
+function useSyncKeyReuse(syncKey: string, apiToken: string): boolean {
+  const [storedReuse, setStoredReuse] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!syncKey) return
+    findSessionsReusingSyncKey(syncKey)
+      .then(({ sessionIds }) => {
+        if (!cancelled) setStoredReuse(sessionIds.length > 0)
+      })
+      .catch((error: unknown) => {
+        console.error(`[DataSyncManager] reuse check failed: ${String(error)}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [syncKey, apiToken])
+
+  return (
+    (!!syncKey && storedReuse) || isSyncKeyReusedAsApiToken(apiToken, syncKey)
+  )
+}
+
+/**
+ * DataSyncManager renders the sync key as a write-only field together with
+ * the upload, download, and rotation actions. It returns the section.
+ */
 export function DataSyncManager({
   config,
   onConfigChange,
@@ -20,7 +101,62 @@ export function DataSyncManager({
   onImportData,
 }: DataSyncManagerProps) {
   const [isSyncing, setIsSyncing] = useState(false)
-  const [showSyncKey, setShowSyncKey] = useState(false)
+  const syncKey = config.sync_key || ''
+  const syncKeyReused = useSyncKeyReuse(syncKey, config.api_token)
+  const rotate = useSyncKeyRotation({
+    exportData: onExportData,
+    importData: onImportData,
+    updateConfig: onConfigChange,
+  })
+  const pendingDeletions = usePendingBackupDeletions()
+
+  const handleSaveSyncKey = async (nextSyncKey: string) => {
+    const result = await onConfigChange({ sync_key: nextSyncKey })
+    if (result?.rejections.some((r) => r.field === 'sync_key')) {
+      return SYNC_KEY_IS_API_TOKEN_MESSAGE
+    }
+  }
+
+  const handleDeleteOldBackups = async () => {
+    setIsSyncing(true)
+    try {
+      await pendingDeletions.retry()
+      alert('The backup under your old sync key is deleted.')
+    } catch (err) {
+      console.error(
+        `[DataSyncManager] deleting the old backup failed: ${String(err)}`,
+      )
+      alert('Deleting the old backup failed. Try again later.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleRotate = async () => {
+    if (
+      !window.confirm(
+        'Rotate your sync key? Your cloud backup is merged into this device, uploaded under a new random key, and the copy under the old key is deleted. Afterwards, enter the new key on your other devices.',
+      )
+    ) {
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const { newKey, oldBackupDeleted } = await rotate(syncKey)
+      alert(rotationMessage(newKey, oldBackupDeleted))
+      window.location.reload()
+    } catch (err) {
+      console.error(
+        `[DataSyncManager] rotating the sync key failed: ${String(err)}`,
+      )
+      alert(
+        'Rotating the sync key failed, so it was left unchanged. See console for details.',
+      )
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const handleDownload = async () => {
     if (!config.sync_key) {
@@ -40,7 +176,7 @@ export function DataSyncManager({
       alert('Download successful!')
       window.location.reload()
     } catch (err) {
-      console.error(err)
+      console.error(`[DataSyncManager] download failed: ${String(err)}`)
       alert('Download failed. See console for details.')
     } finally {
       setIsSyncing(false)
@@ -59,7 +195,7 @@ export function DataSyncManager({
       await api.uploadUserData(config.sync_key, data)
       alert('Upload successful!')
     } catch (err) {
-      console.error(err)
+      console.error(`[DataSyncManager] upload failed: ${String(err)}`)
       alert('Upload failed. See console for details.')
     } finally {
       setIsSyncing(false)
@@ -71,29 +207,76 @@ export function DataSyncManager({
       <label className="mb-2 block text-sm font-medium">Data Sync</label>
 
       <div className="mb-2">
-        <label className="mb-1 block text-xs text-muted-foreground">
+        <label
+          id={SYNC_KEY_LABEL_ID}
+          htmlFor={SYNC_KEY_INPUT_ID}
+          className="mb-1 block text-xs text-muted-foreground"
+        >
           Sync Key
         </label>
-        <div className="relative">
-          <Input
-            type={showSyncKey ? 'text' : 'password'}
-            value={config.sync_key || ''}
-            onChange={(e) => onConfigChange({ sync_key: e.target.value })}
-            placeholder="sync-..."
-            className="pr-10 text-xs"
-          />
-          <button
-            type="button"
-            onClick={() => setShowSyncKey(!showSyncKey)}
-            className="absolute right-0 top-0 flex h-full items-center px-3 text-muted-foreground hover:text-foreground"
+        <SecretField
+          inputId={SYNC_KEY_INPUT_ID}
+          name="gptchat-sync-key"
+          label="sync key"
+          labelId={SYNC_KEY_LABEL_ID}
+          value={syncKey}
+          hint={maskSecretHint(syncKey)}
+          onSave={handleSaveSyncKey}
+          placeholder="Paste the sync key of your other device"
+          className="text-xs"
+          iconClassName="h-3.5 w-3.5"
+        />
+        {syncKeyReused && (
+          <div
+            role="alert"
+            className="mt-2 space-y-2 rounded-md border border-destructive p-2 text-xs text-destructive"
           >
-            {showSyncKey ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </button>
-        </div>
+            <p className="flex items-start gap-1.5">
+              <ShieldAlert
+                className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                aria-hidden
+              />
+              <span>
+                Your sync key is also an API key. Anyone who has that API key,
+                including its provider, could download and decrypt your cloud
+                backup. Rotate the sync key: your backup moves to a new random
+                key and the old copy is deleted.
+              </span>
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleRotate}
+              disabled={isSyncing}
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              Rotate sync key
+            </Button>
+          </div>
+        )}
+        {pendingDeletions.pending.length > 0 && (
+          <div
+            role="status"
+            className="mt-2 space-y-2 rounded-md border border-border p-2 text-xs"
+          >
+            <p>
+              The backup under your previous sync key (
+              {pendingDeletions.pending.map(maskSecretHint).join(', ')}) still
+              exists, so that key can still read it.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleDeleteOldBackups}
+              disabled={isSyncing}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              Delete old backup
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2">
