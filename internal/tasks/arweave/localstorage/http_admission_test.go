@@ -47,11 +47,17 @@ func drainArchiveTasks() int {
 
 // serveCacheHandler runs CacheHandler for raw through a real gin router and returns the recorder.
 func serveCacheHandler(raw string) *httptest.ResponseRecorder {
+	return serveCacheHandlerWithContext(context.Background(), raw)
+}
+
+// serveCacheHandlerWithContext runs CacheHandler for raw with ctx as the request
+// context, so tests can model a client that leaves before the answer is ready.
+func serveCacheHandlerWithContext(ctx context.Context, raw string) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/proxy", CacheHandler)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/proxy?url="+url.QueryEscape(raw), nil)
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/proxy?url="+url.QueryEscape(raw), nil)
 	router.ServeHTTP(recorder, request)
 	return recorder
 }

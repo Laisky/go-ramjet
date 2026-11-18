@@ -110,24 +110,34 @@ func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
 //
 // Note: caller should close the returned io.ReadCloser
 func LoadContentFromS3(ctx context.Context, url string) (io.ReadCloser, error) {
-	objkey := url2objkey(url)
 	objUrl := fmt.Sprintf("https://%s/%s/%s",
 		config.Instance.S3.Endpoint,
 		config.Instance.S3.Bucket,
-		objkey2path(objkey),
+		objkey2path(url2objkey(url)),
 	)
+	return openArchivedObject(ctx, httpcli, objUrl)
+}
+
+// openArchivedObject GETs one archived object from objUrl with client and returns
+// its body when the archive answers 200. Any other answer, including the 404 of
+// an archive miss, is closed before the error is returned.
+//
+// Note: caller should close the returned io.ReadCloser
+func openArchivedObject(ctx context.Context, client *http.Client, objUrl string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, objUrl, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %s", objUrl)
 	}
 
-	resp, err := httpcli.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %s", objUrl)
 	}
-	// defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, errors.Wrapf(closeErr, "close unexpected status %d response for url %s", resp.StatusCode, objUrl)
+		}
 		return nil, errors.Errorf("unexpected status code %d for url %s", resp.StatusCode, objUrl)
 	}
 

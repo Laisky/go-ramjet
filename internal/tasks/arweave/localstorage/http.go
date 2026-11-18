@@ -13,16 +13,19 @@ import (
 	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/library/egress"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
-type cacheResultItem struct {
-	reader      io.ReadCloser
-	cacheStatus string
-}
+var (
+	// loadOriginContent fetches the live target through the pinned egress client; tests replace it.
+	loadOriginContent = LoadContentByUrl
+	// loadCachedContent fetches the archived copy from S3; tests replace it.
+	loadCachedContent = LoadContentFromS3
+	// cacheFallbackDelay is the live fetch's head start before the archive is raced against it.
+	cacheFallbackDelay = time.Second
+)
 
 // CacheHandler proxies a user-selected public url, preferring a live fetch and
 // falling back to the S3 archive, and schedules the url for archiving.
@@ -30,6 +33,10 @@ type cacheResultItem struct {
 // The target is admitted with the shared destination policy before any fetch,
 // cache lookup or archive scheduling. Refused targets are answered with 400 and
 // logged below the alert level; redirects are admitted again on every hop.
+//
+// The live fetch starts at once and the archive lookup after cacheFallbackDelay;
+// the first to succeed answers, the other is canceled and its body closed, and
+// no goroutine outlives the request except the archive scheduler.
 func CacheHandler(ctx *gin.Context) {
 	targetUrl := strings.TrimSpace(ctx.Query("url"))
 	logger := gmw.GetLogger(ctx).With(zap.String("target_url", targetUrl))
@@ -44,45 +51,6 @@ func CacheHandler(ctx *gin.Context) {
 		return
 	}
 
-	var pool errgroup.Group
-	var resultChan = make(chan cacheResultItem)
-	var errChan = make(chan error)
-
-	taskCtx, cancel := context.WithCancel(requestCtx)
-	defer cancel()
-
-	pool.Go(func() (err error) {
-		reader, err := LoadContentByUrl(taskCtx, targetUrl)
-		if err != nil {
-			return errors.Wrapf(err, "load content by url %q", targetUrl)
-		}
-
-		select {
-		case resultChan <- cacheResultItem{reader: reader, cacheStatus: "DYNAMIC"}:
-			logger.Debug("load content from origin url")
-		default:
-			reader.Close()
-		}
-		return nil
-	})
-	pool.Go(func() error {
-		time.Sleep(time.Second)
-		reader, err := LoadContentFromS3(taskCtx, targetUrl)
-		if err != nil {
-			return errors.Wrapf(err, "load content from s3 %q", targetUrl)
-		}
-
-		select {
-		case resultChan <- cacheResultItem{reader: reader, cacheStatus: "CACHE"}:
-			logger.Debug("load content from s3 cache")
-		default:
-			reader.Close()
-		}
-		return nil
-	})
-	go func() {
-		errChan <- pool.Wait()
-	}()
 	// The gin context is recycled after this handler returns; the archive
 	// scheduler keeps only request values and outlives request cancellation.
 	archiveCtx := context.WithoutCancel(requestCtx)
@@ -93,19 +61,28 @@ func CacheHandler(ctx *gin.Context) {
 		}
 	}()
 
-	select {
-	case result := <-resultChan:
-		defer result.reader.Close()
-		ctx.Header("X-Laisky-Cache-Status", result.cacheStatus)
-		_, err := io.Copy(ctx.Writer, result.reader)
-		if web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl)) {
-			return
-		}
-
-		ctx.Status(200)
-	case err := <-errChan:
+	body, cacheStatus, err := firstAvailableContent(requestCtx, logger, targetUrl, []contentSource{
+		{name: "origin url", status: "DYNAMIC", load: loadOriginContent},
+		{name: "s3 cache", status: "CACHE", delay: cacheFallbackDelay, load: loadCachedContent},
+	})
+	if err != nil {
 		abortTargetError(ctx, logger, errors.Wrapf(err, "load content from %q", targetUrl))
+		return
 	}
+	defer func() {
+		if closeErr := body.Close(); closeErr != nil {
+			logger.Debug("close proxied content", zap.Error(closeErr))
+		}
+	}()
+
+	logger.Debug("serve proxied content", zap.String("cache_status", cacheStatus))
+	ctx.Header("X-Laisky-Cache-Status", cacheStatus)
+	if _, err := io.Copy(ctx.Writer, body); err != nil {
+		web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl))
+		return
+	}
+
+	ctx.Status(http.StatusOK)
 }
 
 // invalidTargetError marks a target that is not even a parseable request URI.
