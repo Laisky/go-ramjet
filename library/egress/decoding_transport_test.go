@@ -1,7 +1,9 @@
 package egress
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -146,4 +148,140 @@ func TestClientsDecodeContentOnRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, wire, fetch(t, wirePinned))
 	require.Equal(t, wire, fetch(t, wireProxied), "the proxied transport is wire-level like the pinned one")
+}
+
+// TestContentDecodingTransportSkipsBodilessResponses leaves responses that carry
+// no body untouched, headers included, as net/http does for 1xx, 204, 304 and
+// an explicit zero Content-Length.
+func TestContentDecodingTransportSkipsBodilessResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		length int64
+		body   io.ReadCloser
+	}{
+		{"no content", http.StatusNoContent, 0, http.NoBody},
+		{"not modified", http.StatusNotModified, 0, http.NoBody},
+		{"switching protocols", http.StatusSwitchingProtocols, -1, http.NoBody},
+		{"zero length", http.StatusOK, 0, http.NoBody},
+		{"zero length with a body reader", http.StatusOK, 0, io.NopCloser(bytes.NewReader(nil))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+				return &http.Response{StatusCode: tc.status, ContentLength: tc.length, Body: tc.body, Request: request,
+					Header: http.Header{"Content-Encoding": []string{"gzip"}, "Content-Length": []string{"0"}}}
+			}}
+			response, err := ContentDecodingTransport{Base: base}.RoundTrip(httptest.NewRequest(http.MethodGet, "http://public.example/", nil))
+			require.NoError(t, err)
+			require.Equal(t, []string{AcceptEncoding}, base.encodings)
+			require.Equal(t, "gzip", response.Header.Get("Content-Encoding"))
+			require.Equal(t, "0", response.Header.Get("Content-Length"))
+			require.Equal(t, tc.length, response.ContentLength)
+			require.False(t, response.Uncompressed)
+			body, err := io.ReadAll(response.Body)
+			require.NoError(t, errors.Join(err, response.Body.Close()))
+			require.Empty(t, body)
+		})
+	}
+}
+
+// TestContentDecodingTransportBoundsDecodedSize stops a compressed body from
+// expanding without bound in memory: a body the transport decodes fails with
+// *DecodedSizeError past the bound, after at most the bound has been returned.
+// A body at the bound, and a body the transport did not decode, are untouched.
+func TestContentDecodingTransportBoundsDecodedSize(t *testing.T) {
+	const limit = 64 << 10
+	respond := func(coding string, body io.Reader) *recordingRoundTripper {
+		return &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+			header := http.Header{}
+			if coding != "" {
+				header.Set("Content-Encoding", coding)
+			}
+			return &http.Response{StatusCode: http.StatusOK, ContentLength: -1, Header: header,
+				Body: io.NopCloser(body), Request: request}
+		}}
+	}
+	read := func(t *testing.T, transport ContentDecodingTransport) ([]byte, error) {
+		t.Helper()
+		response, err := transport.RoundTrip(httptest.NewRequest(http.MethodGet, "http://public.example/", nil))
+		require.NoError(t, err)
+		body, readErr := io.ReadAll(response.Body)
+		require.NoError(t, response.Body.Close())
+		return body, readErr
+	}
+
+	body, err := read(t, ContentDecodingTransport{Base: respond("gzip", bytes.NewReader(gzipLayers(t, make([]byte, limit+1), 1))), MaxDecodedBytes: limit})
+	var sizeErr *DecodedSizeError
+	require.ErrorAs(t, err, &sizeErr)
+	require.EqualValues(t, limit, sizeErr.Limit)
+	require.LessOrEqual(t, len(body), limit)
+
+	body, err = read(t, ContentDecodingTransport{Base: respond("gzip", bytes.NewReader(gzipLayers(t, make([]byte, limit), 1))), MaxDecodedBytes: limit})
+	require.NoError(t, err)
+	require.Len(t, body, limit)
+
+	body, err = read(t, ContentDecodingTransport{Base: respond("", bytes.NewReader(make([]byte, 2*limit))), MaxDecodedBytes: limit})
+	require.NoError(t, err, "a body the transport did not decode keeps its caller's own bound")
+	require.Len(t, body, 2*limit)
+
+	// Expanding DefaultMaxDecodedBytes takes too long for a unit test, so the
+	// default is checked where it is chosen; the bound itself is exercised above.
+	require.EqualValues(t, DefaultMaxDecodedBytes, ContentDecodingTransport{}.decodedLimit())
+	require.EqualValues(t, limit, ContentDecodingTransport{MaxDecodedBytes: limit}.decodedLimit())
+	client := NewHTTPClient(time.Second, Dependencies{}, WithContentDecoding())
+	decoding, ok := client.Transport.(ContentDecodingTransport)
+	require.True(t, ok)
+	require.EqualValues(t, DefaultMaxDecodedBytes, decoding.decodedLimit(), "WithContentDecoding uses the default bound")
+}
+
+// TestContentDecodingClientStreamsWithoutBuffering keeps compressed event
+// streams incremental: each flushed event reaches the reader before the origin
+// writes the next one, so neither decoding nor its size bound buffers the body.
+func TestContentDecodingClientStreamsWithoutBuffering(t *testing.T) {
+	release := make(chan struct{})
+	var dials atomic.Int32
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept-Encoding") != AcceptEncoding {
+			http.Error(w, "gzip not negotiated", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Encoding", "gzip")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		writer := gzip.NewWriter(w)
+		for _, event := range []string{"first", "second"} {
+			if _, err := io.WriteString(writer, "data: "+event+"\n\n"); err != nil {
+				return
+			}
+			if err := writer.Flush(); err != nil {
+				return
+			}
+			flusher.Flush()
+			if event == "first" {
+				select {
+				case <-release:
+				case <-r.Context().Done():
+					return
+				}
+			}
+		}
+		_ = writer.Close()
+	}))
+	t.Cleanup(origin.Close)
+
+	client := NewHTTPClient(5*time.Second, publicFixture(t, origin, &dials), WithContentDecoding())
+	response, err := client.Get("http://public.example/stream")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, response.Body.Close()) })
+	reader := bufio.NewReader(response.Body)
+	line, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "data: first\n", line, "the first event must arrive before the origin sends the next")
+	close(release)
+	rest, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, "\ndata: second\n\n", string(rest))
 }
