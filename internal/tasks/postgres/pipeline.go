@@ -80,10 +80,7 @@ func dumpAndGzipToWriter(ctx context.Context, db cfgDB, w io.Writer) error {
 	defer func() { _ = gz.Close() }()
 
 	if err := cmd.Start(); err != nil {
-		logger.Error("failed to start pg_dump",
-			zap.Strings("args", args),
-			zap.Error(err))
-		return errors.Wrap(err, "start pg_dump")
+		return errors.Wrapf(err, "start pg_dump for %s:%d/%s", db.Host, db.Port, db.Database)
 	}
 
 	// Stream pg_dump stdout into gzip writer
@@ -116,7 +113,7 @@ func dumpAndGzipToWriter(ctx context.Context, db cfgDB, w io.Writer) error {
 		// add exit code if possible
 		ee := &exec.ExitError{}
 		if errors.As(waitErr, &ee) {
-			logger.Error("pg_dump exited with error", zap.Int("exit_code", ee.ExitCode()))
+			return errors.Wrapf(waitErr, "wait pg_dump (exit code %d)", ee.ExitCode())
 		}
 		return errors.Wrap(waitErr, "wait pg_dump")
 	}
@@ -132,8 +129,8 @@ func dumpAndGzipToWriter(ctx context.Context, db cfgDB, w io.Writer) error {
 //   - s: S3 settings of the destination bucket.
 //   - key: Destination object key.
 //
-// It returns an error when the upload or the dump fails. It never returns before
-// the dump producer goroutine has exited.
+// It returns an error when the upload or the dump fails, joining both causes when
+// both fail. It never returns before the dump producer goroutine has exited.
 func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error {
 	s3cli, err := newBackupS3Client(s)
 	if err != nil {
@@ -149,10 +146,17 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 	})
 	defer stopCtxWatch()
 
+	// The dump gets its own context so it can be stopped once the upload returns.
+	// Closing the pipe frees a producer blocked in a write, but not one whose
+	// pg_dump is idle (e.g. waiting on a lock), which would otherwise run until
+	// the per-backup timeout and delay the remaining databases.
+	dumpCtx, cancelDump := context.WithCancel(ctx)
+	defer cancelDump()
+
 	errCh := make(chan error, 1)
 	go func() {
 		// CloseWithError ensures the reader sees error if any
-		err := dumpDatabase(ctx, db, pw)
+		err := dumpDatabase(dumpCtx, db, pw)
 		_ = pw.CloseWithError(err)
 		errCh <- err
 	}()
@@ -169,14 +173,16 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 	// would otherwise hang this backup and every later one in the run.
 	// PipeReader.CloseWithError always returns nil.
 	_ = pr.CloseWithError(errStreamUploadReturned)
+	// A successful upload has read EOF, which the producer only sends after the
+	// dump finished, so canceling here can only stop an unfinished dump.
+	cancelDump()
 
 	dumpErr := <-errCh // wait producer
-	if putErr != nil {
-		return errors.Wrap(putErr, "put object")
-	}
-
-	if dumpErr != nil {
-		return errors.Wrap(dumpErr, "pg_dump pipeline")
+	if err := errors.Join(
+		errors.Wrap(putErr, "put object"),
+		errors.Wrap(dumpErr, "pg_dump pipeline"),
+	); err != nil {
+		return errors.Wrap(err, "stream backup")
 	}
 
 	logger.Info("backup completed",

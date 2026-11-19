@@ -23,9 +23,13 @@ const pipelineTestGuard = 10 * time.Second
 // fakeUploadClient is an in-memory s3.ObjectVersionClient for streaming upload tests.
 // PutObject consumes at most readLimit bytes (a negative limit drains to EOF) and then
 // returns putErr, mimicking an upload that fails or stops reading part-way through.
+// Consumed bytes are only counted unless keep is set, so endless producers cannot
+// exhaust memory.
 type fakeUploadClient struct {
 	readLimit int64
 	putErr    error
+	keep      bool
+	consumed  int64
 	received  bytes.Buffer
 }
 
@@ -36,12 +40,18 @@ func (f *fakeUploadClient) PutObject(_ context.Context, _, _ string, r io.Reader
 		src = io.LimitReader(r, f.readLimit)
 	}
 
-	n, err := io.Copy(&f.received, src)
+	dst := io.Discard
+	if f.keep {
+		dst = &f.received
+	}
+
+	n, err := io.Copy(dst, src)
+	f.consumed += n
 	if err != nil {
 		return minio.UploadInfo{}, errors.Wrap(err, "fake upload read")
 	}
 	if f.putErr != nil {
-		return minio.UploadInfo{}, f.putErr
+		return minio.UploadInfo{}, errors.Wrap(f.putErr, "fake upload")
 	}
 
 	return minio.UploadInfo{Size: n}, nil
@@ -124,6 +134,25 @@ func TestStreamBackupToS3UploadStopsReadingDoesNotHang(t *testing.T) {
 	}
 }
 
+// TestStreamBackupToS3UploadFailureStopsIdleDump verifies that a failed upload also
+// stops a dump that is not writing (pg_dump waiting on a lock, for example), instead
+// of waiting for the per-backup timeout, and that both errors are reported.
+func TestStreamBackupToS3UploadFailureStopsIdleDump(t *testing.T) {
+	cli := &fakeUploadClient{readLimit: 0, putErr: errors.New("upload rejected")}
+	stubStreamPipeline(t, cli, func(ctx context.Context, _ cfgDB, _ io.Writer) error {
+		<-ctx.Done() // idle until the dump is canceled
+		return errors.Wrap(ctx.Err(), "pg_dump idle")
+	})
+
+	err := runWithGuard(t, "streamBackupToS3", func() error {
+		return streamBackupToS3(context.Background(), cfgDB{Database: "appdb"}, cfgS3{Bucket: "bucket"}, "appdb-20261119.gz")
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "upload rejected")
+	require.Contains(t, err.Error(), "pg_dump idle", "the dump error must not be dropped")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 // TestStreamBackupToS3ContextDeadlineUnblocksPipeline verifies that the per-backup
 // deadline stops the stream even when neither side of the pipe observes ctx itself.
 func TestStreamBackupToS3ContextDeadlineUnblocksPipeline(t *testing.T) {
@@ -144,7 +173,7 @@ func TestStreamBackupToS3ContextDeadlineUnblocksPipeline(t *testing.T) {
 // and reports success.
 func TestStreamBackupToS3Success(t *testing.T) {
 	payload := bytes.Repeat([]byte("pg-dump-payload\n"), 64*1024)
-	cli := &fakeUploadClient{readLimit: -1}
+	cli := &fakeUploadClient{readLimit: -1, keep: true}
 	stubStreamPipeline(t, cli, func(_ context.Context, _ cfgDB, w io.Writer) error {
 		if _, err := w.Write(payload); err != nil {
 			return errors.Wrap(err, "write payload")
