@@ -58,12 +58,13 @@ const apiPasswordMask = "*****"
 // when every API accepted the change.
 func runTask() {
 	log.Logger.Info("run elasticsearch.password")
+	newpasswd := GeneratePasswdByDate(
+		gutils.UTCNow(),
+		gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret"))
 	ctx := context.Background()
 	user := &User{
 		Username: gconfig.Shared.GetString("tasks.elasticsearch-v2.password.username"),
-		Password: GeneratePasswdByDate(
-			gutils.UTCNow(),
-			gconfig.Shared.GetString("tasks.elasticsearch-v2.password.secret")),
+		Password: newpasswd,
 	}
 	jb, err := json.Marshal(user)
 	if err != nil {
