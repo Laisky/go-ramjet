@@ -220,6 +220,7 @@ func TestStreamBackupToS3LeavesNoGoroutines(t *testing.T) {
 		timeout time.Duration
 	}{
 		{name: "upload stops reading", cli: &fakeUploadClient{readLimit: 1024}, dump: endlessDump},
+		{name: "upload fails part-way", cli: &fakeUploadClient{readLimit: 1024, putErr: errors.New("upload rejected")}, dump: endlessDump},
 		{name: "upload fails while the dump is idle", cli: &fakeUploadClient{putErr: errors.New("upload rejected")}, dump: idleDump},
 		{name: "backup deadline", cli: &fakeUploadClient{readLimit: -1}, dump: idleDump, timeout: 50 * time.Millisecond},
 	} {
@@ -236,7 +237,11 @@ func TestStreamBackupToS3LeavesNoGoroutines(t *testing.T) {
 			require.Error(t, runWithGuard(t, "streamBackupToS3", func() error {
 				return streamBackupToS3(ctx, cfgDB{Database: "appdb"}, cfgS3{Bucket: "bucket"}, "appdb-20261119.gz")
 			}))
-			require.LessOrEqual(t, pipelineGoroutines(), before, "a pipeline goroutine outlived streamBackupToS3")
+			// The producer exits right after handing over its error, and a context
+			// watcher that already fired is not waited for, so allow them to finish;
+			// a leaked goroutine never would.
+			require.Eventually(t, func() bool { return pipelineGoroutines() <= before },
+				5*time.Second, 10*time.Millisecond, "a pipeline goroutine outlived streamBackupToS3")
 		})
 	}
 }
