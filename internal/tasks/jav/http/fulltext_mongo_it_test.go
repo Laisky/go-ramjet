@@ -118,9 +118,11 @@ func literalMatches(q string) []string {
 // MongoDB, whose $regex engine is PCRE rather than Go's RE2, and proves the
 // escaped query is a literal, case-insensitive substring there too: pattern,
 // operator and inline-flag syntax only ever match itself, a catastrophic-
-// backtracking pattern returns at once with no match, and bytes MongoDB
-// refuses in a regex (NUL, invalid UTF-8; MongoDB 8.0 answers Location51091)
-// fail the request instead of widening it.
+// backtracking pattern returns at once with no match. It also proves that
+// MongoDB itself refuses the patterns validateSearchQuery rejects up front (a
+// NUL byte, invalid UTF-8, an over-long pattern; MongoDB 8.0 answers BadValue
+// or Location51091) by sending wordFilter straight to the collection, and that
+// the handler answers those queries with 400.
 //
 // It is an integration test: start a disposable server, e.g.
 // `docker run --rm -p 127.0.0.1:27017:27017 mongo:8.0`, and set
@@ -152,8 +154,27 @@ func TestSearchIsLiteralOnRealMongoDB(t *testing.T) {
 		})
 	}
 
-	for _, q := range []string{"a\x00b", "\xff"} {
-		t.Run(fmt.Sprintf("rejected %q", q), func(t *testing.T) {
+	for _, tc := range []struct{ q, wantErr string }{
+		{q: "a\x00b", wantErr: "(BadValue) Regular expression cannot contain an embedded null byte"},
+		{q: "\xff", wantErr: "(Location51091) Regular expression is invalid: UTF-8 error"},
+		{q: strings.Repeat("a", 33*1024), wantErr: "(Location51091) Regular expression is invalid: pattern string is longer"},
+	} {
+		q, name := tc.q, tc.q
+		if len(name) > 16 {
+			name = fmt.Sprintf("%d-byte pattern", len(q))
+		}
+		t.Run(fmt.Sprintf("mongodb refuses %q", name), func(t *testing.T) {
+			// Bypass validateSearchQuery: MongoDB itself must refuse the
+			// pattern, never treat it as something wider.
+			cur, err := model.GetColFulltext().Find(t.Context(), wordFilter(q))
+			if err != nil {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, cur.Close(t.Context()))
+			require.Fail(t, "MongoDB accepted the pattern")
+		})
+		t.Run(fmt.Sprintf("handler rejects %q", name), func(t *testing.T) {
 			status, _ := searchCodes(t, q)
 			require.Equal(t, http.StatusBadRequest, status, "this pattern must be refused, never widened")
 		})
