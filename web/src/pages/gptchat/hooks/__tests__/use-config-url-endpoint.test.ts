@@ -258,7 +258,9 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(storedConfig(store, 1).api_base).toBe(ATTACKER_BASE)
   })
 
-  it('still applies a link key alone to a free-tier session without asking', async () => {
+  it('asks before a link key alone replaces a stored free-tier session’s key', async () => {
+    // The alert says it plainly: the requests would then use, and be
+    // visible to, that key's account.
     window.history.replaceState({}, '', `/?api_key=${LINK_KEY}`)
     const store = installStore({
       config_selected_session: 1,
@@ -271,9 +273,58 @@ describe('useConfig link-supplied API endpoint', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe(LINK_KEY)
-    expect(result.current.config.api_base).toBe(PROVIDER_A)
-    expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
+    expect(result.current.config.api_token).toBe(
+      'FREETIER-synthetic-placeholder-01',
+    )
+    expect(storedConfig(store, 1).api_token).toBe(
+      'FREETIER-synthetic-placeholder-01',
+    )
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiToken: LINK_KEY,
+    })
+    expect(window.location.search).toBe('')
+  })
+
+  it('keeps a stored default endpoint byte-for-byte when a link names it differently', async () => {
+    // Chat, media and realtime treat exactly 'https://api.openai.com' as the
+    // server default and send X-Laisky-Api-Base for anything else.
+    window.history.replaceState(
+      {},
+      '',
+      `/?api_base=${encodeURIComponent('https://API.openai.com:443/')}`,
+    )
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: 'https://api.openai.com',
+        api_token: 'FREETIER-synthetic-placeholder-01',
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_base).toBe('https://api.openai.com')
+    expect(storedConfig(store, 1).api_base).toBe('https://api.openai.com')
+    const headers = await outboundHeaders(result.current.config)
+    expect(headers['X-Laisky-Api-Base']).toBeUndefined()
+    expect(result.current.pendingLinkChange).toBeNull()
+    expect(window.location.search).toBe('')
+  })
+
+  it('keeps the default endpoint on a first visit when a link names it differently', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/?api_base=${encodeURIComponent('HTTPS://api.openai.com/')}`,
+    )
+    const store = installStore({})
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_base).toBe('https://api.openai.com')
+    expect(storedConfig(store, 1).api_base).toBe('https://api.openai.com')
     expect(result.current.pendingLinkChange).toBeNull()
   })
 
@@ -333,6 +384,22 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
     expect(result.current.config.api_token_reset_required).toBe(true)
     expect(result.current.pendingLinkChange?.apiBase).toBe(ATTACKER_BASE)
+  })
+
+  it('applies a link key and endpoint on a first visit without asking', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/?api_key=${LINK_KEY}&api_base=${PROVIDER_B}`,
+    )
+    const store = installStore({})
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_token).toBe(LINK_KEY)
+    expect(result.current.config.api_base).toBe(PROVIDER_B)
+    expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
+    expect(result.current.pendingLinkChange).toBeNull()
   })
 
   it('applies a link endpoint on a first visit without asking', async () => {

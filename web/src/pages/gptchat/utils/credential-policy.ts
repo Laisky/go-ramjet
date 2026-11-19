@@ -22,16 +22,17 @@
  *       the user picks it, or it is the same session's own earlier value.
  *       A shared endpoint is not evidence, because one endpoint serves many
  *       accounts.
- *   I4. A link never silently moves a stored session to another API
- *       endpoint, and never silently replaces a key of the user's own (its
- *       API token, or the key a pending reset set aside). Such a change is
- *       held until the user confirms it, because the server forwards a BYOK
- *       key, and the session's recent history with every request, to
- *       whatever endpoint the client names. A link key that is not
- *       user-supplied (empty, free tier, a sync key) or implausibly short
- *       is dropped from a held change. A first visit takes the link's
- *       values directly, and so does a link key alone on a stored session
- *       without a key of the user's own.
+ *   I4. A link never silently changes the API endpoint or the API key of
+ *       a stored session, nor a key of the user's own (its API token, or
+ *       the key a pending reset set aside). Such a change is held until the
+ *       user confirms it, because the server forwards a BYOK key, and the
+ *       session's recent history with every request, to whatever endpoint
+ *       the client names, and the key's account sees every request. A link
+ *       key that is not user-supplied (empty, free tier, a sync key) or
+ *       implausibly short is dropped. A link naming the stored endpoint in
+ *       another spelling keeps the stored text, because request routing
+ *       compares that text. Only a first visit takes the link's values
+ *       directly.
  *
  * Comparisons use constantTimeEqual as a best-effort measure. All secrets
  * involved already live in the same browser profile, so isolation, not
@@ -279,14 +280,14 @@ export function heldUserApiToken(
 
 /**
  * holdLinkCredentialChange enforces I4 on linked, the result of applying a
- * link's parameters to current. It holds the change when current holds a
- * key of the user's own, or when the link would move a stored session
- * (options.firstVisit unset) to another endpoint. A held change returns
- * linked with current's endpoint and credential fields kept, and pending
- * set to the endpoint change and user-supplied key the link asked for (a
- * link key that is not user-supplied, or shorter than
- * MIN_LINK_API_KEY_LENGTH, is dropped). Otherwise it returns linked
- * unchanged. syncKey is the browser-wide sync key.
+ * link's parameters to current. On a first visit (options.firstVisit) to a
+ * session without a key of the user's own it returns linked as it is.
+ * Otherwise it returns linked with current's endpoint and credential fields
+ * kept, and pending set to the endpoint change and the user-supplied key the
+ * link asked for; a link key that is not user-supplied, or shorter than
+ * MIN_LINK_API_KEY_LENGTH, is dropped. Either way, a link API base that
+ * names current's endpoint in another spelling is replaced by current's
+ * text. syncKey is the browser-wide sync key.
  */
 export function holdLinkCredentialChange(
   current: SessionConfig,
@@ -294,10 +295,16 @@ export function holdLinkCredentialChange(
   syncKey?: string | null,
   options: LinkCredentialHoldOptions = {},
 ): { config: SessionConfig; pending?: LinkCredentialChange } {
-  const holdsUserKey = !!heldUserApiToken(current, syncKey)
   const movesEndpoint = !isSameApiEndpoint(current.api_base, linked.api_base)
-  if (!holdsUserKey && (options.firstVisit === true || !movesEndpoint)) {
-    return { config: linked }
+  if (options.firstVisit === true && !heldUserApiToken(current, syncKey)) {
+    // Chat, media and realtime routing compare the API base text (the
+    // server default is exactly DefaultSessionConfig.api_base), so the same
+    // endpoint in another spelling must not replace the stored text.
+    return {
+      config: movesEndpoint
+        ? linked
+        : { ...linked, api_base: current.api_base },
+    }
   }
 
   const pending: LinkCredentialChange = {}

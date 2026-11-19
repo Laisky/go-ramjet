@@ -1,6 +1,6 @@
 /**
- * Alert shown when a link asked to move a stored session to another API
- * endpoint, or to replace a key of the user's own.
+ * Alert shown when a link asked to change the API endpoint or the API key of
+ * a stored session.
  */
 import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'

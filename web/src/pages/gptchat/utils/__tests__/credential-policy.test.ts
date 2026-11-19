@@ -607,16 +607,43 @@ describe('holdLinkCredentialChange', () => {
       expect(kept.temperature).toBe(0.2)
     })
 
-    it('passes a link key alone through on a stored session', () => {
-      const keyOnly = { ...free, api_token: 'sk-link-0123456789' }
-      const { config: applied, pending } = holdLinkCredentialChange(
+    it('holds a link key alone on a stored session', () => {
+      const { config: kept, pending } = holdLinkCredentialChange(
         free,
-        keyOnly,
+        { ...free, api_token: 'sk-link-0123456789' },
+        SYNC_KEY,
+      )
+      expect(pending).toEqual({ apiToken: 'sk-link-0123456789' })
+      expect(kept.api_token).toBe('FREETIER-synthetic-0123456789')
+    })
+
+    it('drops a link key that is not user-supplied on a stored session', () => {
+      const { config: kept, pending } = holdLinkCredentialChange(
+        free,
+        { ...free, api_token: 'x' },
         SYNC_KEY,
       )
       expect(pending).toBeUndefined()
-      expect(applied).toBe(keyOnly)
+      expect(kept.api_token).toBe('FREETIER-synthetic-0123456789')
     })
+
+    it.each([
+      ['a stored session', false],
+      ['a first visit', true],
+    ])(
+      'keeps the stored API base text on %s when the link names the same endpoint',
+      (_name, firstVisit) => {
+        const onDefault = { ...free, api_base: 'https://api.openai.com' }
+        const { config: kept, pending } = holdLinkCredentialChange(
+          onDefault,
+          { ...onDefault, api_base: 'https://API.openai.com:443/' },
+          SYNC_KEY,
+          { firstVisit },
+        )
+        expect(pending).toBeUndefined()
+        expect(kept.api_base).toBe('https://api.openai.com')
+      },
+    )
 
     it('never treats a first visit as license to move a held key', () => {
       const own = config({

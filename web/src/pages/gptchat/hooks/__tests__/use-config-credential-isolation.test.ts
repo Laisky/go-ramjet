@@ -302,8 +302,8 @@ describe('useConfig URL overrides honor the API token invariant', () => {
     expect(storedConfig(store, 1).api_token).toBe('sk-original')
   })
 
-  it('accepts a real API key from the URL and clears a pending reset', async () => {
-    window.history.replaceState({}, '', '/?api_key=sk-from-url')
+  it('accepts a confirmed API key from the URL and clears a pending reset', async () => {
+    window.history.replaceState({}, '', '/?api_key=sk-from-url-0123456789')
     const store: Record<string, unknown> = {
       config_selected_session: 1,
       config_sync_key: SYNC_KEY,
@@ -316,7 +316,18 @@ describe('useConfig URL overrides honor the API token invariant', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_token).toBe('sk-from-url')
+    // A link key never completes the reset of a stored session by itself
+    // (credential policy I4); the user confirms it first.
+    expect(result.current.config.api_token).toBe('FREETIER-placeholder')
+    expect(result.current.config.api_token_reset_required).toBe(true)
+    expect(result.current.pendingLinkChange?.apiToken).toBe(
+      'sk-from-url-0123456789',
+    )
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+
+    expect(result.current.config.api_token).toBe('sk-from-url-0123456789')
     expect(result.current.config.api_token_reset_required).toBe(false)
   })
 
