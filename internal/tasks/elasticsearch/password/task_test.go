@@ -140,7 +140,8 @@ func useTransport(t *testing.T, rt http.RoundTripper) {
 // error quote the whole URL. A raw '/', '?' or '#' in the password ends the
 // authority early, so net/url parses no userinfo (or the wrong one) and puts
 // the rest of the password in the host, path, query or fragment, where no
-// masking applies. The task must skip such an API before any request, and
+// masking applies. An API without a scheme keeps its credentials in the opaque
+// part. The task must skip such an API before any request, and
 // report it by index without echoing any part of it, in dry and real runs.
 func TestRunTaskNeverLogsCredentialsOfMalformedAPI(t *testing.T) {
 	const path = "/_security/user/elastic/_password"
@@ -150,6 +151,9 @@ func TestRunTaskNeverLogsCredentialsOfMalformedAPI(t *testing.T) {
 		"https://elastic:/SECRETTAIL@es.example" + path,
 		"https://elastic:12#SECRETTAIL@es.example" + path,
 		"https://elastic:p@ss/SECRETTAIL@es.example" + path,
+		// Without a scheme, net/url reads "elastic" as the scheme and keeps
+		// the credentials in the opaque part, where no masking applies.
+		"elastic:SECRETTAIL@es.example:9200" + path,
 	}
 	for i, api := range apis {
 		for _, dry := range []bool{true, false} {
