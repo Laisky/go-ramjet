@@ -1,9 +1,11 @@
 package ario
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -85,6 +87,59 @@ func init() {
 // RegexpArweaveFileID matches arweave file id
 var RegexpArweaveFileID = regexp.MustCompile(`^[a-zA-Z0-9_-]{40,100}$`)
 
+// regexpArNSName matches one ArNS name or undername ("undername_name") used as
+// a single DNS label in front of a gateway host. It admits no URL delimiter,
+// so the caller selects a subdomain of a configured gateway and never the host.
+var regexpArNSName = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?$`)
+
+// maxGatewayRequestBodyBytes bounds the caller body buffered once and replayed
+// to every gateway. Gateway reads carry no body; this only caps misuse.
+const maxGatewayRequestBodyBytes = 1 << 20
+
+// forwardedGatewayHeaders lists the caller headers that shape the requested
+// content. Everything else, notably cookies, credentials and client metadata,
+// stays on this service instead of reaching third-party gateways.
+var forwardedGatewayHeaders = []string{
+	"Accept",
+	"Accept-Encoding",
+	"Accept-Language",
+	"Cache-Control",
+	"Content-Type",
+	"If-Match",
+	"If-Modified-Since",
+	"If-None-Match",
+	"If-Range",
+	"If-Unmodified-Since",
+	"Range",
+}
+
+// gatewayTarget returns the URL fetched from gateway. With an ArNS domain it is
+// the gateway's root on the domain's subdomain; otherwise it is fileKey on the gateway.
+// The domain must already match regexpArNSName.
+func gatewayTarget(gateway, domain, fileKey string) (string, error) {
+	if domain == "" {
+		return gateway + fileKey, nil
+	}
+	parsed, err := url.Parse(gateway)
+	if err != nil {
+		return "", errors.Wrapf(err, "parse gateway %q", gateway)
+	}
+	parsed.Host = domain + "." + parsed.Host
+	return parsed.String(), nil
+}
+
+// gatewayRequestHeader returns a new header holding only the forwardable
+// content-negotiation headers of source.
+func gatewayRequestHeader(source http.Header) http.Header {
+	header := make(http.Header, len(forwardedGatewayHeaders))
+	for _, name := range forwardedGatewayHeaders {
+		if values := source.Values(name); len(values) > 0 {
+			header[name] = append([]string(nil), values...)
+		}
+	}
+	return header
+}
+
 // GatewayHandler redirects request to multiple arweave gateways,
 // and returns the first response.
 func GatewayHandler(ctx *gin.Context) {
@@ -101,6 +156,35 @@ func GatewayHandler(ctx *gin.Context) {
 		return
 	}
 
+	if domain != "" && !regexpArNSName.MatchString(domain) {
+		web.AbortErr(ctx, errors.New("invalid domain, expect a single ArNS name such as name or undername_name"))
+		return
+	}
+
+	targets := make([]string, 0, len(ArweaveGateways))
+	for _, gw := range ArweaveGateways {
+		target, err := gatewayTarget(gw, domain, fileKey)
+		if web.AbortErr(ctx, err) {
+			return
+		}
+		targets = append(targets, target)
+	}
+
+	// Every gateway receives its own reader over one bounded copy of the body;
+	// a shared request body would be split between concurrent requests.
+	var body []byte
+	if ctx.Request.Body != nil {
+		var err error
+		body, err = io.ReadAll(io.LimitReader(ctx.Request.Body, maxGatewayRequestBodyBytes+1))
+		if web.AbortErr(ctx, errors.Wrap(err, "read request body")) {
+			return
+		}
+	}
+	if len(body) > maxGatewayRequestBodyBytes {
+		ctx.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"err": "request body too large"})
+		return
+	}
+
 	logger := gmw.GetLogger(ctx).With(
 		zap.String("method", ctx.Request.Method),
 		zap.String("fileKey", fileKey),
@@ -110,35 +194,34 @@ func GatewayHandler(ctx *gin.Context) {
 	taskCtx, taskCancel := context.WithCancel(gmw.Ctx(ctx))
 	defer taskCancel()
 
+	// Gateway goroutines may outlive this handler once the first response wins,
+	// so they must not read the recycled gin context or mutable globals.
+	method, header, client := ctx.Request.Method, gatewayRequestHeader(ctx.Request.Header), httpcli
 	var pool errgroup.Group
-	for _, gw := range ArweaveGateways {
-		var url string
-		if domain != "" {
-			url = strings.Replace(gw, "https://", "https://"+domain+".", 1)
-		} else {
-			url = gw + fileKey
-		}
-
+	for _, target := range targets {
 		pool.Go(func() error {
-			logger := logger.With(zap.String("target_url", url))
+			logger := logger.With(zap.String("target_url", target))
 			logger.Debug("fetching file")
 
-			req, err := http.NewRequestWithContext(taskCtx,
-				ctx.Request.Method, url, ctx.Request.Body)
+			var reqBody io.Reader
+			if len(body) > 0 {
+				reqBody = bytes.NewReader(body)
+			}
+			req, err := http.NewRequestWithContext(taskCtx, method, target, reqBody)
 			if err != nil {
-				return errors.Wrapf(err, "new request %q", url)
+				return errors.Wrapf(err, "new request %q", target)
 			}
 
-			req.Header = ctx.Request.Header
-			resp, err := httpcli.Do(req)
+			req.Header = header.Clone()
+			resp, err := client.Do(req)
 			if err != nil {
-				return errors.Wrapf(err, "do request %q", url)
+				return errors.Wrapf(err, "do request %q", target)
 			}
 
 			// fmt.Printf(">> url: %s, status: %d, X-Ar-Ui-Hops: %s\n", url, resp.StatusCode, resp.Header.Get("X-Ar-Ui-Hops"))
 
 			if resp.StatusCode >= 200 && resp.StatusCode < 400 &&
-				(strings.Contains(url, "s3.laisky.com") || resp.Header.Get("X-Ar-Io-Hops") != "") {
+				(strings.Contains(target, "s3.laisky.com") || resp.Header.Get("X-Ar-Io-Hops") != "") {
 				select {
 				case firstFinished <- resp: // close body later
 				case <-taskCtx.Done():
@@ -149,7 +232,7 @@ func GatewayHandler(ctx *gin.Context) {
 			}
 
 			_ = resp.Body.Close()
-			return errors.Errorf("request %q, got %d", url, resp.StatusCode)
+			return errors.Errorf("request %q, got %d", target, resp.StatusCode)
 		})
 	}
 
