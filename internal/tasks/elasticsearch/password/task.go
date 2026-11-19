@@ -57,7 +57,8 @@ const apiPasswordMask = "*****"
 // runTask sets this month's generated password for the configured user on
 // every configured Elasticsearch API. It logs each API only with its admin
 // password masked, never logs the generated password, and reports success only
-// when every API accepted the change.
+// when every API accepted the change. A dry run, or a run with no API
+// configured, changes nothing and says so instead of reporting success.
 func runTask() {
 	log.Logger.Info("run elasticsearch.password")
 	newpasswd := GeneratePasswdByDate(
@@ -75,6 +76,7 @@ func runTask() {
 	}
 
 	apis := gconfig.Shared.GetStringSlice("tasks.elasticsearch-v2.password.apis")
+	dry := gconfig.Shared.GetBool("dry")
 	failed := 0
 	for i, api := range apis {
 		// An API that logSafeAPI rejects is never requested, and is reported by
@@ -89,7 +91,7 @@ func runTask() {
 		}
 		log.Logger.Debug("try to change password", zap.String("api", maskedAPI))
 
-		if gconfig.Shared.GetBool("dry") {
+		if dry {
 			// Never log the generated password, not even in a dry run.
 			log.Logger.Info("change password via post",
 				zap.String("api", maskedAPI),
@@ -106,13 +108,19 @@ func runTask() {
 		}
 	}
 
-	if failed > 0 {
+	switch {
+	case failed > 0:
 		log.Logger.Error("failed to change password on some apis",
 			zap.Int("failed", failed),
 			zap.Int("total", len(apis)))
-		return
+	case len(apis) == 0:
+		log.Logger.Info("no elasticsearch api configured, no password changed")
+	case dry:
+		log.Logger.Info("dry run finished, no password changed",
+			zap.Int("total", len(apis)))
+	default:
+		log.Logger.Info("success changed password")
 	}
-	log.Logger.Info("success changed password")
 }
 
 // logSafeAPI returns api with its password masked for logging. It returns an

@@ -21,6 +21,39 @@ func TestRunTaskDryModeNeverLogsPassword(t *testing.T) {
 	requireNoSecretsLogged(t, entries, password)
 }
 
+// TestRunTaskReportsSuccessOnlyAfterARealChange guards the run summary: a dry
+// run, or a run with no API configured, changes no password, so it must not
+// log "success changed password" and must say why nothing changed instead.
+func TestRunTaskReportsSuccessOnlyAfterARealChange(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		dry     bool
+		apis    []string
+		summary string
+	}{
+		{
+			name:    "dry run",
+			dry:     true,
+			apis:    []string{"https://elastic:pass@es.invalid/_security/user/elastic/_password"},
+			summary: "dry run finished, no password changed",
+		},
+		{
+			name:    "no api",
+			summary: "no elasticsearch api configured, no password changed",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configureTask(t, tc.dry, tc.apis...)
+			entries := captureLogs(t)
+
+			runTask()
+
+			require.Empty(t, entries.FilterMessage("success changed password").All())
+			require.Len(t, entries.FilterMessage(tc.summary).All(), 1)
+		})
+	}
+}
+
 // TestRunTaskDryModeNeverLogsAPICredentials guards the admin credentials in the
 // API URL. A raw '@' in the password is valid for net/url, so masking must
 // parse the URL instead of splitting it on '@'.
