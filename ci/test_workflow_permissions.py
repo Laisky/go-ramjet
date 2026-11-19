@@ -15,7 +15,6 @@ EXPECTED_WRITE_GRANTS = {
     "bolt-verify.yml": {("report", "statuses")},
     "ci.yml": set(),
     "pr-validation.yml": set(),
-    "sync-go127-tidy.yml": {("sync", "contents")},
 }
 
 # RELEASE_JOB_PERMISSIONS is the exact effective token scope of each release job.
