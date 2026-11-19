@@ -12,6 +12,10 @@ tasks:
     # are optional and fall back to the built-in defaults shown below.
     url: 'https://blacknova-enclave-cipherforge-wallet-relay.pieverse.io:8443/health'
     interval: 60 # seconds
+    # TLS is always verified against the system roots plus the embedded
+    # purrfect-tee Root CA. Optionally add more trusted root CAs (PEM bundle),
+    # e.g. both the old and new purrfect-tee Roots during a Root rotation.
+    # root_ca_file: '/etc/ramjet/pieverse-roots.pem'
   postgres:
     # enable/disable the postgres backup task
     enable: true
