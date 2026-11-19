@@ -16,11 +16,10 @@ import (
 )
 
 const (
-	pdfAsyncRenderTimeout = 60 * time.Second
-	cvSitePathPrefix      = "/cv"
-	cvSiteID              = "cv"
-	cvSiteTheme           = "cv"
-	cvSiteTitle           = "Zhonghua (Laisky) Cai | CV"
+	cvSitePathPrefix = "/cv"
+	cvSiteID         = "cv"
+	cvSiteTheme      = "cv"
+	cvSiteTitle      = "Zhonghua (Laisky) Cai | CV"
 )
 
 // contentRequest represents the payload for updating CV content.
@@ -200,22 +199,42 @@ func (h *handler) saveContent(c *gin.Context) {
 		return
 	}
 
-	payload, err := h.store.Save(gmw.Ctx(c), req.Content)
+	payload, err := h.saveLatestContent(gmw.Ctx(c), req.Content)
 	if web.AbortErr(c, err) {
 		return
 	}
 
 	if h.pdfService != nil {
-		if err := h.pdfService.RenderAndStore(gmw.Ctx(c), payload.Content); web.AbortErr(c, err) {
+		outcome, err := h.pdfService.RenderAndStore(gmw.Ctx(c), payload.Content)
+		if web.AbortErr(c, err) {
 			return
 		}
-		logger.Debug("cv pdf uploaded", zap.Int("content_bytes", len(payload.Content)))
+		switch outcome {
+		case PDFStoreUploaded:
+			logger.Debug("cv pdf uploaded", zap.Int("content_bytes", len(payload.Content)))
+		case PDFStoreSkippedSuperseded:
+			logger.Debug("cv pdf upload skipped because newer content was saved",
+				zap.Int("content_bytes", len(payload.Content)))
+		}
 	}
 
 	logger.Debug("cv content saved",
 		zap.Int("bytes", len(payload.Content)),
 		zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 	c.JSON(http.StatusOK, payload)
+}
+
+// saveLatestContent saves content as the latest CV. With a PDF service it saves through that service, which records
+// saves in the order the content store commits them. It returns the saved payload or an error.
+func (h *handler) saveLatestContent(ctx context.Context, content string) (ContentPayload, error) {
+	if h.pdfService != nil {
+		return h.pdfService.SaveContent(ctx, content)
+	}
+	payload, err := h.store.Save(ctx, content)
+	if err != nil {
+		return ContentPayload{}, errors.Wrap(err, "save cv content")
+	}
+	return payload, nil
 }
 
 // renderPDFPreview renders ad-hoc markdown into a PDF without persisting it,
@@ -269,7 +288,7 @@ func (h *handler) downloadPDF(c *gin.Context) {
 		if errors.Is(err, ErrObjectNotFound) {
 			logger.Debug("cv pdf unavailable, trigger async refresh",
 				zap.String("cache_buster", cacheBuster))
-			h.triggerAsyncPDFRefresh(c, cacheBuster)
+			h.triggerAsyncPDFRefresh(c)
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -296,35 +315,15 @@ func (h *handler) downloadPDF(c *gin.Context) {
 	c.DataFromReader(http.StatusOK, size, "application/pdf", reader, nil)
 }
 
-// triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background.
-// It takes the request context and cache buster string and returns no values.
-func (h *handler) triggerAsyncPDFRefresh(c *gin.Context, cacheBuster string) {
-	if h == nil || h.pdfService == nil || h.store == nil || c == nil {
+// triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background without blocking the request.
+// It takes the request context, whose logger the background work keeps, and returns no values. Concurrent refreshes
+// share one content read, render and upload, whose failure the refresh logs once as a warning.
+func (h *handler) triggerAsyncPDFRefresh(c *gin.Context) {
+	if h == nil || h.pdfService == nil || c == nil {
 		return
 	}
 
-	logger := gmw.GetLogger(c)
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), pdfAsyncRenderTimeout)
-		defer cancel()
-
-		payload, err := h.store.Load(ctx)
-		if err != nil {
-			logger.Warn("cv pdf async refresh load failed", zap.Error(err))
-			return
-		}
-
-		if err := h.pdfService.RenderAndStore(ctx, payload.Content); err != nil {
-			logger.Warn("cv pdf async refresh render failed", zap.Error(err))
-			return
-		}
-
-		logger.Debug("cv pdf async refresh completed",
-			zap.String("cache_buster", cacheBuster),
-			zap.Int("content_bytes", len(payload.Content)),
-			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
-	}()
+	h.pdfService.refreshLatest(gmw.Ctx(c))
 }
 
 // formatUpdatedAt formats updatedAt as RFC3339, returning an empty string when nil.

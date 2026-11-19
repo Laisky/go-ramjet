@@ -267,7 +267,7 @@ func newCVAuthHarness(t *testing.T, owners []string) *cvAuthHarness {
 	renderer := &trackingPDFRenderer{}
 	pdfStore, err := NewS3PDFStore(newFakeS3Client(), "bucket", "cv.pdf")
 	require.NoError(t, err)
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, store)
 	require.NoError(t, err)
 
 	gin.SetMode(gin.TestMode)
