@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -78,6 +79,9 @@ func TestArchiveAlertClassifications(t *testing.T) {
 	}{
 		{"fetch_failed", "fetch", "fetch", "fetch_failed", fmt.Errorf("private fetch cause")},
 		{"storage_failed", "save", "save", "storage_failed", fmt.Errorf("private storage cause")},
+		{"lookup_failed", "schedule", "schedule", "lookup_failed", fmt.Errorf("private lookup cause")},
+		{"lookup_timeout", "schedule", "schedule", "timeout", fmt.Errorf("wrapped: %w", context.DeadlineExceeded)},
+		{"lookup_network", "schedule", "schedule", "network_error", &net.OpError{Op: "dial", Net: "tcp", Err: fmt.Errorf("private")}},
 		{"canceled", "fetch", "fetch", "canceled", fmt.Errorf("wrapped: %w", context.Canceled)},
 		{"destination_denied", "fetch", "admission", "destination_denied",
 			&syntheticStageError{cause: &syntheticAdmissionError{reason: "destination_denied", cause: fmt.Errorf("private")}}},

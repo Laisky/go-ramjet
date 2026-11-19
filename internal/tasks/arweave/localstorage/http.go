@@ -2,7 +2,6 @@ package localstorage
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -50,8 +49,9 @@ const sniffLen = 512
 //
 // The live fetch starts at once and the archive lookup after cacheFallbackDelay;
 // the first to succeed answers, the other is canceled and any body it returns is
-// closed. Work that briefly outlives the request (the archive scheduler, canceled
-// sources and their cleanup) is tracked by requestBackgroundWork.
+// closed. Work that briefly outlives the request (the bounded archive scheduler
+// started by scheduleArchive, canceled sources and their cleanup) is tracked by
+// requestBackgroundWork.
 func CacheHandler(ctx *gin.Context) {
 	targetUrl := strings.TrimSpace(ctx.Query("url"))
 	logger := gmw.GetLogger(ctx).With(zap.String("target_url", targetUrl))
@@ -66,15 +66,7 @@ func CacheHandler(ctx *gin.Context) {
 		return
 	}
 
-	// The gin context is recycled after this handler returns; the archive
-	// scheduler keeps only request values and outlives request cancellation.
-	archiveCtx := context.WithoutCancel(requestCtx)
-	requestBackgroundWork.Go(func() {
-		err := SaveUrlContent(archiveCtx, taskItem{url: targetUrl})
-		if err != nil {
-			logger.Warn("save url content to s3", zap.Error(err))
-		}
-	})
+	scheduleArchive(requestCtx, logger, targetUrl)
 
 	body, cacheStatus, err := firstAvailableContent(requestCtx, logger, targetUrl, []contentSource{
 		{name: "origin url", status: "DYNAMIC", load: loadOriginContent},

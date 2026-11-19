@@ -21,6 +21,12 @@ const archiveLoggerScope = "arweave.localstorage"
 // ArchiveLoggerName is the full logger name whose failures receive the bounded
 // archive alert projection. Monitoring that filters by logger name should
 // match this value or the "go-ramjet" prefix.
+//
+// The projection is a boundary of the outbound alert channel only. The same
+// records keep their raw url and error fields in the ordinary log sinks: the
+// local console and, when APP_LOG_OTLP_ENDPOINT opts in, the OTLP exporter, so
+// operators can diagnose a failure from its target_ref. An OTLP destination
+// must therefore be trusted with raw target URLs, query strings included.
 const ArchiveLoggerName = rootLoggerName + "." + archiveLoggerScope
 
 // ArchiveLogger returns the archive worker logger. It is derived on every call
@@ -98,7 +104,7 @@ func archiveAlertFields(fields []zapcore.Field) []zapcore.Field {
 	for _, field := range fields {
 		switch field.Key {
 		case "stage":
-			if field.Type == zapcore.StringType && (field.String == "fetch" || field.String == "save") {
+			if field.Type == zapcore.StringType && (field.String == "schedule" || field.String == "fetch" || field.String == "save") {
 				stage = field.String
 			}
 		case "url":
@@ -150,6 +156,8 @@ func archiveFailureCategory(stage string, cause error) (string, string) {
 			return stage, "timeout"
 		}
 		return stage, "network_error"
+	case stage == "schedule":
+		return stage, "lookup_failed"
 	case stage == "fetch":
 		return stage, "fetch_failed"
 	case stage == "save":

@@ -70,46 +70,44 @@ type taskItem struct {
 
 // SaveUrlContent queues url for archiving unless it is already pending or archived.
 //
-// A url is marked pending atomically when it is queued and stays marked until
-// its task ends, so concurrent requests for one url queue it at most once and
-// cannot fill the shared queue with duplicates. It returns an error when the
-// archive lookup fails or the queue is full; a refused url is not left marked.
+// A url is marked pending atomically before its archive lookup and stays marked
+// while it is queued and until its task ends. Concurrent requests for one url
+// therefore run one lookup and queue it at most once, instead of each issuing
+// its own S3 HEAD or filling the shared queue with duplicates. Tasks record a
+// successful archive before releasing the mark, so a caller that takes the mark
+// afterwards sees the archive. It returns an error when the lookup fails or the
+// queue is full (errArchiveQueueFull); a url that is not queued is not left marked.
+// Every outcome is counted in archiveScheduleOutcomes.
 func SaveUrlContent(ctx context.Context, item taskItem) error {
 	logger := gmw.GetLogger(ctx).With(zap.String("url", item.url))
 
-	// check is pending
-	if _, ok := runningUrls.Load(item.url); ok {
-		logger.Debug("url is running, skip")
-		return nil
-	}
-
-	// check is finished
-	if finished, err := isArchived(ctx, item.url); err != nil {
-		return errors.Wrapf(err, "check url %s", item.url)
-	} else if finished {
-		return nil
-	}
-
 	if _, pending := runningUrls.LoadOrStore(item.url, struct{}{}); pending {
+		archiveScheduleOutcomes.Add(schedulePending, 1)
 		logger.Debug("url is running, skip")
 		return nil
 	}
-	// A task may have archived the url after the lookup above; tasks record the
-	// archive before releasing their mark, so the cache already shows it.
-	if finished, ok := isUrlFinishedCache.Load(item.url); ok && finished {
+
+	finished, err := isArchived(ctx, item.url)
+	if err != nil {
 		runningUrls.Delete(item.url)
+		archiveScheduleOutcomes.Add(scheduleLookupFailed, 1)
+		return errors.Wrapf(err, "check url %s", item.url)
+	}
+	if finished {
+		runningUrls.Delete(item.url)
+		archiveScheduleOutcomes.Add(scheduleArchived, 1)
 		return nil
 	}
 
-	// put task
 	select {
 	case taskChan <- item:
+		archiveScheduleOutcomes.Add(scheduleQueued, 1)
+		return nil
 	default:
 		runningUrls.Delete(item.url)
-		return errors.New("taskChan is full, please wait for a while")
+		archiveScheduleOutcomes.Add(scheduleQueueFull, 1)
+		return errors.WithStack(errArchiveQueueFull)
 	}
-
-	return nil
 }
 
 // LoadContentByUrl loads a user-selected url through the shared destination policy.
@@ -152,12 +150,16 @@ func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
 //
 // Note: caller should close the returned io.ReadCloser
 func LoadContentFromS3(ctx context.Context, url string) (io.ReadCloser, error) {
-	objUrl := fmt.Sprintf("https://%s/%s/%s",
+	return openArchivedObject(ctx, httpcli, archiveObjectURL(url))
+}
+
+// archiveObjectURL returns the configured S3 URL of target's archived copy.
+func archiveObjectURL(target string) string {
+	return fmt.Sprintf("https://%s/%s/%s",
 		config.Instance.S3.Endpoint,
 		config.Instance.S3.Bucket,
-		objkey2path(url2objkey(url)),
+		objkey2path(url2objkey(target)),
 	)
-	return openArchivedObject(ctx, httpcli, objUrl)
 }
 
 // openArchivedObject GETs one archived object from objUrl with client and returns
@@ -254,11 +256,7 @@ func isUrlFinished(ctx context.Context, url string) (bool, error) {
 		return res, nil
 	}
 
-	objUrl := fmt.Sprintf("https://%s/%s/%s",
-		config.Instance.S3.Endpoint,
-		config.Instance.S3.Bucket,
-		objkey2path(url2objkey(url)),
-	)
+	objUrl := archiveObjectURL(url)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, objUrl, nil)
 	if err != nil {
 		return false, errors.Wrapf(err, "new request %s", objUrl)

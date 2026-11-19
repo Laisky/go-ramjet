@@ -311,20 +311,21 @@ func TestCacheHandlerStopsWhenClientLeaves(t *testing.T) {
 	require.EqualValues(t, 2, canceled.Load())
 }
 
-// TestSaveUrlContentSkipsURLArchivedDuringLookup closes the window between the
-// archive lookup and taking the pending mark: a task that archived the url in
-// between has already recorded it, so the url is not queued a second time.
-func TestSaveUrlContentSkipsURLArchivedDuringLookup(t *testing.T) {
+// TestSaveUrlContentLooksUpWhileMarkedPending closes the window between the
+// archive lookup and taking the pending mark: the lookup runs only while the url
+// is already marked, so no concurrent request or task can queue it in between,
+// and a url found archived is released without being queued.
+func TestSaveUrlContentLooksUpWhileMarkedPending(t *testing.T) {
 	const target = "https://public.example/archived-meanwhile"
-	isUrlFinishedCache.Delete(target)
-	t.Cleanup(func() { isUrlFinishedCache.Delete(target) })
+	var markedDuringLookup atomic.Bool
 	useArchiveSeams(t, func(context.Context, string) (bool, error) {
-		// The lookup misses, then a concurrent task finishes and records the archive.
-		isUrlFinishedCache.Store(target, true)
-		return false, nil
+		_, pending := runningUrls.Load(target)
+		markedDuringLookup.Store(pending)
+		return true, nil
 	}, nil, nil)
 
 	require.NoError(t, SaveUrlContent(context.Background(), taskItem{url: target}))
+	require.True(t, markedDuringLookup.Load(), "the lookup must run while the url is marked pending")
 	require.Zero(t, drainArchiveTasks(), "an archived url must not be queued again")
 	_, pending := runningUrls.Load(target)
 	require.False(t, pending, "a skipped url must not stay marked pending")
