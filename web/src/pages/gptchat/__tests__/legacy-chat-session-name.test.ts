@@ -204,4 +204,49 @@ describe('legacy chat.js session names are rendered as text', () => {
     await expect.poll(() => sessionItems(2).length).toBe(2)
     expectSessionNameAsText(2, `${ATTR_BREAKOUT_PAYLOAD}_copy`)
   })
+
+  it.each([IMG_PAYLOAD, ATTR_BREAKOUT_PAYLOAD])(
+    'asks to delete the session named %s as text',
+    async (name) => {
+      const item = (sid: number) => `
+        <div class="list-group session" data-session="${sid}">
+          <button type="button" class="list-group-item"><div class="col"></div>
+          <i class="bi bi-trash col-auto"></i></button>
+        </div>`
+      const chatContainer = mountSessionPage(`${item(1)}${item(2)}`)
+      // data-name holds the decoded name, exactly as the session list leaves it.
+      const [target] = sessionItems(2)
+      target.dataset.name = name
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        '<div id="deleteCheckModal"><h5 class="modal-title"></h5></div>',
+      )
+      let shown = false
+      const { bindSessionDeleteBtn } = loadLegacyChatDeclarations<{
+        bindSessionDeleteBtn: () => void
+      }>(
+        ['ConfirmModal', 'bindSessionDeleteBtn'],
+        {
+          ...pageScope(chatContainer),
+          ShowSpinner: () => {},
+          HideSpinner: () => {},
+          deleteCheckModal: {
+            show: () => {
+              shown = true
+            },
+          },
+        },
+        ['deleteCheckCallback'],
+      )
+
+      bindSessionDeleteBtn()
+      target.querySelector<HTMLElement>('.bi-trash')?.click()
+
+      await expect.poll(() => shown).toBe(true)
+      expect(document.querySelector('img')).toBeNull()
+      expect(
+        document.querySelector('#deleteCheckModal .modal-title')?.textContent,
+      ).toBe(`Are you sure to delete session "${name}"?`)
+    },
+  )
 })

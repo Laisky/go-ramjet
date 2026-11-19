@@ -1185,12 +1185,16 @@ function SingleInputModal(title, message, callback, defaultVal) {
   modal.querySelector('.modal-body input').focus();
 }
 
-// show modal to confirm,
-// callback will be called if user click yes
-//
-// params:
-//   - title: modal title
-//   - callback: async callback function
+/**
+ * ConfirmModal shows the confirmation modal and runs callback when the user confirms.
+ *
+ * The title is shown as plain text, because callers interpolate user data into
+ * it, such as a session name that was typed by the user or synced from a backup.
+ *
+ * @param {string} title - Plain-text question shown as the modal title.
+ * @param {function(): Promise<void>} callback - Async action run on confirmation.
+ * @returns {void}
+ */
 function ConfirmModal(title, callback) {
   deleteCheckCallback = async () => {
     try {
@@ -1200,7 +1204,7 @@ function ConfirmModal(title, callback) {
       HideSpinner();
     }
   };
-  document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title;
+  document.getElementById('deleteCheckModal').querySelector('.modal-title').textContent = title;
   deleteCheckModal.show();
 }
 
