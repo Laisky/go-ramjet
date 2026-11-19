@@ -113,6 +113,18 @@ var forwardedGatewayHeaders = []string{
 	"Range",
 }
 
+// relayBlockedHeaders lists gateway response headers that would change this
+// origin's state instead of describing the relayed content. Gateways are third
+// parties sharing an origin with GPTChat, so they must not set cookies, wipe
+// storage (Clear-Site-Data), pin HSTS or advertise alternative services here.
+var relayBlockedHeaders = map[string]struct{}{
+	"Set-Cookie":                {},
+	"Set-Cookie2":               {},
+	"Clear-Site-Data":           {},
+	"Strict-Transport-Security": {},
+	"Alt-Svc":                   {},
+}
+
 // gatewayTarget returns the URL fetched from gateway. With an ArNS domain it is
 // the gateway's root on the domain's subdomain; otherwise it is fileKey on the gateway.
 // The domain must already match regexpArNSName.
@@ -142,6 +154,10 @@ func gatewayRequestHeader(source http.Header) http.Header {
 
 // GatewayHandler redirects request to multiple arweave gateways,
 // and returns the first response.
+//
+// Arweave content is third-party markup served on this origin, so the relayed
+// response is marked untrusted (sandboxed into an opaque, script-free origin)
+// and gateway headers that would change origin state are dropped.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	domain := ctx.Query("domain")
@@ -257,8 +273,13 @@ func GatewayHandler(ctx *gin.Context) {
 
 			ctx.Header("X-Ar-Io-Url", reqUrl)
 			for k, v := range resp.Header {
+				if _, blocked := relayBlockedHeaders[http.CanonicalHeaderKey(k)]; blocked {
+					continue
+				}
 				ctx.Header(k, v[0])
 			}
+			// Applied after the upstream headers so it replaces any gateway CSP.
+			web.MarkUntrustedContent(ctx)
 			ctx.Status(resp.StatusCode)
 
 			_, err := io.Copy(ctx.Writer, resp.Body)

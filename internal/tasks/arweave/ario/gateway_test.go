@@ -15,6 +15,8 @@ import (
 	"github.com/Laisky/errors/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // testFileKey is a syntactically valid Arweave transaction id.
@@ -210,4 +212,41 @@ func TestGatewayHandlerGivesEveryGatewayTheWholeBody(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"synthetic-payload", "synthetic-payload", "synthetic-payload"}, bodies)
+}
+
+// TestGatewayHandlerSandboxesRelayedDocuments keeps Arweave content from acting
+// on this origin, which also serves GPTChat and its stored credentials: an HTML
+// document with a script is relayed under the untrusted-content sandbox, which
+// overrides the gateway's own policy, and the gateway cannot set cookies or
+// other origin-wide state here.
+func TestGatewayHandlerSandboxesRelayedDocuments(t *testing.T) {
+	const document = `<html><body><script>indexedDB.open("ramjet_kv_v2")</script></body></html>`
+	useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"X-Ar-Io-Hops":              []string{"1"},
+				"Content-Type":              []string{"text/html; charset=utf-8"},
+				"Content-Security-Policy":   []string{"script-src * 'unsafe-inline'"},
+				"Set-Cookie":                []string{"session=SYNTHETIC; Path=/"},
+				"Set-Cookie2":               []string{"legacy=SYNTHETIC"},
+				"Clear-Site-Data":           []string{`"storage"`},
+				"Strict-Transport-Security": []string{"max-age=63072000; includeSubDomains"},
+				"Alt-Svc":                   []string{`h3="gateway.example:443"`},
+			},
+			Body:    io.NopCloser(strings.NewReader(document)),
+			Request: request,
+		}, nil
+	})}, "https://gateway.example/")
+
+	recorder := serveGateway(httptest.NewRequest(http.MethodGet, "/gateway/"+testFileKey, nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, document, recorder.Body.String(), "content is still relayed")
+	require.Equal(t, "text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
+	require.Equal(t, []string{web.UntrustedContentPolicy}, recorder.Header().Values("Content-Security-Policy"))
+	require.NotContains(t, web.UntrustedContentPolicy, "allow-scripts")
+	require.Equal(t, "nosniff", recorder.Header().Get("X-Content-Type-Options"))
+	for _, name := range []string{"Set-Cookie", "Set-Cookie2", "Clear-Site-Data", "Strict-Transport-Security", "Alt-Svc"} {
+		require.Empty(t, recorder.Header().Values(name), name)
+	}
 }
