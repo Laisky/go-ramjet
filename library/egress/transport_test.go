@@ -156,3 +156,42 @@ func TestPinnedTransportRefusesBeforeDial(t *testing.T) {
 	}
 	require.Zero(t, dials.Load())
 }
+
+// TestPinnedClientResponseHeaderTimeout applies the configured header bound,
+// so callers of slow upstreams such as model APIs can extend the default.
+func TestPinnedClientResponseHeaderTimeout(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		_, err := io.WriteString(w, "late")
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+	var dials atomic.Int32
+	deps := publicFixture(t, server, &dials)
+
+	client := NewHTTPClient(5*time.Second, deps, WithResponseHeaderTimeout(50*time.Millisecond))
+	require.Equal(t, 50*time.Millisecond, client.Transport.(PinnedTransport).ResponseHeaderTimeout)
+	response, err := client.Get("http://public.example/slow")
+	if response != nil {
+		require.NoError(t, response.Body.Close())
+	}
+	require.ErrorContains(t, err, "timeout awaiting response headers")
+
+	client = NewHTTPClient(5*time.Second, deps, WithResponseHeaderTimeout(time.Minute))
+	time.AfterFunc(200*time.Millisecond, func() { close(release) })
+	response, err = client.Get("http://public.example/slow")
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()))
+	require.Equal(t, "late", string(body))
+
+	for _, opts := range [][]ClientOption{nil, {WithResponseHeaderTimeout(0)}, {WithResponseHeaderTimeout(-time.Second)}} {
+		client = NewHTTPClient(time.Second, deps, opts...)
+		require.Zero(t, client.Transport.(PinnedTransport).ResponseHeaderTimeout, "non-positive values keep the default")
+	}
+}

@@ -22,6 +22,10 @@ type Dependencies struct {
 	RootCAs *x509.CertPool
 }
 
+// defaultResponseHeaderTimeout bounds the wait for response headers when a
+// PinnedTransport sets no ResponseHeaderTimeout of its own.
+const defaultResponseHeaderTimeout = 10 * time.Second
+
 // PinnedTransport is an http.RoundTripper for user-selected targets. Every
 // request is admitted with Admit and connects only to the addresses that
 // admission returned, so DNS rebinding cannot steer the connection elsewhere.
@@ -31,7 +35,27 @@ type Dependencies struct {
 // It never negotiates or removes content codings, so callers see the wire body
 // and can bound it before decoding. A caller that wants compression sets
 // Accept-Encoding to AcceptEncoding and reads the body through DecodeContent.
-type PinnedTransport struct{ Deps Dependencies }
+//
+// ResponseHeaderTimeout bounds the wait for response headers after the request
+// is written; zero means ten seconds. Upstreams that compute before answering,
+// such as model APIs, need a longer bound.
+type PinnedTransport struct {
+	Deps                  Dependencies
+	ResponseHeaderTimeout time.Duration
+}
+
+// ClientOption customizes the PinnedTransport behind NewHTTPClient.
+type ClientOption func(*PinnedTransport)
+
+// WithResponseHeaderTimeout sets the transport's ResponseHeaderTimeout to timeout.
+// A non-positive timeout keeps the ten-second default.
+func WithResponseHeaderTimeout(timeout time.Duration) ClientOption {
+	return func(transport *PinnedTransport) {
+		if timeout > 0 {
+			transport.ResponseHeaderTimeout = timeout
+		}
+	}
+}
 
 // RoundTrip admits request's target, pins its connection and performs one exchange.
 // Admission refusals are returned as *AdmissionError in the error chain.
@@ -51,11 +75,15 @@ func (t PinnedTransport) RoundTrip(request *http.Request) (*http.Response, error
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: -1}
 		dial = dialer.DialContext
 	}
+	headerTimeout := t.ResponseHeaderTimeout
+	if headerTimeout <= 0 {
+		headerTimeout = defaultResponseHeaderTimeout
+	}
 	transport := &http.Transport{
 		Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false, DisableCompression: true,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, ServerName: admission.Host, RootCAs: t.Deps.RootCAs},
 		TLSNextProto:        make(map[string]func(string, *tls.Conn) http.RoundTripper),
-		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 10 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: headerTimeout,
 		MaxResponseHeaderBytes: 1 << 20,
 	}
 	defer transport.CloseIdleConnections()
@@ -89,9 +117,14 @@ func (t PinnedTransport) RoundTrip(request *http.Request) (*http.Response, error
 // NewHTTPClient returns a client for user-selected targets whose every hop,
 // including redirects, is admitted and pinned. It follows at most the shared
 // policy's default redirect budget and bounds each whole exchange by timeout.
-func NewHTTPClient(timeout time.Duration, deps Dependencies) *http.Client {
+// opts adjust the underlying PinnedTransport.
+func NewHTTPClient(timeout time.Duration, deps Dependencies, opts ...ClientOption) *http.Client {
+	transport := PinnedTransport{Deps: deps}
+	for _, opt := range opts {
+		opt(&transport)
+	}
 	return &http.Client{
-		Transport: PinnedTransport{Deps: deps},
+		Transport: transport,
 		Timeout:   timeout,
 		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 			if len(via) > crawleregress.DefaultMaxRedirects {
