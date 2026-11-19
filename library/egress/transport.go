@@ -27,6 +27,10 @@ type Dependencies struct {
 // admission returned, so DNS rebinding cannot steer the connection elsewhere.
 // It never uses environment proxies and keeps no idle connections. Redirects
 // are left to the http.Client, so every hop is admitted again.
+//
+// It never negotiates or removes content codings, so callers see the wire body
+// and can bound it before decoding. A caller that wants compression sets
+// Accept-Encoding to AcceptEncoding and reads the body through DecodeContent.
 type PinnedTransport struct{ Deps Dependencies }
 
 // RoundTrip admits request's target, pins its connection and performs one exchange.

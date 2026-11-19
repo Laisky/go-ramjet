@@ -2,11 +2,9 @@ package tasks
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -60,7 +58,7 @@ func (t verifiedWebFetchTransport) RoundTrip(request *http.Request) (*http.Respo
 		return nil, errors.WithStack(err)
 	}
 	request = request.Clone(request.Context())
-	request.Header.Set("Accept-Encoding", "gzip")
+	request.Header.Set("Accept-Encoding", egress.AcceptEncoding)
 	transport := egress.PinnedTransport{Deps: egress.Dependencies{
 		Resolve: t.deps.resolve, Dial: t.deps.dial, RootCAs: t.deps.rootCAs,
 	}}
@@ -73,6 +71,7 @@ func (t verifiedWebFetchTransport) RoundTrip(request *http.Request) (*http.Respo
 
 // readWebFetchProxyHTTPBody preserves legacy reads and bounds both wire and
 // decoded provider content when ctx opts into verified endpoint enforcement.
+// Content codings follow the shared egress policy (egress.DecodeContent).
 func readWebFetchProxyHTTPBody(ctx context.Context, response *http.Response) ([]byte, error) {
 	if _, verified := ctx.Value(verifiedWebFetchClientKey{}).(rendererNetworkDependencies); !verified {
 		return io.ReadAll(response.Body)
@@ -80,24 +79,17 @@ func readWebFetchProxyHTTPBody(ctx context.Context, response *http.Response) ([]
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	body, err := readBoundedWebFetchBody(response.Body)
+	wire, err := readBoundedWebFetchBody(response.Body)
 	if err != nil {
 		return nil, err
 	}
-	switch strings.ToLower(strings.TrimSpace(response.Header.Get("Content-Encoding"))) {
-	case "", "identity":
-	case "gzip":
-		compressed, err := gzip.NewReader(bytes.NewReader(body))
-		if err != nil {
-			return nil, errors.Wrap(err, "decode provider gzip")
-		}
-		decoded, readErr := readBoundedWebFetchBody(compressed)
-		if err := errors.Join(readErr, compressed.Close()); err != nil {
-			return nil, errors.Wrap(err, "read decoded provider response")
-		}
-		body = decoded
-	default:
-		return nil, errors.New("provider content encoding unsupported")
+	decoded, err := egress.DecodeContent(response.Header, io.NopCloser(bytes.NewReader(wire)))
+	if err != nil {
+		return nil, errors.Wrap(err, "decode provider response")
+	}
+	body, readErr := readBoundedWebFetchBody(decoded)
+	if err := errors.Join(readErr, decoded.Close()); err != nil {
+		return nil, errors.Wrap(err, "read decoded provider response")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)

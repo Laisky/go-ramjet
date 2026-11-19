@@ -116,12 +116,18 @@ func SaveUrlContent(ctx context.Context, item taskItem) error {
 // Every hop, including redirects, must be a public destination; refusals carry an
 // *egress.AdmissionError in the returned chain.
 //
+// It advertises gzip, as net/http's default transport does, and returns the
+// decoded representation: the proxy relays the body without upstream headers, so
+// encoded bytes would be unreadable. A content coding that cannot be decoded is
+// refused with *egress.UnsupportedEncodingError, so another source can answer.
+//
 // Note: caller should close the returned io.ReadCloser
 func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "new request %s", url)
 	}
+	req.Header.Set("Accept-Encoding", egress.AcceptEncoding)
 
 	resp, err := targetHTTPClient.Do(req)
 	if err != nil {
@@ -135,7 +141,11 @@ func LoadContentByUrl(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, errors.Errorf("unexpected status code %d for url %s", resp.StatusCode, url)
 	}
 
-	return resp.Body, nil
+	body, err := egress.DecodeContent(resp.Header, resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(errors.Join(err, resp.Body.Close()), "decode response for url %s", url)
+	}
+	return body, nil
 }
 
 // LoadContentFromS3 load content by url
