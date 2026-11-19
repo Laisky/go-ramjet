@@ -193,3 +193,19 @@ func TestRootFileSystemRefusalsAreNotFound(t *testing.T) {
 		require.Equal(t, http.StatusForbidden, w.Code, "permission errors keep http.Dir's 403")
 	}
 }
+
+// TestRootFileSystemSymlinkLoopIsNotFound verifies a symlink loop inside the
+// root (a.js -> b.js -> a.js), which os.Root reports as ELOOP, is answered as
+// not found rather than as a server error.
+func TestRootFileSystemSymlinkLoopIsNotFound(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Symlink("b.js", filepath.Join(dir, "a.js")))
+	require.NoError(t, os.Symlink("a.js", filepath.Join(dir, "b.js")))
+	srv := http.FileServer(rootFileSystem{dir: dir})
+
+	for _, target := range []string{"/a.js", "/b.js"} {
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+		require.Equal(t, http.StatusNotFound, w.Code, target)
+	}
+}

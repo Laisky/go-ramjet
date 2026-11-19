@@ -81,8 +81,10 @@ func openRegularFile(root *os.Root, rel string) (*os.File, error) {
 
 // notFoundIfRefused marks the errors os.Root returns for paths it refuses to
 // resolve (a symlink escaping the root or an absolute one, a symlink loop, a
-// path through a regular file) as fs.ErrNotExist, as http.Dir does for its own
-// refusals, so http.FileServer answers 404 for them instead of 500.
+// path through a regular file) as fs.ErrNotExist, so http.FileServer answers
+// 404 for them instead of 500. This is stricter than http.Dir, which only maps
+// a path through a regular file to not found, follows escaping symlinks, and
+// answers 500 for symlink loops and for its own unsafe-path error.
 //
 // Parameters:
 //   - err: error from opening a path inside an os.Root.
