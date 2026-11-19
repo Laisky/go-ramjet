@@ -160,3 +160,36 @@ func TestRegisterSPAMissingDistIsQuiet(t *testing.T) {
 	}
 	require.Less(t, recorder.maxLevel(), zapcore.ErrorLevel, "missing dist must not log at alert level")
 }
+
+// TestRootFileSystemRefusalsAreNotFound verifies rootFileSystem reports every
+// path it refuses (a symlink escaping the root, a path through a regular
+// file) as not found, like http.Dir does, so a bare http.FileServer over it
+// answers 404 instead of 500. Gin's StaticFS pre-check hides the difference
+// today, but only as long as nothing changes between its Open and the file
+// server's own.
+func TestRootFileSystemRefusalsAreNotFound(t *testing.T) {
+	_, engine, secret := newSPATraversalFixture(t)
+	assetsDir := filepath.Join(spaFixtureDistDir(t, engine), "assets")
+	srv := http.FileServer(rootFileSystem{dir: assetsDir})
+
+	for _, target := range []string{"/leak.js", "/leak-rel.js", "/app.js/x", "/missing.js"} {
+		t.Run(target, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+			require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+			require.NotContains(t, w.Body.String(), secret)
+		})
+	}
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/app.js", nil))
+	require.Equal(t, http.StatusOK, w.Code, "regular files are still served")
+
+	if os.Geteuid() != 0 { // root ignores file modes
+		locked := filepath.Join(assetsDir, "locked.js")
+		require.NoError(t, os.WriteFile(locked, []byte("locked()"), 0o000))
+		w = httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/locked.js", nil))
+		require.Equal(t, http.StatusForbidden, w.Code, "permission errors keep http.Dir's 403")
+	}
+}
