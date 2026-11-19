@@ -2,8 +2,9 @@ package http
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -86,15 +87,14 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var sentN atomic.Int64
 			gctx := imageCountTestContext(t, func(w http.ResponseWriter, r *http.Request) {
-				payload, err := io.ReadAll(r.Body)
-				if err == nil {
-					var body struct {
-						N int64 `json:"n"`
-					}
-					if json.Unmarshal(payload, &body) == nil {
-						sentN.Store(body.N)
-					}
+				var body struct {
+					N int64 `json:"n"`
 				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					http.Error(w, "bad image payload: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				sentN.Store(body.N)
 				http.Error(w, "synthetic upstream failure", http.StatusBadGateway)
 			})
 			user := &config.UserConfig{
@@ -109,40 +109,84 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 	}
 }
 
-// imageBillingRecorder serves the external billing API and a failing image
-// upstream, recording every charged amount.
-type imageBillingRecorder struct {
-	mu      sync.Mutex
-	charges []int64
+// imageBillingFixture fakes the image upstream, the external billing API and the
+// object store for the DALL-E paths, recording every charge and delivered image.
+type imageBillingFixture struct {
+	produced    int // images the upstream returns; 0 makes generation fail
+	failChargeN int // 1-based billing call that is rejected; 0 accepts all
+	mu          sync.Mutex
+	charges     []int64
+	rejected    int
+	uploads     int
 }
 
-// handler records billing requests and rejects everything else.
-func (b *imageBillingRecorder) handler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/token/consume" {
-		http.Error(w, "synthetic upstream failure", http.StatusBadGateway)
-		return
+// handler serves billing calls and OpenAI-style image generations.
+func (f *imageBillingFixture) handler(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/api/token/consume":
+		var usage struct {
+			Cost int64 `json:"add_used_quota"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&usage); err != nil {
+			http.Error(w, "bad billing payload: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.failChargeN == len(f.charges)+f.rejected+1 {
+			f.rejected++
+			http.Error(w, "insufficient balance", http.StatusForbidden)
+			return
+		}
+		f.charges = append(f.charges, usage.Cost)
+		_, _ = w.Write([]byte("{}"))
+	case "/v1/images/generations":
+		if f.produced == 0 {
+			http.Error(w, "n must be 1 for this model", http.StatusBadRequest)
+			return
+		}
+		data := make([]map[string]string, f.produced)
+		for i := range data {
+			data[i] = map[string]string{"b64_json": base64.StdEncoding.EncodeToString([]byte("synthetic-image"))}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	default:
+		http.Error(w, "unexpected path", http.StatusNotFound)
 	}
-	var usage struct {
-		Cost int64 `json:"add_used_quota"`
-	}
-	payload, err := io.ReadAll(r.Body)
-	if err == nil && json.Unmarshal(payload, &usage) == nil {
-		b.mu.Lock()
-		b.charges = append(b.charges, usage.Cost)
-		b.mu.Unlock()
-	}
-	_, _ = w.Write([]byte("{}"))
 }
 
-// total returns the sum of all recorded charges.
-func (b *imageBillingRecorder) total() int64 {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+// totalCharged returns the sum of all accepted charges.
+func (f *imageBillingFixture) totalCharged() int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var sum int64
-	for _, c := range b.charges {
+	for _, c := range f.charges {
 		sum += c
 	}
 	return sum
+}
+
+// delivered returns how many images were uploaded for the client.
+func (f *imageBillingFixture) delivered() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.uploads
+}
+
+// install wires the fixture into an isolated request context and stubs uploads.
+func (f *imageBillingFixture) install(t *testing.T) *gin.Context {
+	t.Helper()
+	gctx := imageCountTestContext(t, f.handler)
+	config.Config.ExternalBillingAPI = config.Config.API
+	origUpload := uploadGeneratedImage
+	t.Cleanup(func() { uploadGeneratedImage = origUpload })
+	uploadGeneratedImage = func(context.Context, string, string, []byte, string) error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.uploads++
+		return nil
+	}
+	return gctx
 }
 
 // billedImageUser returns a paid user with external image billing enabled.
@@ -154,44 +198,53 @@ func billedImageUser(free bool) *config.UserConfig {
 	}
 }
 
-// imageBillingCases are requested image counts and the counts that must be billed.
+// imageBillingCases pin how DALL-E requests are charged against what was produced:
+// one image upfront (the balance probe), the rest only once delivered.
 var imageBillingCases = []struct {
-	name      string
-	requested int
-	free      bool
-	billed    int
+	name        string
+	requested   int
+	free        bool
+	produced    int
+	failChargeN int
+	billed      int
+	delivered   int
 }{
-	{name: "three images", requested: 3, billed: 3},
-	{name: "huge count is clamped", requested: hugeImageCount, billed: maxImagesPerRequest},
-	{name: "unset", requested: 0, billed: 1},
-	{name: "free user", requested: 5, free: true, billed: 1},
+	{name: "eight requested, eight delivered", requested: 8, produced: 8, billed: 8, delivered: 8},
+	{name: "eight requested, one delivered", requested: 8, produced: 1, billed: 1, delivered: 1},
+	{name: "upstream rejects the request", requested: 8, produced: 0, billed: 1, delivered: 0},
+	{name: "upstream returns more than requested", requested: 2, produced: 5, billed: 2, delivered: 2},
+	{name: "huge count is clamped", requested: hugeImageCount, produced: 8, billed: 8, delivered: 8},
+	{name: "free user", requested: 5, free: true, produced: 1, billed: 1, delivered: 1},
+	{name: "extra charge rejected keeps only the prepaid image", requested: 3, produced: 3, failChargeN: 2, billed: 1, delivered: 1},
 }
 
-// TestSendChatImageGenerationBillsPerImage verifies the upfront charge of an
-// image-model chat request scales with the clamped image count, like Flux, which
-// bills every generated image.
-func TestSendChatImageGenerationBillsPerImage(t *testing.T) {
+// TestSendChatImageGenerationBillsDeliveredImages verifies the image-model chat path
+// charges one image upfront and the remaining delivered images after success.
+func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			billing := &imageBillingRecorder{}
-			gctx := imageCountTestContext(t, billing.handler)
-			config.Config.ExternalBillingAPI = config.Config.API
+			f := &imageBillingFixture{produced: tc.produced, failChargeN: tc.failChargeN}
+			gctx := f.install(t)
 
 			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), billedImageUser(tc.free))
-			require.Error(t, err) // the synthetic upstream fails after billing
-			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), billing.total())
+			if tc.produced == 0 {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), f.totalCharged())
+			require.Equal(t, tc.delivered, f.delivered())
 		})
 	}
 }
 
-// TestDrawByDalleHandlerBillsPerImage verifies the image generation endpoint charges
-// for every requested (clamped) image instead of once per request.
-func TestDrawByDalleHandlerBillsPerImage(t *testing.T) {
+// TestDrawByDalleHandlerBillsDeliveredImages verifies the image generation endpoint
+// charges one image upfront and the remaining delivered images after success.
+func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			billing := &imageBillingRecorder{}
-			gctx := imageCountTestContext(t, billing.handler)
-			config.Config.ExternalBillingAPI = config.Config.API
+			f := &imageBillingFixture{produced: tc.produced, failChargeN: tc.failChargeN}
+			gctx := f.install(t)
 			body, err := json.Marshal(map[string]any{"model": "dall-e-3", "prompt": "draw a tree", "n": tc.requested})
 			require.NoError(t, err)
 			gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations", bytes.NewReader(body))
@@ -199,7 +252,8 @@ func TestDrawByDalleHandlerBillsPerImage(t *testing.T) {
 			gctx.Set(ctxKeyUser, billedImageUser(tc.free))
 
 			DrawByDalleHandler(gctx)
-			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), billing.total())
+			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), f.totalCharged())
+			require.Equal(t, tc.delivered, f.delivered())
 		})
 	}
 }

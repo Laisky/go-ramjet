@@ -50,8 +50,10 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 
 	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
 	if user.EnableExternalImageBilling {
+		// Charge one image upfront as the balance probe; settleImageBilling charges
+		// the rest once they are delivered.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, imageBatchPrice(frontendReq.Model, frontendReq.N), "txt2image"); web.AbortErr(ctx, err) {
+			user, GetImageModelPrice(frontendReq.Model), "txt2image"); web.AbortErr(ctx, err) {
 			return err
 		}
 	}
@@ -81,12 +83,13 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 			return err
 		}
 	}
+	imgContents = settleImageBilling(gmw.Ctx(ctx), user, frontendReq.Model, frontendReq.N, imgContents)
 
 	var pool errgroup.Group
 	for i, imgContent := range imgContents {
 		i, imgContent := i, imgContent
 		pool.Go(func() error {
-			return uploadImage2Minio(taskCtx,
+			return uploadGeneratedImage(taskCtx,
 				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
 				prompt,
 				imgContent,

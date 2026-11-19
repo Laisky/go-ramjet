@@ -44,12 +44,47 @@ func normalizeImageCount(n int, isFree bool) int {
 	}
 }
 
-// imageBatchPrice returns the upfront charge for generating n images with model.
-// Image prices are per image (db.PriceTxt2Image is one DALL-E image, and Flux
-// bills every generated image), so the charge scales with n, which callers must
-// already have bounded with normalizeImageCount.
+// uploadGeneratedImage stores one generated image; it is a package variable so
+// tests can observe delivered images without an object store.
+var uploadGeneratedImage = uploadImage2Minio
+
+// imageBatchPrice returns the charge for n images of model. Image prices are per
+// image (db.PriceTxt2Image is one DALL-E image, and Flux bills every generated
+// image), so the charge scales with n.
 func imageBatchPrice(model string, n int) db.Price {
 	return GetImageModelPrice(model) * db.Price(n)
+}
+
+// settleImageBilling reconciles a DALL-E request's charge with what the upstream
+// produced. One image is charged upfront, which doubles as the balance probe; this
+// charges the remaining delivered images in one call once generation succeeded.
+//
+// Parameters:
+//   - ctx: Request context carrying the request logger.
+//   - user: User being billed.
+//   - model: Image model, which selects the per-image price.
+//   - n: Normalized number of requested images; never more are delivered.
+//   - imgs: Images the upstream produced.
+//
+// It returns the images to deliver: at most n of imgs. When the charge for the
+// extra images fails, only the prepaid first image is delivered and the failure is
+// logged once at error level; like Flux, unbilled images are never exposed.
+func settleImageBilling(ctx context.Context, user *config.UserConfig, model string, n int, imgs [][]byte) [][]byte {
+	if len(imgs) > n {
+		imgs = imgs[:n]
+	}
+	extra := len(imgs) - 1
+	if !user.EnableExternalImageBilling || extra <= 0 {
+		return imgs
+	}
+
+	if err := checkUserExternalBilling(ctx, user, imageBatchPrice(model, extra), "txt2image"); err != nil {
+		gmw.GetLogger(ctx).Error("charge for extra generated images failed; delivering only the prepaid image",
+			zap.String("model", model), zap.Int("produced", len(imgs)), zap.Error(err))
+		return imgs[:1]
+	}
+
+	return imgs
 }
 
 func DrawByDalleHandler(ctx *gin.Context) {
@@ -90,8 +125,10 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	}
 
 	if user.EnableExternalImageBilling {
+		// Charge one image upfront as the balance probe; settleImageBilling charges
+		// the rest once they are delivered.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, imageBatchPrice(req.Model, req.N), "txt2image"); web.AbortErr(ctx, err) {
+			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
 			return
 		}
 	}
@@ -121,12 +158,13 @@ func DrawByDalleHandler(ctx *gin.Context) {
 			return
 		}
 	}
+	imgContents = settleImageBilling(gmw.Ctx(ctx), user, req.Model, req.N, imgContents)
 
 	var pool errgroup.Group
 	for i, imgContent := range imgContents {
 		i, imgContent := i, imgContent
 		pool.Go(func() error {
-			return uploadImage2Minio(taskCtx,
+			return uploadGeneratedImage(taskCtx,
 				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
 				req.Prompt,
 				imgContent,
