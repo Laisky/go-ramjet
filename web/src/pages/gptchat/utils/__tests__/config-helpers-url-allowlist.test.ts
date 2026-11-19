@@ -120,6 +120,22 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       },
     )
 
+    it.each([
+      ['userinfo', 'https://evil:x@provider-a.example'],
+      ['a script URL', 'javascript:alert(1)'],
+      ['a non-http scheme', 'ftp://provider-a.example'],
+      ['a query string', 'https://provider-a.example/v1?x=1'],
+      ['a fragment', 'https://provider-a.example/v1#x'],
+      ['no URL at all', 'provider-a'],
+    ])('rejects an api_base with %s', (_name, value) => {
+      const { config, mutated } = applyWithSearch(
+        `?api_base=${encodeURIComponent(value)}`,
+      )
+      expect(config.api_base).toBe(DefaultSessionConfig.api_base)
+      expect(mutated).toBe(false)
+      expect(window.location.search).toBe('')
+    })
+
     it('keeps api_base a string when a URL addresses a child of it', () => {
       const { config, mutated } = applyWithSearch('?api_base.foo=1')
       expect(config.api_base).toBe(DefaultSessionConfig.api_base)

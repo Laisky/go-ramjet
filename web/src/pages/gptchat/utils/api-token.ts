@@ -128,3 +128,25 @@ export function isSameApiEndpoint(
 ): boolean {
   return normalizeApiBase(a) === normalizeApiBase(b)
 }
+
+/**
+ * isValidApiBase reports whether apiBase is an API base the server accepts
+ * and realtime audio can connect to: an absolute http(s) URL with a host and
+ * without user info, query, or fragment.
+ */
+export function isValidApiBase(apiBase?: string | null): boolean {
+  let url: URL
+  try {
+    url = new URL(apiBase?.trim() || '')
+  } catch {
+    return false
+  }
+  return (
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
+    !!url.hostname &&
+    !url.username &&
+    !url.password &&
+    !url.search &&
+    !url.hash
+  )
+}
