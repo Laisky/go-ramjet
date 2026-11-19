@@ -15,7 +15,9 @@
 // private PKI (leaf -> purrfect-tee-issuing-ca -> purrfect-tee-root-ca), so the
 // task trusts the system roots plus the embedded purrfect-tee Root CA, which is
 // the anchor purrfect-tee relying parties pin. Extra roots (e.g. both Roots
-// during a Root rotation) can be added with `tasks.pieverse_alert.root_ca_file`.
+// during a Root rotation) can be added with `tasks.pieverse_alert.root_ca_file`,
+// and `tasks.pieverse_alert.server_name` sets the name the certificate is
+// verified against when `url` uses an IP literal or another host name.
 package pieverse
 
 import (
@@ -100,11 +102,13 @@ func newRootPool(extraCAFile string) (*x509.CertPool, error) {
 //
 // Parameters:
 //   - extraCAFile: optional path of a PEM bundle with additional root CAs.
+//   - serverName: optional name to send as SNI and to verify the certificate
+//     against instead of the URL host (e.g. when url uses an IP literal).
 //
 // Returns:
 //   - *http.Client: the verifying client.
 //   - error: wrapped error when the root pool cannot be built.
-func newHTTPClient(extraCAFile string) (*http.Client, error) {
+func newHTTPClient(extraCAFile, serverName string) (*http.Client, error) {
 	pool, err := newRootPool(extraCAFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "build root pool")
@@ -114,16 +118,73 @@ func newHTTPClient(extraCAFile string) (*http.Client, error) {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				RootCAs:    pool,
+				RootCAs: pool,
+				// Empty means "use the URL host". Verification is never skipped.
+				ServerName: serverName,
 				MinVersion: tls.VersionTLS12,
 			},
 		},
 	}, nil
 }
 
+// healthChecker runs health checks with a verifying client, or carries the
+// configuration error that prevented building one.
+type healthChecker struct {
+	client    *http.Client
+	configErr error
+}
+
+// newHealthChecker builds a healthChecker from the TLS trust settings.
+//
+// Parameters:
+//   - extraCAFile: optional path of a PEM bundle with additional root CAs.
+//   - serverName: optional TLS server name override.
+//
+// Returns:
+//   - *healthChecker: a checker with a client, or with configErr set when the
+//     settings are invalid. It never falls back to skipping verification.
+func newHealthChecker(extraCAFile, serverName string) *healthChecker {
+	client, err := newHTTPClient(extraCAFile, serverName)
+	if err != nil {
+		return &healthChecker{configErr: errors.Wrap(err, "invalid TLS trust settings")}
+	}
+
+	return &healthChecker{client: client}
+}
+
+// check runs one health check against url.
+//
+// Parameters:
+//   - ctx: request deadline and cancellation.
+//   - url: health endpoint.
+//
+// Returns:
+//   - error: the configuration error when the checker has no client, otherwise
+//     the checkHealth result.
+func (h *healthChecker) check(ctx context.Context, url string) error {
+	if h.configErr != nil {
+		return errors.Wrap(h.configErr, "health check not performed")
+	}
+
+	return checkHealth(ctx, h.client, url)
+}
+
+// scheduleHealthCheck runs checker every interval. Tests replace it.
+var scheduleHealthCheck = func(interval time.Duration, checker *healthChecker) {
+	go store.TaskStore.TickerAfterRun(interval, func() { runTask(checker) })
+}
+
 // healthResp is the subset of the health response we care about.
 type healthResp struct {
 	State string `json:"state"`
+}
+
+// taskServerName returns the optional TLS server name override from settings.
+//
+// Returns:
+//   - string: configured name, or "" to verify against the URL host.
+func taskServerName() string {
+	return gconfig.Shared.GetString("tasks.pieverse_alert.server_name")
 }
 
 // taskRootCAFile returns the optional extra root CA bundle path from settings.
@@ -194,15 +255,15 @@ func checkHealth(ctx context.Context, client *http.Client, url string) error {
 	return nil
 }
 
-// runTask runs one health check with client and logs the outcome.
-func runTask(client *http.Client) {
+// runTask runs one health check with checker and logs the outcome.
+func runTask(checker *healthChecker) {
 	url := taskURL()
 	log.Logger.Debug("run pieverse_alert", zap.String("url", url))
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultHTTPTimeout)
 	defer cancel()
 
-	if err := checkHealth(ctx, client, url); err != nil {
+	if err := checker.check(ctx, url); err != nil {
 		// Emit ERROR so the alert log pusher forwards it; no email is sent here.
 		log.Logger.Error("pieverse health check failed", zap.String("url", url), zap.Error(err))
 		return
@@ -237,17 +298,18 @@ func bindTask() {
 		return
 	}
 
-	client, err := newHTTPClient(taskRootCAFile())
-	if err != nil {
-		log.Logger.Error("pieverse_alert task not started: invalid TLS trust settings",
-			zap.String("root_ca_file", taskRootCAFile()), zap.Error(err))
-		return
-	}
+	// Invalid TLS trust settings do not disable the task: the checker fails
+	// closed and every scheduled run reports the error at ERROR level (which
+	// the alert pusher forwards), the same channel as a failed health check,
+	// so a misconfiguration stays visible each interval.
+	checker := newHealthChecker(taskRootCAFile(), taskServerName())
 
 	log.Logger.Info("bind pieverse_alert task...",
 		zap.String("url", taskURL()),
+		zap.String("server_name", taskServerName()),
+		zap.Bool("tls_config_valid", checker.configErr == nil),
 		zap.Duration("interval", taskInterval()))
-	go store.TaskStore.TickerAfterRun(taskInterval(), func() { runTask(client) })
+	scheduleHealthCheck(taskInterval(), checker)
 }
 
 func init() {

@@ -13,8 +13,8 @@ import (
 func TestCheckHealth(t *testing.T) {
 	t.Parallel()
 
-	client, err := newHTTPClient("")
-	require.NoError(t, err)
+	checker := newHealthChecker("", "")
+	require.NoError(t, checker.configErr)
 
 	for _, tc := range []struct {
 		name    string
@@ -76,11 +76,13 @@ func TestCheckHealth(t *testing.T) {
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.body))
+				if _, err := w.Write([]byte(tc.body)); err != nil {
+					t.Errorf("write health body: %v", err)
+				}
 			}))
 			defer srv.Close()
 
-			err := checkHealth(context.Background(), client, srv.URL)
+			err := checker.check(context.Background(), srv.URL)
 			if tc.wantErr {
 				require.Error(t, err)
 				return

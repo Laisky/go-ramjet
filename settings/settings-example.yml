@@ -16,6 +16,12 @@ tasks:
     # purrfect-tee Root CA. Optionally add more trusted root CAs (PEM bundle),
     # e.g. both the old and new purrfect-tee Roots during a Root rotation.
     # root_ca_file: '/etc/ramjet/pieverse-roots.pem'
+    # An unreadable root_ca_file never disables verification: every run then
+    # fails and logs an ERROR until it is fixed.
+    # Optionally verify the certificate against this name (also sent as SNI)
+    # instead of the url host, e.g. when url uses an IP address. It must be a
+    # name the server certificate lists; verification is never skipped.
+    # server_name: 'blacknova-enclave-cipherforge-wallet-relay.pieverse.io'
   postgres:
     # enable/disable the postgres backup task
     enable: true
