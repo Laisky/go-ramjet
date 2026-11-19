@@ -36,6 +36,12 @@ func init() {
 	)
 }
 
+// sameOriginFramingPolicy is the CSP directive that lets only this origin
+// frame a response. securityMiddleware sends it as the default policy, and
+// every relayed-content policy in untrusted.go includes it, so replacing the
+// default policy never relaxes framing.
+const sameOriginFramingPolicy = "frame-ancestors 'self'"
+
 // securityMiddleware sets the default security headers on every response and
 // continues the chain. Framing is limited to the same origin through both
 // X-Frame-Options and CSP frame-ancestors. Referrer-Policy defaults to
@@ -44,7 +50,7 @@ func init() {
 func securityMiddleware(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("X-Frame-Options", "SAMEORIGIN")
-	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
+	c.Header("Content-Security-Policy", sameOriginFramingPolicy)
 	if c.Writer.Header().Get("Referrer-Policy") == "" {
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 	}

@@ -12,12 +12,12 @@ import (
 // origin's cookies or storage (where the GPTChat app keeps credentials), and
 // without allow-scripts it cannot run scripts or submit forms. Links may still
 // open in a new, unsandboxed tab. Framing stays limited to the same origin.
-const UntrustedContentPolicy = "sandbox allow-popups allow-popups-to-escape-sandbox; frame-ancestors 'self'"
+const UntrustedContentPolicy = "sandbox allow-popups allow-popups-to-escape-sandbox; " + sameOriginFramingPolicy
 
 // PassiveContentPolicy is the Content-Security-Policy for relayed media types
 // that browsers display with built-in viewers isolated from this origin. They
 // cannot act on the origin, and a sandbox would stop the viewer from loading.
-const PassiveContentPolicy = "frame-ancestors 'self'"
+const PassiveContentPolicy = sameOriginFramingPolicy
 
 // MarkUntrustedContent sets the response headers that keep third-party content
 // relayed by c's handler from acting on this service's origin. contentType is
