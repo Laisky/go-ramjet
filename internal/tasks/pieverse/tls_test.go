@@ -375,3 +375,36 @@ func TestEmbeddedRootCAIsPinned(t *testing.T) {
 	require.NoError(t, root.CheckSignatureFrom(root), "the trust anchor must be self-signed")
 	require.Equal(t, time.Date(2036, time.May, 19, 19, 16, 22, 0, time.UTC), root.NotAfter.UTC())
 }
+
+// TestCheckLeavesNoOpenConnections verifies the per-run client never keeps a
+// connection alive: after N runs the server must see no open connection. With
+// keep-alives on, every run's fresh client would leave one idle connection
+// (and its goroutines) behind until the server times it out.
+func TestCheckLeavesNoOpenConnections(t *testing.T) {
+	t.Parallel()
+
+	var open atomic.Int64
+	srv := httptest.NewUnstartedServer(masterHandler(t))
+	srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			open.Add(1)
+		case http.StateClosed, http.StateHijacked:
+			open.Add(-1)
+		default:
+		}
+	}
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600))
+	checker := newHealthChecker(caFile, "")
+
+	const runs = 20
+	for range runs {
+		require.NoError(t, checker.check(context.Background(), srv.URL))
+	}
+	require.Eventually(t, func() bool { return open.Load() == 0 }, 5*time.Second, 10*time.Millisecond,
+		"every run must close its connection")
+}
