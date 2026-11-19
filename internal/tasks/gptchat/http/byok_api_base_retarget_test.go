@@ -1,13 +1,34 @@
 package http
 
 import (
-	"io"
-	"net/http"
-	"strings"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// buildBYOKUpstreamRequest authenticates key the way a chat request does,
+// with apiBase as X-Laisky-Api-Base when it is not empty, and returns the
+// upstream Responses request the server would send for it. It builds the
+// request without sending it, so the assertion does not depend on which
+// HTTP client delivers caller-selected upstreams.
+func buildBYOKUpstreamRequest(t *testing.T, key, apiBase string) (host, path, auth string) {
+	t.Helper()
+	ctx := newAuthContext(key)
+	if apiBase != "" {
+		ctx.Request.Header.Set("X-Laisky-Api-Base", apiBase)
+	}
+	user, err := getUserByAuthHeader(ctx)
+	require.NoError(t, err)
+	require.True(t, user.BYOK)
+
+	req, err := buildResponsesHTTPRequestCtx(context.Background(), UpstreamDeps{
+		User:          user,
+		RequestHeader: ctx.Request.Header,
+	}, []byte(`{"model":"test-model"}`))
+	require.NoError(t, err)
+	return req.URL.Host, req.URL.Path, req.Header.Get("Authorization")
+}
 
 // TestBYOKApiBaseHeaderRetargetsUpstreamCredential pins the server half of
 // the link-supplied API base chain: for a BYOK key the server trusts the
@@ -19,27 +40,11 @@ import (
 func TestBYOKApiBaseHeaderRetargetsUpstreamCredential(t *testing.T) {
 	byokAuditSetup(t)
 	const key = "sk-SYNTHETIC-ONLY-RETARGET-0123456789"
-	const attackerBase = "https://evil.example"
 
-	ctx := newAuthContext(key)
-	ctx.Request.Header.Set("X-Laisky-Api-Base", attackerBase)
-	user, err := getUserByAuthHeader(ctx)
-	require.NoError(t, err)
-	require.True(t, user.BYOK)
-
-	var upstreamHost, upstreamPath, upstreamAuth string
-	httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
-		upstreamHost = req.URL.Host
-		upstreamPath = req.URL.Path
-		upstreamAuth = req.Header.Get("Authorization")
-		return byokAuditResponse(req, `{"id":"resp_synthetic","output":[]}`), nil
-	})}
-
-	_, _, err = callUpstreamResponses(ctx, user, &OpenAIResponsesReq{Model: "test-model"})
-	require.NoError(t, err)
-	require.Equal(t, "evil.example", upstreamHost)
-	require.Equal(t, "/v1/responses", upstreamPath)
-	require.Equal(t, "Bearer "+key, upstreamAuth)
+	host, path, auth := buildBYOKUpstreamRequest(t, key, "https://evil.example")
+	require.Equal(t, "evil.example", host)
+	require.Equal(t, "/v1/responses", path)
+	require.Equal(t, "Bearer "+key, auth)
 }
 
 // TestBYOKWithoutApiBaseHeaderUsesDefaultUpstream pins the other half: a
@@ -50,20 +55,8 @@ func TestBYOKWithoutApiBaseHeaderUsesDefaultUpstream(t *testing.T) {
 	byokAuditSetup(t)
 	const key = "sk-SYNTHETIC-ONLY-DEFAULT-0123456789"
 
-	ctx := newAuthContext(key)
-	user, err := getUserByAuthHeader(ctx)
-	require.NoError(t, err)
-
-	var upstreamHost string
-	httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
-		upstreamHost = req.URL.Host
-		require.True(t, strings.HasPrefix(req.Header.Get("Authorization"), "Bearer "))
-		_, rerr := io.Copy(io.Discard, req.Body)
-		require.NoError(t, rerr)
-		return byokAuditResponse(req, `{"id":"resp_synthetic","output":[]}`), nil
-	})}
-
-	_, _, err = callUpstreamResponses(ctx, user, &OpenAIResponsesReq{Model: "test-model"})
-	require.NoError(t, err)
-	require.Equal(t, "oneapi.laisky.com", upstreamHost)
+	host, path, auth := buildBYOKUpstreamRequest(t, key, "")
+	require.Equal(t, "oneapi.laisky.com", host)
+	require.Equal(t, "/v1/responses", path)
+	require.Equal(t, "Bearer "+key, auth)
 }
