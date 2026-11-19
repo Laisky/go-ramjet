@@ -368,6 +368,17 @@ func processMCPResponse(obj map[string]any) (string, error) {
 	return stringifyMCPResult(obj), nil
 }
 
+// doMCPPost posts body to endpoint once per authorization candidate in auths
+// (or once without one) and returns the first 2xx response.
+//
+// Parameters:
+//   - ctx: Request context bounding every attempt.
+//   - endpoint: Caller-supplied MCP endpoint URL.
+//   - baseHeaders: Headers added to every attempt.
+//   - auths: Authorization header candidates tried in order.
+//   - body: Request payload replayed for each attempt.
+//
+// Returns the response, whose body the caller must close, or the last error.
 func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, auths []string, body []byte) (*http.Response, error) {
 	tryAuths := auths
 	if len(tryAuths) == 0 {
@@ -389,7 +400,9 @@ func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, au
 			req.Header.Set("authorization", auth)
 		}
 
-		resp, err := httpcli.Do(req) //nolint:bodyclose
+		// The MCP server URL comes from the caller's request, so every
+		// endpoint, probe and redirect passes the public egress policy.
+		resp, err := tenantEgressClient().Do(req) //nolint:bodyclose
 		if err != nil {
 			lastErr = errors.Wrap(err, "do request")
 			continue

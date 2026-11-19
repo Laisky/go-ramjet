@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Laisky/errors/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
@@ -245,4 +248,68 @@ func TestResponsesStreamThroughPinnedTransport(t *testing.T) {
 			require.Fail(t, "caller cancellation must abort the upstream request")
 		}
 	})
+}
+
+// TestMCPToolCallRefusesInternalServer proves a caller-supplied MCP server URL
+// (frontend `mcp_servers[].url`) is admitted before any tool call or probe.
+func TestMCPToolCallRefusesInternalServer(t *testing.T) {
+	internal := newInternalService(t, http.StatusOK, `{"content":[{"type":"text","text":"internal-secret"}]}`)
+	egressTestSetup(t, nil)
+	resetMCPTransportCache()
+	t.Cleanup(resetMCPTransportCache)
+	server := &MCPServerConfig{URL: internal.URL, APIKey: "SYNTHETIC", Enabled: true}
+
+	result, err := callMCPTool(t.Context(), server, "tool", `{}`, nil)
+	require.Error(t, err)
+	require.NotContains(t, result, "internal-secret")
+	require.Zero(t, internal.hits.Load(), "a caller-supplied MCP server must not reach an internal address")
+}
+
+// mcpFixtureSeq numbers the public-looking hosts handed out by mcpFixtureURL.
+var mcpFixtureSeq atomic.Int32
+
+// mcpFixtureURL serves server under a unique public-looking host through
+// caller-selected egress and returns that host's base URL. Earlier routes in
+// the same test stay reachable; the previous dependencies return on cleanup.
+func mcpFixtureURL(t *testing.T, server *httptest.Server) string {
+	t.Helper()
+	seq := mcpFixtureSeq.Add(1)
+	host := fmt.Sprintf("mcp%d.example", seq)
+	address := fmt.Sprintf("93.184.216.%d", 10+seq%200)
+	previous := tenantEgressDeps
+	t.Cleanup(func() { tenantEgressDeps = previous })
+	tenantEgressDeps = egress.Dependencies{
+		Resolve: func(ctx context.Context, name string) ([]net.IPAddr, error) {
+			if name == host {
+				return []net.IPAddr{{IP: net.ParseIP(address)}}, nil
+			}
+			if previous.Resolve != nil {
+				return previous.Resolve(ctx, name)
+			}
+			return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+		},
+		Dial: func(ctx context.Context, network, target string) (net.Conn, error) {
+			pinned, port, err := net.SplitHostPort(target)
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+			if pinned != address {
+				if previous.Dial != nil {
+					return previous.Dial(ctx, network, target)
+				}
+				return nil, errors.Errorf("unexpected pinned dial to %s", target)
+			}
+			var dialer net.Dialer
+			conn, err := dialer.DialContext(ctx, network, server.Listener.Addr().String())
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+			portNumber, err := net.LookupPort("tcp", port)
+			if err != nil {
+				return nil, errors.Join(errors.WithStack(err), conn.Close())
+			}
+			return &fixturePeerConn{Conn: conn, peer: &net.TCPAddr{IP: net.ParseIP(address), Port: portNumber}}, nil
+		},
+	}
+	return "http://" + host
 }
