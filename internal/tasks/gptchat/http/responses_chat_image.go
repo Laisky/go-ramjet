@@ -11,7 +11,6 @@ import (
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -32,7 +31,6 @@ import (
 // It returns the error that was also reported to the client, or nil on success.
 func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *config.UserConfig) error {
 	logger := gmw.GetLogger(ctx)
-	var err error
 	// Like the text paths, the request-scoped reservation never outlives the
 	// branch; a successful answer settles it below.
 	defer clearTokenReservation(ctx)
@@ -68,26 +66,9 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
 
-	var imgContents [][]byte
-	switch {
-	case strings.Contains(user.ImageUrl, "openai.azure.com"):
-		var pool errgroup.Group
-		imgContents = make([][]byte, frontendReq.N)
-		for i := range frontendReq.N {
-			i := i
-			pool.Go(func() (err error) {
-				imgContents[i], err = fetchImageFromAzureDalle(taskCtx, user, prompt)
-				return err
-			})
-		}
-		if err := pool.Wait(); web.AbortErr(ctx, err) {
-			return errors.Wrap(err, "fetch azure images")
-		}
-	default:
-		imgContents, err = fetchImageFromOpenaiDalle(taskCtx, user, frontendReq.Model, prompt, frontendReq.N, "")
-		if web.AbortErr(ctx, err) {
-			return errors.Wrap(err, "fetch openai images")
-		}
+	imgContents, err := generateImages(taskCtx, user, frontendReq.Model, prompt, frontendReq.N, "")
+	if web.AbortErr(ctx, err) {
+		return errors.Wrap(err, "generate images")
 	}
 	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, frontendReq.Model, frontendReq.N, taskID, prompt, imgContents)
 	if web.AbortErr(ctx, err) {

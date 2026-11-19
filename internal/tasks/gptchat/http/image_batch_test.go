@@ -15,6 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
 
 // editTestRequest points gctx at the image edit endpoint with a one-pixel PNG
@@ -185,4 +187,56 @@ func TestImageResponseCapToleratesSurplusEntries(t *testing.T) {
 func TestImageResponseAllowanceFitsLargestImage(t *testing.T) {
 	largestImage := base64.StdEncoding.EncodedLen(4096 * 4096 * 4)
 	require.Greater(t, maxImageResponseBytesPerImage, int64(largestImage)+1<<20)
+}
+
+// azureImageUser returns a paid user whose image URL selects the Azure path and
+// points at the fixture server.
+func azureImageUser() *config.UserConfig {
+	user := billedImageUser(false)
+	user.ImageUrl = config.Config.API + "/openai.azure.com/images"
+	return user
+}
+
+// TestAzureImageAnswersAreBoundedPerImage verifies that each Azure answer, which
+// carries one image URL, is held to one image's allowance. The Azure path sends one
+// request per image concurrently, so a per-answer cap sized for a whole batch would
+// let one request buffer maxImagesPerRequest times the batch cap.
+func TestAzureImageAnswersAreBoundedPerImage(t *testing.T) {
+	origLimit := maxImageResponseBytesPerImage
+	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
+	maxImageResponseBytesPerImage = 4 << 10
+
+	var downloads atomic.Int32
+	f := &imageBillingFixture{}
+	gctx := f.install(t)
+	serverURL := config.Config.API
+	f.override = func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.URL.Path == "/openai.azure.com/images":
+			// Twice the one-image allowance, far below the batch cap.
+			answer, err := json.Marshal(map[string]any{"data": []map[string]string{{
+				"url":            serverURL + "/generated/azure.png",
+				"revised_prompt": strings.Repeat("a", 8<<10),
+			}}})
+			if err != nil {
+				t.Errorf("encode azure answer: %v", err)
+				return true
+			}
+			// A bounded client hangs up once the cap is reached, so the write may fail.
+			if _, err := w.Write(answer); err != nil {
+				t.Logf("oversized azure answer cut off: %v", err)
+			}
+			return true
+		case strings.HasPrefix(r.URL.Path, "/generated/"):
+			downloads.Add(1)
+			f.writeBody(w, []byte("synthetic-image"))
+			return true
+		}
+		return false
+	}
+
+	err := sendChatImageGeneration(gctx, imageCountTestRequest(2), azureImageUser())
+	require.ErrorContains(t, err, "exceeds")
+	require.Zero(t, downloads.Load(), "an oversized Azure answer was accepted")
+	require.Zero(t, f.delivered())
 }

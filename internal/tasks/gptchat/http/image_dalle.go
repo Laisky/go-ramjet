@@ -83,26 +83,9 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
 
-	var imgContents [][]byte
-	switch {
-	case strings.Contains(user.ImageUrl, "openai.azure.com"):
-		var pool errgroup.Group
-		imgContents = make([][]byte, req.N)
-		for i := range req.N {
-			i := i
-			pool.Go(func() (err error) {
-				imgContents[i], err = fetchImageFromAzureDalle(taskCtx, user, req.Prompt)
-				return err
-			})
-		}
-		if err := pool.Wait(); web.AbortErr(ctx, err) {
-			return
-		}
-	default:
-		imgContents, err = fetchImageFromOpenaiDalle(taskCtx, user, req.Model, req.Prompt, req.N, req.Size)
-		if web.AbortErr(ctx, err) {
-			return
-		}
+	imgContents, err := generateImages(taskCtx, user, req.Model, req.Prompt, req.N, req.Size)
+	if web.AbortErr(ctx, err) {
+		return
 	}
 	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, req.N, taskID, req.Prompt, imgContents)
 	if err != nil {
@@ -189,7 +172,7 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body)
+		payload, err := readImageAPIResponse(httpresp.Body, maxImagesPerRequest)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image response")
 		}
@@ -283,7 +266,7 @@ func fetchImageFromAzureDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body)
+		payload, err := readImageAPIResponse(httpresp.Body, 1)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image response")
 		}
@@ -508,7 +491,7 @@ func fetchImageEditFromOpenai(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body)
+		payload, err := readImageAPIResponse(httpresp.Body, maxImagesPerRequest)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image edit response")
 		}

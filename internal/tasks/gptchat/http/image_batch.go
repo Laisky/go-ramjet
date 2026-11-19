@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -143,21 +144,66 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 	return urls, nil
 }
 
+// generateImages asks user's image upstream for n images of model drawn from
+// prompt, at size when it is not empty.
+//
+// An Azure image deployment answers one image per call, so n calls run
+// concurrently; any other upstream gets one call asking for n images.
+//
+// Parameters:
+//   - ctx: Context bounding every upstream call.
+//   - user: User whose image upstream and credentials are used.
+//   - model: Image model; ignored by Azure deployments.
+//   - prompt: Text the images are drawn from.
+//   - n: Normalized number of images (see normalizeImageCount).
+//   - size: Requested image size for OpenAI-compatible upstreams; empty keeps the
+//     upstream default.
+//
+// It returns the generated images, or the first error.
+func generateImages(ctx context.Context, user *config.UserConfig,
+	model, prompt string, n int, size string) ([][]byte, error) {
+	if !strings.Contains(user.ImageUrl, "openai.azure.com") {
+		imgs, err := fetchImageFromOpenaiDalle(ctx, user, model, prompt, n, size)
+		if err != nil {
+			return nil, errors.Wrap(err, "fetch openai images")
+		}
+		return imgs, nil
+	}
+
+	imgs := make([][]byte, n)
+	var pool errgroup.Group
+	for i := range n {
+		pool.Go(func() (err error) {
+			imgs[i], err = fetchImageFromAzureDalle(ctx, user, prompt)
+			return err
+		})
+	}
+	if err := pool.Wait(); err != nil {
+		return nil, errors.Wrap(err, "fetch azure images")
+	}
+	return imgs, nil
+}
+
 // maxImageResponseBytesPerImage is the answer allowance for one image. The largest
 // image a client may request through size is 4096x4096; as an incompressible RGBA
 // PNG that is 64 MiB, which base64 inflates to 85.3 MiB. 96 MiB covers that plus
 // JSON overhead. It is a variable so tests can lower it.
 var maxImageResponseBytesPerImage int64 = 96 << 20
 
-// readImageAPIResponse reads the body of an image API answer, refusing one larger
-// than maxImagesPerRequest times maxImageResponseBytesPerImage so an upstream
-// cannot make the server buffer an unbounded body. The cap is fixed rather than
-// scaled by the requested count, because an answer may legitimately carry surplus
-// entries that imageCollector ignores.
+// readImageAPIResponse reads the body of an image API answer from which the call
+// may take up to images images, refusing one larger than images times
+// maxImageResponseBytesPerImage so an upstream cannot make the server buffer an
+// unbounded body. images is clamped to 1..maxImagesPerRequest.
+//
+// A call asking for a batch passes maxImagesPerRequest rather than the requested
+// count, because an answer may legitimately carry surplus entries that
+// imageCollector ignores. The Azure path sends one call per image concurrently and
+// passes 1, so every image request buffers at most maxImagesPerRequest allowances
+// of upstream answers in total.
 //
 // It returns the body, or an error when reading fails or the body exceeds the cap.
-func readImageAPIResponse(body io.Reader) ([]byte, error) {
-	limit := maxImageResponseBytesPerImage * maxImagesPerRequest
+func readImageAPIResponse(body io.Reader, images int) ([]byte, error) {
+	limit := maxImageResponseBytesPerImage * int64(min(max(images, 1), maxImagesPerRequest))
 	payload, err := io.ReadAll(io.LimitReader(body, limit+1))
 	if err != nil {
 		return nil, errors.Wrap(err, "read image API response")
