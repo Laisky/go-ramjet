@@ -59,9 +59,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
 
-	if frontendReq.N <= 0 {
-		frontendReq.N = 1
-	}
+	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
 
 	var imgContents [][]byte
 	switch {

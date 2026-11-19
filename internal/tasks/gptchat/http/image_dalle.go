@@ -26,6 +26,24 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+// maxImagesPerRequest caps how many images one request may generate.
+const maxImagesPerRequest = 8
+
+// normalizeImageCount returns how many images to generate for a request asking for
+// n: at least 1, at most maxImagesPerRequest, and exactly 1 for free users. The
+// count is request-controlled, so it must be bounded before it sizes allocations,
+// goroutines or upstream requests.
+func normalizeImageCount(n int, isFree bool) int {
+	switch {
+	case n <= 0, isFree:
+		return 1
+	case n > maxImagesPerRequest:
+		return maxImagesPerRequest
+	default:
+		return n
+	}
+}
+
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
@@ -49,13 +67,10 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.IsFree && req.N > 1 {
-		logger.Debug("n is limited to 1 for free user")
-		req.N = 1
-	}
-	if req.N > 8 {
-		logger.Debug("n is limited to 8")
-		req.N = 8
+	if n := normalizeImageCount(req.N, user.IsFree); n != req.N {
+		logger.Debug("image count limited",
+			zap.Int("requested", req.N), zap.Int("limited", n), zap.Bool("free_user", user.IsFree))
+		req.N = n
 	}
 
 	if err = IsModelAllowed(ctx, user,
