@@ -216,7 +216,7 @@ func TestPDFServicePanicReturnsErrorToJoinedCallers(t *testing.T) {
 			require.ErrorContains(t, errs[i], "goldmark exploded")
 			require.Contains(t, fmt.Sprintf("%+v", errs[i]), "gatedPDFRenderer", "the error must carry the panic stack")
 		}
-		require.Error(t, service.RenderAndStore(context.Background(), "# Panic"))
+		require.Error(t, renderAndStoreErr(service, "# Panic"))
 	})
 }
 
@@ -307,7 +307,7 @@ func TestPDFServiceAbandonedPreviewsReleaseRenderSlots(t *testing.T) {
 			synctest.Wait()
 		}
 		var saveErr error
-		wg.Go(func() { saveErr = service.RenderAndStore(context.Background(), "# S") })
+		wg.Go(func() { saveErr = renderAndStoreErr(service, "# S") })
 		synctest.Wait()
 		require.Equal(t, []string{"# P1", "# P2"}, renderer.startedContents(), "the save waits for a render slot")
 
@@ -367,7 +367,7 @@ func TestPDFServiceAbandonedSaveFailureLoggedOnce(t *testing.T) {
 		callerCtx, cancelCaller := context.WithCancel(gmw.SetLogger(context.Background(), logger))
 		var saveErr error
 		var wg sync.WaitGroup
-		wg.Go(func() { saveErr = service.RenderAndStore(callerCtx, "# F") })
+		wg.Go(func() { _, saveErr = service.RenderAndStore(callerCtx, "# F") })
 		synctest.Wait()
 		cancelCaller()
 		wg.Wait()
@@ -446,7 +446,7 @@ func TestPDFServicesWithDifferentStoresDoNotShareWrites(t *testing.T) {
 		errs := make([]error, 2)
 		var wg sync.WaitGroup
 		for i, service := range []*PDFService{first, second} {
-			wg.Go(func() { errs[i] = service.RenderAndStore(context.Background(), "# X") })
+			wg.Go(func() { errs[i] = renderAndStoreErr(service, "# X") })
 			synctest.Wait()
 		}
 		renderer.open(0)

@@ -216,7 +216,7 @@ func TestPDFServiceSharedRenderIsBounded(t *testing.T) {
 		var callerErr error
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			callerErr = service.RenderAndStore(callerCtx, "# Hung CV")
+			_, callerErr = service.RenderAndStore(callerCtx, "# Hung CV")
 		})
 		synctest.Wait()
 		cancelCaller()
@@ -238,14 +238,14 @@ func TestPDFServiceSharedRenderIsBounded(t *testing.T) {
 func TestPDFServiceRenderAndStoreSharesFailure(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := &failingPDFRenderer{release: make(chan struct{})}
-		service, _, client := newFlightTestPDFService(t, renderer, &fakeContentStore{})
+		service, _, client := newFlightTestPDFService(t, renderer, &fakeContentStore{payload: ContentPayload{Content: "# Broken CV"}})
 
 		const callers = 4
 		errs := make([]error, callers)
 		var wg sync.WaitGroup
 		for i := range callers {
 			wg.Go(func() {
-				errs[i] = service.RenderAndStore(context.Background(), "# Broken CV")
+				errs[i] = renderAndStoreErr(service, "# Broken CV")
 			})
 		}
 		synctest.Wait()
@@ -257,7 +257,7 @@ func TestPDFServiceRenderAndStoreSharesFailure(t *testing.T) {
 		}
 		require.Zero(t, client.puts.Load())
 
-		require.ErrorContains(t, service.RenderAndStore(context.Background(), "# Broken CV"), "renderer exploded")
+		require.ErrorContains(t, renderAndStoreErr(service, "# Broken CV"), "renderer exploded")
 		require.Equal(t, int64(2), renderer.calls.Load(), "a failed flight must not be cached")
 	})
 }

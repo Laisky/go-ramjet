@@ -81,9 +81,11 @@ func cvBrowserExecutable(t *testing.T) string {
 		candidates = []string{"google-chrome"}
 	}
 	for _, candidate := range candidates {
-		if executable, err := exec.LookPath(candidate); err == nil {
-			return executable
+		executable, err := exec.LookPath(candidate)
+		if err != nil {
+			continue
 		}
+		return executable
 	}
 	t.Fatal("no owned CV browser candidate is installed")
 	return ""

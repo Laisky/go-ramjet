@@ -208,10 +208,17 @@ func (h *handler) saveContent(c *gin.Context) {
 	}
 
 	if h.pdfService != nil {
-		if err := h.pdfService.RenderAndStore(gmw.Ctx(c), payload.Content); web.AbortErr(c, err) {
+		outcome, err := h.pdfService.RenderAndStore(gmw.Ctx(c), payload.Content)
+		if web.AbortErr(c, err) {
 			return
 		}
-		logger.Debug("cv pdf uploaded", zap.Int("content_bytes", len(payload.Content)))
+		switch outcome {
+		case PDFStoreUploaded:
+			logger.Debug("cv pdf uploaded", zap.Int("content_bytes", len(payload.Content)))
+		case PDFStoreSkippedSuperseded:
+			logger.Debug("cv pdf upload skipped because newer content was saved",
+				zap.Int("content_bytes", len(payload.Content)))
+		}
 	}
 
 	logger.Debug("cv content saved",

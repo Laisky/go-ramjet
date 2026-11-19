@@ -39,15 +39,24 @@ const (
 	pdfWriteFlight
 )
 
+// pdfFlightValue is the result of one piece of shared PDF work: rendered bytes for a render, an outcome for a write.
+type pdfFlightValue struct {
+	pdf     []byte
+	outcome PDFStoreOutcome
+}
+
+// pdfFlightWork is shared PDF work; it receives the detached flight context.
+type pdfFlightWork func(context.Context) (pdfFlightValue, error)
+
 // pdfFlight is one piece of shared PDF work and its outcome.
 type pdfFlight struct {
 	done   chan struct{}
 	cancel context.CancelFunc
 	mode   pdfFlightMode
-	// The fields below are guarded by the owning pdfFlights mutex; payload and err are final once done is closed.
+	// The fields below are guarded by the owning pdfFlights mutex; value and err are final once done is closed.
 	waiters  int
 	finished bool
-	payload  []byte
+	value    pdfFlightValue
 	err      error
 }
 
@@ -76,7 +85,7 @@ func pdfDocumentKey(kind, content string) string {
 // holds request-scoped values (such as the pooled gin context) past the request, and it is bounded by the group
 // timeout. When wait is true the caller counts as a waiter and must call wait; otherwise the caller only starts or
 // joins the work. It returns the flight.
-func (g *pdfFlights) join(ctx context.Context, key string, mode pdfFlightMode, wait bool, work func(context.Context) ([]byte, error)) *pdfFlight {
+func (g *pdfFlights) join(ctx context.Context, key string, mode pdfFlightMode, wait bool, work pdfFlightWork) *pdfFlight {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	flight, ok := g.flights[key]
@@ -92,13 +101,27 @@ func (g *pdfFlights) join(ctx context.Context, key string, mode pdfFlightMode, w
 	return flight
 }
 
-// run executes work for flight, publishes its outcome, and logs a failure exactly once when no caller waits for it.
-func (g *pdfFlights) run(ctx context.Context, key string, flight *pdfFlight, work func(context.Context) ([]byte, error)) {
-	defer flight.cancel()
-	payload, err := runPDFWork(ctx, work)
+// run executes work for flight and always publishes an outcome, even when work ends its goroutine with
+// runtime.Goexit, so joined callers are never stranded.
+func (g *pdfFlights) run(ctx context.Context, key string, flight *pdfFlight, work pdfFlightWork) {
+	var value pdfFlightValue
+	var err error
+	completed := false
+	defer func() {
+		if !completed {
+			err = errors.New("shared PDF work exited without a result")
+		}
+		g.finish(ctx, key, flight, value, err)
+	}()
+	value, err = runPDFWork(ctx, work)
+	completed = true
+}
 
+// finish publishes the outcome of flight to its waiters and logs a failure exactly once when nobody waits for it.
+func (g *pdfFlights) finish(ctx context.Context, key string, flight *pdfFlight, value pdfFlightValue, err error) {
+	flight.cancel()
 	g.mu.Lock()
-	flight.payload, flight.err, flight.finished = payload, err, true
+	flight.value, flight.err, flight.finished = value, err, true
 	if g.flights[key] == flight {
 		delete(g.flights, key)
 	}
@@ -118,20 +141,20 @@ func (g *pdfFlights) run(ctx context.Context, key string, flight *pdfFlight, wor
 }
 
 // runPDFWork runs work and converts a panic into an error that carries the panic value and the panicking stack.
-func runPDFWork(ctx context.Context, work func(context.Context) ([]byte, error)) (payload []byte, err error) {
+func runPDFWork(ctx context.Context, work pdfFlightWork) (value pdfFlightValue, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			payload, err = nil, errors.Errorf("shared PDF work panicked: %v", recovered)
+			value, err = pdfFlightValue{}, errors.Errorf("shared PDF work panicked: %v", recovered)
 		}
 	}()
 	return work(ctx)
 }
 
-// wait blocks until flight finishes or ctx ends and returns a caller-owned copy of the payload or the shared error.
+// wait blocks until flight finishes or ctx ends and returns a caller-owned copy of the value or the shared error.
 //
 // A caller that leaves stops waiting only for itself; read-only work is canceled when its last waiter leaves.
 // A caller whose context ends after the work finished still receives the outcome, so no result is lost.
-func (g *pdfFlights) wait(ctx context.Context, key string, flight *pdfFlight) ([]byte, error) {
+func (g *pdfFlights) wait(ctx context.Context, key string, flight *pdfFlight) (pdfFlightValue, error) {
 	select {
 	case <-flight.done:
 		return flight.result()
@@ -152,14 +175,14 @@ func (g *pdfFlights) wait(ctx context.Context, key string, flight *pdfFlight) ([
 		}
 	}
 	g.mu.Unlock()
-	return nil, errors.Wrap(ctx.Err(), "wait for shared PDF work")
+	return pdfFlightValue{}, errors.Wrap(ctx.Err(), "wait for shared PDF work")
 }
 
-// result returns a caller-owned copy of the finished payload or the wrapped shared error.
-func (f *pdfFlight) result() ([]byte, error) {
+// result returns a caller-owned copy of the finished value or the wrapped shared error.
+func (f *pdfFlight) result() (pdfFlightValue, error) {
 	if f.err != nil {
-		return nil, errors.Wrap(f.err, "shared PDF work")
+		return pdfFlightValue{}, errors.Wrap(f.err, "shared PDF work")
 	}
 	// Joined callers must not alias one mutable slice.
-	return bytes.Clone(f.payload), nil
+	return pdfFlightValue{pdf: bytes.Clone(f.value.pdf), outcome: f.value.outcome}, nil
 }
