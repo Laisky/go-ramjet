@@ -251,6 +251,17 @@ func TestChatCacheKeyNeverMatchesConservationRecord(t *testing.T) {
 	require.Equal(t, int32(1), upstreamCalls.Load())
 }
 
+// useLongLivedResponseCache gives the test a private llmRespCache whose entries
+// outlive the test, so cache-hit assertions do not depend on the handler finishing
+// within the production 3 s TTL under -race; the original cache is restored on
+// cleanup.
+func useLongLivedResponseCache(t *testing.T) {
+	t.Helper()
+	original := llmRespCache
+	llmRespCache = gutils.NewExpCache[string](t.Context(), time.Hour)
+	t.Cleanup(func() { llmRespCache = original })
+}
+
 // cacheTenantUpstream starts a Responses API upstream that always answers with
 // answer and counts its calls.
 func cacheTenantUpstream(t *testing.T, answer string) (*httptest.Server, *atomic.Int32) {
@@ -274,6 +285,7 @@ func cacheTenantUpstream(t *testing.T, answer string) (*httptest.Server, *atomic
 // body would let one tenant answer another tenant's question.
 func TestChatResponseCacheIsolatesTenants(t *testing.T) {
 	isolateResponsesChatGlobals(t)
+	useLongLivedResponseCache(t)
 	gin.SetMode(gin.TestMode)
 
 	chosen, chosenCalls := cacheTenantUpstream(t, "answer from a caller-chosen upstream")
@@ -339,6 +351,7 @@ func TestChatResponseCacheIsolatesTenants(t *testing.T) {
 // caller's key, so an answer may carry that caller's private MCP data.
 func TestChatResponseCacheIsolatesFreeTierCallers(t *testing.T) {
 	isolateResponsesChatGlobals(t)
+	useLongLivedResponseCache(t)
 	setupFreeUserTestQuota(t)
 	gin.SetMode(gin.TestMode)
 
