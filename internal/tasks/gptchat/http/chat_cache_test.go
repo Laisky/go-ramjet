@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -42,21 +43,28 @@ func cacheTestRequest(mcpAPIKey string) *FrontendReq {
 	return req
 }
 
-// cacheTestUser returns the tenant the cache policy tests send requests as.
+// cacheTestUser returns the user the cache policy tests send requests as.
 func cacheTestUser() *config.UserConfig {
 	return &config.UserConfig{Token: "sk-synthetic-cache-tenant", APIBase: "https://upstream.test"}
 }
 
+// cacheTestContext returns a request context whose caller key is apiKey.
+func cacheTestContext(apiKey string) *gin.Context {
+	gctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	gctx.Set(ctxKeyUserAuth, apiKey)
+	return gctx
+}
+
 // requireNotCached fails the test when llmRespCache holds an answer for req, under
-// the bare request key an unscoped writer would use or, when user is not nil,
-// under user's tenant-scoped key.
-func requireNotCached(t *testing.T, user *config.UserConfig, req *FrontendReq) {
+// the bare request key an unscoped writer would use or, when gctx is not nil,
+// under the caller-scoped key of gctx and user.
+func requireNotCached(t *testing.T, gctx *gin.Context, user *config.UserConfig, req *FrontendReq) {
 	t.Helper()
 	bareKey, err := req2CacheKey(req)
 	require.NoError(t, err)
 	keys := []string{bareKey}
-	if user != nil {
-		scopedKey, err := responseCacheKey(user, req)
+	if gctx != nil {
+		scopedKey, err := requestResponseCacheKey(gctx, user, req)
 		require.NoError(t, err)
 		keys = append(keys, scopedKey)
 	}
@@ -95,25 +103,38 @@ func TestStoreAndLoadCachedResponseShareThePolicy(t *testing.T) {
 	t.Run("allowed", func(t *testing.T) {
 		isolateResponseCache(t, false)
 		req := cacheTestRequest("")
-		require.NoError(t, storeCachedResponse(cacheTestUser(), req, "cached answer"))
+		gctx := cacheTestContext(cacheTestUser().Token)
+		require.NoError(t, storeCachedResponse(gctx, cacheTestUser(), req, "cached answer"))
 
-		answer, ok, err := loadCachedResponse(cacheTestUser(), req)
+		answer, ok, err := loadCachedResponse(gctx, cacheTestUser(), req)
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, "cached answer", answer)
 	})
 
+	t.Run("unknown caller key", func(t *testing.T) {
+		isolateResponseCache(t, false)
+		req := cacheTestRequest("")
+		gctx := cacheTestContext("")
+		require.Error(t, storeCachedResponse(gctx, cacheTestUser(), req, "answer for nobody"))
+		requireNotCached(t, nil, nil, req)
+		_, ok, err := loadCachedResponse(gctx, cacheTestUser(), req)
+		require.Error(t, err)
+		require.False(t, ok)
+	})
+
 	t.Run("disallowed", func(t *testing.T) {
 		isolateResponseCache(t, false)
 		req := cacheTestRequest("sk-synthetic-mcp-secret")
-		require.NoError(t, storeCachedResponse(cacheTestUser(), req, "answer derived from private MCP data"))
-		requireNotCached(t, cacheTestUser(), req)
+		gctx := cacheTestContext(cacheTestUser().Token)
+		require.NoError(t, storeCachedResponse(gctx, cacheTestUser(), req, "answer derived from private MCP data"))
+		requireNotCached(t, gctx, cacheTestUser(), req)
 
 		// Even an entry planted under the same key must not be served.
-		key, err := responseCacheKey(cacheTestUser(), req)
+		key, err := requestResponseCacheKey(gctx, cacheTestUser(), req)
 		require.NoError(t, err)
 		llmRespCache.Store(key, "planted")
-		_, ok, err := loadCachedResponse(cacheTestUser(), req)
+		_, ok, err := loadCachedResponse(gctx, cacheTestUser(), req)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -167,7 +188,7 @@ func TestSaveLlmConservationHandlerOnlyRecordsAudit(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "the audit entry was never persisted")
 	}
-	requireNotCached(t, nil, conservationTestRequest())
+	requireNotCached(t, nil, nil, conservationTestRequest())
 }
 
 // TestChatCacheKeyNeverMatchesConservationRecord pins why a conservation-shaped
@@ -306,4 +327,66 @@ func TestChatResponseCacheIsolatesTenants(t *testing.T) {
 	victimElsewhere := newUser(victim.Token, chosen.URL)
 	require.Contains(t, ask(victimElsewhere), "answer from a caller-chosen upstream")
 	require.Equal(t, int32(2), chosenCalls.Load(), "an answer cached for another upstream was served")
+}
+
+// TestChatResponseCacheIsolatesFreeTierCallers verifies that two callers with
+// different FREETIER- keys never share cached answers. Every free-tier caller is
+// resolved to a copy of the shared free-tier user, so user.Token is the same for
+// all of them; the cache must be scoped by the caller's own key instead. The
+// request enables an MCP server without its own key, which is called with the
+// caller's key, so an answer may carry that caller's private MCP data.
+func TestChatResponseCacheIsolatesFreeTierCallers(t *testing.T) {
+	isolateResponsesChatGlobals(t)
+	setupFreeUserTestQuota(t)
+	gin.SetMode(gin.TestMode)
+
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := calls.Add(1)
+		w.Header().Set("content-type", "application/json")
+		answer := `{"id":"resp-1","output_text":"answer ` + strconv.Itoa(int(n)) + `","output":[]}`
+		if _, err := w.Write([]byte(answer)); err != nil {
+			t.Errorf("write upstream answer: %v", err)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = &http.Client{Timeout: 10 * time.Second}
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		API:                                     upstream.URL,
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+		UserTokens: []*config.UserConfig{{
+			Token: config.FreetierUserToken, UserName: "public", APIBase: upstream.URL,
+			OpenaiToken: "sk-synthetic-shared", AllowedModels: []string{"*"}, NoLimitExpensiveModels: true,
+		}},
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	const body = `{"stream":false,"model":"gpt-4.1","max_tokens":50,` +
+		`"mcp_servers":[{"name":"private","url":"https://mcp.test","enabled":true}],` +
+		`"messages":[{"role":"user","content":"what is in my notes?"}]}`
+	ask := func(key string) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		gctx, _ := gin.CreateTestContext(rec)
+		gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", strings.NewReader(body))
+		gctx.Request.Header.Set("content-type", "application/json")
+		gctx.Request.Header.Set("authorization", "Bearer "+key)
+		require.NoError(t, sendChatWithResponsesToolLoop(gctx))
+		return rec.Body.String()
+	}
+
+	callerA, callerB := "FREETIER-synthetic-caller-a", "FREETIER-synthetic-caller-b"
+	require.Contains(t, ask(callerA), "answer 1")
+	require.Contains(t, ask(callerB), "answer 2", "caller B was served caller A's cached answer")
+	require.Equal(t, int32(2), calls.Load())
+
+	// The same caller still benefits from the cache.
+	require.Contains(t, ask(callerA), "answer 1")
+	require.Equal(t, int32(2), calls.Load(), "a repeated request of the same caller must be served from the cache")
 }

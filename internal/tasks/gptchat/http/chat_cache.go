@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Laisky/errors/v2"
+	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 )
@@ -36,19 +37,22 @@ func responseCacheAllowed(req *FrontendReq) bool {
 	return true
 }
 
-// responseCacheKey derives the llmRespCache key of req answered for user.
+// responseCacheKey derives the llmRespCache key of req sent with the caller's raw
+// apiKey to the upstream apiBase.
 //
 // Besides the request body, the key covers the tenant, identified by the caller's
-// API key as AGENTS.md requires, and the upstream API base. A BYOK caller chooses
-// its upstream through X-Laisky-Api-Base and so may author the answer that gets
-// cached; scoping the key means an answer is only served to the API key and
-// upstream that produced it. The API key enters the key only through a SHA-256
-// digest.
+// own API key as AGENTS.md requires, and the upstream API base. The raw key is used
+// rather than user.Token because every free-tier caller resolves to a copy of the
+// shared free-tier user, while an MCP server without its own key is called with
+// the caller's raw key, so an answer may carry that caller's private data. A BYOK
+// caller also chooses its upstream through X-Laisky-Api-Base and so may author the
+// cached answer. An answer is therefore only served to the key and upstream that
+// produced it. The API key enters the key only through a SHA-256 digest.
 //
-// It returns an error when user is nil or req cannot be encoded.
-func responseCacheKey(user *config.UserConfig, req *FrontendReq) (string, error) {
-	if user == nil {
-		return "", errors.New("response cache key needs the requesting user")
+// It returns an error when apiKey is empty or req cannot be encoded.
+func responseCacheKey(apiKey, apiBase string, req *FrontendReq) (string, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return "", errors.New("response cache key needs the caller's API key")
 	}
 	reqKey, err := req2CacheKey(req)
 	if err != nil {
@@ -56,7 +60,7 @@ func responseCacheKey(user *config.UserConfig, req *FrontendReq) (string, error)
 	}
 
 	var material []byte
-	for _, part := range []string{user.Token, user.APIBase, reqKey} {
+	for _, part := range []string{apiKey, apiBase, reqKey} {
 		// Length-prefix every part, so no two part lists encode alike.
 		material = strconv.AppendInt(material, int64(len(part)), 10)
 		material = append(material, ':')
@@ -66,16 +70,36 @@ func responseCacheKey(user *config.UserConfig, req *FrontendReq) (string, error)
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// loadCachedResponse returns the answer cached for req sent by user.
+// requestResponseCacheKey derives the llmRespCache key of req for the request in
+// gctx, which user sent: the caller's raw API key comes from GetRawUserToken and
+// the upstream from user.APIBase.
+//
+// It returns an error when user is nil, the caller's key is unknown, or req cannot
+// be encoded.
+func requestResponseCacheKey(gctx *gin.Context, user *config.UserConfig, req *FrontendReq) (string, error) {
+	if user == nil {
+		return "", errors.New("response cache key needs the requesting user")
+	}
+
+	key, err := responseCacheKey(GetRawUserToken(gctx), user.APIBase, req)
+	if err != nil {
+		return "", errors.Wrap(err, "response cache key")
+	}
+	return key, nil
+}
+
+// loadCachedResponse returns the answer cached for req, which user sent in the
+// request of gctx.
 //
 // It returns ok=false when responseCacheAllowed refuses req or nothing is cached
-// for this tenant and upstream, and an error when the cache key cannot be derived.
-func loadCachedResponse(user *config.UserConfig, req *FrontendReq) (answer string, ok bool, err error) {
+// for this caller key and upstream, and an error when the cache key cannot be
+// derived.
+func loadCachedResponse(gctx *gin.Context, user *config.UserConfig, req *FrontendReq) (answer string, ok bool, err error) {
 	if !responseCacheAllowed(req) {
 		return "", false, nil
 	}
 
-	key, err := responseCacheKey(user, req)
+	key, err := requestResponseCacheKey(gctx, user, req)
 	if err != nil {
 		return "", false, errors.Wrap(err, "derive response cache key")
 	}
@@ -84,16 +108,17 @@ func loadCachedResponse(user *config.UserConfig, req *FrontendReq) (answer strin
 	return answer, ok, nil
 }
 
-// storeCachedResponse caches answer for req sent by user when responseCacheAllowed
-// permits it; only the same API key and upstream can read it back.
+// storeCachedResponse caches answer for req, which user sent in the request of
+// gctx, when responseCacheAllowed permits it; only the same caller key and
+// upstream can read it back.
 //
 // It returns an error when the cache key cannot be derived.
-func storeCachedResponse(user *config.UserConfig, req *FrontendReq, answer string) error {
+func storeCachedResponse(gctx *gin.Context, user *config.UserConfig, req *FrontendReq, answer string) error {
 	if !responseCacheAllowed(req) {
 		return nil
 	}
 
-	key, err := responseCacheKey(user, req)
+	key, err := requestResponseCacheKey(gctx, user, req)
 	if err != nil {
 		return errors.Wrap(err, "derive response cache key")
 	}
