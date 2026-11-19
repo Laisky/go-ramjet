@@ -145,3 +145,43 @@ func TestSearchTreatsQueryAsLiteral(t *testing.T) {
 		})
 	}
 }
+
+// capturedWordFilter runs the Search handler for the raw URL query rawQuery
+// against a mock MongoDB deployment and returns the `filter` document exactly
+// as it went over the wire.
+//
+// Parameters:
+//   - mt: mtest sub-test bound to a mock deployment.
+//   - rawQuery: raw, already URL-encoded query string (without "?").
+//
+// Returns:
+//   - bson.Raw: the find command's filter document.
+func capturedWordFilter(mt *mtest.T, rawQuery string) bson.Raw {
+	mt.Helper()
+
+	useTestSearchCache(mt.T)
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "jav.fulltext", mtest.FirstBatch))
+	model.SetDB(mongotest.New(mt.Client, "jav"))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/jav/search?"+rawQuery, nil)
+	Search(c)
+	require.Equal(mt, http.StatusOK, w.Code, w.Body.String())
+
+	started := mt.GetStartedEvent()
+	require.NotNil(mt, started)
+	require.Equal(mt, "find", started.CommandName)
+	filter, ok := started.Command.Lookup("filter").DocumentOK()
+	require.True(mt, ok, "find must carry a filter document")
+	return filter
+}
+
+// TestSearchQueryCannotInjectOperators documents why CodeQL go/sql-injection
+// #119 (the `wordFilter(query)` argument, i.e. alert #51 relocated by the
+// regexp.QuoteMeta fix) is a false positive. Whatever the caller sends, the
+// filter keeps the fixed shape {word: {$regex: <BSON string>, $options: "i"}}:
+// Gin's Query("q") only ever yields a Go string (so `q[$ne]=` style keys are
+// ignored and JSON-looking values stay text), the field name and options are
+// constants, and the pattern is QuoteMeta(q), a literal. (Bytes MongoDB
+// refuses in a regex never get this far; see
