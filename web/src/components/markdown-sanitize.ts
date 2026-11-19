@@ -57,18 +57,36 @@ const EXTRA_TAG_NAMES = [
 ]
 
 /**
+ * DROPPED_TAG_NAMES lists default-schema elements the renderer removes.
+ * `source` carries a `srcset` that neither the schema's protocol check nor
+ * the urlTransform sees, so it could load any image, SVG data URLs included,
+ * outside the `img` sink. A `<picture>` keeps rendering its `img` fallback.
+ */
+const DROPPED_TAG_NAMES: ReadonlySet<string> = new Set(['source'])
+
+/**
  * markdownSanitizeSchema extends the GitHub-style default schema only with
  * what the chat renderer legitimately needs: remark-math classes that
  * rehype-katex consumes after sanitization, a few benign formatting tags,
  * `tel:` links and `data:` image sources (narrowed to base64 raster images by
  * sanitizeMarkdownUrl). Everything else, including scripts, frames, forms,
- * styles, event handlers, and arbitrary classes, is removed.
+ * styles, event handlers, arbitrary classes, and `source` elements, is
+ * removed, so `img` is the only element that loads an image.
  */
 export const markdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), ...EXTRA_TAG_NAMES],
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []).filter(
+      (tagName) => !DROPPED_TAG_NAMES.has(tagName),
+    ),
+    ...EXTRA_TAG_NAMES,
+  ],
   attributes: {
-    ...defaultSchema.attributes,
+    ...Object.fromEntries(
+      Object.entries(defaultSchema.attributes ?? {}).filter(
+        ([tagName]) => !DROPPED_TAG_NAMES.has(tagName),
+      ),
+    ),
     // `language-*` drives code highlighting; remark-math marks math with
     // `math-inline` / `math-display` so rehype-katex can render it afterwards.
     code: [['className', /^language-./, 'math-inline', 'math-display']],

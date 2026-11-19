@@ -86,25 +86,53 @@ function collectUnsafeAttributes(container: HTMLElement): string[] {
 }
 
 /**
- * collectUnsafeUrls returns href/src values whose scheme can execute script or
- * smuggle an HTML document.
+ * normalizeUrlForCheck mirrors how a browser reads a URL attribute before it
+ * picks the scheme: leading C0 controls and spaces are dropped and ASCII tabs
+ * and newlines are removed anywhere, so obfuscated schemes are still caught.
+ */
+function normalizeUrlForCheck(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/^[\u0000-\u0020]+/, '').replace(/[\t\n\r]/g, '')
+}
+
+/**
+ * isUnsafeUrl reports whether value uses a scheme that can execute script or
+ * smuggle a document: javascript:, vbscript:, or any data: URL other than a
+ * base64 raster image.
+ */
+function isUnsafeUrl(value: string): boolean {
+  const url = normalizeUrlForCheck(value).toLowerCase()
+  if (url.startsWith('javascript:') || url.startsWith('vbscript:')) {
+    return true
+  }
+  return (
+    url.startsWith('data:') &&
+    !/^data:image\/(png|jpe?g|gif|webp|avif);base64,/.test(url)
+  )
+}
+
+/**
+ * collectUnsafeUrls returns the URL attributes, srcset candidates included,
+ * whose scheme can execute script or smuggle a document.
  */
 function collectUnsafeUrls(container: HTMLElement): string[] {
   const found: string[] = []
   for (const node of container.querySelectorAll(
-    '[href],[src],[xlink\\:href]',
+    '[href],[src],[xlink\\:href],[srcset]',
   )) {
     for (const name of ['href', 'src', 'xlink:href']) {
-      const value = (node.getAttribute(name) ?? '').trim().toLowerCase()
-      if (!value) continue
-      if (value.startsWith('javascript:') || value.startsWith('vbscript:')) {
+      const value = node.getAttribute(name) ?? ''
+      if (value && isUnsafeUrl(value)) {
         found.push(`${node.tagName.toLowerCase()}[${name}]`)
       }
-      if (
-        value.startsWith('data:') &&
-        !/^data:image\/(png|jpe?g|gif|webp|avif);/.test(value)
-      ) {
-        found.push(`${node.tagName.toLowerCase()}[${name}]`)
+    }
+    const srcset = node.getAttribute('srcset') ?? ''
+    // A srcset candidate is a URL followed by an optional descriptor; data:
+    // URLs may contain commas, so only the start of each candidate counts.
+    if (/(^|,)\s*(javascript|vbscript|data):/i.test(srcset)) {
+      const candidates = srcset.split(/,\s*(?=[a-z]+:|\/|\.)/i)
+      if (candidates.some((candidate) => isUnsafeUrl(candidate.trim()))) {
+        found.push(`${node.tagName.toLowerCase()}[srcset]`)
       }
     }
   }
@@ -190,6 +218,50 @@ const xssCases: Array<[string, string]> = [
   ['video onerror', '<video src="x" onerror="window.__xss = 1"></video>'],
   ['template', '<template><script>window.__xss = 1</script></template>'],
   ['dialog', '<dialog open>Re-enter your API key</dialog>'],
+  // Scheme obfuscation: entities, tabs, newlines, control characters.
+  ['tab-split javascript', '<a href="java&#x09;script:alert(1)">x</a>'],
+  ['newline-split javascript', '<a href="jav&#x0A;ascript:alert(1)">x</a>'],
+  ['control-prefixed javascript', '<a href="&#x01;javascript:alert(1)">x</a>'],
+  [
+    'named-entity colon javascript',
+    '<a href="javascript&colon;alert(1)">x</a>',
+  ],
+  ['raw anchor vbscript', '<a href="vbscript:msgbox(1)">x</a>'],
+  ['markdown link vbscript', '[x](vbscript:msgbox(1))'],
+  [
+    'markdown reference link javascript',
+    '[x][r]\n\n[r]: javascript:window.__xss=1',
+  ],
+  // A second image sink outside the img element.
+  [
+    'picture source svg data srcset',
+    '<picture><source srcset="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="><img src="https://example.com/x.png" alt="x"></picture>',
+  ],
+]
+
+/**
+ * mxssCases are mutation XSS payloads that broke string-based sanitizers.
+ * React builds DOM nodes from the sanitized tree, so nothing is re-parsed.
+ * Unclosed raw-text elements may swallow the rest of the answer, so only the
+ * absence of active content is asserted for them.
+ */
+const mxssCases: Array<[string, string]> = [
+  [
+    'mxss svg style break-out',
+    '<svg><p><style><img src=x onerror="window.__xss = 1"></style></p></svg>',
+  ],
+  [
+    'mxss math mglyph style',
+    '<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;img src=1 onerror=alert(1)&gt;">',
+  ],
+  [
+    'mxss noscript title',
+    '<noscript><p title="</noscript><img src=x onerror=alert(1)>"></noscript>',
+  ],
+  [
+    'mxss nested form math',
+    '<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>',
+  ],
 ]
 
 afterEach(() => {
@@ -211,6 +283,14 @@ describe('Markdown untrusted HTML sanitization', () => {
     expect(container.textContent).toContain('Thanks.')
   })
 
+  it.each(mxssCases)('leaves no active content for %s', (_name, payload) => {
+    const { container } = render(<Markdown>{payload}</Markdown>)
+
+    expect(collectActive(container)).toEqual([])
+    expect(collectUnsafeAttributes(container)).toEqual([])
+    expect(collectUnsafeUrls(container)).toEqual([])
+  })
+
   it('prefixes raw element ids so they cannot clobber page globals', () => {
     const { container } = render(
       <Markdown>{'<div id="root" name="config">x</div>'}</Markdown>,
@@ -218,6 +298,41 @@ describe('Markdown untrusted HTML sanitization', () => {
     expect(container.querySelector('#root')).toBeNull()
     expect(container.querySelector('[name="config"]')).toBeNull()
     expect(container.textContent).toContain('x')
+  })
+
+  it('renders picture fallbacks only through the img sink', () => {
+    const { container } = render(
+      <Markdown>
+        {
+          '<picture><source media="(prefers-color-scheme: dark)" srcset="https://evil.example/track.png"><img src="https://example.com/light.png" alt="logo"></picture>'
+        }
+      </Markdown>,
+    )
+    expect(container.querySelector('source, [srcset]')).toBeNull()
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toBe('https://example.com/light.png')
+    expect(img?.getAttribute('alt')).toBe('logo')
+  })
+
+  it('keeps KaTeX commands that need trust inert', () => {
+    const { container } = render(
+      <Markdown>
+        {[
+          '$\\href{javascript:window.__xss=1}{x}$',
+          '$\\url{https://evil.example/u}$',
+          '$\\includegraphics{https://evil.example/x.png}$',
+          '$\\htmlStyle{position:fixed;inset:0}{x}$',
+          '$\\htmlId{root}{x}$',
+        ].join('\n\n')}
+      </Markdown>,
+    )
+    expect(container.querySelectorAll('.katex').length).toBe(5)
+    expect(container.querySelector('.katex a, .katex img')).toBeNull()
+    expect(container.querySelector('#root')).toBeNull()
+    for (const node of container.querySelectorAll('[style]')) {
+      expect(node.getAttribute('style') ?? '').not.toMatch(/position|inset/)
+    }
+    expect(container.innerHTML).not.toContain('evil.example/x.png"')
   })
 
   it('drops raw class names that could reuse app styling for overlays', () => {
