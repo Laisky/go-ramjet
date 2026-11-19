@@ -31,10 +31,12 @@ type fakeUploadClient struct {
 	keep      bool
 	consumed  int64
 	received  bytes.Buffer
+	opts      minio.PutObjectOptions // options of the last PutObject call
 }
 
 // PutObject reads from r according to readLimit and returns the configured putErr.
-func (f *fakeUploadClient) PutObject(_ context.Context, _, _ string, r io.Reader, _ int64, _ minio.PutObjectOptions) (minio.UploadInfo, error) {
+func (f *fakeUploadClient) PutObject(_ context.Context, _, _ string, r io.Reader, _ int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	f.opts = opts
 	src := r
 	if f.readLimit >= 0 {
 		src = io.LimitReader(r, f.readLimit)
@@ -186,6 +188,27 @@ func TestStreamBackupToS3Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, payload, cli.received.Bytes())
+}
+
+// TestStreamBackupToS3BoundsUploadPartBuffer verifies the streaming upload states a
+// part size. The dump size is unknown, and without a part size minio-go sizes each
+// part for a 5 TiB object and allocates that part buffer (about 528 MiB) up front,
+// even for a tiny database. The stated size must still allow a large dump.
+func TestStreamBackupToS3BoundsUploadPartBuffer(t *testing.T) {
+	cli := &fakeUploadClient{readLimit: -1}
+	stubStreamPipeline(t, cli, func(_ context.Context, _ cfgDB, w io.Writer) error {
+		_, err := w.Write([]byte("tiny dump"))
+		return errors.Wrap(err, "write payload")
+	})
+
+	require.NoError(t, runWithGuard(t, "streamBackupToS3", func() error {
+		return streamBackupToS3(context.Background(), cfgDB{Database: "appdb"}, cfgS3{Bucket: "bucket"}, "appdb-20261119.gz")
+	}))
+
+	parts, partSize, _, err := minio.OptimalPartInfo(-1, cli.opts.PartSize)
+	require.NoError(t, err)
+	require.LessOrEqual(t, partSize, int64(64<<20), "each streaming backup allocates a part buffer of this size")
+	require.GreaterOrEqual(t, int64(parts)*partSize, int64(500<<30), "the part size must still allow a 500 GiB dump")
 }
 
 // stubPgDump makes dumpAndGzipToWriter run script under sh instead of pg_dump. The

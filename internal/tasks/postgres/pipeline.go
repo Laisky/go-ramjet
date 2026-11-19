@@ -20,6 +20,13 @@ import (
 // once the streaming upload has returned and nothing reads the pipe any more.
 var errStreamUploadReturned = errors.New("s3 upload returned before the dump stream was fully consumed")
 
+// streamBackupPartSize is the multipart part size of a streaming backup upload.
+// The dump size is unknown, and without a part size minio-go sizes parts for a
+// 5 TiB object and allocates one such part buffer (about 528 MiB) per upload, even
+// for a tiny database. 64 MiB parts bound that buffer while still allowing
+// 10000 x 64 MiB = 625 GiB of compressed dump.
+const streamBackupPartSize = 64 << 20
+
 // pgDumpCommand builds the pg_dump command; it is a package variable so tests can
 // substitute a fake process without a PostgreSQL installation.
 var pgDumpCommand = exec.CommandContext
@@ -161,11 +168,12 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 		errCh <- err
 	}()
 
-	// Size -1 enables streaming multipart upload
+	// Size -1 enables streaming multipart upload; PartSize bounds its part buffer.
 	logger.Info("s3 put (stream)", zap.String("bucket", s.Bucket), zap.String("key", key))
 	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, pr, -1, minio.PutObjectOptions{
 		ContentType:     "application/gzip",
 		ContentEncoding: "gzip",
+		PartSize:        streamBackupPartSize,
 	}, s3.DefaultVersionsToKeep)
 
 	// Nothing reads the pipe after the upload returns. Closing the read side makes
