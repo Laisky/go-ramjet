@@ -7,11 +7,11 @@ import { useMcpSync } from '../use-mcp-sync'
 /**
  * stubMcpServer stubs fetch with an MCP server that lists one tool. Like real
  * fetch, it rejects a request whose signal is aborted, and only counts the
- * requests it actually receives. The initialize request is held until the
+ * requests it actually receives. Every initialize request is held until the
  * returned release function is called.
  */
 function stubMcpServer() {
-  let releaseInitialize: () => void = () => undefined
+  const heldInitializes: Array<() => void> = []
   const received: string[] = []
   const fetchMock = vi.fn(
     async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -21,7 +21,7 @@ function stubMcpServer() {
       received.push(method)
       if (method === 'initialize') {
         await new Promise<void>((resolve, reject) => {
-          releaseInitialize = resolve
+          heldInitializes.push(resolve)
           signal?.addEventListener('abort', () => reject(signal.reason))
         })
         return Response.json({ jsonrpc: '2.0', id: 0, result: {} })
@@ -39,7 +39,10 @@ function stubMcpServer() {
     },
   )
   vi.stubGlobal('fetch', fetchMock)
-  return { received, release: () => releaseInitialize() }
+  return {
+    received,
+    release: () => heldInitializes.splice(0).forEach((resolve) => resolve()),
+  }
 }
 
 describe('useMcpSync', () => {
@@ -65,6 +68,25 @@ describe('useMcpSync', () => {
     const [{ mcp_servers }] = updateConfig.mock.calls[0]
     expect(mcp_servers[0].tools.map((t: { name: string }) => t.name)).toEqual([
       'web_search',
+    ])
+  })
+
+  it('syncs once under StrictMode, whose remount aborts the first sync', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const server = stubMcpServer()
+    const updateConfig = vi.fn()
+    renderHook(() => useMcpSync(DefaultSessionConfig, false, updateConfig), {
+      reactStrictMode: true,
+    })
+
+    await vi.waitFor(() => expect(server.received).toContain('initialize'))
+    server.release()
+
+    await vi.waitFor(() => expect(updateConfig).toHaveBeenCalledTimes(1))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(updateConfig).toHaveBeenCalledTimes(1)
+    expect(server.received.filter((m) => m === 'tools/list')).toEqual([
+      'tools/list',
     ])
   })
 
