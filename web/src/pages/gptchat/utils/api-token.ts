@@ -130,14 +130,29 @@ export function isSameApiEndpoint(
 }
 
 /**
+ * API_BASE_SHAPE requires the raw text of an API base to start with an
+ * http(s) scheme, two slashes and a plain authority, followed by a path or
+ * the end. Browsers repair forms such as `https:host`, `https:\\host`,
+ * `https://@host` or `https://host\\@x` into a URL that Go's url.Parse
+ * (and so the server) refuses or reads differently, so the raw text is
+ * checked before parsing.
+ */
+const API_BASE_SHAPE = /^https?:\/\/[^/?#\\@%\s]+(?:\/|$)/i
+
+/**
  * isValidApiBase reports whether apiBase is an API base the server accepts
- * and realtime audio can connect to: an absolute http(s) URL with a host and
- * without user info, query, or fragment.
+ * and realtime audio can connect to: an absolute http(s) URL with a plain
+ * host and without user info, query, fragment, backslashes, or whitespace
+ * and control characters.
  */
 export function isValidApiBase(apiBase?: string | null): boolean {
+  const raw = apiBase?.trim() || ''
+  if (!API_BASE_SHAPE.test(raw) || /[\\\s\p{Cc}]/u.test(raw)) {
+    return false
+  }
   let url: URL
   try {
-    url = new URL(apiBase?.trim() || '')
+    url = new URL(raw)
   } catch {
     return false
   }

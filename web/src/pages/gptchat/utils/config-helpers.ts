@@ -428,7 +428,10 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
       target.defaultValue,
     )
     if (coercedValue === currentValue) {
+      // Consumed all the same: a credential must not stay in the address bar
+      // or history just because it matches what is stored.
       searchParams.delete(rawKey)
+      strippedParams = true
       return
     }
 

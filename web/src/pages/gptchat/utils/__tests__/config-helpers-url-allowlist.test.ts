@@ -127,6 +127,18 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       ['a query string', 'https://provider-a.example/v1?x=1'],
       ['a fragment', 'https://provider-a.example/v1#x'],
       ['no URL at all', 'provider-a'],
+      // Browsers repair these into a URL, but Go's url.Parse (and so the
+      // server) refuses or reads them differently.
+      ['no slashes', 'https:evil.example'],
+      ['backslashes', 'https:\\\\evil.example\\v1'],
+      ['an empty user', 'https://@evil.example'],
+      ['an empty user and password', 'https://:@provider-a.example'],
+      [
+        'a backslash before userinfo',
+        'https://provider-a.example\\@evil.example',
+      ],
+      ['a tab in the host', 'https://ev\til.example'],
+      ['a percent-encoded host', 'https://evil%2Eexample'],
     ])('rejects an api_base with %s', (_name, value) => {
       const { config, mutated } = applyWithSearch(
         `?api_base=${encodeURIComponent(value)}`,
@@ -254,6 +266,30 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       expect(config.sync_key).toBe('sync-original')
       expect(config.mcp_servers).toEqual(DefaultSessionConfig.mcp_servers)
       expect(config.updated_at).toBe(DefaultSessionConfig.updated_at)
+      expect(window.location.search).toBe('?foo=bar')
+    })
+
+    it.each([
+      'https://provider-b.example/v1',
+      'https://provider-b.example:8443/openai/v1',
+      'http://[2001:db8::1]:3000',
+      'HTTPS://Provider-B.Example/V1/',
+      'https://provider-b.example/',
+    ])('accepts the API base %s', (value) => {
+      const { config, mutated } = applyWithSearch(
+        `?api_base=${encodeURIComponent(value)}`,
+      )
+      expect(config.api_base).toBe(value)
+      expect(mutated).toBe(true)
+      expect(window.location.search).toBe('')
+    })
+
+    it('strips a credential param that equals the stored value', () => {
+      const { config, mutated } = applyWithSearch(
+        '?api_key=sk-original&foo=bar',
+      )
+      expect(mutated).toBe(false)
+      expect(config.api_token).toBe('sk-original')
       expect(window.location.search).toBe('?foo=bar')
     })
 
