@@ -1,10 +1,15 @@
 package http
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v6"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
@@ -43,26 +48,6 @@ func requireNotCached(t *testing.T, req *FrontendReq) {
 	require.NoError(t, err)
 	_, ok := llmRespCache.Load(key)
 	require.False(t, ok, "answer cached although caching is disallowed for this request")
-}
-
-// TestSaveLLMConservationRespectsCachePolicy verifies the conservation audit never
-// caches answers of requests the chat read path refuses to cache: requests with MCP
-// credentials (the answer may expose data fetched with them) and any request while
-// transparent memory is enabled (answers are personalized).
-func TestSaveLLMConservationRespectsCachePolicy(t *testing.T) {
-	t.Run("mcp api key", func(t *testing.T) {
-		isolateResponseCache(t, false)
-		req := cacheTestRequest("sk-synthetic-mcp-secret")
-		saveLLMConservation(conservationLogger(), req, "answer derived from private MCP data", "")
-		requireNotCached(t, req)
-	})
-
-	t.Run("memory enabled", func(t *testing.T) {
-		isolateResponseCache(t, true)
-		req := cacheTestRequest("")
-		saveLLMConservation(conservationLogger(), req, "personalized answer", "")
-		requireNotCached(t, req)
-	})
 }
 
 // TestResponseCacheAllowed pins the single cache policy shared by every cache read
@@ -116,4 +101,75 @@ func TestStoreAndLoadCachedResponseShareThePolicy(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
+}
+
+// TestSaveLlmConservationHandlerCannotSeedChatAnswers verifies that the conservation
+// audit endpoint, which accepts any caller-supplied answer without authentication,
+// never writes llmRespCache, so it cannot plant an answer that the chat endpoint
+// serves to another caller instead of asking the upstream.
+func TestSaveLlmConservationHandlerCannotSeedChatAnswers(t *testing.T) {
+	isolateResponsesChatGlobals(t)
+	gin.SetMode(gin.TestMode)
+
+	var upstreamCalls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalls.Add(1)
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"genuine answer","output":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	originalCli := httpcli
+	httpcli = upstream.Client()
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		API:                                     strings.TrimRight(upstream.URL, "/"),
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	const prompt = `"model":"gpt-4.1","max_tokens":50,"messages":[{"role":"user","content":"hello"}]`
+
+	// An anonymous caller records a conservation carrying an answer of its choice.
+	auditRec := httptest.NewRecorder()
+	auditCtx, _ := gin.CreateTestContext(auditRec)
+	auditCtx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/audit/conservation",
+		strings.NewReader(`{`+prompt+`,"response":"planted answer"}`))
+	auditCtx.Request.Header.Set("content-type", "application/json")
+	SaveLlmConservationHandler(auditCtx)
+	require.Less(t, auditRec.Code, http.StatusBadRequest)
+	requireNotCached(t, &FrontendReq{
+		Model:     "gpt-4.1",
+		MaxTokens: 50,
+		Messages: []FrontendReqMessage{{
+			Role:    OpenaiMessageRoleUser,
+			Content: FrontendReqMessageContent{StringContent: "hello"},
+		}},
+	})
+
+	// Another user then asks the same question through the chat endpoint.
+	user := &config.UserConfig{
+		Token:         "laisky-abcdefghijklmno",
+		UserName:      "victim",
+		APIBase:       strings.TrimRight(upstream.URL, "/"),
+		OpenaiToken:   "sk-user",
+		AllowedModels: []string{"*"},
+	}
+	require.NoError(t, user.Valid())
+
+	chatRec := httptest.NewRecorder()
+	chatCtx, _ := gin.CreateTestContext(chatRec)
+	chatCtx.Set(ctxKeyUser, user)
+	chatCtx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api",
+		strings.NewReader(`{"stream":false,`+prompt+`}`))
+	chatCtx.Request.Header.Set("content-type", "application/json")
+	chatCtx.Request.Header.Set("authorization", "Bearer "+user.Token)
+
+	require.NoError(t, sendChatWithResponsesToolLoop(chatCtx))
+	require.NotContains(t, chatRec.Body.String(), "planted answer", "chat served an answer planted through the audit endpoint")
+	require.Contains(t, chatRec.Body.String(), "genuine answer")
+	require.Equal(t, int32(1), upstreamCalls.Load())
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	gmw "github.com/Laisky/gin-middlewares/v7"
 	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -15,7 +14,13 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
-// SaveLlmConservationHandler save llm conservation
+// SaveLlmConservationHandler records a caller-reported conversation in the audit
+// collection.
+//
+// The answer is caller-supplied and the endpoint is unauthenticated, so it is
+// stored for audit only and never put in llmRespCache: only the chat endpoint,
+// which produced its answer itself, caches answers. The audit write runs in the
+// background; ctx is the gin context of the request.
 func SaveLlmConservationHandler(ctx *gin.Context) {
 	req := new(LLMConservationReq)
 	if err := ctx.BindJSON(req); web.AbortErr(ctx, err) {
@@ -25,10 +30,6 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 	freq := new(FrontendReq)
 	if err := copier.Copy(freq, req); web.AbortErr(ctx, err) {
 		return
-	}
-
-	if err := storeCachedResponse(freq, req.Response); err != nil {
-		gmw.GetLogger(ctx).Warn("cache conservation response", zap.Error(err))
 	}
 
 	go saveLLMConservation(conservationLogger(), freq, req.Response, req.Reasoning)
@@ -43,11 +44,12 @@ func conservationLogger() glog.Logger {
 }
 
 // saveLLMConservation persists the exchange to the openai conservations collection.
-// It does not touch llmRespCache; callers cache through storeCachedResponse, which
-// applies the shared responseCacheAllowed policy. logger receives all diagnostics
-// and must be resolved by the caller before the goroutine is spawned; req is the
-// frontend request, respContent the final answer, and reasoning the optional
-// reasoning text. It returns nothing; every failure is logged.
+// It does not touch llmRespCache; the chat endpoint caches its own answers through
+// storeCachedResponse, which applies the shared responseCacheAllowed policy.
+// logger receives all diagnostics and must be resolved by the caller before the
+// goroutine is spawned; req is the frontend request, respContent the final answer,
+// and reasoning the optional reasoning text. It returns nothing; every failure is
+// logged.
 func saveLLMConservation(logger glog.Logger, req *FrontendReq, respContent string, reasoning string) {
 	if req == nil {
 		logger.Debug("skip saving conservation for empty request")
