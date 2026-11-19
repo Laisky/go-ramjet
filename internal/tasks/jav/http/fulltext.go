@@ -4,6 +4,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"sync"
 	"time"
 
@@ -24,6 +25,23 @@ import (
 
 var searchCache = gutils.NewExpCache[[]*dto.MovieResponse](context.Background(), time.Hour)
 
+// wordFilter builds the fulltext filter for the user-supplied search query.
+//
+// The query is a literal, case-insensitive substring: regexp.QuoteMeta escapes
+// every regular-expression metacharacter so a caller cannot inject a pattern
+// (e.g. `.*` to dump the collection, or a catastrophic-backtracking pattern to
+// stall the database). Go's escaping uses only `\` + punctuation, which
+// MongoDB's PCRE engine also reads as literal characters.
+//
+// Parameters:
+//   - query: raw `q` parameter from the request.
+//
+// Returns:
+//   - bson.M: filter matching fulltext documents whose word contains query.
+func wordFilter(query string) bson.M {
+	return bson.M{"word": bson.M{"$regex": regexp.QuoteMeta(query), "$options": "i"}}
+}
+
 // Search is a http handler to search movies
 func Search(ctx *gin.Context) {
 	query := ctx.Query("q")
@@ -37,7 +55,7 @@ func Search(ctx *gin.Context) {
 	var docus []model.Fulltext
 	cur, err := model.GetColFulltext().
 		Find(gmw.Ctx(ctx),
-			bson.M{"word": bson.M{"$regex": query, "$options": "i"}},
+			wordFilter(query),
 			options.Find().SetLimit(30),
 		)
 	if web.AbortErr(ctx, errors.Wrap(err, "search fulltext")) {

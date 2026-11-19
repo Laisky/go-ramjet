@@ -28,6 +28,17 @@ func SetupDB(ctx context.Context) (err error) {
 	return nil
 }
 
+// SetDB installs db as the package-level jav database handle.
+//
+// SetupDB is the normal way to connect; SetDB lets callers (and tests that use
+// a mock deployment) provide an already constructed handle.
+//
+// Parameters:
+//   - db: the database handle every Get*Col accessor resolves collections from.
+func SetDB(db mongo.DB) {
+	javDB = db
+}
+
 // GetDB get db
 func GetDB() mongo.DB {
 	return javDB
