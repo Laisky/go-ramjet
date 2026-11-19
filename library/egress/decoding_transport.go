@@ -8,9 +8,11 @@ import (
 	"github.com/Laisky/errors/v2"
 )
 
-// DefaultMaxDecodedBytes bounds a body ContentDecodingTransport decodes when its
-// MaxDecodedBytes is zero. gzip expands about 1000:1, so without a bound a
-// caller-chosen origin could turn 16 MiB on the wire into 16 GiB in memory.
+// DefaultMaxDecodedBytes bounds a 2xx body ContentDecodingTransport decodes
+// when its MaxDecodedBytes is zero. Deflate expands up to about 1000:1 per
+// layer and DecodeContent removes two stacked layers, so a few kilobytes on the
+// wire can decode to hundreds of MiB (256 MiB of zeros double-gzips to under
+// 3 KB, over 100,000:1); only an absolute bound on decoded bytes holds.
 //
 // The largest legitimate decoded bodies on these clients are non-streaming
 // image-generation answers: at most 8 images (the handler's clamp), each a PNG
@@ -19,6 +21,12 @@ import (
 // event line at 20 MiB and carry far less in total. 256 MiB leaves three times
 // the largest of those while capping a gzip bomb at a fixed size.
 const DefaultMaxDecodedBytes = 256 << 20
+
+// DefaultMaxDecodedErrorBytes bounds a decoded body of an answer outside 2xx.
+// Error paths read the whole body and copy it into logs and error documents,
+// several times over, while legitimate error documents are a few KiB; 1 MiB
+// keeps every real one and stops an expanded body from multiplying in memory.
+const DefaultMaxDecodedErrorBytes = 1 << 20
 
 // DecodedSizeError reports a decoded body that grew past its bound. It is
 // returned by Read, after the bytes within the bound, so a caller can tell a
@@ -49,9 +57,11 @@ func (e *DecodedSizeError) Error() string {
 // up to two stacked gzip layers are removed, while a coding DecodeContent
 // refuses is passed through unchanged with its header. It also bounds every
 // body it decodes to MaxDecodedBytes (DefaultMaxDecodedBytes when zero): Read
-// fails with *DecodedSizeError past the bound. The bound counts bytes as they
-// are read and never buffers, so streams stay incremental. Bodies it does not
-// decode are not bounded here; callers bound them as before.
+// fails with *DecodedSizeError past the bound. An answer outside 2xx is bounded
+// to DefaultMaxDecodedErrorBytes, or MaxDecodedBytes when that is smaller. The
+// bound counts bytes as they are read and never buffers, so streams stay
+// incremental. Bodies it does not decode are not bounded here; callers bound
+// them as before.
 type ContentDecodingTransport struct {
 	Base http.RoundTripper
 	// MaxDecodedBytes bounds each decoded body; zero means DefaultMaxDecodedBytes.
@@ -84,6 +94,9 @@ func (t ContentDecodingTransport) RoundTrip(request *http.Request) (*http.Respon
 		return response, nil
 	}
 	limit := t.decodedLimit()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		limit = min(limit, DefaultMaxDecodedErrorBytes)
+	}
 	response.Body = &boundedBody{
 		ReadCloser: &decodedBody{source: response.Body, layers: layers},
 		remaining:  limit,
@@ -129,11 +142,12 @@ type boundedBody struct {
 
 // Read returns the next bytes within the bound. It reads one byte past the
 // bound at most, to tell a body that ends exactly at the bound from a longer one.
+// The comparison avoids remaining+1, which overflows for a math.MaxInt64 bound.
 func (b *boundedBody) Read(p []byte) (int, error) {
 	if b.remaining < 0 {
 		return 0, errors.WithStack(&DecodedSizeError{Limit: b.limit})
 	}
-	if int64(len(p)) > b.remaining+1 {
+	if int64(len(p)) > b.remaining {
 		p = p[:b.remaining+1]
 	}
 	n, err := b.ReadCloser.Read(p)

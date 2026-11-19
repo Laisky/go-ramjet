@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -214,7 +215,7 @@ func TestContentDecodingTransportBoundsDecodedSize(t *testing.T) {
 	var sizeErr *DecodedSizeError
 	require.ErrorAs(t, err, &sizeErr)
 	require.EqualValues(t, limit, sizeErr.Limit)
-	require.LessOrEqual(t, len(body), limit)
+	require.Len(t, body, limit, "the bytes within the bound are delivered before the error")
 
 	body, err = read(t, ContentDecodingTransport{Base: respond("gzip", bytes.NewReader(gzipLayers(t, make([]byte, limit), 1))), MaxDecodedBytes: limit})
 	require.NoError(t, err)
@@ -284,4 +285,55 @@ func TestContentDecodingClientStreamsWithoutBuffering(t *testing.T) {
 	rest, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	require.Equal(t, "\ndata: second\n\n", string(rest))
+}
+
+// TestContentDecodingTransportBoundsDecodedErrorBodies gives answers outside
+// 2xx a small decoded bound: error paths read the whole body and copy it into
+// logs and error documents, and two stacked gzip layers expand by more than
+// 100,000:1, so a few kilobytes must not become hundreds of MiB there.
+func TestContentDecodingTransportBoundsDecodedErrorBodies(t *testing.T) {
+	respond := func(status, size int) *recordingRoundTripper {
+		wire := gzipLayers(t, make([]byte, size), 2)
+		return &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+			return &http.Response{StatusCode: status, ContentLength: int64(len(wire)), Request: request,
+				Header: http.Header{"Content-Encoding": []string{"gzip, gzip"}}, Body: io.NopCloser(bytes.NewReader(wire))}
+		}}
+	}
+	read := func(t *testing.T, base http.RoundTripper) ([]byte, error) {
+		t.Helper()
+		response, err := ContentDecodingTransport{Base: base}.RoundTrip(httptest.NewRequest(http.MethodGet, "http://public.example/", nil))
+		require.NoError(t, err)
+		body, readErr := io.ReadAll(response.Body)
+		require.NoError(t, response.Body.Close())
+		return body, readErr
+	}
+	for _, status := range []int{http.StatusBadRequest, http.StatusInternalServerError, http.StatusFound} {
+		body, err := read(t, respond(status, DefaultMaxDecodedErrorBytes+1))
+		var sizeErr *DecodedSizeError
+		require.ErrorAs(t, err, &sizeErr, "status %d", status)
+		require.EqualValues(t, DefaultMaxDecodedErrorBytes, sizeErr.Limit)
+		require.Len(t, body, DefaultMaxDecodedErrorBytes)
+
+		body, err = read(t, respond(status, DefaultMaxDecodedErrorBytes))
+		require.NoError(t, err, "status %d", status)
+		require.Len(t, body, DefaultMaxDecodedErrorBytes)
+	}
+	body, err := read(t, respond(http.StatusOK, DefaultMaxDecodedErrorBytes+1))
+	require.NoError(t, err, "a 2xx body keeps the larger bound")
+	require.Len(t, body, DefaultMaxDecodedErrorBytes+1)
+}
+
+// TestContentDecodingTransportAcceptsTheLargestBound keeps the bound from
+// overflowing: math.MaxInt64 means effectively unbounded, not a panic.
+func TestContentDecodingTransportAcceptsTheLargestBound(t *testing.T) {
+	wire := gzipLayers(t, []byte("content"), 1)
+	base := &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+		return encodedResponse(request, "gzip", wire)
+	}}
+	transport := ContentDecodingTransport{Base: base, MaxDecodedBytes: math.MaxInt64}
+	response, err := transport.RoundTrip(httptest.NewRequest(http.MethodGet, "http://public.example/", nil))
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()))
+	require.Equal(t, "content", string(body))
 }
