@@ -65,7 +65,7 @@ func GetEngine(ctx context.Context, conf *config.OpenAI, user *config.UserConfig
 
 func getEngine(ctx context.Context, conf *config.OpenAI, user *config.UserConfig, caller files.ToolCaller) (memory.Engine, error) {
 	if err := admitMemoryLLMBase(ctx, conf, user); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "check memory model destination")
 	}
 	cacheKey := buildEngineCacheKey(conf, user)
 
