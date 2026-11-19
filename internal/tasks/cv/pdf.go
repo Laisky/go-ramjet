@@ -174,9 +174,13 @@ type PDFRenderer interface {
 }
 
 // PDFService renders CV markdown into PDF and uploads it to object storage.
+//
+// Concurrent requests for the same document share one render (and one upload), and renders are bounded
+// process-wide, so public triggers cannot start one headless Chrome per request.
 type PDFService struct {
 	renderer PDFRenderer
 	store    *S3PDFStore
+	renders  *pdfRenderCoordinator
 }
 
 // NewPDFService creates a PDFService using the provided renderer and store.
@@ -192,10 +196,14 @@ func NewPDFService(renderer PDFRenderer, store *S3PDFStore) (*PDFService, error)
 	return &PDFService{
 		renderer: renderer,
 		store:    store,
+		renders:  defaultPDFRenderCoordinator,
 	}, nil
 }
 
 // Render converts markdown content into a PDF document and returns the PDF bytes or an error.
+//
+// Callers rendering the same content concurrently share one render; a caller that cancels stops waiting
+// without canceling the render for the others.
 func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context done")
@@ -204,22 +212,38 @@ func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error)
 		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
 	}
 
-	return s.renderer.Render(ctx, content)
+	return s.renders.share(ctx, pdfDocumentKey("render", content), func(sharedCtx context.Context) ([]byte, error) {
+		return s.renders.withRenderSlot(sharedCtx, func(slotCtx context.Context) ([]byte, error) {
+			pdfBytes, err := s.renderer.Render(slotCtx, content)
+			if err != nil {
+				return nil, errors.Wrap(err, "render pdf")
+			}
+			return pdfBytes, nil
+		})
+	})
 }
 
 // RenderAndStore renders markdown into a PDF and persists it to object storage.
+//
+// Callers storing the same content concurrently share one render and one upload, which completes even when
+// the caller that started it cancels.
 func (s *PDFService) RenderAndStore(ctx context.Context, content string) error {
 	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "context done")
 	}
 
-	pdfBytes, err := s.Render(ctx, content)
+	_, err := s.renders.share(ctx, pdfDocumentKey("store", content), func(sharedCtx context.Context) ([]byte, error) {
+		pdfBytes, err := s.Render(sharedCtx, content)
+		if err != nil {
+			return nil, errors.Wrap(err, "render cv pdf")
+		}
+		if err := s.store.Save(sharedCtx, pdfBytes); err != nil {
+			return nil, errors.Wrap(err, "save cv pdf")
+		}
+		return nil, nil
+	})
 	if err != nil {
-		return errors.Wrap(err, "render cv pdf")
-	}
-
-	if err := s.store.Save(ctx, pdfBytes); err != nil {
-		return errors.Wrap(err, "save cv pdf")
+		return errors.Wrap(err, "render and store cv pdf")
 	}
 
 	return nil
