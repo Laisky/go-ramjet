@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -35,6 +37,9 @@ type PDFService struct {
 	writeMu        sync.Mutex
 	latestWriteKey string
 	latestWriteGen uint64
+
+	// refreshRetryAt is the Unix time in nanoseconds before which public downloads start no new refresh.
+	refreshRetryAt atomic.Int64
 
 	// uploadLock serializes the check-then-upload step of writes, honoring each write's context while it waits.
 	// It serializes uploads within this process only; replicas sharing one bucket would also need a conditional
@@ -136,19 +141,34 @@ func (s *PDFService) RenderAndStore(ctx context.Context, content string) (PDFSto
 // pdfRefreshKey identifies the one background refresh of the latest saved CV that may run at a time.
 const pdfRefreshKey = "refresh:latest"
 
+// pdfRefreshFailureBackoff is how long public downloads stop starting refreshes after a refresh failed.
+const pdfRefreshFailureBackoff = 15 * time.Second
+
 // refreshLatest stores the PDF of the latest saved CV in the background and returns without waiting.
+//
+// ctx only supplies the logger for the shared work; its cancellation and deadline are ignored, because the refresh
+// must outlive the download that triggered it and is bounded by the shared flight timeout instead.
 //
 // Concurrent refreshes share one read of the latest content and the render and upload that follow, until that work
 // ends, so a burst of public downloads of a missing PDF costs one content read. The store work is joined like any
-// other write, so a refresh and a save of the same content share one render. A failure to read the content is
-// logged once by the refresh; a render or upload failure is reported once by the store work.
+// other write, so a refresh and a save of the same content share one render. After a refresh fails, downloads start
+// no new refresh for pdfRefreshFailureBackoff, so a lasting outage costs one read and one warning per window. A
+// failure to read the content is logged once by the refresh; a render or upload failure is reported once by the
+// store work.
 func (s *PDFService) refreshLatest(ctx context.Context) {
+	if time.Now().UnixNano() < s.refreshRetryAt.Load() {
+		return
+	}
 	s.flights.join(ctx, pdfRefreshKey, pdfWriteFlight, false, func(flightCtx context.Context) (pdfFlightValue, error) {
+		logger := gmw.GetLogger(flightCtx)
 		payload, err := s.content.Load(flightCtx)
 		if err != nil {
-			return pdfFlightValue{}, errors.Wrap(err, "load latest cv content for pdf refresh")
+			s.backOffRefresh()
+			logger.Warn("cv pdf async refresh load failed",
+				zap.Duration("retry_after", pdfRefreshFailureBackoff), zap.Error(err))
+			return pdfFlightValue{}, nil
 		}
-		gmw.GetLogger(flightCtx).Debug("cv pdf refresh started",
+		logger.Debug("cv pdf refresh started",
 			zap.Int("content_bytes", len(payload.Content)),
 			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 
@@ -158,10 +178,19 @@ func (s *PDFService) refreshLatest(ctx context.Context) {
 		// refresh does not wait as a caller, so the store work, bounded by its own timeout, reports its own outcome.
 		select {
 		case <-store.done:
+			// The store work's error is final once done is closed; it was reported by that work or its caller.
+			if store.err != nil {
+				s.backOffRefresh()
+			}
 		case <-flightCtx.Done():
 		}
 		return pdfFlightValue{}, nil
 	})
+}
+
+// backOffRefresh stops public downloads from starting a new refresh for pdfRefreshFailureBackoff.
+func (s *PDFService) backOffRefresh() {
+	s.refreshRetryAt.Store(time.Now().Add(pdfRefreshFailureBackoff).UnixNano())
 }
 
 // writeKey returns the flight key for storing content.

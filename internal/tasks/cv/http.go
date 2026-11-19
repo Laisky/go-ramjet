@@ -274,7 +274,7 @@ func (h *handler) downloadPDF(c *gin.Context) {
 		if errors.Is(err, ErrObjectNotFound) {
 			logger.Debug("cv pdf unavailable, trigger async refresh",
 				zap.String("cache_buster", cacheBuster))
-			h.triggerAsyncPDFRefresh(c, cacheBuster)
+			h.triggerAsyncPDFRefresh(c)
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -302,15 +302,14 @@ func (h *handler) downloadPDF(c *gin.Context) {
 }
 
 // triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background without blocking the request.
-// It takes the request context and cache buster string and returns no values. Concurrent refreshes share one
-// content read, render and upload, whose failure is logged once by the shared work.
-func (h *handler) triggerAsyncPDFRefresh(c *gin.Context, cacheBuster string) {
+// It takes the request context, whose logger the background work keeps, and returns no values. Concurrent refreshes
+// share one content read, render and upload, whose failure is logged once by the shared work.
+func (h *handler) triggerAsyncPDFRefresh(c *gin.Context) {
 	if h == nil || h.pdfService == nil || c == nil {
 		return
 	}
 
 	h.pdfService.refreshLatest(gmw.Ctx(c))
-	gmw.GetLogger(c).Debug("cv pdf async refresh requested", zap.String("cache_buster", cacheBuster))
 }
 
 // formatUpdatedAt formats updatedAt as RFC3339, returning an empty string when nil.
