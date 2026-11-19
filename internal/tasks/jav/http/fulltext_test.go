@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -185,3 +186,94 @@ func capturedWordFilter(mt *mtest.T, rawQuery string) bson.Raw {
 // ignored and JSON-looking values stay text), the field name and options are
 // constants, and the pattern is QuoteMeta(q), a literal. (Bytes MongoDB
 // refuses in a regex never get this far; see
+// TestSearchRejectsQueriesMongoDBRefuses.)
+func TestSearchQueryCannotInjectOperators(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	for _, tc := range []struct {
+		name     string
+		rawQuery string
+		wantQ    string
+	}{
+		{name: "bracket operator", rawQuery: "q[$ne]=x", wantQ: ""},
+		{name: "bracket where", rawQuery: "q[$where]=sleep(5000)", wantQ: ""},
+		{name: "json operator document", rawQuery: "q=" + url.QueryEscape(`{"$gt":""}`), wantQ: `{"$gt":""}`},
+		{name: "where literal", rawQuery: "q=" + url.QueryEscape(`$where`), wantQ: `$where`},
+		{name: "repeated parameter keeps the first", rawQuery: "q=tokyo&q=" + url.QueryEscape(`$expr`), wantQ: "tokyo"},
+		{name: "inline regex flags", rawQuery: "q=" + url.QueryEscape(`(?x)a #b`), wantQ: `(?x)a #b`},
+		{name: "pcre quoting", rawQuery: "q=" + url.QueryEscape(`\Q.*\E`), wantQ: `\Q.*\E`},
+	} {
+		mt.Run(tc.name, func(mt *mtest.T) {
+			filter := capturedWordFilter(mt, tc.rawQuery)
+
+			elems, err := filter.Elements()
+			require.NoError(mt, err)
+			require.Len(mt, elems, 1, "filter must only constrain word: %s", filter)
+			require.Equal(mt, "word", elems[0].Key())
+
+			word, ok := elems[0].Value().DocumentOK()
+			require.True(mt, ok, "word must hold an operator document we built: %s", filter)
+			wordElems, err := word.Elements()
+			require.NoError(mt, err)
+			require.Len(mt, wordElems, 2, "word must only carry $regex and $options: %s", word)
+
+			// bson.M encodes keys in random order, so look them up by name.
+			regexVal := word.Lookup("$regex")
+			pattern, ok := regexVal.StringValueOK()
+			require.True(mt, ok, "$regex must be a BSON string, got %s", regexVal.Type)
+			require.Equal(mt, regexp.QuoteMeta(tc.wantQ), pattern)
+
+			opts, ok := word.Lookup("$options").StringValueOK()
+			require.True(mt, ok, "$options must be a BSON string: %s", word)
+			require.Equal(mt, "i", opts)
+		})
+	}
+}
+
+// TestSearchRejectsQueriesMongoDBRefuses verifies queries that MongoDB's regex
+// engine refuses (a NUL byte, invalid UTF-8, or a pattern over its ~32 KiB
+// limit, all observed on MongoDB 8.0 by TestSearchIsLiteralOnRealMongoDB and
+// manual probes) are answered with 400 before any database round trip.
+// Before, each one reached MongoDB, failed there, and went through
+// web.AbortErr, which logs at ERROR: the level the alert pusher forwards. Any
+// anonymous caller could therefore raise alerts at will and use up the shared
+// alert rate limit, and the response echoed the server's error text. Queries
+// up to the bound, which already exceeds any plausible word, still search.
+func TestSearchRejectsQueriesMongoDBRefuses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	for _, tc := range []struct {
+		name string
+		q    string
+	}{
+		{name: "nul byte", q: "a\x00b"},
+		{name: "invalid utf-8", q: "\xff"},
+		{name: "over the length bound", q: strings.Repeat("a", maxSearchQueryBytes+1)},
+		{name: "multi-byte runes over the length bound", q: strings.Repeat("東", maxSearchQueryBytes/3+1)},
+	} {
+		mt.Run(tc.name, func(mt *mtest.T) {
+			useTestSearchCache(mt.T)
+			// The mock would answer an (unexpected) find with an empty result.
+			mt.AddMockResponses(mtest.CreateCursorResponse(0, "jav.fulltext", mtest.FirstBatch))
+			model.SetDB(mongotest.New(mt.Client, "jav"))
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodGet, "/jav/search?q="+url.QueryEscape(tc.q), nil)
+			Search(c)
+
+			require.Equal(mt, http.StatusBadRequest, w.Code, w.Body.String())
+			require.True(mt, mt.GetStartedEvent() == nil, "a refused query must not reach MongoDB")
+		})
+	}
+
+	mt.Run("query at the length bound still searches", func(mt *mtest.T) {
+		q := strings.Repeat("a", maxSearchQueryBytes)
+		filter := capturedWordFilter(mt, "q="+url.QueryEscape(q))
+		pattern, ok := filter.Lookup("word", "$regex").StringValueOK()
+		require.True(mt, ok)
+		require.Equal(mt, q, pattern)
+	})
+}

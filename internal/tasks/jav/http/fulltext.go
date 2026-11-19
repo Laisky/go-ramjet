@@ -5,8 +5,10 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -24,6 +26,12 @@ import (
 )
 
 var searchCache = gutils.NewExpCache[[]*dto.MovieResponse](context.Background(), time.Hour)
+
+// maxSearchQueryBytes bounds the `q` parameter. Search is a substring match,
+// so a query longer than every stored word can never match anything; the bound
+// sits far above any plausible word yet far below MongoDB's ~32 KiB regex
+// limit, and it also caps the size of each searchCache key.
+const maxSearchQueryBytes = 512
 
 // wordFilter builds the fulltext filter for the user-supplied search query.
 //
@@ -44,9 +52,38 @@ func wordFilter(query string) bson.M {
 	return bson.M{"word": bson.M{"$regex": regexp.QuoteMeta(query), "$options": "i"}}
 }
 
+// validateSearchQuery checks query before it reaches MongoDB.
+//
+// It rejects only queries MongoDB's regex engine refuses anyway (a NUL byte,
+// invalid UTF-8) or that are longer than maxSearchQueryBytes, so they are
+// answered as a client error instead of a database failure, which
+// web.AbortErr would log at the alerting ERROR level.
+//
+// Parameters:
+//   - query: raw `q` parameter from the request.
+//
+// Returns:
+//   - error: why query cannot be searched, or nil when it is acceptable.
+func validateSearchQuery(query string) error {
+	switch {
+	case len(query) > maxSearchQueryBytes:
+		return errors.Errorf("query must be at most %d bytes", maxSearchQueryBytes)
+	case !utf8.ValidString(query):
+		return errors.New("query must be valid UTF-8")
+	case strings.ContainsRune(query, 0):
+		return errors.New("query must not contain NUL")
+	default:
+		return nil
+	}
+}
+
 // Search is a http handler to search movies
 func Search(ctx *gin.Context) {
 	query := ctx.Query("q")
+	if err := validateSearchQuery(query); err != nil {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": err.Error()})
+		return
+	}
 
 	// search cache
 	if res, ok := searchCache.Load(query); ok {
