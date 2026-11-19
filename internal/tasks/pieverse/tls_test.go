@@ -451,3 +451,21 @@ func TestNewRootPoolRejectsDamagedBundle(t *testing.T) {
 	_, err := newRootPool(caFile)
 	require.NoError(t, err)
 }
+
+// TestCheckExplainsUntrustedChain verifies a chain that does not lead to a
+// trusted root, which is what a purrfect-tee Root CA rotation looks like until
+// the new root is configured, still fails closed but names the remedy. The
+// raw x509 error only said "certificate signed by unknown authority", which
+// does not tell the operator that root_ca_file exists or that the new root
+// must be checked against the published pin before it is trusted.
+func TestCheckExplainsUntrustedChain(t *testing.T) {
+	t.Parallel()
+
+	srv := newMasterTLSServer(t) // signed by a CA the checker does not trust
+	err := newHealthChecker("", "").check(context.Background(), srv.URL)
+
+	var unknownAuthority x509.UnknownAuthorityError
+	require.ErrorAs(t, err, &unknownAuthority, "the x509 cause must stay inspectable")
+	require.ErrorContains(t, err, "tasks.pieverse_alert.root_ca_file")
+	require.ErrorContains(t, err, "pin")
+}

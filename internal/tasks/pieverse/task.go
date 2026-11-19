@@ -277,6 +277,13 @@ func checkHealth(ctx context.Context, client *http.Client, url string) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		var unknownAuthority x509.UnknownAuthorityError
+		if errors.As(err, &unknownAuthority) {
+			// Fails closed either way; name the remedy for a Root rotation.
+			return errors.Wrap(err, "server certificate does not chain to a trusted root "+
+				"(a man-in-the-middle, or a purrfect-tee Root CA rotation: check the new root "+
+				"against the published Root pin, then add it to tasks.pieverse_alert.root_ca_file)")
+		}
 		return errors.Wrap(err, "do request")
 	}
 	defer gutils.LogErr(resp.Body.Close, log.Logger) //nolint:errcheck,gosec
