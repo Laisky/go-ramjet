@@ -34,8 +34,8 @@ func useTestSearchCache(t *testing.T) {
 }
 
 // capturedWordRegex runs the Search handler for query q against a mock
-// MongoDB deployment and returns the `word.$regex` pattern and `$options`
-// actually sent to the server.
+// MongoDB deployment and returns the pattern and options of the `word`
+// regular expression actually sent to the server.
 //
 // Parameters:
 //   - mt: mtest sub-test bound to a mock deployment.
@@ -63,17 +63,11 @@ func capturedWordRegex(mt *mtest.T, q string) (string, string) {
 	require.NotNil(mt, started)
 	require.Equal(mt, "find", started.CommandName)
 
-	var cmd struct {
-		Filter struct {
-			Word struct {
-				Regex   string `bson:"$regex"`
-				Options string `bson:"$options"`
-			} `bson:"word"`
-		} `bson:"filter"`
-	}
-	require.NoError(mt, bson.Unmarshal(started.Command, &cmd))
+	word := started.Command.Lookup("filter", "word")
+	pattern, opts, ok := word.RegexOK()
+	require.True(mt, ok, "word must be a BSON regular expression, got %s", word.Type)
 
-	return cmd.Filter.Word.Regex, cmd.Filter.Word.Options
+	return pattern, opts
 }
 
 // TestSearchTreatsQueryAsLiteral proves the `q` parameter can no longer inject
@@ -178,14 +172,15 @@ func capturedWordFilter(mt *mtest.T, rawQuery string) bson.Raw {
 	return filter
 }
 
-// TestSearchQueryCannotInjectOperators documents why CodeQL go/sql-injection
-// #119 (the `wordFilter(query)` argument, i.e. alert #51 relocated by the
-// regexp.QuoteMeta fix) is a false positive. Whatever the caller sends, the
-// filter keeps the fixed shape {word: {$regex: <BSON string>, $options: "i"}}:
-// Gin's Query("q") only ever yields a Go string (so `q[$ne]=` style keys are
-// ignored and JSON-looking values stay text), the field name and options are
-// constants, and the pattern is QuoteMeta(q), a literal. (Bytes MongoDB
-// refuses in a regex never get this far; see
+// TestSearchQueryCannotInjectOperators proves `q` can neither inject a query
+// operator nor regular-expression syntax (CodeQL go/sql-injection #51, and
+// #119 where the first fix moved it). Whatever the caller sends, the filter
+// keeps the fixed shape {word: <BSON regex QuoteMeta(q), options "i">}: Gin's
+// Query("q") only ever yields a Go string (so `q[$ne]=` style keys are ignored
+// and JSON-looking values stay text), the field name and options are
+// constants, and the value is a typed BSON regular expression, which MongoDB
+// matches as a pattern and can never read as an operator document. (Bytes
+// MongoDB refuses in a regex never get this far; see
 // TestSearchRejectsQueriesMongoDBRefuses.)
 func TestSearchQueryCannotInjectOperators(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -199,6 +194,7 @@ func TestSearchQueryCannotInjectOperators(t *testing.T) {
 		{name: "bracket operator", rawQuery: "q[$ne]=x", wantQ: ""},
 		{name: "bracket where", rawQuery: "q[$where]=sleep(5000)", wantQ: ""},
 		{name: "json operator document", rawQuery: "q=" + url.QueryEscape(`{"$gt":""}`), wantQ: `{"$gt":""}`},
+		{name: "json ne null", rawQuery: "q=" + url.QueryEscape(`{"$ne":null}`), wantQ: `{"$ne":null}`},
 		{name: "where literal", rawQuery: "q=" + url.QueryEscape(`$where`), wantQ: `$where`},
 		{name: "repeated parameter keeps the first", rawQuery: "q=tokyo&q=" + url.QueryEscape(`$expr`), wantQ: "tokyo"},
 		{name: "inline regex flags", rawQuery: "q=" + url.QueryEscape(`(?x)a #b`), wantQ: `(?x)a #b`},
@@ -212,20 +208,10 @@ func TestSearchQueryCannotInjectOperators(t *testing.T) {
 			require.Len(mt, elems, 1, "filter must only constrain word: %s", filter)
 			require.Equal(mt, "word", elems[0].Key())
 
-			word, ok := elems[0].Value().DocumentOK()
-			require.True(mt, ok, "word must hold an operator document we built: %s", filter)
-			wordElems, err := word.Elements()
-			require.NoError(mt, err)
-			require.Len(mt, wordElems, 2, "word must only carry $regex and $options: %s", word)
-
-			// bson.M encodes keys in random order, so look them up by name.
-			regexVal := word.Lookup("$regex")
-			pattern, ok := regexVal.StringValueOK()
-			require.True(mt, ok, "$regex must be a BSON string, got %s", regexVal.Type)
+			pattern, opts, ok := elems[0].Value().RegexOK()
+			require.True(mt, ok, "word must be a typed BSON regular expression, got %s: %s",
+				elems[0].Value().Type, filter)
 			require.Equal(mt, regexp.QuoteMeta(tc.wantQ), pattern)
-
-			opts, ok := word.Lookup("$options").StringValueOK()
-			require.True(mt, ok, "$options must be a BSON string: %s", word)
 			require.Equal(mt, "i", opts)
 		})
 	}
@@ -272,7 +258,7 @@ func TestSearchRejectsQueriesMongoDBRefuses(t *testing.T) {
 	mt.Run("query at the length bound still searches", func(mt *mtest.T) {
 		q := strings.Repeat("a", maxSearchQueryBytes)
 		filter := capturedWordFilter(mt, "q="+url.QueryEscape(q))
-		pattern, ok := filter.Lookup("word", "$regex").StringValueOK()
+		pattern, _, ok := filter.Lookup("word").RegexOK()
 		require.True(mt, ok)
 		require.Equal(mt, q, pattern)
 	})

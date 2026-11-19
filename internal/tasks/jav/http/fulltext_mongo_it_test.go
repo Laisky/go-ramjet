@@ -119,10 +119,11 @@ func literalMatches(q string) []string {
 // escaped query is a literal, case-insensitive substring there too: pattern,
 // operator and inline-flag syntax only ever match itself, a catastrophic-
 // backtracking pattern returns at once with no match. It also proves that
-// MongoDB itself refuses the patterns validateSearchQuery rejects up front (a
-// NUL byte, invalid UTF-8, an over-long pattern; MongoDB 8.0 answers BadValue
-// or Location51091) by sending wordFilter straight to the collection, and that
-// the handler answers those queries with 400.
+// the driver or MongoDB itself refuses the patterns mongosearch.ValidateQuery
+// rejects up front (the driver will not encode a NUL byte in a BSON regular
+// expression; MongoDB 8.0 answers Location51091 for invalid UTF-8 and an
+// over-long pattern) by sending wordFilter straight to the collection, and
+// that the handler answers those queries with 400.
 //
 // It is an integration test: start a disposable server, e.g.
 // `docker run --rm -p 127.0.0.1:27017:27017 mongo:8.0`, and set
@@ -144,7 +145,7 @@ func TestSearchIsLiteralOnRealMongoDB(t *testing.T) {
 	seedFulltext(t, client)
 
 	for _, q := range []string{
-		"", "Tokyo", "A B", ".*", "^x|y", "[a-z]", `\d`, "(a+)+$", `{"$gt":""}`,
+		"", "Tokyo", "A B", ".*", "^x|y", "[a-z]", `\d`, "(a+)+$", `{"$gt":""}`, `{"$ne":null}`,
 		"$where", `(?x)a #b`, "#", `\Q.*\E`, "(?i)TOKYO",
 	} {
 		t.Run("q="+q, func(t *testing.T) {
@@ -155,7 +156,7 @@ func TestSearchIsLiteralOnRealMongoDB(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ q, wantErr string }{
-		{q: "a\x00b", wantErr: "(BadValue) Regular expression cannot contain an embedded null byte"},
+		{q: "a\x00b", wantErr: "BSON regex values cannot contain null bytes"},
 		{q: "\xff", wantErr: "(Location51091) Regular expression is invalid: UTF-8 error"},
 		{q: strings.Repeat("a", 33*1024), wantErr: "(Location51091) Regular expression is invalid: pattern string is longer"},
 	} {
@@ -163,9 +164,9 @@ func TestSearchIsLiteralOnRealMongoDB(t *testing.T) {
 		if len(name) > 16 {
 			name = fmt.Sprintf("%d-byte pattern", len(q))
 		}
-		t.Run(fmt.Sprintf("mongodb refuses %q", name), func(t *testing.T) {
-			// Bypass validateSearchQuery: MongoDB itself must refuse the
-			// pattern, never treat it as something wider.
+		t.Run(fmt.Sprintf("driver or mongodb refuses %q", name), func(t *testing.T) {
+			// Bypass ValidateQuery: the driver or MongoDB itself must refuse
+			// the pattern, never treat it as something wider.
 			cur, err := model.GetColFulltext().Find(t.Context(), wordFilter(q))
 			if err != nil {
 				require.ErrorContains(t, err, tc.wantErr)

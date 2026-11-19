@@ -4,11 +4,8 @@ package http
 import (
 	"context"
 	"net/http"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -22,6 +19,7 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/dto"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/model"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/service"
+	"github.com/Laisky/go-ramjet/library/db/mongosearch"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -35,52 +33,28 @@ const maxSearchQueryBytes = 512
 
 // wordFilter builds the fulltext filter for the user-supplied search query.
 //
-// The query is a literal, case-insensitive substring: regexp.QuoteMeta escapes
-// every regular-expression metacharacter so a caller cannot inject pattern
-// syntax, such as a catastrophic-backtracking pattern that stalls the
-// database or anchors/classes/alternation that change what matches. (An empty
-// query still matches every word, limited to 30 results, as before.) Go's
-// escaping uses only `\` + punctuation, which MongoDB's PCRE engine also reads
-// as literal characters.
+// The query is a literal, case-insensitive substring (see
+// mongosearch.LiteralSubstring): pattern syntax such as a catastrophic-
+// backtracking pattern, anchors, classes or alternation only matches itself,
+// and the typed BSON regular expression can never become an operator. (An
+// empty query still matches every word, limited to 30 results, as before.)
 //
 // Parameters:
 //   - query: raw `q` parameter from the request.
 //
 // Returns:
-//   - bson.M: filter matching fulltext documents whose word contains query.
-func wordFilter(query string) bson.M {
-	return bson.M{"word": bson.M{"$regex": regexp.QuoteMeta(query), "$options": "i"}}
-}
-
-// validateSearchQuery checks query before it reaches MongoDB.
-//
-// It rejects only queries MongoDB's regex engine refuses anyway (a NUL byte,
-// invalid UTF-8) or that are longer than maxSearchQueryBytes, so they are
-// answered as a client error instead of a database failure, which
-// web.AbortErr would log at the alerting ERROR level.
-//
-// Parameters:
-//   - query: raw `q` parameter from the request.
-//
-// Returns:
-//   - error: why query cannot be searched, or nil when it is acceptable.
-func validateSearchQuery(query string) error {
-	switch {
-	case len(query) > maxSearchQueryBytes:
-		return errors.Errorf("query must be at most %d bytes", maxSearchQueryBytes)
-	case !utf8.ValidString(query):
-		return errors.New("query must be valid UTF-8")
-	case strings.ContainsRune(query, 0):
-		return errors.New("query must not contain NUL")
-	default:
-		return nil
-	}
+//   - bson.D: filter matching fulltext documents whose word contains query.
+func wordFilter(query string) bson.D {
+	return bson.D{{Key: "word", Value: mongosearch.LiteralSubstring(query)}}
 }
 
 // Search is a http handler to search movies
 func Search(ctx *gin.Context) {
 	query := ctx.Query("q")
-	if err := validateSearchQuery(query); err != nil {
+	// Queries MongoDB refuses as a pattern are a client error here; reaching
+	// the database they would fail in web.AbortErr, which logs at the alerting
+	// ERROR level.
+	if err := mongosearch.ValidateQuery(query, maxSearchQueryBytes); err != nil {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": err.Error()})
 		return
 	}
