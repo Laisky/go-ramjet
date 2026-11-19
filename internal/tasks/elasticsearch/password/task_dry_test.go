@@ -1,55 +1,37 @@
 package password
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
-	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
-	glog "github.com/Laisky/go-utils/v6/log"
-	"github.com/Laisky/zap"
-	"github.com/Laisky/zap/zapcore"
-	"github.com/Laisky/zap/zaptest/observer"
 	"github.com/stretchr/testify/require"
-
-	"github.com/Laisky/go-ramjet/library/log"
 )
-
-// setConfig sets key for the duration of t and restores its previous value.
-func setConfig(t *testing.T, key string, value any) {
-	t.Helper()
-	previous := gconfig.Shared.Get(key)
-	gconfig.Shared.Set(key, value)
-	t.Cleanup(func() { gconfig.Shared.Set(key, previous) })
-}
 
 // TestRunTaskDryModeNeverLogsPassword guards against writing the generated
 // Elasticsearch password to the logs during a dry run, which AGENTS.md forbids.
 // The dry run must still report that it would change the password for each API.
 func TestRunTaskDryModeNeverLogsPassword(t *testing.T) {
-	const secret = "dry-run-test-secret"
-	setConfig(t, "dry", true)
-	setConfig(t, "tasks.elasticsearch-v2.password.secret", secret)
-	setConfig(t, "tasks.elasticsearch-v2.password.username", "elastic")
-	setConfig(t, "tasks.elasticsearch-v2.password.apis", []string{"https://user:pass@es.invalid/_security/user/elastic/_password"})
+	configureTask(t, true, "https://user:pass@es.invalid/_security/user/elastic/_password")
+	entries := captureLogs(t)
 
-	core, entries := observer.New(zapcore.DebugLevel)
-	logger, err := glog.New(glog.WithZapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
-	require.NoError(t, err)
-	old := log.Logger
-	log.Logger = logger
-	t.Cleanup(func() { log.Logger = old })
-
-	password := GeneratePasswdByDate(gutils.UTCNow(), secret)
+	password := GeneratePasswdByDate(gutils.UTCNow(), testSecret)
 	runTask()
 
 	require.NotEmpty(t, entries.FilterMessage("change password via post").All(), "dry run must still report the change")
-	for _, entry := range entries.All() {
-		require.NotContains(t, entry.Message, password)
-		for key, value := range entry.ContextMap() {
-			require.NotContains(t, strings.ToLower(key), "password", "entry %q must not carry a password field", entry.Message)
-			require.NotContains(t, fmt.Sprint(value), password, "entry %q field %q", entry.Message, key)
-		}
-	}
+	requireNoSecretsLogged(t, entries, password)
+}
+
+// TestRunTaskDryModeNeverLogsAPICredentials guards the admin credentials in the
+// API URL. A raw '@' in the password is valid for net/url, so masking must
+// parse the URL instead of splitting it on '@'.
+func TestRunTaskDryModeNeverLogsAPICredentials(t *testing.T) {
+	configureTask(t, true, "https://elastic:"+adminPassword+"@es.invalid/_security/user/elastic/_password")
+	entries := captureLogs(t)
+
+	runTask()
+
+	reports := entries.FilterMessage("change password via post").All()
+	require.Len(t, reports, 1, "dry run must still report the change")
+	require.Contains(t, reports[0].ContextMap()["api"], "es.invalid/_security/user/elastic/_password")
+	requireNoSecretsLogged(t, entries, "hunter", "2-secret")
 }
