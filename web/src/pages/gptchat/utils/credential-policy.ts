@@ -22,6 +22,11 @@
  *       the user picks it, or it is the same session's own earlier value.
  *       A shared endpoint is not evidence, because one endpoint serves many
  *       accounts.
+ *   I4. A link never re-targets a stored key of the user's own. A URL that
+ *       moves such a session to another API endpoint is held until the user
+ *       confirms it, because the server forwards the key to whatever
+ *       endpoint the client names. A URL that brings its own key may set
+ *       the endpoint for that key.
  *
  * Comparisons use constantTimeEqual as a best-effort measure. All secrets
  * involved already live in the same browser profile, so isolation, not
@@ -214,6 +219,25 @@ export function validateCredentialUpdate(
   }
 
   return { accepted, rejections }
+}
+
+/**
+ * retargetsStoredApiToken reports whether moving current to next would send
+ * a stored key of the user's own to a different API endpoint (I4): the
+ * endpoints differ, current.api_token is user-supplied (not missing, legacy,
+ * free-tier, or a clobbered syncKey), and next still carries that same key.
+ * It returns false when next brings a different key of its own.
+ */
+export function retargetsStoredApiToken(
+  current: Pick<SessionConfig, 'api_base' | 'api_token'>,
+  next: Pick<SessionConfig, 'api_base' | 'api_token'>,
+  syncKey?: string | null,
+): boolean {
+  return (
+    !isSameApiEndpoint(current.api_base, next.api_base) &&
+    isUserSuppliedApiToken(current.api_token, syncKey) &&
+    sameSecret(current.api_token, next.api_token)
+  )
 }
 
 /**

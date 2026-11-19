@@ -9,6 +9,7 @@ import {
   isUserSuppliedApiToken,
   repairStoredApiToken,
   restoringApiTokenNeedsRotation,
+  retargetsStoredApiToken,
   validateCredentialUpdate,
 } from '../credential-policy'
 
@@ -428,5 +429,57 @@ describe('validateCredentialUpdate across sessions', () => {
         others,
       ).rejections,
     ).toEqual([])
+  })
+})
+
+describe('retargetsStoredApiToken', () => {
+  const own = { api_base: PROVIDER_A, api_token: 'sk-own-key-0123456789' }
+
+  it('flags the user’s own key moving to another endpoint', () => {
+    expect(
+      retargetsStoredApiToken(own, { ...own, api_base: PROVIDER_B }, SYNC_KEY),
+    ).toBe(true)
+    expect(
+      retargetsStoredApiToken(
+        { ...own, api_token: 'azure-custom-key-0123' },
+        { api_base: PROVIDER_B, api_token: 'azure-custom-key-0123' },
+        SYNC_KEY,
+      ),
+    ).toBe(true)
+  })
+
+  it('allows the same endpoint in another spelling', () => {
+    expect(
+      retargetsStoredApiToken(
+        own,
+        { ...own, api_base: `${PROVIDER_A.toUpperCase()}/` },
+        SYNC_KEY,
+      ),
+    ).toBe(false)
+  })
+
+  it('allows an endpoint that comes with a key of its own', () => {
+    expect(
+      retargetsStoredApiToken(
+        own,
+        { api_base: PROVIDER_B, api_token: 'sk-link-key-0123456789' },
+        SYNC_KEY,
+      ),
+    ).toBe(false)
+  })
+
+  it.each([
+    ['missing', ''],
+    ['legacy placeholder', 'DEFAULT_PROXY_TOKEN'],
+    ['free tier', 'FREETIER-synthetic-0123456789'],
+    ['clobbered sync key', SYNC_KEY],
+  ])('allows moving a session whose token is %s', (_name, token) => {
+    expect(
+      retargetsStoredApiToken(
+        { api_base: PROVIDER_A, api_token: token },
+        { api_base: PROVIDER_B, api_token: token },
+        SYNC_KEY,
+      ),
+    ).toBe(false)
   })
 })

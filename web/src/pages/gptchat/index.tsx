@@ -19,6 +19,7 @@ import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
+  ApiEndpointChangeBanner,
   ApiKeyResetBanner,
   ChatInput,
   ChatMessage,
@@ -73,6 +74,9 @@ export function GPTChatPage() {
     sessions,
     isLoading: configLoading,
     updateConfig,
+    pendingApiBase,
+    confirmPendingApiBase,
+    dismissPendingApiBase,
     createSession,
     deleteSession,
     switchSession,
@@ -535,6 +539,15 @@ export function GPTChatPage() {
                 setConfigFocus('api-key')
                 setConfigOpen(true)
               }}
+            />
+          )}
+
+          {pendingApiBase && !configLoading && (
+            <ApiEndpointChangeBanner
+              requestedBase={pendingApiBase.apiBase}
+              config={config}
+              onConfirm={confirmPendingApiBase}
+              onDismiss={dismissPendingApiBase}
             />
           )}
 

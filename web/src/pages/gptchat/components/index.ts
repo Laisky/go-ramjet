@@ -1,3 +1,7 @@
+export {
+  ApiEndpointChangeAlert,
+  ApiEndpointChangeBanner,
+} from './api-endpoint-change-alert'
 export { ApiKeyResetAlert, ApiKeyResetBanner } from './api-key-reset-alert'
 export { AttachmentTag } from './attachment-tag'
 export { ChatInput } from './chat-input'

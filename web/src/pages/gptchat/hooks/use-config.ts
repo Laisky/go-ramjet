@@ -39,6 +39,15 @@ import {
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
+ * PendingApiBase is an API endpoint a link asked for, held for the session
+ * it was opened in until the user confirms or dismisses it.
+ */
+export interface PendingApiBase {
+  sessionId: number
+  apiBase: string
+}
+
+/**
  * Hook for managing session configuration
  */
 export function useConfig() {
@@ -48,6 +57,11 @@ export function useConfig() {
     { id: number; name: string; visible: boolean }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
+  // An API endpoint a link asked for that would re-target the stored key of
+  // the user's own; it waits for the user to confirm or dismiss it.
+  const [pendingApiBase, setPendingApiBase] = useState<PendingApiBase | null>(
+    null,
+  )
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
   const hydratedRef = useRef(false)
@@ -187,6 +201,12 @@ export function useConfig() {
         }
 
         applySessionState(activeSessionId, finalConfig)
+        if (hydratedConfig.pendingApiBase) {
+          setPendingApiBase({
+            sessionId: activeSessionId,
+            apiBase: hydratedConfig.pendingApiBase,
+          })
+        }
 
         // Repair inactive sessions too, so none of them is exported,
         // uploaded, or switched to with a sync key as its API token.
@@ -351,6 +371,26 @@ export function useConfig() {
     },
     [persistQueue],
   )
+
+  /**
+   * confirmPendingApiBase applies the link-supplied API endpoint the user
+   * confirmed, but only to the session the link was opened in. The prompt
+   * stays when storing fails, and the returned promise rejects.
+   */
+  const confirmPendingApiBase = useCallback(async () => {
+    const pending = pendingApiBase
+    if (!pending || pending.sessionId !== sessionIdRef.current) {
+      setPendingApiBase(null)
+      return
+    }
+    await updateConfig({ api_base: pending.apiBase })
+    setPendingApiBase(null)
+  }, [pendingApiBase, updateConfig])
+
+  /** dismissPendingApiBase keeps the current endpoint and drops the prompt. */
+  const dismissPendingApiBase = useCallback(() => {
+    setPendingApiBase(null)
+  }, [])
 
   /**
    * Reorder sessions
@@ -685,6 +725,10 @@ export function useConfig() {
     sessions,
     isLoading,
     updateConfig,
+    pendingApiBase:
+      pendingApiBase?.sessionId === sessionId ? pendingApiBase : null,
+    confirmPendingApiBase,
+    dismissPendingApiBase,
     switchSession,
     reorderSessions,
     createSession,

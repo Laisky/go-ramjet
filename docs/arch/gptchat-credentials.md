@@ -25,6 +25,7 @@ All decisions live in [`credential-policy.ts`](../../web/src/pages/gptchat/utils
 3. **A key never moves between sessions without evidence.** Sharing an endpoint is not evidence, because one endpoint serves many accounts. Two kinds of evidence count:
    - the user picks the key from the reset alert;
    - it is the same session's own earlier value. For example, a cloud download carrying a clobbered copy keeps the local key of that session.
+4. **A link never re-targets a stored key of the user's own.** For a `sk-`/`laisky-` key the server sends the key, as the upstream `Authorization`, to whatever `X-Laisky-Api-Base` the client names, and realtime audio connects to `api_base` directly. So a link that would move a session holding the user's own key (`byok` or `custom`) to another endpoint is not applied. The chat page asks instead (**Keep current endpoint** / **Switch to …**), and only an explicit switch stores it. A link that brings its own `api_key` may set the endpoint for that key, and sessions without a key of the user's own (missing, free tier, or clobbered) take the link's endpoint as before.
 
 ## Where the invariants are enforced
 
@@ -36,7 +37,7 @@ All decisions live in [`credential-policy.ts`](../../web/src/pages/gptchat/utils
 | Startup (`repairStoredSessionCredentials`) | Repairs every inactive session, so none is exported or uploaded while clobbered. |
 | Cloud import (`importAllData`) | Repairs incoming configs, preferring the same session's local key. Never adopts the backup's sync key: the device keeps the key it downloaded with, and incoming configs are bound to it. |
 | Cloud export (`exportAllData`) | Exports a free-tier token in place of a clobbered one, so devices not yet updated are protected. Binds every exported config to the browser-wide sync key. Device-local keys (`config_pending_backup_deletions`) are never exported. |
-| URL overrides | Only an explicit allowlist can be set from a link: the scalar fields of `DefaultSessionConfig` and of its `chat_switch`. Values are coerced to the default's type. `__proto__`, `prototype` and `constructor` are rejected anywhere in a path. `api_key` goes through the policy. `sync_key`, `mcp_servers`, `api_token_reset_required` and `updated_at` can never be set from a link, and are stripped from the address bar. |
+| URL overrides | Only an explicit allowlist can be set from a link: the scalar fields of `DefaultSessionConfig` and of its `chat_switch`. Values are coerced to the default's type. `__proto__`, `prototype` and `constructor` are rejected anywhere in a path. `api_key` goes through the policy, and an `api_base` that would re-target the user's own key waits for confirmation (invariant 4). `sync_key`, `mcp_servers`, `api_token_reset_required` and `updated_at` can never be set from a link, and are stripped from the address bar. |
 
 ## Secret fields are write-only
 
