@@ -150,7 +150,7 @@ func TestGatewayHandlerRefusesSubdomainsResolvingInternally(t *testing.T) {
 					if tc.redirect && address == net.JoinHostPort(redirectingSubdomainAddress, "443") {
 						conn, err := dialHop(ctx, network)
 						if err != nil {
-							return nil, err
+							return nil, errors.WithStack(err)
 						}
 						return &pinnedPeerConn{Conn: conn, peer: &net.TCPAddr{IP: net.ParseIP(redirectingSubdomainAddress), Port: 443}}, nil
 					}

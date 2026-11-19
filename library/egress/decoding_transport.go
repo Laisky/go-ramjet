@@ -66,7 +66,9 @@ func (e *DecodedSizeError) Error() string {
 // without a header map is refused, as net/http refuses it.
 type ContentDecodingTransport struct {
 	Base http.RoundTripper
-	// MaxDecodedBytes bounds each decoded body; zero means DefaultMaxDecodedBytes.
+	// MaxDecodedBytes bounds every 2xx body the transport returns, decoded or
+	// not; zero means DefaultMaxDecodedBytes. A body outside 2xx is bounded to
+	// the smaller of it and DefaultMaxDecodedErrorBytes.
 	MaxDecodedBytes int64
 }
 
