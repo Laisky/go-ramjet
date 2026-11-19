@@ -419,7 +419,8 @@ func writeFinalToUI(
 
 	if frontendReq.Stream {
 		setStreamHeaders(ctx, upstreamHeader)
-		enableHeartBeatForStreamReq(ctx)
+		stopHeartbeat := enableHeartBeatForStreamReq(ctx)
+		defer stopHeartbeat()
 
 		if !ctx.GetBool("llm_response_streamed") || !responseContentStreamed(ctx) {
 			if ctx.GetBool("llm_response_streamed") && !responseContentStreamed(ctx) {
@@ -454,6 +455,8 @@ func writeFinalToUI(
 				FinishReason: "stop",
 			}},
 		})
+		// No heartbeat may follow the terminal frame or outlive the handler.
+		stopHeartbeat()
 		_, _ = io.WriteString(ctx.Writer, "data: [DONE]\n\n")
 		return nil
 	}

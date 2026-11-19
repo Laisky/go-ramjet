@@ -1,7 +1,6 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
@@ -17,7 +16,6 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/openai"
 	"github.com/Laisky/go-ramjet/library/web"
 )
@@ -357,64 +355,58 @@ func req2CacheKey(req *FrontendReq) (string, error) {
 // 	return fmt.Sprintf("%d minutes", minutes)
 // }
 
-// enableHeartBeatForStreamReq enable heartbeat for stream request
-func enableHeartBeatForStreamReq(gctx *gin.Context) {
+// streamHeartbeatInterval is the period between SSE heartbeats for most clients.
+var streamHeartbeatInterval = 10 * time.Second
+
+// safariStreamHeartbeatInterval is the shorter heartbeat period used for Safari,
+// which drops idle event streams sooner.
+var safariStreamHeartbeatInterval = 5 * time.Second
+
+// enableHeartBeatForStreamReq starts periodic SSE heartbeat frames on the response
+// of a streaming request; Safari clients also get one heartbeat immediately.
+//
+// Heartbeats are written under the gin-middlewares context lock, so they never
+// interleave with stream chunks written under the same lock. They stop when the
+// request context ends or when the returned stop func is called.
+//
+// Parameters:
+//   - gctx: Gin context of the streaming request; its writer lock must be installed.
+//
+// It returns stop, which ends the heartbeats and blocks until the heartbeat
+// goroutine has exited, so nothing is written after stop returns. Call stop before
+// writing the terminal [DONE] frame and before the handler returns, and never while
+// holding the context lock. Calling stop more than once is safe.
+func enableHeartBeatForStreamReq(gctx *gin.Context) (stop func()) {
 	ctx := gmw.Ctx(gctx)
 	logger := gmw.GetLogger(gctx)
 
-	// Create synchronization primitives with proper cleanup
-	heartCtx, heartCancel := context.WithCancel(context.Background())
-	defer heartCancel() // Ensure cleanup on function return
-
-	var wg sync.WaitGroup
-	wg.Add(1)
+	if _, err := gmw.GetLockFromCtx(ctx); err != nil {
+		logger.Debug("stream heartbeat disabled: no writer lock in context", zap.Error(err))
+		return func() {}
+	}
 
 	// Detect iOS Safari
 	userAgent := gctx.Request.UserAgent()
 	isSafari := strings.Contains(userAgent, "Safari") && !strings.Contains(userAgent, "Chrome")
 
 	// Set appropriate heartbeat interval
-	heartbeatInterval := 10 * time.Second
+	heartbeatInterval := streamHeartbeatInterval
 	if isSafari {
-		heartbeatInterval = 5 * time.Second
+		heartbeatInterval = safariStreamHeartbeatInterval
 	}
 
 	// Send initial heartbeat for Safari
 	if isSafari {
-		if err := gmw.CtxLock(ctx); err != nil {
-			logger.Debug("failed to lock context for initial heartbeat", zap.Error(err))
-			return
-		}
-
-		if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte(": connection established\ndata: [HEARTBEAT]\n\n"))); err != nil {
-			log.Logger.Warn("failed to send initial heartbeat", zap.Error(err))
-			if err := gmw.CtxUnlock(ctx); err != nil {
-				logger.Debug("failed to unlock context", zap.Error(err))
-				return
-			}
-
-			return
-		}
-		gctx.Writer.Flush()
-		if err := gmw.CtxUnlock(ctx); err != nil {
-			logger.Debug("failed to unlock context", zap.Error(err))
-			return
+		if err := writeStreamHeartbeat(ctx, gctx, ": connection established\n"+streamHeartbeatFrame); err != nil {
+			logger.Warn("failed to send initial heartbeat", zap.Error(err))
+			return func() {}
 		}
 	}
 
-	// Request context monitor channel
-	requestDone := make(chan struct{})
-
-	// Setup the context monitor
+	heartCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		close(requestDone)
-	}()
-
-	// Heartbeat sender goroutine with improved error handling
-	go func() {
-		defer wg.Done()
-		defer heartCancel() // Ensure cleanup on goroutine exit
+		defer close(done)
 
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
@@ -423,39 +415,58 @@ func enableHeartBeatForStreamReq(gctx *gin.Context) {
 			select {
 			case <-heartCtx.Done():
 				return
-			case <-requestDone:
-				return
 			case <-ticker.C:
-				if err := gmw.CtxLock(ctx); err != nil {
-					logger.Debug("failed to lock context for initial heartbeat", zap.Error(err))
-					return
-				}
-
-				if _, err := io.Copy(gctx.Writer, bytes.NewReader([]byte("data: [HEARTBEAT]\n\n"))); err != nil {
-					log.Logger.Warn("failed write heartbeat msg to sse", zap.Error(err))
-					if err := gmw.CtxUnlock(ctx); err != nil {
-						logger.Debug("failed to unlock context", zap.Error(err))
-						return
-					}
-
-					return
-				}
-
-				gctx.Writer.Flush()
-				if err := gmw.CtxUnlock(ctx); err != nil {
-					logger.Debug("failed to unlock context", zap.Error(err))
+				if err := writeStreamHeartbeat(heartCtx, gctx, streamHeartbeatFrame); err != nil {
+					logger.Debug("stop stream heartbeat", zap.Error(err))
 					return
 				}
 			}
 		}
 	}()
 
-	// Wait for completion before returning
-	go func() {
-		<-requestDone
-		heartCancel()
-		wg.Wait()
+	return sync.OnceFunc(func() {
+		cancel()
+		<-done
+	})
+}
+
+// streamHeartbeatFrame is the SSE frame clients recognize as a keep-alive.
+const streamHeartbeatFrame = "data: [HEARTBEAT]\n\n"
+
+// writeStreamHeartbeat writes frame to the response and flushes it while holding
+// the gin-middlewares context lock shared with the stream writer.
+//
+// Parameters:
+//   - ctx: Context carrying the gin context and its lock; once it is done the
+//     frame is skipped, because the stream is ending.
+//   - gctx: Gin context whose writer receives the frame.
+//   - frame: Complete SSE frame to write.
+//
+// It returns an error when the lock is unavailable or the write fails.
+func writeStreamHeartbeat(ctx context.Context, gctx *gin.Context, frame string) error {
+	if err := gmw.CtxLock(ctx); err != nil {
+		return errors.Wrap(err, "lock stream writer")
+	}
+
+	writeErr := func() error {
+		select {
+		case <-ctx.Done():
+			return nil // the stream is ending; drop the frame
+		default:
+		}
+
+		if _, err := io.WriteString(gctx.Writer, frame); err != nil {
+			return errors.Wrap(err, "write heartbeat frame")
+		}
+		gctx.Writer.Flush()
+		return nil
 	}()
+
+	if err := gmw.CtxUnlock(ctx); err != nil {
+		return errors.Join(writeErr, errors.Wrap(err, "unlock stream writer"))
+	}
+
+	return writeErr
 }
 
 func bodyChecker(body io.ReadCloser) (userReq *FrontendReq, err error) {
