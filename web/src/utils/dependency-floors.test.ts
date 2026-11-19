@@ -36,6 +36,13 @@ const dependencyFloors = [
   ['minimatch', 11, '11.0.1'],
   ['glob', 14, '14.0.2'],
   ['lodash-es', 4, '4.18.0'],
+  ['lodash', 4, '4.18.0'],
+  ['lodash-amd', 4, '4.18.0'],
+  ['lodash.template', 4, '4.18.0'],
+  ['lodash.omit', 4, '4.18.0'],
+  ['lodash.unset', 4, '4.18.0'],
+  ['undici', 6, '6.29.1'],
+  ['undici', 7, '7.30.1'],
   ['undici', 8, '8.12.2'],
   ['postcss-selector-parser', 6, '6.1.5'],
   ['postcss-selector-parser', 7, '7.1.6'],
@@ -43,6 +50,8 @@ const dependencyFloors = [
   ['baseline-browser-mapping', 2, '2.11.0'],
   ['@humanfs/node', 0, '0.16.8'],
   ['@babel/core', 7, '7.29.6'],
+  // Floors accept stable releases only, so this also rejects 8.0 prereleases.
+  ['@babel/core', 8, '8.0.0'],
   ['zod', 4, '4.6.6'],
   ['@ungap/structured-clone', 1, '1.3.1'],
 ] as const
@@ -55,30 +64,47 @@ const unpatchedMajors = [
   ['dompurify', 0, 2],
   ['browserslist', 0, 3],
   ['postcss-selector-parser', 0, 5],
+  ['undici', 4, 5],
+  ['zod', 0, 3],
 ] as const
 
-// Versions inside each advisory this lockfile addresses, paired with the first
-// fixed release. Older majors appear when the advisory publishes no fix for them.
+// A version inside every affected major line of each advisory this lockfile
+// addresses, paired with the first fixed release that the floors accept.
+// Ranges come from `gh api /advisories/<GHSA>`; older majors appear when the
+// advisory publishes no fix for them.
 const addressedAdvisoryVersions = [
   ['@babel/core', '7.29.0', '7.29.6'], // GHSA-4x5r-pxfx-6jf8
+  ['@babel/core', '8.0.0-rc.4', '8.0.0'],
   ['baseline-browser-mapping', '2.10.0', '2.11.0'], // GHSA-w5vr-8v7q-w6rv
   ['browserslist', '4.28.6', '4.28.7'], // GHSA-73wf-gq98-2v4g
   ['browserslist', '3.2.8', '4.28.7'],
   ['dompurify', '3.4.16', '3.4.17'], // GHSA-c6gr-qvv4-5v3f and two others
   ['dompurify', '2.5.8', '3.4.17'],
   ['@humanfs/node', '0.16.7', '0.16.8'], // GHSA-p498-v437-472g
-  ['lodash-es', '4.17.23', '4.18.0'], // GHSA-r5fr-rjxr-66jc
+  ['lodash-es', '4.17.23', '4.18.0'], // GHSA-r5fr-rjxr-66jc, GHSA-xxjr-mmjv-4gpg
+  ['lodash', '4.17.23', '4.18.0'],
+  ['lodash-amd', '4.17.23', '4.18.0'],
+  ['lodash.template', '4.5.0', '4.18.0'],
+  ['lodash.omit', '4.4.0', '4.18.0'],
+  ['lodash.unset', '4.5.2', '4.18.0'],
   ['minimatch', '7.0.0', '11.0.1'], // GHSA-g3hv-75wg-m249
   ['minimatch', '11.0.0', '11.0.1'],
   ['glob', '9.0.0', '14.0.2'], // GHSA-3g3m-2fjr-6pw4
   ['glob', '14.0.1', '14.0.2'],
   ['postcss-selector-parser', '6.1.4', '6.1.5'], // GHSA-rj75-hqrm-r3gf
   ['postcss-selector-parser', '5.0.0', '6.1.5'],
+  ['postcss-selector-parser', '7.1.5', '7.1.6'],
   ['undici', '8.12.1', '8.12.2'], // GHSA-2m5v-pch6-74hx and four others
+  ['undici', '7.30.0', '7.30.1'],
+  ['undici', '6.29.0', '6.29.1'],
+  ['undici', '5.29.0', '6.29.1'],
+  ['undici', '4.0.0', '6.29.1'],
   ['uuid', '8.3.2', '11.1.1'], // GHSA-w5hq-g745-h8pq
   ['uuid', '11.1.0', '11.1.1'],
   ['uuid', '12.0.0', '12.0.1'],
   ['uuid', '13.0.0', '13.0.1'],
+  ['zod', '4.6.5', '4.6.6'], // GHSA-mrhx-c7xc-m3w5
+  ['zod', '3.25.76', '4.6.6'],
 ] as const
 
 /** assertFloor checks that every resolved copy of name in the given major meets minimum. */
