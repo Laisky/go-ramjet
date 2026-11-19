@@ -299,12 +299,11 @@ describe('useConfig link-supplied API key', () => {
       expect(result.current.config.api_base).toBe(PROVIDER_A)
       expect(storedConfig(store, 1).api_token).toBe(OWN_KEY)
       expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
-      // Only the endpoint is offered; a key that is not the user's own is
-      // dropped rather than offered as a replacement.
+      // Only the endpoint is offered. An empty, free-tier or implausibly
+      // short link key is dropped rather than offered as a replacement.
       expect(result.current.pendingLinkChange).toEqual({
         sessionId: 1,
         apiBase: ATTACKER_BASE,
-        ...(search.includes('token=x') ? { apiToken: 'x' } : {}),
       })
     },
   )
@@ -391,4 +390,69 @@ describe('useConfig link-supplied API key', () => {
     expect(result.current.config.api_token_reset_required).toBe(false)
     expect(storedConfig(store, 1).api_token_before_reset).toBeUndefined()
   })
+})
+
+describe('useConfig pending link change lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/')
+    vi.restoreAllMocks()
+  })
+
+  it('drops the prompt when its session is deleted and recreated', async () => {
+    window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+    const store = ownKeyStore()
+
+    const { result } = await renderLoadedConfig()
+    expect(result.current.pendingLinkChange).not.toBeNull()
+    await act(async () => {
+      await result.current.deleteSession(1)
+    })
+    expect(result.current.pendingLinkChange).toBeNull()
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+
+    expect(result.current.config.api_base).not.toBe(ATTACKER_BASE)
+    expect(storedConfig(store, 1)?.api_base).not.toBe(ATTACKER_BASE)
+  })
+
+  it('drops the prompt when every session is purged', async () => {
+    window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+    const store = ownKeyStore()
+
+    const { result } = await renderLoadedConfig()
+    await act(async () => {
+      await result.current.purgeAllSessions()
+    })
+    expect(result.current.pendingLinkChange).toBeNull()
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+  })
+
+  it.each(['download', 'merge'] as const)(
+    'drops the prompt when a backup is imported (%s)',
+    async (mode) => {
+      window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+      const store = ownKeyStore()
+
+      const { result } = await renderLoadedConfig()
+      await act(async () => {
+        await result.current.importAllData({}, mode)
+      })
+      expect(result.current.pendingLinkChange).toBeNull()
+      await act(async () => {
+        await result.current.confirmPendingLinkChange()
+      })
+
+      expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    },
+  )
 })

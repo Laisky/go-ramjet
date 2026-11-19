@@ -517,6 +517,11 @@ export function useConfig() {
    */
   const deleteSession = useCallback(
     async (targetSessionId: number) => {
+      // A link prompt belongs to the config it was raised for; a session
+      // recreated under the same id must not inherit it.
+      setPendingLinkChange((pending) =>
+        pending?.sessionId === targetSessionId ? null : pending,
+      )
       // A pending write must not resurrect the deleted config.
       await persistQueue.whenIdle()
       await kvDel(getSessionConfigKey(targetSessionId))
@@ -599,6 +604,7 @@ export function useConfig() {
   )
 
   const purgeAllSessions = useCallback(async () => {
+    setPendingLinkChange(null)
     await persistQueue.whenIdle()
     const keys = await kvList()
     for (const key of keys) {
@@ -720,6 +726,8 @@ export function useConfig() {
       data: Record<string, unknown>,
       mode: 'merge' | 'download' = 'merge',
     ) => {
+      // Imported configs replace the one a pending link prompt describes.
+      setPendingLinkChange(null)
       await persistQueue.whenIdle()
       const activeSessionId = sessionIdRef.current
       await importData(data, activeSessionId, mode)

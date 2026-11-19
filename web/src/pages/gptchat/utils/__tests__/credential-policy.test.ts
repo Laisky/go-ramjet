@@ -489,6 +489,15 @@ describe('holdLinkCredentialChange', () => {
     expect(kept.temperature).toBe(0.2)
   })
 
+  it('offers the shortest key the server accepts', () => {
+    const { pending } = holdLinkCredentialChange(
+      own,
+      { ...own, api_token: 'sk-0123456789ab' },
+      SYNC_KEY,
+    )
+    expect(pending).toEqual({ apiToken: 'sk-0123456789ab' })
+  })
+
   it('holds a user-supplied replacement key together with the endpoint', () => {
     const { config: kept, pending } = holdLinkCredentialChange(
       own,
@@ -506,6 +515,8 @@ describe('holdLinkCredentialChange', () => {
     ['empty', ''],
     ['free tier', 'FREETIER-synthetic-0123456789'],
     ['sync key', SYNC_KEY],
+    ['junk', 'x'],
+    ['too short BYOK-shaped', 'sk-0123456789a'],
   ])('drops a %s link key and keeps the stored one', (_name, token) => {
     const { config: kept, pending } = holdLinkCredentialChange(
       own,

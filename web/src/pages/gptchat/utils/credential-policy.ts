@@ -28,8 +28,8 @@
  *       endpoint, or replace that key, is held until the user confirms it,
  *       because the server forwards the key to whatever endpoint the client
  *       names. A link key that is not user-supplied (empty, free tier, a
- *       sync key) is dropped. Sessions without such a key take the link's
- *       values as before.
+ *       sync key) or implausibly short is dropped. Sessions without such
+ *       a key take the link's values as before.
  *
  * Comparisons use constantTimeEqual as a best-effort measure. All secrets
  * involved already live in the same browser profile, so isolation, not
@@ -235,6 +235,16 @@ export interface LinkCredentialChange {
 }
 
 /**
+ * MIN_LINK_API_KEY_LENGTH is the shortest link-supplied key offered as a
+ * replacement for a key the user holds. It is the server's own minimum for
+ * `sk-`/`laisky-` keys (getUserByToken rejects shorter ones), and real
+ * provider keys are all longer, so a shorter link key could only replace a
+ * working key with one that cannot authenticate. Keys typed in Settings are
+ * not affected.
+ */
+const MIN_LINK_API_KEY_LENGTH = 15
+
+/**
  * heldUserApiToken returns the key of the user's own that config holds: its
  * API token when that is user-supplied, otherwise, while a reset is
  * pending, the key the reset set aside (which the recovery alert can
@@ -261,7 +271,8 @@ export function heldUserApiToken(
  * link's parameters to current. When current holds a key of the user's own,
  * it returns linked with current's endpoint and credential fields kept, and
  * pending set to the endpoint change and user-supplied key the link asked
- * for (a link key that is not user-supplied is dropped). Otherwise it
+ * for (a link key that is not user-supplied, or shorter than
+ * MIN_LINK_API_KEY_LENGTH, is dropped). Otherwise it
  * returns linked unchanged. syncKey is the browser-wide sync key.
  */
 export function holdLinkCredentialChange(
@@ -279,6 +290,7 @@ export function holdLinkCredentialChange(
   }
   const linkToken = linked.api_token?.trim() || ''
   if (
+    linkToken.length >= MIN_LINK_API_KEY_LENGTH &&
     !sameSecret(linkToken, current.api_token) &&
     isUserSuppliedApiToken(linkToken, syncKey)
   ) {
