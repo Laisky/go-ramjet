@@ -520,7 +520,11 @@ export function GPTChatPage() {
         >
           {/* Loading overlay for session switching */}
           {configLoading && (
-            <div className="fixed inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]">
+            <div
+              role="status"
+              aria-label="Loading chat session"
+              className="fixed inset-0 z-10 flex items-center justify-center bg-background/20 backdrop-blur-[1px]"
+            >
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
             </div>
           )}

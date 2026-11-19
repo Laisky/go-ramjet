@@ -30,10 +30,30 @@ function setSiteMeta(siteId: string) {
 
 // The first GPTChatPage render compiles the whole lazy-loaded page tree,
 // which can take several seconds when the full suite runs in parallel. The
-// test timeout must exceed the wait, or a slow load times out the test
-// before waitFor can report it.
+// test timeout must exceed both waits in waitForChatPageLoaded, or a slow
+// load times out the test before waitFor can report it.
 const LAZY_PAGE_TIMEOUT_MS = 10_000
-const LAZY_PAGE_TEST_TIMEOUT_MS = 15_000
+const LAZY_PAGE_TEST_TIMEOUT_MS = 25_000
+
+/**
+ * waitForChatPageLoaded waits until GPTChatPage has rendered and finished
+ * loading its session config. Ending a test while that load is pending lets
+ * it set state after the test file's jsdom environment is torn down, which
+ * Vitest reports as an unhandled "window is not defined" rejection.
+ */
+async function waitForChatPageLoaded() {
+  // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
+  await waitFor(() => expect(document.title).toBe('Chat'), {
+    timeout: LAZY_PAGE_TIMEOUT_MS,
+  })
+  await waitFor(
+    () =>
+      expect(
+        screen.queryByRole('status', { name: 'Loading chat session' }),
+      ).not.toBeInTheDocument(),
+    { timeout: LAZY_PAGE_TIMEOUT_MS },
+  )
+}
 
 describe('chat domain proxying', () => {
   beforeEach(() => {
@@ -72,10 +92,7 @@ describe('chat domain proxying', () => {
       expect(
         screen.queryByRole('heading', { name: 'go-ramjet' }),
       ).not.toBeInTheDocument()
-      // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
-      await waitFor(() => expect(document.title).toBe('Chat'), {
-        timeout: LAZY_PAGE_TIMEOUT_MS,
-      })
+      await waitForChatPageLoaded()
     },
     LAZY_PAGE_TEST_TIMEOUT_MS,
   )
@@ -89,9 +106,7 @@ describe('chat domain proxying', () => {
       expect(
         screen.queryByRole('heading', { name: 'go-ramjet' }),
       ).not.toBeInTheDocument()
-      await waitFor(() => expect(document.title).toBe('Chat'), {
-        timeout: LAZY_PAGE_TIMEOUT_MS,
-      })
+      await waitForChatPageLoaded()
     },
     LAZY_PAGE_TEST_TIMEOUT_MS,
   )
