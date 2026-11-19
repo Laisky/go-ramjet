@@ -127,8 +127,9 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	reservation := getTokenReservation(ctx)
 	defer clearTokenReservation(ctx)
 
-	// responseCacheAllowed skips the cache for memory and MCP-credential requests.
-	if respContent, ok, err := loadCachedResponse(frontendReq); err != nil {
+	// responseCacheAllowed skips the cache for memory and MCP-credential requests;
+	// cached answers are scoped to the caller's API key and upstream.
+	if respContent, ok, err := loadCachedResponse(user, frontendReq); err != nil {
 		logger.Debug("skip response cache lookup", zap.Error(err))
 	} else if ok {
 		finalText := respContent
@@ -260,7 +261,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	}
 
 	// Save to cache and audit log.
-	if err := storeCachedResponse(frontendReq, finalText); err != nil {
+	if err := storeCachedResponse(user, frontendReq, finalText); err != nil {
 		logger.Debug("skip response cache store", zap.Error(err))
 	}
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {

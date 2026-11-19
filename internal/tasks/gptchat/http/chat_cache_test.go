@@ -42,13 +42,28 @@ func cacheTestRequest(mcpAPIKey string) *FrontendReq {
 	return req
 }
 
-// requireNotCached fails the test when llmRespCache holds an answer for req.
-func requireNotCached(t *testing.T, req *FrontendReq) {
+// cacheTestUser returns the tenant the cache policy tests send requests as.
+func cacheTestUser() *config.UserConfig {
+	return &config.UserConfig{Token: "sk-synthetic-cache-tenant", APIBase: "https://upstream.test"}
+}
+
+// requireNotCached fails the test when llmRespCache holds an answer for req, under
+// the bare request key an unscoped writer would use or, when user is not nil,
+// under user's tenant-scoped key.
+func requireNotCached(t *testing.T, user *config.UserConfig, req *FrontendReq) {
 	t.Helper()
-	key, err := req2CacheKey(req)
+	bareKey, err := req2CacheKey(req)
 	require.NoError(t, err)
-	_, ok := llmRespCache.Load(key)
-	require.False(t, ok, "answer cached although caching is disallowed for this request")
+	keys := []string{bareKey}
+	if user != nil {
+		scopedKey, err := responseCacheKey(user, req)
+		require.NoError(t, err)
+		keys = append(keys, scopedKey)
+	}
+	for _, key := range keys {
+		_, ok := llmRespCache.Load(key)
+		require.False(t, ok, "answer cached although caching is disallowed for this request")
+	}
 }
 
 // TestResponseCacheAllowed pins the single cache policy shared by every cache read
@@ -80,9 +95,9 @@ func TestStoreAndLoadCachedResponseShareThePolicy(t *testing.T) {
 	t.Run("allowed", func(t *testing.T) {
 		isolateResponseCache(t, false)
 		req := cacheTestRequest("")
-		require.NoError(t, storeCachedResponse(req, "cached answer"))
+		require.NoError(t, storeCachedResponse(cacheTestUser(), req, "cached answer"))
 
-		answer, ok, err := loadCachedResponse(req)
+		answer, ok, err := loadCachedResponse(cacheTestUser(), req)
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, "cached answer", answer)
@@ -91,14 +106,14 @@ func TestStoreAndLoadCachedResponseShareThePolicy(t *testing.T) {
 	t.Run("disallowed", func(t *testing.T) {
 		isolateResponseCache(t, false)
 		req := cacheTestRequest("sk-synthetic-mcp-secret")
-		require.NoError(t, storeCachedResponse(req, "answer derived from private MCP data"))
-		requireNotCached(t, req)
+		require.NoError(t, storeCachedResponse(cacheTestUser(), req, "answer derived from private MCP data"))
+		requireNotCached(t, cacheTestUser(), req)
 
 		// Even an entry planted under the same key must not be served.
-		key, err := req2CacheKey(req)
+		key, err := responseCacheKey(cacheTestUser(), req)
 		require.NoError(t, err)
 		llmRespCache.Store(key, "planted")
-		_, ok, err := loadCachedResponse(req)
+		_, ok, err := loadCachedResponse(cacheTestUser(), req)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -152,7 +167,7 @@ func TestSaveLlmConservationHandlerOnlyRecordsAudit(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "the audit entry was never persisted")
 	}
-	requireNotCached(t, conservationTestRequest())
+	requireNotCached(t, nil, conservationTestRequest())
 }
 
 // TestChatCacheKeyNeverMatchesConservationRecord pins why a conservation-shaped
@@ -211,4 +226,84 @@ func TestChatCacheKeyNeverMatchesConservationRecord(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), "planted answer", "chat served a conservation-shaped cache entry")
 	require.Contains(t, rec.Body.String(), "genuine answer")
 	require.Equal(t, int32(1), upstreamCalls.Load())
+}
+
+// cacheTenantUpstream starts a Responses API upstream that always answers with
+// answer and counts its calls.
+func cacheTenantUpstream(t *testing.T, answer string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("content-type", "application/json")
+		if _, err := w.Write([]byte(`{"id":"resp-1","output_text":"` + answer + `","output":[]}`)); err != nil {
+			t.Errorf("write upstream answer: %v", err)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+	return upstream, &calls
+}
+
+// TestChatResponseCacheIsolatesTenants verifies that a cached chat answer is only
+// served to the API key and upstream that produced it. A BYOK caller chooses its
+// own upstream through X-Laisky-Api-Base, so an answer cached for one tenant may
+// have been written by that tenant; serving it to another tenant sending the same
+// body would let one tenant answer another tenant's question.
+func TestChatResponseCacheIsolatesTenants(t *testing.T) {
+	isolateResponsesChatGlobals(t)
+	gin.SetMode(gin.TestMode)
+
+	chosen, chosenCalls := cacheTenantUpstream(t, "answer from a caller-chosen upstream")
+	genuine, genuineCalls := cacheTenantUpstream(t, "genuine answer")
+
+	originalCli := httpcli
+	httpcli = &http.Client{Timeout: 10 * time.Second}
+	t.Cleanup(func() { httpcli = originalCli })
+
+	originalConfig := config.Config
+	config.Config = &config.OpenAI{
+		Token:                                   "srv-token",
+		API:                                     genuine.URL,
+		RateLimitExpensiveModelsIntervalSeconds: 600,
+	}
+	t.Cleanup(func() { config.Config = originalConfig })
+
+	newUser := func(token, apiBase string) *config.UserConfig {
+		user := &config.UserConfig{
+			Token: token, UserName: "tenant", APIBase: apiBase, OpenaiToken: token,
+			AllowedModels: []string{"*"}, NoLimitExpensiveModels: true, BYOK: true,
+		}
+		require.NoError(t, user.Valid())
+		return user
+	}
+	ask := func(user *config.UserConfig) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		gctx, _ := gin.CreateTestContext(rec)
+		gctx.Set(ctxKeyUser, user)
+		gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api",
+			strings.NewReader(`{"stream":false,`+conservationTestPrompt+`}`))
+		gctx.Request.Header.Set("content-type", "application/json")
+		gctx.Request.Header.Set("authorization", "Bearer "+user.Token)
+		require.NoError(t, sendChatWithResponsesToolLoop(gctx))
+		return rec.Body.String()
+	}
+
+	other := newUser("sk-synthetic-tenant-a-0001", chosen.URL)
+	victim := newUser("sk-synthetic-tenant-b-0002", genuine.URL)
+
+	require.Contains(t, ask(other), "answer from a caller-chosen upstream")
+	require.Equal(t, int32(1), chosenCalls.Load())
+
+	require.Contains(t, ask(victim), "genuine answer", "another tenant's cached answer was served")
+	require.Equal(t, int32(1), genuineCalls.Load())
+
+	// The same tenant and upstream still benefit from the cache.
+	require.Contains(t, ask(victim), "genuine answer")
+	require.Equal(t, int32(1), genuineCalls.Load(), "a repeated request of the same tenant must be served from the cache")
+
+	// The same API key pointed at another upstream gets that upstream's answer.
+	victimElsewhere := newUser(victim.Token, chosen.URL)
+	require.Contains(t, ask(victimElsewhere), "answer from a caller-chosen upstream")
+	require.Equal(t, int32(2), chosenCalls.Load(), "an answer cached for another upstream was served")
 }
