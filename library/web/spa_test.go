@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -229,5 +230,156 @@ func TestSiteMetadata(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		require.Contains(t, w.Body.String(), "<title>Config Title</title>")
 		require.Contains(t, w.Body.String(), `<div id="root"><main><h1>Fallback content</h1></main></div>`)
+	})
+}
+
+// newSPATraversalFixture lays out <tmp>/dist (the served SPA) next to a
+// sibling secret file and a symlink inside dist that points at it.
+//
+// Parameters:
+//   - t: test handle.
+//
+// Returns:
+//   - http.Handler: the production pipeline (normalizeHandler wrapping gin).
+//   - *gin.Engine: the bare gin engine, to probe paths normalizeHandler rewrites.
+//   - string: secret content that must never be served.
+func newSPATraversalFixture(t *testing.T) (http.Handler, *gin.Engine, string) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	const secret = "TOP-SECRET-OUTSIDE-DIST"
+	base := t.TempDir()
+	distDir := filepath.Join(base, "dist")
+	require.NoError(t, os.MkdirAll(filepath.Join(distDir, "assets"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<html>index</html>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "vite.svg"), []byte("<svg>logo</svg>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "assets", "app.js"), []byte("console.log(1)"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "secret.txt"), []byte(secret), 0o644))
+	require.NoError(t, os.Symlink(filepath.Join(base, "secret.txt"), filepath.Join(distDir, "leak.txt")))
+	require.NoError(t, os.Symlink(filepath.Join("..", "secret.txt"), filepath.Join(distDir, "leak-rel.txt")))
+	// os.Root follows relative symlinks that stay inside distDir.
+	require.NoError(t, os.Symlink("vite.svg", filepath.Join(distDir, "logo-link.svg")))
+
+	r := gin.New()
+	require.NoError(t, RegisterSPA(r, distDir))
+	return &normalizeHandler{handler: r}, r, secret
+}
+
+// serveRawPath sends a GET whose request-target is rawTarget verbatim, the way
+// a client on the wire can, and returns the recorded response.
+//
+// Parameters:
+//   - t: test handle.
+//   - h: handler under test.
+//   - rawTarget: request-target, possibly percent-encoded or non-canonical.
+//   - accept: Accept header value.
+//
+// Returns:
+//   - *httptest.ResponseRecorder: recorded response.
+func serveRawPath(t *testing.T, h http.Handler, rawTarget, accept string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+	u, err := url.ParseRequestURI(rawTarget)
+	require.NoError(t, err)
+	req.URL = u
+	req.RequestURI = rawTarget
+	req.Header.Set("Accept", accept)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	return w
+}
+
+// TestRegisterSPARejectsPathTraversal reproduces CodeQL go/path-injection
+// #75-#78: the prefix-stripping fallback turned `/gptchat../x` into `../x`,
+// which escaped distDir. Every payload must stay confined to distDir, both
+// through the production normalizeHandler pipeline and against bare gin.
+func TestRegisterSPARejectsPathTraversal(t *testing.T) {
+	pipeline, engine, secret := newSPATraversalFixture(t)
+
+	payloads := []string{
+		"/gptchat../secret.txt",
+		"//gptchat../secret.txt",
+		"/./gptchat../secret.txt",
+		"/%2e/gptchat%2e%2e/secret.txt",
+		"/x/../gptchat../secret.txt",
+		"/x/..%2fgptchat..%2fsecret.txt",
+		"/../secret.txt",
+		"/%2e%2e/secret.txt",
+		"/%2e%2e%2fsecret.txt",
+		"/%252e%252e%252fsecret.txt",
+		"/..%5csecret.txt",
+		"/gptchat/..%5c..%5csecret.txt",
+		"/x/../../secret.txt",
+		"/gptchat/../../secret.txt",
+		"/leak.txt",
+		"/leak-rel.txt",
+		"/gptchat/leak.txt",
+		"/x/leak.txt",
+	}
+	for _, h := range []struct {
+		name    string
+		handler http.Handler
+	}{
+		{name: "pipeline", handler: pipeline},
+		{name: "gin", handler: engine},
+	} {
+		for _, payload := range payloads {
+			for _, accept := range []string{"*/*", "text/html"} {
+				t.Run(h.name+" "+payload+" "+accept, func(t *testing.T) {
+					w := serveRawPath(t, h.handler, payload, accept)
+					require.NotContains(t, w.Body.String(), secret)
+					require.NotEqual(t, http.StatusInternalServerError, w.Code)
+					if accept == "*/*" {
+						require.Contains(t, []int{http.StatusNotFound, http.StatusBadRequest}, w.Code,
+							"non-navigation request must not be served: %d", w.Code)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestRegisterSPAPrefixFallback pins the legitimate behaviors of the
+// prefix-stripping fallback so the traversal fix keeps them working.
+func TestRegisterSPAPrefixFallback(t *testing.T) {
+	pipeline, engine, _ := newSPATraversalFixture(t)
+
+	for _, tc := range []struct {
+		name     string
+		handler  http.Handler
+		target   string
+		wantCode int
+		wantBody string
+		wantLoc  string
+	}{
+		{name: "root static file", handler: pipeline, target: "/vite.svg", wantCode: http.StatusOK, wantBody: "<svg>logo</svg>"},
+		{name: "gptchat prefix", handler: pipeline, target: "/gptchat/vite.svg", wantCode: http.StatusOK, wantBody: "<svg>logo</svg>"},
+		{name: "merged gptchat prefix", handler: engine, target: "/gptchatvite.svg", wantCode: http.StatusOK, wantBody: "<svg>logo</svg>"},
+		{name: "merged gptchat assets", handler: engine, target: "/gptchatassets/app.js", wantCode: http.StatusOK, wantBody: "console.log(1)"},
+		{name: "gptchat assets", handler: pipeline, target: "/gptchat/assets/app.js", wantCode: http.StatusOK, wantBody: "console.log(1)"},
+		{name: "other prefix", handler: pipeline, target: "/cv/vite.svg", wantCode: http.StatusOK, wantBody: "<svg>logo</svg>"},
+		{name: "symlink inside dist", handler: pipeline, target: "/logo-link.svg", wantCode: http.StatusOK, wantBody: "<svg>logo</svg>"},
+		{name: "index.html redirect", handler: pipeline, target: "/index.html", wantCode: http.StatusMovedPermanently, wantLoc: "./"},
+		{name: "prefixed index.html redirect", handler: pipeline, target: "/gptchat/index.html", wantCode: http.StatusMovedPermanently, wantLoc: "./"},
+		{name: "missing asset", handler: pipeline, target: "/gptchat/missing.js", wantCode: http.StatusNotFound},
+		{name: "directory is not served", handler: pipeline, target: "/gptchat/assets", wantCode: http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := serveRawPath(t, tc.handler, tc.target, "*/*")
+			require.Equal(t, tc.wantCode, w.Code, w.Body.String())
+			if tc.wantBody != "" {
+				require.Equal(t, tc.wantBody, w.Body.String())
+			}
+			if tc.wantLoc != "" {
+				require.Equal(t, tc.wantLoc, w.Header().Get("Location"))
+			}
+		})
+	}
+
+	t.Run("navigation falls back to index", func(t *testing.T) {
+		w := serveRawPath(t, pipeline, "/gptchat/some/route", "text/html")
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), "<html>index</html>")
 	})
 }

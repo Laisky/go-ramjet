@@ -1,13 +1,16 @@
 package web
 
 import (
+	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
@@ -71,19 +74,17 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
-		// Try to serve static file from distDir
-		// Clean path to prevent directory traversal
-		cleanPath := filepath.Clean(c.Request.URL.Path)
+		// Try to serve static file from distDir. URL paths are slash-separated,
+		// so clean them with path (not filepath); confinement to distDir is
+		// enforced by serveSPAFile, not by cleaning.
+		cleanPath := path.Clean(c.Request.URL.Path)
 		// Prevent serving root as it is handled by indexHandler
 		if cleanPath == "/" || cleanPath == "." {
 			indexHandler(c)
 			return
 		}
 
-		fpath := filepath.Join(distDir, cleanPath)
-		info, err := os.Stat(fpath)
-		if err == nil && !info.IsDir() {
-			c.File(fpath)
+		if serveSPAFile(c, logger, distDir, cleanPath) {
 			return
 		}
 
@@ -105,11 +106,8 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		}
 
 		if newPath != cleanPath {
-			fpath = filepath.Join(distDir, strings.TrimPrefix(newPath, "/"))
-			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath), zap.String("fpath", fpath))
-			info, err = os.Stat(fpath)
-			if err == nil && !info.IsDir() {
-				c.File(fpath)
+			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath))
+			if serveSPAFile(c, logger, distDir, newPath) {
 				return
 			}
 		}
@@ -125,6 +123,57 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 	})
 
 	return nil
+}
+
+// serveSPAFile serves the regular file name from distDir, confined to distDir.
+//
+// name comes from the request URL, so it is untrusted. It must be a local,
+// slash-separated path (fs.ValidPath: no "..", ".", or empty elements once the
+// leading slash is dropped), and it is resolved through an os.Root so neither
+// ".." nor a symlink can reach outside distDir. The root is opened per request
+// so a rebuilt dist directory is picked up without a restart, like index.html.
+//
+// Parameters:
+//   - c: request context; the response is written to c.Writer when served.
+//   - logger: request-scoped logger.
+//   - distDir: SPA build directory that bounds every lookup.
+//   - name: candidate file path taken from the request URL.
+//
+// Returns:
+//   - bool: true when a file was served; false when the caller should fall back.
+func serveSPAFile(c *gin.Context, logger glog.Logger, distDir, name string) bool {
+	name = strings.TrimPrefix(name, "/")
+	if name == "" || !fs.ValidPath(name) {
+		logger.Debug("spa reject non-local path", zap.String("name", name))
+		return false
+	}
+
+	root, err := os.OpenRoot(distDir)
+	if err != nil {
+		logger.Error("open spa dist root", zap.String("dir", distDir), zap.Error(err))
+		return false
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			logger.Warn("close spa dist root", zap.String("dir", distDir), zap.Error(closeErr))
+		}
+	}()
+
+	fsys := root.FS()
+	info, err := fs.Stat(fsys, name)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			// e.g. a symlink that escapes distDir.
+			logger.Debug("spa stat rejected", zap.String("name", name), zap.Error(err))
+		}
+		return false
+	}
+	if info.IsDir() {
+		return false
+	}
+
+	http.ServeFileFS(c.Writer, c.Request, fsys, name)
+	return true
 }
 
 // TryRegisterDefaultSPA tries to register the SPA served from the default dist path.
