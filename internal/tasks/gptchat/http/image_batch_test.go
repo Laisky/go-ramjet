@@ -240,3 +240,24 @@ func TestAzureImageAnswersAreBoundedPerImage(t *testing.T) {
 	require.Zero(t, downloads.Load(), "an oversized Azure answer was accepted")
 	require.Zero(t, f.delivered())
 }
+
+// TestGenerateImagesRefusesUnboundedCount verifies generateImages enforces the image
+// count bound itself, before sizing any allocation or calling the upstream, so a
+// caller that forgot normalizeImageCount cannot fan out a request-controlled count.
+func TestGenerateImagesRefusesUnboundedCount(t *testing.T) {
+	var calls atomic.Int32
+	f := &imageBillingFixture{}
+	f.install(t)
+	f.override = func(http.ResponseWriter, *http.Request) bool {
+		calls.Add(1)
+		return false
+	}
+
+	for _, n := range []int{0, -1, maxImagesPerRequest + 1, hugeImageCount} {
+		for _, user := range []*config.UserConfig{billedImageUser(false), azureImageUser()} {
+			_, err := generateImages(t.Context(), user, "dall-e-3", "draw a tree", n, "")
+			require.ErrorContains(t, err, "outside", "count %d", n)
+		}
+	}
+	require.Zero(t, calls.Load(), "an unbounded count reached the upstream")
+}

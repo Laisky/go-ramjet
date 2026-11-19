@@ -159,9 +159,14 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 //   - size: Requested image size for OpenAI-compatible upstreams; empty keeps the
 //     upstream default.
 //
-// It returns the generated images, or the first error.
+// It returns the generated images, or the first error. A count outside
+// 1..maxImagesPerRequest is refused before any allocation or upstream call, so the
+// bound holds even for a caller that skipped normalizeImageCount.
 func generateImages(ctx context.Context, user *config.UserConfig,
 	model, prompt string, n int, size string) ([][]byte, error) {
+	if n < 1 || n > maxImagesPerRequest {
+		return nil, errors.Errorf("image count %d is outside 1..%d", n, maxImagesPerRequest)
+	}
 	if !strings.Contains(user.ImageUrl, "openai.azure.com") {
 		imgs, err := fetchImageFromOpenaiDalle(ctx, user, model, prompt, n, size)
 		if err != nil {
