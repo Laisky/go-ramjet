@@ -22,7 +22,8 @@ import (
 // the proxy's connection, a small rebinding window that PinnedTransport
 // closes. Use ProxiedTransport only where the proxy is required; without one,
 // use PinnedTransport. Like PinnedTransport it keeps no idle connections, so a
-// client built per request leaves nothing open behind it.
+// client built per request leaves nothing open behind it, and it never
+// negotiates or removes content codings; see WithContentDecoding.
 type ProxiedTransport struct {
 	resolve   Resolver
 	transport *http.Transport
@@ -33,7 +34,8 @@ type ProxiedTransport struct {
 // the target's certificate. deps.Dial is not used: it dials admitted target
 // addresses, while this transport only ever connects to the operator's proxy,
 // which it reaches with a ten-second dialer. opts adjust the response-header
-// timeout as for NewHTTPClient.
+// timeout as for NewHTTPClient; content decoding applies only to
+// NewProxiedHTTPClient, which wraps the transport.
 func NewProxiedTransport(proxy *url.URL, deps Dependencies, opts ...ClientOption) (*ProxiedTransport, error) {
 	if proxy == nil || proxy.Scheme == "" || proxy.Host == "" {
 		return nil, errors.New("proxy URL with scheme and host is required")
@@ -46,6 +48,7 @@ func NewProxiedTransport(proxy *url.URL, deps Dependencies, opts ...ClientOption
 			Proxy:                  http.ProxyURL(proxy),
 			DialContext:            dial,
 			DisableKeepAlives:      true,
+			DisableCompression:     true,
 			ForceAttemptHTTP2:      false,
 			TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: deps.RootCAs},
 			TLSHandshakeTimeout:    10 * time.Second,
@@ -80,11 +83,16 @@ func (t *ProxiedTransport) RoundTrip(request *http.Request) (*http.Response, err
 // NewProxiedHTTPClient returns a client for user-selected targets that sends
 // every admitted hop, including redirects, through proxy. It follows at most
 // the shared policy's default redirect budget and bounds each whole exchange
-// by timeout. See ProxiedTransport for the rebinding trade-off.
+// by timeout. See ProxiedTransport for the rebinding trade-off. opts adjust
+// the transport and may add content decoding.
 func NewProxiedHTTPClient(timeout time.Duration, proxy *url.URL, deps Dependencies, opts ...ClientOption) (*http.Client, error) {
 	transport, err := NewProxiedTransport(proxy, deps, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "new proxied transport")
 	}
-	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: checkRedirectBudget}, nil
+	return &http.Client{
+		Transport:     applyClientOptions(opts).wrap(transport),
+		Timeout:       timeout,
+		CheckRedirect: checkRedirectBudget,
+	}, nil
 }

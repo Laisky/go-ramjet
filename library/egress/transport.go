@@ -47,6 +47,7 @@ type PinnedTransport struct {
 // clientOptions holds the settings ClientOption values adjust.
 type clientOptions struct {
 	responseHeaderTimeout time.Duration
+	decodeContent         bool
 }
 
 // ClientOption customizes the transport behind NewHTTPClient or NewProxiedHTTPClient.
@@ -60,6 +61,24 @@ func WithResponseHeaderTimeout(timeout time.Duration) ClientOption {
 			opts.responseHeaderTimeout = timeout
 		}
 	}
+}
+
+// WithContentDecoding wraps the client's transport in ContentDecodingTransport,
+// so requests that leave content negotiation to the client advertise gzip and
+// read decoded bodies, as with net/http's default transport. Without it the
+// client is wire-level.
+func WithContentDecoding() ClientOption {
+	return func(opts *clientOptions) {
+		opts.decodeContent = true
+	}
+}
+
+// wrap returns transport, inside ContentDecodingTransport when decoding was requested.
+func (o clientOptions) wrap(transport http.RoundTripper) http.RoundTripper {
+	if o.decodeContent {
+		return ContentDecodingTransport{Base: transport}
+	}
+	return transport
 }
 
 // applyClientOptions folds opts into one clientOptions value.
@@ -143,11 +162,11 @@ func (t PinnedTransport) RoundTrip(request *http.Request) (*http.Response, error
 // NewHTTPClient returns a client for user-selected targets whose every hop,
 // including redirects, is admitted and pinned. It follows at most the shared
 // policy's default redirect budget and bounds each whole exchange by timeout.
-// opts adjust the underlying PinnedTransport.
+// opts adjust the underlying PinnedTransport and may add content decoding.
 func NewHTTPClient(timeout time.Duration, deps Dependencies, opts ...ClientOption) *http.Client {
 	options := applyClientOptions(opts)
 	return &http.Client{
-		Transport:     PinnedTransport{Deps: deps, ResponseHeaderTimeout: options.responseHeaderTimeout},
+		Transport:     options.wrap(PinnedTransport{Deps: deps, ResponseHeaderTimeout: options.responseHeaderTimeout}),
 		Timeout:       timeout,
 		CheckRedirect: checkRedirectBudget,
 	}
