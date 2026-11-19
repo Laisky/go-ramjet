@@ -1,5 +1,8 @@
 """Contracts for fast PR CI scope and browser smoke."""
 
+import contextlib
+import io
+import json
 import importlib.util
 import pathlib
 import os
@@ -93,6 +96,25 @@ class FastCIContracts(unittest.TestCase):
             with self.subTest(code=code), mock.patch.object(smoke.probe, 'run_browser',
                                                            return_value=fixtures.result(output, exit=code)):
                 self.assertNotEqual(smoke.run_smoke(ROOT)['status'], 'passed')
+
+    def test_smoke_retains_safe_failure_observations(self):
+        """test_smoke_retains_safe_failure_observations exposes finite phases without raw output."""
+        smoke = load('probe_cv_smoke')
+        fixtures = load('test_probe_cv_print')
+        row = smoke.probe.evaluate_cell(smoke.probe.CELLS[2], fixtures.result(
+            fixtures.synthetic_output(instrumented=True, mode='auto'), exit=1))
+        row['raw_stderr'] = 'private-browser-error-canary'
+        output = io.StringIO()
+        with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD='a' * 40), \
+                mock.patch.object(smoke.probe, 'git', return_value='same-tree'), \
+                mock.patch.object(smoke, 'run_smoke', return_value=row), \
+                contextlib.redirect_stdout(output):
+            self.assertEqual(smoke.main(), 1)
+        rendered = output.getvalue()
+        payload = json.loads(rendered.split(' ', 1)[1])
+        self.assertEqual(payload['observations'], row['observations'])
+        self.assertNotEqual(payload['status'], 'passed')
+        self.assertNotIn('private-browser-error-canary', rendered)
 
 
 if __name__ == '__main__':
