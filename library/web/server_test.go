@@ -29,6 +29,9 @@ func TestNormalizeHandlerDuplicatePrefix(t *testing.T) {
 	require.Equal(t, "/gptchat/favicon.ico", gotPath)
 }
 
+// TestSecurityMiddleware pins the default response headers: MIME sniffing is off,
+// framing is limited to the same origin by both X-Frame-Options and the modern
+// CSP frame-ancestors directive, and cross-origin referrers carry only the origin.
 func TestSecurityMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -44,6 +47,7 @@ func TestSecurityMiddleware(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 	require.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	require.Equal(t, "frame-ancestors 'self'", w.Header().Get("Content-Security-Policy"))
 	require.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 }
 

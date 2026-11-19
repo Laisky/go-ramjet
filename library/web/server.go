@@ -36,6 +36,11 @@ func init() {
 	)
 }
 
+// securityMiddleware sets the default security headers on every response and
+// continues the chain. Framing is limited to the same origin through both
+// X-Frame-Options and CSP frame-ancestors; Referrer-Policy defaults to
+// strict-origin-when-cross-origin unless a handler already chose a stricter
+// policy (SSO pages use no-referrer).
 func securityMiddleware(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("X-Frame-Options", "SAMEORIGIN")
