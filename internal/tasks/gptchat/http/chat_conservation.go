@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	gmw "github.com/Laisky/gin-middlewares/v7"
 	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,10 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 		return
 	}
 
+	if err := storeCachedResponse(freq, req.Response); err != nil {
+		gmw.GetLogger(ctx).Warn("cache conservation response", zap.Error(err))
+	}
+
 	go saveLLMConservation(conservationLogger(), freq, req.Response, req.Reasoning)
 }
 
@@ -37,8 +42,9 @@ func conservationLogger() glog.Logger {
 	return log.Logger.Named("save_llm")
 }
 
-// saveLLMConservation caches respContent under the cache key of req and persists the
-// exchange to the openai conservations collection. logger receives all diagnostics
+// saveLLMConservation persists the exchange to the openai conservations collection.
+// It does not touch llmRespCache; callers cache through storeCachedResponse, which
+// applies the shared responseCacheAllowed policy. logger receives all diagnostics
 // and must be resolved by the caller before the goroutine is spawned; req is the
 // frontend request, respContent the final answer, and reasoning the optional
 // reasoning text. It returns nothing; every failure is logged.
@@ -51,13 +57,6 @@ func saveLLMConservation(logger glog.Logger, req *FrontendReq, respContent strin
 	if len(req.Messages) == 0 {
 		logger.Debug("skip saving conservation for request without messages")
 		return
-	}
-
-	// save to cache
-	if cacheKey, err := req2CacheKey(req); err != nil {
-		logger.Warn("marshal req for cache key", zap.Error(err))
-	} else {
-		llmRespCache.Store(cacheKey, respContent)
 	}
 
 	// save to db

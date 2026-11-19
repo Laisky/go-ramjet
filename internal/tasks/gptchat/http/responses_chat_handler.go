@@ -127,27 +127,16 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	reservation := getTokenReservation(ctx)
 	defer clearTokenReservation(ctx)
 
-	// If MCP is enabled (api keys present), skip cache to avoid persisting secrets.
-	cacheAllowed := !(config.Config != nil && config.Config.EnableMemory)
-
-	for _, srv := range frontendReq.MCPServers {
-		if strings.TrimSpace(srv.APIKey) != "" {
-			cacheAllowed = false
-			break
+	// responseCacheAllowed skips the cache for memory and MCP-credential requests.
+	if respContent, ok, err := loadCachedResponse(frontendReq); err != nil {
+		logger.Debug("skip response cache lookup", zap.Error(err))
+	} else if ok {
+		finalText := respContent
+		if reservation != nil {
+			_ = reservation.Finalize(gmw.Ctx(ctx), CountTextTokens(finalText))
 		}
-	}
-
-	if cacheAllowed && frontendReq != nil && len(frontendReq.Messages) > 0 {
-		if cacheKey, err := req2CacheKey(frontendReq); err == nil {
-			if respContent, ok := llmRespCache.Load(cacheKey); ok {
-				finalText := respContent
-				if reservation != nil {
-					_ = reservation.Finalize(gmw.Ctx(ctx), CountTextTokens(finalText))
-				}
-				clearTokenReservation(ctx)
-				return writeFinalToUI(ctx, frontendReq, nil, finalText, "", nil)
-			}
-		}
+		clearTokenReservation(ctx)
+		return writeFinalToUI(ctx, frontendReq, nil, finalText, "", nil)
 	}
 
 	// Synchronous tool loop; we stream only to the browser.
@@ -271,10 +260,8 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	}
 
 	// Save to cache and audit log.
-	if cacheAllowed && frontendReq != nil && len(frontendReq.Messages) > 0 {
-		if cacheKey, err := req2CacheKey(frontendReq); err == nil {
-			llmRespCache.Store(cacheKey, finalText)
-		}
+	if err := storeCachedResponse(frontendReq, finalText); err != nil {
+		logger.Debug("skip response cache store", zap.Error(err))
 	}
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
 		if frontendReq != nil && len(frontendReq.Messages) > 0 && finalText != "" {
