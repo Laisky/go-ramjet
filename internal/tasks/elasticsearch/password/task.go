@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -75,10 +77,9 @@ func runTask() {
 	apis := gconfig.Shared.GetStringSlice("tasks.elasticsearch-v2.password.apis")
 	failed := 0
 	for i, api := range apis {
-		// MaskURLPassword also rejects URLs that net/url cannot parse. Its error
-		// never quotes the URL, unlike the parse error an HTTP request would
-		// return, so the admin credentials stay out of the logs.
-		maskedAPI, err := gutils.MaskURLPassword(api, apiPasswordMask)
+		// An API that logSafeAPI rejects is never requested, and is reported by
+		// index only because any part of it may hold the admin credentials.
+		maskedAPI, err := logSafeAPI(api)
 		if err != nil {
 			log.Logger.Error("skip invalid elasticsearch api",
 				zap.Int("index", i),
@@ -114,10 +115,37 @@ func runTask() {
 	log.Logger.Info("success changed password")
 }
 
+// logSafeAPI returns api with its password masked for logging. It returns an
+// error that never quotes api when net/url cannot parse api, when api has no
+// host, or when a raw '@' appears after the authority. The last case means a
+// '/', '?' or '#' in the credentials ended the authority early, so net/url
+// read no userinfo, or the wrong one, and left part of the password in the
+// host, path, query or fragment, where no masking applies; such an API would
+// also be requested on the wrong host. An '@' outside the credentials, such as
+// in a username in the path, must be written as %40.
+func logSafeAPI(api string) (string, error) {
+	parsed, err := url.Parse(api)
+	if err != nil {
+		// The cause quotes api with its credentials, so it is deliberately not wrapped.
+		return "", errors.New("api is not a valid URL")
+	}
+	if strings.Contains(parsed.EscapedPath()+parsed.RawQuery+parsed.EscapedFragment(), "@") {
+		return "", errors.New("api has a raw '@' after its host; " +
+			"percent-encode '/', '?', '#' and '@' in the credentials, and '@' elsewhere, as in RFC 3986")
+	}
+	masked, err := gutils.MaskURLPassword(api, apiPasswordMask)
+	if err != nil {
+		return "", errors.Wrap(err, "mask api password")
+	}
+	return masked, nil
+}
+
 // postPassword posts body, the JSON user with its new password, to api and
 // returns an error unless Elasticsearch accepted it. api must already have
-// passed gutils.MaskURLPassword. Transport errors are safe to return because
-// net/http masks the URL password in them.
+// passed logSafeAPI, so any credentials in it were parsed as userinfo, and
+// net/http masks that password in the transport errors returned here. The
+// response body is closed before returning, so each API's connection is
+// released before the next API is requested.
 func postPassword(ctx context.Context, api string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api, bytes.NewReader(body))
 	if err != nil {

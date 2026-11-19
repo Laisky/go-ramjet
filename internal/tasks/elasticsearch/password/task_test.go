@@ -2,12 +2,15 @@ package password
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/go-utils/v6/json"
@@ -116,17 +119,125 @@ func TestRunTaskChangesPasswordWithoutLoggingSecrets(t *testing.T) {
 	requireNoSecretsLogged(t, entries, newPassword, "hunter", "2-secret")
 }
 
-// TestRunTaskNeverLogsCredentialsOfMalformedAPI guards the error path for an
-// API URL that net/url rejects. Its parse error quotes the whole URL, so the
-// task must report the bad entry without echoing any part of its credentials.
+// roundTripFunc adapts a function to http.RoundTripper.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+// RoundTrip calls f with req and returns its response and error.
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// useTransport makes the task's HTTP client send through rt for the duration of t.
+func useTransport(t *testing.T, rt http.RoundTripper) {
+	t.Helper()
+	old := httpClient.Transport
+	httpClient.Transport = rt
+	t.Cleanup(func() { httpClient.Transport = old })
+}
+
+// TestRunTaskNeverLogsCredentialsOfMalformedAPI guards API URLs whose
+// credentials net/url cannot read as userinfo. A bad escape makes the parse
+// error quote the whole URL. A raw '/', '?' or '#' in the password ends the
+// authority early, so net/url parses no userinfo (or the wrong one) and puts
+// the rest of the password in the host, path, query or fragment, where no
+// masking applies. The task must skip such an API before any request, and
+// report it by index without echoing any part of it, in dry and real runs.
 func TestRunTaskNeverLogsCredentialsOfMalformedAPI(t *testing.T) {
-	configureTask(t, false, "http://elastic:bad%zz-secret@127.0.0.1:1/_security/user/elastic/_password")
+	const path = "/_security/user/elastic/_password"
+	apis := []string{
+		"http://elastic:bad%zzSECRETTAIL@127.0.0.1:1" + path,
+		"https://elastic:12?SECRETTAIL@es.example" + path,
+		"https://elastic:/SECRETTAIL@es.example" + path,
+		"https://elastic:12#SECRETTAIL@es.example" + path,
+		"https://elastic:p@ss/SECRETTAIL@es.example" + path,
+	}
+	for i, api := range apis {
+		for _, dry := range []bool{true, false} {
+			t.Run(fmt.Sprintf("api%d/dry=%t", i, dry), func(t *testing.T) {
+				var sent atomic.Int32
+				useTransport(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+					sent.Add(1)
+					return nil, errors.New("offline test transport")
+				}))
+				configureTask(t, dry, api)
+				entries := captureLogs(t)
+
+				runTask()
+
+				require.Zero(t, sent.Load(), "an API whose credentials did not parse must not be requested")
+				require.Len(t, entries.FilterMessage("skip invalid elasticsearch api").All(), 1)
+				require.Empty(t, entries.FilterMessage("success changed password").All())
+				requireNoSecretsLogged(t, entries, "SECRETTAIL", "es.example", "127.0.0.1",
+					GeneratePasswdByDate(gutils.UTCNow(), testSecret))
+			})
+		}
+	}
+}
+
+// TestLogSafeAPIAcceptsEncodedAt pins that an '@' written as %40 outside the
+// credentials is still accepted, so a username such as an email address can
+// appear in the change-password path, while the password stays masked.
+func TestLogSafeAPIAcceptsEncodedAt(t *testing.T) {
+	masked, err := logSafeAPI("https://elastic:p@ss@es.example/_security/user/ops%40corp/_password")
+	require.NoError(t, err)
+	require.Equal(t, "https://elastic:*****@es.example/_security/user/ops%40corp/_password", masked)
+}
+
+// closeTracker reports the first Close of the wrapped response body.
+type closeTracker struct {
+	io.ReadCloser
+	once    sync.Once
+	onClose func()
+}
+
+// Close closes the wrapped body and calls onClose once.
+func (c *closeTracker) Close() error {
+	c.once.Do(c.onClose)
+	return c.ReadCloser.Close()
+}
+
+// TestRunTaskClosesEachResponseBeforeTheNextAPI guards against holding every
+// response body, and its connection, open until the whole run ends: each
+// API's response must be closed before the next API is requested.
+func TestRunTaskClosesEachResponseBeforeTheNextAPI(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"acknowledged":true}`))
+	}))
+	t.Cleanup(server.Close)
+
+	base := &http.Transport{}
+	t.Cleanup(base.CloseIdleConnections)
+	var mu sync.Mutex
+	open := 0
+	var openAtRequest []int
+	useTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		mu.Lock()
+		openAtRequest = append(openAtRequest, open)
+		mu.Unlock()
+		resp, err := base.RoundTrip(req)
+		if err != nil {
+			return nil, err
+		}
+		mu.Lock()
+		open++
+		mu.Unlock()
+		resp.Body = &closeTracker{ReadCloser: resp.Body, onClose: func() {
+			mu.Lock()
+			open--
+			mu.Unlock()
+		}}
+		return resp, nil
+	}))
+	configureTask(t, false, adminAPI(server), adminAPI(server), adminAPI(server))
 	entries := captureLogs(t)
 
 	runTask()
 
-	require.NotEmpty(t, entries.FilterLevelExact(zapcore.ErrorLevel).All(), "the malformed API must be reported")
-	requireNoSecretsLogged(t, entries, "zz-secret", GeneratePasswdByDate(gutils.UTCNow(), testSecret))
+	require.NotEmpty(t, entries.FilterMessage("success changed password").All())
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []int{0, 0, 0}, openAtRequest, "open response bodies when each API was requested")
+	require.Zero(t, open, "every response body must be closed by the end of the run")
 }
 
 // TestRunTaskDoesNotReportSuccessAfterFailure guards against announcing a
