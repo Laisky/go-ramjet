@@ -2791,10 +2791,10 @@ function bindSessionEditBtn() {
           sconfig.session_name = newSessionName;
           await saveChatSessionConfig(sconfig, sid);
 
-          // update session name
+          // update session name; it is user-typed or synced data, so write it as text
           document.querySelector(`#sessionManager .sessions [data-session="${sid}"]`).dataset.name = newSessionName;
-          document.querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
-          chatContainer.querySelector(`.sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
+          document.querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).textContent = newSessionName;
+          chatContainer.querySelector(`.sessions [data-session="${sid}"] .col`).textContent = newSessionName;
         },
         oldSessionName
       );
@@ -2883,21 +2883,22 @@ function bindSessionDuplicateBtn() {
       await libs.KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, newSconfig);
       await libs.KvSet(kvSessionKey(newSessionID), originalChatHistory);
 
-      // Add new session to UI
+      // Add new session to UI; the name is user-typed or synced data, so escape it
       const newSessionName = newSconfig.session_name;
+      const newSessionNameHTML = libs.escapeHtml(newSessionName);
       const sessionManagerHtml = `
-                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionNameHTML}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
-                        <div class="col">${newSessionName}</div>
+                        <div class="col">${newSessionNameHTML}</div>
                         <i class="bi bi-pencil-square"></i>
                         <i class="bi bi-files"></i>
                         <i class="bi bi-trash col-auto"></i>
                     </button>
                 </div>`;
       const chatContainerHtml = `
-                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionNameHTML}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
-                        <div class="col">${newSessionName}</div>
+                        <div class="col">${newSessionNameHTML}</div>
                     </button>
                 </div>`;
 
@@ -2963,7 +2964,8 @@ async function setupSessionManager() {
 
         let active = '';
         const sconfig = await getChatSessionConfig(sessionID);
-        const sessionName = sconfig.session_name || sessionID;
+        // The name is user-typed or synced data, so escape it for the markup below.
+        const sessionName = libs.escapeHtml(sconfig.session_name || sessionID);
         if (sessionID === selectedSessionID) {
           active = 'active';
         }

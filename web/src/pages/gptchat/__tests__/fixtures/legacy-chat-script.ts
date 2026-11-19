@@ -13,6 +13,42 @@ export const LEGACY_CHAT_SCRIPT_PATH = path.resolve(
   '../../../../../../internal/tasks/gptchat/templates/js/chat.js',
 )
 
+/**
+ * LEGACY_LIBS_SCRIPT_PATH is the legacy libs.js ES module that the legacy page
+ * exposes to chat.js as window.libs.
+ */
+export const LEGACY_LIBS_SCRIPT_PATH = path.resolve(
+  import.meta.dirname,
+  '../../../../../../internal/tasks/gptchat/templates/js/libs.js',
+)
+
+/**
+ * loadLegacyLibs evaluates the real legacy libs.js ES module and returns the
+ * named exports, so tests can hand chat.js its actual helpers (such as
+ * escapeHtml) instead of re-implementing them. libs.js only declares
+ * `export const` bindings and has no imports or top-level side effects, so it
+ * is evaluated as one strict-mode function body with `export` removed.
+ *
+ * @param names - Exported bindings to return.
+ * @returns An object mapping each requested name to its exported value.
+ * @throws Error when libs.js no longer exports one of the names.
+ */
+export function loadLegacyLibs<T extends Record<string, unknown>>(
+  names: string[],
+): T {
+  const source = readFileSync(LEGACY_LIBS_SCRIPT_PATH, 'utf8')
+  names.forEach((name) => {
+    if (!new RegExp(`^export const ${name} =`, 'm').test(source)) {
+      throw new Error(`legacy libs.js has no export ${name}`)
+    }
+  })
+  const body = source.replace(/^export const /gm, 'const ')
+  const factory = new Function(
+    `'use strict';\n${body}\nreturn { ${names.join(', ')} };`,
+  )
+  return factory() as T
+}
+
 let cachedSource: string | undefined
 
 /**
