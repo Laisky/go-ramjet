@@ -4,8 +4,9 @@
  *
  * Pipeline order matters. Model migrations and the sync key come first; the
  * API endpoint is settled next because every credential decision is scoped
- * to it; URL overrides are applied as guarded writes; only then is the API
- * token invariant enforced, so no write path can bypass it.
+ * to it; the stored API token is repaired next, so a key it sets aside is
+ * known; URL overrides are then applied as guarded writes, and a link that
+ * would change a held key's endpoint or the key itself waits for the user.
  */
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
@@ -206,6 +207,22 @@ export async function hydrateSessionConfig(
     configChanged = true
   }
 
+  // A token that is really the sync key (browser password-manager autofill
+  // in the settings sidebar) is never sent anywhere. The session falls back
+  // to the free tier and the UI asks the user to re-enter or pick a key;
+  // another session's key is never adopted silently, because sharing an
+  // endpoint does not mean sharing an account. This runs before URL
+  // overrides, so a key the repair sets aside already counts as held when
+  // a link asks to change the session's endpoint (I4).
+  const repair = repairStoredApiToken(finalConfig, [globalSyncKey])
+  if (repair.outcome !== 'healthy') {
+    finalConfig = repair.config
+    configChanged = true
+    console.warn(
+      `[useConfig] API token awaiting reset: session=${sessionId} outcome=${repair.outcome}`,
+    )
+  }
+
   let pendingLinkChange: LinkCredentialChange | undefined
   if (options?.applyUrlOverrides) {
     const overrideResult = applyUrlOverridesToConfig(finalConfig)
@@ -244,20 +261,6 @@ export async function hydrateSessionConfig(
       finalConfig = held.config
       configChanged = true
     }
-  }
-
-  // A token that is really the sync key (browser password-manager autofill
-  // in the settings sidebar) is never sent anywhere. The session falls back
-  // to the free tier and the UI asks the user to re-enter or pick a key;
-  // another session's key is never adopted silently, because sharing an
-  // endpoint does not mean sharing an account.
-  const repair = repairStoredApiToken(finalConfig, [globalSyncKey])
-  if (repair.outcome !== 'healthy') {
-    finalConfig = repair.config
-    configChanged = true
-    console.warn(
-      `[useConfig] API token awaiting reset: session=${sessionId} outcome=${repair.outcome}`,
-    )
   }
 
   if (

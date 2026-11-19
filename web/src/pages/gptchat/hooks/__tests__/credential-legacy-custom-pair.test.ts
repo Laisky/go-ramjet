@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   installStore,
+  PROVIDER_A,
   sessionConfig,
   storedConfig,
   SYNC_KEY,
@@ -103,6 +104,30 @@ describe('legacy API key that is also a custom sync key', () => {
     expect(config.api_token_before_reset).toBe(CUSTOM_PAIR)
     expect(storedConfig(store, 1).api_token_before_reset).toBe(CUSTOM_PAIR)
     expect(result.current.recovery.needsRotation).toBe(true)
+  })
+
+  it('holds a link endpoint until the user decides, so a restore stays on its endpoint', async () => {
+    window.history.replaceState({}, '', '/?api_base=https://evil.example')
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: CUSTOM_PAIR,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: CUSTOM_PAIR,
+        sync_key: CUSTOM_PAIR,
+      }),
+    })
+
+    const { result } = await renderRecoveryHarness()
+
+    const config = result.current.cfg.config
+    expect(config.api_token_before_reset).toBe(CUSTOM_PAIR)
+    expect(config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    expect(result.current.cfg.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: 'https://evil.example',
+    })
   })
 
   it('does not keep a generated sync key, which is never an API key', async () => {
