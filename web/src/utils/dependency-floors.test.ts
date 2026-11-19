@@ -42,6 +42,7 @@ const dependencyFloors = [
   ['@humanfs/node', 0, '0.16.8'],
   ['@babel/core', 7, '7.29.6'],
   ['zod', 4, '4.6.6'],
+  ['@ungap/structured-clone', 1, '1.3.1'],
 ] as const
 
 // Advisories that publish no fix for these majors require a newer major instead.
