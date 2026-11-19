@@ -253,7 +253,7 @@ func TestDownloadPDFUsesStoredPDF(t *testing.T) {
 	require.NoError(t, err)
 
 	renderer := &trackingPDFRenderer{}
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, store)
 	require.NoError(t, err)
 
 	h := &handler{
@@ -372,7 +372,7 @@ func TestDownloadPDFMissingTriggersAsyncRender(t *testing.T) {
 
 	signal := make(chan struct{}, 1)
 	renderer := &signalPDFRenderer{ch: signal}
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, store)
 	require.NoError(t, err)
 
 	h := &handler{
@@ -421,7 +421,7 @@ func TestDownloadPDFAccessDeniedMissingTriggersAsyncRender(t *testing.T) {
 
 	signal := make(chan struct{}, 1)
 	renderer := &signalPDFRenderer{ch: signal}
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, store)
 	require.NoError(t, err)
 
 	h := &handler{
@@ -460,7 +460,7 @@ func TestRenderPDFPreviewReturnsPDFWithoutPersisting(t *testing.T) {
 	require.NoError(t, err)
 
 	renderer := &trackingPDFRenderer{}
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, &fakeContentStore{})
 	require.NoError(t, err)
 
 	h := &handler{pdfService: pdfService}
@@ -502,7 +502,7 @@ func TestRenderPDFPreviewRejectsEmptyContent(t *testing.T) {
 	require.NoError(t, err)
 
 	renderer := &trackingPDFRenderer{}
-	pdfService, err := NewPDFService(renderer, pdfStore)
+	pdfService, err := NewPDFService(renderer, pdfStore, &fakeContentStore{})
 	require.NoError(t, err)
 
 	h := &handler{pdfService: pdfService}

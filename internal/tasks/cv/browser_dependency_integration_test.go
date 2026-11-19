@@ -18,6 +18,7 @@ import (
 func TestBrowserPDFWaitsForFontsAndKeepsPagination(t *testing.T) {
 	t.Parallel()
 	logCVBrowserRuntime(t)
+	warmCVBrowser(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	ctx = withCVPDFPrintProbe(ctx, t)
@@ -46,6 +47,7 @@ setTimeout(() => { document.getElementById('ready').textContent = 'Font-ready mi
 func TestBrowserPDFRejectsFontPromiseFailure(t *testing.T) {
 	t.Parallel()
 	logCVBrowserRuntime(t)
+	warmCVBrowser(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	ctx = withCVPDFPrintProbe(ctx, t)

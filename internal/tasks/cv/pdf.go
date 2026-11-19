@@ -19,6 +19,11 @@ import (
 )
 
 const (
+	// pdfBrowserStartupTimeout bounds launching Chrome and attaching its first tab. It matches Puppeteer's default
+	// launch timeout, exceeds the slowest completed cold start observed on hosted CI runners (about 21s), and is
+	// longer than the former shared startup-plus-render deadline, so no launch that used to succeed can now fail.
+	pdfBrowserStartupTimeout = 30 * time.Second
+	// pdfRenderTimeout bounds the page work once the browser is ready, from navigation through printing.
 	pdfRenderTimeout  = 25 * time.Second
 	pdfViewportWidth  = 1280
 	pdfViewportHeight = 720
@@ -168,58 +173,6 @@ type PDFRenderer interface {
 	Render(ctx context.Context, content string) ([]byte, error)
 }
 
-// PDFService renders CV markdown into PDF and uploads it to object storage.
-type PDFService struct {
-	renderer PDFRenderer
-	store    *S3PDFStore
-}
-
-// NewPDFService creates a PDFService using the provided renderer and store.
-// It takes a renderer implementation and an S3 store, and returns the configured service or an error.
-func NewPDFService(renderer PDFRenderer, store *S3PDFStore) (*PDFService, error) {
-	if renderer == nil {
-		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
-	}
-	if store == nil {
-		return nil, errors.WithStack(errors.New("pdf store is nil"))
-	}
-
-	return &PDFService{
-		renderer: renderer,
-		store:    store,
-	}, nil
-}
-
-// Render converts markdown content into a PDF document and returns the PDF bytes or an error.
-func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, errors.Wrap(err, "context done")
-	}
-	if s.renderer == nil {
-		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
-	}
-
-	return s.renderer.Render(ctx, content)
-}
-
-// RenderAndStore renders markdown into a PDF and persists it to object storage.
-func (s *PDFService) RenderAndStore(ctx context.Context, content string) error {
-	if err := ctx.Err(); err != nil {
-		return errors.Wrap(err, "context done")
-	}
-
-	pdfBytes, err := s.Render(ctx, content)
-	if err != nil {
-		return errors.Wrap(err, "render cv pdf")
-	}
-
-	if err := s.store.Save(ctx, pdfBytes); err != nil {
-		return errors.Wrap(err, "save cv pdf")
-	}
-
-	return nil
-}
-
 // CVPDFRenderer converts markdown content into a styled PDF.
 type CVPDFRenderer struct {
 	parser   parser.Parser
@@ -341,13 +294,52 @@ func renderHTMLToPDFWithRenderer(ctx context.Context, htmlContent string, render
 	return renderer(ctx, htmlContent)
 }
 
-// renderHTMLToPDFInBrowser renders HTML with the existing browser phases and total render deadline.
+// pdfBrowserBudgets holds the independent browser startup and page rendering limits for one PDF render.
+type pdfBrowserBudgets struct {
+	startup time.Duration
+	render  time.Duration
+}
+
+// defaultPDFBrowserBudgets are the production limits: a dedicated startup budget and an unchanged render budget.
+var defaultPDFBrowserBudgets = pdfBrowserBudgets{startup: pdfBrowserStartupTimeout, render: pdfRenderTimeout}
+
+// renderHTMLToPDFInBrowser renders HTML with the production startup and render budgets.
 func renderHTMLToPDFInBrowser(ctx context.Context, htmlContent string) ([]byte, error) {
+	return renderHTMLToPDFInBrowserWithBudgets(ctx, htmlContent, defaultPDFBrowserBudgets)
+}
+
+// startPDFBrowserWithin bounds a browser launch by its own budget without binding the launched browser to it.
+//
+// chromedp ties the browser lifetime to the context of the first Run, so a timeout on that context would also
+// stop the browser after startup. Instead, ctx is the caller context, budget limits only the launch, abort cancels
+// the browser lifetime context with a cause when the budget elapses, and start launches the browser and receives a
+// context that carries the startup deadline for observations. It returns nil once the browser is ready, the
+// wrapped start error, or a wrapped context.DeadlineExceeded cause when the startup budget elapsed first.
+func startPDFBrowserWithin(ctx context.Context, budget time.Duration, abort context.CancelCauseFunc, start func(startupCtx context.Context) error) error {
+	expired := errors.Wrapf(context.DeadlineExceeded, "PDF browser startup exceeded %s", budget)
+	startupCtx, cancelStartup := context.WithTimeoutCause(ctx, budget, expired)
+	defer cancelStartup()
+	stopWatchdog := context.AfterFunc(startupCtx, func() { abort(context.Cause(startupCtx)) })
+	err := start(startupCtx)
+	if !stopWatchdog() {
+		// The budget elapsed or the caller ended first, and the browser lifetime has already been aborted.
+		return errors.Wrap(context.Cause(startupCtx), "start PDF browser")
+	}
+	if err != nil {
+		return errors.Wrap(err, "start PDF browser")
+	}
+	return nil
+}
+
+// renderHTMLToPDFInBrowserWithBudgets renders HTML to PDF bytes with headless Chrome.
+//
+// The browser lives on the caller context, startup is limited by budgets.startup, and budgets.render starts only
+// once the browser is ready, so a slow launch never shortens the time left for navigation, fonts and printing.
+// It returns the PDF bytes, or an error from startup, a rendering phase, or an empty print result.
+func renderHTMLToPDFInBrowserWithBudgets(ctx context.Context, htmlContent string, budgets pdfBrowserBudgets) ([]byte, error) {
 	encoded := base64.StdEncoding.EncodeToString([]byte(htmlContent))
 	dataURL := "data:text/html;base64," + encoded
 
-	renderCtx, cancel := context.WithTimeout(ctx, pdfRenderTimeout)
-	defer cancel()
 	probeStarted := time.Now()
 	probe := cvPDFPrintProbeFromContext(ctx)
 
@@ -364,70 +356,80 @@ func renderHTMLToPDFInBrowser(ctx context.Context, htmlContent string) ([]byte, 
 	if executable, ok := ctx.Value(cvPDFPrintProbeBrowserKey{}).(string); ok && probe != nil {
 		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(executable))
 	}
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(renderCtx, allocatorOptions...)
+	browserCtx, abortBrowser := context.WithCancelCause(ctx)
+	defer abortBrowser(nil)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(browserCtx, allocatorOptions...)
 	defer cancelAlloc()
 
 	chromeCtx, cancelChrome := chromedp.NewContext(allocCtx)
 	defer cancelChrome()
 
-	// PROBE ONLY: the original action order and shared deadline remain unchanged.
-	phaseStarted := time.Now()
-	emitCVPDFPrintProbe(chromeCtx, probe, "startup", "begin", probeStarted, phaseStarted, "")
-	if err := chromedp.Do(chromeCtx); err != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "startup", "failure", probeStarted, phaseStarted, "")
-		return nil, errors.Wrap(err, "start PDF browser")
+	if err := startPDFBrowserWithin(ctx, budgets.startup, abortBrowser, func(startupCtx context.Context) error {
+		phaseStarted := time.Now()
+		emitCVPDFPrintProbe(startupCtx, probe, "startup", "begin", probeStarted, phaseStarted, "")
+		if err := chromedp.Do(chromeCtx); err != nil {
+			emitCVPDFPrintProbe(startupCtx, probe, "startup", "failure", probeStarted, phaseStarted, "")
+			return errors.WithStack(err)
+		}
+		emitCVPDFPrintProbe(startupCtx, probe, "startup", "success", probeStarted, phaseStarted, "")
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	emitCVPDFPrintProbe(chromeCtx, probe, "startup", "success", probeStarted, phaseStarted, "")
+
+	// Derived from the started browser context, the render deadline ends rendering actions without stopping Chrome.
+	renderCtx, cancelRender := context.WithTimeout(chromeCtx, budgets.render)
+	defer cancelRender()
 	// This one explicitly measured metadata command exists only for observer-enabled probe contexts.
-	observeCVPDFBrowserVersion(chromeCtx, probe, probeStarted)
-	phaseStarted = time.Now()
-	emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "begin", probeStarted, phaseStarted, "")
-	if err := chromedp.Do(chromeCtx, chromedp.Navigate(dataURL)); err != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "failure", probeStarted, phaseStarted, "")
+	observeCVPDFBrowserVersion(renderCtx, probe, probeStarted)
+	phaseStarted := time.Now()
+	emitCVPDFPrintProbe(renderCtx, probe, "navigation", "begin", probeStarted, phaseStarted, "")
+	if err := chromedp.Do(renderCtx, chromedp.Navigate(dataURL)); err != nil {
+		emitCVPDFPrintProbe(renderCtx, probe, "navigation", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "navigate PDF document")
 	}
-	emitCVPDFPrintProbe(chromeCtx, probe, "navigation", "success", probeStarted, phaseStarted, "")
+	emitCVPDFPrintProbe(renderCtx, probe, "navigation", "success", probeStarted, phaseStarted, "")
 	phaseStarted = time.Now()
-	emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "begin", probeStarted, phaseStarted, "")
-	if err := chromedp.Do(chromeCtx, chromedp.WaitReady(chromedp.CSS("body"))); err != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "failure", probeStarted, phaseStarted, "")
+	emitCVPDFPrintProbe(renderCtx, probe, "body_ready", "begin", probeStarted, phaseStarted, "")
+	if err := chromedp.Do(renderCtx, chromedp.WaitReady(chromedp.CSS("body"))); err != nil {
+		emitCVPDFPrintProbe(renderCtx, probe, "body_ready", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "wait for PDF document body")
 	}
-	emitCVPDFPrintProbe(chromeCtx, probe, "body_ready", "success", probeStarted, phaseStarted, "")
+	emitCVPDFPrintProbe(renderCtx, probe, "body_ready", "success", probeStarted, phaseStarted, "")
 
 	// Await the font promise before printing, including its JavaScript errors.
 	phaseStarted = time.Now()
-	emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "begin", probeStarted, phaseStarted, "")
-	fonts, err := chromedp.Call(chromeCtx, runtime.Evaluate, runtime.EvaluateParams{
+	emitCVPDFPrintProbe(renderCtx, probe, "fonts", "begin", probeStarted, phaseStarted, "")
+	fonts, err := chromedp.Call(renderCtx, runtime.Evaluate, runtime.EvaluateParams{
 		Expression:   `document.fonts.ready.then(() => true)`,
 		AwaitPromise: new(true),
 	})
 	if err != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
+		emitCVPDFPrintProbe(renderCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "await document.fonts.ready")
 	}
 	if fonts.ExceptionDetails != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
+		emitCVPDFPrintProbe(renderCtx, probe, "fonts", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.WithStack(&chromedp.ExceptionError{ExceptionDetails: fonts.ExceptionDetails})
 	}
 
-	emitCVPDFPrintProbe(chromeCtx, probe, "fonts", "success", probeStarted, phaseStarted, "")
+	emitCVPDFPrintProbe(renderCtx, probe, "fonts", "success", probeStarted, phaseStarted, "")
 	phaseStarted = time.Now()
-	emitCVPDFPrintProbe(chromeCtx, probe, "print", "begin", probeStarted, phaseStarted, "")
-	result, err := chromedp.Call(chromeCtx, page.PrintToPDF, page.PrintToPDFParams{
+	emitCVPDFPrintProbe(renderCtx, probe, "print", "begin", probeStarted, phaseStarted, "")
+	result, err := chromedp.Call(renderCtx, page.PrintToPDF, page.PrintToPDFParams{
 		PrintBackground:   new(true),
 		PreferCSSPageSize: new(true),
 		TransferMode:      page.PrintToPDFTransferModeReturnAsBase64,
 	})
 	if err != nil {
-		emitCVPDFPrintProbe(chromeCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
+		emitCVPDFPrintProbe(renderCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.Wrap(err, "print PDF document")
 	}
 	if len(result.Data) == 0 {
-		emitCVPDFPrintProbe(chromeCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
+		emitCVPDFPrintProbe(renderCtx, probe, "print", "failure", probeStarted, phaseStarted, "")
 		return nil, errors.WithStack(errors.New("empty pdf output"))
 	}
 
-	emitCVPDFPrintProbe(chromeCtx, probe, "print", "success", probeStarted, phaseStarted, "")
+	emitCVPDFPrintProbe(renderCtx, probe, "print", "success", probeStarted, phaseStarted, "")
 	return result.Data, nil
 }
