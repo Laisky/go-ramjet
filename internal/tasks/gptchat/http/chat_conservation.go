@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -25,12 +26,23 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 		return
 	}
 
-	go saveLLMConservation(freq, req.Response, req.Reasoning)
+	go saveLLMConservation(conservationLogger(), freq, req.Response, req.Reasoning)
 }
 
-func saveLLMConservation(req *FrontendReq, respContent string, reasoning string) {
-	logger := log.Logger.Named("save_llm")
+// conservationLogger returns the named process logger used by saveLLMConservation.
+// Callers evaluate it as an argument of the go statement, so it is resolved on the
+// calling goroutine and the detached goroutine never reads the mutable global
+// log.Logger. It takes no parameters and returns the "save_llm" logger.
+func conservationLogger() glog.Logger {
+	return log.Logger.Named("save_llm")
+}
 
+// saveLLMConservation caches respContent under the cache key of req and persists the
+// exchange to the openai conservations collection. logger receives all diagnostics
+// and must be resolved by the caller before the goroutine is spawned; req is the
+// frontend request, respContent the final answer, and reasoning the optional
+// reasoning text. It returns nothing; every failure is logged.
+func saveLLMConservation(logger glog.Logger, req *FrontendReq, respContent string, reasoning string) {
 	if req == nil {
 		logger.Debug("skip saving conservation for empty request")
 		return

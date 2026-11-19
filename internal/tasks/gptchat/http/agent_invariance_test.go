@@ -24,6 +24,7 @@ import (
 //
 // See docs/proposals/2026-05-26-gptchat-react-agent-mode.md §6.2 I1.
 func TestI1_ProxyInvariance_NoAgentModeSkipsDispatcher(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	// Stub upstream — returns a tiny non-streaming response so the
@@ -114,6 +115,7 @@ func TestI1_ProxyInvariance_NoAgentModeSkipsDispatcher(t *testing.T) {
 // other half of the dispatch contract so a regression on one side does
 // not silently mask the other.
 func TestI1b_AgentModeFlagRoutesToDispatcher(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

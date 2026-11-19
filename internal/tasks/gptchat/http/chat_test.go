@@ -191,7 +191,22 @@ func Test_functionCallsRegexp(t *testing.T) {
 	require.Equal(t, matched[0][1], "Ottawa ON Canada weather forecast this week")
 }
 
+// isolateResponsesChatGlobals makes a sendChatWithResponsesToolLoop test hermetic.
+// It disables the detached saveLLMConservation goroutine, which otherwise outlives
+// the test while reading log.Logger and writing llmRespCache, and installs a private
+// llmRespCache so answers cached by earlier tests or earlier -count iterations can
+// never short-circuit the upstream call. The original cache is restored on cleanup.
+// It takes the running test and returns nothing.
+func isolateResponsesChatGlobals(t *testing.T) {
+	t.Helper()
+	t.Setenv("DISABLE_LLM_CONSERVATION_AUDIT", "true")
+	originalCache := llmRespCache
+	llmRespCache = gutils.NewExpCache[string](t.Context(), 3*time.Second)
+	t.Cleanup(func() { llmRespCache = originalCache })
+}
+
 func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +252,22 @@ func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
 }
 
 func TestSaveLLMConservationNilReq(t *testing.T) {
-	require.NotPanics(t, func() { saveLLMConservation(nil, "response", "") })
+	require.NotPanics(t, func() { saveLLMConservation(conservationLogger(), nil, "response", "") })
+}
+
+// TestSaveLLMConservationUsesCallerLogger verifies the detached conservation work logs
+// through the logger resolved by its caller instead of re-reading log.Logger.
+func TestSaveLLMConservationUsesCallerLogger(t *testing.T) {
+	callerLogger, callerEntries := embeddingTestLogger(t)
+	globalLogger, globalEntries := embeddingTestLogger(t)
+	originalLogger := log.Logger
+	log.Logger = globalLogger
+	t.Cleanup(func() { log.Logger = originalLogger })
+
+	saveLLMConservation(callerLogger, nil, "response", "")
+
+	require.Equal(t, 1, callerEntries.FilterMessage("skip saving conservation for empty request").Len())
+	require.Zero(t, globalEntries.Len())
 }
 
 func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *testing.T) {
@@ -279,6 +309,7 @@ func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *tes
 }
 
 func TestSendChatWithResponsesToolLoopMemoryEnabledRoundTrip(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	var (
@@ -366,6 +397,7 @@ func TestSendChatWithResponsesToolLoopMemoryEnabledRoundTrip(t *testing.T) {
 }
 
 func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	var (
@@ -439,6 +471,7 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
 }
 
 func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	quotaHook := setupFreeUserTestQuota(t)
 	gin.SetMode(gin.TestMode)
 
@@ -518,6 +551,7 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested
 }
 
 func TestSendChatWithResponsesToolLoopMemoryFailureNonFatal(t *testing.T) {
+	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

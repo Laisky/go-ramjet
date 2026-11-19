@@ -278,7 +278,7 @@ func sendChatWithResponsesToolLoop(ctx *gin.Context) error {
 	}
 	if strings.ToLower(os.Getenv("DISABLE_LLM_CONSERVATION_AUDIT")) != "true" {
 		if frontendReq != nil && len(frontendReq.Messages) > 0 && finalText != "" {
-			go saveLLMConservation(frontendReq, finalText, fullReasoning)
+			go saveLLMConservation(conservationLogger(), frontendReq, finalText, fullReasoning)
 		}
 	}
 
