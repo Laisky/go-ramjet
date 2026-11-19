@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 
+	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/Laisky/zap"
 
@@ -69,4 +70,38 @@ func settleImageBilling(ctx context.Context, user *config.UserConfig, model stri
 	}
 
 	return imgs
+}
+
+// imageCollector gathers the images decoded or downloaded from the entries of an
+// image API answer, up to a limit. Entries without image data (for example one
+// carrying only revised_prompt) do not count, and callers stop processing entries
+// once the collector is full, so nothing beyond the limit is decoded or downloaded.
+type imageCollector struct {
+	limit int
+	imgs  [][]byte
+}
+
+// newImageCollector returns a collector for at most limit images; a limit below 1
+// counts as 1.
+func newImageCollector(limit int) *imageCollector {
+	return &imageCollector{limit: max(limit, 1)}
+}
+
+// add records img when it is not empty and reports whether the collector now holds
+// limit images, in which case the caller must stop processing entries.
+func (c *imageCollector) add(img []byte) (full bool) {
+	if len(img) > 0 {
+		c.imgs = append(c.imgs, img)
+	}
+	return len(c.imgs) >= c.limit
+}
+
+// images returns the collected images in entry order, or an error when no entry
+// carried an image, so an empty answer is never reported as a success.
+func (c *imageCollector) images() ([][]byte, error) {
+	if len(c.imgs) == 0 {
+		return nil, errors.New("image API response contains no image")
+	}
+
+	return c.imgs, nil
 }

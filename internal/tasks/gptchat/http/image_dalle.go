@@ -172,9 +172,10 @@ func DrawByDalleHandler(ctx *gin.Context) {
 // fetchImageFromOpenaiDalle asks user's OpenAI-compatible upstream for n images of
 // model drawn from prompt, at size when it is not empty.
 //
-// It returns at most n images (surplus upstream entries are dropped before they
-// are decoded or downloaded), or an error when the upstream call fails or an
-// image cannot be decoded or downloaded.
+// It returns between 1 and n images: entries after the n-th image are never
+// decoded or downloaded, and entries without image data are skipped. It returns an
+// error when the upstream call fails, an image cannot be decoded or downloaded, or
+// no entry carries an image.
 func fetchImageFromOpenaiDalle(ctx context.Context,
 	user *config.UserConfig, model, prompt string, n int, size string) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("openai")
@@ -235,13 +236,10 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	}
 
 	logger.Debug("succeed get image from openai", zap.Int("n", len(resp.Data)))
-	// The upstream may answer with more images than requested. Drop the surplus
-	// before any entry is decoded or downloaded, so the work stays bounded by n.
-	if n > 0 && len(resp.Data) > n {
-		logger.Debug("drop surplus upstream images",
-			zap.Int("requested", n), zap.Int("returned", len(resp.Data)))
-		resp.Data = resp.Data[:n]
-	}
+	// The upstream may answer with more entries than requested, and some entries
+	// may carry no image. Stop once n images are collected, so no surplus entry is
+	// decoded or downloaded and entries without an image do not use up the count.
+	collector := newImageCollector(n)
 	for i, data := range resp.Data {
 		var imgContent []byte
 		if data.B64Json != "" {
@@ -264,14 +262,23 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 			}
 		}
 
-		if len(imgContent) > 0 {
-			imgs = append(imgs, imgContent)
+		if collector.add(imgContent) {
+			if i+1 < len(resp.Data) {
+				logger.Debug("ignore surplus upstream images",
+					zap.Int("requested", n), zap.Int("returned", len(resp.Data)))
+			}
+			break
 		}
 	}
 
-	return imgs, nil
+	return collector.images()
 }
 
+// fetchImageFromAzureDalle asks user's Azure OpenAI image deployment for one image
+// drawn from prompt and downloads it.
+//
+// It returns the image, or an error when the upstream call fails, its answer
+// carries no image, or the download fails.
 func fetchImageFromAzureDalle(ctx context.Context,
 	user *config.UserConfig, prompt string) (img []byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("azure")
@@ -337,6 +344,13 @@ func downloadImage(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(imgResp.Body)
 }
 
+// EditImageHandler edits the caller's image (and optional mask) by prompt through
+// the user's OpenAI-compatible upstream, stores the result in the object store and
+// answers with its URL.
+//
+// With external image billing one image is charged upfront, and exactly one image
+// is delivered. ctx is the gin context of the request; failures are reported to
+// the client through web.AbortErr.
 func EditImageHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 	logger := gmw.GetLogger(ctx).Named("image_edit").With(zap.String("task_id", taskID))
@@ -402,7 +416,7 @@ func EditImageHandler(ctx *gin.Context) {
 	for i, imgContent := range imgContents {
 		i, imgContent := i, imgContent
 		pool.Go(func() error {
-			return uploadImage2Minio(taskCtx,
+			return uploadGeneratedImage(taskCtx,
 				fmt.Sprintf("%s-%d", drawImageByImageObjkeyPrefix(taskID), i),
 				req.Prompt,
 				imgContent,
@@ -443,6 +457,12 @@ func getDataFromUrlOrBase64(ctx context.Context, input string) ([]byte, error) {
 	return DecodeBase64(input)
 }
 
+// fetchImageEditFromOpenai sends image, and mask when it is not empty, with prompt
+// to the image edit API of user's OpenAI-compatible upstream for model.
+//
+// It returns exactly one image: entries after the first image are never decoded
+// or downloaded. It returns an error when the request cannot be built, the upstream
+// call fails, an image cannot be decoded or downloaded, or no entry carries an image.
 func fetchImageEditFromOpenai(ctx context.Context,
 	user *config.UserConfig, model, prompt string, image, mask []byte) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx)
@@ -521,6 +541,9 @@ func fetchImageEditFromOpenai(ctx context.Context,
 		}
 	}
 
+	// The edit request asks for one image and is charged for one, so stop at the
+	// first image: surplus entries are never downloaded or delivered.
+	collector := newImageCollector(1)
 	for _, data := range resp.Data {
 		var imgContent []byte
 		if data.B64Json != "" {
@@ -535,10 +558,10 @@ func fetchImageEditFromOpenai(ctx context.Context,
 			}
 		}
 
-		if len(imgContent) > 0 {
-			imgs = append(imgs, imgContent)
+		if collector.add(imgContent) {
+			break
 		}
 	}
 
-	return imgs, nil
+	return collector.images()
 }

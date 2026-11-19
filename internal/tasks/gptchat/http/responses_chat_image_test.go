@@ -114,8 +114,10 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 // imageBillingFixture fakes the image upstream, the external billing API and the
 // object store for the DALL-E paths, recording every charge and delivered image.
 type imageBillingFixture struct {
-	produced    int // images the upstream returns; 0 makes generation fail
+	produced    int // images the upstream returns; 0 with empty 0 makes generation fail
+	empty       int // entries without image data (e.g. only revised_prompt) sent first
 	failChargeN int // 1-based billing call that is rejected; 0 accepts all
+	t           *testing.T
 	// override, when set, serves a request before the default routes and reports
 	// whether it did.
 	override func(http.ResponseWriter, *http.Request) bool
@@ -147,19 +149,38 @@ func (f *imageBillingFixture) handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.charges = append(f.charges, usage.Cost)
-		_, _ = w.Write([]byte("{}"))
-	case "/v1/images/generations":
-		if f.produced == 0 {
+		f.writeJSON(w, map[string]any{})
+	case "/v1/images/generations", "/v1/images/edits":
+		if f.produced == 0 && f.empty == 0 {
 			http.Error(w, "n must be 1 for this model", http.StatusBadRequest)
 			return
 		}
-		data := make([]map[string]string, f.produced)
-		for i := range data {
-			data[i] = map[string]string{"b64_json": base64.StdEncoding.EncodeToString([]byte("synthetic-image"))}
+		data := make([]map[string]string, 0, f.empty+f.produced)
+		for range f.empty {
+			data = append(data, map[string]string{"revised_prompt": "a tree"})
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+		for range f.produced {
+			data = append(data, map[string]string{"b64_json": base64.StdEncoding.EncodeToString([]byte("synthetic-image"))})
+		}
+		f.writeJSON(w, map[string]any{"data": data})
 	default:
 		http.Error(w, "unexpected path", http.StatusNotFound)
+	}
+}
+
+// writeJSON encodes v as the response body and reports an encoding or write
+// failure on the fixture's test.
+func (f *imageBillingFixture) writeJSON(w http.ResponseWriter, v any) {
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		f.t.Errorf("write fixture response: %v", err)
+	}
+}
+
+// writeBody writes body as the response and reports a write failure on the
+// fixture's test.
+func (f *imageBillingFixture) writeBody(w http.ResponseWriter, body []byte) {
+	if _, err := w.Write(body); err != nil {
+		f.t.Errorf("write fixture response: %v", err)
 	}
 }
 
@@ -184,6 +205,7 @@ func (f *imageBillingFixture) delivered() int {
 // install wires the fixture into an isolated request context and stubs uploads.
 func (f *imageBillingFixture) install(t *testing.T) *gin.Context {
 	t.Helper()
+	f.t = t
 	gctx := imageCountTestContext(t, f.handler)
 	config.Config.ExternalBillingAPI = config.Config.API
 	origUpload := uploadGeneratedImage
@@ -213,6 +235,7 @@ var imageBillingCases = []struct {
 	requested   int
 	free        bool
 	produced    int
+	empty       int
 	failChargeN int
 	billed      int
 	delivered   int
@@ -224,6 +247,9 @@ var imageBillingCases = []struct {
 	{name: "huge count is clamped", requested: hugeImageCount, produced: 8, billed: 8, delivered: 8},
 	{name: "free user", requested: 5, free: true, produced: 1, billed: 1, delivered: 1},
 	{name: "extra charge rejected keeps only the prepaid image", requested: 3, produced: 3, failChargeN: 2, billed: 1, delivered: 1},
+	{name: "an entry without image data does not count", requested: 2, empty: 1, produced: 2, billed: 2, delivered: 2},
+	{name: "leading entries without image data hide nothing", requested: 2, empty: 2, produced: 2, billed: 2, delivered: 2},
+	{name: "no entry carries an image", requested: 2, empty: 2, billed: 1, delivered: 0},
 }
 
 // TestSendChatImageGenerationBillsDeliveredImages verifies the image-model chat path
@@ -231,7 +257,7 @@ var imageBillingCases = []struct {
 func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &imageBillingFixture{produced: tc.produced, failChargeN: tc.failChargeN}
+			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN}
 			gctx := f.install(t)
 
 			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), billedImageUser(tc.free))
@@ -251,7 +277,7 @@ func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &imageBillingFixture{produced: tc.produced, failChargeN: tc.failChargeN}
+			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN}
 			gctx := f.install(t)
 			body, err := json.Marshal(map[string]any{"model": "dall-e-3", "prompt": "draw a tree", "n": tc.requested})
 			require.NoError(t, err)
@@ -260,6 +286,11 @@ func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 			gctx.Set(ctxKeyUser, billedImageUser(tc.free))
 
 			DrawByDalleHandler(gctx)
+			if tc.produced == 0 {
+				require.GreaterOrEqual(t, gctx.Writer.Status(), http.StatusBadRequest, "a request without images must fail")
+			} else {
+				require.Equal(t, http.StatusOK, gctx.Writer.Status())
+			}
 			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), f.totalCharged())
 			require.Equal(t, tc.delivered, f.delivered())
 		})
@@ -318,11 +349,11 @@ func TestDrawByDalleHandlerFetchesOnlyRequestedImages(t *testing.T) {
 			for i := range data {
 				data[i] = map[string]string{"url": serverURL + "/generated/" + strconv.Itoa(i) + ".png"}
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+			f.writeJSON(w, map[string]any{"data": data})
 			return true
 		case strings.HasPrefix(r.URL.Path, "/generated/"):
 			downloads.Add(1)
-			_, _ = w.Write([]byte("synthetic-image"))
+			f.writeBody(w, []byte("synthetic-image"))
 			return true
 		}
 		return false
