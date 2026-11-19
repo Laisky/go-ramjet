@@ -92,10 +92,13 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('still asks after a StrictMode double mount', async () => {
-    // StrictMode runs the load effect twice. The first, already cleaned-up
-    // run consumes the link's parameters, so its prompt must still reach the
-    // page that stays mounted.
+  it('keeps the prompt of the first load run after a StrictMode double mount', async () => {
+    // StrictMode runs the load effect twice, and only the first run sees the
+    // link, because hydration strips its parameters from the address bar.
+    // The prompt that run raised must survive the second run, which finds
+    // no link: a load that resets the prompt when it sees none, or (once
+    // #106 adds a per-run liveness guard) a prompt raised only by a live
+    // run, fails here.
     window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
     const store = ownKeyStore()
 
