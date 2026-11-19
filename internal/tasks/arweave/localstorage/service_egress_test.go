@@ -62,9 +62,13 @@ func TestLoadContentByUrlRefusesPrivateDNSAnswer(t *testing.T) {
 			return nil, net.ErrClosed
 		},
 	}
+	requireNoProxyGoroutines(t)
 	oldClient := targetHTTPClient
 	targetHTTPClient = egress.NewHTTPClient(5*time.Second, deps)
-	t.Cleanup(func() { targetHTTPClient = oldClient })
+	t.Cleanup(func() {
+		requireNoProxyGoroutines(t)
+		targetHTTPClient = oldClient
+	})
 
 	body, err := LoadContentByUrl(context.Background(), "http://rebind.example/internal")
 	require.Error(t, err)

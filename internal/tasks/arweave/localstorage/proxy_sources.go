@@ -52,10 +52,10 @@ func firstAvailableContent(ctx context.Context, logger glog.Logger, target strin
 	for i, source := range sources {
 		sourceCtx, cancel := context.WithCancel(ctx)
 		cancels[i] = cancel
-		go func() {
+		requestBackgroundWork.Go(func() {
 			body, err := runContentSource(sourceCtx, target, source)
 			outcomes <- sourceOutcome{index: i, body: body, err: err}
-		}()
+		})
 	}
 	cancelOthers := func(winner int) {
 		for i, cancel := range cancels {
@@ -75,12 +75,12 @@ func firstAvailableContent(ctx context.Context, logger glog.Logger, target strin
 				continue
 			}
 			cancelOthers(outcome.index)
-			go discardLosingContent(logger, outcomes, pending-1)
+			requestBackgroundWork.Go(func() { discardLosingContent(logger, outcomes, pending-1) })
 			winner := &cancelOnClose{ReadCloser: outcome.body, cancel: cancels[outcome.index]}
 			return winner, sources[outcome.index].status, nil
 		case <-ctx.Done():
 			cancelOthers(-1)
-			go discardLosingContent(logger, outcomes, pending)
+			requestBackgroundWork.Go(func() { discardLosingContent(logger, outcomes, pending) })
 			return nil, "", errors.WithStack(ctx.Err())
 		}
 	}
@@ -88,7 +88,7 @@ func firstAvailableContent(ctx context.Context, logger glog.Logger, target strin
 	for i, err := range errs[1:] {
 		logger.Debug("fallback content source failed", zap.String("source", sources[i+1].name), zap.Error(err))
 	}
-	return nil, "", errs[0]
+	return nil, "", errors.Wrap(errs[0], "no content source succeeded")
 }
 
 // runContentSource waits out source's head start, unless ctx ends first, and then
@@ -106,6 +106,9 @@ func runContentSource(ctx context.Context, target string, source contentSource) 
 
 	body, err := source.load(ctx, target)
 	if err != nil {
+		if body != nil {
+			err = errors.Join(err, body.Close())
+		}
 		return nil, errors.Wrapf(err, "load content from %s", source.name)
 	}
 	if body == nil {

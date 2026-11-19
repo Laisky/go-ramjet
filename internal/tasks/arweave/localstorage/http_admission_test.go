@@ -52,7 +52,11 @@ func serveCacheHandler(raw string) *httptest.ResponseRecorder {
 
 // serveCacheHandlerWithContext runs CacheHandler for raw with ctx as the request
 // context, so tests can model a client that leaves before the answer is ready.
+// A deadline bounds every request so a coordination regression fails the test
+// with a non-200 answer instead of hanging until the test binary times out.
 func serveCacheHandlerWithContext(ctx context.Context, raw string) *httptest.ResponseRecorder {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/proxy", CacheHandler)
@@ -66,7 +70,8 @@ func serveCacheHandlerWithContext(ctx context.Context, raw string) *httptest.Res
 // destination policy before any direct fetch, cache lookup or archive scheduling.
 // Every target below is owned by the test; none of them may receive a request.
 func TestCacheHandlerRefusesNonPublicTargets(t *testing.T) {
-	useArchiveTestConfig()
+	// Report every url as unarchived so that scheduling an archive would be observable.
+	useArchiveSeams(t, notArchived, nil, nil)
 	var contacted atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		contacted.Add(1)
@@ -88,6 +93,7 @@ func TestCacheHandlerRefusesNonPublicTargets(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, recorder.Code)
 			require.NotContains(t, recorder.Body.String(), "private-content")
 			require.Zero(t, contacted.Load(), "non-public target must never be contacted")
+			requireNoProxyGoroutines(t)
 			require.Zero(t, drainArchiveTasks(), "refused target must not be archived")
 		})
 	}
@@ -123,14 +129,18 @@ func usePublicTargetFixture(t *testing.T, server *httptest.Server) {
 			return &fixturePeerConn{Conn: conn, peer: &net.TCPAddr{IP: net.ParseIP("93.184.216.34"), Port: 80}}, nil
 		},
 	}
+	requireNoProxyGoroutines(t)
 	oldNetwork, oldClient := targetNetwork, targetHTTPClient
 	targetNetwork, targetHTTPClient = deps, egress.NewHTTPClient(5*time.Second, deps)
-	t.Cleanup(func() { targetNetwork, targetHTTPClient = oldNetwork, oldClient })
+	t.Cleanup(func() {
+		requireNoProxyGoroutines(t)
+		targetNetwork, targetHTTPClient = oldNetwork, oldClient
+	})
 }
 
 // TestCacheHandlerServesPublicTarget preserves the existing live-fetch response for public targets.
 func TestCacheHandlerServesPublicTarget(t *testing.T) {
-	useArchiveTestConfig()
+	useArchiveSeams(t, notArchived, nil, nil)
 	public := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "public.example", r.Host)
 		if _, err := io.WriteString(w, "public-content"); err != nil {
@@ -144,6 +154,8 @@ func TestCacheHandlerServesPublicTarget(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, "DYNAMIC", recorder.Header().Get("X-Laisky-Cache-Status"))
 	require.Equal(t, "public-content", recorder.Body.String())
+	requireNoProxyGoroutines(t)
+	require.Equal(t, 1, drainArchiveTasks(), "an admitted target is scheduled for archiving once")
 }
 
 // TestCacheHandlerRefusesRedirectIntoPrivateNetwork re-admits redirects on the

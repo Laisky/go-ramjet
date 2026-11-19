@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -25,6 +26,11 @@ var (
 	loadCachedContent = LoadContentFromS3
 	// cacheFallbackDelay is the live fetch's head start before the archive is raced against it.
 	cacheFallbackDelay = time.Second
+	// requestBackgroundWork tracks goroutines a proxy request leaves behind: the
+	// archive scheduler, sources still being canceled, and the cleanup of their
+	// bodies. Each ends shortly after its request; waiting on it gives a clean
+	// shutdown point and lets tests synchronize with that work.
+	requestBackgroundWork sync.WaitGroup
 )
 
 // CacheHandler proxies a user-selected public url, preferring a live fetch and
@@ -35,8 +41,9 @@ var (
 // logged below the alert level; redirects are admitted again on every hop.
 //
 // The live fetch starts at once and the archive lookup after cacheFallbackDelay;
-// the first to succeed answers, the other is canceled and its body closed, and
-// no goroutine outlives the request except the archive scheduler.
+// the first to succeed answers, the other is canceled and any body it returns is
+// closed. Work that briefly outlives the request (the archive scheduler, canceled
+// sources and their cleanup) is tracked by requestBackgroundWork.
 func CacheHandler(ctx *gin.Context) {
 	targetUrl := strings.TrimSpace(ctx.Query("url"))
 	logger := gmw.GetLogger(ctx).With(zap.String("target_url", targetUrl))
@@ -54,12 +61,12 @@ func CacheHandler(ctx *gin.Context) {
 	// The gin context is recycled after this handler returns; the archive
 	// scheduler keeps only request values and outlives request cancellation.
 	archiveCtx := context.WithoutCancel(requestCtx)
-	go func() {
+	requestBackgroundWork.Go(func() {
 		err := SaveUrlContent(archiveCtx, taskItem{url: targetUrl})
 		if err != nil {
 			logger.Warn("save url content to s3", zap.Error(err))
 		}
-	}()
+	})
 
 	body, cacheStatus, err := firstAvailableContent(requestCtx, logger, targetUrl, []contentSource{
 		{name: "origin url", status: "DYNAMIC", load: loadOriginContent},

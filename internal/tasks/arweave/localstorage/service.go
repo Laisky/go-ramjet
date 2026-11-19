@@ -94,6 +94,12 @@ func SaveUrlContent(ctx context.Context, item taskItem) error {
 		logger.Debug("url is running, skip")
 		return nil
 	}
+	// A task may have archived the url after the lookup above; tasks record the
+	// archive before releasing their mark, so the cache already shows it.
+	if finished, ok := isUrlFinishedCache.Load(item.url); ok && finished {
+		runningUrls.Delete(item.url)
+		return nil
+	}
 
 	// put task
 	select {

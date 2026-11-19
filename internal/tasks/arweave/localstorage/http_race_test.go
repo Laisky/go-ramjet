@@ -143,6 +143,18 @@ func proxyGoroutines() []string {
 // archive code, so a request that already answered cannot leave work behind.
 func requireNoProxyGoroutines(t *testing.T) {
 	t.Helper()
+	// Waiting on the tracked work orders its reads of package-level test seams
+	// before the caller's writes; the stack scan then catches untracked leaks.
+	tracked := make(chan struct{})
+	go func() {
+		requestBackgroundWork.Wait()
+		close(tracked)
+	}()
+	select {
+	case <-tracked:
+	case <-time.After(3 * time.Second):
+		require.Fail(t, "request background work did not finish")
+	}
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		leaked := proxyGoroutines()
@@ -277,18 +289,44 @@ func TestCacheHandlerReportsLiveRefusalWhenBothFail(t *testing.T) {
 	require.Empty(t, recorder.Header().Get("X-Laisky-Cache-Status"))
 }
 
-// TestCacheHandlerStopsWhenClientLeaves answers a canceled request promptly and
-// releases both sources instead of waiting for them in the background.
+// TestCacheHandlerStopsWhenClientLeaves preserves the client-disconnect answer:
+// a canceled request is answered with 499 as soon as it ends, and both pending
+// sources are released instead of being waited for in the background.
 func TestCacheHandlerStopsWhenClientLeaves(t *testing.T) {
 	var canceled atomic.Int32
 	useProxySources(t, blockingLoader(&canceled), blockingLoader(&canceled), 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(50*time.Millisecond, cancel)
+	canceledAt := make(chan time.Time, 1)
+	time.AfterFunc(50*time.Millisecond, func() {
+		canceledAt <- time.Now()
+		cancel()
+	})
 	recorder := serveCacheHandlerWithContext(ctx, "http://public.example/page")
-	require.NotEqual(t, http.StatusOK, recorder.Code)
+	answeredAt := time.Now()
+	require.Equal(t, 499, recorder.Code, "client-closed-request status")
+	require.Less(t, answeredAt.Sub(<-canceledAt), time.Second, "the handler must stop when the client leaves")
 	requireNoProxyGoroutines(t)
 	require.EqualValues(t, 2, canceled.Load())
+}
+
+// TestSaveUrlContentSkipsURLArchivedDuringLookup closes the window between the
+// archive lookup and taking the pending mark: a task that archived the url in
+// between has already recorded it, so the url is not queued a second time.
+func TestSaveUrlContentSkipsURLArchivedDuringLookup(t *testing.T) {
+	const target = "https://public.example/archived-meanwhile"
+	isUrlFinishedCache.Delete(target)
+	t.Cleanup(func() { isUrlFinishedCache.Delete(target) })
+	useArchiveSeams(t, func(context.Context, string) (bool, error) {
+		// The lookup misses, then a concurrent task finishes and records the archive.
+		isUrlFinishedCache.Store(target, true)
+		return false, nil
+	}, nil, nil)
+
+	require.NoError(t, SaveUrlContent(context.Background(), taskItem{url: target}))
+	require.Zero(t, drainArchiveTasks(), "an archived url must not be queued again")
+	_, pending := runningUrls.Load(target)
+	require.False(t, pending, "a skipped url must not stay marked pending")
 }
 
 // TestFirstAvailableContentRejectsMissingBody treats a loader that returns neither
