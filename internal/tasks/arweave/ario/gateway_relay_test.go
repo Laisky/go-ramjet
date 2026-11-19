@@ -180,3 +180,46 @@ func TestGatewayHandlerPolicyFollowsContentType(t *testing.T) {
 		})
 	}
 }
+
+// TestGatewayHandlerRelaysNotModifiedValidatorsOnly answers a gateway 304 with
+// the validators and caching headers a cache needs (RFC 9110, section
+// 15.4.5), including Vary, and with no representation metadata or policy: a
+// Content-Type or Content-Security-Policy on a 304 replaces the stored one, so
+// a cached PDF would be re-labeled and re-sandboxed, or a cached image
+// re-labeled as HTML, without its body changing.
+func TestGatewayHandlerRelaysNotModifiedValidatorsOnly(t *testing.T) {
+	var forwarded http.Header
+	useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
+		forwarded = request.Header.Clone()
+		return &http.Response{
+			StatusCode: http.StatusNotModified,
+			Header: http.Header{
+				"X-Ar-Io-Hops":  []string{"1"},
+				"Etag":          []string{`"tx"`},
+				"Cache-Control": []string{"public, max-age=31536000, immutable"},
+				"Expires":       []string{"Fri, 01 Jan 2027 00:00:00 GMT"},
+				"Last-Modified": []string{"Thu, 01 Jan 2026 00:00:00 GMT"},
+				"Vary":          []string{"Accept-Encoding"},
+				"Content-Type":  []string{"text/html"},
+			},
+			Body:    http.NoBody,
+			Request: request,
+		}, nil
+	})}, "https://gateway.example/")
+
+	request := httptest.NewRequest(http.MethodGet, "/gateway/"+testFileKey, nil)
+	request.Header.Set("If-None-Match", `"tx"`)
+	recorder := serveGateway(request)
+
+	require.Equal(t, http.StatusNotModified, recorder.Code)
+	require.Empty(t, recorder.Body.String())
+	require.Equal(t, `"tx"`, forwarded.Get("If-None-Match"))
+	require.Equal(t, `"tx"`, recorder.Header().Get("Etag"))
+	require.Equal(t, "public, max-age=31536000, immutable", recorder.Header().Get("Cache-Control"))
+	require.Equal(t, "Fri, 01 Jan 2027 00:00:00 GMT", recorder.Header().Get("Expires"))
+	require.Equal(t, "Thu, 01 Jan 2026 00:00:00 GMT", recorder.Header().Get("Last-Modified"))
+	require.Equal(t, "Accept-Encoding", recorder.Header().Get("Vary"))
+	for _, name := range []string{"Content-Type", "Content-Security-Policy", "Content-Length"} {
+		require.Empty(t, recorder.Header().Values(name), "a 304 must not replace the cached %s", name)
+	}
+}

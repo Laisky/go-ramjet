@@ -270,8 +270,8 @@ func getRecord(ctx context.Context, name string) (recordItem recordItem, err err
 // The file is third-party content served on the origin shared with GPTChat, so
 // it is relayed like the gateway's answers: only content-negotiation headers
 // reach the gateway, only content and caching headers come back, and the
-// content is marked untrusted. A gateway failure is answered with its status
-// and none of its headers or body.
+// content is marked untrusted. A 304 keeps its validators; any other gateway
+// failure is answered with its status and none of its headers or body.
 func Query(ctx *gin.Context) {
 	name := ctx.Param("name")
 
@@ -300,7 +300,8 @@ func Query(ctx *gin.Context) {
 	defer gutils.LogErr(resp.Body.Close, logger)
 
 	ctx.Header("X-Ar-File-Id", record.FileID)
-	if resp.StatusCode/100 != 2 {
+	// A 304 answers the caller's forwarded validators and is relayed with them.
+	if resp.StatusCode/100 != 2 && resp.StatusCode != http.StatusNotModified {
 		_ = ctx.AbortWithError(resp.StatusCode, errors.Errorf("fetch %q, got %d", record.FileID, resp.StatusCode))
 		return
 	}

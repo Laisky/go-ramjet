@@ -47,6 +47,22 @@ var relayedGatewayHeaders = []string{
 	"Etag",
 	"Expires",
 	"Last-Modified",
+	"Vary",
+}
+
+// notModifiedGatewayHeaders lists the relayed headers a 304 carries: the
+// validators and caching headers RFC 9110, section 15.4.5, requires so a cache
+// can refresh its stored response. A cache replaces stored headers with those
+// of a 304, so representation metadata (Content-Type, Content-Length) and the
+// content policy are left out: they would re-label or re-sandbox a cached
+// body that did not change. Content-Location is left out because it names the
+// gateway's URL space; this server sets Date itself.
+var notModifiedGatewayHeaders = []string{
+	"Cache-Control",
+	"Etag",
+	"Expires",
+	"Last-Modified",
+	"Vary",
 }
 
 // relayedGatewayHeaderPrefix marks ar.io headers, which the handler relies on
@@ -117,8 +133,9 @@ func isOperatorCache(u *url.URL) bool {
 // RelayGatewayResponse writes response to ctx: the allowlisted headers, the
 // gateway URL as X-Ar-Io-Url, the untrusted-content policy for the relayed
 // type, the status and the body. A missing Content-Type is detected from the
-// first bytes, as net/http would. Every handler that serves Arweave content on
-// this origin relays it through here.
+// first bytes, as net/http would. A 304 carries only
+// notModifiedGatewayHeaders. Every handler that serves Arweave content on this
+// origin relays it through here.
 //
 // A returned error may come after the status is committed; callers answer it
 // with web.AbortStreamErr, which aborts a started transfer instead of
@@ -129,6 +146,16 @@ func isOperatorCache(u *url.URL) bool {
 // the error answered in its place carries none of the headers, such as
 // X-Ar-Io-Verified, that describe the body it never sent.
 func RelayGatewayResponse(ctx *gin.Context, response *http.Response) error {
+	if response.StatusCode == http.StatusNotModified {
+		for _, name := range notModifiedGatewayHeaders {
+			if value := response.Header.Get(name); value != "" {
+				ctx.Header(name, value)
+			}
+		}
+		ctx.Status(http.StatusNotModified)
+		return nil
+	}
+
 	body := bufio.NewReaderSize(response.Body, sniffLen)
 	contentType := response.Header.Get("Content-Type")
 	need := 1

@@ -137,3 +137,51 @@ func TestQueryDoesNotRelayFailedGatewayAnswers(t *testing.T) {
 	require.Empty(t, recorder.Header().Values("Set-Cookie"))
 	require.NotContains(t, recorder.Body.String(), "gateway error")
 }
+
+// TestQueryRelaysNotModifiedWithValidators keeps conditional requests working:
+// If-None-Match reaches the gateway, and its 304 is answered as a 304 that
+// carries the validators and caching headers a cache needs to refresh its
+// stored response (RFC 9110, section 15.4.5), but no representation metadata
+// such as Content-Type, which would rewrite how the cached body is rendered.
+func TestQueryRelaysNotModifiedWithValidators(t *testing.T) {
+	var mu sync.Mutex
+	var forwarded http.Header
+	useAliasRecord(t, "docs", testAliasFileID, aliasRoundTripper(func(request *http.Request) (*http.Response, error) {
+		mu.Lock()
+		forwarded = request.Header.Clone()
+		mu.Unlock()
+		return &http.Response{
+			StatusCode: http.StatusNotModified,
+			Header: http.Header{
+				"Etag":          []string{`"tx"`},
+				"Cache-Control": []string{"public, max-age=31536000, immutable"},
+				"Expires":       []string{"Fri, 01 Jan 2027 00:00:00 GMT"},
+				"Last-Modified": []string{"Thu, 01 Jan 2026 00:00:00 GMT"},
+				"Vary":          []string{"Accept-Encoding"},
+				"Content-Type":  []string{"text/html"},
+				"Set-Cookie":    []string{"session=attacker"},
+			},
+			Body:    http.NoBody,
+			Request: request,
+		}, nil
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/arweave/alias/docs", nil)
+	request.Header.Set("If-None-Match", `"tx"`)
+	recorder := serveAlias(request)
+
+	require.Equal(t, http.StatusNotModified, recorder.Code)
+	require.Empty(t, recorder.Body.String())
+	require.Equal(t, `"tx"`, recorder.Header().Get("Etag"))
+	require.Equal(t, "public, max-age=31536000, immutable", recorder.Header().Get("Cache-Control"))
+	require.Equal(t, "Fri, 01 Jan 2027 00:00:00 GMT", recorder.Header().Get("Expires"))
+	require.Equal(t, "Thu, 01 Jan 2026 00:00:00 GMT", recorder.Header().Get("Last-Modified"))
+	require.Equal(t, "Accept-Encoding", recorder.Header().Get("Vary"))
+	require.Equal(t, testAliasFileID, recorder.Header().Get("X-Ar-File-Id"))
+	require.Empty(t, recorder.Header().Values("Content-Type"), "a 304 must not change the cached type")
+	require.Empty(t, recorder.Header().Values("Set-Cookie"))
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, `"tx"`, forwarded.Get("If-None-Match"))
+}
