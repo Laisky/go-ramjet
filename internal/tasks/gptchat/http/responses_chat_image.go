@@ -45,7 +45,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	if prompt == "" {
 		err := errors.New("prompt is empty for image generation")
 		web.AbortErr(ctx, err)
-		return err
+		return errors.Wrap(err, "validate image prompt")
 	}
 
 	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
@@ -54,7 +54,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 		// the rest once they are delivered.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
 			user, GetImageModelPrice(frontendReq.Model), "txt2image"); web.AbortErr(ctx, err) {
-			return err
+			return errors.Wrap(err, "charge upfront image")
 		}
 	}
 
@@ -75,12 +75,12 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 			})
 		}
 		if err := pool.Wait(); web.AbortErr(ctx, err) {
-			return err
+			return errors.Wrap(err, "fetch azure images")
 		}
 	default:
 		imgContents, err = fetchImageFromOpenaiDalle(taskCtx, user, frontendReq.Model, prompt, frontendReq.N, "")
 		if web.AbortErr(ctx, err) {
-			return err
+			return errors.Wrap(err, "fetch openai images")
 		}
 	}
 	imgContents = settleImageBilling(gmw.Ctx(ctx), user, frontendReq.Model, frontendReq.N, imgContents)
@@ -99,7 +99,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	}
 
 	if err := pool.Wait(); web.AbortErr(ctx, err) {
-		return err
+		return errors.Wrap(err, "upload images")
 	}
 
 	var markdownText string

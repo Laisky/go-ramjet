@@ -118,10 +118,18 @@ func writeFinalToUI(
 		return errors.Wrap(err, "marshal completion")
 	}
 	ctx.Header("content-type", "application/json")
-	_, err = ctx.Writer.Write(data)
-	return err
+	if _, err = ctx.Writer.Write(data); err != nil {
+		return errors.Wrap(err, "write completion body")
+	}
+	return nil
 }
 
+// setStreamHeaders sets the SSE response headers and exposes the upstream request
+// id for cost display.
+//
+// Parameters:
+//   - ctx: Gin context of the streaming request; headers must not be sent yet.
+//   - upstreamHeader: Upstream response headers carrying the request id, if any.
 func setStreamHeaders(ctx *gin.Context, upstreamHeader http.Header) {
 	ctx.Header("content-type", "text/event-stream")
 	ctx.Header("cache-control", "no-cache")
@@ -139,6 +147,15 @@ func setStreamHeaders(ctx *gin.Context, upstreamHeader http.Header) {
 	}
 }
 
+// emitThinkingDelta streams text as a reasoning delta so the UI shows it in the
+// Thinking panel. It does nothing for non-stream requests, and a write failure is
+// dropped because the client has gone away.
+//
+// Parameters:
+//   - ctx: Gin context of the chat request.
+//   - isStream: Whether the request streams its answer.
+//   - requestID: Upstream request id echoed in the chunk.
+//   - text: Reasoning text to emit.
 func emitThinkingDelta(ctx *gin.Context, isStream bool, requestID, text string) {
 	if !isStream {
 		return
@@ -156,6 +173,15 @@ func emitThinkingDelta(ctx *gin.Context, isStream bool, requestID, text string) 
 	})
 }
 
+// emitTextDelta streams text as an answer content delta. It does nothing for
+// non-stream requests, and a write failure is dropped because the client has gone
+// away.
+//
+// Parameters:
+//   - ctx: Gin context of the chat request.
+//   - isStream: Whether the request streams its answer.
+//   - requestID: Upstream request id echoed in the chunk.
+//   - text: Answer text to emit.
 func emitTextDelta(ctx *gin.Context, isStream bool, requestID, text string) {
 	if !isStream {
 		return
@@ -173,6 +199,9 @@ func emitTextDelta(ctx *gin.Context, isStream bool, requestID, text string) {
 	})
 }
 
+// chunkString splits s into consecutive pieces of at most n bytes.
+//
+// It returns s as the only piece when n <= 0, and no pieces for an empty s.
 func chunkString(s string, n int) []string {
 	if n <= 0 {
 		return []string{s}
@@ -189,6 +218,15 @@ func chunkString(s string, n int) []string {
 	return out
 }
 
+// writeChatCompletionChunk writes chunk as one SSE data frame and flushes it while
+// holding the gin-middlewares context lock shared with the heartbeat writer.
+//
+// Parameters:
+//   - ctx: Gin context of the streaming request.
+//   - chunk: Chat completion chunk to send.
+//
+// It returns an error when the chunk cannot be marshaled, the lock is unavailable,
+// or the frame cannot be written.
 func writeChatCompletionChunk(ctx *gin.Context, chunk OpenaiCompletionStreamResp) error {
 	data, err := json.Marshal(chunk)
 	if err != nil {
@@ -197,18 +235,20 @@ func writeChatCompletionChunk(ctx *gin.Context, chunk OpenaiCompletionStreamResp
 	if err := gmw.CtxLock(ctx); err != nil {
 		return errors.Wrap(err, "lock ctx")
 	}
-	_, werr := ctx.Writer.Write([]byte("data: "))
-	if werr == nil {
-		_, werr = ctx.Writer.Write(data)
-	}
-	if werr == nil {
-		_, werr = ctx.Writer.Write([]byte("\n\n"))
-	}
+
+	writeErr := func() error {
+		for _, part := range [][]byte{[]byte("data: "), data, []byte("\n\n")} {
+			if _, err := ctx.Writer.Write(part); err != nil {
+				return errors.Wrap(err, "write stream chunk")
+			}
+		}
+		return nil
+	}()
 	if flush, ok := ctx.Writer.(http.Flusher); ok {
 		flush.Flush()
 	}
 	if unlockErr := gmw.CtxUnlock(ctx); unlockErr != nil {
-		return errors.Wrap(unlockErr, "unlock ctx")
+		return errors.Join(writeErr, errors.Wrap(unlockErr, "unlock ctx"))
 	}
-	return werr
+	return writeErr
 }
