@@ -135,3 +135,70 @@ func TestMemoryEngineAdmitsTenantSelectedPublicLLMBase(t *testing.T) {
 	require.NoError(t, runMemoryTurn(t, user))
 	require.Positive(t, hits.Load(), "a public caller-selected model base stays reachable")
 }
+
+// TestMemoryEngineRebindingStopsBeforeTheRequest pins the assumption that lets
+// the memory model base be admitted without pinning: when a later DNS answer
+// steers the library's own client to an internal service, the https-only rule
+// and certificate verification stop the exchange before any request is sent.
+func TestMemoryEngineRebindingStopsBeforeTheRequest(t *testing.T) {
+	var tlsHits, plainHits, tlsDials atomic.Int32
+	internalTLS := memoryLLMService(t, &tlsHits)
+	internalPlain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		plainHits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"resp","output":[]}`)
+	}))
+	t.Cleanup(internalPlain.Close)
+
+	// Admission sees a public answer for rebind.test ...
+	original := memoryLLMResolver
+	t.Cleanup(func() { memoryLLMResolver = original })
+	memoryLLMResolver = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host != "rebind.test" {
+			return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+		}
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+	}
+	// ... while the library's client connects to internal services, which trust
+	// the same roots but hold no certificate for rebind.test.
+	trustServerByDefault(t, internalTLS)
+	tlsTransport, ok := http.DefaultTransport.(*http.Transport)
+	require.True(t, ok)
+	rebound := tlsTransport.Clone()
+	rebound.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		routes := map[string]string{
+			"rebind.test:443": internalTLS.Listener.Addr().String(),
+			"rebind.test:80":  internalPlain.Listener.Addr().String(),
+		}
+		target, ok := routes[address]
+		if !ok {
+			return nil, errors.Errorf("unexpected dial to %s", address)
+		}
+		if address == "rebind.test:443" {
+			tlsDials.Add(1)
+		}
+		var dialer net.Dialer
+		conn, err := dialer.DialContext(ctx, network, target)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return conn, nil
+	}
+	http.DefaultTransport = rebound
+
+	// A failed extraction over https degrades the turn without an error, while
+	// a cleartext base is refused when the engine is built.
+	for base, refused := range map[string]bool{"https://rebind.test": false, "http://rebind.test": true} {
+		user := &config.UserConfig{UserName: "byok", OpenaiToken: "sk-SYNTHETIC-ONLY-MEMORY-0123", BYOK: true,
+			APIBase: base, APIBaseUserSelected: true}
+		err := runMemoryTurn(t, user)
+		if refused {
+			require.Error(t, err, base)
+		} else {
+			require.NoError(t, err, base)
+		}
+		require.Zero(t, tlsHits.Load(), "%s: certificate verification must stop a rebound TLS exchange", base)
+		require.Zero(t, plainHits.Load(), "%s: the library must refuse a cleartext model base", base)
+	}
+	require.Positive(t, tlsDials.Load(), "the https extraction must have reached the rebound address")
+}
