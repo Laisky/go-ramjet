@@ -16,6 +16,7 @@ import (
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/graphql"
+	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/Laisky/zap"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -27,7 +28,8 @@ import (
 
 // fetchStaticURLContent fetches url and returns its text content. The URL comes
 // from a prompt or a web search result, never from server configuration, so it
-// is always fetched through tenantEgressClient.
+// is always fetched through tenantEgressClient, and, like the crawler, at most
+// crawleregress.MaxResponseBytes of its body are read.
 func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err error) {
 	logger := gmw.GetLogger(ctx).With(zap.String("url", url))
 	logger.Debug("fetch static url", zap.String("url", url))
@@ -51,13 +53,19 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
 	}
 
+	body, err := io.ReadAll(io.LimitReader(resp.Body, crawleregress.MaxResponseBytes+1))
+	if err != nil {
+		return nil, errors.Wrapf(err, "read %q", url)
+	}
+	if len(body) > crawleregress.MaxResponseBytes {
+		return nil, errors.Errorf("body of %q exceeds %d bytes", url, crawleregress.MaxResponseBytes)
+	}
+
 	switch filepath.Ext(url) {
 	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".json":
-		if content, err = io.ReadAll(resp.Body); err != nil {
-			return nil, errors.Wrapf(err, "read %q", url)
-		}
+		content = body
 	default:
-		if content, err = _extractHtmlBody(resp.Body); err != nil {
+		if content, err = _extractHtmlBody(bytes.NewReader(body)); err != nil {
 			return nil, errors.Wrapf(err, "extract html body %q", url)
 		}
 	}

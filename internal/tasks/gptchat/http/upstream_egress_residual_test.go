@@ -9,11 +9,13 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
@@ -149,6 +151,39 @@ func TestPromptURLFetchStillReachesPublicTargets(t *testing.T) {
 	content, err := fetchStaticURLContent(t.Context(), "http://"+egressProviderHost+"/notes.txt")
 	require.NoError(t, err)
 	require.Equal(t, "public-notes", string(content))
+}
+
+// TestPromptURLFetchBoundsBody stops a URL from a prompt or a search result
+// from streaming an unbounded body into memory: like the crawler, a static
+// fetch reads at most crawleregress.MaxResponseBytes, for documents and pages.
+func TestPromptURLFetchBoundsBody(t *testing.T) {
+	oversized := strings.Repeat("a", crawleregress.MaxResponseBytes+1)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".txt") {
+			_, _ = io.WriteString(w, oversized)
+			return
+		}
+		_, _ = io.WriteString(w, "<html><body>"+oversized+"</body></html>")
+	}))
+	t.Cleanup(provider.Close)
+	egressTestSetup(t, provider)
+
+	for _, path := range []string{"/notes.txt", "/page"} {
+		content, err := fetchStaticURLContent(t.Context(), "http://"+egressProviderHost+path)
+		require.Error(t, err, path)
+		require.Contains(t, err.Error(), "exceeds", path)
+		require.Empty(t, content, path)
+	}
+
+	bounded := strings.Repeat("b", 1024)
+	small := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "<html><body>"+bounded+"</body></html>")
+	}))
+	t.Cleanup(small.Close)
+	egressTestSetup(t, small)
+	content, err := fetchStaticURLContent(t.Context(), "http://"+egressProviderHost+"/page")
+	require.NoError(t, err)
+	require.Contains(t, string(content), bounded)
 }
 
 // sseEvent frames one Responses streaming event and flushes it to the client.
