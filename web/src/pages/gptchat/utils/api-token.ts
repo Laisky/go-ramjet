@@ -140,14 +140,27 @@ export function isSameApiEndpoint(
 const API_BASE_SHAPE = /^https?:\/\/[^/?#\\@%\s]+(?:\/|$)/i
 
 /**
+ * NON_PRINTABLE_ASCII matches any character outside printable ASCII, which
+ * covers whitespace and control characters too. Every request carries the
+ * API base in the X-Laisky-Api-Base header: fetch refuses header values
+ * beyond ISO-8859-1, and a Latin-1 host reaches Go as a raw byte while
+ * realtime audio connects to its punycode form.
+ */
+const NON_PRINTABLE_ASCII = /[^\x21-\x7e]/
+
+/**
  * isValidApiBase reports whether apiBase is an API base the server accepts
- * and realtime audio can connect to: an absolute http(s) URL with a plain
- * host and without user info, query, fragment, backslashes, or whitespace
- * and control characters.
+ * and realtime audio can connect to: an absolute http(s) URL in printable
+ * ASCII with a plain host and without user info, query, fragment, or
+ * backslashes.
  */
 export function isValidApiBase(apiBase?: string | null): boolean {
   const raw = apiBase?.trim() || ''
-  if (!API_BASE_SHAPE.test(raw) || /[\\\s\p{Cc}]/u.test(raw)) {
+  if (
+    !API_BASE_SHAPE.test(raw) ||
+    raw.includes('\\') ||
+    NON_PRINTABLE_ASCII.test(raw)
+  ) {
     return false
   }
   let url: URL

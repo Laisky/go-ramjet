@@ -139,6 +139,10 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       ],
       ['a tab in the host', 'https://ev\til.example'],
       ['a percent-encoded host', 'https://evil%2Eexample'],
+      // Every request carries api_base in the X-Laisky-Api-Base header, and
+      // fetch refuses header values outside ISO-8859-1.
+      ['a non-ASCII host', 'https://例え.テスト/v1'],
+      ['a Latin-1 host', 'https://café.example'],
     ])('rejects an api_base with %s', (_name, value) => {
       const { config, mutated } = applyWithSearch(
         `?api_base=${encodeURIComponent(value)}`,
