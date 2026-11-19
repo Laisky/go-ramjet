@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -215,4 +217,82 @@ func TestWriteFinalToUILeavesNoHeartbeatRunning(t *testing.T) {
 	body := s.requireBodyStable(t)
 	require.True(t, strings.HasSuffix(body, "data: [DONE]\n\n"), "stream must end with [DONE]")
 	require.Contains(t, body, "final answer")
+}
+
+// slowFlushRecorder is a response writer whose every write and flush takes a while,
+// widening the window in which a heartbeat could interleave with a stream chunk.
+type slowFlushRecorder struct {
+	*httptest.ResponseRecorder
+	delay time.Duration
+}
+
+// Write records p after the configured delay.
+func (w *slowFlushRecorder) Write(p []byte) (int, error) {
+	time.Sleep(w.delay)
+	return w.ResponseRecorder.Write(p)
+}
+
+// WriteString records s after the configured delay.
+func (w *slowFlushRecorder) WriteString(s string) (int, error) {
+	time.Sleep(w.delay)
+	return w.ResponseRecorder.WriteString(s)
+}
+
+// Flush flushes the recorder after the configured delay.
+func (w *slowFlushRecorder) Flush() {
+	time.Sleep(w.delay)
+	w.ResponseRecorder.Flush()
+}
+
+// TestHeartbeatNeverInterleavesWithStreamChunks verifies that heartbeats contending
+// with stream chunks on a slow connection never split a frame: every SSE frame on
+// the wire is either a whole heartbeat comment or a whole JSON data frame, and the
+// stream ends with [DONE]. Run with -race it also proves the heartbeat goroutine and
+// the handler never touch the response writer concurrently.
+func TestHeartbeatNeverInterleavesWithStreamChunks(t *testing.T) {
+	origInterval := streamHeartbeatInterval
+	t.Cleanup(func() { streamHeartbeatInterval = origInterval })
+	streamHeartbeatInterval = time.Millisecond
+
+	rec := &slowFlushRecorder{ResponseRecorder: httptest.NewRecorder(), delay: 100 * time.Microsecond}
+	gctx, _ := gin.CreateTestContext(rec)
+	gctx.Set(string(gmw.CtxKeyLock), &sync.RWMutex{})
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", nil)
+	gctx.Request.Header.Set("User-Agent", chromeUserAgent)
+
+	stop := enableHeartBeatForStreamReq(gctx)
+	t.Cleanup(stop)
+	for i := range 50 {
+		require.NoError(t, writeChatCompletionChunk(gctx, OpenaiCompletionStreamResp{
+			ID: "req-1",
+			Choices: []OpenaiCompletionStreamRespChoice{{
+				Delta: OpenaiCompletionStreamRespDelta{Role: OpenaiMessageRoleAI, Content: strings.Repeat("x", i%7)},
+			}},
+		}))
+		time.Sleep(100 * time.Microsecond) // idle gap between chunks, as between upstream deltas
+	}
+	stop()
+	_, err := io.WriteString(gctx.Writer, "data: [DONE]\n\n")
+	require.NoError(t, err)
+
+	body := rec.Body.String()
+	require.True(t, strings.HasSuffix(body, "\n\n"))
+	frames := strings.Split(strings.TrimSuffix(body, "\n\n"), "\n\n")
+	var heartbeats, chunks int
+	for _, frame := range frames {
+		switch {
+		case frame == ": heartbeat":
+			heartbeats++
+		case frame == "data: [DONE]":
+		case strings.HasPrefix(frame, "data: "):
+			var chunk OpenaiCompletionStreamResp
+			require.NoError(t, json.Unmarshal([]byte(strings.TrimPrefix(frame, "data: ")), &chunk), "corrupted frame %q", frame)
+			chunks++
+		default:
+			require.FailNowf(t, "corrupted frame", "%q", frame)
+		}
+	}
+	require.Equal(t, 50, chunks)
+	require.Positive(t, heartbeats, "no heartbeat was written between chunks")
+	require.Equal(t, "data: [DONE]", frames[len(frames)-1])
 }
