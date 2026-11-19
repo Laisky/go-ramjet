@@ -78,3 +78,44 @@ func TestEditImageHandlerFailsWithoutImage(t *testing.T) {
 	require.GreaterOrEqual(t, gctx.Writer.Status(), http.StatusBadRequest)
 	require.Zero(t, f.delivered())
 }
+
+// TestImageResponsesAreSizeBounded verifies that the generation and edit paths stop
+// reading an image API answer once it exceeds the per-image allowance times the
+// image count, and report that clearly instead of buffering the whole body.
+func TestImageResponsesAreSizeBounded(t *testing.T) {
+	origLimit := maxImageResponseBytesPerImage
+	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
+	maxImageResponseBytesPerImage = 4 << 10
+
+	oversized := func(f *imageBillingFixture) func(http.ResponseWriter, *http.Request) bool {
+		return func(w http.ResponseWriter, r *http.Request) bool {
+			if r.URL.Path != "/v1/images/generations" && r.URL.Path != "/v1/images/edits" {
+				return false
+			}
+			image := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, 16<<10))
+			f.writeJSON(w, map[string]any{"data": []map[string]string{{"b64_json": image}, {"b64_json": image}}})
+			return true
+		}
+	}
+
+	t.Run("generation", func(t *testing.T) {
+		f := &imageBillingFixture{}
+		gctx := f.install(t)
+		f.override = oversized(f)
+
+		err := sendChatImageGeneration(gctx, imageCountTestRequest(2), billedImageUser(false))
+		require.ErrorContains(t, err, "exceeds")
+		require.Zero(t, f.delivered())
+	})
+
+	t.Run("edit", func(t *testing.T) {
+		f := &imageBillingFixture{}
+		gctx := f.install(t)
+		editTestRequest(t, gctx)
+		f.override = oversized(f)
+
+		EditImageHandler(gctx)
+		require.GreaterOrEqual(t, gctx.Writer.Status(), http.StatusBadRequest)
+		require.Zero(t, f.delivered())
+	})
+}

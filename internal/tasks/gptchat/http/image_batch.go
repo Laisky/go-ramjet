@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"io"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -70,6 +71,30 @@ func settleImageBilling(ctx context.Context, user *config.UserConfig, model stri
 	}
 
 	return imgs
+}
+
+// maxImageResponseBytesPerImage bounds an image API answer per expected image: one
+// base64-encoded image of up to 32 MiB plus JSON overhead. It is a variable so
+// tests can lower it.
+var maxImageResponseBytesPerImage int64 = 48 << 20
+
+// readImageAPIResponse reads the body of an image API answer that should carry n
+// images, refusing one larger than n times maxImageResponseBytesPerImage so an
+// upstream cannot make the server buffer an unbounded body. n below 1 counts as 1.
+//
+// It returns the body, or an error when reading fails or the body exceeds the limit.
+func readImageAPIResponse(body io.Reader, n int) ([]byte, error) {
+	n = max(n, 1)
+	limit := maxImageResponseBytesPerImage * int64(n)
+	payload, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, errors.Wrap(err, "read image API response")
+	}
+	if int64(len(payload)) > limit {
+		return nil, errors.Errorf("image API response exceeds %d bytes allowed for %d image(s)", limit, n)
+	}
+
+	return payload, nil
 }
 
 // imageCollector gathers the images decoded or downloaded from the entries of an

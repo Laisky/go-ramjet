@@ -174,8 +174,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 //
 // It returns between 1 and n images: entries after the n-th image are never
 // decoded or downloaded, and entries without image data are skipped. It returns an
-// error when the upstream call fails, an image cannot be decoded or downloaded, or
-// no entry carries an image.
+// error when the upstream call fails, its answer exceeds the size allowance for n
+// images, an image cannot be decoded or downloaded, or no entry carries an image.
 func fetchImageFromOpenaiDalle(ctx context.Context,
 	user *config.UserConfig, model, prompt string, n int, size string) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("openai")
@@ -213,9 +213,9 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := io.ReadAll(httpresp.Body)
+		payload, err := readImageAPIResponse(httpresp.Body, n)
 		if err != nil {
-			return nil, errors.Wrap(err, "read response body")
+			return nil, errors.Wrap(err, "read image response")
 		}
 
 		if httpresp.StatusCode != http.StatusOK {
@@ -278,7 +278,7 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 // drawn from prompt and downloads it.
 //
 // It returns the image, or an error when the upstream call fails, its answer
-// carries no image, or the download fails.
+// exceeds the size allowance for one image or carries no image, or the download fails.
 func fetchImageFromAzureDalle(ctx context.Context,
 	user *config.UserConfig, prompt string) (img []byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("azure")
@@ -307,12 +307,15 @@ func fetchImageFromAzureDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
+		payload, err := readImageAPIResponse(httpresp.Body, 1)
+		if err != nil {
+			return nil, errors.Wrap(err, "read image response")
+		}
 		if httpresp.StatusCode != http.StatusOK {
-			payload, _ := io.ReadAll(httpresp.Body)
 			return nil, errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
 		}
 
-		if err = json.NewDecoder(httpresp.Body).Decode(resp); err != nil {
+		if err = json.Unmarshal(payload, resp); err != nil {
 			return nil, errors.Wrap(err, "decode response")
 		}
 
@@ -462,7 +465,8 @@ func getDataFromUrlOrBase64(ctx context.Context, input string) ([]byte, error) {
 //
 // It returns exactly one image: entries after the first image are never decoded
 // or downloaded. It returns an error when the request cannot be built, the upstream
-// call fails, an image cannot be decoded or downloaded, or no entry carries an image.
+// call fails, its answer exceeds the size allowance for one image, an image cannot
+// be decoded or downloaded, or no entry carries an image.
 func fetchImageEditFromOpenai(ctx context.Context,
 	user *config.UserConfig, model, prompt string, image, mask []byte) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx)
@@ -528,15 +532,18 @@ func fetchImageEditFromOpenai(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
+		payload, err := readImageAPIResponse(httpresp.Body, 1)
+		if err != nil {
+			return nil, errors.Wrap(err, "read image edit response")
+		}
 		if httpresp.StatusCode != http.StatusOK {
-			payload, _ := io.ReadAll(httpresp.Body)
 			logger.Debug("openai image edit error",
 				zap.Int("status", httpresp.StatusCode),
 				zap.String("payload", string(payload)))
 			return nil, errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
 		}
 
-		if err = json.NewDecoder(httpresp.Body).Decode(resp); err != nil {
+		if err = json.Unmarshal(payload, resp); err != nil {
 			return nil, errors.Wrap(err, "decode response")
 		}
 	}
