@@ -114,16 +114,21 @@ func isOperatorCache(u *url.URL) bool {
 	return host == cacheGatewayHost || strings.HasSuffix(host, "."+cacheGatewayHost)
 }
 
-// relayGatewayResponse writes response to ctx: the allowlisted headers, the
+// RelayGatewayResponse writes response to ctx: the allowlisted headers, the
 // gateway URL as X-Ar-Io-Url, the untrusted-content policy for the relayed
 // type, the status and the body. A missing Content-Type is detected from the
-// first bytes, as net/http would.
+// first bytes, as net/http would. Every handler that serves Arweave content on
+// this origin relays it through here.
+//
+// A returned error may come after the status is committed; callers answer it
+// with web.AbortStreamErr, which aborts a started transfer instead of
+// appending an error document.
 //
 // No header is copied until the gateway has produced its first body byte (or
 // ended an empty body): a gateway that fails earlier leaves ctx untouched, so
 // the error answered in its place carries none of the headers, such as
 // X-Ar-Io-Verified, that describe the body it never sent.
-func relayGatewayResponse(ctx *gin.Context, response *http.Response) error {
+func RelayGatewayResponse(ctx *gin.Context, response *http.Response) error {
 	body := bufio.NewReaderSize(response.Body, sniffLen)
 	contentType := response.Header.Get("Content-Type")
 	need := 1

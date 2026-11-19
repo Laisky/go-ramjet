@@ -21,6 +21,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/arweave/ario"
 	"github.com/Laisky/go-ramjet/internal/tasks/arweave/config"
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/s3"
@@ -264,7 +265,13 @@ func getRecord(ctx context.Context, name string) (recordItem recordItem, err err
 	return recordItem, errors.Errorf("record not found")
 }
 
-// Query query record by name
+// Query relays the Arweave file an alias name points to.
+//
+// The file is third-party content served on the origin shared with GPTChat, so
+// it is relayed like the gateway's answers: only content-negotiation headers
+// reach the gateway, only content and caching headers come back, and the
+// content is marked untrusted. A gateway failure is answered with its status
+// and none of its headers or body.
 func Query(ctx *gin.Context) {
 	name := ctx.Param("name")
 
@@ -278,47 +285,29 @@ func Query(ctx *gin.Context) {
 		return
 	}
 
-	// ctx.Redirect(http.StatusFound, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID))
-
 	// proxy to ario
-	upstreamReq, err := http.NewRequest(ctx.Request.Method, fmt.Sprintf("https://ario.laisky.com/%s", record.FileID), nil)
-	if web.AbortErr(ctx, err) {
+	upstreamReq, err := http.NewRequestWithContext(gmw.Ctx(ctx), ctx.Request.Method,
+		fmt.Sprintf("https://ario.laisky.com/%s", record.FileID), nil)
+	if web.AbortErr(ctx, errors.Wrap(err, "new alias request")) {
 		return
 	}
-
-	upstreamReq.Header = ctx.Request.Header
-	upstreamReq.Header.Del("Host")
-	upstreamReq.Header.Del("Referer")
-	upstreamReq.Header.Del("Origin")
-	upstreamReq.Header.Del("User-Agent")
-	upstreamReq.Header.Del("Accept-Encoding")
+	upstreamReq.Header = ario.GatewayRequestHeader(ctx.Request.Header)
 
 	resp, err := httpcli.Do(upstreamReq)
-	if web.AbortErr(ctx, err) {
+	if web.AbortErr(ctx, errors.Wrapf(err, "fetch %q", record.FileID)) {
 		return
 	}
-
-	defer resp.Body.Close()
-	for k, v := range resp.Header {
-		if len(v) == 0 {
-			continue
-		}
-
-		ctx.Header(k, v[0])
-	}
+	defer gutils.LogErr(resp.Body.Close, logger)
 
 	ctx.Header("X-Ar-File-Id", record.FileID)
 	if resp.StatusCode/100 != 2 {
-		ctx.AbortWithError(resp.StatusCode, errors.Errorf("fetch %q, got %d", record.FileID, resp.StatusCode))
+		_ = ctx.AbortWithError(resp.StatusCode, errors.Errorf("fetch %q, got %d", record.FileID, resp.StatusCode))
 		return
 	}
 
-	_, err = io.Copy(ctx.Writer, resp.Body)
-	if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
-		return
+	if err := ario.RelayGatewayResponse(ctx, resp); err != nil {
+		web.AbortStreamErr(ctx, errors.Wrapf(err, "relay %q", record.FileID))
 	}
-
-	ctx.Status(resp.StatusCode)
 }
 
 var listRecordsCache = gutils.NewSingleItemExpCache[[]recordItem](10 * time.Minute)

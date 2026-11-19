@@ -125,9 +125,10 @@ func gatewayTarget(gateway, domain, fileKey string) (string, error) {
 	return parsed.String(), nil
 }
 
-// gatewayRequestHeader returns a new header holding only the forwardable
-// content-negotiation headers of source.
-func gatewayRequestHeader(source http.Header) http.Header {
+// GatewayRequestHeader returns a new header holding only the forwardable
+// content-negotiation headers of source. Every relay of Arweave content uses
+// it, so caller cookies and credentials never reach a gateway.
+func GatewayRequestHeader(source http.Header) http.Header {
 	header := make(http.Header, len(forwardedGatewayHeaders))
 	for _, name := range forwardedGatewayHeaders {
 		if values := source.Values(name); len(values) > 0 {
@@ -201,7 +202,7 @@ func GatewayHandler(ctx *gin.Context) {
 	fanOut := gatewayFanOut{
 		client: newGatewayClient(httpcli, ArweaveGateways, gatewayEgress),
 		method: ctx.Request.Method,
-		header: gatewayRequestHeader(ctx.Request.Header),
+		header: GatewayRequestHeader(ctx.Request.Header),
 		body:   body,
 		logger: logger,
 	}
@@ -214,7 +215,7 @@ func GatewayHandler(ctx *gin.Context) {
 
 	// A failure after the status is committed must abort the transfer, not
 	// append an error document to a partial body.
-	if err := relayGatewayResponse(ctx, resp); err != nil {
+	if err := RelayGatewayResponse(ctx, resp); err != nil {
 		web.AbortStreamErr(ctx, errors.Wrap(err, "relay gateway response"))
 	}
 }
