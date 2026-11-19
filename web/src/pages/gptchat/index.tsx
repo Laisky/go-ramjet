@@ -19,13 +19,13 @@ import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
 import {
-  ApiEndpointChangeBanner,
   ApiKeyResetBanner,
   ChatInput,
   ChatMessage,
   ChatSearch,
   ConversationInsert,
   FloatingMessageHeader,
+  LinkCredentialChangeBanner,
   ModelSelector,
   SelectionTTSPlayer,
   SelectionToolbar,
@@ -74,9 +74,9 @@ export function GPTChatPage() {
     sessions,
     isLoading: configLoading,
     updateConfig,
-    pendingApiBase,
-    confirmPendingApiBase,
-    dismissPendingApiBase,
+    pendingLinkChange,
+    confirmPendingLinkChange,
+    dismissPendingLinkChange,
     createSession,
     deleteSession,
     switchSession,
@@ -542,12 +542,12 @@ export function GPTChatPage() {
             />
           )}
 
-          {pendingApiBase && !configLoading && (
-            <ApiEndpointChangeBanner
-              requestedBase={pendingApiBase.apiBase}
+          {pendingLinkChange && !configLoading && (
+            <LinkCredentialChangeBanner
+              change={pendingLinkChange}
               config={config}
-              onConfirm={confirmPendingApiBase}
-              onDismiss={dismissPendingApiBase}
+              onConfirm={confirmPendingLinkChange}
+              onDismiss={dismissPendingLinkChange}
             />
           )}
 

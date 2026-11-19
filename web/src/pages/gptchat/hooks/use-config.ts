@@ -20,6 +20,7 @@ import {
 } from '../utils/config-helpers'
 import {
   type ConfigUpdateResult,
+  type LinkCredentialChange,
   validateCredentialUpdate,
 } from '../utils/credential-policy'
 import {
@@ -39,12 +40,11 @@ import {
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
- * PendingApiBase is an API endpoint a link asked for, held for the session
- * it was opened in until the user confirms or dismisses it.
+ * PendingLinkChange is the endpoint and key a link asked to change, held for
+ * the session it was opened in until the user confirms or dismisses it.
  */
-export interface PendingApiBase {
+export interface PendingLinkChange extends LinkCredentialChange {
   sessionId: number
-  apiBase: string
 }
 
 /**
@@ -57,11 +57,10 @@ export function useConfig() {
     { id: number; name: string; visible: boolean }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
-  // An API endpoint a link asked for that would re-target the stored key of
-  // the user's own; it waits for the user to confirm or dismiss it.
-  const [pendingApiBase, setPendingApiBase] = useState<PendingApiBase | null>(
-    null,
-  )
+  // What a link asked to change on a session holding the user's own key
+  // (I4); it waits for the user to confirm or dismiss it.
+  const [pendingLinkChange, setPendingLinkChange] =
+    useState<PendingLinkChange | null>(null)
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
   const hydratedRef = useRef(false)
@@ -201,10 +200,10 @@ export function useConfig() {
         }
 
         applySessionState(activeSessionId, finalConfig)
-        if (hydratedConfig.pendingApiBase) {
-          setPendingApiBase({
+        if (hydratedConfig.pendingLinkChange) {
+          setPendingLinkChange({
+            ...hydratedConfig.pendingLinkChange,
             sessionId: activeSessionId,
-            apiBase: hydratedConfig.pendingApiBase,
           })
         }
 
@@ -373,23 +372,33 @@ export function useConfig() {
   )
 
   /**
-   * confirmPendingApiBase applies the link-supplied API endpoint the user
-   * confirmed, but only to the session the link was opened in. The prompt
-   * stays when storing fails, and the returned promise rejects.
+   * confirmPendingLinkChange applies the link-supplied endpoint and key the
+   * user confirmed, in one write, but only to the session the link was
+   * opened in. A key the policy refuses aborts the whole change, so the
+   * stored key never moves to the new endpoint alone. The prompt stays when
+   * the change is refused or storing fails, and the returned promise rejects.
    */
-  const confirmPendingApiBase = useCallback(async () => {
-    const pending = pendingApiBase
+  const confirmPendingLinkChange = useCallback(async () => {
+    const pending = pendingLinkChange
     if (!pending || pending.sessionId !== sessionIdRef.current) {
-      setPendingApiBase(null)
+      setPendingLinkChange(null)
       return
     }
-    await updateConfig({ api_base: pending.apiBase })
-    setPendingApiBase(null)
-  }, [pendingApiBase, updateConfig])
+    const updates: Partial<SessionConfig> = {}
+    if (pending.apiBase !== undefined) updates.api_base = pending.apiBase
+    if (pending.apiToken !== undefined) updates.api_token = pending.apiToken
+    if (
+      validateCredentialUpdate(configRef.current, updates).rejections.length
+    ) {
+      throw new Error('the API key from the link was refused')
+    }
+    await updateConfig(updates)
+    setPendingLinkChange(null)
+  }, [pendingLinkChange, updateConfig])
 
-  /** dismissPendingApiBase keeps the current endpoint and drops the prompt. */
-  const dismissPendingApiBase = useCallback(() => {
-    setPendingApiBase(null)
+  /** dismissPendingLinkChange keeps the current settings and drops the prompt. */
+  const dismissPendingLinkChange = useCallback(() => {
+    setPendingLinkChange(null)
   }, [])
 
   /**
@@ -725,10 +734,10 @@ export function useConfig() {
     sessions,
     isLoading,
     updateConfig,
-    pendingApiBase:
-      pendingApiBase?.sessionId === sessionId ? pendingApiBase : null,
-    confirmPendingApiBase,
-    dismissPendingApiBase,
+    pendingLinkChange:
+      pendingLinkChange?.sessionId === sessionId ? pendingLinkChange : null,
+    confirmPendingLinkChange,
+    dismissPendingLinkChange,
     switchSession,
     reorderSessions,
     createSession,

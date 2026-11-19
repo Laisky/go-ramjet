@@ -8,8 +8,9 @@ import {
   isSyncKeyReusedAsApiToken,
   isUserSuppliedApiToken,
   repairStoredApiToken,
+  heldUserApiToken,
+  holdLinkCredentialChange,
   restoringApiTokenNeedsRotation,
-  retargetsStoredApiToken,
   validateCredentialUpdate,
 } from '../credential-policy'
 
@@ -432,40 +433,27 @@ describe('validateCredentialUpdate across sessions', () => {
   })
 })
 
-describe('retargetsStoredApiToken', () => {
-  const own = { api_base: PROVIDER_A, api_token: 'sk-own-key-0123456789' }
-
-  it('flags the user’s own key moving to another endpoint', () => {
+describe('heldUserApiToken', () => {
+  it('returns a user-supplied API token', () => {
     expect(
-      retargetsStoredApiToken(own, { ...own, api_base: PROVIDER_B }, SYNC_KEY),
-    ).toBe(true)
-    expect(
-      retargetsStoredApiToken(
-        { ...own, api_token: 'azure-custom-key-0123' },
-        { api_base: PROVIDER_B, api_token: 'azure-custom-key-0123' },
-        SYNC_KEY,
-      ),
-    ).toBe(true)
+      heldUserApiToken({ api_token: ' sk-own-0123456789 ' }, SYNC_KEY),
+    ).toBe('sk-own-0123456789')
+    expect(heldUserApiToken({ api_token: 'azure-custom-0123' }, SYNC_KEY)).toBe(
+      'azure-custom-0123',
+    )
   })
 
-  it('allows the same endpoint in another spelling', () => {
+  it('returns the key a pending reset set aside', () => {
     expect(
-      retargetsStoredApiToken(
-        own,
-        { ...own, api_base: `${PROVIDER_A.toUpperCase()}/` },
+      heldUserApiToken(
+        {
+          api_token: 'FREETIER-synthetic-0123456789',
+          api_token_reset_required: true,
+          api_token_before_reset: 'sk-own-0123456789',
+        },
         SYNC_KEY,
       ),
-    ).toBe(false)
-  })
-
-  it('allows an endpoint that comes with a key of its own', () => {
-    expect(
-      retargetsStoredApiToken(
-        own,
-        { api_base: PROVIDER_B, api_token: 'sk-link-key-0123456789' },
-        SYNC_KEY,
-      ),
-    ).toBe(false)
+    ).toBe('sk-own-0123456789')
   })
 
   it.each([
@@ -473,13 +461,120 @@ describe('retargetsStoredApiToken', () => {
     ['legacy placeholder', 'DEFAULT_PROXY_TOKEN'],
     ['free tier', 'FREETIER-synthetic-0123456789'],
     ['clobbered sync key', SYNC_KEY],
-  ])('allows moving a session whose token is %s', (_name, token) => {
+  ])('returns nothing for a %s token', (_name, token) => {
+    expect(heldUserApiToken({ api_token: token }, SYNC_KEY)).toBe('')
+    // A set-aside key only counts while its reset is pending.
     expect(
-      retargetsStoredApiToken(
-        { api_base: PROVIDER_A, api_token: token },
-        { api_base: PROVIDER_B, api_token: token },
+      heldUserApiToken(
+        { api_token: token, api_token_before_reset: 'sk-own-0123456789' },
         SYNC_KEY,
       ),
-    ).toBe(false)
+    ).toBe('')
+  })
+})
+
+describe('holdLinkCredentialChange', () => {
+  const own = config({ api_base: PROVIDER_A, api_token: 'sk-own-0123456789' })
+
+  it('holds an endpoint change and keeps the stored key', () => {
+    const { config: kept, pending } = holdLinkCredentialChange(
+      own,
+      { ...own, api_base: PROVIDER_B, temperature: 0.2 },
+      SYNC_KEY,
+    )
+    expect(pending).toEqual({ apiBase: PROVIDER_B })
+    expect(kept.api_base).toBe(PROVIDER_A)
+    expect(kept.api_token).toBe('sk-own-0123456789')
+    // Other link fields still apply.
+    expect(kept.temperature).toBe(0.2)
+  })
+
+  it('holds a user-supplied replacement key together with the endpoint', () => {
+    const { config: kept, pending } = holdLinkCredentialChange(
+      own,
+      { ...own, api_base: PROVIDER_B, api_token: 'sk-link-0123456789' },
+      SYNC_KEY,
+    )
+    expect(pending).toEqual({
+      apiBase: PROVIDER_B,
+      apiToken: 'sk-link-0123456789',
+    })
+    expect(kept.api_token).toBe('sk-own-0123456789')
+  })
+
+  it.each([
+    ['empty', ''],
+    ['free tier', 'FREETIER-synthetic-0123456789'],
+    ['sync key', SYNC_KEY],
+  ])('drops a %s link key and keeps the stored one', (_name, token) => {
+    const { config: kept, pending } = holdLinkCredentialChange(
+      own,
+      { ...own, api_base: PROVIDER_B, api_token: token },
+      SYNC_KEY,
+    )
+    expect(pending).toEqual({ apiBase: PROVIDER_B })
+    expect(kept.api_token).toBe('sk-own-0123456789')
+  })
+
+  it('keeps reset state and holds changes while a set-aside key exists', () => {
+    const resetting = config({
+      api_base: PROVIDER_A,
+      api_token: 'FREETIER-synthetic-0123456789',
+      api_token_reset_required: true,
+      api_token_before_reset: 'sk-own-0123456789',
+    })
+    const { config: kept, pending } = holdLinkCredentialChange(
+      resetting,
+      {
+        ...resetting,
+        api_base: PROVIDER_B,
+        api_token: 'sk-link-0123456789',
+        api_token_reset_required: false,
+        api_token_before_reset: undefined,
+      },
+      SYNC_KEY,
+    )
+    expect(pending).toEqual({
+      apiBase: PROVIDER_B,
+      apiToken: 'sk-link-0123456789',
+    })
+    expect(kept).toMatchObject({
+      api_base: PROVIDER_A,
+      api_token: 'FREETIER-synthetic-0123456789',
+      api_token_reset_required: true,
+      api_token_before_reset: 'sk-own-0123456789',
+    })
+  })
+
+  it('holds nothing for the same endpoint and key in another spelling', () => {
+    const { pending } = holdLinkCredentialChange(
+      own,
+      {
+        ...own,
+        api_base: `${PROVIDER_A.toUpperCase()}/`,
+        api_token: ' sk-own-0123456789 ',
+      },
+      SYNC_KEY,
+    )
+    expect(pending).toBeUndefined()
+  })
+
+  it('passes link values through for a session without the user’s own key', () => {
+    const free = config({
+      api_base: PROVIDER_A,
+      api_token: 'FREETIER-synthetic-0123456789',
+    })
+    const linked = {
+      ...free,
+      api_base: PROVIDER_B,
+      api_token: 'sk-link-0123456789',
+    }
+    const { config: applied, pending } = holdLinkCredentialChange(
+      free,
+      linked,
+      SYNC_KEY,
+    )
+    expect(pending).toBeUndefined()
+    expect(applied).toBe(linked)
   })
 })

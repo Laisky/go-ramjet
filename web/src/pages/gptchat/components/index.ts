@@ -1,7 +1,3 @@
-export {
-  ApiEndpointChangeAlert,
-  ApiEndpointChangeBanner,
-} from './api-endpoint-change-alert'
 export { ApiKeyResetAlert, ApiKeyResetBanner } from './api-key-reset-alert'
 export { AttachmentTag } from './attachment-tag'
 export { ChatInput } from './chat-input'
@@ -11,6 +7,10 @@ export { ConfigSidebar } from './config-sidebar'
 export { ConversationInsert } from './conversation-insert'
 export { EditMessageModal } from './edit-message-modal'
 export { FloatingMessageHeader } from './floating-message-header'
+export {
+  LinkCredentialChangeAlert,
+  LinkCredentialChangeBanner,
+} from './link-credential-change-alert'
 export { ImageEditorModal } from './image-editor-modal'
 export { McpServerManager } from './mcp-server-manager'
 export { ModelSelector } from './model-selector'

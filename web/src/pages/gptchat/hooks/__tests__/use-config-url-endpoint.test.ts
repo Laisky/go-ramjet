@@ -27,6 +27,9 @@ const ATTACKER_BASE = 'https://evil.example'
 /** OWN_KEY is a synthetic key of the user's own (BYOK shape). */
 const OWN_KEY = 'sk-SYNTHETIC-OWN-KEY-0123456789'
 
+/** LINK_KEY is a synthetic key that a link carries. */
+const LINK_KEY = 'sk-SYNTHETIC-LINK-KEY-0123456789'
+
 /**
  * outboundHeaders returns the headers the chat client sends for config, the
  * way chat-streaming builds them for every request.
@@ -81,7 +84,7 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(result.current.config.api_base).toBe(PROVIDER_A)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
     // The link is not silently dropped: the user is asked instead.
-    expect(result.current.pendingApiBase).toEqual({
+    expect(result.current.pendingLinkChange).toEqual({
       sessionId: 1,
       apiBase: ATTACKER_BASE,
     })
@@ -96,7 +99,7 @@ describe('useConfig link-supplied API endpoint', () => {
 
     expect(result.current.config.api_base).toBe(PROVIDER_A)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
-    expect(result.current.pendingApiBase?.apiBase).toBe(ATTACKER_BASE)
+    expect(result.current.pendingLinkChange?.apiBase).toBe(ATTACKER_BASE)
   })
 
   it('applies the endpoint once the user confirms it', async () => {
@@ -105,13 +108,13 @@ describe('useConfig link-supplied API endpoint', () => {
 
     const { result } = await renderLoadedConfig()
     await act(async () => {
-      await result.current.confirmPendingApiBase()
+      await result.current.confirmPendingLinkChange()
     })
 
     expect(result.current.config.api_base).toBe(PROVIDER_B)
     expect(result.current.config.api_token).toBe(OWN_KEY)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_B)
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
   })
 
   it('keeps the current endpoint when the user declines', async () => {
@@ -120,10 +123,10 @@ describe('useConfig link-supplied API endpoint', () => {
 
     const { result } = await renderLoadedConfig()
     act(() => {
-      result.current.dismissPendingApiBase()
+      result.current.dismissPendingLinkChange()
     })
 
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
     expect(result.current.config.api_base).toBe(PROVIDER_A)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
   })
@@ -148,9 +151,9 @@ describe('useConfig link-supplied API endpoint', () => {
     await act(async () => {
       await result.current.switchSession(2)
     })
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
     await act(async () => {
-      await result.current.confirmPendingApiBase()
+      await result.current.confirmPendingLinkChange()
     })
 
     expect(result.current.config.api_base).toBe(PROVIDER_A)
@@ -158,22 +161,52 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(storedConfig(store, 2).api_base).toBe(PROVIDER_A)
   })
 
-  it('applies an endpoint that comes with its own key in the same link', async () => {
+  it('applies a link key and endpoint together once the user confirms', async () => {
     window.history.replaceState(
       {},
       '',
-      `/?api_key=sk-SYNTHETIC-LINK-KEY-0123456789&api_base=${PROVIDER_B}`,
+      `/?api_key=${LINK_KEY}&api_base=${PROVIDER_B}`,
     )
     const store = ownKeyStore()
 
     const { result } = await renderLoadedConfig()
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: PROVIDER_B,
+      apiToken: LINK_KEY,
+    })
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
 
-    expect(result.current.config.api_token).toBe(
-      'sk-SYNTHETIC-LINK-KEY-0123456789',
-    )
+    expect(result.current.config.api_token).toBe(LINK_KEY)
     expect(result.current.config.api_base).toBe(PROVIDER_B)
+    expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_B)
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
+  })
+
+  it('applies a link key and endpoint to a free-tier session without asking', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/?api_key=${LINK_KEY}&api_base=${PROVIDER_B}`,
+    )
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: 'FREETIER-synthetic-placeholder-01',
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_token).toBe(LINK_KEY)
+    expect(result.current.config.api_base).toBe(PROVIDER_B)
+    expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
+    expect(result.current.pendingLinkChange).toBeNull()
   })
 
   it('still asks when the link key is rejected and the stored key would move', async () => {
@@ -188,7 +221,7 @@ describe('useConfig link-supplied API endpoint', () => {
 
     expect(result.current.config.api_token).toBe(OWN_KEY)
     expect(result.current.config.api_base).toBe(PROVIDER_A)
-    expect(result.current.pendingApiBase?.apiBase).toBe(ATTACKER_BASE)
+    expect(result.current.pendingLinkChange?.apiBase).toBe(ATTACKER_BASE)
   })
 
   it('applies a link endpoint to a free-tier session without asking', async () => {
@@ -206,7 +239,7 @@ describe('useConfig link-supplied API endpoint', () => {
 
     expect(result.current.config.api_base).toBe(PROVIDER_B)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_B)
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
   })
 
   it('applies a link endpoint on a first visit without asking', async () => {
@@ -218,7 +251,7 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(result.current.config.api_base).toBe(PROVIDER_B)
     expect(result.current.config.api_token).toMatch(/^FREETIER-/)
     expect(storedConfig(store, 1).api_base).toBe(PROVIDER_B)
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
   })
 
   it('does not ask when the link names the stored endpoint', async () => {
@@ -232,6 +265,130 @@ describe('useConfig link-supplied API endpoint', () => {
     const { result } = await renderLoadedConfig()
 
     expect(result.current.config.api_token).toBe(OWN_KEY)
-    expect(result.current.pendingApiBase).toBeNull()
+    expect(result.current.pendingLinkChange).toBeNull()
+  })
+})
+
+describe('useConfig link-supplied API key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/')
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['an empty api_key', `/?api_key=&api_base=${ATTACKER_BASE}`],
+    ['a junk token', `/?token=x&base=${ATTACKER_BASE}`],
+    [
+      'a free-tier token',
+      `/?api_key=FREETIER-synthetic-0123456789&api_base=${ATTACKER_BASE}`,
+    ],
+  ])(
+    'keeps the stored key and endpoint when a link carries %s',
+    async (_name, search) => {
+      window.history.replaceState({}, '', search)
+      const store = ownKeyStore()
+
+      const { result } = await renderLoadedConfig()
+
+      expect(result.current.config.api_token).toBe(OWN_KEY)
+      expect(result.current.config.api_base).toBe(PROVIDER_A)
+      expect(storedConfig(store, 1).api_token).toBe(OWN_KEY)
+      expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+      // Only the endpoint is offered; a key that is not the user's own is
+      // dropped rather than offered as a replacement.
+      expect(result.current.pendingLinkChange).toEqual({
+        sessionId: 1,
+        apiBase: ATTACKER_BASE,
+        ...(search.includes('token=x') ? { apiToken: 'x' } : {}),
+      })
+    },
+  )
+
+  it('never silently replaces the user’s own key with a link key', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/?api_key=${LINK_KEY}&api_base=${ATTACKER_BASE}`,
+    )
+    const store = ownKeyStore()
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_token).toBe(OWN_KEY)
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_token).toBe(OWN_KEY)
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: ATTACKER_BASE,
+      apiToken: LINK_KEY,
+    })
+  })
+
+  it('asks before a link key alone replaces the user’s own key', async () => {
+    window.history.replaceState({}, '', `/?api_key=${LINK_KEY}`)
+    const store = ownKeyStore()
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_token).toBe(OWN_KEY)
+    expect(storedConfig(store, 1).api_token).toBe(OWN_KEY)
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiToken: LINK_KEY,
+    })
+  })
+
+  it('keeps a key set aside by a pending reset on its endpoint', async () => {
+    window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: 'FREETIER-synthetic-placeholder-01',
+        api_token_reset_required: true,
+        api_token_before_reset: OWN_KEY,
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    expect(result.current.config.api_token_before_reset).toBe(OWN_KEY)
+    expect(result.current.config.api_token_reset_required).toBe(true)
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: ATTACKER_BASE,
+    })
+  })
+
+  it('completes a pending reset with a confirmed link key', async () => {
+    window.history.replaceState({}, '', `/?api_key=${LINK_KEY}`)
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: 'FREETIER-synthetic-placeholder-01',
+        api_token_reset_required: true,
+        api_token_before_reset: OWN_KEY,
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+    expect(result.current.config.api_token_reset_required).toBe(true)
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+
+    expect(result.current.config.api_token).toBe(LINK_KEY)
+    expect(result.current.config.api_token_reset_required).toBe(false)
+    expect(storedConfig(store, 1).api_token_before_reset).toBeUndefined()
   })
 })

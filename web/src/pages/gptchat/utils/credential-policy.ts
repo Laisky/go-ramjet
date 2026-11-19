@@ -22,11 +22,14 @@
  *       the user picks it, or it is the same session's own earlier value.
  *       A shared endpoint is not evidence, because one endpoint serves many
  *       accounts.
- *   I4. A link never re-targets a stored key of the user's own. A URL that
- *       moves such a session to another API endpoint is held until the user
- *       confirms it, because the server forwards the key to whatever
- *       endpoint the client names. A URL that brings its own key may set
- *       the endpoint for that key.
+ *   I4. A link never changes the credentials of a session that holds a
+ *       key of the user's own: its API token, or the key a pending reset
+ *       set aside. A URL that would move such a session to another API
+ *       endpoint, or replace that key, is held until the user confirms it,
+ *       because the server forwards the key to whatever endpoint the client
+ *       names. A link key that is not user-supplied (empty, free tier, a
+ *       sync key) is dropped. Sessions without such a key take the link's
+ *       values as before.
  *
  * Comparisons use constantTimeEqual as a best-effort measure. All secrets
  * involved already live in the same browser profile, so isolation, not
@@ -222,22 +225,79 @@ export function validateCredentialUpdate(
 }
 
 /**
- * retargetsStoredApiToken reports whether moving current to next would send
- * a stored key of the user's own to a different API endpoint (I4): the
- * endpoints differ, current.api_token is user-supplied (not missing, legacy,
- * free-tier, or a clobbered syncKey), and next still carries that same key.
- * It returns false when next brings a different key of its own.
+ * LinkCredentialChange is what a link asked to change on a session that
+ * holds a key of the user's own (I4): a different API endpoint, a
+ * user-supplied replacement key, or both. It waits for confirmation.
  */
-export function retargetsStoredApiToken(
-  current: Pick<SessionConfig, 'api_base' | 'api_token'>,
-  next: Pick<SessionConfig, 'api_base' | 'api_token'>,
+export interface LinkCredentialChange {
+  apiBase?: string
+  apiToken?: string
+}
+
+/**
+ * heldUserApiToken returns the key of the user's own that config holds: its
+ * API token when that is user-supplied, otherwise, while a reset is
+ * pending, the key the reset set aside (which the recovery alert can
+ * restore). It returns an empty string when config holds no such key.
+ */
+export function heldUserApiToken(
+  config: Pick<
+    SessionConfig,
+    'api_token' | 'api_token_reset_required' | 'api_token_before_reset'
+  >,
   syncKey?: string | null,
-): boolean {
-  return (
-    !isSameApiEndpoint(current.api_base, next.api_base) &&
-    isUserSuppliedApiToken(current.api_token, syncKey) &&
-    sameSecret(current.api_token, next.api_token)
-  )
+): string {
+  if (isUserSuppliedApiToken(config.api_token, syncKey)) {
+    return config.api_token.trim()
+  }
+  if (config.api_token_reset_required === true) {
+    return config.api_token_before_reset?.trim() || ''
+  }
+  return ''
+}
+
+/**
+ * holdLinkCredentialChange enforces I4 on linked, the result of applying a
+ * link's parameters to current. When current holds a key of the user's own,
+ * it returns linked with current's endpoint and credential fields kept, and
+ * pending set to the endpoint change and user-supplied key the link asked
+ * for (a link key that is not user-supplied is dropped). Otherwise it
+ * returns linked unchanged. syncKey is the browser-wide sync key.
+ */
+export function holdLinkCredentialChange(
+  current: SessionConfig,
+  linked: SessionConfig,
+  syncKey?: string | null,
+): { config: SessionConfig; pending?: LinkCredentialChange } {
+  if (!heldUserApiToken(current, syncKey)) {
+    return { config: linked }
+  }
+
+  const pending: LinkCredentialChange = {}
+  if (!isSameApiEndpoint(current.api_base, linked.api_base)) {
+    pending.apiBase = linked.api_base
+  }
+  const linkToken = linked.api_token?.trim() || ''
+  if (
+    !sameSecret(linkToken, current.api_token) &&
+    isUserSuppliedApiToken(linkToken, syncKey)
+  ) {
+    pending.apiToken = linkToken
+  }
+
+  return {
+    config: {
+      ...linked,
+      api_base: current.api_base,
+      api_token: current.api_token,
+      api_token_reset_required: current.api_token_reset_required,
+      api_token_before_reset: current.api_token_before_reset,
+    },
+    pending:
+      pending.apiBase !== undefined || pending.apiToken !== undefined
+        ? pending
+        : undefined,
+  }
 }
 
 /**

@@ -17,9 +17,10 @@ import {
   isSameApiEndpoint,
 } from '../utils/api-token'
 import {
+  holdLinkCredentialChange,
   isApiTokenClobberedBySyncKey,
+  type LinkCredentialChange,
   repairStoredApiToken,
-  retargetsStoredApiToken,
   validateCredentialUpdate,
 } from '../utils/credential-policy'
 import {
@@ -76,14 +77,15 @@ function pickFallbackApiToken(
  * HydratedSessionConfigResult is the outcome of hydrateSessionConfig: the
  * usable config, the raw stored config (null when absent), and whether the
  * usable config differs from storage and should be written back.
- * pendingApiBase is an API endpoint a URL asked for that would re-target the
- * stored key of the user's own; it is not applied and awaits confirmation.
+ * pendingLinkChange is the endpoint and key a URL asked to change on a
+ * session that holds a key of the user's own; it is not applied and awaits
+ * confirmation.
  */
 export interface HydratedSessionConfigResult {
   config: SessionConfig
   savedConfig: SessionConfig | null
   changed: boolean
-  pendingApiBase?: string
+  pendingLinkChange?: LinkCredentialChange
 }
 
 /**
@@ -109,8 +111,8 @@ export function mergeSessionConfigs(
  * previously active session) supplies the API endpoint of a missing config
  * and a token for a tokenless session on the same endpoint; and
  * options.applyUrlOverrides applies URL query overrides as guarded writes;
- * an endpoint change that would re-target the user's own stored key is
- * returned as pendingApiBase instead of being applied.
+ * an endpoint or key change on a session that holds a key of the user's own
+ * is returned as pendingLinkChange instead of being applied.
  * It persists only a newly adopted or generated browser-wide sync key; the
  * session config itself is returned with changed set, and the caller decides
  * whether to write it back.
@@ -204,7 +206,7 @@ export async function hydrateSessionConfig(
     configChanged = true
   }
 
-  let pendingApiBase: string | undefined
+  let pendingLinkChange: LinkCredentialChange | undefined
   if (options?.applyUrlOverrides) {
     const overrideResult = applyUrlOverridesToConfig(finalConfig)
     if (overrideResult.mutated) {
@@ -227,15 +229,19 @@ export async function hydrateSessionConfig(
         }
       }
       // The server sends a BYOK key to whatever endpoint the client names,
-      // so a link must not silently move the user's own key elsewhere (I4).
-      if (retargetsStoredApiToken(finalConfig, overridden, globalSyncKey)) {
-        pendingApiBase = overridden.api_base
-        overridden.api_base = finalConfig.api_base
+      // so a link must not silently move or replace the user's own key (I4).
+      const held = holdLinkCredentialChange(
+        finalConfig,
+        overridden,
+        globalSyncKey,
+      )
+      if (held.pending) {
+        pendingLinkChange = held.pending
         console.warn(
-          `[useConfig] holding URL API endpoint change for confirmation: session=${sessionId}`,
+          `[useConfig] holding URL credential change for confirmation: session=${sessionId} endpoint=${held.pending.apiBase !== undefined} key=${held.pending.apiToken !== undefined}`,
         )
       }
-      finalConfig = overridden
+      finalConfig = held.config
       configChanged = true
     }
   }
@@ -274,6 +280,6 @@ export async function hydrateSessionConfig(
     config: finalConfig,
     savedConfig,
     changed: configChanged,
-    pendingApiBase,
+    pendingLinkChange,
   }
 }
