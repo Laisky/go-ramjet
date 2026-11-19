@@ -10,7 +10,8 @@ const reviewedCrawlerLoggerName = "go-ramjet.run_dynamic_web_crawler.verified_cr
 
 // CrawlerDiagnosticAlertCore preserves the application's existing exact logger scope.
 // Pass a fresh unbound SDK core. The reviewed worker gets eagerly bound and call-site fields;
-// other names retain metadata only through an independent empty-context clone.
+// Archive failures receive a bounded safe projection; other names retain metadata
+// only through an independent empty-context clone.
 func CrawlerDiagnosticAlertCore(core zapcore.Core) zapcore.Core {
 	return &crawlerDiagnosticAlertCore{full: core, metadata: core.With(nil)}
 }
@@ -36,10 +37,11 @@ func (c *crawlerDiagnosticAlertCore) Check(entry zapcore.Entry, checked *zapcore
 
 // Write selects one existing application policy without changing the chosen entry message.
 func (c *crawlerDiagnosticAlertCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
-	if entry.LoggerName == reviewedCrawlerLoggerName {
+	projected, faithful := alertFieldsFor(entry.LoggerName, fields)
+	if faithful {
 		return c.full.Write(entry, fields)
 	}
-	return c.metadata.Write(entry, nil)
+	return c.metadata.Write(entry, projected)
 }
 
 // Sync synchronizes the shared alert transport once; the SDK does not promise delivery flushing.
