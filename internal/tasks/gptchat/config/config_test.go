@@ -164,6 +164,32 @@ func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 	require.Equal(t, "gpt-realtime-2.1-mini", user.Voice.RealtimeModel)
 }
 
+// TestUserConfigDefaultUserNameIsFrozen pins the default UserName derived from
+// a configured user token, hex(SHA256(token))[:16], with a vector computed
+// independently (Python hashlib).
+//
+// CodeQL go/weak-sensitive-data-hashing #68 flags this SHA-256 call as password
+// hashing. It is not: the input is an API token (operator-issued in
+// openai.user_tokens or resolved from the request), not a human-chosen
+// password; the digest is never stored as a verifier nor compared to
+// authenticate anyone; the 16-hex prefix is only a fallback, stable user
+// identifier (quota, billing, logs) for entries without user_name. A slow KDF
+// would add nothing, and any change would re-key existing per-user records.
+func TestUserConfigDefaultUserNameIsFrozen(t *testing.T) {
+	baseVoiceConfig(t)
+	gconfig.Shared.Set("openai.voice.plugin", "")
+	gconfig.Shared.Set("openai.voice.realtime_model", "")
+	require.NoError(t, SetupConfig())
+
+	derived := &UserConfig{Token: "synthetic-user-token", AllowedModels: []string{"*"}}
+	require.NoError(t, derived.Valid())
+	require.Equal(t, "a18124dce2d892dc", derived.UserName)
+
+	explicit := &UserConfig{UserName: "alice", Token: "synthetic-user-token", AllowedModels: []string{"*"}}
+	require.NoError(t, explicit.Valid())
+	require.Equal(t, "alice", explicit.UserName, "an explicit user_name must win")
+}
+
 // TestSetupConfigWebFetchQueryForwarding checks the actual mapstructure wire
 // setting. The query-disclosure policy defaults to false and requires an
 // operator override in the worker's openai.web_fetch configuration.

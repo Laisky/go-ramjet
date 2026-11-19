@@ -75,3 +75,24 @@ func TestSyncKeyFingerprint(t *testing.T) {
 	req.Equal(fp1, fp2)
 	req.Len(fp1, 12)
 }
+
+// TestSyncKeyDerivedIdentifiersAreFrozen pins the S3 object key and the log
+// fingerprint derived from a sync key, hex(SHA256(key)) and its 12-hex prefix,
+// with vectors computed independently (Python hashlib).
+//
+// CodeQL go/weak-sensitive-data-hashing #79 (userConfigS3Key) and #80
+// (syncKeyFingerprint) flag SHA-256 as password hashing. Neither is a password
+// verifier: the sync key is a bearer secret the client generates from a CSPRNG
+// (`sync-` + 32 base-36 chars, ~165 bits), the digest only names the user's
+// backup object (and tags logs), and the server never compares it to
+// authenticate. A slow KDF would only make every sync request expensive, and
+// changing the derivation would orphan every existing cloud backup.
+func TestSyncKeyDerivedIdentifiersAreFrozen(t *testing.T) {
+	t.Parallel()
+
+	const syncKey = "sync-0123456789abcdefghijklmnopqrstuv"
+	require.Equal(t,
+		"user-configs/3b31719986183dbbaa6787163d5ca5adbbb76880882430a70b4a3b8d0c4a5ae9",
+		userConfigS3Key(syncKey))
+	require.Equal(t, "3b3171998618", syncKeyFingerprint(syncKey))
+}
