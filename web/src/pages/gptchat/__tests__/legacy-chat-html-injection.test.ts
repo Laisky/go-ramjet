@@ -6,6 +6,9 @@ import { loadLegacyChatDeclarations } from './fixtures/legacy-chat-script'
 // a sink parses it as HTML instead of treating it as text.
 const IMG_PAYLOAD = '<img src="x" onerror="globalThis.__legacyChatXss = 1">'
 const ATTR_BREAKOUT_PAYLOAD = `"><img src="x" onerror="globalThis.__legacyChatXss = 1">`
+// A textarea's content is raw text, so an attribute breakout on a textarea
+// must also close the element before its markup can become live.
+const TEXTAREA_BREAKOUT_PAYLOAD = `"></textarea><img src="x" onerror="globalThis.__legacyChatXss = 1">`
 
 type ChatData = Record<string, unknown> & { chatID: string }
 
@@ -337,5 +340,100 @@ describe('legacy chat.js appendPromptShortcut badge (alert #87)', () => {
       '.system-prompt .input',
     ) as HTMLTextAreaElement
     await vi.waitFor(() => expect(promptInput.value).toBe('translate'))
+  })
+})
+
+describe('legacy chat.js bindTalkSwitchHandler prompt input (?model= sink)', () => {
+  type TalkSwitchApi = {
+    bindTalkSwitchHandler: (enableTalk: boolean) => Promise<void>
+    readonly chatPromptInputEle: HTMLTextAreaElement | null
+    readonly chatPromptInputBtn: HTMLButtonElement | null
+  }
+
+  let chatContainer: HTMLElement
+  let selectedModel: string
+  const setupChatInput = vi.fn(async () => {})
+
+  /**
+   * loadTalkSwitch evaluates bindTalkSwitchHandler with the page-level input
+   * element variables it reassigns when the talk widget is switched off.
+   *
+   * @returns The evaluated handler plus live getters for those variables.
+   */
+  function loadTalkSwitch(): TalkSwitchApi {
+    return loadLegacyChatDeclarations<TalkSwitchApi>(
+      ['bindTalkSwitchHandler'],
+      {
+        chatContainer,
+        getChatSessionConfig: async () => ({ selected_model: selectedModel }),
+        libs: { waitElementReady: async () => {} },
+        setupTextareaAutoResize: () => {},
+        setupChatInput,
+        bindTalkBtnHandler: async () => {},
+      },
+      ['chatPromptInputEle', 'chatPromptInputBtn', 'audioStream'],
+    )
+  }
+
+  beforeEach(() => {
+    // The talk widget is active: the prompt textarea has been replaced by the
+    // record button, so switching talk off rebuilds the prompt input.
+    document.body.innerHTML = `
+      <div id="chatContainer">
+        <input type="checkbox" id="switchChatEnableTalking" checked>
+        <div class="user-input">
+          <button class="btn btn-outline-secondary" type="button" data-fn="record"><i class="bi bi-mic"></i></button>
+        </div>
+      </div>`
+    chatContainer = document.getElementById('chatContainer') as HTMLElement
+    selectedModel = 'gpt-test'
+    setupChatInput.mockClear()
+  })
+
+  it.each([ATTR_BREAKOUT_PAYLOAD, TEXTAREA_BREAKOUT_PAYLOAD])(
+    'keeps the model name %s from ?model= inside the placeholder attribute',
+    async (payload) => {
+      selectedModel = payload
+      const api = loadTalkSwitch()
+
+      await api.bindTalkSwitchHandler(false)
+
+      expect(chatContainer.querySelector('img')).toBeNull()
+      const prompt = chatContainer.querySelector(
+        '.user-input .input.prompt',
+      ) as HTMLTextAreaElement
+      expect(prompt.getAttribute('placeholder')).toBe(
+        `[${payload}] CTRL+Enter to send`,
+      )
+      expect(api.chatPromptInputEle).toBe(prompt)
+    },
+  )
+
+  it('rebuilds the same prompt input for ordinary model names', async () => {
+    const api = loadTalkSwitch()
+
+    await api.bindTalkSwitchHandler(false)
+
+    const switchEle = chatContainer.querySelector(
+      '#switchChatEnableTalking',
+    ) as HTMLInputElement
+    expect(switchEle.checked).toBe(false)
+    const prompt = chatContainer.querySelector(
+      '.user-input .input.prompt',
+    ) as HTMLTextAreaElement
+    expect(prompt.tagName).toBe('TEXTAREA')
+    expect(prompt.className).toBe('form-control input prompt')
+    expect(prompt.getAttribute('dir')).toBe('auto')
+    expect(prompt.getAttribute('placeholder')).toBe(
+      '[gpt-test] CTRL+Enter to send',
+    )
+    expect(api.chatPromptInputEle).toBe(prompt)
+    expect(api.chatPromptInputBtn).toBe(
+      chatContainer.querySelector('.user-input .btn.send'),
+    )
+    expect(
+      chatContainer.querySelector('.user-input .btn.send .bi-send'),
+    ).not.toBeNull()
+    expect(setupChatInput).toHaveBeenCalledTimes(1)
   })
 })

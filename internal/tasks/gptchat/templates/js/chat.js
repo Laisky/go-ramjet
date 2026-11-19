@@ -6331,9 +6331,12 @@ async function bindTalkSwitchHandler(newSelectedValue) {
     const ssconfig = await getChatSessionConfig();
     chatContainer.querySelector('.user-input').innerHTML = `
         <div class="input-group mb-3 user-input">
-            <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
+            <textarea dir="auto" class="form-control input prompt"></textarea>
             <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
         </div>`;
+    // The model can come from a URL override (?model=), so assign the
+    // placeholder as an attribute value instead of HTML.
+    chatContainer.querySelector('.user-input .input.prompt').setAttribute('placeholder', `[${ssconfig.selected_model}] CTRL+Enter to send`);
 
     // reset chat input element
     await libs.waitElementReady('#chatContainer .user-input .input.prompt');
