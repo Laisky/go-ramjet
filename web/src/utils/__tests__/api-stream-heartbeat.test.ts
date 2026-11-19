@@ -96,14 +96,27 @@ describe('chat stream heartbeats', () => {
     expect(captureUnexpectedRequestFailure).not.toHaveBeenCalled()
   })
 
-  it('reports legacy data heartbeats as protocol failures', async () => {
-    // This is why periodic heartbeats must not use the data: [HEARTBEAT] form.
+  it('ignores the legacy data heartbeat sentinel without telemetry', async () => {
+    // The server still sends this frame once to Safari for older cached clients.
+    const baseline = await streamEvents(answerFrames)
     const legacy = [
+      ': connection established\ndata: [HEARTBEAT]\n\n',
       answerFrames[0],
       'data: [HEARTBEAT]\n\n',
       ...answerFrames.slice(1),
     ]
-    await streamEvents(legacy)
-    expect(captureUnexpectedRequestFailure).toHaveBeenCalledTimes(1)
+    expect(await streamEvents(legacy)).toEqual(baseline)
+    expect(captureUnexpectedRequestFailure).not.toHaveBeenCalled()
+  })
+
+  it('still reports genuinely unknown non-JSON frames', async () => {
+    for (const unknown of [
+      'data: [HEARTBEAT] extra\n\n',
+      'data: <html>bad gateway</html>\n\n',
+    ]) {
+      vi.mocked(captureUnexpectedRequestFailure).mockClear()
+      await streamEvents([answerFrames[0], unknown, ...answerFrames.slice(1)])
+      expect(captureUnexpectedRequestFailure).toHaveBeenCalledTimes(1)
+    }
   })
 })
