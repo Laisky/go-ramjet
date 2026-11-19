@@ -27,17 +27,35 @@ const dependencyFloors = [
   ['mermaid', 11, '11.15.0'],
   ['mermaid', 12, '12.1.0'],
   ['uuid', 11, '11.1.1'],
-  ['dompurify', 3, '3.4.16'],
+  ['dompurify', 3, '3.4.17'],
   ['katex', 0, '0.19.0'],
   ['vitest', 4, '4.1.11'],
   ['vitest', 5, '5.0.3'],
+  ['minimatch', 11, '11.0.1'],
+  ['glob', 14, '14.0.2'],
+  ['lodash-es', 4, '4.18.0'],
+  ['undici', 8, '8.12.2'],
+  ['postcss-selector-parser', 6, '6.1.5'],
+  ['postcss-selector-parser', 7, '7.1.6'],
+  ['browserslist', 4, '4.28.7'],
+  ['baseline-browser-mapping', 2, '2.11.0'],
+  ['@humanfs/node', 0, '0.16.8'],
+  ['@babel/core', 7, '7.29.6'],
+  ['zod', 4, '4.6.6'],
+] as const
+
+// Advisories that publish no fix for these majors require a newer major instead.
+const unpatchedMajors = [
+  ['minimatch', 7, 10],
+  ['glob', 9, 13],
+  ['uuid', 0, 10],
 ] as const
 
 const requiredFloors = [
   ['vite', '8.3.3'],
   ['postcss', '8.5.29'],
   ['mermaid', '12.1.0'],
-  ['dompurify', '3.4.16'],
+  ['dompurify', '3.4.17'],
   ['katex', '0.19.0'],
   ['vitest', '5.0.3'],
 ] as const
@@ -54,6 +72,16 @@ describe('resolved dependency PR floors', () => {
         if (!version.startsWith(`${major}.`)) continue
         expect(version).toMatch(/^\d+\.\d+\.\d+$/)
         expect(compareVersions(version, minimum)).toBeGreaterThanOrEqual(0)
+      }
+    },
+  )
+
+  it.each(unpatchedMajors)(
+    'no %s copy uses unpatched majors %s through %s',
+    (name, firstMajor, lastMajor) => {
+      for (const version of packages.get(name) ?? []) {
+        const major = Number(version.split('.')[0])
+        expect(major < firstMajor || major > lastMajor).toBe(true)
       }
     },
   )

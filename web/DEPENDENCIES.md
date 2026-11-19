@@ -59,6 +59,30 @@ Mandatory application packages must be present, and every resolved copy must
 meet its minimum. Historical same-major floors remain enforced when present;
 a removed transitive package does not need to be reintroduced.
 
+## Advisory overrides without a same-major fix
+
+Some advisories publish no fix in the major line that a pinned parent requests.
+Each such override is scoped to that parent, so another package that requests
+an older major is not silently moved to a new API:
+
+- `pouchdb-browser@9>uuid` uses uuid 11.1.1 instead of the pinned 8.3.2
+  (GHSA-w5hq-g745-h8pq). The legacy migration reader calls only `v4()`, which
+  keeps its API in uuid 11.
+- `@sentry/bundler-plugins@10>glob` uses glob 14 (GHSA-3g3m-2fjr-6pw4). glob 13
+  requires minimatch 10, which has no fix for GHSA-g3hv-75wg-m249. The plugin
+  calls only the stable `glob()` function, the same call that Sentry 11 makes
+  with glob 14. The private build also disables uploads, so it does not run.
+- `@typescript-eslint/typescript-estree@8>minimatch` uses minimatch 11. Version
+  8.73 makes the same move, but it requires a TypeScript 7.1 prerelease peer.
+  The parser calls `minimatch()` only for `allowDefaultProject`, which this
+  configuration does not set.
+
+ESLint 10.15 uses minimatch 11 directly. The postcss-selector-parser override
+keeps the copy pinned by `@tailwindcss/typography` on the patched 6.1 line. The
+dependency floor tests reject vulnerable copies, including any copy of a major
+line that has no fix. Remove a scoped override once its parent requests a
+patched version.
+
 ## Mermaid compatibility
 
 Mermaid 11.15 changed dotted class-diagram namespaces into hierarchical groups
@@ -85,7 +109,7 @@ that every 0.x minor is interchangeable. The missing-font-metrics test also
 checks that the default strict policy remains non-fatal. Keep the renderer and
 stylesheet versions aligned when updating the override.
 
-Direct and nested DOMPurify copies have a 3.4.16 minimum, including Mermaid's
+Direct and nested DOMPurify copies have a 3.4.17 minimum, including Mermaid's
 sanitizer. Tests cover active HTML removal, SVG geometry, KaTeX classes and
 accessible MathML. DOMPurify's default annotation removal is retained. No
 sanitizer allowlist is relaxed. Malformed math has a readable fallback, and
