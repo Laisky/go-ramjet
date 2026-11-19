@@ -2,15 +2,21 @@ import hljs from 'highlight.js/lib/common'
 import { Check, Copy, Eye, EyeOff } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Components, ExtraProps } from 'react-markdown'
+import type { Components, ExtraProps, Options } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 
 import { cn } from '@/utils/cn'
 import { createMermaidConfig } from '@/utils/mermaid-config'
+import {
+  markdownRemarkRehypeOptions,
+  markdownSanitizeSchema,
+  sanitizeMarkdownUrl,
+} from './markdown-sanitize'
 import 'katex/dist/katex.min.css'
 
 // ANSI escape sequence pattern built via string to avoid no-control-regex lint error.
@@ -24,51 +30,6 @@ type CodeRendererProps = HTMLAttributes<HTMLElement> &
     inline?: boolean
     children?: ReactNode
   }
-
-const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:'])
-const DATA_IMAGE_PREFIX = /^data:image\/[a-z0-9.+-]+;base64,/i
-
-/**
- * sanitizeMarkdownUrl ensures only safe URLs are rendered by ReactMarkdown.
- * It allows data:image base64 sources for images while blocking other data URLs.
- */
-function sanitizeMarkdownUrl(url: string, key?: string): string {
-  const trimmed = String(url || '').trim()
-  if (!trimmed) {
-    return ''
-  }
-
-  if (DATA_IMAGE_PREFIX.test(trimmed) && key !== 'href') {
-    return trimmed
-  }
-
-  if (
-    trimmed.startsWith('#') ||
-    trimmed.startsWith('/') ||
-    trimmed.startsWith('./') ||
-    trimmed.startsWith('../')
-  ) {
-    return trimmed
-  }
-
-  try {
-    const parsed = new URL(trimmed)
-    if (SAFE_PROTOCOLS.has(parsed.protocol)) {
-      return trimmed
-    }
-  } catch {
-    if (!trimmed.includes(':')) {
-      return trimmed
-    }
-  }
-
-  console.debug('[Markdown] blocked unsafe url', {
-    key,
-    length: trimmed.length,
-    hasProtocol: trimmed.includes(':'),
-  })
-  return ''
-}
 
 /**
  * useColorScheme watches the root element and media query to determine the active theme.
@@ -482,9 +443,16 @@ const components: Components = {
   img: renderImage,
 }
 
-// Stable plugin arrays to avoid ReactMarkdown re-parsing on every render
-const remarkPlugins = [remarkGfm, remarkMath]
-const rehypePlugins = [rehypeKatex, rehypeRaw]
+// Stable plugin arrays to avoid ReactMarkdown re-parsing on every render.
+// Order matters: rehype-raw turns untrusted HTML into elements, rehype-sanitize
+// then removes everything the schema does not allow, and only afterwards does
+// rehype-katex emit its trusted markup (inline styles and MathML).
+const remarkPlugins: Options['remarkPlugins'] = [remarkGfm, remarkMath]
+const rehypePlugins: Options['rehypePlugins'] = [
+  rehypeRaw,
+  [rehypeSanitize, markdownSanitizeSchema],
+  rehypeKatex,
+]
 
 export type MarkdownProps = {
   children: string
@@ -504,8 +472,9 @@ export const Markdown = memo(function Markdown({
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
+        remarkRehypeOptions={markdownRemarkRehypeOptions}
         components={components}
-        urlTransform={(url, key) => sanitizeMarkdownUrl(url, key)}
+        urlTransform={sanitizeMarkdownUrl}
       >
         {children}
       </ReactMarkdown>
