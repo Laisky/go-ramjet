@@ -6,7 +6,8 @@
  * API endpoint is settled next because every credential decision is scoped
  * to it; the stored API token is repaired next, so a key it sets aside is
  * known; URL overrides are then applied as guarded writes, and a link that
- * would change a held key's endpoint or the key itself waits for the user.
+ * would move a stored session to another endpoint, or replace a held key,
+ * waits for the user.
  */
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
@@ -79,8 +80,7 @@ function pickFallbackApiToken(
  * usable config, the raw stored config (null when absent), and whether the
  * usable config differs from storage and should be written back.
  * pendingLinkChange is the endpoint and key a URL asked to change on a
- * session that holds a key of the user's own; it is not applied and awaits
- * confirmation.
+ * stored session (I4); it is not applied and awaits confirmation.
  */
 export interface HydratedSessionConfigResult {
   config: SessionConfig
@@ -112,8 +112,8 @@ export function mergeSessionConfigs(
  * previously active session) supplies the API endpoint of a missing config
  * and a token for a tokenless session on the same endpoint; and
  * options.applyUrlOverrides applies URL query overrides as guarded writes;
- * an endpoint or key change on a session that holds a key of the user's own
- * is returned as pendingLinkChange instead of being applied.
+ * an endpoint change on a stored session, or a change of a key of the
+ * user's own, is returned as pendingLinkChange instead of being applied.
  * It persists only a newly adopted or generated browser-wide sync key; the
  * session config itself is returned with changed set, and the caller decides
  * whether to write it back.
@@ -245,12 +245,14 @@ export async function hydrateSessionConfig(
             accepted.api_token_reset_required
         }
       }
-      // The server sends a BYOK key to whatever endpoint the client names,
-      // so a link must not silently move or replace the user's own key (I4).
+      // The server sends a BYOK key, and the session's recent history, to
+      // whatever endpoint the client names, so a link must not silently move
+      // a stored session or replace the user's own key (I4).
       const held = holdLinkCredentialChange(
         finalConfig,
         overridden,
         globalSyncKey,
+        { firstVisit: !savedConfig },
       )
       if (held.pending) {
         pendingLinkChange = held.pending

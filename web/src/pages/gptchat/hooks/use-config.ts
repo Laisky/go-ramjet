@@ -57,8 +57,8 @@ export function useConfig() {
     { id: number; name: string; visible: boolean }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
-  // What a link asked to change on a session holding the user's own key
-  // (I4); it waits for the user to confirm or dismiss it.
+  // What a link asked to change on a stored session (I4); it waits for the
+  // user to confirm or dismiss it.
   const [pendingLinkChange, setPendingLinkChange] =
     useState<PendingLinkChange | null>(null)
   const configRef = useRef(config)

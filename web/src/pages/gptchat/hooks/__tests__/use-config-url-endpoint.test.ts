@@ -1,4 +1,5 @@
-import { act } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { createElement, StrictMode, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildHeaders } from '@/utils/api'
@@ -11,6 +12,7 @@ import {
   storedConfig,
   SYNC_KEY,
 } from '../../__tests__/fixtures/credential-store'
+import { useConfig } from '../use-config'
 
 vi.mock(
   '@/utils/storage',
@@ -88,6 +90,32 @@ describe('useConfig link-supplied API endpoint', () => {
       sessionId: 1,
       apiBase: ATTACKER_BASE,
     })
+    expect(window.location.search).toBe('')
+  })
+
+  it('still asks after a StrictMode double mount', async () => {
+    // StrictMode runs the load effect twice. The first, already cleaned-up
+    // run consumes the link's parameters, so its prompt must still reach the
+    // page that stays mounted.
+    window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+    const store = ownKeyStore()
+
+    const { result } = renderHook(() => useConfig(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(StrictMode, null, children),
+    })
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    await waitFor(() => {
+      expect(result.current.pendingLinkChange).toEqual({
+        sessionId: 1,
+        apiBase: ATTACKER_BASE,
+      })
+    })
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
     expect(window.location.search).toBe('')
   })
 
@@ -186,11 +214,14 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(result.current.pendingLinkChange).toBeNull()
   })
 
-  it('applies a link key and endpoint to a free-tier session without asking', async () => {
+  it('asks before a link moves an existing free-tier session to its own key and endpoint', async () => {
+    // The server forwards a BYOK key, and the session's recent history with
+    // every request, to X-Laisky-Api-Base. A link that silently switched a
+    // stored free-tier session would hand that history to the link's host.
     window.history.replaceState(
       {},
       '',
-      `/?api_key=${LINK_KEY}&api_base=${PROVIDER_B}`,
+      `/?api_key=${LINK_KEY}&api_base=${ATTACKER_BASE}`,
     )
     const store = installStore({
       config_selected_session: 1,
@@ -203,8 +234,44 @@ describe('useConfig link-supplied API endpoint', () => {
 
     const { result } = await renderLoadedConfig()
 
+    const headers = await outboundHeaders(result.current.config)
+    expect(headers.Authorization).toBe(
+      'Bearer FREETIER-synthetic-placeholder-01',
+    )
+    expect(headers['X-Laisky-Api-Base']).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_token).toBe(
+      'FREETIER-synthetic-placeholder-01',
+    )
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: ATTACKER_BASE,
+      apiToken: LINK_KEY,
+    })
+    expect(window.location.search).toBe('')
+
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+    expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
+    expect(storedConfig(store, 1).api_base).toBe(ATTACKER_BASE)
+  })
+
+  it('still applies a link key alone to a free-tier session without asking', async () => {
+    window.history.replaceState({}, '', `/?api_key=${LINK_KEY}`)
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: 'FREETIER-synthetic-placeholder-01',
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+
     expect(result.current.config.api_token).toBe(LINK_KEY)
-    expect(result.current.config.api_base).toBe(PROVIDER_B)
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
     expect(storedConfig(store, 1).api_token).toBe(LINK_KEY)
     expect(result.current.pendingLinkChange).toBeNull()
   })
@@ -224,7 +291,7 @@ describe('useConfig link-supplied API endpoint', () => {
     expect(result.current.pendingLinkChange?.apiBase).toBe(ATTACKER_BASE)
   })
 
-  it('applies a link endpoint to a free-tier session without asking', async () => {
+  it('asks before a link moves an existing free-tier session to another endpoint', async () => {
     window.history.replaceState({}, '', `/?api_base=${PROVIDER_B}`)
     const store = installStore({
       config_selected_session: 1,
@@ -237,9 +304,34 @@ describe('useConfig link-supplied API endpoint', () => {
 
     const { result } = await renderLoadedConfig()
 
-    expect(result.current.config.api_base).toBe(PROVIDER_B)
-    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_B)
-    expect(result.current.pendingLinkChange).toBeNull()
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    expect(result.current.pendingLinkChange).toEqual({
+      sessionId: 1,
+      apiBase: PROVIDER_B,
+    })
+  })
+
+  it('asks before a link moves a session awaiting a reset with no key set aside', async () => {
+    window.history.replaceState({}, '', `/?api_base=${ATTACKER_BASE}`)
+    const store = installStore({
+      config_selected_session: 1,
+      config_sync_key: SYNC_KEY,
+      chat_user_config_1: sessionConfig({
+        api_base: PROVIDER_A,
+        api_token: 'FREETIER-synthetic-placeholder-01',
+        api_token_reset_required: true,
+      }),
+    })
+
+    const { result } = await renderLoadedConfig()
+
+    // The key the user types into the reset alert next would otherwise go
+    // straight to the link's host.
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(storedConfig(store, 1).api_base).toBe(PROVIDER_A)
+    expect(result.current.config.api_token_reset_required).toBe(true)
+    expect(result.current.pendingLinkChange?.apiBase).toBe(ATTACKER_BASE)
   })
 
   it('applies a link endpoint on a first visit without asking', async () => {

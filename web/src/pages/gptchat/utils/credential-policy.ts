@@ -22,14 +22,16 @@
  *       the user picks it, or it is the same session's own earlier value.
  *       A shared endpoint is not evidence, because one endpoint serves many
  *       accounts.
- *   I4. A link never changes the credentials of a session that holds a
- *       key of the user's own: its API token, or the key a pending reset
- *       set aside. A URL that would move such a session to another API
- *       endpoint, or replace that key, is held until the user confirms it,
- *       because the server forwards the key to whatever endpoint the client
- *       names. A link key that is not user-supplied (empty, free tier, a
- *       sync key) or implausibly short is dropped. Sessions without such
- *       a key take the link's values as before.
+ *   I4. A link never silently moves a stored session to another API
+ *       endpoint, and never silently replaces a key of the user's own (its
+ *       API token, or the key a pending reset set aside). Such a change is
+ *       held until the user confirms it, because the server forwards a BYOK
+ *       key, and the session's recent history with every request, to
+ *       whatever endpoint the client names. A link key that is not
+ *       user-supplied (empty, free tier, a sync key) or implausibly short
+ *       is dropped from a held change. A first visit takes the link's
+ *       values directly, and so does a link key alone on a stored session
+ *       without a key of the user's own.
  *
  * Comparisons use constantTimeEqual as a best-effort measure. All secrets
  * involved already live in the same browser profile, so isolation, not
@@ -225,13 +227,22 @@ export function validateCredentialUpdate(
 }
 
 /**
- * LinkCredentialChange is what a link asked to change on a session that
- * holds a key of the user's own (I4): a different API endpoint, a
- * user-supplied replacement key, or both. It waits for confirmation.
+ * LinkCredentialChange is what a link asked to change on a stored session
+ * (I4): a different API endpoint, a user-supplied key, or both. It waits for
+ * confirmation.
  */
 export interface LinkCredentialChange {
   apiBase?: string
   apiToken?: string
+}
+
+/**
+ * LinkCredentialHoldOptions tells holdLinkCredentialChange about the
+ * session: firstVisit is true when nothing was stored for it before the
+ * link was opened.
+ */
+export interface LinkCredentialHoldOptions {
+  firstVisit?: boolean
 }
 
 /**
@@ -268,24 +279,29 @@ export function heldUserApiToken(
 
 /**
  * holdLinkCredentialChange enforces I4 on linked, the result of applying a
- * link's parameters to current. When current holds a key of the user's own,
- * it returns linked with current's endpoint and credential fields kept, and
- * pending set to the endpoint change and user-supplied key the link asked
- * for (a link key that is not user-supplied, or shorter than
- * MIN_LINK_API_KEY_LENGTH, is dropped). Otherwise it
- * returns linked unchanged. syncKey is the browser-wide sync key.
+ * link's parameters to current. It holds the change when current holds a
+ * key of the user's own, or when the link would move a stored session
+ * (options.firstVisit unset) to another endpoint. A held change returns
+ * linked with current's endpoint and credential fields kept, and pending
+ * set to the endpoint change and user-supplied key the link asked for (a
+ * link key that is not user-supplied, or shorter than
+ * MIN_LINK_API_KEY_LENGTH, is dropped). Otherwise it returns linked
+ * unchanged. syncKey is the browser-wide sync key.
  */
 export function holdLinkCredentialChange(
   current: SessionConfig,
   linked: SessionConfig,
   syncKey?: string | null,
+  options: LinkCredentialHoldOptions = {},
 ): { config: SessionConfig; pending?: LinkCredentialChange } {
-  if (!heldUserApiToken(current, syncKey)) {
+  const holdsUserKey = !!heldUserApiToken(current, syncKey)
+  const movesEndpoint = !isSameApiEndpoint(current.api_base, linked.api_base)
+  if (!holdsUserKey && (options.firstVisit === true || !movesEndpoint)) {
     return { config: linked }
   }
 
   const pending: LinkCredentialChange = {}
-  if (!isSameApiEndpoint(current.api_base, linked.api_base)) {
+  if (movesEndpoint) {
     pending.apiBase = linked.api_base
   }
   const linkToken = linked.api_token?.trim() || ''

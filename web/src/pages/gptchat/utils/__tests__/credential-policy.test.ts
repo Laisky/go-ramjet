@@ -570,7 +570,7 @@ describe('holdLinkCredentialChange', () => {
     expect(pending).toBeUndefined()
   })
 
-  it('passes link values through for a session without the user’s own key', () => {
+  describe('for a session without the user’s own key', () => {
     const free = config({
       api_base: PROVIDER_A,
       api_token: 'FREETIER-synthetic-0123456789',
@@ -580,12 +580,56 @@ describe('holdLinkCredentialChange', () => {
       api_base: PROVIDER_B,
       api_token: 'sk-link-0123456789',
     }
-    const { config: applied, pending } = holdLinkCredentialChange(
-      free,
-      linked,
-      SYNC_KEY,
-    )
-    expect(pending).toBeUndefined()
-    expect(applied).toBe(linked)
+
+    it('passes link values through on a first visit', () => {
+      const { config: applied, pending } = holdLinkCredentialChange(
+        free,
+        linked,
+        SYNC_KEY,
+        { firstVisit: true },
+      )
+      expect(pending).toBeUndefined()
+      expect(applied).toBe(linked)
+    })
+
+    it('holds an endpoint change on a stored session, key included', () => {
+      const { config: kept, pending } = holdLinkCredentialChange(
+        free,
+        { ...linked, temperature: 0.2 },
+        SYNC_KEY,
+      )
+      expect(pending).toEqual({
+        apiBase: PROVIDER_B,
+        apiToken: 'sk-link-0123456789',
+      })
+      expect(kept.api_base).toBe(PROVIDER_A)
+      expect(kept.api_token).toBe('FREETIER-synthetic-0123456789')
+      expect(kept.temperature).toBe(0.2)
+    })
+
+    it('passes a link key alone through on a stored session', () => {
+      const keyOnly = { ...free, api_token: 'sk-link-0123456789' }
+      const { config: applied, pending } = holdLinkCredentialChange(
+        free,
+        keyOnly,
+        SYNC_KEY,
+      )
+      expect(pending).toBeUndefined()
+      expect(applied).toBe(keyOnly)
+    })
+
+    it('never treats a first visit as license to move a held key', () => {
+      const own = config({
+        api_base: PROVIDER_A,
+        api_token: 'sk-own-0123456789',
+      })
+      const { pending } = holdLinkCredentialChange(
+        own,
+        { ...own, api_base: PROVIDER_B },
+        SYNC_KEY,
+        { firstVisit: true },
+      )
+      expect(pending).toEqual({ apiBase: PROVIDER_B })
+    })
   })
 })

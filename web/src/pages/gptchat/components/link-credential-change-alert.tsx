@@ -1,6 +1,6 @@
 /**
- * Alert shown when a link asked to change the API endpoint or the API key of
- * a session that holds the user's own key.
+ * Alert shown when a link asked to move a stored session to another API
+ * endpoint, or to replace a key of the user's own.
  */
 import { ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
@@ -29,7 +29,8 @@ function describeEndpoint(apiBase: string): string {
 /**
  * LinkCredentialChangeAlertProps configures LinkCredentialChangeAlert.
  * change is what the link asked for, currentBase the endpoint in use, and
- * keyHint the masked key the session holds. onConfirm applies the change,
+ * keyHint the masked key of the user's own the session holds (empty when it
+ * holds none, such as on the free tier). onConfirm applies the change,
  * onDismiss keeps the current settings, and busy disables both while a
  * choice is being stored.
  */
@@ -44,7 +45,7 @@ export interface LinkCredentialChangeAlertProps {
 
 /**
  * LinkCredentialChangeAlert asks the user whether a link may move this
- * session to another endpoint, replace its API key, or both. Keeping the
+ * session to another endpoint, set or replace its API key, or both. Keeping the
  * current settings is the prominent choice. It returns an alert pinned below
  * the page header that does not block the rest of the page.
  */
@@ -77,7 +78,8 @@ export function LinkCredentialChangeAlert({
           </p>
           {requested && (
             <p>
-              The link you opened asks to send this session&apos;s requests to{' '}
+              The link you opened asks to send this session&apos;s requests,
+              including its recent chat history, to{' '}
               <code className="break-all font-mono">{requested}</code> instead
               of{' '}
               <code className="break-all font-mono">
@@ -88,16 +90,28 @@ export function LinkCredentialChangeAlert({
           )}
           {linkKeyHint && (
             <p>
-              The link asks to replace your API key (
-              <code className="font-mono">{keyHint}</code>) with{' '}
+              {keyHint ? (
+                <>
+                  The link asks to replace your API key (
+                  <code className="font-mono">{keyHint}</code>) with{' '}
+                </>
+              ) : (
+                <>The link asks to use the API key </>
+              )}
               <code className="font-mono">{linkKeyHint}</code>. Your requests
               would then use, and be visible to, that key&apos;s account.
             </p>
           )}
-          {requested && !linkKeyHint && (
+          {requested && !linkKeyHint && keyHint && (
             <p>
               Your API key (<code className="font-mono">{keyHint}</code>) would
               be sent there too, and whoever runs that address could use it.
+            </p>
+          )}
+          {requested && !linkKeyHint && !keyHint && (
+            <p>
+              An API key you add to this session later would be sent there too,
+              and whoever runs that address could use it.
             </p>
           )}
           <p>Apply these settings only if you trust whoever sent the link.</p>

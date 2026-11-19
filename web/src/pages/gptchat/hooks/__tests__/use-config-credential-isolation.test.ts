@@ -342,6 +342,14 @@ describe('useConfig URL overrides honor the API token invariant', () => {
 
     const { result } = await renderLoadedConfig()
 
+    // A stored session moves to the link's endpoint only once the user
+    // confirms it (credential policy I4).
+    expect(result.current.config.api_base).toBe(PROVIDER_A)
+    expect(result.current.pendingLinkChange?.apiBase).toBe(PROVIDER_B)
+    await act(async () => {
+      await result.current.confirmPendingLinkChange()
+    })
+
     expect(result.current.config.api_base).toBe(PROVIDER_B)
     expect(result.current.config.api_token).toMatch(/^FREETIER-/)
     const choices = await listApiTokenChoices(1, {

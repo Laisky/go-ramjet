@@ -83,6 +83,40 @@ describe('LinkCredentialChangeBanner', () => {
     expect(alertElement()).toHaveTextContent('sk-…6789')
   })
 
+  it('describes a change for a session without a key of the user’s own', () => {
+    const freeTier = {
+      ...config,
+      api_token: 'FREETIER-synthetic-0123456789',
+    }
+    const { rerender } = render(
+      <LinkCredentialChangeBanner
+        change={{ apiBase: 'https://evil.example', apiToken: LINK_KEY }}
+        config={freeTier}
+        onConfirm={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    )
+
+    let alert = alertElement()
+    expect(alert).toHaveTextContent('chat history')
+    expect(alert).toHaveTextContent('use the API key sk-…3210')
+    expect(alert).not.toHaveTextContent('()')
+    expect(alert).not.toHaveTextContent('replace your API key')
+    expect(alert).not.toHaveTextContent('FREETIER-')
+
+    rerender(
+      <LinkCredentialChangeBanner
+        change={{ apiBase: 'https://evil.example' }}
+        config={freeTier}
+        onConfirm={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    )
+    alert = alertElement()
+    expect(alert).toHaveTextContent('An API key you add to this session later')
+    expect(alert).not.toHaveTextContent('()')
+  })
+
   it('keeps the current settings when the user declines', async () => {
     const onConfirm = vi.fn()
     const onDismiss = vi.fn()
