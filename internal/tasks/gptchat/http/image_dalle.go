@@ -44,6 +44,14 @@ func normalizeImageCount(n int, isFree bool) int {
 	}
 }
 
+// imageBatchPrice returns the upfront charge for generating n images with model.
+// Image prices are per image (db.PriceTxt2Image is one DALL-E image, and Flux
+// bills every generated image), so the charge scales with n, which callers must
+// already have bounded with normalizeImageCount.
+func imageBatchPrice(model string, n int) db.Price {
+	return GetImageModelPrice(model) * db.Price(n)
+}
+
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
@@ -83,7 +91,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 	if user.EnableExternalImageBilling {
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
+			user, imageBatchPrice(req.Model, req.N), "txt2image"); web.AbortErr(ctx, err) {
 			return
 		}
 	}

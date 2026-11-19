@@ -48,9 +48,10 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 		return err
 	}
 
+	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
 	if user.EnableExternalImageBilling {
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, GetImageModelPrice(frontendReq.Model), "txt2image"); web.AbortErr(ctx, err) {
+			user, imageBatchPrice(frontendReq.Model, frontendReq.N), "txt2image"); web.AbortErr(ctx, err) {
 			return err
 		}
 	}
@@ -58,8 +59,6 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	taskID := gutils.RandomStringWithLength(36)
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
-
-	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
 
 	var imgContents [][]byte
 	switch {
