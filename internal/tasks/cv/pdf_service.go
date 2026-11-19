@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -43,8 +42,9 @@ type PDFService struct {
 	latestWriteKey string
 	latestWriteGen uint64
 
-	// refreshRetryAt is the Unix time in nanoseconds before which public downloads start no new refresh.
-	refreshRetryAt atomic.Int64
+	// refreshMu guards refreshRetryAt, the monotonic time before which public downloads start no new refresh.
+	refreshMu      sync.Mutex
+	refreshRetryAt time.Time
 
 	// uploadLock serializes the check-then-upload step of writes, honoring each write's context while it waits.
 	// It serializes uploads within this process only; replicas sharing one bucket would also need a conditional
@@ -190,7 +190,7 @@ const pdfRefreshFailureBackoff = 15 * time.Second
 // failure to read the content is logged once by the refresh; a render or upload failure is reported once by the
 // store work.
 func (s *PDFService) refreshLatest(ctx context.Context) {
-	if time.Now().UnixNano() < s.refreshRetryAt.Load() {
+	if s.refreshBackingOff() {
 		return
 	}
 	s.flights.join(ctx, pdfRefreshKey, pdfWriteFlight, false, func(flightCtx context.Context) (pdfFlightValue, error) {
@@ -222,9 +222,19 @@ func (s *PDFService) refreshLatest(ctx context.Context) {
 	})
 }
 
-// backOffRefresh stops public downloads from starting a new refresh for pdfRefreshFailureBackoff.
+// backOffRefresh stops public downloads from starting a new refresh for pdfRefreshFailureBackoff. The deadline
+// keeps time.Now's monotonic reading, so a wall-clock step does not stretch or shorten the window.
 func (s *PDFService) backOffRefresh() {
-	s.refreshRetryAt.Store(time.Now().Add(pdfRefreshFailureBackoff).UnixNano())
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	s.refreshRetryAt = time.Now().Add(pdfRefreshFailureBackoff)
+}
+
+// refreshBackingOff reports whether a failed refresh's backoff window is still open.
+func (s *PDFService) refreshBackingOff() bool {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	return time.Now().Before(s.refreshRetryAt)
 }
 
 // recordSave records content, which the content store has just committed, as the latest save in this process.
