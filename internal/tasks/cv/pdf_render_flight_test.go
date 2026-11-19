@@ -3,9 +3,11 @@ package cv
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
@@ -282,5 +285,56 @@ func (r *failingPDFRenderer) Render(ctx context.Context, _ string) ([]byte, erro
 func shareProcessRenderLimit(first *PDFService, others ...*PDFService) {
 	for _, other := range others {
 		other.slots = first.slots
+	}
+}
+
+// previewCVPDF performs POST /cv/pdf/preview through the handler with ctx as the request context.
+// It returns the response status code, or an error when the request body cannot be encoded.
+func previewCVPDF(ctx context.Context, h *handler, content string) (int, error) {
+	body, err := json.Marshal(contentRequest{Content: content})
+	if err != nil {
+		return 0, errors.Wrap(err, "encode preview request")
+	}
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/cv/pdf/preview", bytes.NewReader(body)).WithContext(ctx)
+	request.Header.Set("Content-Type", "application/json")
+	ginCtx, _ := gin.CreateTestContext(recorder)
+	ginCtx.Request = request
+	h.renderPDFPreview(ginCtx)
+	return recorder.Code, nil
+}
+
+// TestPDFHandlersWithHungRenderAreBounded verifies the preview and save handlers, which have no deadline of their
+// own, answer 504 exactly when the shared render timeout ends a render that never finishes, even for a client that
+// keeps waiting, and that the hung render is stopped.
+func TestPDFHandlersWithHungRenderAreBounded(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		call func(ctx context.Context, h *handler) (int, error)
+	}{
+		{name: "preview", call: func(ctx context.Context, h *handler) (int, error) { return previewCVPDF(ctx, h, "# Hung") }},
+		{name: "save", call: func(ctx context.Context, h *handler) (int, error) { return saveCVContent(ctx, h, nil, "# Hung") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				renderer := newBlockingPDFRenderer()
+				defer renderer.releaseAll()
+				content := &versionedContentStore{current: "# Hung"}
+				service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+				h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+				started := time.Now()
+				code, err := tc.call(context.Background(), h)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusGatewayTimeout, code)
+				require.Equal(t, pdfSharedRenderTimeout, time.Since(started), "the shared timeout is the request's upper bound")
+				synctest.Wait()
+				require.Equal(t, int64(1), renderer.canceled.Load(), "the hung render must be stopped")
+				require.Zero(t, client.puts.Load())
+			})
+		})
 	}
 }
