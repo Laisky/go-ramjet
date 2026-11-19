@@ -62,15 +62,20 @@ func (r *blockingPDFRenderer) Render(ctx context.Context, content string) ([]byt
 	}
 }
 
-// countingS3Client counts PDF uploads while delegating storage to the in-memory fake client.
+// countingS3Client counts PDF uploads while delegating storage to the in-memory fake client, and fails uploads
+// while failPuts is set.
 type countingS3Client struct {
 	*fakeS3Client
-	puts atomic.Int64
+	puts     atomic.Int64
+	failPuts atomic.Bool
 }
 
-// PutObject counts the upload and stores it through the fake client.
+// PutObject counts the upload and stores it through the fake client, or fails it while failPuts is set.
 func (c *countingS3Client) PutObject(ctx context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
 	c.puts.Add(1)
+	if c.failPuts.Load() {
+		return minio.UploadInfo{}, errors.New("pdf upload outage")
+	}
 	return c.fakeS3Client.PutObject(ctx, bucketName, objectName, reader, objectSize, opts)
 }
 
@@ -503,4 +508,50 @@ func TestDownloadPDFHungRefreshLoggedOnce(t *testing.T) {
 		service.flights.mu.Unlock()
 		require.Zero(t, remaining, "no refresh or store work may outlive the shared timeout")
 	})
+}
+
+// TestDownloadPDFRefreshStoreFailureBacksOff verifies that after a refresh whose render or upload failed, public
+// downloads start no new refresh until the backoff window ends, and that the first download after it retries.
+func TestDownloadPDFRefreshStoreFailureBacksOff(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		failRender bool
+	}{
+		{name: "render fails", failRender: true},
+		{name: "upload fails"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				renderer := newGatedPDFRenderer()
+				renderer.fail = tc.failRender
+				renderer.openAll()
+				content := &scriptedContentStore{versionedContentStore: versionedContentStore{current: "# CV"}}
+				service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+				client.failPuts.Store(!tc.failRender)
+				h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+				require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+				synctest.Wait()
+				require.Len(t, renderer.startedContents(), 1)
+
+				const downloads = 5
+				for range downloads {
+					time.Sleep(pdfRefreshFailureBackoff / (downloads + 1))
+					require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+					synctest.Wait()
+				}
+				require.Len(t, renderer.startedContents(), 1, "no refresh may start within the backoff window")
+
+				time.Sleep(pdfRefreshFailureBackoff)
+				require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+				synctest.Wait()
+				require.Len(t, renderer.startedContents(), 2, "a download after the backoff window must retry")
+				if !tc.failRender {
+					require.Equal(t, int64(2), client.puts.Load())
+				}
+			})
+		})
+	}
 }
