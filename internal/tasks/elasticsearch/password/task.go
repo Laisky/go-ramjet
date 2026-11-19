@@ -63,9 +63,10 @@ func runTask() {
 		}
 
 		if gconfig.Shared.GetBool("dry") {
+			// Never log the generated password, not even in a dry run.
 			log.Logger.Info("change password via post",
 				zap.String("api", maskAPI(api)),
-				zap.String("password", newpasswd))
+				zap.String("username", user.Username))
 			continue
 		}
 
