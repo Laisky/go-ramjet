@@ -29,6 +29,8 @@ const dependencyFloors = [
   ['uuid', 11, '11.1.1'],
   ['dompurify', 3, '3.4.16'],
   ['katex', 0, '0.19.0'],
+  ['rehype-sanitize', 6, '6.0.0'],
+  ['hast-util-sanitize', 5, '5.0.2'],
   ['vitest', 4, '4.1.11'],
   ['vitest', 5, '5.0.3'],
 ] as const
@@ -39,6 +41,9 @@ const requiredFloors = [
   ['mermaid', '12.1.0'],
   ['dompurify', '3.4.16'],
   ['katex', '0.19.0'],
+  // The chat renderer sanitizes untrusted assistant HTML with these packages.
+  ['rehype-sanitize', '6.0.0'],
+  ['hast-util-sanitize', '5.0.2'],
   ['vitest', '5.0.3'],
 ] as const
 
