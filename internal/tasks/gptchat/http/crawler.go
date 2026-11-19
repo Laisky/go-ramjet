@@ -25,7 +25,9 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-// fetchStaticURLContent fetch static url content
+// fetchStaticURLContent fetches url and returns its text content. The URL comes
+// from a prompt or a web search result, never from server configuration, so it
+// is always fetched through tenantEgressClient.
 func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err error) {
 	logger := gmw.GetLogger(ctx).With(zap.String("url", url))
 	logger.Debug("fetch static url", zap.String("url", url))
@@ -39,7 +41,7 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 			"Chrome/58.0.3029.110 Safari/537")
 	req.Header.Del("Accept-Encoding")
 
-	resp, err := httpcli.Do(req) // nolint:bodyclose
+	resp, err := tenantEgressClient().Do(req) // nolint:bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", url)
 	}

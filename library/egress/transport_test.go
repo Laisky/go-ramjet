@@ -195,3 +195,32 @@ func TestPinnedClientResponseHeaderTimeout(t *testing.T) {
 		require.Zero(t, client.Transport.(PinnedTransport).ResponseHeaderTimeout, "non-positive values keep the default")
 	}
 }
+
+// TestPinnedClientHeaderTimeoutDoesNotCutStreams bounds only the wait for
+// response headers: a body that keeps streaming past the header timeout is
+// delivered whole, chunk by chunk.
+func TestPinnedClientHeaderTimeoutDoesNotCutStreams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		for range 5 {
+			if _, err := io.WriteString(w, "chunk\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+			time.Sleep(100 * time.Millisecond)
+		}
+	}))
+	t.Cleanup(server.Close)
+	var dials atomic.Int32
+	client := NewHTTPClient(5*time.Second, publicFixture(t, server, &dials), WithResponseHeaderTimeout(50*time.Millisecond))
+	start := time.Now()
+	response, err := client.Get("http://public.example/stream")
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()))
+	require.Equal(t, strings.Repeat("chunk\n", 5), string(body))
+	require.Greater(t, time.Since(start), 400*time.Millisecond, "the stream outlived the header timeout")
+}

@@ -15,12 +15,39 @@ import (
 	memorystoragemcp "github.com/Laisky/go-utils/v6/agents/memory/storage/mcp"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
+	"github.com/Laisky/go-ramjet/library/egress"
 )
 
 var (
 	engineCacheMu sync.RWMutex
 	engineCache   = map[string]memory.Engine{}
+	// memoryLLMResolver resolves hostnames when admitting a caller-selected
+	// memory model base. Nil uses the system resolver; tests replace it.
+	memoryLLMResolver egress.Resolver
 )
+
+// admitMemoryLLMBase applies the shared public-destination policy to user's
+// model base when the caller selected it through X-Laisky-Api-Base and memory
+// extraction will call it. The memory library builds its own client, which
+// cannot be pinned, so the base is admitted on every engine lookup instead;
+// the library's https-only rule and certificate verification stop a later DNS
+// answer from reaching an internal service under the admitted name.
+//
+// Parameters:
+//   - ctx: Request context bounding the DNS lookup.
+//   - conf: Global gptchat config; extraction runs only when MemoryModel is set.
+//   - user: Current user.
+//
+// Returns a wrapped *egress.AdmissionError when the base is refused.
+func admitMemoryLLMBase(ctx context.Context, conf *config.OpenAI, user *config.UserConfig) error {
+	if user == nil || !user.APIBaseUserSelected || strings.TrimSpace(conf.MemoryModel) == "" {
+		return nil
+	}
+	if _, err := egress.Admit(ctx, strings.TrimSpace(user.APIBase), memoryLLMResolver); err != nil {
+		return errors.Wrap(err, "admit memory model base")
+	}
+	return nil
+}
 
 // GetEngine returns a cached memory engine for current runtime context.
 //
@@ -37,6 +64,9 @@ func GetEngine(ctx context.Context, conf *config.OpenAI, user *config.UserConfig
 }
 
 func getEngine(ctx context.Context, conf *config.OpenAI, user *config.UserConfig, caller files.ToolCaller) (memory.Engine, error) {
+	if err := admitMemoryLLMBase(ctx, conf, user); err != nil {
+		return nil, err
+	}
 	cacheKey := buildEngineCacheKey(conf, user)
 
 	engineCacheMu.RLock()
