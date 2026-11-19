@@ -934,16 +934,48 @@ function getNestedConfigValue(config, pathSegments) {
   }, config);
 }
 
+/**
+ * isUnsafeConfigPathSegment reports whether a config path segment would reach an
+ * object's prototype chain when used as a property key (prototype pollution).
+ *
+ * @param {string} segment - One dot-separated segment of a config path.
+ * @returns {boolean} True when the segment is `__proto__`, `constructor`, or `prototype`.
+ */
+function isUnsafeConfigPathSegment(segment) {
+  return segment === '__proto__' || segment === 'constructor' || segment === 'prototype';
+}
+
+/**
+ * setNestedConfigValue assigns value at the dotted path inside config, replacing
+ * missing or non-object intermediates with plain objects. It only descends into
+ * own properties and rejects unsafe segments, so a URL-supplied path can never
+ * write through to Object.prototype.
+ *
+ * @param {object} config - Session config to mutate.
+ * @param {string[]} pathSegments - Property path, e.g. ['chat_switch', 'enable_mcp'].
+ * @param {*} value - Value to assign at the path.
+ * @returns {boolean} True when assigned, false when the path was rejected.
+ */
 function setNestedConfigValue(config, pathSegments, value) {
   let cursor = config;
   for (let i = 0; i < pathSegments.length - 1; i++) {
     const segment = pathSegments[i];
-    if (cursor[segment] === undefined || cursor[segment] === null || typeof cursor[segment] !== 'object') {
+    if (isUnsafeConfigPathSegment(segment)) {
+      return false;
+    }
+    const next = Object.prototype.hasOwnProperty.call(cursor, segment) ? cursor[segment] : undefined;
+    if (next === undefined || next === null || typeof next !== 'object') {
       cursor[segment] = {};
     }
     cursor = cursor[segment];
   }
-  cursor[pathSegments[pathSegments.length - 1]] = value;
+
+  const leaf = pathSegments[pathSegments.length - 1];
+  if (isUnsafeConfigPathSegment(leaf)) {
+    return false;
+  }
+  cursor[leaf] = value;
+  return true;
 }
 
 function coerceConfigValue(field, rawValue, currentValue) {
@@ -983,8 +1015,14 @@ function applyUrlConfigOverrides(sconfig) {
     }
 
     const pathSegments = targetPath.split('.');
+    if (pathSegments.some(isUnsafeConfigPathSegment)) {
+      return;
+    }
+
+    // Only override settings the config already owns; `in` would also accept
+    // inherited names such as `constructor`.
     const rootKey = pathSegments[0];
-    if (rootKey !== 'chat_switch' && !(rootKey in sconfig)) {
+    if (rootKey !== 'chat_switch' && !Object.prototype.hasOwnProperty.call(sconfig, rootKey)) {
       return;
     }
 
@@ -5206,9 +5244,16 @@ async function renderAfterAiResp(chatData, saveStorage = false, rootElement = nu
     let costUsd = chatData.costUsd;
     const sconfig = await getChatSessionConfig();
 
-    // First ensure the info div exists (idempotent)
+    // First ensure the info div exists (idempotent). Build it with DOM APIs so a
+    // model name from the URL (?chatmodel=) or storage always renders as text.
     if (!aiRespEle.querySelector(':scope > div.info')) {
-      aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
+      const infoEle = document.createElement('div');
+      infoEle.className = 'info';
+      const modelEle = document.createElement('i');
+      modelEle.className = 'model';
+      modelEle.textContent = chatData.model || '';
+      infoEle.appendChild(modelEle);
+      aiRespEle.appendChild(infoEle);
     }
     const infoDiv = aiRespEle.querySelector('div.info');
 
@@ -5217,7 +5262,10 @@ async function renderAfterAiResp(chatData, saveStorage = false, rootElement = nu
       // Display existing cost if we already have it
       if (costUsd) {
         if (!infoDiv.querySelector('.cost')) {
-          infoDiv.insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+          const costEle = document.createElement('i');
+          costEle.className = 'cost';
+          costEle.textContent = `$${costUsd}`;
+          infoDiv.appendChild(costEle);
         }
       } else if (chatData.requestid) {
         // Otherwise fetch the cost if we have a request ID
@@ -6621,13 +6669,15 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
 
   delete muRenderAfterAiRespForChatID[chatID];
 
+  // Read the prompt as plain text in both cases; it is written back with
+  // textContent below, so markup typed into the editor is never parsed as HTML.
   let newText = '';
   if (chatEle.querySelector('.role-human textarea')) {
     // read user input from click edit button
     newText = chatEle.querySelector('.role-human textarea').value;
   } else {
     // read user input from click reload button
-    newText = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    newText = chatEle.querySelector('.role-human .text-start pre').textContent;
   }
 
   const selecedModel = await OpenaiSelectedModel();
@@ -6643,7 +6693,7 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
   chatEle.innerHTML = `
         <div class="container-fluid row role-human" data-chatid="${chatID}">
             <div class="col-auto icon">🤔️</div>
-            <div class="col text-start"><pre>${newText}</pre></div>
+            <div class="col text-start"><pre></pre></div>
             <div class="col-auto d-flex control">
                 <i class="bi bi-pencil-square"></i>
                 <i class="bi bi-trash"></i>
@@ -6652,9 +6702,7 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
         <div class="container-fluid row role-ai" data-chatid="${chatID}">
             <div class="col-auto icon">${robotIcon}</div>
             <div class="col text-start ai-response"
-                data-task-status="${ChatTaskStatusWaiting}"
-                data-task-type="${chatData.taskType}"
-                data-model="${selecedModel}">
+                data-task-status="${ChatTaskStatusWaiting}">
                 <p class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -6664,6 +6712,12 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
                 </p>
             </div>
         </div>`;
+  chatEle.querySelector('.role-human .text-start pre').textContent = newText;
+  // The model can come from a URL override (?model=) and the task type from
+  // storage, so assign them as attribute values instead of HTML.
+  const aiRespEle = chatEle.querySelector('.role-ai .ai-response');
+  aiRespEle.dataset.taskType = chatData.taskType;
+  aiRespEle.dataset.model = selecedModel;
 
   // chatEle.dataset.taskStatus = ChatTaskStatusWaiting;
 
@@ -7983,21 +8037,29 @@ async function callMCPTool(server, toolName, args) {
 }
 
 /**
- * generateUUIDv4 generates a UUID v4 string.
+ * generateUUIDv4 generates a random (version 4) UUID string from a CSPRNG.
  *
- * @returns {string} UUID.
+ * The result is used as the MCP session ID, which the MCP spec says SHOULD be
+ * cryptographically secure, so it never falls back to Math.random. When
+ * crypto.randomUUID is missing (it is exposed only in secure contexts), the UUID
+ * is built from crypto.getRandomValues, which insecure contexts also provide.
+ *
+ * @returns {string} UUID in the canonical 8-4-4-4-12 lowercase hex form.
+ * @throws {Error} When the runtime offers no cryptographic random source.
  */
 function generateUUIDv4() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('secure random number generator is unavailable');
+  }
 
-  // Fallback: not cryptographically strong, but good enough for session correlation.
-  const hex = () =>
-    Math.floor((1 + Math.random()) * 0x10000)
-      .toString(16)
-      .slice(1);
-  return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 9562 variant
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
@@ -9184,7 +9246,9 @@ async function appendPromptShortcut(shortcut, storage = false) {
   ele.classList.add('badge', 'text-bg-info');
   ele.dataset.prompt = shortcut.description;
   ele.dataset.title = shortcut.title;
-  ele.innerHTML = `<i class="title">${shortcut.title}</i>  <i class="bi bi-pencil-square"></i><i class="bi bi-trash"></i>`;
+  // The title is user-typed or synced data: insert it as text, never as HTML.
+  ele.innerHTML = `<i class="title"></i>  <i class="bi bi-pencil-square"></i><i class="bi bi-trash"></i>`;
+  ele.querySelector('i.title').textContent = shortcut.title;
 
   // add edit click event
   ele.querySelector('i.bi-pencil-square').addEventListener('click', EditFavSystemPromptHandler);
