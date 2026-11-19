@@ -28,8 +28,7 @@ var (
 	}
 )
 
-// BindPasswordTask schedules runTask at the configured interval in seconds and
-// registers the HTTP endpoint that serves the current password.
+// BindPasswordTask schedules password rotation at the configured interval in seconds.
 func BindPasswordTask() {
 	step := gconfig.Shared.GetDuration("tasks.elasticsearch-v2.password.interval")
 	if gconfig.Shared.GetBool("debug") {
@@ -41,7 +40,6 @@ func BindPasswordTask() {
 	}
 
 	go store.TaskStore.TickerAfterRun(step*time.Second, runTask)
-	bindHTTP()
 }
 
 // User is the body of the Elasticsearch change-password request.

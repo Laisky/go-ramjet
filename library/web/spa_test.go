@@ -97,6 +97,31 @@ func TestRegisterSPA(t *testing.T) {
 	})
 }
 
+// TestRegisterSPARetiredPasswordRoute verifies that the former credential URL
+// returns 404 instead of serving the SPA or a static fallback file.
+func TestRegisterSPARetiredPasswordRoute(t *testing.T) {
+	distDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<html>SPA</html>"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "password"), []byte("static fixture"), 0600))
+	r := gin.New()
+	require.NoError(t, RegisterSPA(r, distDir))
+	handler := &normalizeHandler{handler: r}
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		for _, requestPath := range []string{"/es/password", "/es/password/", "/es/es/password"} {
+			t.Run(method+requestPath, func(t *testing.T) {
+				req := httptest.NewRequest(method, requestPath, nil)
+				req.Header.Set("Accept", "text/html")
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				require.Equal(t, http.StatusNotFound, w.Code)
+				require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+				require.NotContains(t, w.Body.String(), "static fixture")
+			})
+		}
+	}
+}
+
 func TestSiteMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -67,6 +68,13 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		logger := gmw.GetLogger(c)
 
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		// The retired Elasticsearch credential URL must not fall back to the SPA.
+		if path.Clean(c.Request.URL.Path) == "/es/password" {
+			c.Header("Cache-Control", "no-store")
 			c.Status(http.StatusNotFound)
 			return
 		}
