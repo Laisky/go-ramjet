@@ -8,7 +8,7 @@ import (
 	"github.com/Laisky/errors/v2"
 )
 
-// DefaultMaxDecodedBytes bounds a 2xx body ContentDecodingTransport decodes
+// DefaultMaxDecodedBytes bounds a 2xx body ContentDecodingTransport returns
 // when its MaxDecodedBytes is zero. Deflate expands up to about 1000:1 per
 // layer and DecodeContent removes two stacked layers, so a few kilobytes on the
 // wire can decode to hundreds of MiB (256 MiB of zeros double-gzips to under
@@ -22,15 +22,16 @@ import (
 // the largest of those while capping a gzip bomb at a fixed size.
 const DefaultMaxDecodedBytes = 256 << 20
 
-// DefaultMaxDecodedErrorBytes bounds a decoded body of an answer outside 2xx.
+// DefaultMaxDecodedErrorBytes bounds the body of an answer outside 2xx, decoded or not.
 // Error paths read the whole body and copy it into logs and error documents,
 // several times over, while legitimate error documents are a few KiB; 1 MiB
 // keeps every real one and stops an expanded body from multiplying in memory.
 const DefaultMaxDecodedErrorBytes = 1 << 20
 
-// DecodedSizeError reports a decoded body that grew past its bound. It is
-// returned by Read, after the bytes within the bound, so a caller can tell a
-// refused expansion from a transport failure with errors.As.
+// DecodedSizeError reports a response body that grew past its bound, counted
+// after any content decoding. It is returned by Read, after the bytes within
+// the bound, so a caller can tell a refused body from a transport failure with
+// errors.As.
 type DecodedSizeError struct {
 	// Limit is the bound, in decoded bytes, that the body exceeded.
 	Limit int64
@@ -56,12 +57,13 @@ func (e *DecodedSizeError) Error() string {
 // Unlike net/http, it uses DecodeContent's rules: "x-gzip" counts as gzip and
 // up to two stacked gzip layers are removed, while a coding DecodeContent
 // refuses is passed through unchanged with its header. It also bounds every
-// body it decodes to MaxDecodedBytes (DefaultMaxDecodedBytes when zero): Read
-// fails with *DecodedSizeError past the bound. An answer outside 2xx is bounded
-// to DefaultMaxDecodedErrorBytes, or MaxDecodedBytes when that is smaller. The
-// bound counts bytes as they are read and never buffers, so streams stay
-// incremental. Bodies it does not decode are not bounded here; callers bound
-// them as before.
+// body it returns, decoded or not, to MaxDecodedBytes (DefaultMaxDecodedBytes
+// when zero): Read fails with *DecodedSizeError past the bound. An answer
+// outside 2xx is bounded to DefaultMaxDecodedErrorBytes, or MaxDecodedBytes
+// when that is smaller. Plain bodies are bounded too because the callers of
+// these clients read error and JSON bodies whole. The bound counts bytes as
+// they are read and never buffers, so streams stay incremental. A request
+// without a header map is refused, as net/http refuses it.
 type ContentDecodingTransport struct {
 	Base http.RoundTripper
 	// MaxDecodedBytes bounds each decoded body; zero means DefaultMaxDecodedBytes.
@@ -71,13 +73,16 @@ type ContentDecodingTransport struct {
 // RoundTrip sends request through Base, negotiating and decoding gzip when
 // request leaves content negotiation to the transport. request is not modified.
 func (t ContentDecodingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.Header == nil {
+		return nil, closeRequestBody(request, errors.New("nil request header"))
+	}
 	if request.Header.Get("Accept-Encoding") != "" || request.Header.Get("Range") != "" ||
 		request.Method == http.MethodHead {
 		response, err := t.Base.RoundTrip(request)
 		if err != nil {
 			return nil, errors.Wrap(err, "exchange without content decoding")
 		}
-		return response, nil
+		return t.bound(response), nil
 	}
 
 	negotiated := request.Clone(request.Context())
@@ -91,22 +96,28 @@ func (t ContentDecodingTransport) RoundTrip(request *http.Request) (*http.Respon
 	}
 	layers, ok := removableGzipLayers(response.Header)
 	if !ok || layers == 0 {
-		return response, nil
+		return t.bound(response), nil
+	}
+	response.Body = &decodedBody{source: response.Body, layers: layers}
+	response.Header.Del("Content-Encoding")
+	response.Header.Del("Content-Length")
+	response.ContentLength = -1
+	response.Uncompressed = true
+	return t.bound(response), nil
+}
+
+// bound limits the body of response, unless it has none, to the bound for its
+// status, and returns response.
+func (t ContentDecodingTransport) bound(response *http.Response) *http.Response {
+	if bodiless(response) {
+		return response
 	}
 	limit := t.decodedLimit()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		limit = min(limit, DefaultMaxDecodedErrorBytes)
 	}
-	response.Body = &boundedBody{
-		ReadCloser: &decodedBody{source: response.Body, layers: layers},
-		remaining:  limit,
-		limit:      limit,
-	}
-	response.Header.Del("Content-Encoding")
-	response.Header.Del("Content-Length")
-	response.ContentLength = -1
-	response.Uncompressed = true
-	return response, nil
+	response.Body = &boundedBody{ReadCloser: response.Body, remaining: limit, limit: limit}
+	return response
 }
 
 // decodedLimit returns MaxDecodedBytes, or DefaultMaxDecodedBytes when it is not positive.

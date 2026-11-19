@@ -65,7 +65,9 @@ func pinnedTenantClient() *http.Client {
 // tenantClientOptions returns the settings shared by every caller-selected
 // client. They match the server client: the same response-header budget, and
 // gzip negotiated and decoded transparently, so callers that relied on the
-// server client's decoding still read plain bodies.
+// server client's decoding still read plain bodies. Unlike the server client,
+// every body is bounded (1 MiB outside 2xx), because a caller-selected
+// upstream chooses how much its answers make this server read.
 func tenantClientOptions() []egress.ClientOption {
 	return []egress.ClientOption{
 		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout),

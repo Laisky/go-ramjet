@@ -65,8 +65,8 @@ func WithResponseHeaderTimeout(timeout time.Duration) ClientOption {
 
 // WithContentDecoding wraps the client's transport in ContentDecodingTransport,
 // so requests that leave content negotiation to the client advertise gzip and
-// read decoded bodies, as with net/http's default transport. Without it the
-// client is wire-level.
+// read decoded bodies, as with net/http's default transport, and every body is
+// bounded. Without it the client is wire-level and unbounded.
 func WithContentDecoding() ClientOption {
 	return func(opts *clientOptions) {
 		opts.decodeContent = true

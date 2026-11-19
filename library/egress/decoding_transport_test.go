@@ -221,9 +221,9 @@ func TestContentDecodingTransportBoundsDecodedSize(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, body, limit)
 
-	body, err = read(t, ContentDecodingTransport{Base: respond("", bytes.NewReader(make([]byte, 2*limit))), MaxDecodedBytes: limit})
-	require.NoError(t, err, "a body the transport did not decode keeps its caller's own bound")
-	require.Len(t, body, 2*limit)
+	body, err = read(t, ContentDecodingTransport{Base: respond("", bytes.NewReader(make([]byte, limit+1))), MaxDecodedBytes: limit})
+	require.ErrorAs(t, err, &sizeErr, "a plain body is bounded too, since callers read it whole")
+	require.Len(t, body, limit)
 
 	// Expanding DefaultMaxDecodedBytes takes too long for a unit test, so the
 	// default is checked where it is chosen; the bound itself is exercised above.
@@ -336,4 +336,70 @@ func TestContentDecodingTransportAcceptsTheLargestBound(t *testing.T) {
 	body, err := io.ReadAll(response.Body)
 	require.NoError(t, errors.Join(err, response.Body.Close()))
 	require.Equal(t, "content", string(body))
+}
+
+// TestContentDecodingTransportBoundsEveryBody bounds bodies the transport does
+// not decode as well: callers such as the chat and transcription error paths
+// read whole bodies, so a plain body must stop at the same bound as a decoded
+// one, on the negotiated path and when the caller negotiated itself.
+func TestContentDecodingTransportBoundsEveryBody(t *testing.T) {
+	const limit = 64 << 10
+	plain := func(status, size int) *recordingRoundTripper {
+		return &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+			return &http.Response{StatusCode: status, ContentLength: int64(size), Header: http.Header{}, Request: request,
+				Body: io.NopCloser(bytes.NewReader(make([]byte, size)))}
+		}}
+	}
+	read := func(t *testing.T, transport ContentDecodingTransport, request *http.Request) ([]byte, error) {
+		t.Helper()
+		response, err := transport.RoundTrip(request)
+		require.NoError(t, err)
+		body, readErr := io.ReadAll(response.Body)
+		require.NoError(t, response.Body.Close())
+		return body, readErr
+	}
+	selfNegotiated := func() *http.Request {
+		request := httptest.NewRequest(http.MethodGet, "http://public.example/", nil)
+		request.Header.Set("Accept-Encoding", "identity")
+		return request
+	}
+
+	for name, request := range map[string]func() *http.Request{
+		"negotiated":      func() *http.Request { return httptest.NewRequest(http.MethodGet, "http://public.example/", nil) },
+		"self-negotiated": selfNegotiated,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var sizeErr *DecodedSizeError
+			body, err := read(t, ContentDecodingTransport{Base: plain(http.StatusOK, limit+1), MaxDecodedBytes: limit}, request())
+			require.ErrorAs(t, err, &sizeErr)
+			require.EqualValues(t, limit, sizeErr.Limit)
+			require.Len(t, body, limit)
+
+			body, err = read(t, ContentDecodingTransport{Base: plain(http.StatusOK, limit), MaxDecodedBytes: limit}, request())
+			require.NoError(t, err)
+			require.Len(t, body, limit)
+
+			body, err = read(t, ContentDecodingTransport{Base: plain(http.StatusBadGateway, DefaultMaxDecodedErrorBytes+1)}, request())
+			require.ErrorAs(t, err, &sizeErr, "an error body keeps the error bound")
+			require.EqualValues(t, DefaultMaxDecodedErrorBytes, sizeErr.Limit)
+			require.Len(t, body, DefaultMaxDecodedErrorBytes)
+		})
+	}
+}
+
+// TestContentDecodingTransportRefusesNilHeader answers a request without a
+// header map with an error, as net/http's transport does, instead of panicking
+// while advertising gzip.
+func TestContentDecodingTransportRefusesNilHeader(t *testing.T) {
+	base := &recordingRoundTripper{respond: func(request *http.Request) *http.Response {
+		return encodedResponse(request, "", []byte("content"))
+	}}
+	target, err := url.Parse("http://public.example/")
+	require.NoError(t, err)
+	require.NotPanics(t, func() {
+		response, err := ContentDecodingTransport{Base: base}.RoundTrip(&http.Request{Method: http.MethodGet, URL: target})
+		require.Error(t, err)
+		require.Nil(t, response)
+	})
+	require.Empty(t, base.encodings, "the request must not reach the base transport")
 }
