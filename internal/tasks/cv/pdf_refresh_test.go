@@ -268,3 +268,129 @@ func TestSaveContentWaitHonorsContext(t *testing.T) {
 		require.True(t, service.isLatestSave("# X"))
 	})
 }
+
+// TestDownloadPDFRefreshStoreFailureIsAWarning verifies that when the render or upload behind a public refresh of a
+// missing PDF fails or hangs, the failure is reported once, as the "cv pdf async refresh render failed" warning
+// that background refreshes have always logged, and never at error level: the process forwards error-level entries
+// to its alert channel, so an anonymous download must not be able to raise an alert.
+func TestDownloadPDFRefreshStoreFailureIsAWarning(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		// renderer returns the renderer for the case and a function that releases it when the test ends.
+		renderer func() (PDFRenderer, func())
+		failPuts bool
+		cause    string
+	}{
+		{name: "render fails", renderer: func() (PDFRenderer, func()) {
+			renderer := newGatedPDFRenderer()
+			renderer.fail = true
+			renderer.openAll()
+			return renderer, func() {}
+		}, cause: "gated renderer failed"},
+		{name: "upload fails", renderer: func() (PDFRenderer, func()) {
+			renderer := newGatedPDFRenderer()
+			renderer.openAll()
+			return renderer, func() {}
+		}, failPuts: true, cause: "pdf upload outage"},
+		{name: "render hangs", renderer: func() (PDFRenderer, func()) {
+			renderer := newBlockingPDFRenderer()
+			return renderer, renderer.releaseAll
+		}, cause: "blocking renderer stopped"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				renderer, release := tc.renderer()
+				defer release()
+				logger, entries := newObservedLogger(t)
+				content := &versionedContentStore{current: "# CV"}
+				service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+				client.failPuts.Store(tc.failPuts)
+				h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+				require.Equal(t, http.StatusNotFound, requestCVPDF(h, logger))
+				// Every case has ended once the shared timeout has passed.
+				time.Sleep(pdfSharedRenderTimeout + time.Second)
+				synctest.Wait()
+				require.Empty(t, storedPDF(t, pdfStore))
+				require.Equal(t, 1, entriesMentioning(entries, tc.cause), "the failure must be reported once")
+				for _, entry := range entries.All() {
+					require.Less(t, entry.Level, zapcore.ErrorLevel, "a public refresh must not log an alert-level entry: %s", entry.Message)
+				}
+				warnings := entries.FilterLevelExact(zapcore.WarnLevel).FilterMessage("cv pdf async refresh render failed")
+				require.Equal(t, 1, warnings.Len(), "the failure must be reported as the background refresh warning")
+			})
+		})
+	}
+}
+
+// slowLoadContentStore is a scripted content store whose every read of the latest content first takes delay, like
+// a slow storage backend.
+type slowLoadContentStore struct {
+	scriptedContentStore
+	delay time.Duration
+}
+
+// Load waits for delay, or fails when ctx ends first, and then reads like the scripted store.
+func (s *slowLoadContentStore) Load(ctx context.Context) (ContentPayload, error) {
+	timer := time.NewTimer(s.delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return ContentPayload{}, errors.Wrap(ctx.Err(), "slow content read stopped")
+	}
+	return s.scriptedContentStore.Load(ctx)
+}
+
+// TestDownloadPDFRefreshHoldsUntilHungStoreWorkEnds verifies a refresh whose render hangs keeps later downloads
+// from reading the content or rendering again until the shared timeout stops that render, and then backs off like
+// any other failed refresh, even though the refresh's own deadline, which started before its content read, passes
+// first.
+func TestDownloadPDFRefreshHoldsUntilHungStoreWorkEnds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const readDelay = time.Second
+		renderer := newBlockingPDFRenderer()
+		defer renderer.releaseAll()
+		content := &slowLoadContentStore{
+			scriptedContentStore: scriptedContentStore{versionedContentStore: versionedContentStore{current: "# CV"}},
+			delay:                readDelay,
+		}
+		service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+		sleepUntil := func(at time.Time) { time.Sleep(time.Until(at)) }
+
+		started := time.Now()
+		require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+		// The refresh read, the store work's two currency reads and the start of its render take three reads.
+		sleepUntil(started.Add(10 * readDelay))
+		synctest.Wait()
+		require.Equal(t, int64(1), renderer.calls.Load())
+		loads := content.loads.Load()
+
+		// The store work started one read after the refresh, so its render is stopped one read after the refresh's
+		// own deadline. Downloads before and just after that must neither read the content nor render again.
+		for _, at := range []time.Duration{pdfSharedRenderTimeout + readDelay/2, pdfSharedRenderTimeout + 2*readDelay} {
+			sleepUntil(started.Add(at))
+			require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+			synctest.Wait()
+		}
+		require.Equal(t, int64(1), renderer.canceled.Load(), "the hung render must be stopped by the shared timeout")
+		require.Equal(t, loads, content.loads.Load(), "no download may read the content while the hung refresh holds or backs off")
+		require.Equal(t, int64(1), renderer.calls.Load())
+
+		require.Zero(t, client.puts.Load())
+
+		// Once the backoff window ends, a download retries, and the retry stores the PDF when rendering works again.
+		renderer.releaseAll()
+		retryAt := started.Add(pdfSharedRenderTimeout + readDelay + pdfRefreshFailureBackoff + time.Second)
+		sleepUntil(retryAt)
+		require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+		sleepUntil(retryAt.Add(10 * readDelay))
+		synctest.Wait()
+		require.Greater(t, content.loads.Load(), loads, "a download after the backoff window must retry")
+		require.Equal(t, int64(2), renderer.calls.Load())
+		require.Equal(t, "%PDF-1.4 # CV", storedPDF(t, pdfStore))
+	})
+}

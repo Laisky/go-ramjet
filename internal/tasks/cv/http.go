@@ -317,7 +317,7 @@ func (h *handler) downloadPDF(c *gin.Context) {
 
 // triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background without blocking the request.
 // It takes the request context, whose logger the background work keeps, and returns no values. Concurrent refreshes
-// share one content read, render and upload, whose failure is logged once by the shared work.
+// share one content read, render and upload, whose failure the refresh logs once as a warning.
 func (h *handler) triggerAsyncPDFRefresh(c *gin.Context) {
 	if h == nil || h.pdfService == nil || c == nil {
 		return

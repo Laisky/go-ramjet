@@ -186,9 +186,8 @@ const pdfRefreshFailureBackoff = 15 * time.Second
 // Concurrent refreshes share one read of the latest content and the render and upload that follow, until that work
 // ends, so a burst of public downloads of a missing PDF costs one content read. The store work is joined like any
 // other write, so a refresh and a save of the same content share one render. After a refresh fails, downloads start
-// no new refresh for pdfRefreshFailureBackoff, so a lasting outage costs one read and one warning per window. A
-// failure to read the content is logged once by the refresh; a render or upload failure is reported once by the
-// store work.
+// no new refresh for pdfRefreshFailureBackoff, so a lasting outage costs one read and one warning per window. The
+// refresh logs a failure to read the content, or a failed or timed-out render or upload, once and at warning level.
 func (s *PDFService) refreshLatest(ctx context.Context) {
 	if s.refreshBackingOff() {
 		return
@@ -207,16 +206,16 @@ func (s *PDFService) refreshLatest(ctx context.Context) {
 			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 
 		key := s.storeKey(payload.Content)
-		store := s.flights.join(flightCtx, key, pdfWriteFlight, false, s.storeWork(payload.Content))
-		// Holding the refresh until the store work ends keeps later downloads from reading the content again. The
-		// refresh does not wait as a caller, so the store work, bounded by its own timeout, reports its own outcome.
-		select {
-		case <-store.done:
-			// The store work's error is final once done is closed; it was reported by that work or its caller.
-			if store.err != nil {
-				s.backOffRefresh()
-			}
-		case <-flightCtx.Done():
+		store := s.flights.join(flightCtx, key, pdfWriteFlight, true, s.storeWork(payload.Content))
+		// The refresh waits for the store work as a caller, past the refresh's own deadline, which started before the
+		// content read: the store work ends within its own timeout, and holding the refresh until then keeps later
+		// downloads from reading the content again. As a caller the refresh receives the failure and reports it as
+		// the warning background refreshes have always logged, so an anonymous download never raises an
+		// error-level alert.
+		if _, err := s.flights.wait(context.WithoutCancel(flightCtx), key, store); err != nil {
+			s.backOffRefresh()
+			logger.Warn("cv pdf async refresh render failed",
+				zap.Duration("retry_after", pdfRefreshFailureBackoff), zap.Error(err))
 		}
 		return pdfFlightValue{}, nil
 	})

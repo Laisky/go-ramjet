@@ -501,7 +501,9 @@ func TestDownloadPDFHungRefreshLoggedOnce(t *testing.T) {
 		time.Sleep(pdfSharedRenderTimeout + time.Second)
 		synctest.Wait()
 		require.Equal(t, int64(1), renderer.canceled.Load(), "the hung refresh render must be stopped")
-		require.Equal(t, 1, entriesMentioning(entries, "shared cv pdf work failed after every caller left"))
+		require.Equal(t, 1, entriesMentioning(entries, "cv pdf async refresh render failed"))
+		require.Zero(t, entriesMentioning(entries, "shared cv pdf work failed after every caller left"),
+			"the refresh receives the failure, so the store work must not report it again")
 		require.Zero(t, client.puts.Load())
 		service.flights.mu.Lock()
 		remaining := len(service.flights.flights)
