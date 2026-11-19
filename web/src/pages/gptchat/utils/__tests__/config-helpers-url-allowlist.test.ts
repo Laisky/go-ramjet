@@ -143,6 +143,15 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       // fetch refuses header values outside ISO-8859-1.
       ['a non-ASCII host', 'https://例え.テスト/v1'],
       ['a Latin-1 host', 'https://café.example'],
+      // A bare ? or # leaves url.search and url.hash empty, but Go keeps it
+      // and builds `…/v1?/v1/responses`.
+      ['a bare query mark', 'https://provider-a.example/v1?'],
+      ['a bare fragment mark', 'https://provider-a.example/v1#'],
+      // The browser reads these as IPv4 addresses, Go as host names.
+      ['a hex IPv4 host', 'https://0x7f.1/'],
+      ['a short IPv4 host', 'https://127.1/'],
+      ['an integer IPv4 host', 'https://2130706433/v1'],
+      ['an octal IPv4 host', 'https://0177.0.0.1:8443/v1'],
     ])('rejects an api_base with %s', (_name, value) => {
       const { config, mutated } = applyWithSearch(
         `?api_base=${encodeURIComponent(value)}`,
@@ -277,6 +286,8 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       'https://provider-b.example/v1',
       'https://provider-b.example:8443/openai/v1',
       'http://[2001:db8::1]:3000',
+      'http://127.0.0.1:3000/v1',
+      'https://provider-b.example.:8443',
       'HTTPS://Provider-B.Example/V1/',
       'https://provider-b.example/',
     ])('accepts the API base %s', (value) => {

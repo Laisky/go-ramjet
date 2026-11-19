@@ -149,16 +149,32 @@ const API_BASE_SHAPE = /^https?:\/\/[^/?#\\@%\s]+(?:\/|$)/i
 const NON_PRINTABLE_ASCII = /[^\x21-\x7e]/
 
 /**
+ * rawApiBaseHost returns the host of raw, an API base that matched
+ * API_BASE_SHAPE, as written: the authority without its port, lower-cased,
+ * with the brackets of an IPv6 literal kept.
+ */
+function rawApiBaseHost(raw: string): string {
+  const authority = raw.replace(/^https?:\/\//i, '').split('/')[0]
+  const host = authority.startsWith('[')
+    ? authority.slice(0, authority.indexOf(']') + 1)
+    : authority.split(':')[0]
+  return host.toLowerCase()
+}
+
+/**
  * isValidApiBase reports whether apiBase is an API base the server accepts
  * and realtime audio can connect to: an absolute http(s) URL in printable
  * ASCII with a plain host and without user info, query, fragment, or
- * backslashes.
+ * backslashes. The host must already be in the form the browser would
+ * normalize it to: a bare `?` or `#` leaves url.search and url.hash empty
+ * but Go keeps it, and the browser reads hosts such as `0x7f.1` or `127.1`
+ * as IPv4 addresses where Go sees host names.
  */
 export function isValidApiBase(apiBase?: string | null): boolean {
   const raw = apiBase?.trim() || ''
   if (
     !API_BASE_SHAPE.test(raw) ||
-    raw.includes('\\') ||
+    /[\\?#]/.test(raw) ||
     NON_PRINTABLE_ASCII.test(raw)
   ) {
     return false
@@ -172,9 +188,8 @@ export function isValidApiBase(apiBase?: string | null): boolean {
   return (
     (url.protocol === 'https:' || url.protocol === 'http:') &&
     !!url.hostname &&
+    url.hostname === rawApiBaseHost(raw) &&
     !url.username &&
-    !url.password &&
-    !url.search &&
-    !url.hash
+    !url.password
   )
 }
