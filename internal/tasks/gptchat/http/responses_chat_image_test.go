@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -27,15 +30,24 @@ const hugeImageCount = 1 << 40
 // whose image upstream is served by handler; HTTP and configuration are isolated.
 func imageCountTestContext(t *testing.T, handler http.HandlerFunc) *gin.Context {
 	t.Helper()
+	gctx, _ := imageTestContextWithRecorder(t, handler)
+	return gctx
+}
+
+// imageTestContextWithRecorder is imageCountTestContext that also returns the
+// recorder holding the response.
+func imageTestContextWithRecorder(t *testing.T, handler http.HandlerFunc) (*gin.Context, *httptest.ResponseRecorder) {
+	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	logger, _, _ := embeddingTestSetup(t, server)
 
 	gin.SetMode(gin.TestMode)
-	gctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	rec := httptest.NewRecorder()
+	gctx, _ := gin.CreateTestContext(rec)
 	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", nil)
 	gmw.SetLogger(gctx, logger)
-	return gctx
+	return gctx, rec
 }
 
 // imageCountTestRequest builds an image-model chat request asking for n images.
@@ -112,19 +124,21 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 }
 
 // imageBillingFixture fakes the image upstream, the external billing API and the
-// object store for the DALL-E paths, recording every charge and delivered image.
+// object store for the DALL-E paths, recording every charge and stored image.
 type imageBillingFixture struct {
-	produced    int // images the upstream returns; 0 with empty 0 makes generation fail
-	empty       int // entries without image data (e.g. only revised_prompt) sent first
-	failChargeN int // 1-based billing call that is rejected; 0 accepts all
+	produced    int  // images the upstream returns; 0 with empty 0 makes generation fail
+	empty       int  // entries without image data (e.g. only revised_prompt) sent first
+	failChargeN int  // 1-based billing call that is rejected; 0 accepts all
+	failUpload  bool // every object store upload fails
 	t           *testing.T
+	rec         *httptest.ResponseRecorder
 	// override, when set, serves a request before the default routes and reports
 	// whether it did.
 	override func(http.ResponseWriter, *http.Request) bool
 	mu       sync.Mutex
 	charges  []int64
 	rejected int
-	uploads  int
+	keys     []string // object keys of the stored images
 }
 
 // handler serves billing calls and OpenAI-style image generations.
@@ -195,25 +209,49 @@ func (f *imageBillingFixture) totalCharged() int64 {
 	return sum
 }
 
-// delivered returns how many images were uploaded for the client.
-func (f *imageBillingFixture) delivered() int {
+// stored returns how many images were uploaded to the object store.
+func (f *imageBillingFixture) stored() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.uploads
+	return len(f.keys)
+}
+
+// generatedImageURLRegexp matches the image URLs a response hands to the client.
+var generatedImageURLRegexp = regexp.MustCompile(`https://[^\s"()\[\]]+\.png`)
+
+// deliveredURLs returns the distinct image URLs the response hands to the client,
+// whether as JSON fields or as Markdown links in a chat answer.
+func (f *imageBillingFixture) deliveredURLs() []string {
+	var urls []string
+	for _, url := range generatedImageURLRegexp.FindAllString(f.rec.Body.String(), -1) {
+		if !slices.Contains(urls, url) {
+			urls = append(urls, url)
+		}
+	}
+	return urls
+}
+
+// delivered returns how many distinct images the response hands to the client.
+func (f *imageBillingFixture) delivered() int {
+	return len(f.deliveredURLs())
 }
 
 // install wires the fixture into an isolated request context and stubs uploads.
 func (f *imageBillingFixture) install(t *testing.T) *gin.Context {
 	t.Helper()
 	f.t = t
-	gctx := imageCountTestContext(t, f.handler)
+	gctx, rec := imageTestContextWithRecorder(t, f.handler)
+	f.rec = rec
 	config.Config.ExternalBillingAPI = config.Config.API
 	origUpload := uploadGeneratedImage
 	t.Cleanup(func() { uploadGeneratedImage = origUpload })
-	uploadGeneratedImage = func(context.Context, string, string, []byte, string) error {
+	uploadGeneratedImage = func(_ context.Context, key, _ string, _ []byte, _ string) error {
+		if f.failUpload {
+			return errors.New("synthetic object store failure")
+		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		f.uploads++
+		f.keys = append(f.keys, key)
 		return nil
 	}
 	return gctx
@@ -237,19 +275,23 @@ var imageBillingCases = []struct {
 	produced    int
 	empty       int
 	failChargeN int
+	failUpload  bool
 	billed      int
 	delivered   int
 }{
 	{name: "eight requested, eight delivered", requested: 8, produced: 8, billed: 8, delivered: 8},
 	{name: "eight requested, one delivered", requested: 8, produced: 1, billed: 1, delivered: 1},
-	{name: "upstream rejects the request", requested: 8, produced: 0, billed: 1, delivered: 0},
+	// Pre-existing: the prepaid image is not refunded when nothing is delivered; the
+	// billing API has no refund call (owner decision).
+	{name: "upstream rejects the request (prepaid image kept)", requested: 8, produced: 0, billed: 1, delivered: 0},
 	{name: "upstream returns more than requested", requested: 2, produced: 5, billed: 2, delivered: 2},
 	{name: "huge count is clamped", requested: hugeImageCount, produced: 8, billed: 8, delivered: 8},
 	{name: "free user", requested: 5, free: true, produced: 1, billed: 1, delivered: 1},
 	{name: "extra charge rejected keeps only the prepaid image", requested: 3, produced: 3, failChargeN: 2, billed: 1, delivered: 1},
 	{name: "an entry without image data does not count", requested: 2, empty: 1, produced: 2, billed: 2, delivered: 2},
 	{name: "leading entries without image data hide nothing", requested: 2, empty: 2, produced: 2, billed: 2, delivered: 2},
-	{name: "no entry carries an image", requested: 2, empty: 2, billed: 1, delivered: 0},
+	{name: "no entry carries an image (prepaid image kept)", requested: 2, empty: 2, billed: 1, delivered: 0},
+	{name: "upload fails, so the extra images are not charged (prepaid image kept)", requested: 3, produced: 3, failUpload: true, billed: 1, delivered: 0},
 }
 
 // TestSendChatImageGenerationBillsDeliveredImages verifies the image-model chat path
@@ -257,11 +299,11 @@ var imageBillingCases = []struct {
 func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN}
+			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN, failUpload: tc.failUpload}
 			gctx := f.install(t)
 
 			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), billedImageUser(tc.free))
-			if tc.produced == 0 {
+			if tc.delivered == 0 {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
@@ -277,7 +319,7 @@ func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 	for _, tc := range imageBillingCases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN}
+			f := &imageBillingFixture{produced: tc.produced, empty: tc.empty, failChargeN: tc.failChargeN, failUpload: tc.failUpload}
 			gctx := f.install(t)
 			body, err := json.Marshal(map[string]any{"model": "dall-e-3", "prompt": "draw a tree", "n": tc.requested})
 			require.NoError(t, err)
@@ -286,7 +328,7 @@ func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 			gctx.Set(ctxKeyUser, billedImageUser(tc.free))
 
 			DrawByDalleHandler(gctx)
-			if tc.produced == 0 {
+			if tc.delivered == 0 {
 				require.GreaterOrEqual(t, gctx.Writer.Status(), http.StatusBadRequest, "a request without images must fail")
 			} else {
 				require.Equal(t, http.StatusOK, gctx.Writer.Status())

@@ -2,11 +2,14 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
@@ -41,36 +44,103 @@ func imageBatchPrice(model string, n int) db.Price {
 	return GetImageModelPrice(model) * db.Price(n)
 }
 
-// settleImageBilling reconciles a DALL-E request's charge with what the upstream
-// produced. One image is charged upfront, which doubles as the balance probe; this
-// charges the remaining delivered images in one call once generation succeeded.
+// chargeExtraImages settles a DALL-E request's charge once its images are stored.
+// One image is charged upfront, which doubles as the balance probe; this charges
+// the remaining stored images in one call.
 //
 // Parameters:
 //   - ctx: Request context carrying the request logger.
 //   - user: User being billed.
 //   - model: Image model, which selects the per-image price.
-//   - n: Normalized number of requested images; never more are delivered.
-//   - imgs: Images the upstream produced.
+//   - stored: Number of images stored for the client.
 //
-// It returns the images to deliver: at most n of imgs. When the charge for the
-// extra images fails, only the prepaid first image is delivered and the failure is
+// It returns how many of the stored images may be delivered: all of them, or only
+// the prepaid first one when the charge for the others fails. That failure is
 // logged once at error level; like Flux, unbilled images are never exposed.
-func settleImageBilling(ctx context.Context, user *config.UserConfig, model string, n int, imgs [][]byte) [][]byte {
-	if len(imgs) > n {
-		imgs = imgs[:n]
-	}
-	extra := len(imgs) - 1
+func chargeExtraImages(ctx context.Context, user *config.UserConfig, model string, stored int) int {
+	extra := stored - 1
 	if !user.EnableExternalImageBilling || extra <= 0 {
-		return imgs
+		return stored
 	}
 
 	if err := checkUserExternalBilling(ctx, user, imageBatchPrice(model, extra), "txt2image"); err != nil {
 		gmw.GetLogger(ctx).Error("charge for extra generated images failed; delivering only the prepaid image",
-			zap.String("model", model), zap.Int("produced", len(imgs)), zap.Error(err))
-		return imgs[:1]
+			zap.String("model", model), zap.Int("stored", stored), zap.Error(err))
+		return 1
 	}
 
-	return imgs
+	return stored
+}
+
+// generatedImageKey returns a new object key, without extension, for the i-th
+// image of task taskID. Each key ends in its own cryptographically random suffix,
+// so the URL of one delivered image never reveals the key of another image of the
+// same task that was stored but not paid for.
+//
+// It returns an error when no random suffix can be generated.
+func generatedImageKey(taskID string, i int) (string, error) {
+	suffix, err := gutils.SecRandomStringWithLength(20)
+	if err != nil {
+		return "", errors.Wrap(err, "generate image key suffix")
+	}
+
+	return fmt.Sprintf("%s-%d-%s", drawImageByTxtObjkeyPrefix(taskID), i, suffix), nil
+}
+
+// generatedImageURL returns the public URL of the PNG stored under key.
+func generatedImageURL(key string) string {
+	return fmt.Sprintf("https://%s/%s/%s.png", config.Config.S3.Endpoint, config.Config.S3.Bucket, key)
+}
+
+// storeAndBillImages stores generated images and only then charges for the ones
+// beyond the prepaid first image, so a failed upload never bills images nobody
+// receives.
+//
+// Parameters:
+//   - ctx: Request context used for billing; it carries the request logger.
+//   - taskCtx: Context bounding the uploads.
+//   - user: User being billed.
+//   - model: Image model, which selects the per-image price.
+//   - n: Normalized number of requested images; never more are stored.
+//   - taskID: Task whose key prefix the objects share.
+//   - prompt: Prompt stored as object metadata.
+//   - imgs: Images the upstream produced.
+//
+// It returns the URLs to deliver: every stored image, or only the prepaid first one
+// when the charge for the others fails. It returns an error when a key cannot be
+// generated or an upload fails; nothing beyond the upfront charge is billed then.
+func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
+	model string, n int, taskID, prompt string, imgs [][]byte) ([]string, error) {
+	if len(imgs) > n {
+		imgs = imgs[:n]
+	}
+
+	keys := make([]string, len(imgs))
+	for i := range imgs {
+		key, err := generatedImageKey(taskID, i)
+		if err != nil {
+			return nil, errors.Wrap(err, "image key")
+		}
+		keys[i] = key
+	}
+
+	var pool errgroup.Group
+	for i, img := range imgs {
+		pool.Go(func() error {
+			return uploadGeneratedImage(taskCtx, keys[i], prompt, img, ".png")
+		})
+	}
+	if err := pool.Wait(); err != nil {
+		return nil, errors.Wrap(err, "upload images")
+	}
+
+	keys = keys[:chargeExtraImages(ctx, user, model, len(keys))]
+	urls := make([]string, len(keys))
+	for i, key := range keys {
+		urls[i] = generatedImageURL(key)
+	}
+
+	return urls, nil
 }
 
 // maxImageResponseBytesPerImage bounds an image API answer per expected image: one

@@ -119,3 +119,35 @@ func TestImageResponsesAreSizeBounded(t *testing.T) {
 		require.Zero(t, f.delivered())
 	})
 }
+
+// TestDrawByDalleHandlerUndeliveredImagesStayUnguessable verifies that when the
+// charge for the extra images fails after they were stored, the client gets only
+// the prepaid image, and its URL does not reveal the keys of the stored but unpaid
+// images: every image key carries its own random suffix.
+func TestDrawByDalleHandlerUndeliveredImagesStayUnguessable(t *testing.T) {
+	f := &imageBillingFixture{produced: 3, failChargeN: 2}
+	gctx := f.install(t)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations",
+		bytes.NewReader([]byte(`{"model":"dall-e-3","prompt":"draw a tree","n":3}`)))
+	gctx.Request.Header.Set("Content-Type", "application/json")
+	gctx.Set(ctxKeyUser, billedImageUser(false))
+
+	DrawByDalleHandler(gctx)
+	require.Equal(t, http.StatusOK, gctx.Writer.Status())
+	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
+	require.Equal(t, 3, f.stored(), "images are stored before the extra charge")
+
+	urls := f.deliveredURLs()
+	require.Len(t, urls, 1)
+	var delivered int
+	for _, key := range f.keys {
+		if strings.Contains(urls[0], key+".png") {
+			delivered++
+			continue
+		}
+		suffix := key[strings.LastIndex(key, "-")+1:]
+		require.GreaterOrEqual(t, len(suffix), 16, "image key %q lacks a random suffix", key)
+		require.NotContains(t, urls[0], suffix, "the delivered URL reveals an unpaid image key")
+	}
+	require.Equal(t, 1, delivered, "the delivered URL must name one stored image")
+}

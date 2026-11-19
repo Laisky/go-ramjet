@@ -56,8 +56,8 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 
 	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
 	if user.EnableExternalImageBilling {
-		// Charge one image upfront as the balance probe; settleImageBilling charges
-		// the rest once they are delivered.
+		// Charge one image upfront as the balance probe; storeAndBillImages charges
+		// the rest once they are stored.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
 			user, GetImageModelPrice(frontendReq.Model), "txt2image"); web.AbortErr(ctx, err) {
 			return errors.Wrap(err, "charge upfront image")
@@ -89,32 +89,13 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 			return errors.Wrap(err, "fetch openai images")
 		}
 	}
-	imgContents = settleImageBilling(gmw.Ctx(ctx), user, frontendReq.Model, frontendReq.N, imgContents)
-
-	var pool errgroup.Group
-	for i, imgContent := range imgContents {
-		i, imgContent := i, imgContent
-		pool.Go(func() error {
-			return uploadGeneratedImage(taskCtx,
-				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
-				prompt,
-				imgContent,
-				".png",
-			)
-		})
-	}
-
-	if err := pool.Wait(); web.AbortErr(ctx, err) {
-		return errors.Wrap(err, "upload images")
+	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, frontendReq.Model, frontendReq.N, taskID, prompt, imgContents)
+	if web.AbortErr(ctx, err) {
+		return errors.Wrap(err, "store images")
 	}
 
 	var markdownText string
-	for i := range imgContents {
-		url := fmt.Sprintf("https://%s/%s/%s-%d.%s",
-			config.Config.S3.Endpoint,
-			config.Config.S3.Bucket,
-			drawImageByTxtObjkeyPrefix(taskID), i, "png",
-		)
+	for _, url := range imgUrls {
 		markdownText += fmt.Sprintf("![Image](%s)\n\n", url)
 	}
 

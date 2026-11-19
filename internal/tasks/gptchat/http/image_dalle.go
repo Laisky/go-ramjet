@@ -30,8 +30,8 @@ import (
 // stores them in the object store and answers with their URLs.
 //
 // The image count is bounded by normalizeImageCount. With external image billing,
-// one image is charged upfront and the remaining delivered images are charged by
-// settleImageBilling once generation succeeded. ctx is the gin context of the
+// one image is charged upfront and the remaining images are charged by
+// storeAndBillImages once they are stored. ctx is the gin context of the
 // request; failures are reported to the client through web.AbortErr.
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
@@ -71,8 +71,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	}
 
 	if user.EnableExternalImageBilling {
-		// Charge one image upfront as the balance probe; settleImageBilling charges
-		// the rest once they are delivered.
+		// Charge one image upfront as the balance probe; storeAndBillImages charges
+		// the rest once they are stored.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
 			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
 			return
@@ -104,31 +104,14 @@ func DrawByDalleHandler(ctx *gin.Context) {
 			return
 		}
 	}
-	imgContents = settleImageBilling(gmw.Ctx(ctx), user, req.Model, req.N, imgContents)
-
-	var pool errgroup.Group
-	for i, imgContent := range imgContents {
-		i, imgContent := i, imgContent
-		pool.Go(func() error {
-			return uploadGeneratedImage(taskCtx,
-				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
-				req.Prompt,
-				imgContent,
-				".png",
-			)
-		})
-	}
-
-	if err := pool.Wait(); err != nil {
+	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, req.N, taskID, req.Prompt, imgContents)
+	if err != nil {
 		// upload error msg
 		msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
 		objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-		s3cli, errS3 := s3.GetCli()
-		if errS3 != nil {
+		if s3cli, errS3 := s3.GetCli(); errS3 != nil {
 			logger.Error("get s3 client", zap.Error(errS3))
-		}
-
-		if _, errS3 := s3lib.PutObjectCappingVersions(taskCtx,
+		} else if _, errS3 := s3lib.PutObjectCappingVersions(taskCtx,
 			logger,
 			s3cli,
 			config.Config.S3.Bucket,
@@ -149,15 +132,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 	logger.Info("succeed draw image done")
 
-	var imgUrls []string
-	var openaiData []gin.H
-	for i := range imgContents {
-		url := fmt.Sprintf("https://%s/%s/%s-%d.%s",
-			config.Config.S3.Endpoint,
-			config.Config.S3.Bucket,
-			drawImageByTxtObjkeyPrefix(taskID), i, "png",
-		)
-		imgUrls = append(imgUrls, url)
+	openaiData := make([]gin.H, 0, len(imgUrls))
+	for _, url := range imgUrls {
 		openaiData = append(openaiData, gin.H{"url": url})
 	}
 
