@@ -80,8 +80,10 @@ an older major is not silently moved to a new API:
 ESLint 10.15 uses minimatch 11 directly. The postcss-selector-parser override
 keeps the copy pinned by `@tailwindcss/typography` on the patched 6.1 line. The
 dependency floor tests reject vulnerable copies, including any copy of a major
-line that has no fix. Remove a scoped override once its parent requests a
-patched version.
+line that has no fix. They also check a version inside each addressed advisory
+range, including older majors such as DOMPurify 2 and uuid 12, against its first
+fixed release, so a missing rule fails before a vulnerable copy can arrive.
+Remove a scoped override once its parent requests a patched version.
 
 ## Mermaid compatibility
 
