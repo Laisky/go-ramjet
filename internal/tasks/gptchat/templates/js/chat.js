@@ -1001,6 +1001,17 @@ function coerceConfigValue(field, rawValue, currentValue) {
   return rawValue;
 }
 
+/**
+ * applyUrlConfigOverrides applies supported session settings from the page URL's
+ * query parameters to sconfig and removes the applied parameters from the URL.
+ *
+ * Keys are normalized and resolved through UrlParamAliasMap. Only settings that
+ * sconfig already owns (or any chat_switch.* flag) are changed, and paths that
+ * could reach an object prototype are ignored and left in the URL.
+ *
+ * @param {object} sconfig - Session config to mutate in place.
+ * @returns {boolean} True when any applicable parameter was consumed, which also rewrites the URL.
+ */
 function applyUrlConfigOverrides(sconfig) {
   const url = new URL(window.location.href);
   const searchParams = url.searchParams;
@@ -4052,9 +4063,18 @@ async function detectPromptTaskType(model, prompt) {
   }
 }
 
+/**
+ * appendImg2UserInput attaches a pinned image to a human chat message, saving
+ * the message's prompt text with the image to storage and showing the image.
+ *
+ * @param {string} chatID - The chat ID of the human message.
+ * @param {string} imgDataBase64 - Base64-encoded PNG image data.
+ * @param {string} imgName - The image's display name.
+ * @returns {Promise<void>} Resolves once the chat has been saved and updated.
+ */
 async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
-  // insert image to user hisotry
-  const text = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
+  // insert image to user hisotry; storage keeps the raw prompt text
+  const text = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).textContent;
   await saveChats2Storage({
     role: RoleHuman,
     chatID,
@@ -4159,7 +4179,7 @@ async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
 // }
 
 /**
- * Sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
+ * sendChat2Server sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
  *
  * @param {string} chatID - The chat ID.
  * @param {string} reqPrompt - Optional. The chat prompt to send to the server.
@@ -4206,8 +4226,8 @@ async function sendChat2Server(chatID, reqPrompt) {
       content: reqPrompt,
     });
   } else {
-    // if chatID is not empty, it's a reload request
-    reqPrompt = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
+    // if chatID is not empty, it's a reload request; send the prompt text as shown
+    reqPrompt = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).textContent;
   }
 
   // extract and pin new material in chat
@@ -5119,7 +5139,7 @@ function renderError(err) {
 }
 
 /**
- * do render and save chat after ai response finished
+ * renderAfterAiResp renders and saves a chat after the AI response has finished.
  *
  * @param {object} chatData - chat item
  *   @property {string} chatID - chat id
@@ -5133,6 +5153,8 @@ function renderError(err) {
  *   @property {string} requestid - request id
  * @param {boolean} saveStorage - save to storage or not.
  *                                if it's restore chat, there is no need to save to storage.
+ * @param {HTMLElement|null} rootElement - Optional root to search for the chat instead of chatContainer.
+ * @returns {Promise<void>} Resolves once the response is rendered (and saved when requested).
  */
 async function renderAfterAiResp(chatData, saveStorage = false, rootElement = null) {
   const root = rootElement || chatContainer;
@@ -6660,9 +6682,14 @@ async function updateChatVisionSelectedFileStore() {
 }
 
 /**
- * reload ai response
+ * reloadAiResp re-sends a human prompt and resets its AI response to the waiting state.
  *
+ * The prompt is read from the open editor textarea when the user edited it, or
+ * from the rendered message otherwise, and is always written back as text.
+ *
+ * @param {string} chatID - The chat ID to reload.
  * @param {async function} overwriteSendChat2Server - overwrite sendChat2Server function
+ * @returns {Promise<void>} Resolves once the request has been sent.
  */
 async function reloadAiResp(chatID, overwriteSendChat2Server) {
   const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
@@ -9226,10 +9253,11 @@ async function EditFavSystemPromptHandler(evt) {
 }
 
 /**
- * append prompt shortcuts to html and kv
+ * appendPromptShortcut appends a prompt shortcut badge to the page and, optionally, to kv storage.
  *
  * @param {Object} shortcut - shortcut object
  * @param {bool} storage - whether to save to kv
+ * @returns {Promise<void>} Resolves once the badge is shown and storage is updated.
  */
 async function appendPromptShortcut(shortcut, storage = false) {
   const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
@@ -9284,6 +9312,12 @@ async function appendPromptShortcut(shortcut, storage = false) {
   promptShortcutContainer.appendChild(ele);
 }
 
+/**
+ * setupPromptManager restores saved prompt shortcuts and binds the save-prompt,
+ * prompt-market and shortcut controls of the system prompt panel.
+ *
+ * @returns {Promise<void>} Resolves once shortcuts are restored and handlers bound.
+ */
 async function setupPromptManager() {
   // restore shortcuts from kv
   {
@@ -9311,7 +9345,9 @@ async function setupPromptManager() {
       evt.stopPropagation();
       const promptInput = configContainer.querySelector('.system-prompt .input');
 
-      saveSystemPromptModelEle.querySelector('.modal-body textarea.user-input').innerHTML = promptInput.value;
+      // Copy the prompt as the textarea's value: innerHTML would decode entities
+      // and stop updating the shown text once the value had been set.
+      saveSystemPromptModelEle.querySelector('.modal-body textarea.user-input').value = promptInput.value;
 
       saveSystemPromptModal.show();
     });

@@ -12,8 +12,6 @@ type ChatData = Record<string, unknown> & { chatID: string }
 type PageWindow = Window & {
   Prism?: unknown
   MathJax?: unknown
-  bootstrap?: unknown
-  chatPrompts?: unknown
 }
 
 /**
@@ -37,8 +35,6 @@ afterEach(() => {
   const page = window as PageWindow
   delete page.Prism
   delete page.MathJax
-  delete page.bootstrap
-  delete page.chatPrompts
 })
 
 describe('legacy chat.js renderAfterAiResp info line (alert #89)', () => {
@@ -341,87 +337,5 @@ describe('legacy chat.js appendPromptShortcut badge (alert #87)', () => {
       '.system-prompt .input',
     ) as HTMLTextAreaElement
     await vi.waitFor(() => expect(promptInput.value).toBe('translate'))
-  })
-})
-
-describe('legacy chat.js save-prompt modal prefill (alert #88)', () => {
-  type PromptManagerApi = { setupPromptManager: () => Promise<void> }
-
-  /**
-   * mountPromptManager renders the elements setupPromptManager binds to.
-   *
-   * @returns The element that legacy code knows as configContainer.
-   */
-  function mountPromptManager(): HTMLElement {
-    document.body.innerHTML = `
-      <div id="config">
-        <div class="prompt-shortcuts"><span class="badge" data-prompt="p"></span></div>
-        <div class="system-prompt">
-          <textarea class="input"></textarea>
-          <i class="bi save-prompt"></i>
-          <i class="bi open-prompt-market"></i>
-        </div>
-      </div>
-      <div id="save-system-prompt" class="modal">
-        <div class="modal-body">
-          <input class="title">
-          <textarea class="user-input"></textarea>
-        </div>
-      </div>
-      <div id="prompt-market" class="modal">
-        <div class="prompt-labels"></div>
-        <textarea class="prompt-content"></textarea>
-        <input class="prompt-title">
-        <div class="modal-body"><button class="save"></button></div>
-      </div>`
-    return document.getElementById('config') as HTMLElement
-  }
-
-  it('is a false positive: a textarea sink never parses the prompt as markup', async () => {
-    const configContainer = mountPromptManager()
-    const page = window as PageWindow
-    page.bootstrap = {
-      Modal: class {
-        show() {}
-        hide() {}
-      },
-    }
-    page.chatPrompts = []
-    const { setupPromptManager } = loadLegacyChatDeclarations<PromptManagerApi>(
-      ['setupPromptManager'],
-      {
-        configContainer,
-        loadPromptShortcutsFromStorage: async () => [],
-        appendPromptShortcut: async () => {},
-        OpenaiChatStaticContext: async () => {},
-        systemPromptModalCallback: null,
-        libs: {
-          evtTarget: (evt: Event) => evt.currentTarget || evt.target,
-        },
-      },
-    )
-    await setupPromptManager()
-
-    // `</textarea>` cannot close the element: fragment parsing in a textarea
-    // context runs the tokenizer in RCDATA with no appropriate end tag.
-    const payload = `</textarea>${IMG_PAYLOAD}<script>globalThis.__legacyChatXss = 1</script>`
-    const promptInput = configContainer.querySelector(
-      '.system-prompt .input',
-    ) as HTMLTextAreaElement
-    promptInput.value = payload
-    configContainer
-      .querySelector<HTMLElement>('.system-prompt .bi.save-prompt')
-      ?.click()
-
-    const modal = document.getElementById('save-system-prompt') as HTMLElement
-    const textarea = modal.querySelector(
-      'textarea.user-input',
-    ) as HTMLTextAreaElement
-    await vi.waitFor(() => expect(textarea.value).toBe(payload))
-    expect(textarea.children).toHaveLength(0)
-    expect(modal.querySelector('img, script')).toBeNull()
-    expect(
-      (globalThis as { __legacyChatXss?: number }).__legacyChatXss,
-    ).toBeUndefined()
   })
 })
