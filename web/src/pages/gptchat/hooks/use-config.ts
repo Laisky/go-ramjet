@@ -39,6 +39,12 @@ import {
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
 
 /**
+ * alwaysActive is the default liveness check for loads whose caller cannot
+ * be unmounted before they finish.
+ */
+const alwaysActive = () => true
+
+/**
  * Hook for managing session configuration
  */
 export function useConfig() {
@@ -81,9 +87,11 @@ export function useConfig() {
   )
 
   /**
-   * Load all available sessions
+   * loadSessions reloads the session list from storage into state. isActive
+   * is checked once the list is read; when it returns false the list is
+   * dropped, so a load that outlives its component never sets state.
    */
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (isActive = alwaysActive) => {
     const keys = await kvList()
     const configKeys = keys.filter((k) =>
       k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
@@ -136,11 +144,17 @@ export function useConfig() {
       // We defer to what loadConfig created
     }
 
-    setSessions(loadedSessions)
+    if (isActive()) {
+      setSessions(loadedSessions)
+    }
   }, [])
 
-  // Load configuration on mount
+  // Load configuration on mount. The load can outlive the component (a route
+  // change, or a test whose environment is torn down), so once the effect is
+  // cleaned up it keeps storing data but stops setting state.
   useEffect(() => {
+    let active = true
+    const isActive = () => active
     const loadConfig = async () => {
       try {
         // Run migration first
@@ -186,7 +200,9 @@ export function useConfig() {
           )
         }
 
-        applySessionState(activeSessionId, finalConfig)
+        if (active) {
+          applySessionState(activeSessionId, finalConfig)
+        }
 
         // Repair inactive sessions too, so none of them is exported,
         // uploaded, or switched to with a sync key as its API token.
@@ -208,15 +224,20 @@ export function useConfig() {
         }
 
         // Load all sessions
-        await loadSessions()
+        await loadSessions(isActive)
       } catch (error) {
         console.error(`[useConfig] failed to load config: ${String(error)}`)
       } finally {
-        setIsLoading(false)
+        if (active) {
+          setIsLoading(false)
+        }
       }
     }
 
     loadConfig()
+    return () => {
+      active = false
+    }
   }, [applySessionState, loadSessions, persistQueue])
 
   /**
