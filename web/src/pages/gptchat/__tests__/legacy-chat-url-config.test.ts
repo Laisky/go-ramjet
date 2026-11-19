@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { loadLegacyChatDeclarations } from './fixtures/legacy-chat-script'
 
+type McpServer = Record<string, unknown> & { url: string; api_key: string }
+
 type SessionConfig = Record<string, unknown> & {
   chat_switch?: Record<string, unknown>
+  mcp_servers?: McpServer[]
 }
+
+const STORED_MCP_URL = 'https://mcp.example.test'
 
 type UrlConfigApi = {
   applyUrlConfigOverrides: (sconfig: SessionConfig) => boolean
@@ -32,6 +37,8 @@ function loadUrlConfigApi(allModels: string[] = []): UrlConfigApi {
       'parseFloatParamValue',
       'getNestedConfigValue',
       'isUnsafeConfigPathSegment',
+      'isUrlScalarConfigValue',
+      'isUrlSettableConfigPath',
       'setNestedConfigValue',
       'coerceConfigValue',
       'applyUrlConfigOverrides',
@@ -55,6 +62,17 @@ function newSessionConfig(): SessionConfig {
     n_contexts: 6,
     system_prompt: '',
     chat_switch: { all_in_one: false, enable_mcp: false },
+    mcp_bootstrapped: true,
+    mcp_servers: [
+      {
+        id: 'srv-1',
+        name: 'Default MCP',
+        url: STORED_MCP_URL,
+        api_key: 'mcp-key-placeholder',
+        enabled: true,
+        tools: [],
+      },
+    ],
   }
 }
 
@@ -132,15 +150,47 @@ describe('legacy chat.js applyUrlConfigOverrides', () => {
     expect(window.location.search).toBe('?unknown=kept')
   })
 
-  it('creates chat_switch when the stored config lacks it', () => {
+  it.each([
+    ['lacks it', undefined],
+    ['stores it as an array', []],
+  ])('creates chat_switch when the stored config %s', (_case, stored) => {
     const { applyUrlConfigOverrides } = loadUrlConfigApi()
     const sconfig = newSessionConfig()
-    delete sconfig.chat_switch
+    if (stored === undefined) {
+      delete sconfig.chat_switch
+    } else {
+      sconfig.chat_switch = stored as unknown as Record<string, unknown>
+    }
     visit('?all_in_one=true')
 
     expect(applyUrlConfigOverrides(sconfig)).toBe(true)
 
-    expect(sconfig.chat_switch).toEqual({ all_in_one: true })
+    expect(sconfig.chat_switch).toStrictEqual({ all_in_one: true })
     expect(window.location.search).toBe('')
+  })
+
+  // A link is untrusted input. Nested paths would let it re-target a stored
+  // MCP server (whose api_key is then sent to the new URL), replace whole
+  // objects, or truncate arrays, so only scalar settings and single
+  // chat_switch flags may be set.
+  it.each([
+    '?mcp_servers.0.url=https://attacker.example',
+    '?mcp_servers=replaced',
+    '?mcp_servers.length=0',
+    '?mcp_servers.length=not-a-number',
+    '?chat_switch=replaced',
+    '?chat_switch.nested.flag=on',
+    '?system_prompt.length=1',
+  ])('leaves stored objects and arrays untouched for %s', (search) => {
+    const { applyUrlConfigOverrides } = loadUrlConfigApi()
+    const sconfig = newSessionConfig()
+    const before = structuredClone(sconfig)
+    visit(search)
+
+    expect(applyUrlConfigOverrides(sconfig)).toBe(false)
+
+    expect(sconfig).toEqual(before)
+    expect(sconfig.mcp_servers?.[0].url).toBe(STORED_MCP_URL)
+    expect(window.location.search).toBe(search)
   })
 })

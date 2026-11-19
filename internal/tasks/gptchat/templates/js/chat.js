@@ -946,6 +946,51 @@ function isUnsafeConfigPathSegment(segment) {
 }
 
 /**
+ * isUrlScalarConfigValue reports whether a URL string may replace value: only
+ * scalars (or an unset value) can be, never an object or an array.
+ *
+ * @param {*} value - The setting's current value.
+ * @returns {boolean} True for strings, numbers, booleans, null, and undefined.
+ */
+function isUrlScalarConfigValue(value) {
+  return value === undefined || value === null || ['string', 'number', 'boolean'].includes(typeof value);
+}
+
+/**
+ * isUrlSettableConfigPath reports whether a URL parameter may write the setting
+ * at pathSegments. A link is untrusted input, so it may only set a scalar
+ * setting sconfig already owns or a single chat_switch flag. Deeper paths could
+ * re-target a stored MCP server (whose api_key is then sent to the new URL),
+ * replace whole objects, or truncate arrays.
+ *
+ * @param {object} sconfig - Session config the parameter would change.
+ * @param {string[]} pathSegments - Dot-separated setting path, e.g. ['chat_switch', 'enable_mcp'].
+ * @returns {boolean} True when the path is a URL-settable setting.
+ */
+function isUrlSettableConfigPath(sconfig, pathSegments) {
+  if (pathSegments.some(isUnsafeConfigPathSegment)) {
+    return false;
+  }
+
+  // Use own properties only; `in` would also accept inherited names.
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+  const [rootKey, field] = pathSegments;
+  if (pathSegments.length === 1) {
+    return hasOwn(sconfig, rootKey) && isUrlScalarConfigValue(sconfig[rootKey]);
+  }
+  if (pathSegments.length !== 2 || rootKey !== 'chat_switch') {
+    return false;
+  }
+
+  const chatSwitch = hasOwn(sconfig, 'chat_switch') ? sconfig.chat_switch : undefined;
+  if (!chatSwitch || typeof chatSwitch !== 'object' || Array.isArray(chatSwitch)) {
+    // applyUrlConfigOverrides recreates a missing or malformed chat_switch.
+    return true;
+  }
+  return !hasOwn(chatSwitch, field) || isUrlScalarConfigValue(chatSwitch[field]);
+}
+
+/**
  * setNestedConfigValue assigns value at the dotted path inside config, replacing
  * missing or non-object intermediates with plain objects. It only descends into
  * own properties and rejects unsafe segments, so a URL-supplied path can never
@@ -1005,9 +1050,9 @@ function coerceConfigValue(field, rawValue, currentValue) {
  * applyUrlConfigOverrides applies supported session settings from the page URL's
  * query parameters to sconfig and removes the applied parameters from the URL.
  *
- * Keys are normalized and resolved through UrlParamAliasMap. Only settings that
- * sconfig already owns (or any chat_switch.* flag) are changed, and paths that
- * could reach an object prototype are ignored and left in the URL.
+ * Keys are normalized and resolved through UrlParamAliasMap. Only scalar
+ * settings that sconfig already owns and single chat_switch.* flags are changed
+ * (see isUrlSettableConfigPath); any other path is ignored and left in the URL.
  *
  * @param {object} sconfig - Session config to mutate in place.
  * @returns {boolean} True when any applicable parameter was consumed, which also rewrites the URL.
@@ -1026,19 +1071,13 @@ function applyUrlConfigOverrides(sconfig) {
     }
 
     const pathSegments = targetPath.split('.');
-    if (pathSegments.some(isUnsafeConfigPathSegment)) {
+    if (!isUrlSettableConfigPath(sconfig, pathSegments)) {
       return;
     }
 
-    // Only override settings the config already owns; `in` would also accept
-    // inherited names such as `constructor`.
     const rootKey = pathSegments[0];
-    if (rootKey !== 'chat_switch' && !Object.prototype.hasOwnProperty.call(sconfig, rootKey)) {
-      return;
-    }
-
     if (rootKey === 'chat_switch') {
-      if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object') {
+      if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object' || Array.isArray(sconfig.chat_switch)) {
         sconfig.chat_switch = {};
       }
     }
