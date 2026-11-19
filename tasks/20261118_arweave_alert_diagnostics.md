@@ -12,7 +12,7 @@ Use a distinct archive logger (`log.ArchiveLogger()`, full name `log.ArchiveLogg
 
 Admission is owned by `library/egress`: `egress.Admit` applies the shared crawler policy and returns `*egress.AdmissionError` with a finite reason (`destination_denied`, `invalid_target`, `dns_not_found`, `dns_timeout`, `dns_failed`). Because the dependency sanitizes resolver failures into the same input error as a private destination, the resolver outcome is observed at the lookup boundary (the pattern the renderer already used) instead of parsed from text. Caller cancellation and deadlines keep their identity. The crawler's typed admission wrapper is preserved and implements the explicit `log.FailureStageError` contract; `egress.AdmissionError` implements `log.AdmissionReasonError`; both are compile-time asserted.
 
-The archive per-item function was extracted for the actual source-path regression. Fetching, storage, the three-minute budget and existing duplicate suppression are unchanged. This does not fix or certify the existing separate Load/Store suppression race.
+The archive per-item function was extracted for the actual source-path regression. Fetching, storage, the three-minute budget and existing duplicate suppression are unchanged. The Load/Store suppression race is closed below.
 
 ## Review follow-up (P1/P2)
 
@@ -24,7 +24,7 @@ Each finding was reproduced against `095dcaa` before the fix; none was a false p
 - P2 digest equals S3 object key: reproduced. `target_sha256` is replaced by `target_ref`, an HMAC-SHA256 (128-bit hex) under a per-process random key. It correlates the alert with the same process's local log line, cannot be recomputed from a URL, and is not the object key. The field was introduced by this unmerged PR, so no consumer depends on it.
 - P2 logger-name compatibility: no in-repository consumer filters on logger names; OTLP exports `logger.name`, and 41 production scopes are already named below `go-ramjet`, so exact-match filters on `go-ramjet` already miss most records. External dashboards and alert rules were not available to verify; filters should match `go-ramjet.arweave.localstorage` or the `go-ramjet` prefix. A test binds `ArchiveLogger()` to the alert policy so a scope rename cannot silently revert alerts to `{}`.
 
-Out of scope: the renderer egress fetcher keeps its own resolver capture; the proxy response body remains unbounded as before; the Load/Store duplicate race is unchanged.
+Initially out of scope: the renderer egress fetcher's own resolver capture, the unbounded proxy response body and the Load/Store duplicate race; see "Deferred items closed".
 
 ## Validation
 
@@ -43,6 +43,12 @@ No new dependencies or CI jobs. No live-provider calls, production mutation, dep
 - Same path, pre-existing: an archive miss (S3 404) returned an error without closing the response body, keeping a connection and its transport goroutines busy until the 30s client timeout. Reproduced with a close-tracking dialer; the non-200 body is now closed, as `LoadContentByUrl` already did.
 - CodeQL `go/request-forgery` on `LoadContentByUrl` (alert 118): it is the relocated master alert 52, whose SSRF was real on master. Sink-level regressions now call `LoadContentByUrl` directly, without the handler's admission: loopback with query, `localhost`, `169.254.169.254`, `[::1]`, a hex IPv4 literal and a private DNS answer are refused with an expected admission reason and never contacted. A mutation run with master's plain client fails all six, so the tests discriminate. CodeQL cannot see admission inside `egress.PinnedTransport` (its built-in Go sanitizers are name/regex/constant checks, and model packs are not documented for Go in default setup). After `5456f3f` the alert reports fixed only because `CacheHandler` now reaches `LoadContentByUrl` through a function-valued source field that the CodeQL call graph does not follow; that is an analysis blind spot, not recognition of the barrier. The sink-level tests above, not code scanning, are the regression guard for this boundary.
 - A repository sweep for the same coordination family (non-blocking sends of results that must not be lost, blocking sends to unbuffered channels after the receiver may have left) found no other dropped-result hedge; the ArIO gateway race is safe because its sends also select on the canceled task context.
+
+## Deferred items closed
+
+- Load/Store duplicate suppression (previously out of scope): reproduced deterministically. Thirty-two concurrent requests for one url queued it 20 times and refused the other 12 with "taskChan is full", because the "is it running" check and the mark were separate steps and the mark was only set once a worker started. A url that had just been archived was also queued again. `SaveUrlContent` now marks a url pending atomically (`LoadOrStore`) when it queues it, and releases the mark if the queue is full. The task releases it when it ends, after recording a successful archive in the finished cache, so the url is queued at most once while pending and not again after it is archived.
+- Unbounded proxy response body: verified as bounded in the ways that matter. It is streamed with a fixed copy buffer, so memory does not grow with size. The pinned live client and the S3 client both cap the whole exchange, including the body, at 30 seconds. No size cap was added because it would change existing responses.
+- Renderer egress fetcher resolver capture: duplicated, but not a defect. Its classification deliberately differs from `egress.Admit`: every resolver failure, including NXDOMAIN, stays a non-enforcement resolution error, and its dial path records signed receipt evidence. Merging them would change verified-crawler failure semantics, so they are left separate.
 
 ## Hosted browser-smoke follow-up
 

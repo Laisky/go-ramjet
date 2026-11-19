@@ -37,6 +37,21 @@ var (
 	fetchArchiveContent = func(ctx context.Context, target string) ([]byte, error) {
 		return gptTasks.FetchDynamicURLContent(ctx, target, gptTasks.WithMarkdownConversion("", false))
 	}
+	// isArchived reports whether a url already has an archived copy; tests replace it.
+	isArchived = isUrlFinished
+	// storeArchiveContent writes one rendered page to its archive object; tests replace it.
+	storeArchiveContent = func(ctx context.Context, objkey string, content []byte) error {
+		opt := minio.PutObjectOptions{}
+		opt.Header().Add("Content-Type", "text/html")
+		_, err := config.Instance.S3Cli.PutObject(ctx,
+			config.Instance.S3.Bucket,
+			objkey2path(objkey),
+			bytes.NewReader(content),
+			int64(len(content)),
+			opt,
+		)
+		return errors.WithStack(err)
+	}
 )
 
 func init() {
@@ -53,20 +68,30 @@ type taskItem struct {
 	url string
 }
 
-// SaveUrlContent save url content to s3
+// SaveUrlContent queues url for archiving unless it is already pending or archived.
+//
+// A url is marked pending atomically when it is queued and stays marked until
+// its task ends, so concurrent requests for one url queue it at most once and
+// cannot fill the shared queue with duplicates. It returns an error when the
+// archive lookup fails or the queue is full; a refused url is not left marked.
 func SaveUrlContent(ctx context.Context, item taskItem) error {
 	logger := gmw.GetLogger(ctx).With(zap.String("url", item.url))
 
-	// check is running
+	// check is pending
 	if _, ok := runningUrls.Load(item.url); ok {
 		logger.Debug("url is running, skip")
 		return nil
 	}
 
 	// check is finished
-	if finished, err := isUrlFinished(ctx, item.url); err != nil {
+	if finished, err := isArchived(ctx, item.url); err != nil {
 		return errors.Wrapf(err, "check url %s", item.url)
 	} else if finished {
+		return nil
+	}
+
+	if _, pending := runningUrls.LoadOrStore(item.url, struct{}{}); pending {
+		logger.Debug("url is running, skip")
 		return nil
 	}
 
@@ -74,6 +99,7 @@ func SaveUrlContent(ctx context.Context, item taskItem) error {
 	select {
 	case taskChan <- item:
 	default:
+		runningUrls.Delete(item.url)
 		return errors.New("taskChan is full, please wait for a while")
 	}
 
@@ -156,15 +182,12 @@ func RunSaveUrlContent(ctx context.Context) {
 }
 
 // saveURLContentTask processes one queued archive item and records a single attributed failure.
-// It preserves the three-minute fetch/storage budget and the existing duplicate suppression.
-// Destination-policy refusals are input errors and are logged at WARN, below the alert level;
-// every other failure, including resolver failures, remains an ERROR alert.
+// It preserves the three-minute fetch/storage budget. SaveUrlContent marks the url pending
+// when queuing it; the task releases that mark when it ends and records a successful archive
+// so the url is not queued again. Destination-policy refusals are input errors and are logged
+// at WARN, below the alert level; every other failure, including resolver failures, remains
+// an ERROR alert.
 func saveURLContentTask(ctx context.Context, task taskItem) {
-	if _, ok := runningUrls.Load(task.url); ok {
-		return
-	}
-	runningUrls.Store(task.url, struct{}{})
-
 	startedAt := time.Now()
 	stage := "fetch"
 	err := func() error {
@@ -180,18 +203,10 @@ func saveURLContentTask(ctx context.Context, task taskItem) {
 
 		stage = "save"
 		objkey := url2objkey(task.url)
-		opt := minio.PutObjectOptions{}
-		opt.Header().Add("Content-Type", "text/html")
-		_, err = config.Instance.S3Cli.PutObject(taskCtx,
-			config.Instance.S3.Bucket,
-			objkey2path(objkey),
-			bytes.NewReader(content),
-			int64(len(content)),
-			opt,
-		)
-		if err != nil {
+		if err = storeArchiveContent(taskCtx, objkey, content); err != nil {
 			return errors.Wrapf(err, "save url %s", task.url)
 		}
+		isUrlFinishedCache.Store(task.url, true)
 
 		log.Logger.Info("save url content",
 			zap.String("url", task.url),
