@@ -257,3 +257,33 @@ func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 		})
 	}
 }
+
+// TestSendChatImageGenerationSettlesFreeUserReservation verifies a free user's
+// image-model chat request settles its token reservation like the text paths do.
+// Unsettled, the full max_tokens estimate stays charged to the user's 10-minute
+// quota window although the answer is a few Markdown image links.
+func TestSendChatImageGenerationSettlesFreeUserReservation(t *testing.T) {
+	isolateResponsesChatGlobals(t)
+	quotaHook := setupFreeUserTestQuota(t)
+	f := &imageBillingFixture{produced: 1}
+	gctx := f.install(t)
+	config.Config.RateLimitExpensiveModelsIntervalSeconds = 600
+
+	user := &config.UserConfig{
+		Token: "FREETIER-abcdefgh", UserName: "free-user", IsFree: true,
+		APIBase: config.Config.API, OpenaiToken: "sk-shared", ImageToken: "sk-shared",
+		AllowedModels: []string{"*"},
+	}
+	gctx.Set(ctxKeyUser, user)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", bytes.NewReader([]byte(
+		`{"model":"dall-e-3","stream":false,"max_tokens":500,"messages":[{"role":"user","content":"draw a tree"}]}`)))
+	gctx.Request.Header.Set("Content-Type", "application/json")
+
+	require.NoError(t, sendChatWithResponsesToolLoop(gctx))
+	require.Equal(t, 1, f.delivered())
+	require.Positive(t, quotaHook.reserved.Load(), "free-user image request must reserve quota")
+	require.Equal(t, int32(1), quotaHook.adjustments.Load(), "token reservation was never settled")
+	require.Less(t, quotaHook.net.Load(), quotaHook.reserved.Load(),
+		"the unused max_tokens estimate must be released")
+	require.Nil(t, getTokenReservation(gctx))
+}

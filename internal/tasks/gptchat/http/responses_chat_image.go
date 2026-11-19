@@ -26,10 +26,16 @@ import (
 //   - frontendReq: Parsed frontend request; Model and N select the images.
 //   - user: Authenticated user of the request.
 //
+// A free user's token reservation is settled with the answer's tokens on success
+// and always cleared from the request context.
+//
 // It returns the error that was also reported to the client, or nil on success.
 func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *config.UserConfig) error {
 	logger := gmw.GetLogger(ctx)
 	var err error
+	// Like the text paths, the request-scoped reservation never outlives the
+	// branch; a successful answer settles it below.
+	defer clearTokenReservation(ctx)
 	logger.Debug("routing image model request to image generation logic",
 		zap.String("model", frontendReq.Model))
 
@@ -112,5 +118,14 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 		markdownText += fmt.Sprintf("![Image](%s)\n\n", url)
 	}
 
-	return writeFinalToUI(ctx, frontendReq, nil, strings.TrimSpace(markdownText), "", nil)
+	finalText := strings.TrimSpace(markdownText)
+	// Settle the free-tier token reservation with the actual output, as the text
+	// paths do; otherwise the whole max_tokens estimate stays charged.
+	if reservation := getTokenReservation(ctx); reservation != nil {
+		if err := reservation.Finalize(gmw.Ctx(ctx), CountTextTokens(finalText)); err != nil {
+			logger.Warn("finalize token reservation", zap.Error(err))
+		}
+	}
+
+	return writeFinalToUI(ctx, frontendReq, nil, finalText, "", nil)
 }
