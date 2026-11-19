@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -114,14 +116,20 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 type imageBillingFixture struct {
 	produced    int // images the upstream returns; 0 makes generation fail
 	failChargeN int // 1-based billing call that is rejected; 0 accepts all
-	mu          sync.Mutex
-	charges     []int64
-	rejected    int
-	uploads     int
+	// override, when set, serves a request before the default routes and reports
+	// whether it did.
+	override func(http.ResponseWriter, *http.Request) bool
+	mu       sync.Mutex
+	charges  []int64
+	rejected int
+	uploads  int
 }
 
 // handler serves billing calls and OpenAI-style image generations.
 func (f *imageBillingFixture) handler(w http.ResponseWriter, r *http.Request) {
+	if f.override != nil && f.override(w, r) {
+		return
+	}
 	switch r.URL.Path {
 	case "/api/token/consume":
 		var usage struct {
@@ -286,4 +294,42 @@ func TestSendChatImageGenerationSettlesFreeUserReservation(t *testing.T) {
 	require.Less(t, quotaHook.net.Load(), quotaHook.reserved.Load(),
 		"the unused max_tokens estimate must be released")
 	require.Nil(t, getTokenReservation(gctx))
+}
+
+// TestDrawByDalleHandlerFetchesOnlyRequestedImages verifies that an upstream answering
+// with more images than requested cannot make the server download (or decode) more
+// than the requested count: surplus entries are dropped before any of them is fetched.
+func TestDrawByDalleHandlerFetchesOnlyRequestedImages(t *testing.T) {
+	const requested, returned = 2, 40
+	var downloads atomic.Int32
+	f := &imageBillingFixture{}
+	gctx := f.install(t)
+	serverURL := config.Config.API
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations",
+		bytes.NewReader([]byte(`{"model":"dall-e-3","prompt":"draw a tree","n":2}`)))
+	gctx.Request.Header.Set("Content-Type", "application/json")
+	gctx.Set(ctxKeyUser, billedImageUser(false))
+
+	// Serve every surplus entry as a URL so each processed entry costs one download.
+	f.override = func(w http.ResponseWriter, r *http.Request) bool {
+		switch {
+		case r.URL.Path == "/v1/images/generations":
+			data := make([]map[string]string, returned)
+			for i := range data {
+				data[i] = map[string]string{"url": serverURL + "/generated/" + strconv.Itoa(i) + ".png"}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+			return true
+		case strings.HasPrefix(r.URL.Path, "/generated/"):
+			downloads.Add(1)
+			_, _ = w.Write([]byte("synthetic-image"))
+			return true
+		}
+		return false
+	}
+
+	DrawByDalleHandler(gctx)
+	require.Equal(t, requested, f.delivered())
+	require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*requested, f.totalCharged())
+	require.LessOrEqual(t, downloads.Load(), int32(requested), "surplus upstream images were downloaded")
 }

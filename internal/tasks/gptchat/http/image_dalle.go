@@ -283,6 +283,13 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	}
 
 	logger.Debug("succeed get image from openai", zap.Int("n", len(resp.Data)))
+	// The upstream may answer with more images than requested. Drop the surplus
+	// before any entry is decoded or downloaded, so the work stays bounded by n.
+	if n > 0 && len(resp.Data) > n {
+		logger.Debug("drop surplus upstream images",
+			zap.Int("requested", n), zap.Int("returned", len(resp.Data)))
+		resp.Data = resp.Data[:n]
+	}
 	for i, data := range resp.Data {
 		var imgContent []byte
 		if data.B64Json != "" {
