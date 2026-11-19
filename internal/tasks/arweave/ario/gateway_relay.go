@@ -115,9 +115,28 @@ func isOperatorCache(u *url.URL) bool {
 }
 
 // relayGatewayResponse writes response to ctx: the allowlisted headers, the
-// untrusted-content policy for the relayed type, the status and the body. A
-// missing Content-Type is detected from the first bytes, as net/http would.
+// gateway URL as X-Ar-Io-Url, the untrusted-content policy for the relayed
+// type, the status and the body. A missing Content-Type is detected from the
+// first bytes, as net/http would.
+//
+// No header is copied until the gateway has produced its first body byte (or
+// ended an empty body): a gateway that fails earlier leaves ctx untouched, so
+// the error answered in its place carries none of the headers, such as
+// X-Ar-Io-Verified, that describe the body it never sent.
 func relayGatewayResponse(ctx *gin.Context, response *http.Response) error {
+	body := bufio.NewReaderSize(response.Body, sniffLen)
+	contentType := response.Header.Get("Content-Type")
+	need := 1
+	if contentType == "" {
+		need = sniffLen
+	}
+	// A short read with bytes is relayed as far as it goes; the copy below then
+	// meets the error after the status is committed and aborts the transfer.
+	head, err := body.Peek(need)
+	if err != nil && !errors.Is(err, io.EOF) && len(head) == 0 {
+		return errors.Wrap(err, "read gateway content")
+	}
+
 	for _, name := range relayedGatewayHeaders {
 		if value := response.Header.Get(name); value != "" {
 			ctx.Header(name, value)
@@ -133,14 +152,8 @@ func relayGatewayResponse(ctx *gin.Context, response *http.Response) error {
 			ctx.Header(name, values[0])
 		}
 	}
-
-	body := bufio.NewReaderSize(response.Body, sniffLen)
-	contentType := response.Header.Get("Content-Type")
+	ctx.Header("X-Ar-Io-Url", finalGatewayURL(response, "").String())
 	if contentType == "" {
-		head, err := body.Peek(sniffLen)
-		if err != nil && !errors.Is(err, io.EOF) {
-			return errors.Wrap(err, "read gateway content")
-		}
 		contentType = http.DetectContentType(head)
 		ctx.Header("Content-Type", contentType)
 	}

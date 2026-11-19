@@ -138,3 +138,41 @@ func TestGatewayHandlerFailureBeforeBodyIsSelfDescribing(t *testing.T) {
 	require.Empty(t, response.Header.Get("Content-Encoding"))
 	require.Empty(t, response.Header.Get("Etag"))
 }
+
+// TestGatewayHandlerEarlyFailureRelaysNoGatewayHeader keeps every header the
+// relay copies from a gateway, including each one in relayedGatewayHeaders and
+// the ar.io X-Ar-Io-* headers such as X-Ar-Io-Verified, off an error answered
+// before the first body byte: they would describe a body that was never sent.
+func TestGatewayHandlerEarlyFailureRelaysNoGatewayHeader(t *testing.T) {
+	gatewayHeader := http.Header{
+		"Content-Encoding": []string{"gzip"},
+		"X-Ar-Io-Hops":     []string{"1"},
+		"X-Ar-Io-Digest":   []string{"synthetic-digest"},
+		"X-Ar-Io-Verified": []string{"true"},
+	}
+	for _, name := range relayedGatewayHeaders {
+		gatewayHeader.Set(name, "synthetic")
+	}
+	gatewayHeader.Set("Content-Length", "4096")
+	useGatewayEgress(t, gatewayRoundTripper(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("egress must not be used")
+	}))
+	useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: gatewayHeader.Clone(), Request: request,
+			Body: &truncatingGatewayBody{content: strings.NewReader("")}}, nil
+	})}, "https://gateway.example/")
+	server := newGatewayTestServer(t, false)
+
+	response, err := server.Client().Get(server.URL + "/gateway/" + testFileKey)
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()))
+	require.Equal(t, http.StatusBadRequest, response.StatusCode)
+	require.Contains(t, string(body), `{"err"`)
+	for name, values := range response.Header {
+		require.False(t, strings.HasPrefix(name, "X-Ar-Io-"), "relayed %s: %v", name, values)
+	}
+	for _, name := range append([]string{"Content-Encoding"}, relayedGatewayHeaders...) {
+		require.NotContains(t, response.Header.Values(name), "synthetic", name)
+	}
+}

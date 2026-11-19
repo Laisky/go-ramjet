@@ -263,7 +263,6 @@ func GatewayHandler(ctx *gin.Context) {
 			logger := logger.With(zap.String("upstream", reqUrl))
 			logger.Info("got response")
 
-			ctx.Header("X-Ar-Io-Url", reqUrl)
 			// A failure after the status is committed must abort the
 			// transfer, not append an error document to a partial body.
 			if err := relayGatewayResponse(ctx, resp); err != nil {
