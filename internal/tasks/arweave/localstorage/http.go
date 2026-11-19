@@ -1,6 +1,7 @@
 package localstorage
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"net/http"
@@ -33,11 +34,15 @@ var (
 	requestBackgroundWork sync.WaitGroup
 )
 
+// sniffLen is how many leading bytes http.DetectContentType considers.
+const sniffLen = 512
+
 // CacheHandler proxies a user-selected public url, preferring a live fetch and
 // falling back to the S3 archive, and schedules the url for archiving.
 //
-// Proxied content is third-party markup served on this origin, so it is marked
-// untrusted (sandboxed into an opaque, script-free origin).
+// Proxied content is third-party content served on this origin, so it is marked
+// untrusted: active types are sandboxed into an opaque, script-free origin, while
+// PDFs stay viewable in the browser's built-in viewer.
 //
 // The target is admitted with the shared destination policy before any fetch,
 // cache lookup or archive scheduling. Refused targets are answered with 400 and
@@ -85,10 +90,21 @@ func CacheHandler(ctx *gin.Context) {
 		}
 	}()
 
-	logger.Debug("serve proxied content", zap.String("cache_status", cacheStatus))
-	web.MarkUntrustedContent(ctx)
+	// Detect the type from the first bytes, as net/http would, so the untrusted
+	// content policy can tell active documents from passive ones before writing.
+	content := bufio.NewReaderSize(body, sniffLen)
+	head, err := content.Peek(sniffLen)
+	if err != nil && !errors.Is(err, io.EOF) {
+		web.AbortErr(ctx, errors.Wrapf(err, "read content from %q", targetUrl))
+		return
+	}
+	contentType := http.DetectContentType(head)
+
+	logger.Debug("serve proxied content", zap.String("cache_status", cacheStatus), zap.String("content_type", contentType))
+	web.MarkUntrustedContent(ctx, contentType)
+	ctx.Header("Content-Type", contentType)
 	ctx.Header("X-Laisky-Cache-Status", cacheStatus)
-	if _, err := io.Copy(ctx.Writer, body); err != nil {
+	if _, err := io.Copy(ctx.Writer, content); err != nil {
 		web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl))
 		return
 	}

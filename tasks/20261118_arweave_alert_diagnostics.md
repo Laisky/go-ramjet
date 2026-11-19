@@ -52,7 +52,7 @@ No new dependencies or CI jobs. No live-provider calls, production mutation, dep
 
 ## Proxied documents ran on the service origin
 
-Found while triaging the gateway: `/arweave/proxy` streamed third-party bodies without upstream headers, so HTML was sniffed as `text/html` and rendered as an active document on the origin that also serves `/gptchat`, where the app keeps credentials in IndexedDB. Reproduced: a proxied page with a script was served with no Content-Security-Policy. Proxied responses now carry `web.UntrustedContentPolicy` (`sandbox` without `allow-same-origin` or `allow-scripts`, plus `frame-ancestors 'self'`) and `nosniff`. The page renders in an opaque, script-free origin, and links can still open in a new tab. Programmatic clients are unaffected; scripts on proxied pages no longer run.
+Found while triaging the gateway: `/arweave/proxy` streamed third-party bodies without upstream headers, so HTML was sniffed as `text/html` and rendered as an active document on the origin that also serves `/gptchat`, where the app keeps credentials in IndexedDB. Reproduced: a proxied page with a script was served with no Content-Security-Policy. Proxied responses now carry their detected Content-Type (sniffed from the first 512 bytes, as net/http does) and `nosniff`. Active types get `web.UntrustedContentPolicy` (`sandbox` without `allow-same-origin` or `allow-scripts`, plus `frame-ancestors 'self'`), so pages render in an opaque, script-free origin and links can still open in a new tab. PDFs keep only `frame-ancestors 'self'`: the browser's built-in viewer runs outside this origin and would refuse a sandboxed document. Programmatic clients are unaffected; scripts on proxied pages no longer run.
 
 ## Hosted browser-smoke follow-up
 

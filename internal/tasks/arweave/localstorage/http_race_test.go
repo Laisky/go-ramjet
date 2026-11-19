@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/library/egress"
+	"github.com/Laisky/go-ramjet/library/web"
 )
 
 // proxyRaceIterations is how many requests each timing-sensitive regression issues.
@@ -376,5 +377,23 @@ func TestCacheHandlerSandboxesProxiedDocuments(t *testing.T) {
 	require.NotContains(t, policy, "allow-scripts")
 	require.Contains(t, policy, "frame-ancestors 'self'", "the framing policy must be kept")
 	require.Equal(t, "nosniff", recorder.Header().Get("X-Content-Type-Options"))
+	require.Equal(t, "text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
+	bodies.requireAllClosed(t)
+}
+
+// TestCacheHandlerKeepsProxiedPDFsViewable serves a proxied PDF with its detected
+// type and without the sandbox, which would stop the browser's PDF viewer, while
+// still forbidding sniffing and cross-origin framing. The body is relayed intact.
+func TestCacheHandlerKeepsProxiedPDFsViewable(t *testing.T) {
+	pdf := "%PDF-1.7\n" + strings.Repeat("0", 2048)
+	bodies := newBodyRecorder(1)
+	useProxySources(t, bodies.loader(pdf), failingLoader(errors.New("archive miss")), 0)
+
+	recorder := serveCacheHandler("http://public.example/paper.pdf")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "application/pdf", recorder.Header().Get("Content-Type"))
+	require.Equal(t, web.PassiveContentPolicy, recorder.Header().Get("Content-Security-Policy"))
+	require.Equal(t, "nosniff", recorder.Header().Get("X-Content-Type-Options"))
+	require.Equal(t, pdf, recorder.Body.String())
 	bodies.requireAllClosed(t)
 }
