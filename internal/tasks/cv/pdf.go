@@ -6,16 +6,21 @@ import (
 	"context"
 	"encoding/base64"
 	"html/template"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v7"
+	"github.com/Laisky/zap"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	"github.com/yuin/goldmark/v2/renderer/html"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -175,35 +180,49 @@ type PDFRenderer interface {
 
 // PDFService renders CV markdown into PDF and uploads it to object storage.
 //
-// Concurrent requests for the same document share one render (and one upload), and renders are bounded
-// process-wide, so public triggers cannot start one headless Chrome per request.
+// Concurrent requests for the same document share one render, renders are bounded process-wide, and an upload
+// happens only while its content is still the latest saved CV, so an older save never overwrites a newer PDF.
 type PDFService struct {
 	renderer PDFRenderer
 	store    *S3PDFStore
-	renders  *pdfRenderCoordinator
+	content  ContentRepository
+	slots    *semaphore.Weighted
+	flights  *pdfFlights
+
+	writeMu        sync.Mutex
+	latestWriteKey string
+	latestWriteGen uint64
+
+	uploadMu sync.Mutex
 }
 
-// NewPDFService creates a PDFService using the provided renderer and store.
-// It takes a renderer implementation and an S3 store, and returns the configured service or an error.
-func NewPDFService(renderer PDFRenderer, store *S3PDFStore) (*PDFService, error) {
+// NewPDFService creates a PDFService using the provided renderer, PDF store and CV content source.
+// The content source is the authority on the latest saved CV; uploads for any other content are skipped.
+// It returns the configured service or an error when a dependency is missing.
+func NewPDFService(renderer PDFRenderer, store *S3PDFStore, content ContentRepository) (*PDFService, error) {
 	if renderer == nil {
 		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
 	}
 	if store == nil {
 		return nil, errors.WithStack(errors.New("pdf store is nil"))
 	}
+	if content == nil {
+		return nil, errors.WithStack(errors.New("pdf content source is nil"))
+	}
 
 	return &PDFService{
 		renderer: renderer,
 		store:    store,
-		renders:  defaultPDFRenderCoordinator,
+		content:  content,
+		slots:    pdfRenderSlots,
+		flights:  newPDFFlights(pdfSharedRenderTimeout),
 	}, nil
 }
 
 // Render converts markdown content into a PDF document and returns the PDF bytes or an error.
 //
-// Callers rendering the same content concurrently share one render; a caller that cancels stops waiting
-// without canceling the render for the others.
+// Callers rendering the same content concurrently share one render. A caller that cancels stops waiting only for
+// itself, and the render stops once every caller has left.
 func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(err, "context done")
@@ -212,40 +231,97 @@ func (s *PDFService) Render(ctx context.Context, content string) ([]byte, error)
 		return nil, errors.WithStack(errors.New("pdf renderer is nil"))
 	}
 
-	return s.renders.share(ctx, pdfDocumentKey("render", content), func(sharedCtx context.Context) ([]byte, error) {
-		return s.renders.withRenderSlot(sharedCtx, func(slotCtx context.Context) ([]byte, error) {
-			pdfBytes, err := s.renderer.Render(slotCtx, content)
-			if err != nil {
-				return nil, errors.Wrap(err, "render pdf")
-			}
-			return pdfBytes, nil
-		})
+	key := pdfDocumentKey("render", content)
+	flight := s.flights.join(ctx, key, pdfReadOnlyFlight, true, func(flightCtx context.Context) ([]byte, error) {
+		return s.renderWithSlot(flightCtx, content)
 	})
+	return s.flights.wait(ctx, key, flight)
 }
 
-// RenderAndStore renders markdown into a PDF and persists it to object storage.
+// renderWithSlot renders content while holding one process-wide render slot; ctx bounds both the wait and render.
+func (s *PDFService) renderWithSlot(ctx context.Context, content string) ([]byte, error) {
+	if err := s.slots.Acquire(ctx, 1); err != nil {
+		return nil, errors.Wrap(err, "acquire PDF render slot")
+	}
+	defer s.slots.Release(1)
+
+	pdfBytes, err := s.renderer.Render(ctx, content)
+	if err != nil {
+		return nil, errors.Wrap(err, "render pdf")
+	}
+	return pdfBytes, nil
+}
+
+// RenderAndStore renders markdown into a PDF and persists it to object storage when it is still the latest content.
 //
-// Callers storing the same content concurrently share one render and one upload, which completes even when
-// the caller that started it cancels.
+// Callers storing the same content concurrently share one render and upload, which completes even when every
+// caller leaves; a failure that no caller receives is logged once. It returns nil when the upload succeeded or was
+// skipped because newer content has been saved meanwhile.
 func (s *PDFService) RenderAndStore(ctx context.Context, content string) error {
 	if err := ctx.Err(); err != nil {
 		return errors.Wrap(err, "context done")
 	}
 
-	_, err := s.renders.share(ctx, pdfDocumentKey("store", content), func(sharedCtx context.Context) ([]byte, error) {
-		pdfBytes, err := s.Render(sharedCtx, content)
-		if err != nil {
-			return nil, errors.Wrap(err, "render cv pdf")
-		}
-		if err := s.store.Save(sharedCtx, pdfBytes); err != nil {
-			return nil, errors.Wrap(err, "save cv pdf")
-		}
-		return nil, nil
-	})
-	if err != nil {
+	key := s.writeKey(content)
+	flight := s.flights.join(ctx, key, pdfWriteFlight, true, s.storeWork(content))
+	if _, err := s.flights.wait(ctx, key, flight); err != nil {
 		return errors.Wrap(err, "render and store cv pdf")
 	}
 
+	return nil
+}
+
+// refreshInBackground starts, or joins, storing content without waiting; the shared work logs its own failure.
+func (s *PDFService) refreshInBackground(ctx context.Context, content string) {
+	key := s.writeKey(content)
+	s.flights.join(ctx, key, pdfWriteFlight, false, s.storeWork(content))
+}
+
+// writeKey returns the flight key for storing content.
+//
+// A write joins in-flight work for the same content only when no write for other content was requested since;
+// otherwise it starts a newer generation, so a save never joins a flight that an intervening save made stale.
+func (s *PDFService) writeKey(content string) string {
+	key := pdfDocumentKey("store", content)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if key != s.latestWriteKey {
+		s.latestWriteGen++
+		s.latestWriteKey = key
+	}
+	return key + "#" + strconv.FormatUint(s.latestWriteGen, 10)
+}
+
+// storeWork returns the shared work that renders content and uploads it while it is still current.
+func (s *PDFService) storeWork(content string) func(context.Context) ([]byte, error) {
+	return func(ctx context.Context) ([]byte, error) {
+		pdfBytes, err := s.Render(ctx, content)
+		if err != nil {
+			return nil, errors.Wrap(err, "render cv pdf")
+		}
+		return nil, s.storeIfCurrent(ctx, content, pdfBytes)
+	}
+}
+
+// storeIfCurrent uploads pdfBytes only while content is the latest saved CV content.
+//
+// Uploads are serialized, and each checks the content source right before writing, so whichever upload runs last
+// always belongs to the latest content. It returns nil after uploading or skipping a stale upload, or an error.
+func (s *PDFService) storeIfCurrent(ctx context.Context, content string, pdfBytes []byte) error {
+	s.uploadMu.Lock()
+	defer s.uploadMu.Unlock()
+
+	current, err := s.content.Load(ctx)
+	if err != nil {
+		return errors.Wrap(err, "load current cv content")
+	}
+	if current.Content != content {
+		gmw.GetLogger(ctx).Debug("skip stale cv pdf upload", zap.Int("content_bytes", len(content)))
+		return nil
+	}
+	if err := s.store.Save(ctx, pdfBytes); err != nil {
+		return errors.Wrap(err, "save cv pdf")
+	}
 	return nil
 }
 

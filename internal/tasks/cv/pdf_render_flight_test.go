@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/Laisky/errors/v2"
+	gmw "github.com/Laisky/gin-middlewares/v7"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 )
 
 // blockingPDFRenderer is a slow PDF renderer that holds every render until release is closed or ctx ends.
@@ -71,15 +73,16 @@ func (c *countingS3Client) PutObject(ctx context.Context, bucketName, objectName
 
 // newFlightTestPDFService builds a PDF service around renderer and an in-memory store for render-flight tests,
 // with its own production-sized coordinator so concurrent tests never share render slots or flights.
-func newFlightTestPDFService(t *testing.T, renderer PDFRenderer) (*PDFService, *S3PDFStore, *countingS3Client) {
+func newFlightTestPDFService(t *testing.T, renderer PDFRenderer, content ContentRepository) (*PDFService, *S3PDFStore, *countingS3Client) {
 	t.Helper()
 	client := &countingS3Client{fakeS3Client: newFakeS3Client()}
 	pdfStore, err := NewS3PDFStore(client, "bucket", "cv.pdf")
 	require.NoError(t, err)
-	service, err := NewPDFService(renderer, pdfStore)
+	service, err := NewPDFService(renderer, pdfStore, content)
 	require.NoError(t, err)
-	require.Same(t, defaultPDFRenderCoordinator, service.renders, "production services share the process-wide coordinator")
-	service.renders = newPDFRenderCoordinator(pdfMaxConcurrentRenders, pdfSharedRenderTimeout)
+	require.Same(t, pdfRenderSlots, service.slots, "production services share the process-wide render limit")
+	// A test-local limit of the production size keeps concurrent tests from sharing render slots.
+	service.slots = semaphore.NewWeighted(pdfMaxConcurrentRenders)
 	return service, pdfStore, client
 }
 
@@ -89,8 +92,9 @@ func TestDownloadPDFMissingDeduplicatesConcurrentRefreshes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := newBlockingPDFRenderer()
 		defer renderer.releaseAll()
-		service, pdfStore, client := newFlightTestPDFService(t, renderer)
-		h := &handler{store: &fakeContentStore{payload: ContentPayload{Content: "# CV\nbody"}}, pdfStore: pdfStore, pdfService: service}
+		store := &fakeContentStore{payload: ContentPayload{Content: "# CV\nbody"}}
+		service, pdfStore, client := newFlightTestPDFService(t, renderer, store)
+		h := &handler{store: store, pdfStore: pdfStore, pdfService: service}
 
 		const requests = 8
 		codes := make([]int, requests)
@@ -130,7 +134,7 @@ func TestPDFServiceBoundsConcurrentRenders(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := newBlockingPDFRenderer()
 		defer renderer.releaseAll()
-		service, _, _ := newFlightTestPDFService(t, renderer)
+		service, _, _ := newFlightTestPDFService(t, renderer, &fakeContentStore{})
 
 		const documents = 6
 		payloads := make([][]byte, documents)
@@ -161,7 +165,7 @@ func TestPDFServiceSharedRenderSurvivesCallerCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := newBlockingPDFRenderer()
 		defer renderer.releaseAll()
-		service, _, _ := newFlightTestPDFService(t, renderer)
+		service, _, _ := newFlightTestPDFService(t, renderer, &fakeContentStore{})
 		const content = "# Shared CV"
 
 		leaderCtx, cancelLeader := context.WithCancel(context.Background())
@@ -198,32 +202,34 @@ func TestPDFServiceSharedRenderSurvivesCallerCancellation(t *testing.T) {
 	})
 }
 
-// TestPDFServiceSharedRenderIsBounded verifies a shared render that never finishes is stopped at the shared
-// timeout even after every caller has stopped waiting, so detached renders cannot run forever.
+// TestPDFServiceSharedRenderIsBounded verifies a save that keeps running after its caller left is stopped at the
+// shared timeout, so detached work cannot run forever, and that the timeout is logged once.
 func TestPDFServiceSharedRenderIsBounded(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := newBlockingPDFRenderer()
 		defer renderer.releaseAll()
-		service, _, _ := newFlightTestPDFService(t, renderer)
+		logger, entries := newObservedLogger(t)
+		service, _, _ := newFlightTestPDFService(t, renderer, &fakeContentStore{payload: ContentPayload{Content: "# Hung CV"}})
 
-		callerCtx, cancelCaller := context.WithCancel(context.Background())
+		started := time.Now()
+		callerCtx, cancelCaller := context.WithCancel(gmw.SetLogger(context.Background(), logger))
 		var callerErr error
 		var wg sync.WaitGroup
 		wg.Go(func() {
-			_, callerErr = service.Render(callerCtx, "# Hung CV")
+			callerErr = service.RenderAndStore(callerCtx, "# Hung CV")
 		})
 		synctest.Wait()
 		cancelCaller()
 		wg.Wait()
 		require.ErrorIs(t, callerErr, context.Canceled)
 
-		started := time.Now()
 		synctest.Wait()
-		require.Equal(t, int64(0), renderer.canceled.Load())
+		require.Equal(t, int64(0), renderer.canceled.Load(), "a save keeps running after its caller left")
 		time.Sleep(pdfSharedRenderTimeout)
 		synctest.Wait()
-		require.Equal(t, int64(1), renderer.canceled.Load(), "the detached render must stop at the shared timeout")
+		require.Equal(t, int64(1), renderer.canceled.Load(), "the detached save must stop at the shared timeout")
 		require.Equal(t, pdfSharedRenderTimeout, time.Since(started))
+		require.Equal(t, 1, entriesMentioning(entries, "shared cv pdf work failed after every caller left"))
 	})
 }
 
@@ -232,7 +238,7 @@ func TestPDFServiceSharedRenderIsBounded(t *testing.T) {
 func TestPDFServiceRenderAndStoreSharesFailure(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		renderer := &failingPDFRenderer{release: make(chan struct{})}
-		service, _, client := newFlightTestPDFService(t, renderer)
+		service, _, client := newFlightTestPDFService(t, renderer, &fakeContentStore{})
 
 		const callers = 4
 		errs := make([]error, callers)
@@ -270,4 +276,11 @@ func (r *failingPDFRenderer) Render(ctx context.Context, _ string) ([]byte, erro
 	case <-ctx.Done():
 	}
 	return nil, errors.New("renderer exploded")
+}
+
+// shareProcessRenderLimit makes services share one render limit the way production services share pdfRenderSlots.
+func shareProcessRenderLimit(first *PDFService, others ...*PDFService) {
+	for _, other := range others {
+		other.slots = first.slots
+	}
 }
