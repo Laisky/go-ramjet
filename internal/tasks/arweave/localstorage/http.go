@@ -51,7 +51,7 @@ const sniffLen = 512
 // the first to succeed answers, the other is canceled and any body it returns is
 // closed. Work that briefly outlives the request (the bounded archive scheduler
 // started by scheduleArchive, canceled sources and their cleanup) is tracked by
-// requestBackgroundWork.
+// requestBackgroundWork. A failure after streaming began aborts the transfer.
 func CacheHandler(ctx *gin.Context) {
 	targetUrl := strings.TrimSpace(ctx.Query("url"))
 	logger := gmw.GetLogger(ctx).With(zap.String("target_url", targetUrl))
@@ -96,8 +96,10 @@ func CacheHandler(ctx *gin.Context) {
 	web.MarkUntrustedContent(ctx, contentType)
 	ctx.Header("Content-Type", contentType)
 	ctx.Header("X-Laisky-Cache-Status", cacheStatus)
+	// Once bytes are written the status is committed, so a failure mid-copy must
+	// abort the transfer rather than append an error document to the partial body.
 	if _, err := io.Copy(ctx.Writer, content); err != nil {
-		web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl))
+		web.AbortStreamErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl))
 		return
 	}
 
