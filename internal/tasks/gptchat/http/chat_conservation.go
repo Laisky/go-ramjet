@@ -32,8 +32,13 @@ func SaveLlmConservationHandler(ctx *gin.Context) {
 		return
 	}
 
-	go saveLLMConservation(conservationLogger(), freq, req.Response, req.Reasoning)
+	go persistConservation(conservationLogger(), freq, req.Response, req.Reasoning)
 }
+
+// persistConservation stores one conversation in the audit collection for
+// SaveLlmConservationHandler; it is a package variable so tests can observe the
+// write without a database or a goroutine that outlives them.
+var persistConservation = saveLLMConservation
 
 // conservationLogger returns the named process logger used by saveLLMConservation.
 // Callers evaluate it as an argument of the go statement, so it is resolved on the

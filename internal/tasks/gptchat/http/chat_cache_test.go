@@ -9,6 +9,7 @@ import (
 	"time"
 
 	gutils "github.com/Laisky/go-utils/v6"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
@@ -103,11 +104,63 @@ func TestStoreAndLoadCachedResponseShareThePolicy(t *testing.T) {
 	})
 }
 
-// TestSaveLlmConservationHandlerCannotSeedChatAnswers verifies that the conservation
+// conservationTestRequest is the request every conservation test records.
+func conservationTestRequest() *FrontendReq {
+	return &FrontendReq{
+		Model:     "gpt-4.1",
+		MaxTokens: 50,
+		Messages: []FrontendReqMessage{{
+			Role:    OpenaiMessageRoleUser,
+			Content: FrontendReqMessageContent{StringContent: "hello"},
+		}},
+	}
+}
+
+// conservationTestPrompt is conservationTestRequest as JSON object members.
+const conservationTestPrompt = `"model":"gpt-4.1","max_tokens":50,"messages":[{"role":"user","content":"hello"}]`
+
+// TestSaveLlmConservationHandlerOnlyRecordsAudit verifies that the conservation
 // audit endpoint, which accepts any caller-supplied answer without authentication,
-// never writes llmRespCache, so it cannot plant an answer that the chat endpoint
-// serves to another caller instead of asking the upstream.
-func TestSaveLlmConservationHandlerCannotSeedChatAnswers(t *testing.T) {
+// records the audit entry but never writes llmRespCache.
+func TestSaveLlmConservationHandlerOnlyRecordsAudit(t *testing.T) {
+	isolateResponseCache(t, false)
+	gin.SetMode(gin.TestMode)
+
+	type record struct {
+		req      *FrontendReq
+		response string
+	}
+	recorded := make(chan record, 1)
+	origPersist := persistConservation
+	t.Cleanup(func() { persistConservation = origPersist })
+	persistConservation = func(_ glog.Logger, req *FrontendReq, response, _ string) {
+		recorded <- record{req: req, response: response}
+	}
+
+	rec := httptest.NewRecorder()
+	gctx, _ := gin.CreateTestContext(rec)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/audit/conservation",
+		strings.NewReader(`{`+conservationTestPrompt+`,"response":"planted answer"}`))
+	gctx.Request.Header.Set("content-type", "application/json")
+	SaveLlmConservationHandler(gctx)
+	require.Less(t, rec.Code, http.StatusBadRequest)
+
+	select {
+	case got := <-recorded:
+		require.Equal(t, "planted answer", got.response)
+		require.Equal(t, conservationTestRequest().Messages, got.req.Messages)
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "the audit entry was never persisted")
+	}
+	requireNotCached(t, conservationTestRequest())
+}
+
+// TestChatCacheKeyNeverMatchesConservationRecord pins why a conservation-shaped
+// cache entry was never served even when the audit endpoint still wrote one: the
+// chat endpoint keys the cache on a request whose temperature, top_p and n
+// defaults bodyChecker always fills, which a conservation record cannot carry. An
+// entry planted under the conservation key must not answer the same chat question.
+func TestChatCacheKeyNeverMatchesConservationRecord(t *testing.T) {
 	isolateResponsesChatGlobals(t)
 	gin.SetMode(gin.TestMode)
 
@@ -115,7 +168,9 @@ func TestSaveLlmConservationHandlerCannotSeedChatAnswers(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		upstreamCalls.Add(1)
 		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"resp-1","output_text":"genuine answer","output":[]}`))
+		if _, err := w.Write([]byte(`{"id":"resp-1","output_text":"genuine answer","output":[]}`)); err != nil {
+			t.Errorf("write upstream answer: %v", err)
+		}
 	}))
 	t.Cleanup(upstream.Close)
 
@@ -131,26 +186,10 @@ func TestSaveLlmConservationHandlerCannotSeedChatAnswers(t *testing.T) {
 	}
 	t.Cleanup(func() { config.Config = originalConfig })
 
-	const prompt = `"model":"gpt-4.1","max_tokens":50,"messages":[{"role":"user","content":"hello"}]`
+	plantedKey, err := req2CacheKey(conservationTestRequest())
+	require.NoError(t, err)
+	llmRespCache.Store(plantedKey, "planted answer")
 
-	// An anonymous caller records a conservation carrying an answer of its choice.
-	auditRec := httptest.NewRecorder()
-	auditCtx, _ := gin.CreateTestContext(auditRec)
-	auditCtx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/audit/conservation",
-		strings.NewReader(`{`+prompt+`,"response":"planted answer"}`))
-	auditCtx.Request.Header.Set("content-type", "application/json")
-	SaveLlmConservationHandler(auditCtx)
-	require.Less(t, auditRec.Code, http.StatusBadRequest)
-	requireNotCached(t, &FrontendReq{
-		Model:     "gpt-4.1",
-		MaxTokens: 50,
-		Messages: []FrontendReqMessage{{
-			Role:    OpenaiMessageRoleUser,
-			Content: FrontendReqMessageContent{StringContent: "hello"},
-		}},
-	})
-
-	// Another user then asks the same question through the chat endpoint.
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
 		UserName:      "victim",
@@ -160,16 +199,16 @@ func TestSaveLlmConservationHandlerCannotSeedChatAnswers(t *testing.T) {
 	}
 	require.NoError(t, user.Valid())
 
-	chatRec := httptest.NewRecorder()
-	chatCtx, _ := gin.CreateTestContext(chatRec)
-	chatCtx.Set(ctxKeyUser, user)
-	chatCtx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api",
-		strings.NewReader(`{"stream":false,`+prompt+`}`))
-	chatCtx.Request.Header.Set("content-type", "application/json")
-	chatCtx.Request.Header.Set("authorization", "Bearer "+user.Token)
+	rec := httptest.NewRecorder()
+	gctx, _ := gin.CreateTestContext(rec)
+	gctx.Set(ctxKeyUser, user)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api",
+		strings.NewReader(`{"stream":false,`+conservationTestPrompt+`}`))
+	gctx.Request.Header.Set("content-type", "application/json")
+	gctx.Request.Header.Set("authorization", "Bearer "+user.Token)
 
-	require.NoError(t, sendChatWithResponsesToolLoop(chatCtx))
-	require.NotContains(t, chatRec.Body.String(), "planted answer", "chat served an answer planted through the audit endpoint")
-	require.Contains(t, chatRec.Body.String(), "genuine answer")
+	require.NoError(t, sendChatWithResponsesToolLoop(gctx))
+	require.NotContains(t, rec.Body.String(), "planted answer", "chat served a conservation-shaped cache entry")
+	require.Contains(t, rec.Body.String(), "genuine answer")
 	require.Equal(t, int32(1), upstreamCalls.Load())
 }
