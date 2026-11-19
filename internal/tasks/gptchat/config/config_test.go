@@ -65,10 +65,6 @@ func TestSetupConfigScrapelessValidation(t *testing.T) {
 	setConfig(t, "openai.memory_llm_max_output_tokens", 512)
 	setConfig(t, "openai.web_fetch.scrapeless.enabled", true)
 	setConfig(t, "openai.web_fetch.scrapeless.api_key", "   ")
-	t.Cleanup(func() {
-		setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
-		setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
-	})
 
 	err := SetupConfig()
 	require.Error(t, err)
@@ -87,10 +83,6 @@ func TestSetupConfigFirecrawlValidation(t *testing.T) {
 	setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
 	setConfig(t, "openai.web_fetch.firecrawl.enabled", true)
 	setConfig(t, "openai.web_fetch.firecrawl.api_key", "   ")
-	t.Cleanup(func() {
-		setConfig(t, "openai.web_fetch.firecrawl.enabled", false)
-		setConfig(t, "openai.web_fetch.firecrawl.api_key", "")
-	})
 
 	err := SetupConfig()
 	require.Error(t, err)
@@ -196,7 +188,6 @@ func TestSetupConfigWebFetchQueryForwarding(t *testing.T) {
 	baseVoiceConfig(t)
 	setConfig(t, "openai.voice.plugin", "realtime")
 	setConfig(t, "openai.voice.realtime_model", "")
-	t.Cleanup(func() { setConfig(t, "openai.web_fetch.allow_query_forwarding", false) })
 	for _, enabled := range []bool{false, true} {
 		setConfig(t, "openai.web_fetch.allow_query_forwarding", enabled)
 		require.NoError(t, SetupConfig())
