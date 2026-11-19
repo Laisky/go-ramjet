@@ -47,26 +47,18 @@ func TTSHanler(ctx *gin.Context) {
 	}
 
 	logger := gmw.GetLogger(ctx)
-	azureTTSConfig, err := speech.NewSpeechConfigFromSubscription(config.Config.Azure.TTSKey, config.Config.Azure.TTSRegion)
-	if web.AbortErr(ctx, errors.Wrap(err, "new speech config")) {
+	speechSynthesizer, releaseSynthesizer, err := newTTSSynthesizer()
+	if web.AbortErr(ctx, err) {
 		return
 	}
-	defer azureTTSConfig.Close()
-
-	// if err = azureTTSConfig.SetSpeechSynthesisVoiceName("en-US-SaraNeural"); web.AbortErr(ctx, errors.Wrap(err, "set voice name")) {
-	// 	return
-	// }
-
-	audioCfg, err := audio.NewAudioConfigFromDefaultSpeakerOutput()
-	if web.AbortErr(ctx, errors.Wrap(err, "new audio config")) {
-		return
-	}
-
-	speechSynthesizer, err := speech.NewSpeechSynthesizerFromConfig(azureTTSConfig, audioCfg)
-	if web.AbortErr(ctx, errors.Wrap(err, "new speech synthesizer")) {
-		return
-	}
-	defer speechSynthesizer.Close()
+	// The native synthesizer is released when the handler returns, unless an
+	// abandoned synthesis still uses it; the late outcome's cleanup releases it then.
+	releaseOnReturn := true
+	defer func() {
+		if releaseOnReturn {
+			releaseSynthesizer()
+		}
+	}()
 
 	speechSynthesizer.SynthesisStarted(func(event speech.SpeechSynthesisEventArgs) {
 		defer event.Close()
@@ -102,11 +94,15 @@ func TTSHanler(ctx *gin.Context) {
 
 	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
 	// task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
-	var outcome speech.SpeechSynthesisOutcome
-	select {
-	case outcome = <-task:
-	case <-time.After(60 * time.Second):
-		web.AbortErr(ctx, errors.New("timeout for speech synthesis"))
+	outcome, err := awaitAsyncOutcome(gmw.Ctx(ctx), task, ttsSynthesisTimeout, func(late speech.SpeechSynthesisOutcome) {
+		// The SDK finally delivered the abandoned outcome, so nothing uses the
+		// synthesizer any more and every native handle can be freed.
+		late.Close()
+		releaseSynthesizer()
+	})
+	if err != nil {
+		releaseOnReturn = false
+		web.AbortErr(ctx, errors.Wrap(err, "speech synthesis"))
 		return
 	}
 	defer outcome.Close()
@@ -154,6 +150,82 @@ func TTSHanler(ctx *gin.Context) {
 	logger.Info("tts audio succeed",
 		zap.Int("text_len", len(text)),
 		zap.String("audio_size", gutils.HumanReadableByteCount(nBytes, true)))
+}
+
+// ttsSynthesisTimeout bounds how long the handler waits for synthesis to start.
+const ttsSynthesisTimeout = 60 * time.Second
+
+// newTTSSynthesizer creates the Azure speech config, the audio config and the speech
+// synthesizer used by TTSHanler.
+//
+// It returns the synthesizer and a release func that frees all three native handles
+// in reverse creation order. Call release exactly once, after every outcome the
+// synthesizer produced has been closed. On error nothing is left to release.
+func newTTSSynthesizer() (*speech.SpeechSynthesizer, func(), error) {
+	speechCfg, err := speech.NewSpeechConfigFromSubscription(config.Config.Azure.TTSKey, config.Config.Azure.TTSRegion)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "new speech config")
+	}
+
+	// A fixed voice can be pinned here with speechCfg.SetSpeechSynthesisVoiceName
+	// (e.g. "en-US-SaraNeural"); the SSML currently selects the voice instead.
+
+	audioCfg, err := audio.NewAudioConfigFromDefaultSpeakerOutput()
+	if err != nil {
+		speechCfg.Close()
+		return nil, nil, errors.Wrap(err, "new audio config")
+	}
+
+	synthesizer, err := speech.NewSpeechSynthesizerFromConfig(speechCfg, audioCfg)
+	if err != nil {
+		audioCfg.Close()
+		speechCfg.Close()
+		return nil, nil, errors.Wrap(err, "new speech synthesizer")
+	}
+
+	release := func() {
+		synthesizer.Close()
+		audioCfg.Close()
+		speechCfg.Close()
+	}
+	return synthesizer, release, nil
+}
+
+// awaitAsyncOutcome waits for the single value an Azure Speech SDK async call
+// delivers on task. The SDK sends that value from its own goroutine on an
+// unbuffered channel, so the channel must be received from even after the caller
+// gives up; otherwise the SDK goroutine blocks forever and the value's native
+// handle is never freed.
+//
+// Parameters:
+//   - ctx: Request context; its cancellation stops the wait.
+//   - task: Channel returned by the SDK async call.
+//   - timeout: Maximum time to wait for the value.
+//   - release: Frees a value that arrives after the wait was abandoned. It runs on
+//     a background goroutine.
+//
+// It returns the value when it arrives in time; the caller then owns it. Otherwise
+// it returns an error and hands the late value to release once the SDK delivers it.
+func awaitAsyncOutcome[T any](ctx context.Context, task <-chan T, timeout time.Duration, release func(T)) (T, error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	var waitErr error
+	select {
+	case outcome := <-task:
+		return outcome, nil
+	case <-timer.C:
+		waitErr = errors.Errorf("timeout after %s", timeout)
+	case <-ctx.Done():
+		waitErr = errors.Wrap(context.Cause(ctx), "request canceled")
+	}
+
+	go func() {
+		release(<-task)
+	}()
+
+	var zero T
+	return zero, waitErr
 }
 
 var ssmlRegexp = regexp.MustCompile(`(?ims)(<speak.*</speak>)`)
