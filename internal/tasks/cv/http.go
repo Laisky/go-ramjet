@@ -1,7 +1,6 @@
 package cv
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -16,13 +15,10 @@ import (
 )
 
 const (
-	// pdfAsyncRefreshLoadTimeout bounds loading the current content for a background refresh. The render and
-	// upload that follow run as shared write work bounded by pdfSharedRenderTimeout, which no request waits on.
-	pdfAsyncRefreshLoadTimeout = 30 * time.Second
-	cvSitePathPrefix           = "/cv"
-	cvSiteID                   = "cv"
-	cvSiteTheme                = "cv"
-	cvSiteTitle                = "Zhonghua (Laisky) Cai | CV"
+	cvSitePathPrefix = "/cv"
+	cvSiteID         = "cv"
+	cvSiteTheme      = "cv"
+	cvSiteTitle      = "Zhonghua (Laisky) Cai | CV"
 )
 
 // contentRequest represents the payload for updating CV content.
@@ -305,32 +301,16 @@ func (h *handler) downloadPDF(c *gin.Context) {
 	c.DataFromReader(http.StatusOK, size, "application/pdf", reader, nil)
 }
 
-// triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background.
-// It takes the request context and cache buster string and returns no values. Concurrent refreshes of the same
-// content share one render and upload, whose failure is logged once by the shared work.
+// triggerAsyncPDFRefresh renders and stores the latest CV PDF in the background without blocking the request.
+// It takes the request context and cache buster string and returns no values. Concurrent refreshes share one
+// content read, render and upload, whose failure is logged once by the shared work.
 func (h *handler) triggerAsyncPDFRefresh(c *gin.Context, cacheBuster string) {
-	if h == nil || h.pdfService == nil || h.store == nil || c == nil {
+	if h == nil || h.pdfService == nil || c == nil {
 		return
 	}
 
-	logger := gmw.GetLogger(c)
-
-	go func() {
-		ctx, cancel := context.WithTimeout(gmw.SetLogger(context.Background(), logger), pdfAsyncRefreshLoadTimeout)
-		defer cancel()
-
-		payload, err := h.store.Load(ctx)
-		if err != nil {
-			logger.Warn("cv pdf async refresh load failed", zap.Error(err))
-			return
-		}
-
-		h.pdfService.refreshInBackground(ctx, payload.Content)
-		logger.Debug("cv pdf async refresh scheduled",
-			zap.String("cache_buster", cacheBuster),
-			zap.Int("content_bytes", len(payload.Content)),
-			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
-	}()
+	h.pdfService.refreshLatest(gmw.Ctx(c))
+	gmw.GetLogger(c).Debug("cv pdf async refresh requested", zap.String("cache_buster", cacheBuster))
 }
 
 // formatUpdatedAt formats updatedAt as RFC3339, returning an empty string when nil.

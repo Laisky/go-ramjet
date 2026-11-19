@@ -338,3 +338,169 @@ func TestPDFHandlersWithHungRenderAreBounded(t *testing.T) {
 		})
 	}
 }
+
+// countingLoadContentStore is a versioned content store that counts reads of the latest content.
+type countingLoadContentStore struct {
+	versionedContentStore
+	loads atomic.Int64
+}
+
+// Load counts the read and returns the current content.
+func (s *countingLoadContentStore) Load(ctx context.Context) (ContentPayload, error) {
+	s.loads.Add(1)
+	return s.versionedContentStore.Load(ctx)
+}
+
+// TestDownloadPDFMissingSharesOneContentLoad verifies that while a background refresh of a missing PDF runs, a
+// burst of further public downloads keeps its 404 responses without reading the CV content again or starting
+// another render, so the public route cannot multiply content reads.
+func TestDownloadPDFMissingSharesOneContentLoad(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newBlockingPDFRenderer()
+		defer renderer.releaseAll()
+		content := &countingLoadContentStore{versionedContentStore: versionedContentStore{current: "# CV"}}
+		service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+		download := func() int {
+			ginCtx, recorder := newCVTestContext(http.MethodGet, "/cv/pdf")
+			h.downloadPDF(ginCtx)
+			return recorder.Code
+		}
+
+		require.Equal(t, http.StatusNotFound, download())
+		synctest.Wait()
+		require.Equal(t, int64(1), renderer.calls.Load())
+		loadsWhileRendering := content.loads.Load()
+
+		const burst = 50
+		codes := make([]int, burst)
+		var wg sync.WaitGroup
+		for i := range burst {
+			wg.Go(func() { codes[i] = download() })
+		}
+		wg.Wait()
+		synctest.Wait()
+		for i := range burst {
+			require.Equal(t, http.StatusNotFound, codes[i])
+		}
+		require.Equal(t, loadsWhileRendering, content.loads.Load(), "downloads during a running refresh must not read the content again")
+		require.Equal(t, int64(1), renderer.calls.Load())
+
+		renderer.releaseAll()
+		synctest.Wait()
+		require.Equal(t, int64(1), client.puts.Load())
+		require.Equal(t, "%PDF-1.4 # CV", storedPDF(t, pdfStore))
+	})
+}
+
+// gatedFailingLoadStore is a content store whose reads wait for release and then fail, like a slow S3 outage.
+type gatedFailingLoadStore struct {
+	versionedContentStore
+	release chan struct{}
+	loads   atomic.Int64
+}
+
+// Load counts the read, waits for release or ctx, and fails.
+func (s *gatedFailingLoadStore) Load(ctx context.Context) (ContentPayload, error) {
+	s.loads.Add(1)
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+	}
+	return ContentPayload{}, errors.New("content read outage")
+}
+
+// TestDownloadPDFRefreshLoadFailureLoggedOnce verifies a burst of public downloads of a missing PDF during a content
+// read outage shares one read, logs its failure once instead of once per request, and renders nothing.
+func TestDownloadPDFRefreshLoadFailureLoggedOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newBlockingPDFRenderer()
+		defer renderer.releaseAll()
+		logger, entries := newObservedLogger(t)
+		content := &gatedFailingLoadStore{release: make(chan struct{})}
+		service, pdfStore, _ := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+		const burst = 20
+		codes := make([]int, burst)
+		var wg sync.WaitGroup
+		for i := range burst {
+			wg.Go(func() {
+				ginCtx, recorder := newCVTestContext(http.MethodGet, "/cv/pdf")
+				gmw.SetLogger(ginCtx, logger)
+				h.downloadPDF(ginCtx)
+				codes[i] = recorder.Code
+			})
+		}
+		wg.Wait()
+		synctest.Wait()
+		for i := range burst {
+			require.Equal(t, http.StatusNotFound, codes[i])
+		}
+		close(content.release)
+		synctest.Wait()
+		require.Equal(t, int64(1), content.loads.Load(), "the burst must share one content read")
+		require.Equal(t, 1, entriesMentioning(entries, "content read outage"), "the failure must be logged once")
+		require.Zero(t, renderer.calls.Load())
+	})
+}
+
+// TestDownloadPDFRefreshJoinsConcurrentSave verifies a background refresh started while a save of the same content
+// renders joins that save's render and upload instead of rendering the document a second time.
+func TestDownloadPDFRefreshJoinsConcurrentSave(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newBlockingPDFRenderer()
+		defer renderer.releaseAll()
+		content := &versionedContentStore{current: "# Old"}
+		service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+		var saveCode int
+		var saveErr error
+		var wg sync.WaitGroup
+		wg.Go(func() { saveCode, saveErr = saveCVContent(context.Background(), h, nil, "# New") })
+		synctest.Wait()
+		ginCtx, recorder := newCVTestContext(http.MethodGet, "/cv/pdf")
+		h.downloadPDF(ginCtx)
+		require.Equal(t, http.StatusNotFound, recorder.Code)
+		synctest.Wait()
+		require.Equal(t, int64(1), renderer.calls.Load(), "the refresh must join the save's render")
+
+		renderer.releaseAll()
+		wg.Wait()
+		synctest.Wait()
+		require.NoError(t, saveErr)
+		require.Equal(t, http.StatusOK, saveCode)
+		require.Equal(t, int64(1), renderer.calls.Load())
+		require.Equal(t, int64(1), client.puts.Load())
+		require.Equal(t, "%PDF-1.4 # New", storedPDF(t, pdfStore))
+	})
+}
+
+// TestDownloadPDFHungRefreshLoggedOnce verifies a refresh whose render never finishes is stopped by the shared
+// timeout and logged once, even though the refresh and the store work it holds on to both end there.
+func TestDownloadPDFHungRefreshLoggedOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newBlockingPDFRenderer()
+		defer renderer.releaseAll()
+		logger, entries := newObservedLogger(t)
+		content := &versionedContentStore{current: "# CV"}
+		service, pdfStore, client := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+		ginCtx, recorder := newCVTestContext(http.MethodGet, "/cv/pdf")
+		gmw.SetLogger(ginCtx, logger)
+		h.downloadPDF(ginCtx)
+		require.Equal(t, http.StatusNotFound, recorder.Code)
+		synctest.Wait()
+		time.Sleep(pdfSharedRenderTimeout + time.Second)
+		synctest.Wait()
+		require.Equal(t, int64(1), renderer.canceled.Load(), "the hung refresh render must be stopped")
+		require.Equal(t, 1, entriesMentioning(entries, "shared cv pdf work failed after every caller left"))
+		require.Zero(t, client.puts.Load())
+		service.flights.mu.Lock()
+		remaining := len(service.flights.flights)
+		service.flights.mu.Unlock()
+		require.Zero(t, remaining, "no refresh or store work may outlive the shared timeout")
+	})
+}

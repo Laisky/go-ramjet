@@ -133,10 +133,35 @@ func (s *PDFService) RenderAndStore(ctx context.Context, content string) (PDFSto
 	return value.outcome, nil
 }
 
-// refreshInBackground starts, or joins, storing content without waiting; the shared work logs its own failure.
-func (s *PDFService) refreshInBackground(ctx context.Context, content string) {
-	key := s.writeKey(content)
-	s.flights.join(ctx, key, pdfWriteFlight, false, s.storeWork(content))
+// pdfRefreshKey identifies the one background refresh of the latest saved CV that may run at a time.
+const pdfRefreshKey = "refresh:latest"
+
+// refreshLatest stores the PDF of the latest saved CV in the background and returns without waiting.
+//
+// Concurrent refreshes share one read of the latest content and the render and upload that follow, until that work
+// ends, so a burst of public downloads of a missing PDF costs one content read. The store work is joined like any
+// other write, so a refresh and a save of the same content share one render. A failure to read the content is
+// logged once by the refresh; a render or upload failure is reported once by the store work.
+func (s *PDFService) refreshLatest(ctx context.Context) {
+	s.flights.join(ctx, pdfRefreshKey, pdfWriteFlight, false, func(flightCtx context.Context) (pdfFlightValue, error) {
+		payload, err := s.content.Load(flightCtx)
+		if err != nil {
+			return pdfFlightValue{}, errors.Wrap(err, "load latest cv content for pdf refresh")
+		}
+		gmw.GetLogger(flightCtx).Debug("cv pdf refresh started",
+			zap.Int("content_bytes", len(payload.Content)),
+			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
+
+		key := s.writeKey(payload.Content)
+		store := s.flights.join(flightCtx, key, pdfWriteFlight, false, s.storeWork(payload.Content))
+		// Holding the refresh until the store work ends keeps later downloads from reading the content again. The
+		// refresh does not wait as a caller, so the store work, bounded by its own timeout, reports its own outcome.
+		select {
+		case <-store.done:
+		case <-flightCtx.Done():
+		}
+		return pdfFlightValue{}, nil
+	})
 }
 
 // writeKey returns the flight key for storing content.
