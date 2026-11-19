@@ -1,7 +1,6 @@
 package ario
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -14,7 +13,6 @@ import (
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -195,88 +193,28 @@ func GatewayHandler(ctx *gin.Context) {
 		zap.String("fileKey", fileKey),
 	)
 
-	firstFinished := make(chan *http.Response)
 	taskCtx, taskCancel := context.WithCancel(gmw.Ctx(ctx))
 	defer taskCancel()
 
 	// Gateway goroutines may outlive this handler once the first response wins,
 	// so they must not read the recycled gin context or mutable globals.
-	method, header := ctx.Request.Method, gatewayRequestHeader(ctx.Request.Header)
-	client := newGatewayClient(httpcli, ArweaveGateways, gatewayEgress)
-	var pool errgroup.Group
-	for _, target := range targets {
-		pool.Go(func() error {
-			logger := logger.With(zap.String("target_url", target))
-			logger.Debug("fetching file")
-
-			var reqBody io.Reader
-			if len(body) > 0 {
-				reqBody = bytes.NewReader(body)
-			}
-			req, err := http.NewRequestWithContext(taskCtx, method, target, reqBody)
-			if err != nil {
-				return errors.Wrapf(err, "new request %q", target)
-			}
-
-			req.Header = header.Clone()
-			resp, err := client.Do(req)
-			if err != nil {
-				return errors.Wrapf(err, "do request %q", target)
-			}
-
-			// fmt.Printf(">> url: %s, status: %d, X-Ar-Ui-Hops: %s\n", url, resp.StatusCode, resp.Header.Get("X-Ar-Ui-Hops"))
-
-			// Trust is decided on the final hop: a cache URL that redirects
-			// elsewhere must not lend its trust to the destination.
-			if resp.StatusCode >= 200 && resp.StatusCode < 400 &&
-				(isOperatorCache(finalGatewayURL(resp, target)) || resp.Header.Get("X-Ar-Io-Hops") != "") {
-				select {
-				case firstFinished <- resp: // close body later
-				case <-taskCtx.Done():
-					_ = resp.Body.Close()
-				}
-
-				return nil
-			}
-
-			_ = resp.Body.Close()
-			return errors.Errorf("request %q, got %d", target, resp.StatusCode)
-		})
+	fanOut := gatewayFanOut{
+		client: newGatewayClient(httpcli, ArweaveGateways, gatewayEgress),
+		method: ctx.Request.Method,
+		header: gatewayRequestHeader(ctx.Request.Header),
+		body:   body,
+		logger: logger,
 	}
-
-	taskErrCh := make(chan error)
-	go func() {
-		if err := pool.Wait(); err != nil {
-			select {
-			case taskErrCh <- errors.WithStack(err):
-			case <-taskCtx.Done():
-				return
-			}
-		}
-	}()
-
-	select {
-	case resp := <-firstFinished:
-		func() {
-			defer resp.Body.Close()
-			reqUrl := resp.Request.URL.String()
-			logger := logger.With(zap.String("upstream", reqUrl))
-			logger.Info("got response")
-
-			// A failure after the status is committed must abort the
-			// transfer, not append an error document to a partial body.
-			if err := relayGatewayResponse(ctx, resp); err != nil {
-				web.AbortStreamErr(ctx, errors.Wrap(err, "relay gateway response"))
-			}
-		}()
-
+	resp, err := fanOut.first(taskCtx, targets)
+	if web.AbortErr(ctx, err) {
 		return
-	case err := <-taskErrCh:
-		if err == nil {
-			err = errors.Errorf("this is an internal error, no error occurred in upstreams, please contact the admin")
-		}
+	}
+	defer gutils.LogErr(resp.Body.Close, logger)
+	logger.Info("got response", zap.String("upstream", resp.Request.URL.String()))
 
-		web.AbortErr(ctx, errors.WithStack(err))
-		return
+	// A failure after the status is committed must abort the transfer, not
+	// append an error document to a partial body.
+	if err := relayGatewayResponse(ctx, resp); err != nil {
+		web.AbortStreamErr(ctx, errors.Wrap(err, "relay gateway response"))
 	}
 }
