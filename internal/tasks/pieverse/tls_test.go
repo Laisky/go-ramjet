@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -246,8 +248,9 @@ func TestEmbeddedRootVerifiesProductionChain(t *testing.T) {
 	}
 	require.Len(t, certs, 2, "fixture holds leaf + issuing CA")
 
-	roots := x509.NewCertPool()
-	require.True(t, roots.AppendCertsFromPEM(purrfectTEERootCAPEM))
+	// The production pool: system roots plus the embedded purrfect-tee Root.
+	roots, err := newRootPool("")
+	require.NoError(t, err)
 	intermediates := x509.NewCertPool()
 	intermediates.AddCert(certs[1])
 
@@ -342,4 +345,33 @@ func TestCheckRecoversAfterRootCAFileIsFixed(t *testing.T) {
 	require.NoError(t, os.WriteFile(caFile, []byte("not a certificate"), 0o600))
 	require.ErrorContains(t, checker.check(context.Background(), srv.URL), "no PEM certificate",
 		"a broken bundle must fail closed again, never fall back to an unverified client")
+}
+
+// purrfectTEERootCASHA256 is the SHA-256 of the purrfect-tee Root CA
+// certificate (DER) in the production Root pin published by
+// purrfect-claw-platform (infra/tee-agent-shared/kms-pins.prod.json).
+const purrfectTEERootCASHA256 = "d4e928312d8b6e4b1a0be8995a0ffab5b24b2adb0597d90be890e32796c1f074"
+
+// TestEmbeddedRootCAIsPinned freezes the embedded trust anchor: exactly one
+// self-signed CA certificate whose SHA-256 equals the production Root pin.
+// Without it, replacing or appending a certificate to the PEM (which would
+// silently widen what the monitor trusts) would still pass the chain test.
+func TestEmbeddedRootCAIsPinned(t *testing.T) {
+	t.Parallel()
+
+	block, rest := pem.Decode(purrfectTEERootCAPEM)
+	require.NotNil(t, block)
+	require.Equal(t, "CERTIFICATE", block.Type)
+	require.Empty(t, strings.TrimSpace(string(rest)), "the embedded PEM must hold exactly one certificate")
+
+	sum := sha256.Sum256(block.Bytes)
+	require.Equal(t, purrfectTEERootCASHA256, hex.EncodeToString(sum[:]))
+
+	root, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	require.Equal(t, "purrfect-tee-root-ca", root.Subject.CommonName)
+	require.True(t, root.IsCA)
+	require.NotZero(t, root.KeyUsage&x509.KeyUsageCertSign)
+	require.NoError(t, root.CheckSignatureFrom(root), "the trust anchor must be self-signed")
+	require.Equal(t, time.Date(2036, time.May, 19, 19, 16, 22, 0, time.UTC), root.NotAfter.UTC())
 }
