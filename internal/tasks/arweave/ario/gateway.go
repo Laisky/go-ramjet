@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -77,7 +76,7 @@ var (
 func init() {
 	var err error
 	httpcli, err = gutils.NewHTTPClient(
-		gutils.WithHTTPClientTimeout(5 * time.Minute),
+		gutils.WithHTTPClientTimeout(gatewayTimeout),
 	)
 	if err != nil {
 		log.Logger.Panic("new http client", zap.Error(err))
@@ -113,18 +112,6 @@ var forwardedGatewayHeaders = []string{
 	"Range",
 }
 
-// relayBlockedHeaders lists gateway response headers that would change this
-// origin's state instead of describing the relayed content. Gateways are third
-// parties sharing an origin with GPTChat, so they must not set cookies, wipe
-// storage (Clear-Site-Data), pin HSTS or advertise alternative services here.
-var relayBlockedHeaders = map[string]struct{}{
-	"Set-Cookie":                {},
-	"Set-Cookie2":               {},
-	"Clear-Site-Data":           {},
-	"Strict-Transport-Security": {},
-	"Alt-Svc":                   {},
-}
-
 // gatewayTarget returns the URL fetched from gateway. With an ArNS domain it is
 // the gateway's root on the domain's subdomain; otherwise it is fileKey on the gateway.
 // The domain must already match regexpArNSName.
@@ -155,9 +142,11 @@ func gatewayRequestHeader(source http.Header) http.Header {
 // GatewayHandler redirects request to multiple arweave gateways,
 // and returns the first response.
 //
-// Arweave content is third-party markup served on this origin, so the relayed
-// response is marked untrusted (sandboxed into an opaque, script-free origin)
-// and gateway headers that would change origin state are dropped.
+// Arweave content is third-party content served on this origin, so only
+// content and caching headers are relayed and the response is marked untrusted:
+// active types are sandboxed into an opaque, script-free origin, while PDFs stay
+// viewable. Every hop away from the configured gateway hosts, including
+// redirects, passes the public egress policy.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	domain := ctx.Query("domain")
@@ -212,7 +201,8 @@ func GatewayHandler(ctx *gin.Context) {
 
 	// Gateway goroutines may outlive this handler once the first response wins,
 	// so they must not read the recycled gin context or mutable globals.
-	method, header, client := ctx.Request.Method, gatewayRequestHeader(ctx.Request.Header), httpcli
+	method, header := ctx.Request.Method, gatewayRequestHeader(ctx.Request.Header)
+	client := newGatewayClient(httpcli, ArweaveGateways, gatewayEgress)
 	var pool errgroup.Group
 	for _, target := range targets {
 		pool.Go(func() error {
@@ -236,8 +226,10 @@ func GatewayHandler(ctx *gin.Context) {
 
 			// fmt.Printf(">> url: %s, status: %d, X-Ar-Ui-Hops: %s\n", url, resp.StatusCode, resp.Header.Get("X-Ar-Ui-Hops"))
 
+			// Trust is decided on the final hop: a cache URL that redirects
+			// elsewhere must not lend its trust to the destination.
 			if resp.StatusCode >= 200 && resp.StatusCode < 400 &&
-				(strings.Contains(target, "s3.laisky.com") || resp.Header.Get("X-Ar-Io-Hops") != "") {
+				(isOperatorCache(finalGatewayURL(resp, target)) || resp.Header.Get("X-Ar-Io-Hops") != "") {
 				select {
 				case firstFinished <- resp: // close body later
 				case <-taskCtx.Done():
@@ -272,18 +264,8 @@ func GatewayHandler(ctx *gin.Context) {
 			logger.Info("got response")
 
 			ctx.Header("X-Ar-Io-Url", reqUrl)
-			for k, v := range resp.Header {
-				if _, blocked := relayBlockedHeaders[http.CanonicalHeaderKey(k)]; blocked {
-					continue
-				}
-				ctx.Header(k, v[0])
-			}
-			// Applied after the upstream headers so it replaces any gateway CSP.
-			web.MarkUntrustedContent(ctx)
-			ctx.Status(resp.StatusCode)
-
-			_, err := io.Copy(ctx.Writer, resp.Body)
-			if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
+			if err := relayGatewayResponse(ctx, resp); err != nil {
+				web.AbortErr(ctx, errors.Wrap(err, "relay gateway response"))
 				return
 			}
 		}()

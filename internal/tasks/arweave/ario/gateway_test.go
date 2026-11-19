@@ -48,6 +48,14 @@ func useGateways(t *testing.T, client *http.Client, gateways ...string) {
 	ArweaveGateways, httpcli = gateways, client
 }
 
+// useGatewayEgress replaces the egress transport for one test and restores it afterwards.
+func useGatewayEgress(t *testing.T, transport http.RoundTripper) {
+	t.Helper()
+	original := gatewayEgress
+	t.Cleanup(func() { gatewayEgress = original })
+	gatewayEgress = transport
+}
+
 // loopbackOnlyClient trusts server's certificate, counts every dial attempt in
 // dials and connects to nothing but server, so a test never resolves or
 // contacts any other host.
@@ -124,18 +132,23 @@ func TestGatewayHandlerDomainCannotSteerHost(t *testing.T) {
 	}
 }
 
-// TestGatewayHandlerDomainSelectsGatewaySubdomain keeps ArNS name and undername lookups working.
+// TestGatewayHandlerDomainSelectsGatewaySubdomain keeps ArNS name and undername
+// lookups working. A caller-selected subdomain is not a configured gateway
+// host, so it goes through the egress transport rather than the server client.
 func TestGatewayHandlerDomainSelectsGatewaySubdomain(t *testing.T) {
 	for _, domain := range []string{"ardrive", "docs_ardrive", "my-name", "a", "Name0", strings.Repeat("a", 63)} {
 		t.Run(domain, func(t *testing.T) {
 			var mu sync.Mutex
 			var hosts []string
-			useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
+			useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("subdomains must not use the server client")
+			})}, "https://gateway.example/")
+			useGatewayEgress(t, gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
 				mu.Lock()
 				hosts = append(hosts, request.URL.Host)
 				mu.Unlock()
 				return gatewayOK(request), nil
-			})}, "https://gateway.example/")
+			}))
 			target := "/gateway/" + testFileKey + "?domain=" + url.QueryEscape(domain)
 			recorder := serveGateway(httptest.NewRequest(http.MethodGet, target, nil))
 			require.Equal(t, http.StatusOK, recorder.Code)
@@ -225,14 +238,25 @@ func TestGatewayHandlerSandboxesRelayedDocuments(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header: http.Header{
-				"X-Ar-Io-Hops":              []string{"1"},
-				"Content-Type":              []string{"text/html; charset=utf-8"},
-				"Content-Security-Policy":   []string{"script-src * 'unsafe-inline'"},
-				"Set-Cookie":                []string{"session=SYNTHETIC; Path=/"},
-				"Set-Cookie2":               []string{"legacy=SYNTHETIC"},
-				"Clear-Site-Data":           []string{`"storage"`},
-				"Strict-Transport-Security": []string{"max-age=63072000; includeSubDomains"},
-				"Alt-Svc":                   []string{`h3="gateway.example:443"`},
+				"X-Ar-Io-Hops":                []string{"1"},
+				"Content-Type":                []string{"text/html; charset=utf-8"},
+				"Content-Security-Policy":     []string{"script-src * 'unsafe-inline'"},
+				"Set-Cookie":                  []string{"session=SYNTHETIC; Path=/"},
+				"Set-Cookie2":                 []string{"legacy=SYNTHETIC"},
+				"Clear-Site-Data":             []string{`"storage"`},
+				"Strict-Transport-Security":   []string{"max-age=63072000; includeSubDomains"},
+				"Alt-Svc":                     []string{`h3="gateway.example:443"`},
+				"Nel":                         []string{`{"report_to":"gw","max_age":31536000,"include_subdomains":true}`},
+				"Report-To":                   []string{`{"group":"gw","max_age":31536000,"endpoints":[{"url":"https://gateway.example/r"}]}`},
+				"Reporting-Endpoints":         []string{`gw="https://gateway.example/r"`},
+				"Service-Worker-Allowed":      []string{"/"},
+				"Refresh":                     []string{"0; url=https://gateway.example/"},
+				"Link":                        []string{`<https://gateway.example/x.js>; rel=preload`},
+				"Access-Control-Allow-Origin": []string{"*"},
+				"Etag":                        []string{`"tx-etag"`},
+				"Cache-Control":               []string{"public, max-age=60"},
+				"Content-Disposition":         []string{`inline; filename="tx.html"`},
+				"X-Ar-Io-Digest":              []string{"synthetic-digest"},
 			},
 			Body:    io.NopCloser(strings.NewReader(document)),
 			Request: request,
@@ -246,7 +270,13 @@ func TestGatewayHandlerSandboxesRelayedDocuments(t *testing.T) {
 	require.Equal(t, []string{web.UntrustedContentPolicy}, recorder.Header().Values("Content-Security-Policy"))
 	require.NotContains(t, web.UntrustedContentPolicy, "allow-scripts")
 	require.Equal(t, "nosniff", recorder.Header().Get("X-Content-Type-Options"))
-	for _, name := range []string{"Set-Cookie", "Set-Cookie2", "Clear-Site-Data", "Strict-Transport-Security", "Alt-Svc"} {
+	for _, name := range []string{"Set-Cookie", "Set-Cookie2", "Clear-Site-Data", "Strict-Transport-Security", "Alt-Svc",
+		"Nel", "Report-To", "Reporting-Endpoints", "Service-Worker-Allowed", "Refresh", "Link", "Access-Control-Allow-Origin"} {
 		require.Empty(t, recorder.Header().Values(name), name)
 	}
+	require.Equal(t, `"tx-etag"`, recorder.Header().Get("ETag"))
+	require.Equal(t, "public, max-age=60", recorder.Header().Get("Cache-Control"))
+	require.Equal(t, `inline; filename="tx.html"`, recorder.Header().Get("Content-Disposition"))
+	require.Equal(t, "1", recorder.Header().Get("X-Ar-Io-Hops"))
+	require.Equal(t, "synthetic-digest", recorder.Header().Get("X-Ar-Io-Digest"))
 }
