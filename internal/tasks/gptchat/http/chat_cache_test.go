@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -389,4 +391,30 @@ func TestChatResponseCacheIsolatesFreeTierCallers(t *testing.T) {
 	// The same caller still benefits from the cache.
 	require.Contains(t, ask(callerA), "answer 1")
 	require.Equal(t, int32(2), calls.Load(), "a repeated request of the same caller must be served from the cache")
+}
+
+// TestResponseCacheKeyCannotBeRecomputedFromAPIKey verifies the cache key is a keyed
+// digest: it is stable within the process, but nobody holding only an API key and
+// a request can recompute it, because a plain SHA-256 of the key material is a
+// fast hash of a secret.
+func TestResponseCacheKeyCannotBeRecomputedFromAPIKey(t *testing.T) {
+	const apiKey, apiBase = "sk-synthetic-cache-tenant", "https://upstream.test"
+	req := cacheTestRequest("")
+	key, err := responseCacheKey(apiKey, apiBase, req)
+	require.NoError(t, err)
+	again, err := responseCacheKey(apiKey, apiBase, req)
+	require.NoError(t, err)
+	require.Equal(t, key, again, "the cache key must be stable within the process")
+
+	reqKey, err := req2CacheKey(req)
+	require.NoError(t, err)
+	var material []byte
+	for _, part := range []string{apiKey, apiBase, reqKey} {
+		material = strconv.AppendInt(material, int64(len(part)), 10)
+		material = append(material, ':')
+		material = append(material, part...)
+	}
+	plain := sha256.Sum256(material)
+	require.NotEqual(t, hex.EncodeToString(plain[:]), key, "the cache key is an unkeyed hash of the API key")
+	require.NotContains(t, key, apiKey)
 }

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"strconv"
@@ -47,7 +49,8 @@ func responseCacheAllowed(req *FrontendReq) bool {
 // the caller's raw key, so an answer may carry that caller's private data. A BYOK
 // caller also chooses its upstream through X-Laisky-Api-Base and so may author the
 // cached answer. An answer is therefore only served to the key and upstream that
-// produced it. The API key enters the key only through a SHA-256 digest.
+// produced it. The API key enters the key only through an HMAC-SHA256 keyed with
+// responseCacheKeySecret, so the key cannot be recomputed outside this process.
 //
 // It returns an error when apiKey is empty or req cannot be encoded.
 func responseCacheKey(apiKey, apiBase string, req *FrontendReq) (string, error) {
@@ -66,8 +69,26 @@ func responseCacheKey(apiKey, apiBase string, req *FrontendReq) (string, error) 
 		material = append(material, ':')
 		material = append(material, part...)
 	}
-	sum := sha256.Sum256(material)
-	return hex.EncodeToString(sum[:]), nil
+	mac := hmac.New(sha256.New, responseCacheKeySecret)
+	if _, err := mac.Write(material); err != nil {
+		return "", errors.Wrap(err, "digest response cache key")
+	}
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+// responseCacheKeySecret keys the response cache digest. It is random per process,
+// like archiveTargetRefKey in library/log: llmRespCache lives only in this process,
+// and nobody holding just an API key and a request can recompute its cache key.
+var responseCacheKeySecret = newResponseCacheKeySecret()
+
+// newResponseCacheKeySecret returns 32 random bytes and panics when the system
+// random source is unavailable, because no safe cache key can be derived then.
+func newResponseCacheKeySecret() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic(errors.Wrap(err, "generate response cache key secret"))
+	}
+	return key
 }
 
 // requestResponseCacheKey derives the llmRespCache key of req for the request in
