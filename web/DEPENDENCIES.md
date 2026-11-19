@@ -47,9 +47,18 @@ updates the stable toolchain and major dependencies, including React 19.3,
 Mermaid 12.1, Vitest 5.0.3, and ESLint 10.12.
 
 Generate the lockfile with pnpm, then format it with the repository's Prettier
-configuration. Never edit integrity hashes manually. Conditional transitive
-minimum overrides retain compatible version ranges; avoid an exact override
-that rejects a newer compatible peer dependency.
+configuration. Never edit integrity hashes manually.
+
+Git can merge two lockfile changes without a conflict and still produce a broken
+graph, for example when one branch adds a package whose snapshot names a version
+that the other branch replaced. `pnpm install --frozen-lockfile` then fails with
+`ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY`, and the suggested `--fix-lockfile` fails
+with the same error in pnpm 12.9.1. Restore the target branch's lockfile, run
+`pnpm -C web install --lockfile-only` with the merged manifests, and format the
+result with Prettier.
+
+Conditional transitive minimum overrides retain compatible version ranges; avoid
+an exact override that rejects a newer compatible peer dependency.
 
 pnpm 12 writes multiple YAML documents: toolchain metadata and the application
 graph. `readResolvedPackages` parses every document, not just the first
