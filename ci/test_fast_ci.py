@@ -77,6 +77,7 @@ class FastCIContracts(unittest.TestCase):
         steps = {step.get('name'): step for step in pr['jobs']['backend']['steps']}
         self.assertEqual(steps['Run Go tests']['run'], 'go test ./... -count=1')
         self.assertIn('browser_scope.outputs.browser', steps['Run current browser smoke']['if'])
+        self.assertEqual(steps['Run current browser smoke']['env']['CV_PRINT_PROBE_BASE_REF'], '${{ github.base_ref }}')
         for name in ('Prepare immutable browser dependency cache profiles', 'Run browser dependency integration tests'):
             self.assertIn('workflow_dispatch', steps[name]['if'])
         for name in ('Run go vet', 'Run golangci-lint', 'Run govulncheck'):
@@ -151,23 +152,47 @@ class FastCIContracts(unittest.TestCase):
             merge_without_head = git('rev-parse', 'HEAD')
             git('checkout', '-q', '--detach', head)
             descendant = commit('extra.go', 'package fixture\n// not in pr\n', 'unreviewed descendant')
-            git('checkout', '-q', '--detach', 'master')
-            unrelated = git('rev-parse', 'HEAD')
+            # A merge whose first parent carries an unreviewed commit on top of the head.
+            merge_of_descendant = git('commit-tree', git('merge-tree', '--write-tree', descendant, head),
+                                      '-p', descendant, '-p', head, '-m', 'Merge pr into descendant')
+            git('checkout', '-q', '--detach', head)
+            git('merge', '-q', '--no-ff', '-m', 'Merge master into pr', 'master')
+            reversed_parents = git('rev-parse', 'HEAD')
+            git('checkout', '-q', '--detach', 'master~1')
+            commit('side.go', 'package fixture\n// not on master\n', 'side branch')
+            git('merge', '-q', '--no-ff', '-m', 'Merge pr into side', head)
+            merge_into_side = git('rev-parse', 'HEAD')
+            git('checkout', '-q', 'master')
+            unrelated = commit('later.go', 'package fixture\n// master moves again\n', 'master moves again')
+            git('update-ref', 'refs/remotes/origin/master', 'master')
 
+            def run_main(checkout, **environment):
+                """run_main runs the smoke entry point on one checkout and returns its code, output and run flag."""
+                git('checkout', '-q', '--detach', checkout)
+                output = io.StringIO()
+                with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD=head, **environment), \
+                        mock.patch.object(smoke, 'ROOT', root), \
+                        mock.patch.object(smoke, 'run_smoke', return_value=passed) as run, \
+                        contextlib.redirect_stdout(output):
+                    if 'CV_PRINT_PROBE_BASE_REF' not in environment:
+                        os.environ.pop('CV_PRINT_PROBE_BASE_REF', None)
+                    code = smoke.main()
+                return code, output.getvalue(), run.called
+
+            # The merge stays accepted after master moves again, because its base is an ancestor of the tip.
             for checkout, accepted in ((head, True), (github_merge, True), (merge_without_head, False),
-                                       (descendant, False), (unrelated, False)):
+                                       (descendant, False), (unrelated, False), (merge_of_descendant, False),
+                                       (merge_into_side, False), (reversed_parents, False)):
                 with self.subTest(checkout=checkout, accepted=accepted):
-                    git('checkout', '-q', '--detach', checkout)
-                    output = io.StringIO()
-                    with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD=head), \
-                            mock.patch.object(smoke, 'ROOT', root), \
-                            mock.patch.object(smoke, 'run_smoke', return_value=passed) as run, \
-                            contextlib.redirect_stdout(output):
-                        code = smoke.main()
-                    self.assertEqual(code == 0, accepted, output.getvalue())
-                    self.assertEqual(run.called, accepted)
+                    code, output, ran = run_main(checkout, CV_PRINT_PROBE_BASE_REF='master')
+                    self.assertEqual(code == 0, accepted, output)
+                    self.assertEqual(ran, accepted)
                     if not accepted:
-                        self.assertEqual(output.getvalue(), 'CV_PRINT_SMOKE setup_failed\n')
+                        self.assertEqual(output, 'CV_PRINT_SMOKE setup_failed\n')
+            for environment in ({}, {'CV_PRINT_PROBE_BASE_REF': 'missing'},
+                                {'CV_PRINT_PROBE_BASE_REF': '../master'}):
+                with self.subTest(base=environment):
+                    self.assertEqual(run_main(github_merge, **environment)[:2], (1, 'CV_PRINT_SMOKE setup_failed\n'))
 
 
 if __name__ == '__main__':
