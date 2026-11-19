@@ -264,9 +264,10 @@ func GatewayHandler(ctx *gin.Context) {
 			logger.Info("got response")
 
 			ctx.Header("X-Ar-Io-Url", reqUrl)
+			// A failure after the status is committed must abort the
+			// transfer, not append an error document to a partial body.
 			if err := relayGatewayResponse(ctx, resp); err != nil {
-				web.AbortErr(ctx, errors.Wrap(err, "relay gateway response"))
-				return
+				web.AbortStreamErr(ctx, errors.Wrap(err, "relay gateway response"))
 			}
 		}()
 
