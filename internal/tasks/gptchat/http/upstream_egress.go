@@ -46,8 +46,7 @@ func tenantEgressClient() *http.Client {
 	if proxy == nil {
 		return pinnedTenantClient()
 	}
-	client, err := egress.NewProxiedHTTPClient(tenantUpstreamTimeout, proxy, tenantEgressDeps,
-		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout))
+	client, err := egress.NewProxiedHTTPClient(tenantUpstreamTimeout, proxy, tenantEgressDeps, tenantClientOptions()...)
 	if err != nil {
 		// SetupHTTPCli validates the proxy, so this is unreachable; fail
 		// closed rather than bypass the proxy.
@@ -60,8 +59,18 @@ func tenantEgressClient() *http.Client {
 // connects directly, admitting and pinning every hop. It serves requests that
 // never used the operator proxy, such as one-shot chat.
 func pinnedTenantClient() *http.Client {
-	return egress.NewHTTPClient(tenantUpstreamTimeout, tenantEgressDeps,
-		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout))
+	return egress.NewHTTPClient(tenantUpstreamTimeout, tenantEgressDeps, tenantClientOptions()...)
+}
+
+// tenantClientOptions returns the settings shared by every caller-selected
+// client. They match the server client: the same response-header budget, and
+// gzip negotiated and decoded transparently, so callers that relied on the
+// server client's decoding still read plain bodies.
+func tenantClientOptions() []egress.ClientOption {
+	return []egress.ClientOption{
+		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout),
+		egress.WithContentDecoding(),
+	}
 }
 
 // refusingTransport fails every request with err.
