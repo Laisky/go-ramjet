@@ -34,8 +34,11 @@ type PDFService struct {
 	slots    *semaphore.Weighted
 	flights  *pdfFlights
 
-	// writeMu guards the key and generation of the latest save requested in this process. Only saves change them,
-	// so they name the content this process last saved, the fallback authority when the content cannot be read.
+	// saveLock, a one-slot channel, makes committing a save to the content store and recording it as the latest
+	// save one critical section, so the record follows the store's commit order.
+	saveLock chan struct{}
+	// writeMu guards the key and generation of the content that SaveContent committed last in this process. Only
+	// SaveContent changes them, and they are the fallback authority when the latest content cannot be read.
 	writeMu        sync.Mutex
 	latestWriteKey string
 	latestWriteGen uint64
@@ -70,6 +73,7 @@ func NewPDFService(renderer PDFRenderer, store *S3PDFStore, content ContentRepos
 		slots:      pdfRenderSlots,
 		flights:    newPDFFlights(pdfSharedRenderTimeout),
 		uploadLock: semaphore.NewWeighted(1),
+		saveLock:   make(chan struct{}, 1),
 	}, nil
 }
 
@@ -119,14 +123,42 @@ func (s *PDFService) renderWithSlot(ctx context.Context, content string, proceed
 	return pdfBytes, true, nil
 }
 
+// SaveContent saves content as the latest CV and records it as the latest save in this process.
+//
+// Committing to the content store and recording the save happen in one critical section, so when the latest content
+// cannot be read before an upload, the save the store committed last is the one that may still upload its PDF.
+// Saves meant to be followed by RenderAndStore go through here. It returns the saved payload, or the content
+// store's error.
+func (s *PDFService) SaveContent(ctx context.Context, content string) (ContentPayload, error) {
+	// A free lock is taken even when ctx has ended, so the content store decides, as before, whether a save from a
+	// departing client still commits; only waiting behind another save honors ctx.
+	select {
+	case s.saveLock <- struct{}{}:
+	default:
+		select {
+		case s.saveLock <- struct{}{}:
+		case <-ctx.Done():
+			return ContentPayload{}, errors.Wrap(ctx.Err(), "wait for an earlier cv content save")
+		}
+	}
+	defer func() { <-s.saveLock }()
+
+	payload, err := s.content.Save(ctx, content)
+	if err != nil {
+		return ContentPayload{}, errors.Wrap(err, "save cv content")
+	}
+	s.recordSave(payload.Content)
+	return payload, nil
+}
+
 // RenderAndStore renders markdown into a PDF and persists it to object storage while it is the latest content.
 //
-// Callers storing the same content concurrently share one render and upload, which completes even when every
-// caller leaves; a failure that no caller receives is logged once. A caller whose context has already ended still
-// starts the write in the background, because its content was saved and the PDF must follow it. It returns the
-// outcome, or an error.
+// content is normally what SaveContent just saved. Callers storing the same content concurrently share one render
+// and upload, which completes even when every caller leaves; a failure that no caller receives is logged once. A
+// caller whose context has already ended still starts the write in the background, because its content was saved
+// and the PDF must follow it. It returns the outcome, or an error.
 func (s *PDFService) RenderAndStore(ctx context.Context, content string) (PDFStoreOutcome, error) {
-	key := s.writeKey(content)
+	key := s.storeKey(content)
 	if err := ctx.Err(); err != nil {
 		s.flights.join(ctx, key, pdfWriteFlight, false, s.storeWork(content))
 		return "", errors.Wrap(err, "caller left; storing the cv pdf continues in the background")
@@ -174,7 +206,7 @@ func (s *PDFService) refreshLatest(ctx context.Context) {
 			zap.Int("content_bytes", len(payload.Content)),
 			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 
-		key := s.refreshWriteKey(payload.Content)
+		key := s.storeKey(payload.Content)
 		store := s.flights.join(flightCtx, key, pdfWriteFlight, false, s.storeWork(payload.Content))
 		// Holding the refresh until the store work ends keeps later downloads from reading the content again. The
 		// refresh does not wait as a caller, so the store work, bounded by its own timeout, reports its own outcome.
@@ -195,11 +227,11 @@ func (s *PDFService) backOffRefresh() {
 	s.refreshRetryAt.Store(time.Now().Add(pdfRefreshFailureBackoff).UnixNano())
 }
 
-// writeKey returns the flight key for storing content.
+// recordSave records content, which the content store has just committed, as the latest save in this process.
 //
-// A write joins in-flight work for the same content only when no write for other content was requested since;
-// otherwise it starts a newer generation, so a save never joins a flight that an intervening save made stale.
-func (s *PDFService) writeKey(content string) string {
+// A save of other content than the previous one starts a newer generation, so a write for that content never joins
+// a flight that an intervening save made stale.
+func (s *PDFService) recordSave(content string) {
 	key := pdfDocumentKey("store", content)
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -207,22 +239,21 @@ func (s *PDFService) writeKey(content string) string {
 		s.latestWriteGen++
 		s.latestWriteKey = key
 	}
-	return key + "#" + strconv.FormatUint(s.latestWriteGen, 10)
 }
 
-// refreshWriteKey returns the flight key for a refresh storing content without recording content as a save.
+// storeKey returns the flight key for storing content, without recording anything.
 //
-// A refresh of the content saved last joins that save's flight. A refresh of other content, for example content
-// read just before a newer save, gets a key that no later save joins, because such a save starts a newer generation.
-// It returns the flight key.
-func (s *PDFService) refreshWriteKey(content string) string {
+// A write of the content saved last joins that save's flight. A write of other content, such as a refresh of
+// content read just before a newer save, or an older save that reaches its PDF late, gets a key that no later save
+// joins, because such a save starts a newer generation. It returns the flight key.
+func (s *PDFService) storeKey(content string) string {
 	key := pdfDocumentKey("store", content)
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	return key + "#" + strconv.FormatUint(s.latestWriteGen, 10)
 }
 
-// isLatestSave reports whether content is the content saved last through this service in this process.
+// isLatestSave reports whether content is what SaveContent committed last in this process.
 func (s *PDFService) isLatestSave(content string) bool {
 	key := pdfDocumentKey("store", content)
 	s.writeMu.Lock()
@@ -281,11 +312,12 @@ type pdfCurrencyCheck struct {
 
 // current reports whether the wanted content is the latest saved CV.
 //
-// When the latest content cannot be read, it falls back to the content saved last in this process and logs that
-// failure once per write. A save that no newer save in this process replaced still stores its PDF, so a transient
-// read failure does not turn a successful save into an error. A write for any other content, such as an older save
-// or a refresh of content this process did not save last, does not store its PDF, so it cannot overwrite a newer
-// PDF that would then stay wrong until the next save.
+// When the latest content cannot be read, it falls back to the content SaveContent committed last in this process,
+// which follows the content store's commit order, and logs that failure once per write. The save the store
+// committed last still stores its PDF, so a transient read failure does not turn a successful save into an error.
+// A write for any other content, such as an older save that reaches its PDF late or a refresh of content this
+// process did not save last, does not store its PDF, so it cannot overwrite a newer PDF that would then stay wrong
+// until the next save. Saves made by other processes are not known here.
 func (c *pdfCurrencyCheck) current(ctx context.Context) bool {
 	latest, err := c.source.Load(ctx)
 	if err != nil {

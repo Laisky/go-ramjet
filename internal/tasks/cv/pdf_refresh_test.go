@@ -16,13 +16,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// scriptedContentStore is a versioned content store whose reads can fail on demand, or hold one read, taken
-// before the hold, until the test releases it.
+// scriptedContentStore is a versioned content store whose reads can fail on demand, and which can hold one read,
+// taken before the hold, or one save, committed before the hold, until the test releases it.
 type scriptedContentStore struct {
 	versionedContentStore
-	failLoads atomic.Bool
-	holdNext  atomic.Pointer[chan struct{}]
-	loads     atomic.Int64
+	failLoads    atomic.Bool
+	holdNext     atomic.Pointer[chan struct{}]
+	holdNextSave atomic.Pointer[chan struct{}]
+	loads        atomic.Int64
+}
+
+// Save commits content and then, when a save hold is pending, waits for its release before returning, like a
+// handler descheduled between committing the content and rendering its PDF.
+func (s *scriptedContentStore) Save(ctx context.Context, content string) (ContentPayload, error) {
+	payload, err := s.versionedContentStore.Save(ctx, content)
+	if hold := s.holdNextSave.Swap(nil); hold != nil {
+		select {
+		case <-*hold:
+		case <-ctx.Done():
+		}
+	}
+	return payload, err
 }
 
 // Load counts the read, fails while failLoads is set, and otherwise returns the content current at the time of the
@@ -185,5 +199,72 @@ func TestStaleRefreshDoesNotDisplaceLatestSave(t *testing.T) {
 		require.NoError(t, saveErr)
 		require.Equal(t, http.StatusOK, saveCode)
 		require.Equal(t, "%PDF-1.4 # Y", storedPDF(t, pdfStore), "the latest save must still upload its PDF")
+	})
+}
+
+// TestFailedFinalReadFollowsContentCommitOrder verifies that when the content cannot be read before an upload, the
+// save whose content the store committed last uploads its PDF, even if an earlier save reaches its render later.
+func TestFailedFinalReadFollowsContentCommitOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newGatedPDFRenderer()
+		defer renderer.openAll()
+		content := &scriptedContentStore{versionedContentStore: versionedContentStore{current: "# Old"}}
+		service, pdfStore, _ := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+		// Save X commits and is then held before it reaches its PDF; save Y is requested meanwhile.
+		hold := make(chan struct{})
+		content.holdNextSave.Store(&hold)
+		codes := make([]int, 2)
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		for i, text := range []string{"# X", "# Y"} {
+			wg.Go(func() { codes[i], errs[i] = saveCVContent(context.Background(), h, nil, text) })
+			synctest.Wait()
+		}
+
+		content.failLoads.Store(true)
+		close(hold)
+		synctest.Wait()
+		renderer.openAll()
+		wg.Wait()
+		synctest.Wait()
+
+		for i := range codes {
+			require.NoError(t, errs[i])
+			require.Equal(t, http.StatusOK, codes[i])
+		}
+		require.Equal(t, "# Y", content.current)
+		require.Equal(t, "%PDF-1.4 # Y", storedPDF(t, pdfStore), "the stored PDF must follow the content committed last")
+	})
+}
+
+// TestSaveContentWaitHonorsContext verifies a save waiting behind another save's commit gives up when its caller
+// leaves, without committing its content.
+func TestSaveContentWaitHonorsContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		content := &scriptedContentStore{versionedContentStore: versionedContentStore{current: "# Old"}}
+		service, _, _ := newFlightTestPDFService(t, &trackingPDFRenderer{}, content)
+
+		hold := make(chan struct{})
+		content.holdNextSave.Store(&hold)
+		var firstErr error
+		var wg sync.WaitGroup
+		wg.Go(func() { _, firstErr = service.SaveContent(context.Background(), "# X") })
+		synctest.Wait()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		var secondErr error
+		wg.Go(func() { _, secondErr = service.SaveContent(ctx, "# Y") })
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
+		require.ErrorIs(t, secondErr, context.Canceled)
+
+		close(hold)
+		wg.Wait()
+		require.NoError(t, firstErr)
+		require.Equal(t, "# X", content.current, "a save whose caller left while waiting must not commit")
+		require.True(t, service.isLatestSave("# X"))
 	})
 }

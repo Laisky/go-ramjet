@@ -472,16 +472,22 @@ func inFlightWrites(service *PDFService) int {
 	return count
 }
 
-// TestPDFServiceWriteKeyGenerations verifies repeated writes of one content share a generation, while a write for
-// content that another write superseded starts a newer generation.
+// TestPDFServiceWriteKeyGenerations verifies repeated saves of one content share a generation, while a save of
+// content that another save superseded starts a newer generation, and that looking up a key records nothing.
 func TestPDFServiceWriteKeyGenerations(t *testing.T) {
 	t.Parallel()
 	service, _, _ := newFlightTestPDFService(t, &trackingPDFRenderer{}, &fakeContentStore{})
-	first := service.writeKey("# A")
-	require.Equal(t, first, service.writeKey("# A"))
-	second := service.writeKey("# B")
+	service.recordSave("# A")
+	first := service.storeKey("# A")
+	service.recordSave("# A")
+	require.Equal(t, first, service.storeKey("# A"))
+	service.recordSave("# B")
+	second := service.storeKey("# B")
 	require.NotEqual(t, first, second)
-	third := service.writeKey("# A")
-	require.NotEqual(t, first, third, "a write must not join a generation that a newer write superseded")
-	require.Equal(t, third, service.writeKey("# A"))
+	require.False(t, service.isLatestSave("# A"))
+	require.Equal(t, second, service.storeKey("# B"), "a key lookup for other content must not record a save")
+	service.recordSave("# A")
+	third := service.storeKey("# A")
+	require.NotEqual(t, first, third, "a write must not join a generation that a newer save superseded")
+	require.True(t, service.isLatestSave("# A"))
 }

@@ -1,6 +1,7 @@
 package cv
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -198,7 +199,7 @@ func (h *handler) saveContent(c *gin.Context) {
 		return
 	}
 
-	payload, err := h.store.Save(gmw.Ctx(c), req.Content)
+	payload, err := h.saveLatestContent(gmw.Ctx(c), req.Content)
 	if web.AbortErr(c, err) {
 		return
 	}
@@ -221,6 +222,19 @@ func (h *handler) saveContent(c *gin.Context) {
 		zap.Int("bytes", len(payload.Content)),
 		zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 	c.JSON(http.StatusOK, payload)
+}
+
+// saveLatestContent saves content as the latest CV. With a PDF service it saves through that service, which records
+// saves in the order the content store commits them. It returns the saved payload or an error.
+func (h *handler) saveLatestContent(ctx context.Context, content string) (ContentPayload, error) {
+	if h.pdfService != nil {
+		return h.pdfService.SaveContent(ctx, content)
+	}
+	payload, err := h.store.Save(ctx, content)
+	if err != nil {
+		return ContentPayload{}, errors.Wrap(err, "save cv content")
+	}
+	return payload, nil
 }
 
 // renderPDFPreview renders ad-hoc markdown into a PDF without persisting it,
