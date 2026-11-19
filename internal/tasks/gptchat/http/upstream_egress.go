@@ -3,6 +3,8 @@ package http
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -16,22 +18,63 @@ const (
 	// tenantUpstreamTimeout bounds one whole exchange with a destination a
 	// caller selected; it matches the server client's budget.
 	tenantUpstreamTimeout = 30 * time.Minute
-	// tenantUpstreamHeaderTimeout bounds the wait for response headers. Image
-	// and non-streaming chat models may compute for minutes before answering.
-	tenantUpstreamHeaderTimeout = 10 * time.Minute
+	// tenantUpstreamHeaderTimeout bounds the wait for response headers. It
+	// equals the whole-exchange budget, as with the server client, because
+	// non-streaming model calls may compute for many minutes before answering.
+	tenantUpstreamHeaderTimeout = tenantUpstreamTimeout
 )
 
-// tenantEgressDeps supplies the network seams of caller-selected egress.
-// Zero values use the system resolver and dialer; tests replace them.
-var tenantEgressDeps egress.Dependencies
+var (
+	// tenantEgressDeps supplies the network seams of caller-selected egress.
+	// Zero values use the system resolver and dialer; tests replace them.
+	tenantEgressDeps egress.Dependencies
+	// serverProxy is the outbound proxy of the server client httpcli, set by
+	// SetupHTTPCli; nil means the deployment has none.
+	serverProxy atomic.Pointer[url.URL]
+)
 
-// tenantEgressClient returns a client for destinations a caller selected. Every
-// hop, including redirects, must pass the shared public-destination policy and
-// connects only to the addresses admitted for it. It deliberately ignores the
-// operator proxy, which would re-resolve the destination outside the pin.
+// tenantEgressClient returns a client for destinations a caller selected that
+// replaces a request previously sent with the server client. Every hop,
+// including redirects, must pass the shared public-destination policy.
+//
+// Without an operator proxy each hop connects only to the addresses admitted
+// for it. With one, admitted hops leave through that same proxy, as they did
+// before; the proxy resolves the name again, which leaves a small DNS-rebinding
+// window in proxied deployments only.
 func tenantEgressClient() *http.Client {
+	proxy := serverProxy.Load()
+	if proxy == nil {
+		return pinnedTenantClient()
+	}
+	client, err := egress.NewProxiedHTTPClient(tenantUpstreamTimeout, proxy, tenantEgressDeps,
+		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout))
+	if err != nil {
+		// SetupHTTPCli validates the proxy, so this is unreachable; fail
+		// closed rather than bypass the proxy.
+		return &http.Client{Transport: refusingTransport{err: errors.Wrap(err, "build proxied egress client")}}
+	}
+	return client
+}
+
+// pinnedTenantClient returns a client for destinations a caller selected that
+// connects directly, admitting and pinning every hop. It serves requests that
+// never used the operator proxy, such as one-shot chat.
+func pinnedTenantClient() *http.Client {
 	return egress.NewHTTPClient(tenantUpstreamTimeout, tenantEgressDeps,
 		egress.WithResponseHeaderTimeout(tenantUpstreamHeaderTimeout))
+}
+
+// refusingTransport fails every request with err.
+type refusingTransport struct{ err error }
+
+// RoundTrip closes request's body and returns the transport's error.
+func (t refusingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.Body != nil {
+		if closeErr := request.Body.Close(); closeErr != nil {
+			return nil, errors.Join(t.err, closeErr)
+		}
+	}
+	return nil, t.err
 }
 
 // upstreamHTTPClient returns the client for requests to user's model upstream
@@ -61,7 +104,8 @@ func userOneshotChat(ctx context.Context, user *config.UserConfig, model, system
 	}
 	var opts []openai.OneshotOption
 	if user.APIBaseUserSelected {
-		opts = append(opts, openai.WithHTTPClient(tenantEgressClient()))
+		// One-shot chat never used the operator proxy, so it stays direct.
+		opts = append(opts, openai.WithHTTPClient(pinnedTenantClient()))
 	}
 	answer, err := openai.OneshotChat(ctx, user.APIBase, user.OpenaiToken, model, systemPrompt, userPrompt, opts...)
 	if err != nil {

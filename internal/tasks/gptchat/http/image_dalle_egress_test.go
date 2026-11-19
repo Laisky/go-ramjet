@@ -22,7 +22,6 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/egress"
-	"github.com/Laisky/go-ramjet/library/log"
 )
 
 // egressTestKey is a synthetic BYOK credential; it is never a real key.
@@ -100,14 +99,19 @@ func egressFixtureDeps(provider *httptest.Server) egress.Dependencies {
 // and installs a server client that reaches loopback fixtures only. Requests
 // for egressProviderHost on port 80 are routed to provider when it is not nil,
 // both through the server client and through caller-selected egress.
+//
+// It leaves the global log.Logger alone: background work started by earlier
+// tests (such as saveLLMConservation) may still be reading it.
 func egressTestSetup(t *testing.T, provider *httptest.Server) {
 	t.Helper()
-	originalConfig, originalClient, originalLogger := config.Config, httpcli, log.Logger
+	originalConfig, originalClient := config.Config, httpcli
 	originalTransport, originalEgress := http.DefaultTransport, tenantEgressDeps
+	originalProxy := serverProxy.Swap(nil)
 	limiterInitialized := freeModelRateLimiter != nil || expensiveModelRateLimiter != nil
 	t.Cleanup(func() {
-		config.Config, httpcli, log.Logger = originalConfig, originalClient, originalLogger
+		config.Config, httpcli = originalConfig, originalClient
 		http.DefaultTransport, tenantEgressDeps = originalTransport, originalEgress
+		serverProxy.Store(originalProxy)
 		onceLimiter = sync.Once{}
 		if limiterInitialized {
 			onceLimiter.Do(func() {})
@@ -119,8 +123,6 @@ func egressTestSetup(t *testing.T, provider *httptest.Server) {
 	http.DefaultTransport = byokAuditTransport(func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("unmocked HTTP request prohibited")
 	})
-	logger, _ := embeddingTestLogger(t)
-	log.Logger = logger
 	tenantEgressDeps = egressFixtureDeps(provider)
 
 	routes := map[string]string{}
