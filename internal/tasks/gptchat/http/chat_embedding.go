@@ -26,7 +26,6 @@ import (
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 var (
@@ -128,8 +127,8 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	functionCalling, err := openai.OneshotChat(gmw.Ctx(gctx),
-		user.APIBase, user.OpenaiToken, defaultChatModel, "",
+	functionCalling, err := userOneshotChat(gmw.Ctx(gctx),
+		user, defaultChatModel, "",
 		webSearchQueryPrompt+"\n\n"+lastUserPrompt.String())
 	if err != nil {
 		logger.Error("google search query", zap.Error(err))

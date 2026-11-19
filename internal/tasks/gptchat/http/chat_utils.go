@@ -18,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/openai"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -489,7 +488,7 @@ func OneShotChatHandler(gctx *gin.Context) {
 		return
 	}
 
-	resp, err := openai.OneshotChat(gmw.Ctx(gctx), user.APIBase, user.OpenaiToken, "", req.SystemPrompt, req.UserPrompt)
+	resp, err := userOneshotChat(gmw.Ctx(gctx), user, "", req.SystemPrompt, req.UserPrompt)
 	if web.AbortErr(gctx, err) {
 		return
 	}

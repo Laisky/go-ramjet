@@ -23,7 +23,6 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 // fetchStaticURLContent fetch static url content
@@ -155,7 +154,7 @@ func webSearch(ctx context.Context, query string, user *config.UserConfig) (resu
 			// summary by LLM within a timeout context
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer summaryCancel()
-			if summaryText, err := openai.OneshotChat(summaryCtx, user.APIBase, user.OpenaiToken, "", "",
+			if summaryText, err := userOneshotChat(summaryCtx, user, "", "",
 				fmt.Sprintf(oneshotSummarySysPrompt, query, addText)); err != nil {
 				logger.Warn("summary by LLM", zap.Error(err))
 			} else {
