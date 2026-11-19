@@ -44,17 +44,47 @@ type PinnedTransport struct {
 	ResponseHeaderTimeout time.Duration
 }
 
-// ClientOption customizes the PinnedTransport behind NewHTTPClient.
-type ClientOption func(*PinnedTransport)
+// clientOptions holds the settings ClientOption values adjust.
+type clientOptions struct {
+	responseHeaderTimeout time.Duration
+}
+
+// ClientOption customizes the transport behind NewHTTPClient or NewProxiedHTTPClient.
+type ClientOption func(*clientOptions)
 
 // WithResponseHeaderTimeout sets the transport's ResponseHeaderTimeout to timeout.
 // A non-positive timeout keeps the ten-second default.
 func WithResponseHeaderTimeout(timeout time.Duration) ClientOption {
-	return func(transport *PinnedTransport) {
+	return func(opts *clientOptions) {
 		if timeout > 0 {
-			transport.ResponseHeaderTimeout = timeout
+			opts.responseHeaderTimeout = timeout
 		}
 	}
+}
+
+// applyClientOptions folds opts into one clientOptions value.
+func applyClientOptions(opts []ClientOption) clientOptions {
+	var options clientOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
+// headerTimeout returns configured, or the ten-second default when it is not positive.
+func headerTimeout(configured time.Duration) time.Duration {
+	if configured <= 0 {
+		return defaultResponseHeaderTimeout
+	}
+	return configured
+}
+
+// checkRedirectBudget stops a client after the shared policy's default redirect budget.
+func checkRedirectBudget(_ *http.Request, via []*http.Request) error {
+	if len(via) > crawleregress.DefaultMaxRedirects {
+		return errors.Errorf("stopped after %d redirects", crawleregress.DefaultMaxRedirects)
+	}
+	return nil
 }
 
 // RoundTrip admits request's target, pins its connection and performs one exchange.
@@ -75,15 +105,11 @@ func (t PinnedTransport) RoundTrip(request *http.Request) (*http.Response, error
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: -1}
 		dial = dialer.DialContext
 	}
-	headerTimeout := t.ResponseHeaderTimeout
-	if headerTimeout <= 0 {
-		headerTimeout = defaultResponseHeaderTimeout
-	}
 	transport := &http.Transport{
 		Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false, DisableCompression: true,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, ServerName: admission.Host, RootCAs: t.Deps.RootCAs},
 		TLSNextProto:        make(map[string]func(string, *tls.Conn) http.RoundTripper),
-		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: headerTimeout,
+		TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: headerTimeout(t.ResponseHeaderTimeout),
 		MaxResponseHeaderBytes: 1 << 20,
 	}
 	defer transport.CloseIdleConnections()
@@ -119,19 +145,11 @@ func (t PinnedTransport) RoundTrip(request *http.Request) (*http.Response, error
 // policy's default redirect budget and bounds each whole exchange by timeout.
 // opts adjust the underlying PinnedTransport.
 func NewHTTPClient(timeout time.Duration, deps Dependencies, opts ...ClientOption) *http.Client {
-	transport := PinnedTransport{Deps: deps}
-	for _, opt := range opts {
-		opt(&transport)
-	}
+	options := applyClientOptions(opts)
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-			if len(via) > crawleregress.DefaultMaxRedirects {
-				return errors.Errorf("stopped after %d redirects", crawleregress.DefaultMaxRedirects)
-			}
-			return nil
-		},
+		Transport:     PinnedTransport{Deps: deps, ResponseHeaderTimeout: options.responseHeaderTimeout},
+		Timeout:       timeout,
+		CheckRedirect: checkRedirectBudget,
 	}
 }
 
