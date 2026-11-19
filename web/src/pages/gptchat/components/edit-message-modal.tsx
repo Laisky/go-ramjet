@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { primaryModifierLabel } from '@/utils/keyboard'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatAttachment } from '../types'
 import { MessageInput } from './message-input'
@@ -95,7 +96,7 @@ export function EditMessageModal({
           </Button>
         </div>
         <p className="mt-2 text-xs theme-text-muted">
-          Ctrl+Enter to submit • Esc to cancel
+          {primaryModifierLabel()}+Enter to submit • Esc to cancel
         </p>
       </div>
     </div>
