@@ -17,6 +17,8 @@ tasks:
     # e.g. both the old and new purrfect-tee Roots during a Root rotation.
     # root_ca_file: '/etc/ramjet/pieverse-roots.pem'
     # The file is re-read on every run, so changes apply without a restart.
+    # Replace it atomically (write a temp file, then rename it over the old
+    # one); a damaged or partly written bundle fails the run closed.
     # An unreadable root_ca_file never disables verification: every run then
     # fails and logs an ERROR until it is fixed.
     # Optionally verify the certificate against this name (also sent as SNI)

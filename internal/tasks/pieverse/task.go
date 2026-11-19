@@ -21,11 +21,13 @@
 package pieverse
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"os"
@@ -82,16 +84,65 @@ func newRootPool(extraCAFile string) (*x509.CertPool, error) {
 	}
 
 	if extraCAFile != "" {
-		pem, err := os.ReadFile(extraCAFile)
+		data, err := os.ReadFile(extraCAFile)
 		if err != nil {
 			return nil, errors.Wrapf(err, "read root ca file %q", extraCAFile)
 		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, errors.Errorf("no PEM certificate found in root ca file %q", extraCAFile)
+		if err = appendRootCAs(pool, data); err != nil {
+			return nil, errors.Wrapf(err, "root ca file %q", extraCAFile)
 		}
 	}
 
 	return pool, nil
+}
+
+// appendRootCAs adds every CERTIFICATE block of the PEM bundle data to pool.
+//
+// Unlike x509.CertPool.AppendCertsFromPEM, which succeeds as soon as one
+// certificate parses, it rejects a bundle with an unparsable certificate or a
+// malformed or incomplete block (pem.Decode silently skips those), e.g. one
+// read while it was being rewritten, so a damaged bundle fails closed instead
+// of silently trusting fewer roots. Text outside blocks and non-certificate
+// blocks are ignored, as in system bundles.
+//
+// Parameters:
+//   - pool: pool to add the certificates to.
+//   - data: PEM bundle.
+//
+// Returns:
+//   - error: why the bundle is unusable, or nil when at least one certificate
+//     was added and nothing was damaged.
+func appendRootCAs(pool *x509.CertPool, data []byte) error {
+	added, decoded := 0, 0
+	rest := data
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		decoded++
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return errors.Wrapf(err, "parse certificate %d", added+1)
+		}
+		pool.AddCert(cert)
+		added++
+	}
+
+	if begins := bytes.Count(data, []byte("-----BEGIN ")); begins != decoded {
+		return errors.Errorf("malformed or incomplete PEM block: %d of %d decoded (file partially written?)",
+			decoded, begins)
+	}
+	if added == 0 {
+		return errors.New("no PEM certificate found")
+	}
+
+	return nil
 }
 
 // newHTTPClient builds the health-check client with full TLS verification

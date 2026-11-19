@@ -408,3 +408,46 @@ func TestCheckLeavesNoOpenConnections(t *testing.T) {
 	require.Eventually(t, func() bool { return open.Load() == 0 }, 5*time.Second, 10*time.Millisecond,
 		"every run must close its connection")
 }
+
+// TestNewRootPoolRejectsDamagedBundle verifies a root_ca_file that is only
+// partly usable fails closed. root_ca_file is re-read on every run, so an
+// in-place edit can be read half-written; AppendCertsFromPEM accepted such a
+// bundle as long as one certificate parsed, silently dropping the rest.
+func TestNewRootPoolRejectsDamagedBundle(t *testing.T) {
+	t.Parallel()
+
+	first := newMasterTLSServer(t).Certificate()
+	second := newMasterTLSServer(t).Certificate()
+	good := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: first.Raw})
+	full := append(append([]byte{}, good...), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: second.Raw})...)
+
+	for _, tc := range []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{name: "truncated last block", data: full[:len(good)+len(full[len(good):])/2], want: "incomplete PEM block"},
+		{name: "damaged middle block", data: append(append([]byte{}, full[:len(good)-30]...), full[len(good):]...),
+			want: "incomplete PEM block"},
+		{name: "unparsable certificate", data: append(append([]byte{}, good...),
+			pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not DER")})...), want: "parse certificate 2"},
+		{name: "empty file", data: nil, want: "no PEM certificate"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			caFile := filepath.Join(t.TempDir(), "roots.pem")
+			require.NoError(t, os.WriteFile(caFile, tc.data, 0o600))
+			_, err := newRootPool(caFile)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+
+	// A complete bundle, with comment lines and a non-certificate block like
+	// those in system CA bundles, still loads.
+	caFile := filepath.Join(t.TempDir(), "roots.pem")
+	bundle := append([]byte("# old root\n"), full...)
+	bundle = append(bundle, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: []byte("ignored")})...)
+	require.NoError(t, os.WriteFile(caFile, bundle, 0o600))
+	_, err := newRootPool(caFile)
+	require.NoError(t, err)
+}
