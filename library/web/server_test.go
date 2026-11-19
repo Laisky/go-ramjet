@@ -51,6 +51,21 @@ func TestSecurityMiddleware(t *testing.T) {
 	require.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 }
 
+// TestServerSendsSecurityHeaders pins that the shared Server, wrapped the way
+// RunServerContext serves it, runs securityMiddleware for every response. An
+// unregistered path is used so the test adds no route to the global engine.
+func TestServerSendsSecurityHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/__security-headers-probe", nil)
+	w := httptest.NewRecorder()
+	(&normalizeHandler{handler: Server}).ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+	require.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	require.Equal(t, "frame-ancestors 'self'", w.Header().Get("Content-Security-Policy"))
+	require.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
+}
+
 // TestServeUntilCanceledStopsAdmission verifies graceful cancellation without production dependencies.
 func TestServeUntilCanceledStopsAdmission(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
