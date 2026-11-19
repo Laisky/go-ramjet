@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -188,6 +189,56 @@ func TestStreamBackupToS3Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, payload, cli.received.Bytes())
+}
+
+// pipelineGoroutines counts live goroutines started by streamBackupToS3 (the dump
+// producer and the context watcher); it is a dependency-free goleak-style probe.
+func pipelineGoroutines() int {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return strings.Count(string(buf[:n]), "streamBackupToS3.func")
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+}
+
+// TestStreamBackupToS3LeavesNoGoroutines verifies that no goroutine of the pipeline
+// outlives streamBackupToS3 on the failure paths that used to hang it: an upload
+// that stops reading, an upload failure while the dump is idle, and the backup
+// deadline.
+func TestStreamBackupToS3LeavesNoGoroutines(t *testing.T) {
+	idleDump := func(ctx context.Context, _ cfgDB, _ io.Writer) error {
+		<-ctx.Done()
+		return errors.Wrap(ctx.Err(), "pg_dump idle")
+	}
+	for _, tc := range []struct {
+		name    string
+		cli     *fakeUploadClient
+		dump    func(context.Context, cfgDB, io.Writer) error
+		timeout time.Duration
+	}{
+		{name: "upload stops reading", cli: &fakeUploadClient{readLimit: 1024}, dump: endlessDump},
+		{name: "upload fails while the dump is idle", cli: &fakeUploadClient{putErr: errors.New("upload rejected")}, dump: idleDump},
+		{name: "backup deadline", cli: &fakeUploadClient{readLimit: -1}, dump: idleDump, timeout: 50 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := pipelineGoroutines()
+			stubStreamPipeline(t, tc.cli, tc.dump)
+			ctx := context.Background()
+			if tc.timeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+			}
+
+			require.Error(t, runWithGuard(t, "streamBackupToS3", func() error {
+				return streamBackupToS3(ctx, cfgDB{Database: "appdb"}, cfgS3{Bucket: "bucket"}, "appdb-20261119.gz")
+			}))
+			require.LessOrEqual(t, pipelineGoroutines(), before, "a pipeline goroutine outlived streamBackupToS3")
+		})
+	}
 }
 
 // TestStreamBackupToS3BoundsUploadPartBuffer verifies the streaming upload states a

@@ -89,16 +89,37 @@ func (s *heartbeatTestStream) requireBodyStable(t *testing.T) string {
 	return before
 }
 
-// heartbeatGoroutines counts live goroutines started by enableHeartBeatForStreamReq.
-func heartbeatGoroutines() int {
+// liveGoroutines counts the live goroutines whose stack contains frame, such as
+// "enableHeartBeatForStreamReq.func"; it is a dependency-free goleak-style probe.
+func liveGoroutines(frame string) int {
 	buf := make([]byte, 1<<20)
 	for {
 		n := runtime.Stack(buf, true)
 		if n < len(buf) {
-			return strings.Count(string(buf[:n]), "enableHeartBeatForStreamReq.func")
+			return strings.Count(string(buf[:n]), frame)
 		}
 		buf = make([]byte, 2*len(buf))
 	}
+}
+
+// heartbeatGoroutines counts live goroutines started by enableHeartBeatForStreamReq.
+func heartbeatGoroutines() int {
+	return liveGoroutines("enableHeartBeatForStreamReq.func")
+}
+
+// TestEnableHeartBeatForStreamReqGoroutineExitsWithRequest verifies that the
+// heartbeat goroutine does not leak when the request ends but the handler never
+// calls stop, for example because it is still blocked elsewhere.
+func TestEnableHeartBeatForStreamReqGoroutineExitsWithRequest(t *testing.T) {
+	before := heartbeatGoroutines()
+	s := newHeartbeatTestStream(t, chromeUserAgent)
+	stop := enableHeartBeatForStreamReq(s.gctx)
+	t.Cleanup(stop)
+	require.Greater(t, heartbeatGoroutines(), before, "the heartbeat goroutine never started")
+
+	s.cancel()
+	require.Eventually(t, func() bool { return heartbeatGoroutines() <= before },
+		5*time.Second, 10*time.Millisecond, "the heartbeat goroutine outlived its request")
 }
 
 // TestEnableHeartBeatForStreamReqSendsPeriodicHeartbeats verifies that heartbeats keep

@@ -79,6 +79,23 @@ func TestAwaitAsyncOutcomeTimeoutReleasesLateOutcome(t *testing.T) {
 	}
 }
 
+// TestAwaitAsyncOutcomeLeavesNoGoroutine verifies that the goroutine which keeps
+// receiving an abandoned outcome exits once the late value has been released, so
+// abandoned syntheses do not accumulate goroutines when the SDK does answer.
+func TestAwaitAsyncOutcomeLeavesNoGoroutine(t *testing.T) {
+	before := liveGoroutines("awaitAsyncOutcome[")
+	task := make(chan int)
+	released := make(chan int, 1)
+	_, err := awaitAsyncOutcome(context.Background(), task, time.Millisecond, func(v int) { released <- v })
+	require.Error(t, err)
+	require.Greater(t, liveGoroutines("awaitAsyncOutcome["), before, "nothing receives the abandoned outcome")
+
+	task <- 11
+	require.Equal(t, 11, <-released)
+	require.Eventually(t, func() bool { return liveGoroutines("awaitAsyncOutcome[") <= before },
+		5*time.Second, 10*time.Millisecond, "the release goroutine outlived the late outcome")
+}
+
 // TestAwaitAsyncOutcomeContextCanceled verifies that a canceled request stops the
 // wait promptly and still releases the outcome that arrives afterwards.
 func TestAwaitAsyncOutcomeContextCanceled(t *testing.T) {
