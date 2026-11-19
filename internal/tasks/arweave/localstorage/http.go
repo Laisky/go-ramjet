@@ -36,6 +36,9 @@ var (
 // CacheHandler proxies a user-selected public url, preferring a live fetch and
 // falling back to the S3 archive, and schedules the url for archiving.
 //
+// Proxied content is third-party markup served on this origin, so it is marked
+// untrusted (sandboxed into an opaque, script-free origin).
+//
 // The target is admitted with the shared destination policy before any fetch,
 // cache lookup or archive scheduling. Refused targets are answered with 400 and
 // logged below the alert level; redirects are admitted again on every hop.
@@ -83,6 +86,7 @@ func CacheHandler(ctx *gin.Context) {
 	}()
 
 	logger.Debug("serve proxied content", zap.String("cache_status", cacheStatus))
+	web.MarkUntrustedContent(ctx)
 	ctx.Header("X-Laisky-Cache-Status", cacheStatus)
 	if _, err := io.Copy(ctx.Writer, body); err != nil {
 		web.AbortErr(ctx, errors.Wrapf(err, "copy content from %q", targetUrl))

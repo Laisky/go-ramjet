@@ -358,3 +358,23 @@ func TestFirstAvailableContentRejectsMissingBody(t *testing.T) {
 	_, _, err = firstAvailableContent(context.Background(), logger, "http://public.example/", nil)
 	require.Error(t, err)
 }
+
+// TestCacheHandlerSandboxesProxiedDocuments guards against serving third-party
+// markup as an active document on this service's origin, which also hosts the
+// GPTChat app and its locally stored credentials: proxied content must be
+// confined to an opaque, script-free origin and must not be MIME-sniffed.
+func TestCacheHandlerSandboxesProxiedDocuments(t *testing.T) {
+	bodies := newBodyRecorder(1)
+	useProxySources(t, bodies.loader(`<html><body><script>indexedDB.open("ramjet_kv_v2")</script></body></html>`),
+		failingLoader(errors.New("archive miss")), 0)
+
+	recorder := serveCacheHandler("http://public.example/page")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	policy := recorder.Header().Get("Content-Security-Policy")
+	require.Contains(t, policy, "sandbox", "proxied documents must get an opaque origin")
+	require.NotContains(t, policy, "allow-same-origin")
+	require.NotContains(t, policy, "allow-scripts")
+	require.Contains(t, policy, "frame-ancestors 'self'", "the framing policy must be kept")
+	require.Equal(t, "nosniff", recorder.Header().Get("X-Content-Type-Options"))
+	bodies.requireAllClosed(t)
+}

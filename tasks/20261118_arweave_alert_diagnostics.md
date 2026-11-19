@@ -50,6 +50,10 @@ No new dependencies or CI jobs. No live-provider calls, production mutation, dep
 - Unbounded proxy response body: verified as bounded in the ways that matter. It is streamed with a fixed copy buffer, so memory does not grow with size. The pinned live client and the S3 client both cap the whole exchange, including the body, at 30 seconds. No size cap was added because it would change existing responses.
 - Renderer egress fetcher resolver capture: duplicated, but not a defect. Its classification deliberately differs from `egress.Admit`: every resolver failure, including NXDOMAIN, stays a non-enforcement resolution error, and its dial path records signed receipt evidence. Merging them would change verified-crawler failure semantics, so they are left separate.
 
+## Proxied documents ran on the service origin
+
+Found while triaging the gateway: `/arweave/proxy` streamed third-party bodies without upstream headers, so HTML was sniffed as `text/html` and rendered as an active document on the origin that also serves `/gptchat`, where the app keeps credentials in IndexedDB. Reproduced: a proxied page with a script was served with no Content-Security-Policy. Proxied responses now carry `web.UntrustedContentPolicy` (`sandbox` without `allow-same-origin` or `allow-scripts`, plus `frame-ancestors 'self'`) and `nosniff`. The page renders in an opaque, script-free origin, and links can still open in a new tab. Programmatic clients are unaffected; scripts on proxied pages no longer run.
+
 ## Hosted browser-smoke follow-up
 
 Exact-head run https://github.com/Laisky/go-ramjet/actions/runs/44350457360 on `b3be9ed36b21014d34a3b3edbf4f40b179ee281e` passed full untagged Go tests and frontend checks, but browser smoke failed: 33 of 35 original identities passed; both PDF font controls were absent from the passing set, with three failed actions. Later vet/lint/vulnerability, manual browser qualification and image-build steps were skipped, not passed. The failure summary did not retain phase observations, so its root cause is unknown; elapsed time alone is not a timeout diagnosis.
