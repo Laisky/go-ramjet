@@ -28,10 +28,12 @@ var searchCache = gutils.NewExpCache[[]*dto.MovieResponse](context.Background(),
 // wordFilter builds the fulltext filter for the user-supplied search query.
 //
 // The query is a literal, case-insensitive substring: regexp.QuoteMeta escapes
-// every regular-expression metacharacter so a caller cannot inject a pattern
-// (e.g. `.*` to dump the collection, or a catastrophic-backtracking pattern to
-// stall the database). Go's escaping uses only `\` + punctuation, which
-// MongoDB's PCRE engine also reads as literal characters.
+// every regular-expression metacharacter so a caller cannot inject pattern
+// syntax, such as a catastrophic-backtracking pattern that stalls the
+// database or anchors/classes/alternation that change what matches. (An empty
+// query still matches every word, limited to 30 results, as before.) Go's
+// escaping uses only `\` + punctuation, which MongoDB's PCRE engine also reads
+// as literal characters.
 //
 // Parameters:
 //   - query: raw `q` parameter from the request.

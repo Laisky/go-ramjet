@@ -19,6 +19,19 @@ import (
 	"github.com/Laisky/go-ramjet/library/db/mongotest"
 )
 
+// useTestSearchCache swaps the package search cache for one whose cleanup
+// goroutine stops when t ends, and restores the original afterwards.
+//
+// Parameters:
+//   - t: test handle that owns the cache lifetime.
+func useTestSearchCache(t *testing.T) {
+	t.Helper()
+
+	orig := searchCache
+	searchCache = gutils.NewExpCache[[]*dto.MovieResponse](t.Context(), time.Hour)
+	t.Cleanup(func() { searchCache = orig })
+}
+
 // capturedWordRegex runs the Search handler for query q against a mock
 // MongoDB deployment and returns the `word.$regex` pattern and `$options`
 // actually sent to the server.
@@ -33,9 +46,9 @@ import (
 func capturedWordRegex(mt *mtest.T, q string) (string, string) {
 	mt.Helper()
 
-	// Search caches results per query in a package-level cache; start every
-	// probe empty so repeated runs (-count>1) still reach the database.
-	searchCache = gutils.NewExpCache[[]*dto.MovieResponse](mt.Context(), time.Hour)
+	// Search caches results per query; drop q so repeated runs (-count>1)
+	// still reach the database.
+	searchCache.Delete(q)
 	mt.AddMockResponses(mtest.CreateCursorResponse(0, "jav.fulltext", mtest.FirstBatch))
 	model.SetDB(mongotest.New(mt.Client, "jav"))
 
@@ -65,10 +78,11 @@ func capturedWordRegex(mt *mtest.T, q string) (string, string) {
 // TestSearchTreatsQueryAsLiteral proves the `q` parameter can no longer inject
 // regular-expression syntax into the MongoDB `$regex` filter (CodeQL
 // go/sql-injection #51): metacharacters must match only themselves, so a
-// caller cannot enumerate the whole collection with `.*` or stall the server
-// with a catastrophic-backtracking pattern.
+// caller cannot stall the server with a catastrophic-backtracking pattern or
+// change what matches with wildcards, anchors, classes or alternation.
 func TestSearchTreatsQueryAsLiteral(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	useTestSearchCache(t)
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	for _, tc := range []struct {
