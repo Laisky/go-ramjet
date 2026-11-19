@@ -102,3 +102,39 @@ func TestGatewayHandlerSignalsTruncatedStream(t *testing.T) {
 		})
 	}
 }
+
+// TestGatewayHandlerFailureBeforeBodyIsSelfDescribing covers a gateway that
+// fails before its first body byte: the error document must not go out under
+// the gateway's length, coding, validators and immutable caching headers.
+func TestGatewayHandlerFailureBeforeBodyIsSelfDescribing(t *testing.T) {
+	useGatewayEgress(t, gatewayRoundTripper(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("egress must not be used")
+	}))
+	useGateways(t, &http.Client{Transport: gatewayRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"X-Ar-Io-Hops":     []string{"1"},
+				"Content-Type":     []string{"text/html"},
+				"Content-Length":   []string{"4096"},
+				"Content-Encoding": []string{"br"},
+				"Cache-Control":    []string{"public, max-age=2592000, immutable"},
+				"Etag":             []string{"abc"},
+			},
+			Body:    &truncatingGatewayBody{content: strings.NewReader("")},
+			Request: request,
+		}, nil
+	})}, "https://gateway.example/")
+	server := newGatewayTestServer(t, false)
+
+	response, err := server.Client().Get(server.URL + "/gateway/" + testFileKey)
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()), "the error document must be complete")
+	require.Equal(t, http.StatusBadRequest, response.StatusCode)
+	require.Contains(t, string(body), `{"err"`)
+	require.Equal(t, "application/json; charset=utf-8", response.Header.Get("Content-Type"))
+	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
+	require.Empty(t, response.Header.Get("Content-Encoding"))
+	require.Empty(t, response.Header.Get("Etag"))
+}
