@@ -24,14 +24,33 @@ def run_smoke(root):
     return probe.evaluate_cell(cell, result)
 
 
+def require_checkout_contains_head(root, expected):
+    """require_checkout_contains_head accepts the expected PR head or GitHub's clean merge of it.
+
+    A pull_request run checks out refs/pull/N/merge, whose tree differs from the head
+    whenever the base branch has moved. That checkout is accepted only when it has exactly
+    two parents, the second is the expected head, and its tree equals a clean merge of those
+    parents, so the tested source contains every change in the head. Anything else raises
+    a ProbeError.
+    """
+    head_tree = probe.git(root, 'rev-parse', 'HEAD^{tree}')
+    if probe.git(root, 'rev-parse', expected + '^{tree}') == head_tree:
+        return
+    parents = probe.git(root, 'rev-parse', 'HEAD^@').split()
+    if len(parents) != 2 or parents[1] != expected:
+        raise probe.ProbeError('checkout_tree_differs_from_expected_pr_head')
+    # merge-tree exits non-zero on conflicts, which git() reports as a ProbeError.
+    if probe.git(root, 'merge-tree', '--write-tree', *parents).splitlines()[:1] != [head_tree]:
+        raise probe.ProbeError('checkout_tree_differs_from_expected_pr_head')
+
+
 def main():
-    """main binds the checked-out tree to the expected PR head and reports only safe facts."""
+    """main binds the checkout to the expected PR head and reports only safe facts."""
     try:
         expected = os.environ['CV_PRINT_PROBE_EXPECTED_HEAD']
         if not re.fullmatch(r'[0-9a-f]{40}', expected):
             raise probe.ProbeError('expected_pr_head_invalid')
-        if probe.git(ROOT, 'rev-parse', expected + '^{tree}') != probe.git(ROOT, 'rev-parse', 'HEAD^{tree}'):
-            raise probe.ProbeError('checkout_tree_differs_from_expected_pr_head')
+        require_checkout_contains_head(ROOT, expected)
         row = run_smoke(ROOT)
         print('CV_PRINT_SMOKE ' + json.dumps({key: row[key] for key in
               ('status', 'originalPassCount', 'cleanupComplete', 'missingOriginal',

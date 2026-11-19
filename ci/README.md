@@ -90,7 +90,11 @@ The six-cell browser run is required; cache preparation alone is not acceptance.
 
 PR validation runs format, unit and regression checks once. A current-source
 browser smoke runs when Go, dependency or browser CI inputs change; it retains
-the browser identity and network controls. The historical six-cell browser
+the browser identity and network controls. The smoke runs on GitHub's merge
+checkout, which differs from the PR head whenever `master` has moved. It accepts
+that checkout only if it is a clean two-parent merge whose second parent is the
+PR head, so the tested source contains every change in the head. The manual
+browser matrix still requires the exact commit tree. The historical six-cell browser
 matrix, SPA benchmark and production-image build run through the
 `pull-request-validation` workflow's manual dispatch with an explicit base
 commit. Optional issue-94 paired-service qualification is available there.

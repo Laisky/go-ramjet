@@ -116,6 +116,59 @@ class FastCIContracts(unittest.TestCase):
         self.assertNotEqual(payload['status'], 'passed')
         self.assertNotIn('private-browser-error-canary', rendered)
 
+    def test_smoke_binds_pull_request_merge_checkout_to_expected_head(self):
+        """test_smoke_binds_pull_request_merge_checkout_to_expected_head accepts GitHub's merge checkout of a stale head."""
+        smoke = load('probe_cv_smoke')
+        passed = {'status': 'passed', 'originalPassCount': 33, 'cleanupComplete': True, 'missingOriginal': [],
+                  'failedActions': 0, 'skippedActions': 0, 'observations': []}
+        with tempfile.TemporaryDirectory(prefix='fast-ci-binding-') as tmp:
+            root = pathlib.Path(tmp)
+
+            def git(*args):
+                """git runs one command in the throwaway repository and returns its stripped output."""
+                return subprocess.run(['git', '-C', str(root), '-c', 'user.email=ci@example.invalid',
+                                       '-c', 'user.name=CI Test', '-c', 'commit.gpgsign=false', *args],
+                                      check=True, capture_output=True, text=True).stdout.strip()
+
+            def commit(path, text, message):
+                """commit writes one file, commits it, and returns the new commit."""
+                (root / path).write_text(text)
+                git('add', path)
+                git('commit', '-qm', message)
+                return git('rev-parse', 'HEAD')
+
+            git('init', '-q', '-b', 'master')
+            commit('shared.go', 'package fixture\n', 'base')
+            git('checkout', '-qb', 'pr')
+            head = commit('pr.go', 'package fixture\n// pr\n', 'pr head')
+            git('checkout', '-q', 'master')
+            commit('master.go', 'package fixture\n// newer master\n', 'master moves ahead')
+            git('checkout', '-q', '--detach', 'master')
+            git('merge', '-q', '--no-ff', '-m', 'Merge pr into master', head)
+            github_merge = git('rev-parse', 'HEAD')
+            git('checkout', '-q', '--detach', 'master')
+            git('merge', '-q', '--no-ff', '-s', 'ours', '-m', 'Merge without pr changes', head)
+            merge_without_head = git('rev-parse', 'HEAD')
+            git('checkout', '-q', '--detach', head)
+            descendant = commit('extra.go', 'package fixture\n// not in pr\n', 'unreviewed descendant')
+            git('checkout', '-q', '--detach', 'master')
+            unrelated = git('rev-parse', 'HEAD')
+
+            for checkout, accepted in ((head, True), (github_merge, True), (merge_without_head, False),
+                                       (descendant, False), (unrelated, False)):
+                with self.subTest(checkout=checkout, accepted=accepted):
+                    git('checkout', '-q', '--detach', checkout)
+                    output = io.StringIO()
+                    with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD=head), \
+                            mock.patch.object(smoke, 'ROOT', root), \
+                            mock.patch.object(smoke, 'run_smoke', return_value=passed) as run, \
+                            contextlib.redirect_stdout(output):
+                        code = smoke.main()
+                    self.assertEqual(code == 0, accepted, output.getvalue())
+                    self.assertEqual(run.called, accepted)
+                    if not accepted:
+                        self.assertEqual(output.getvalue(), 'CV_PRINT_SMOKE setup_failed\n')
+
 
 if __name__ == '__main__':
     unittest.main()
