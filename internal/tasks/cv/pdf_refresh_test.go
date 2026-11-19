@@ -3,6 +3,7 @@ package cv
 import (
 	"context"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -84,5 +85,105 @@ func TestDownloadPDFRefreshLoadFailureBacksOff(t *testing.T) {
 		require.Equal(t, int64(2), content.loads.Load(), "a download after the backoff window must retry")
 		require.Equal(t, 2, entriesMentioning(entries, "content read outage"))
 		require.Zero(t, renderer.calls.Load())
+	})
+}
+
+// TestFailedFinalReadCannotOverwriteNewerSave verifies a write whose final currency read fails does not upload over
+// the PDF of a newer save made in this process, whether that older write came from a public refresh or an earlier
+// save, and that the newer save's PDF stays stored.
+func TestFailedFinalReadCannotOverwriteNewerSave(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		// start begins the older write of "# X" and returns a check of its outcome, run once every write ended.
+		start func(t *testing.T, h *handler, wg *sync.WaitGroup) func(t *testing.T)
+	}{
+		{name: "refresh", start: func(t *testing.T, h *handler, _ *sync.WaitGroup) func(t *testing.T) {
+			t.Helper()
+			require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+			return func(*testing.T) {}
+		}},
+		{name: "save", start: func(t *testing.T, h *handler, wg *sync.WaitGroup) func(t *testing.T) {
+			t.Helper()
+			var code int
+			var err error
+			wg.Go(func() { code, err = saveCVContent(context.Background(), h, nil, "# X") })
+			return func(t *testing.T) {
+				t.Helper()
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, code, "the older save succeeds even when its upload is skipped")
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				renderer := newGatedPDFRenderer()
+				defer renderer.openAll()
+				content := &scriptedContentStore{versionedContentStore: versionedContentStore{current: "# X"}}
+				service, pdfStore, _ := newFlightTestPDFService(t, renderer, content)
+				h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+				var wg sync.WaitGroup
+				checkOlder := tc.start(t, h, &wg)
+				synctest.Wait()
+				require.Equal(t, []string{"# X"}, renderer.startedContents())
+
+				var saveCode int
+				var saveErr error
+				wg.Go(func() { saveCode, saveErr = saveCVContent(context.Background(), h, nil, "# Y") })
+				synctest.Wait()
+				require.Equal(t, []string{"# X", "# Y"}, renderer.startedContents())
+				renderer.open(1)
+				synctest.Wait()
+				require.Equal(t, "%PDF-1.4 # Y", storedPDF(t, pdfStore))
+
+				content.failLoads.Store(true)
+				renderer.open(0)
+				wg.Wait()
+				synctest.Wait()
+				require.NoError(t, saveErr)
+				require.Equal(t, http.StatusOK, saveCode)
+				checkOlder(t)
+				require.Equal(t, "%PDF-1.4 # Y", storedPDF(t, pdfStore), "an older write must not overwrite the newer save's PDF")
+			})
+		})
+	}
+}
+
+// TestStaleRefreshDoesNotDisplaceLatestSave verifies a refresh that read the content just before a save replaced it
+// does not make that save look superseded: when the save's final currency read fails, the save, being the latest
+// save in this process, still uploads its PDF.
+func TestStaleRefreshDoesNotDisplaceLatestSave(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		renderer := newGatedPDFRenderer()
+		defer renderer.openAll()
+		content := &scriptedContentStore{versionedContentStore: versionedContentStore{current: "# X"}}
+		service, pdfStore, _ := newFlightTestPDFService(t, renderer, content)
+		h := &handler{store: content, pdfStore: pdfStore, pdfService: service}
+
+		hold := make(chan struct{})
+		content.holdNext.Store(&hold)
+		require.Equal(t, http.StatusNotFound, requestCVPDF(h, nil))
+		synctest.Wait()
+
+		var saveCode int
+		var saveErr error
+		var wg sync.WaitGroup
+		wg.Go(func() { saveCode, saveErr = saveCVContent(context.Background(), h, nil, "# Y") })
+		synctest.Wait()
+		require.Equal(t, []string{"# Y"}, renderer.startedContents())
+
+		// The refresh now resumes with the content it read before the save, and finds it superseded.
+		close(hold)
+		synctest.Wait()
+		require.Equal(t, []string{"# Y"}, renderer.startedContents())
+
+		content.failLoads.Store(true)
+		renderer.open(0)
+		wg.Wait()
+		require.NoError(t, saveErr)
+		require.Equal(t, http.StatusOK, saveCode)
+		require.Equal(t, "%PDF-1.4 # Y", storedPDF(t, pdfStore), "the latest save must still upload its PDF")
 	})
 }

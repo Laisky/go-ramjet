@@ -34,6 +34,8 @@ type PDFService struct {
 	slots    *semaphore.Weighted
 	flights  *pdfFlights
 
+	// writeMu guards the key and generation of the latest save requested in this process. Only saves change them,
+	// so they name the content this process last saved, the fallback authority when the content cannot be read.
 	writeMu        sync.Mutex
 	latestWriteKey string
 	latestWriteGen uint64
@@ -172,7 +174,7 @@ func (s *PDFService) refreshLatest(ctx context.Context) {
 			zap.Int("content_bytes", len(payload.Content)),
 			zap.String("updated_at", formatUpdatedAt(payload.UpdatedAt)))
 
-		key := s.writeKey(payload.Content)
+		key := s.refreshWriteKey(payload.Content)
 		store := s.flights.join(flightCtx, key, pdfWriteFlight, false, s.storeWork(payload.Content))
 		// Holding the refresh until the store work ends keeps later downloads from reading the content again. The
 		// refresh does not wait as a caller, so the store work, bounded by its own timeout, reports its own outcome.
@@ -208,13 +210,33 @@ func (s *PDFService) writeKey(content string) string {
 	return key + "#" + strconv.FormatUint(s.latestWriteGen, 10)
 }
 
+// refreshWriteKey returns the flight key for a refresh storing content without recording content as a save.
+//
+// A refresh of the content saved last joins that save's flight. A refresh of other content, for example content
+// read just before a newer save, gets a key that no later save joins, because such a save starts a newer generation.
+// It returns the flight key.
+func (s *PDFService) refreshWriteKey(content string) string {
+	key := pdfDocumentKey("store", content)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return key + "#" + strconv.FormatUint(s.latestWriteGen, 10)
+}
+
+// isLatestSave reports whether content is the content saved last through this service in this process.
+func (s *PDFService) isLatestSave(content string) bool {
+	key := pdfDocumentKey("store", content)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return key == s.latestWriteKey
+}
+
 // storeWork returns the shared work that renders content and uploads it while it is still the latest saved CV.
 //
 // Currency is checked before waiting for a render slot, again once the slot is held, and finally right before the
 // upload, so superseded saves neither occupy render slots nor overwrite a newer PDF.
 func (s *PDFService) storeWork(content string) pdfFlightWork {
 	return func(ctx context.Context) (pdfFlightValue, error) {
-		check := &pdfCurrencyCheck{source: s.content, want: content}
+		check := &pdfCurrencyCheck{source: s.content, want: content, latestSave: s.isLatestSave}
 		skipped := pdfFlightValue{outcome: PDFStoreSkippedSuperseded}
 		if !check.current(ctx) {
 			return skipped, nil
@@ -251,25 +273,29 @@ func (s *PDFService) storeIfCurrent(ctx context.Context, check *pdfCurrencyCheck
 
 // pdfCurrencyCheck tells whether one write's content is still the latest saved CV. It is used by one flight only.
 type pdfCurrencyCheck struct {
-	source ContentRepository
-	want   string
-	logged bool
+	source     ContentRepository
+	want       string
+	latestSave func(content string) bool
+	logged     bool
 }
 
 // current reports whether the wanted content is the latest saved CV.
 //
-// When the latest content cannot be read, it assumes the wanted content is current and logs that failure once per
-// write: a write only stores content its caller has just saved or loaded, so a transient read failure must not turn
-// a successful save into an error, while a newer save still re-checks before its own upload.
+// When the latest content cannot be read, it falls back to the content saved last in this process and logs that
+// failure once per write. A save that no newer save in this process replaced still stores its PDF, so a transient
+// read failure does not turn a successful save into an error. A write for any other content, such as an older save
+// or a refresh of content this process did not save last, does not store its PDF, so it cannot overwrite a newer
+// PDF that would then stay wrong until the next save.
 func (c *pdfCurrencyCheck) current(ctx context.Context) bool {
 	latest, err := c.source.Load(ctx)
 	if err != nil {
+		isLatest := c.latestSave(c.want)
 		if !c.logged {
 			c.logged = true
-			gmw.GetLogger(ctx).Warn("cannot confirm the cv content is current; storing the pdf for this save",
-				zap.Error(err))
+			gmw.GetLogger(ctx).Warn("cannot confirm the cv content is current; deciding from the latest save in this process",
+				zap.Bool("latest_save", isLatest), zap.Error(err))
 		}
-		return true
+		return isLatest
 	}
 	return latest.Content == c.want
 }
