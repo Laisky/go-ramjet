@@ -20,7 +20,6 @@ import {
 } from '../utils/config-helpers'
 import {
   type ConfigUpdateResult,
-  type LinkCredentialChange,
   validateCredentialUpdate,
 } from '../utils/credential-policy'
 import {
@@ -30,6 +29,7 @@ import {
 import {
   hydrateSessionConfig,
   mergeSessionConfigs,
+  type PendingLinkChange,
 } from './session-config-hydration'
 import { copyStoredSession } from './session-copy'
 import {
@@ -38,14 +38,6 @@ import {
   repairStoredSessionCredentials,
 } from './session-credentials'
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
-
-/**
- * PendingLinkChange is the endpoint and key a link asked to change, held for
- * the session it was opened in until the user confirms or dismisses it.
- */
-export interface PendingLinkChange extends LinkCredentialChange {
-  sessionId: number
-}
 
 /**
  * Hook for managing session configuration
@@ -198,14 +190,18 @@ export function useConfig() {
             finalConfig,
           )
         }
-
-        applySessionState(activeSessionId, finalConfig)
+        // The load that consumed the link's parameters raises its prompt
+        // even if its effect run was already cleaned up (StrictMode runs it
+        // twice and only the first one sees the link) while the page stays
+        // mounted. After a real unmount React ignores the update.
         if (hydratedConfig.pendingLinkChange) {
           setPendingLinkChange({
             ...hydratedConfig.pendingLinkChange,
             sessionId: activeSessionId,
           })
         }
+
+        applySessionState(activeSessionId, finalConfig)
 
         // Repair inactive sessions too, so none of them is exported,
         // uploaded, or switched to with a sync key as its API token.

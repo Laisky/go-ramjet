@@ -1,5 +1,4 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { createElement, StrictMode, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildHeaders } from '@/utils/api'
@@ -101,8 +100,7 @@ describe('useConfig link-supplied API endpoint', () => {
     const store = ownKeyStore()
 
     const { result } = renderHook(() => useConfig(), {
-      wrapper: ({ children }: { children: ReactNode }) =>
-        createElement(StrictMode, null, children),
+      reactStrictMode: true,
     })
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)

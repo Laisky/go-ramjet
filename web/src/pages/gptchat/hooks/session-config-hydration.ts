@@ -90,6 +90,14 @@ export interface HydratedSessionConfigResult {
 }
 
 /**
+ * PendingLinkChange is the endpoint and key a link asked to change, held for
+ * the session it was opened in until the user confirms or dismisses it.
+ */
+export interface PendingLinkChange extends LinkCredentialChange {
+  sessionId: number
+}
+
+/**
  * mergeSessionConfigs overlays the current config onto a loaded config while keeping nested switches intact.
  */
 export function mergeSessionConfigs(
