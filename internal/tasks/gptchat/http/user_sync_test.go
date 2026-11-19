@@ -82,10 +82,13 @@ func TestSyncKeyFingerprint(t *testing.T) {
 //
 // CodeQL go/weak-sensitive-data-hashing #79 (userConfigS3Key) and #80
 // (syncKeyFingerprint) flag SHA-256 as password hashing. Neither is a password
-// verifier: the sync key is a bearer secret the client generates from a CSPRNG
-// (`sync-` + 32 base-36 chars, ~165 bits), the digest only names the user's
-// backup object (and tags logs), and the server never compares it to
-// authenticate. A slow KDF would only make every sync request expensive, and
+// verifier: the digest only names the user's backup object (and tags logs with
+// a 12-hex prefix), and the server never compares it to authenticate. The sync
+// key is a bearer secret; current clients generate it from a CSPRNG (`sync-` +
+// 32 base-36 chars, ~165 bits), older ones from Math.random, and the server
+// accepts any non-empty key. The same key also feeds the fast HKDF that
+// encrypts the backup, so a slow hash of the object name alone would not
+// protect a weak key; it would only make every sync request expensive, and
 // changing the derivation would orphan every existing cloud backup.
 func TestSyncKeyDerivedIdentifiersAreFrozen(t *testing.T) {
 	t.Parallel()
