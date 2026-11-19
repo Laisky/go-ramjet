@@ -3,28 +3,27 @@ package config
 import (
 	"testing"
 
-	gconfig "github.com/Laisky/go-config/v2"
 	"github.com/stretchr/testify/require"
 )
 
 // TestSetupConfigMemoryDefaults verifies SetupConfig fills current memory and web fetch defaults.
 func TestSetupConfigMemoryDefaults(t *testing.T) {
-	gconfig.Shared.Set("openai.token", "srv-token")
-	gconfig.Shared.Set("openai.enable_memory", true)
-	gconfig.Shared.Set("openai.memory_project", "")
-	gconfig.Shared.Set("openai.memory_storage_mcp_url", "https://mcp.example.com")
-	gconfig.Shared.Set("openai.memory_llm_timeout_seconds", 0)
-	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 0)
-	gconfig.Shared.Set("openai.web_fetch.jina.prefix", "")
-	gconfig.Shared.Set("openai.web_fetch.defuddle.prefix", "")
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.api", "")
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.actor", "")
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.proxy_country", "")
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.api", "")
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "")
+	setConfig(t, "openai.token", "srv-token")
+	setConfig(t, "openai.enable_memory", true)
+	setConfig(t, "openai.memory_project", "")
+	setConfig(t, "openai.memory_storage_mcp_url", "https://mcp.example.com")
+	setConfig(t, "openai.memory_llm_timeout_seconds", 0)
+	setConfig(t, "openai.memory_llm_max_output_tokens", 0)
+	setConfig(t, "openai.web_fetch.jina.prefix", "")
+	setConfig(t, "openai.web_fetch.defuddle.prefix", "")
+	setConfig(t, "openai.web_fetch.scrapeless.api", "")
+	setConfig(t, "openai.web_fetch.scrapeless.actor", "")
+	setConfig(t, "openai.web_fetch.scrapeless.proxy_country", "")
+	setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
+	setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
+	setConfig(t, "openai.web_fetch.firecrawl.api", "")
+	setConfig(t, "openai.web_fetch.firecrawl.enabled", false)
+	setConfig(t, "openai.web_fetch.firecrawl.api_key", "")
 
 	err := SetupConfig()
 	require.NoError(t, err)
@@ -42,14 +41,14 @@ func TestSetupConfigMemoryDefaults(t *testing.T) {
 
 // TestSetupConfigMemoryValidation verifies blank memory storage URL is rejected when memory is enabled.
 func TestSetupConfigMemoryValidation(t *testing.T) {
-	gconfig.Shared.Set("openai.token", "srv-token")
-	gconfig.Shared.Set("openai.enable_memory", true)
-	gconfig.Shared.Set("openai.memory_project", "gptchat")
-	gconfig.Shared.Set("openai.memory_storage_mcp_url", "   ")
-	gconfig.Shared.Set("openai.memory_llm_timeout_seconds", 15)
-	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 512)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
+	setConfig(t, "openai.token", "srv-token")
+	setConfig(t, "openai.enable_memory", true)
+	setConfig(t, "openai.memory_project", "gptchat")
+	setConfig(t, "openai.memory_storage_mcp_url", "   ")
+	setConfig(t, "openai.memory_llm_timeout_seconds", 15)
+	setConfig(t, "openai.memory_llm_max_output_tokens", 512)
+	setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
+	setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
 
 	err := SetupConfig()
 	require.Error(t, err)
@@ -58,17 +57,17 @@ func TestSetupConfigMemoryValidation(t *testing.T) {
 
 // TestSetupConfigScrapelessValidation verifies scrapeless requires an API key when enabled.
 func TestSetupConfigScrapelessValidation(t *testing.T) {
-	gconfig.Shared.Set("openai.token", "srv-token")
-	gconfig.Shared.Set("openai.enable_memory", false)
-	gconfig.Shared.Set("openai.memory_project", "go-ramjet-memory")
-	gconfig.Shared.Set("openai.memory_storage_mcp_url", "https://mcp.example.com")
-	gconfig.Shared.Set("openai.memory_llm_timeout_seconds", 15)
-	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 512)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", true)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "   ")
+	setConfig(t, "openai.token", "srv-token")
+	setConfig(t, "openai.enable_memory", false)
+	setConfig(t, "openai.memory_project", "go-ramjet-memory")
+	setConfig(t, "openai.memory_storage_mcp_url", "https://mcp.example.com")
+	setConfig(t, "openai.memory_llm_timeout_seconds", 15)
+	setConfig(t, "openai.memory_llm_max_output_tokens", 512)
+	setConfig(t, "openai.web_fetch.scrapeless.enabled", true)
+	setConfig(t, "openai.web_fetch.scrapeless.api_key", "   ")
 	t.Cleanup(func() {
-		gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
-		gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
+		setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
+		setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
 	})
 
 	err := SetupConfig()
@@ -78,19 +77,19 @@ func TestSetupConfigScrapelessValidation(t *testing.T) {
 
 // TestSetupConfigFirecrawlValidation verifies firecrawl requires an API key when enabled.
 func TestSetupConfigFirecrawlValidation(t *testing.T) {
-	gconfig.Shared.Set("openai.token", "srv-token")
-	gconfig.Shared.Set("openai.enable_memory", false)
-	gconfig.Shared.Set("openai.memory_project", "go-ramjet-memory")
-	gconfig.Shared.Set("openai.memory_storage_mcp_url", "https://mcp.example.com")
-	gconfig.Shared.Set("openai.memory_llm_timeout_seconds", 15)
-	gconfig.Shared.Set("openai.memory_llm_max_output_tokens", 512)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.api_key", "")
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", true)
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "   ")
+	setConfig(t, "openai.token", "srv-token")
+	setConfig(t, "openai.enable_memory", false)
+	setConfig(t, "openai.memory_project", "go-ramjet-memory")
+	setConfig(t, "openai.memory_storage_mcp_url", "https://mcp.example.com")
+	setConfig(t, "openai.memory_llm_timeout_seconds", 15)
+	setConfig(t, "openai.memory_llm_max_output_tokens", 512)
+	setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
+	setConfig(t, "openai.web_fetch.scrapeless.api_key", "")
+	setConfig(t, "openai.web_fetch.firecrawl.enabled", true)
+	setConfig(t, "openai.web_fetch.firecrawl.api_key", "   ")
 	t.Cleanup(func() {
-		gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
-		gconfig.Shared.Set("openai.web_fetch.firecrawl.api_key", "")
+		setConfig(t, "openai.web_fetch.firecrawl.enabled", false)
+		setConfig(t, "openai.web_fetch.firecrawl.api_key", "")
 	})
 
 	err := SetupConfig()
@@ -102,19 +101,19 @@ func TestSetupConfigFirecrawlValidation(t *testing.T) {
 // exercises only the voice defaults.
 func baseVoiceConfig(t *testing.T) {
 	t.Helper()
-	gconfig.Shared.Set("openai.token", "srv-token")
-	gconfig.Shared.Set("openai.enable_memory", false)
-	gconfig.Shared.Set("openai.memory_project", "go-ramjet-memory")
-	gconfig.Shared.Set("openai.web_fetch.scrapeless.enabled", false)
-	gconfig.Shared.Set("openai.web_fetch.firecrawl.enabled", false)
+	setConfig(t, "openai.token", "srv-token")
+	setConfig(t, "openai.enable_memory", false)
+	setConfig(t, "openai.memory_project", "go-ramjet-memory")
+	setConfig(t, "openai.web_fetch.scrapeless.enabled", false)
+	setConfig(t, "openai.web_fetch.firecrawl.enabled", false)
 }
 
 // TestSetupConfigVoiceDefaults verifies the voice plugin and realtime model fall back
 // to the server defaults when the deployment does not configure them.
 func TestSetupConfigVoiceDefaults(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "")
-	gconfig.Shared.Set("openai.voice.realtime_model", "")
+	setConfig(t, "openai.voice.plugin", "")
+	setConfig(t, "openai.voice.realtime_model", "")
 
 	require.NoError(t, SetupConfig())
 	require.Equal(t, VoicePluginRealtime, Config.Voice.Plugin)
@@ -124,8 +123,8 @@ func TestSetupConfigVoiceDefaults(t *testing.T) {
 // TestSetupConfigVoiceOverrides verifies a deployment can pick the other plugin and model.
 func TestSetupConfigVoiceOverrides(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "Whisper")
-	gconfig.Shared.Set("openai.voice.realtime_model", "gpt-realtime-2.1")
+	setConfig(t, "openai.voice.plugin", "Whisper")
+	setConfig(t, "openai.voice.realtime_model", "gpt-realtime-2.1")
 
 	require.NoError(t, SetupConfig())
 	// Case is normalized so a capitalized value in YAML still matches the client ids.
@@ -137,8 +136,8 @@ func TestSetupConfigVoiceOverrides(t *testing.T) {
 // silently leaving the browser with no usable audio implementation.
 func TestSetupConfigVoiceRejectsUnknownPlugin(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "realtim")
-	gconfig.Shared.Set("openai.voice.realtime_model", "")
+	setConfig(t, "openai.voice.plugin", "realtim")
+	setConfig(t, "openai.voice.realtime_model", "")
 
 	err := SetupConfig()
 	require.Error(t, err)
@@ -149,8 +148,8 @@ func TestSetupConfigVoiceRejectsUnknownPlugin(t *testing.T) {
 // server's voice settings, overriding anything a per-user entry happens to hold.
 func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "whisper")
-	gconfig.Shared.Set("openai.voice.realtime_model", "gpt-realtime-2.1-mini")
+	setConfig(t, "openai.voice.plugin", "whisper")
+	setConfig(t, "openai.voice.realtime_model", "gpt-realtime-2.1-mini")
 	require.NoError(t, SetupConfig())
 
 	user := &UserConfig{
@@ -177,8 +176,8 @@ func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 // would add nothing, and any change would re-key existing per-user records.
 func TestUserConfigDefaultUserNameIsFrozen(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "")
-	gconfig.Shared.Set("openai.voice.realtime_model", "")
+	setConfig(t, "openai.voice.plugin", "")
+	setConfig(t, "openai.voice.realtime_model", "")
 	require.NoError(t, SetupConfig())
 
 	derived := &UserConfig{Token: "synthetic-user-token", AllowedModels: []string{"*"}}
@@ -195,11 +194,11 @@ func TestUserConfigDefaultUserNameIsFrozen(t *testing.T) {
 // operator override in the worker's openai.web_fetch configuration.
 func TestSetupConfigWebFetchQueryForwarding(t *testing.T) {
 	baseVoiceConfig(t)
-	gconfig.Shared.Set("openai.voice.plugin", "realtime")
-	gconfig.Shared.Set("openai.voice.realtime_model", "")
-	t.Cleanup(func() { gconfig.Shared.Set("openai.web_fetch.allow_query_forwarding", false) })
+	setConfig(t, "openai.voice.plugin", "realtime")
+	setConfig(t, "openai.voice.realtime_model", "")
+	t.Cleanup(func() { setConfig(t, "openai.web_fetch.allow_query_forwarding", false) })
 	for _, enabled := range []bool{false, true} {
-		gconfig.Shared.Set("openai.web_fetch.allow_query_forwarding", enabled)
+		setConfig(t, "openai.web_fetch.allow_query_forwarding", enabled)
 		require.NoError(t, SetupConfig())
 		require.Equal(t, enabled, Config.WebFetch.AllowQueryForwarding)
 	}
