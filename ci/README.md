@@ -19,6 +19,15 @@ Mutation controls retain harmless edits and actual publication, target, security
 and failure-path regressions. These local tests do not model GitHub queue scheduling
 or replace final-head hosted CI and separately authorized release acceptance.
 
+## Workflow token permissions
+
+`/usr/bin/python3 -B ci/test_workflow_permissions.py` requires every workflow to
+declare top-level `permissions` and compares each job's effective `GITHUB_TOKEN`
+write scopes with a reviewed allowlist. The release workflow denies all scopes by
+default; only its two image jobs read contents for checkout. Docker Hub and SSH use
+their own secrets, and the `gha` build cache uses the Actions runtime token. A new
+workflow or write grant fails until the allowlist is reviewed and updated.
+
 ## Browser dependency controls
 
 `probe_cv_print.py` preserves the inherited accepted and exact source/module
