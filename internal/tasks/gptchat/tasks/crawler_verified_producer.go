@@ -7,10 +7,16 @@ import (
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	rlibs "github.com/Laisky/laisky-blog-graphql/library/db/redis"
+
+	"github.com/Laisky/go-ramjet/library/egress"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 var (
-	admitHTMLCrawlerURL            = crawleregress.AdmitURL
+	// admitHTMLCrawlerURL applies the shared destination policy with typed refusal reasons.
+	admitHTMLCrawlerURL = func(ctx context.Context, raw string) (crawleregress.Admission, error) {
+		return egress.Admit(ctx, raw, nil)
+	}
 	enqueueAdmittedHTMLCrawlerTask = enqueueHTMLCrawlerTaskToRedis
 	loadVerifiedHTMLCrawlerTask    = getHTMLCrawlerTaskResult
 )
@@ -23,7 +29,7 @@ func submitAdmittedHTMLCrawlerTask(ctx context.Context, target string, outputMar
 	}
 	admission, err := admitHTMLCrawlerURL(ctx, target)
 	if err != nil {
-		return nil, errors.Wrap(err, "admit crawler target")
+		return nil, errors.WithStack(&crawlerAdmissionError{cause: err})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
@@ -103,3 +109,19 @@ func waitVerifiedHTMLCrawlerTask(ctx context.Context, submitted *rlibs.HTMLCrawl
 		}
 	}
 }
+
+// crawlerAdmissionError preserves the admission cause and exposes only its safe diagnostic stage.
+// Its cause is normally an *egress.AdmissionError carrying the typed refusal reason.
+type crawlerAdmissionError struct{ cause error }
+
+// crawlerAdmissionError implements the logging package's explicit stage contract.
+var _ log.FailureStageError = (*crawlerAdmissionError)(nil)
+
+// Error retains the local causal diagnostic without changing admission behavior.
+func (e *crawlerAdmissionError) Error() string { return "admit crawler target: " + e.cause.Error() }
+
+// Unwrap preserves cancellation, resolver and input-error identities for callers.
+func (e *crawlerAdmissionError) Unwrap() error { return e.cause }
+
+// CrawlerFailureStage identifies admission failure without requiring error-text parsing.
+func (e *crawlerAdmissionError) CrawlerFailureStage() string { return "admission" }
