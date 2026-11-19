@@ -102,7 +102,7 @@ function collectUnsafeUrls(container: HTMLElement): string[] {
       }
       if (
         value.startsWith('data:') &&
-        !/^data:image\/(png|jpe?g|gif|webp);/.test(value)
+        !/^data:image\/(png|jpe?g|gif|webp|avif);/.test(value)
       ) {
         found.push(`${node.tagName.toLowerCase()}[${name}]`)
       }
@@ -157,6 +157,14 @@ const xssCases: Array<[string, string]> = [
     '<a href="data:text/html,<script>alert(1)</script>">x</a>',
   ],
   ['raw img data html', '<img src="data:text/html;base64,PHNjcmlwdD4=">'],
+  [
+    'markdown svg data image',
+    '![x](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=)',
+  ],
+  [
+    'raw svg data image',
+    '<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=">',
+  ],
   ['svg script', '<svg><script>window.__xss = 1</script></svg>'],
   ['svg onload', '<svg onload="window.__xss = 1"><circle r="5"/></svg>'],
   [

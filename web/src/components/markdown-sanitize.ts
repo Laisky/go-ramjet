@@ -28,7 +28,12 @@ const SAFE_URL_PROTOCOLS: ReadonlySet<string> = new Set(
   SAFE_LINK_PROTOCOLS.map((protocol) => `${protocol}:`),
 )
 
-const DATA_IMAGE_PREFIX = /^data:image\/[a-z0-9.+-]+;base64,/i
+/**
+ * DATA_IMAGE_PREFIX matches the base64 data URLs of raster image formats.
+ * SVG is excluded on purpose: it is a document format that can carry script
+ * and links, even though an <img> does not run them.
+ */
+const DATA_IMAGE_PREFIX = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i
 
 /**
  * EXTRA_TAG_NAMES lists benign inline and figure elements that assistants
@@ -55,7 +60,7 @@ const EXTRA_TAG_NAMES = [
  * markdownSanitizeSchema extends the GitHub-style default schema only with
  * what the chat renderer legitimately needs: remark-math classes that
  * rehype-katex consumes after sanitization, a few benign formatting tags,
- * `tel:` links and `data:` image sources (narrowed to base64 images by
+ * `tel:` links and `data:` image sources (narrowed to base64 raster images by
  * sanitizeMarkdownUrl). Everything else, including scripts, frames, forms,
  * styles, event handlers, and arbitrary classes, is removed.
  */
@@ -102,9 +107,9 @@ export function namespaceFragmentHref(url: string): string {
 
 /**
  * sanitizeMarkdownUrl is the urlTransform for rendered markdown. It keeps
- * http(s), mailto, tel, relative and fragment URLs, allows base64 data:image
- * sources only outside `href`, namespaces fragment links, and returns an
- * empty string for every other URL.
+ * http(s), mailto, tel, relative and fragment URLs, allows base64 raster
+ * data:image sources only outside `href`, namespaces fragment links, and
+ * returns an empty string for every other URL.
  *
  * @param url - The raw URL from the markdown or HTML attribute.
  * @param key - The attribute name, such as `href` or `src`.
