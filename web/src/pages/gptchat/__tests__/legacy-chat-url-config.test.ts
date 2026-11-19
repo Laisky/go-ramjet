@@ -13,7 +13,14 @@ const STORED_MCP_URL = 'https://mcp.example.test'
 
 type UrlConfigApi = {
   applyUrlConfigOverrides: (sconfig: SessionConfig) => boolean
+  UrlParamAliasMap: Map<string, string>
+  UrlConfigBooleanFields: Set<string>
+  UrlConfigIntegerFields: Set<string>
+  UrlConfigFloatFields: Set<string>
 }
+
+// Markup that becomes a live element if a session-name sink parses it.
+const IMG_PAYLOAD = '<img src="x" onerror="globalThis.__legacyChatXss = 1">'
 
 // normalizeUrlParamKey lowercases keys, so the marker must be lowercase too.
 const POLLUTION_MARKER = 'legacychatpolluted'
@@ -31,6 +38,7 @@ function loadUrlConfigApi(allModels: string[] = []): UrlConfigApi {
       'UrlConfigIntegerFields',
       'UrlConfigFloatFields',
       'UrlParamAliasMap',
+      'UrlSettableConfigPaths',
       'normalizeUrlParamKey',
       'parseBooleanParamValue',
       'parseIntegerParamValue',
@@ -133,7 +141,7 @@ describe('legacy chat.js applyUrlConfigOverrides', () => {
     const { applyUrlConfigOverrides } = loadUrlConfigApi(allModels)
     const sconfig = newSessionConfig()
     visit(
-      '?model=custom-model&temperature=0.5&max_tokens=900&enable_mcp=yes&chat_switch.custom_flag=on&unknown=kept',
+      '?model=custom-model&temperature=0.5&max_tokens=900&enable_mcp=yes&unknown=kept',
     )
 
     expect(applyUrlConfigOverrides(sconfig)).toBe(true)
@@ -144,7 +152,6 @@ describe('legacy chat.js applyUrlConfigOverrides', () => {
     expect(sconfig.chat_switch).toEqual({
       all_in_one: false,
       enable_mcp: true,
-      custom_flag: 'on',
     })
     expect(allModels).toEqual(['custom-model'])
     expect(window.location.search).toBe('?unknown=kept')
@@ -192,5 +199,69 @@ describe('legacy chat.js applyUrlConfigOverrides', () => {
     expect(sconfig).toEqual(before)
     expect(sconfig.mcp_servers?.[0].url).toBe(STORED_MCP_URL)
     expect(window.location.search).toBe(search)
+  })
+
+  // Only the documented alias targets are URL-settable, like the React app's
+  // explicit UrlSettableConfigPaths. Other own scalars such as session_name
+  // (own once a session is renamed or duplicated, and rendered by the session
+  // list) or internal flags must not be reachable from a link.
+  it.each([
+    `?session_name=${encodeURIComponent(IMG_PAYLOAD)}`,
+    '?mcp_bootstrapped=false',
+    '?chat_switch.custom_flag=on',
+  ])('ignores %s, which is not a documented URL setting', (search) => {
+    const { applyUrlConfigOverrides } = loadUrlConfigApi()
+    const sconfig = { ...newSessionConfig(), session_name: 'work' }
+    const before = structuredClone(sconfig)
+    visit(search)
+
+    expect(applyUrlConfigOverrides(sconfig)).toBe(false)
+
+    expect(sconfig).toEqual(before)
+    expect(window.location.search).toBe(search)
+  })
+
+  it('still applies every documented alias from a link', () => {
+    const api = loadUrlConfigApi()
+    const linkValue = (field: string) => {
+      if (api.UrlConfigBooleanFields.has(field)) return 'true'
+      if (api.UrlConfigIntegerFields.has(field)) return '7'
+      if (api.UrlConfigFloatFields.has(field)) return '0.25'
+      return 'from-link'
+    }
+    const expected = (field: string) => {
+      if (api.UrlConfigBooleanFields.has(field)) return true
+      if (api.UrlConfigIntegerFields.has(field)) return 7
+      if (api.UrlConfigFloatFields.has(field)) return 0.25
+      return 'from-link'
+    }
+
+    expect(api.UrlParamAliasMap.size).toBeGreaterThan(40)
+    for (const [alias, target] of api.UrlParamAliasMap) {
+      const sconfig: SessionConfig = {
+        ...newSessionConfig(),
+        token_type: 'proxy',
+        presence_penalty: 0,
+        frequency_penalty: 0,
+        chat_switch: {
+          all_in_one: false,
+          disable_https_crawler: false,
+          enable_talk: false,
+          enable_mcp: false,
+          draw_n_images: 1,
+        },
+      }
+      const field = target.split('.').at(-1) as string
+      visit(`?${alias}=${linkValue(field)}`)
+
+      expect(api.applyUrlConfigOverrides(sconfig), alias).toBe(true)
+
+      const [root, leaf] = target.split('.')
+      const actual = leaf
+        ? (sconfig[root] as Record<string, unknown>)[leaf]
+        : sconfig[root]
+      expect(actual, alias).toBe(expected(field))
+      expect(window.location.search, alias).toBe('')
+    }
   })
 })

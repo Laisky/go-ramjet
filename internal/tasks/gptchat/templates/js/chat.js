@@ -876,6 +876,10 @@ const UrlParamAliasMap = new Map([
   ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
 ]);
 
+// UrlSettableConfigPaths is the explicit allowlist of setting paths a URL may
+// set: the targets of UrlParamAliasMap, like the React app's UrlSettableConfigPaths.
+const UrlSettableConfigPaths = new Set(UrlParamAliasMap.values());
+
 function normalizeUrlParamKey(key) {
   return key
     .trim()
@@ -958,17 +962,19 @@ function isUrlScalarConfigValue(value) {
 
 /**
  * isUrlSettableConfigPath reports whether a URL parameter may write the setting
- * at pathSegments. A link is untrusted input, so it may only set a scalar
- * setting sconfig already owns or a single chat_switch flag. Deeper paths could
- * re-target a stored MCP server (whose api_key is then sent to the new URL),
- * replace whole objects, or truncate arrays.
+ * at pathSegments. A link is untrusted input, so the path must be listed in
+ * UrlSettableConfigPaths, and its current value must be a scalar that sconfig
+ * already owns (or a chat_switch flag). Other own settings such as session_name,
+ * which the session list renders, and deeper paths, which could re-target a
+ * stored MCP server (whose api_key is then sent to the new URL), replace whole
+ * objects, or truncate arrays, are never URL-settable.
  *
  * @param {object} sconfig - Session config the parameter would change.
  * @param {string[]} pathSegments - Dot-separated setting path, e.g. ['chat_switch', 'enable_mcp'].
  * @returns {boolean} True when the path is a URL-settable setting.
  */
 function isUrlSettableConfigPath(sconfig, pathSegments) {
-  if (pathSegments.some(isUnsafeConfigPathSegment)) {
+  if (!UrlSettableConfigPaths.has(pathSegments.join('.')) || pathSegments.some(isUnsafeConfigPathSegment)) {
     return false;
   }
 
@@ -1050,9 +1056,9 @@ function coerceConfigValue(field, rawValue, currentValue) {
  * applyUrlConfigOverrides applies supported session settings from the page URL's
  * query parameters to sconfig and removes the applied parameters from the URL.
  *
- * Keys are normalized and resolved through UrlParamAliasMap. Only scalar
- * settings that sconfig already owns and single chat_switch.* flags are changed
- * (see isUrlSettableConfigPath); any other path is ignored and left in the URL.
+ * Keys are normalized and resolved through UrlParamAliasMap. Only the listed
+ * scalar settings in UrlSettableConfigPaths are changed (see
+ * isUrlSettableConfigPath); any other path is ignored and left in the URL.
  *
  * @param {object} sconfig - Session config to mutate in place.
  * @returns {boolean} True when any applicable parameter was consumed, which also rewrites the URL.
