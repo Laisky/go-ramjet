@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Laisky/go-ramjet/library/db/mongosearch"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
@@ -51,7 +50,7 @@ func searchHandler(svc *Service) gin.HandlerFunc {
 
 		rets, err := svc.Search(gmw.Ctx(ctx), q)
 		if err != nil {
-			log.Logger.Error("crawler search failed", zap.Error(err))
+			gmw.GetLogger(ctx).Error("crawler search failed", zap.Error(err))
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
 			return
 		}
