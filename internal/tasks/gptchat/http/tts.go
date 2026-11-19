@@ -94,14 +94,21 @@ func TTSHanler(ctx *gin.Context) {
 
 	task := speechSynthesizer.StartSpeakingSsmlAsync(ssml)
 	// task := speechSynthesizer.StartSpeakingTextAsync(req.Text)
+	stopped := make(chan error, 1)
 	outcome, err := awaitAsyncOutcome(gmw.Ctx(ctx), task, ttsSynthesisTimeout, func(late speech.SpeechSynthesisOutcome) {
-		// The SDK finally delivered the abandoned outcome, so nothing uses the
-		// synthesizer any more and every native handle can be freed.
+		// Once the abandoned outcome and the stop request have both completed,
+		// nothing uses the synthesizer any more and every native handle can be freed.
+		stopErr := <-stopped
+		logger.Debug("released abandoned speech synthesis",
+			zap.NamedError("outcome_error", late.Error), zap.NamedError("stop_error", stopErr))
 		late.Close()
 		releaseSynthesizer()
 	})
 	if err != nil {
 		releaseOnReturn = false
+		// Ask the SDK to stop the abandoned synthesis so a hung native call returns;
+		// its result channel is unbuffered and must be received.
+		go func() { stopped <- <-speechSynthesizer.StopSpeakingAsync() }()
 		web.AbortErr(ctx, errors.Wrap(err, "speech synthesis"))
 		return
 	}
@@ -152,16 +159,32 @@ func TTSHanler(ctx *gin.Context) {
 		zap.String("audio_size", gutils.HumanReadableByteCount(nBytes, true)))
 }
 
-// ttsSynthesisTimeout bounds how long the handler waits for synthesis to start.
-const ttsSynthesisTimeout = 60 * time.Second
+// ttsSynthesisTimeout bounds how long the handler waits for synthesis to start; it
+// is a variable so tests can shorten it.
+var ttsSynthesisTimeout = 60 * time.Second
 
-// newTTSSynthesizer creates the Azure speech config, the audio config and the speech
-// synthesizer used by TTSHanler.
+// ttsSynthesizer is the part of *speech.SpeechSynthesizer that TTSHanler drives, so
+// tests can substitute a fake for the native SDK.
+type ttsSynthesizer interface {
+	StartSpeakingSsmlAsync(ssml string) chan speech.SpeechSynthesisOutcome
+	StopSpeakingAsync() chan error
+	SynthesisStarted(handler speech.SpeechSynthesisEventHandler)
+	Synthesizing(handler speech.SpeechSynthesisEventHandler)
+	SynthesisCompleted(handler speech.SpeechSynthesisEventHandler)
+	SynthesisCanceled(handler speech.SpeechSynthesisEventHandler)
+}
+
+// newTTSSynthesizer creates the synthesizer used by TTSHanler; it is a package
+// variable so tests can substitute a fake.
+var newTTSSynthesizer = newAzureTTSSynthesizer
+
+// newAzureTTSSynthesizer creates the Azure speech config, the audio config and the
+// speech synthesizer used by TTSHanler.
 //
 // It returns the synthesizer and a release func that frees all three native handles
 // in reverse creation order. Call release exactly once, after every outcome the
 // synthesizer produced has been closed. On error nothing is left to release.
-func newTTSSynthesizer() (*speech.SpeechSynthesizer, func(), error) {
+func newAzureTTSSynthesizer() (ttsSynthesizer, func(), error) {
 	speechCfg, err := speech.NewSpeechConfigFromSubscription(config.Config.Azure.TTSKey, config.Config.Azure.TTSRegion)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "new speech config")
