@@ -143,25 +143,27 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 	return urls, nil
 }
 
-// maxImageResponseBytesPerImage bounds an image API answer per expected image: one
-// base64-encoded image of up to 32 MiB plus JSON overhead. It is a variable so
-// tests can lower it.
-var maxImageResponseBytesPerImage int64 = 48 << 20
+// maxImageResponseBytesPerImage is the answer allowance for one image. The largest
+// image a client may request through size is 4096x4096; as an incompressible RGBA
+// PNG that is 64 MiB, which base64 inflates to 85.3 MiB. 96 MiB covers that plus
+// JSON overhead. It is a variable so tests can lower it.
+var maxImageResponseBytesPerImage int64 = 96 << 20
 
-// readImageAPIResponse reads the body of an image API answer that should carry n
-// images, refusing one larger than n times maxImageResponseBytesPerImage so an
-// upstream cannot make the server buffer an unbounded body. n below 1 counts as 1.
+// readImageAPIResponse reads the body of an image API answer, refusing one larger
+// than maxImagesPerRequest times maxImageResponseBytesPerImage so an upstream
+// cannot make the server buffer an unbounded body. The cap is fixed rather than
+// scaled by the requested count, because an answer may legitimately carry surplus
+// entries that imageCollector ignores.
 //
-// It returns the body, or an error when reading fails or the body exceeds the limit.
-func readImageAPIResponse(body io.Reader, n int) ([]byte, error) {
-	n = max(n, 1)
-	limit := maxImageResponseBytesPerImage * int64(n)
+// It returns the body, or an error when reading fails or the body exceeds the cap.
+func readImageAPIResponse(body io.Reader) ([]byte, error) {
+	limit := maxImageResponseBytesPerImage * maxImagesPerRequest
 	payload, err := io.ReadAll(io.LimitReader(body, limit+1))
 	if err != nil {
 		return nil, errors.Wrap(err, "read image API response")
 	}
 	if int64(len(payload)) > limit {
-		return nil, errors.Errorf("image API response exceeds %d bytes allowed for %d image(s)", limit, n)
+		return nil, errors.Errorf("image API response exceeds %d bytes", limit)
 	}
 
 	return payload, nil

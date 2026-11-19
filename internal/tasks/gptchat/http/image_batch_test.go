@@ -80,19 +80,22 @@ func TestEditImageHandlerFailsWithoutImage(t *testing.T) {
 }
 
 // TestImageResponsesAreSizeBounded verifies that the generation and edit paths stop
-// reading an image API answer once it exceeds the per-image allowance times the
-// image count, and report that clearly instead of buffering the whole body.
+// reading an image API answer once it exceeds the fixed cap (maxImagesPerRequest
+// times the per-image allowance), and report that clearly instead of buffering
+// the whole body.
 func TestImageResponsesAreSizeBounded(t *testing.T) {
 	origLimit := maxImageResponseBytesPerImage
 	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
 	maxImageResponseBytesPerImage = 4 << 10
 
+	// Two 32 KiB base64 images exceed the fixed cap of maxImagesPerRequest (8)
+	// times the lowered 4 KiB allowance.
 	oversized := func(f *imageBillingFixture) func(http.ResponseWriter, *http.Request) bool {
 		return func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path != "/v1/images/generations" && r.URL.Path != "/v1/images/edits" {
 				return false
 			}
-			image := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, 16<<10))
+			image := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, 24<<10))
 			f.writeJSON(w, map[string]any{"data": []map[string]string{{"b64_json": image}, {"b64_json": image}}})
 			return true
 		}
@@ -150,4 +153,36 @@ func TestDrawByDalleHandlerUndeliveredImagesStayUnguessable(t *testing.T) {
 		require.NotContains(t, urls[0], suffix, "the delivered URL reveals an unpaid image key")
 	}
 	require.Equal(t, 1, delivered, "the delivered URL must name one stored image")
+}
+
+// TestImageResponseCapToleratesSurplusEntries verifies that the answer size cap does
+// not scale with the requested count: surplus entries, which the collector ignores,
+// must not turn a valid one-image answer into a failure.
+func TestImageResponseCapToleratesSurplusEntries(t *testing.T) {
+	origLimit := maxImageResponseBytesPerImage
+	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
+	maxImageResponseBytesPerImage = 4 << 10
+
+	f := &imageBillingFixture{}
+	gctx := f.install(t)
+	f.override = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/v1/images/generations" {
+			return false
+		}
+		image := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x42}, 3<<10))
+		f.writeJSON(w, map[string]any{"data": []map[string]string{{"b64_json": image}, {"b64_json": image}}})
+		return true
+	}
+
+	require.NoError(t, sendChatImageGeneration(gctx, imageCountTestRequest(1), billedImageUser(false)))
+	require.Equal(t, 1, f.delivered())
+	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
+}
+
+// TestImageResponseAllowanceFitsLargestImage verifies the per-image answer allowance
+// holds the largest image a client may request through size: an incompressible
+// 4096x4096 RGBA PNG, base64-encoded, plus JSON overhead.
+func TestImageResponseAllowanceFitsLargestImage(t *testing.T) {
+	largestImage := base64.StdEncoding.EncodedLen(4096 * 4096 * 4)
+	require.Greater(t, maxImageResponseBytesPerImage, int64(largestImage)+1<<20)
 }

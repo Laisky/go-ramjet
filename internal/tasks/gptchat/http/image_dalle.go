@@ -189,7 +189,7 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body, n)
+		payload, err := readImageAPIResponse(httpresp.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image response")
 		}
@@ -283,7 +283,7 @@ func fetchImageFromAzureDalle(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body, 1)
+		payload, err := readImageAPIResponse(httpresp.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image response")
 		}
@@ -508,7 +508,7 @@ func fetchImageEditFromOpenai(ctx context.Context,
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body, 1)
+		payload, err := readImageAPIResponse(httpresp.Body)
 		if err != nil {
 			return nil, errors.Wrap(err, "read image edit response")
 		}
