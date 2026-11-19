@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/Laisky/go-ramjet/library/db/mongosearch"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -43,9 +44,9 @@ type SearchResult struct {
 func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
 	// search in title
 	titleRets := make([]SearchResult, 0)
-	titleRegex := regexp.QuoteMeta(text)
+	textRegex := mongosearch.LiteralSubstring(text)
 	if cursor, err := d.DB.docusCol().Find(ctx,
-		bson.M{"title": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		bson.M{"title": textRegex},
 		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &titleRets); err != nil {
@@ -55,7 +56,7 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 	// search in content
 	contentRets := make([]SearchResult, 0)
 	if cursor, err := d.DB.docusCol().Find(ctx,
-		bson.M{"text": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		bson.M{"text": textRegex},
 		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &contentRets); err != nil {
@@ -68,12 +69,22 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 
 const searchCtxSpan = 20
 
-func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []SearchResult {
-	reg, err := regexp.Compile("(?i)" + pattern)
-	if err != nil {
-		log.Logger.Warn("compile pattern", zap.Error(err))
-		return rets
-	}
+// extractSearchContext keeps the results whose text contains query and sets
+// each one's Context to an HTML-escaped snippet with the match highlighted.
+//
+// query is matched literally and case-insensitively, exactly like the MongoDB
+// filter built by Search, so regular-expression syntax in it only matches
+// itself.
+//
+// Parameters:
+//   - query: untrusted search text.
+//   - rets: candidate results returned by MongoDB.
+//
+// Returns:
+//   - []SearchResult: the results whose text contains query, with Context set.
+func (d *Dao) extractSearchContext(query string, rets []SearchResult) []SearchResult {
+	// QuoteMeta output always compiles.
+	reg := regexp.MustCompile("(?i)" + regexp.QuoteMeta(query))
 
 	var filtered []SearchResult
 	for i := range rets {
