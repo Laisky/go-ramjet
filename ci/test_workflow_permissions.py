@@ -62,9 +62,14 @@ class WorkflowTokenPermissionContract(unittest.TestCase):
     """WorkflowTokenPermissionContract checks parsed permission blocks rather than YAML bytes."""
 
     def assert_release_permissions(self, workflow):
-        """assert_release_permissions checks deny-by-default release scopes and exact per-job grants."""
+        """assert_release_permissions checks deny-by-default release scopes and exact per-job grants.
+
+        A release job that is not listed in RELEASE_JOB_PERMISSIONS fails, so every new job's
+        token scope is reviewed, including read scopes and the inherited default.
+        """
         self.assertEqual(workflow.get("permissions"), {})
         self.assertEqual(write_grants(workflow), set())
+        self.assertEqual(set(workflow["jobs"]), set(RELEASE_JOB_PERMISSIONS))
         for job_name, expected in RELEASE_JOB_PERMISSIONS.items():
             self.assertEqual(effective_permissions(workflow, job_name), expected, job_name)
 
@@ -94,6 +99,10 @@ class WorkflowTokenPermissionContract(unittest.TestCase):
             ("cache-job-write", lambda model: model["jobs"]["build_latest_cache"]["permissions"].update(actions="write")),
             ("deploy-contents", lambda model: model["jobs"]["deploy"].update(permissions={"contents": "read"})),
             ("skip-check-contents", lambda model: model["jobs"]["check_skip"].update(permissions={"contents": "read"})),
+            ("new-job-package-read", lambda model: model["jobs"].update(
+                publish_notes={"runs-on": "ubuntu-latest", "permissions": {"packages": "read"}, "steps": []})),
+            ("new-job-inherited-default", lambda model: model["jobs"].update(
+                publish_notes={"runs-on": "ubuntu-latest", "steps": []})),
         )
         for name, mutate in release_mutations:
             with self.subTest(name=name):

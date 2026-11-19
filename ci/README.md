@@ -26,7 +26,8 @@ declare top-level `permissions` and compares each job's effective `GITHUB_TOKEN`
 write scopes with a reviewed allowlist. The release workflow denies all scopes by
 default; only its two image jobs read contents for checkout. Docker Hub and SSH use
 their own secrets, and the `gha` build cache uses the Actions runtime token. A new
-workflow or write grant fails until the allowlist is reviewed and updated.
+workflow, a new release job, or a new write grant fails until the allowlist is
+reviewed and updated.
 
 ## Browser dependency controls
 
