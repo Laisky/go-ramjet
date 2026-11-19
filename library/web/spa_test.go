@@ -234,7 +234,8 @@ func TestSiteMetadata(t *testing.T) {
 }
 
 // newSPATraversalFixture lays out <tmp>/dist (the served SPA) next to a
-// sibling secret file and a symlink inside dist that points at it.
+// sibling secret file, plus symlinks inside dist and dist/assets that point
+// at it.
 //
 // Parameters:
 //   - t: test handle.
@@ -257,11 +258,16 @@ func newSPATraversalFixture(t *testing.T) (http.Handler, *gin.Engine, string) {
 	require.NoError(t, os.WriteFile(filepath.Join(base, "secret.txt"), []byte(secret), 0o644))
 	require.NoError(t, os.Symlink(filepath.Join(base, "secret.txt"), filepath.Join(distDir, "leak.txt")))
 	require.NoError(t, os.Symlink(filepath.Join("..", "secret.txt"), filepath.Join(distDir, "leak-rel.txt")))
+	require.NoError(t, os.MkdirAll(filepath.Join(distDir, "assets", "sub"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "assets", "sub", "nested.js"), []byte("nested()"), 0o644))
+	require.NoError(t, os.Symlink(filepath.Join(base, "secret.txt"), filepath.Join(distDir, "assets", "leak.js")))
+	require.NoError(t, os.Symlink(filepath.Join("..", "..", "secret.txt"), filepath.Join(distDir, "assets", "leak-rel.js")))
 	// os.Root follows relative symlinks that stay inside distDir.
 	require.NoError(t, os.Symlink("vite.svg", filepath.Join(distDir, "logo-link.svg")))
 
 	r := gin.New()
 	require.NoError(t, RegisterSPA(r, distDir))
+	spaFixtureDirs.Store(r, distDir)
 	return &normalizeHandler{handler: r}, r, secret
 }
 
@@ -316,6 +322,11 @@ func TestRegisterSPARejectsPathTraversal(t *testing.T) {
 		"/leak-rel.txt",
 		"/gptchat/leak.txt",
 		"/x/leak.txt",
+		"/assets/leak.js",
+		"/assets/leak-rel.js",
+		"/gptchat/assets/leak.js",
+		"/assets/../leak.txt",
+		"/assets/%2e%2e/%2e%2e/secret.txt",
 	}
 	for _, h := range []struct {
 		name    string

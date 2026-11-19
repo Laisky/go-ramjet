@@ -44,7 +44,9 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 
 	assetsDir := filepath.Join(distDir, "assets")
 	if _, statErr := os.Stat(assetsDir); statErr == nil {
-		r.StaticFS("/assets", http.Dir(assetsDir))
+		// Same gin StaticFS handler and http.FileServer headers as http.Dir,
+		// but confined to assetsDir by os.Root and without directory listing.
+		r.StaticFS("/assets", rootFileSystem{dir: assetsDir})
 	}
 
 	// indexHandler serves the SPA index for request context c and returns no value.
@@ -150,7 +152,9 @@ func serveSPAFile(c *gin.Context, logger glog.Logger, distDir, name string) bool
 
 	root, err := os.OpenRoot(distDir)
 	if err != nil {
-		logger.Error("open spa dist root", zap.String("dir", distDir), zap.Error(err))
+		// Stay below the alert level (ERROR): with dist gone, every scanner hit
+		// would otherwise page. The caller still answers 404 or index.html.
+		logger.Warn("open spa dist root", zap.String("dir", distDir), zap.Error(err))
 		return false
 	}
 	defer func() {
