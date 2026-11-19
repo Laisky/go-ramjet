@@ -99,6 +99,8 @@ func newRootPool(extraCAFile string) (*x509.CertPool, error) {
 //
 // The client has no Timeout of its own; the per-request deadline is supplied by
 // the context in runTask so there is a single authoritative deadline.
+// Keep-alives are off, so every request performs (and verifies) its own TLS
+// handshake and the client leaves no idle connection behind.
 //
 // Parameters:
 //   - extraCAFile: optional path of a PEM bundle with additional root CAs.
@@ -117,6 +119,7 @@ func newHTTPClient(extraCAFile, serverName string) (*http.Client, error) {
 	// Same bare transport as before (no proxy from env), now verifying TLS.
 	return &http.Client{
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				RootCAs: pool,
 				// Empty means "use the URL host". Verification is never skipped.
@@ -127,11 +130,11 @@ func newHTTPClient(extraCAFile, serverName string) (*http.Client, error) {
 	}, nil
 }
 
-// healthChecker runs health checks with a verifying client, or carries the
-// configuration error that prevented building one.
+// healthChecker runs health checks that verify TLS against its trust
+// settings. It is immutable, so concurrent runs cannot race on it.
 type healthChecker struct {
-	client    *http.Client
-	configErr error
+	extraCAFile string
+	serverName  string
 }
 
 // newHealthChecker builds a healthChecker from the TLS trust settings.
@@ -141,32 +144,31 @@ type healthChecker struct {
 //   - serverName: optional TLS server name override.
 //
 // Returns:
-//   - *healthChecker: a checker with a client, or with configErr set when the
-//     settings are invalid. It never falls back to skipping verification.
+//   - *healthChecker: the checker; settings are validated on every check.
 func newHealthChecker(extraCAFile, serverName string) *healthChecker {
-	client, err := newHTTPClient(extraCAFile, serverName)
-	if err != nil {
-		return &healthChecker{configErr: errors.Wrap(err, "invalid TLS trust settings")}
-	}
-
-	return &healthChecker{client: client}
+	return &healthChecker{extraCAFile: extraCAFile, serverName: serverName}
 }
 
-// check runs one health check against url.
+// check builds a verifying client and runs one health check against url.
+//
+// The client is rebuilt on every run, so extraCAFile is re-read: a fixed or
+// rotated bundle applies at the next run without a restart, while an unusable
+// one fails this run closed and never falls back to skipping verification.
 //
 // Parameters:
 //   - ctx: request deadline and cancellation.
 //   - url: health endpoint.
 //
 // Returns:
-//   - error: the configuration error when the checker has no client, otherwise
+//   - error: the trust-settings error when no client can be built, otherwise
 //     the checkHealth result.
 func (h *healthChecker) check(ctx context.Context, url string) error {
-	if h.configErr != nil {
-		return errors.Wrap(h.configErr, "health check not performed")
+	client, err := newHTTPClient(h.extraCAFile, h.serverName)
+	if err != nil {
+		return errors.Wrap(err, "health check not performed: invalid TLS trust settings")
 	}
 
-	return checkHealth(ctx, h.client, url)
+	return checkHealth(ctx, client, url)
 }
 
 // scheduleHealthCheck runs checker every interval. Tests replace it.
@@ -298,16 +300,16 @@ func bindTask() {
 		return
 	}
 
-	// Invalid TLS trust settings do not disable the task: the checker fails
-	// closed and every scheduled run reports the error at ERROR level (which
-	// the alert pusher forwards), the same channel as a failed health check,
-	// so a misconfiguration stays visible each interval.
+	// Invalid TLS trust settings do not disable the task: every scheduled run
+	// (the first one immediately) fails closed and reports the error at ERROR
+	// level (which the alert pusher forwards), the same channel as a failed
+	// health check, until the root_ca_file is fixed.
 	checker := newHealthChecker(taskRootCAFile(), taskServerName())
 
 	log.Logger.Info("bind pieverse_alert task...",
 		zap.String("url", taskURL()),
-		zap.String("server_name", taskServerName()),
-		zap.Bool("tls_config_valid", checker.configErr == nil),
+		zap.String("server_name", checker.serverName),
+		zap.String("root_ca_file", checker.extraCAFile),
 		zap.Duration("interval", taskInterval()))
 	scheduleHealthCheck(taskInterval(), checker)
 }

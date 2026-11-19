@@ -14,7 +14,6 @@ func TestCheckHealth(t *testing.T) {
 	t.Parallel()
 
 	checker := newHealthChecker("", "")
-	require.NoError(t, checker.configErr)
 
 	for _, tc := range []struct {
 		name    string

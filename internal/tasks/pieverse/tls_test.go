@@ -10,11 +10,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -173,8 +175,8 @@ func TestBindTaskReportsBadRootCAFileEveryRun(t *testing.T) {
 	bindTask()
 	require.Len(t, scheduled, 1, "a bad root_ca_file must not silently disable the monitor")
 	checker := scheduled[0]
-	require.Nil(t, checker.client, "must fail closed, never fall back to an unverified client")
 	for range 3 {
+		// Fails closed: a plain-HTTP healthy endpoint is never reached.
 		err := checker.check(context.Background(), srv.URL)
 		require.ErrorContains(t, err, "read root ca file")
 	}
@@ -189,7 +191,6 @@ func TestCheckHealthRejectsUntrustedCertificate(t *testing.T) {
 
 	srv := newMasterTLSServer(t)
 	checker := newHealthChecker("", "")
-	require.NoError(t, checker.configErr)
 
 	err := checker.check(context.Background(), srv.URL)
 	require.Error(t, err, "an impostor TLS endpoint must not be reported healthy")
@@ -211,7 +212,6 @@ func TestCheckHealthTrustsConfiguredRootCAFile(t *testing.T) {
 	}), 0o600))
 
 	checker := newHealthChecker(caFile, "")
-	require.NoError(t, checker.configErr)
 	require.NoError(t, checker.check(context.Background(), srv.URL))
 }
 
@@ -266,4 +266,80 @@ func TestEmbeddedRootVerifiesProductionChain(t *testing.T) {
 	opts.DNSName = "impostor.example.com"
 	_, err = certs[0].Verify(opts)
 	require.Error(t, err, "hostname verification must stay on")
+}
+
+// TestCheckReverifiesTLSEachRun verifies every health check performs its own
+// TLS handshake. With a kept-alive connection only the first run verified the
+// certificate, so once the endpoint started serving an untrusted or expired
+// leaf to new clients (its leaves live about 24h) the monitor kept reporting
+// healthy over the old connection.
+func TestCheckReverifiesTLSEachRun(t *testing.T) {
+	t.Parallel()
+
+	untrustedKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	untrustedTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(time.Hour),
+	}
+	untrustedDER, err := x509.CreateCertificate(rand.Reader, untrustedTmpl, untrustedTmpl, &untrustedKey.PublicKey, untrustedKey)
+	require.NoError(t, err)
+
+	var rotated atomic.Bool
+	srv := httptest.NewUnstartedServer(masterHandler(t))
+	srv.TLS = &tls.Config{
+		// Called for every handshake, with or without SNI.
+		GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			if rotated.Load() {
+				return &tls.Config{
+					Certificates: []tls.Certificate{{Certificate: [][]byte{untrustedDER}, PrivateKey: untrustedKey}},
+					MinVersion:   tls.VersionTLS12,
+				}, nil
+			}
+			return nil, nil // keep httptest's certificate, trusted below
+		},
+		MinVersion: tls.VersionTLS12,
+	}
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600))
+
+	checker := newHealthChecker(caFile, "")
+	require.NoError(t, checker.check(context.Background(), srv.URL))
+
+	rotated.Store(true) // new handshakes now get an untrusted certificate
+	var unknownAuthority x509.UnknownAuthorityError
+	require.ErrorAs(t, checker.check(context.Background(), srv.URL), &unknownAuthority,
+		"the next run must re-verify the certificate, not reuse a verified connection")
+}
+
+// TestCheckRecoversAfterRootCAFileIsFixed verifies root_ca_file is read on
+// every run, so fixing or rotating the bundle takes effect at the next run
+// (as settings-example.yml promises) instead of only after a restart; until
+// then each run still fails closed.
+func TestCheckRecoversAfterRootCAFileIsFixed(t *testing.T) {
+	t.Parallel()
+
+	srv := newMasterTLSServer(t)
+	caFile := filepath.Join(t.TempDir(), "roots.pem") // not mounted yet
+	checker := newHealthChecker(caFile, "")
+
+	for range 2 {
+		require.ErrorContains(t, checker.check(context.Background(), srv.URL), "read root ca file")
+	}
+
+	require.NoError(t, os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: srv.Certificate().Raw,
+	}), 0o600))
+	require.NoError(t, checker.check(context.Background(), srv.URL), "a fixed root_ca_file must apply without a restart")
+
+	require.NoError(t, os.WriteFile(caFile, []byte("not a certificate"), 0o600))
+	require.ErrorContains(t, checker.check(context.Background(), srv.URL), "no PEM certificate",
+		"a broken bundle must fail closed again, never fall back to an unverified client")
 }
