@@ -35,7 +35,7 @@ def main():
         row = run_smoke(ROOT)
         print('CV_PRINT_SMOKE ' + json.dumps({key: row[key] for key in
               ('status', 'originalPassCount', 'cleanupComplete', 'missingOriginal',
-               'failedActions', 'skippedActions')}, sort_keys=True))
+               'failedActions', 'skippedActions', 'observations')}, sort_keys=True))
         return 0 if row['status'] == 'passed' else 1
     except (KeyError, probe.ProbeError):
         print('CV_PRINT_SMOKE setup_failed')
