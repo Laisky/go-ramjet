@@ -164,13 +164,18 @@ class FastCIContracts(unittest.TestCase):
             merge_into_side = git('rev-parse', 'HEAD')
             git('checkout', '-q', 'master')
             unrelated = commit('later.go', 'package fixture\n// master moves again\n', 'master moves again')
+            # A PR head that was updated from master, merged by GitHub after master moved on again.
+            updated_head = reversed_parents
+            git('checkout', '-q', '--detach', 'master')
+            git('merge', '-q', '--no-ff', '-m', 'Merge updated pr into master', updated_head)
+            merge_of_updated_head = git('rev-parse', 'HEAD')
             git('update-ref', 'refs/remotes/origin/master', 'master')
 
-            def run_main(checkout, **environment):
+            def run_main(checkout, expected=head, **environment):
                 """run_main runs the smoke entry point on one checkout and returns its code, output and run flag."""
                 git('checkout', '-q', '--detach', checkout)
                 output = io.StringIO()
-                with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD=head, **environment), \
+                with mock.patch.dict(os.environ, CV_PRINT_PROBE_EXPECTED_HEAD=expected, **environment), \
                         mock.patch.object(smoke, 'ROOT', root), \
                         mock.patch.object(smoke, 'run_smoke', return_value=passed) as run, \
                         contextlib.redirect_stdout(output):
@@ -189,6 +194,11 @@ class FastCIContracts(unittest.TestCase):
                     self.assertEqual(ran, accepted)
                     if not accepted:
                         self.assertEqual(output, 'CV_PRINT_SMOKE setup_failed\n')
+            # A head that already contains master is bound the same way; the superseded head is not.
+            for expected, accepted in ((updated_head, True), (head, False)):
+                with self.subTest(updated_head_merge=expected, accepted=accepted):
+                    code, output, ran = run_main(merge_of_updated_head, expected, CV_PRINT_PROBE_BASE_REF='master')
+                    self.assertEqual((code == 0, ran), (accepted, accepted), output)
             for environment in ({}, {'CV_PRINT_PROBE_BASE_REF': 'missing'},
                                 {'CV_PRINT_PROBE_BASE_REF': '../master'}):
                 with self.subTest(base=environment):
