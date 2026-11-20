@@ -126,7 +126,7 @@ func bindTask() {
 		log.Logger.Panic("create cv pdf renderer", zap.Error(err))
 	}
 
-	pdfService, err := NewPDFService(pdfRenderer, pdfStore)
+	pdfService, err := NewPDFService(pdfRenderer, pdfStore, s3Store)
 	if err != nil {
 		log.Logger.Panic("create cv pdf service", zap.Error(err))
 	}
