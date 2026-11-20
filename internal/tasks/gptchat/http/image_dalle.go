@@ -167,8 +167,9 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+user.OpenaiToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
@@ -214,8 +215,8 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 			}
 		} else if data.Url != "" {
 			logger.Debug("download from url", zap.Int("index", i), zap.String("url", data.Url))
-			// download from url
-			imgContent, err = downloadImage(ctx, data.Url)
+			// The URL comes from the upstream, so it inherits the upstream's trust.
+			imgContent, err = downloadImage(ctx, cli, data.Url)
 			if err != nil {
 				return nil, errors.Wrap(err, "download image from url")
 			}
@@ -261,8 +262,9 @@ func fetchImageFromAzureDalle(ctx context.Context,
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Api-Key", user.ImageToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(AzureCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
@@ -283,17 +285,30 @@ func fetchImageFromAzureDalle(ctx context.Context,
 		}
 	}
 
-	// download image
-	return downloadImage(ctx, resp.Data[0].Url)
+	// download image; the URL comes from the upstream, so it inherits the upstream's trust.
+	return downloadImage(ctx, cli, resp.Data[0].Url)
 }
 
-func downloadImage(ctx context.Context, url string) ([]byte, error) {
+// maxDownloadedImageBytes bounds one downloaded image or mask. Generated and
+// uploaded images are a few megabytes; the cap stops a caller-chosen URL from
+// streaming an unbounded body into memory.
+const maxDownloadedImageBytes = 32 << 20
+
+// downloadImage fetches the image at url with cli and returns its bytes.
+//
+// Parameters:
+//   - ctx: Request-scoped context carrying the logger and cancellation.
+//   - cli: Client matching the trust of url's origin; caller-chosen URLs need tenantEgressClient.
+//   - url: Image location.
+//
+// Returns the body, at most maxDownloadedImageBytes long, or a wrapped error.
+func downloadImage(ctx context.Context, cli *http.Client, url string) ([]byte, error) {
 	logger := gmw.GetLogger(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
-	imgResp, err := httpcli.Do(req) //nolint: bodyclose
+	imgResp, err := cli.Do(req) //nolint: bodyclose
 	if err != nil {
 		return nil, errors.Wrap(err, "download image")
 	}
@@ -303,7 +318,15 @@ func downloadImage(ctx context.Context, url string) ([]byte, error) {
 		return nil, errors.Errorf("download image got bad status code %d", imgResp.StatusCode)
 	}
 
-	return io.ReadAll(imgResp.Body)
+	content, err := io.ReadAll(io.LimitReader(imgResp.Body, maxDownloadedImageBytes+1))
+	if err != nil {
+		return nil, errors.Wrap(err, "read image")
+	}
+	if len(content) > maxDownloadedImageBytes {
+		return nil, errors.Errorf("image exceeds %d bytes", maxDownloadedImageBytes)
+	}
+
+	return content, nil
 }
 
 // EditImageHandler edits the caller's image (and optional mask) by prompt through
@@ -411,12 +434,23 @@ func EditImageHandler(ctx *gin.Context) {
 	})
 }
 
+// getDataFromUrlOrBase64 returns the image named by input, which is either an
+// http(s) URL or base64 content. The caller chose the URL, so it is always
+// fetched through tenantEgressClient.
 func getDataFromUrlOrBase64(ctx context.Context, input string) ([]byte, error) {
 	if strings.HasPrefix(input, "http") {
-		return downloadImage(ctx, input)
+		content, err := downloadImage(ctx, tenantEgressClient(), input)
+		if err != nil {
+			return nil, errors.Wrap(err, "download caller image")
+		}
+		return content, nil
 	}
 
-	return DecodeBase64(input)
+	content, err := DecodeBase64(input)
+	if err != nil {
+		return nil, errors.Wrap(err, "decode base64 image")
+	}
+	return content, nil
 }
 
 // fetchImageEditFromOpenai sends image, and mask when it is not empty, with prompt
@@ -486,8 +520,9 @@ func fetchImageEditFromOpenai(ctx context.Context,
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+user.OpenaiToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
@@ -518,7 +553,8 @@ func fetchImageEditFromOpenai(ctx context.Context,
 				return nil, errors.Wrap(err, "decode image")
 			}
 		} else if data.Url != "" {
-			imgContent, err = downloadImage(ctx, data.Url)
+			// The URL comes from the upstream, so it inherits the upstream's trust.
+			imgContent, err = downloadImage(ctx, cli, data.Url)
 			if err != nil {
 				return nil, errors.Wrap(err, "download image from url")
 			}

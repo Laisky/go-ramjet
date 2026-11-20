@@ -50,6 +50,7 @@ func resolveRamjetUser(ctx *gin.Context) (*config.UserConfig, error) {
 	resolved.UserName = "public"
 	if selectedBase != "" {
 		resolved.APIBase = selectedBase
+		resolved.APIBaseUserSelected = true
 	}
 	if resolved.APIBase != "" {
 		if err := validateRamjetAPIBase(resolved.APIBase); err != nil {

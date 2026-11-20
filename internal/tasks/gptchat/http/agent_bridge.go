@@ -189,7 +189,7 @@ func CallUpstreamResponsesCtx(
 		return nil, nil, errors.Wrap(err, "build responses http request")
 	}
 
-	resp, err := httpcli.Do(upReq) //nolint:bodyclose
+	resp, err := upstreamHTTPClient(deps.User).Do(upReq) //nolint:bodyclose
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "do upstream request")
 	}
@@ -636,7 +636,7 @@ func StreamUpstreamResponsesEventsCtx(
 		return nil, nil, errors.Wrap(err, "build responses http request")
 	}
 
-	resp, err := httpcli.Do(upReq) //nolint:bodyclose
+	resp, err := upstreamHTTPClient(deps.User).Do(upReq) //nolint:bodyclose
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "do upstream request")
 	}

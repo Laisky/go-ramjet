@@ -17,4 +17,10 @@ type MCPServerConfig struct {
 	// Session fields are optional and may be provided by the UI.
 	MCPProtocolVersion string `json:"mcp_protocol_version,omitempty"`
 	MCPSessionID       string `json:"mcp_session_id,omitempty"`
+
+	// OperatorCurated reports that URL comes from server configuration (the
+	// agent loop's curated server) rather than from the caller. Such servers
+	// use the server client and may live on private networks; every other
+	// server passes the public egress policy. It is never decoded from JSON.
+	OperatorCurated bool `json:"-"`
 }

@@ -470,10 +470,14 @@ func forceMCPEnabledWithCuratedServer(
 	curatedURL := strings.TrimSpace(curatedServer.URL)
 	seenCurated := false
 	for _, s := range cp.MCPServers {
-		merged = append(merged, s)
 		if curatedURL != "" && strings.TrimSpace(s.URL) == curatedURL {
+			// The caller's entry for the curated URL reaches only that
+			// operator-chosen origin (URLPrefix cannot change the host),
+			// so it shares the curated server's trust.
+			s.OperatorCurated = true
 			seenCurated = true
 		}
+		merged = append(merged, s)
 	}
 	if !seenCurated {
 		merged = append(merged, *curatedServer)
@@ -565,8 +569,9 @@ func resolveCuratedMCP(cfg *config.AgentLoopConfig) *httppkg.MCPServerConfig {
 		return nil
 	}
 	return &httppkg.MCPServerConfig{
-		URL:     raw,
-		Enabled: true,
+		URL:             raw,
+		Enabled:         true,
+		OperatorCurated: true,
 	}
 }
 

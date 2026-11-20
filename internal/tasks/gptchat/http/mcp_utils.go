@@ -368,7 +368,30 @@ func processMCPResponse(obj map[string]any) (string, error) {
 	return stringifyMCPResult(obj), nil
 }
 
-func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, auths []string, body []byte) (*http.Response, error) {
+// mcpHTTPClient returns the client for requests to server. Every endpoint of
+// a server shares the origin of its URL, so the choice follows where that URL
+// came from: an operator-curated server keeps the server client, and a
+// caller-supplied server passes the public egress policy on every hop.
+func mcpHTTPClient(server *MCPServerConfig) *http.Client {
+	if server != nil && server.OperatorCurated {
+		return httpcli
+	}
+	return tenantEgressClient()
+}
+
+// doMCPPost posts body to endpoint with client once per authorization
+// candidate in auths (or once without one) and returns the first 2xx response.
+//
+// Parameters:
+//   - ctx: Request context bounding every attempt.
+//   - client: Client chosen by mcpHTTPClient for the endpoint's server.
+//   - endpoint: MCP endpoint URL.
+//   - baseHeaders: Headers added to every attempt.
+//   - auths: Authorization header candidates tried in order.
+//   - body: Request payload replayed for each attempt.
+//
+// Returns the response, whose body the caller must close, or the last error.
+func doMCPPost(ctx context.Context, client *http.Client, endpoint string, baseHeaders http.Header, auths []string, body []byte) (*http.Response, error) {
 	tryAuths := auths
 	if len(tryAuths) == 0 {
 		tryAuths = []string{""}
@@ -389,7 +412,7 @@ func doMCPPost(ctx context.Context, endpoint string, baseHeaders http.Header, au
 			req.Header.Set("authorization", auth)
 		}
 
-		resp, err := httpcli.Do(req) //nolint:bodyclose
+		resp, err := client.Do(req) //nolint:bodyclose
 		if err != nil {
 			lastErr = errors.Wrap(err, "do request")
 			continue
@@ -488,7 +511,7 @@ func ensureMCPSession(ctx context.Context, server *MCPServerConfig, endpoint str
 	if err != nil {
 		return errors.Wrap(err, "marshal initialize")
 	}
-	resp, err := doMCPPost(ctx, endpoint, h, auths, body)
+	resp, err := doMCPPost(ctx, mcpHTTPClient(server), endpoint, h, auths, body)
 	if err != nil {
 		return errors.Wrap(err, "initialize")
 	}
@@ -510,7 +533,7 @@ func ensureMCPSession(ctx context.Context, server *MCPServerConfig, endpoint str
 	if err != nil {
 		return errors.Wrap(err, "marshal initialized")
 	}
-	resp2, err := doMCPPost(ctx, endpoint, h, auths, b2)
+	resp2, err := doMCPPost(ctx, mcpHTTPClient(server), endpoint, h, auths, b2)
 	if err != nil {
 		return errors.Wrap(err, "notifications/initialized")
 	}

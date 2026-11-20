@@ -26,7 +26,6 @@ import (
 	gptTasks "github.com/Laisky/go-ramjet/internal/tasks/gptchat/tasks"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/utils"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/openai"
 )
 
 var (
@@ -34,7 +33,8 @@ var (
 	urlRegexp       = regexp.MustCompile(`https:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
 )
 
-// FetchURLContent fetch url content
+// FetchURLContent fetches the content of url, a URL found in the caller's
+// prompt. Every request it makes passes the public egress policy.
 func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) {
 	// check cache
 	content, ok := urlContentCache.Load(url)
@@ -51,7 +51,7 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 		return nil, errors.Wrapf(err, "new request %q", url)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537")
-	resp, err := httpcli.Do(req) // nolint:bodyclose
+	resp, err := tenantEgressClient().Do(req) // nolint:bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", url)
 	}
@@ -128,8 +128,8 @@ func (r *FrontendReq) embeddingGoogleSearch(gctx *gin.Context, user *config.User
 		return
 	}
 
-	functionCalling, err := openai.OneshotChat(gmw.Ctx(gctx),
-		user.APIBase, user.OpenaiToken, defaultChatModel, "",
+	functionCalling, err := userOneshotChat(gmw.Ctx(gctx),
+		user, defaultChatModel, "",
 		webSearchQueryPrompt+"\n\n"+lastUserPrompt.String())
 	if err != nil {
 		logger.Error("google search query", zap.Error(err))

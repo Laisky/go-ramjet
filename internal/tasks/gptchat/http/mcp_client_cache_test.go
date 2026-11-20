@@ -74,8 +74,9 @@ func TestMCPTransportCache_RESTHitSkipsProbe(t *testing.T) {
 		})
 	}))
 	t.Cleanup(ts.Close)
+	tsURL := mcpFixtureURL(t, ts)
 
-	server := &MCPServerConfig{URL: ts.URL, APIKey: "k", Enabled: true}
+	server := &MCPServerConfig{URL: tsURL, APIKey: "k", Enabled: true}
 
 	// First call: probes until /v1/tools/call succeeds. With the
 	// guessMCPToolCallURLs order /v1/tools/call is first, so only one
@@ -91,7 +92,7 @@ func TestMCPTransportCache_RESTHitSkipsProbe(t *testing.T) {
 	cached, ok := loadMCPTransport(server.URL)
 	require.True(t, ok, "cache should be populated after first success")
 	require.Equal(t, mcpTransportREST, cached.Transport)
-	require.Equal(t, ts.URL+successPath, cached.Endpoint)
+	require.Equal(t, tsURL+successPath, cached.Endpoint)
 
 	// Second call: must hit only the cached endpoint, no other paths.
 	res, err = callMCPTool(context.Background(), server, "tool", `{}`, nil)
@@ -131,8 +132,9 @@ func TestMCPTransportCache_FailureInvalidates(t *testing.T) {
 		})
 	}))
 	t.Cleanup(ts.Close)
+	tsURL := mcpFixtureURL(t, ts)
 
-	server := &MCPServerConfig{URL: ts.URL, APIKey: "k", Enabled: true}
+	server := &MCPServerConfig{URL: tsURL, APIKey: "k", Enabled: true}
 
 	// Populate cache.
 	_, err := callMCPTool(context.Background(), server, "tool", `{}`, nil)
@@ -189,8 +191,9 @@ func TestMCPTransportCache_JSONRPCHitSkipsRESTSweep(t *testing.T) {
 		})
 	}))
 	t.Cleanup(ts.Close)
+	tsURL := mcpFixtureURL(t, ts)
 
-	server := &MCPServerConfig{URL: ts.URL, APIKey: "k", Enabled: true}
+	server := &MCPServerConfig{URL: tsURL, APIKey: "k", Enabled: true}
 
 	// First call: REST probe sweeps and fails, then JSON-RPC succeeds.
 	res, err := callMCPTool(context.Background(), server, "tool", `{}`, nil)
@@ -242,8 +245,8 @@ func TestMCPTransportCache_DistinctServers(t *testing.T) {
 	ts2 := mkServer()
 	t.Cleanup(ts2.Close)
 
-	srv1 := &MCPServerConfig{URL: ts1.URL, APIKey: "k", Enabled: true}
-	srv2 := &MCPServerConfig{URL: ts2.URL, APIKey: "k", Enabled: true}
+	srv1 := &MCPServerConfig{URL: mcpFixtureURL(t, ts1), APIKey: "k", Enabled: true}
+	srv2 := &MCPServerConfig{URL: mcpFixtureURL(t, ts2), APIKey: "k", Enabled: true}
 
 	_, err := callMCPTool(context.Background(), srv1, "tool", `{}`, nil)
 	require.NoError(t, err)
