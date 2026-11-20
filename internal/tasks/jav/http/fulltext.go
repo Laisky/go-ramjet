@@ -19,14 +19,45 @@ import (
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/dto"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/model"
 	"github.com/Laisky/go-ramjet/internal/tasks/jav/service"
+	"github.com/Laisky/go-ramjet/library/db/mongosearch"
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
 var searchCache = gutils.NewExpCache[[]*dto.MovieResponse](context.Background(), time.Hour)
 
+// maxSearchQueryBytes bounds the `q` parameter. Search is a substring match,
+// so a query longer than every stored word can never match anything; the bound
+// sits far above any plausible word yet far below MongoDB's ~32 KiB regex
+// limit, and it also caps the size of each searchCache key.
+const maxSearchQueryBytes = 512
+
+// wordFilter builds the fulltext filter for the user-supplied search query.
+//
+// The query is a literal, case-insensitive substring (see
+// mongosearch.LiteralSubstring): pattern syntax such as a catastrophic-
+// backtracking pattern, anchors, classes or alternation only matches itself,
+// and the typed BSON regular expression can never become an operator. (An
+// empty query still matches every word, limited to 30 results, as before.)
+//
+// Parameters:
+//   - query: raw `q` parameter from the request.
+//
+// Returns:
+//   - bson.D: filter matching fulltext documents whose word contains query.
+func wordFilter(query string) bson.D {
+	return bson.D{{Key: "word", Value: mongosearch.LiteralSubstring(query)}}
+}
+
 // Search is a http handler to search movies
 func Search(ctx *gin.Context) {
 	query := ctx.Query("q")
+	// Queries MongoDB refuses as a pattern are a client error here; reaching
+	// the database they would fail in web.AbortErr, which logs at the alerting
+	// ERROR level.
+	if err := mongosearch.ValidateQuery(query, maxSearchQueryBytes); err != nil {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"err": err.Error()})
+		return
+	}
 
 	// search cache
 	if res, ok := searchCache.Load(query); ok {
@@ -37,7 +68,7 @@ func Search(ctx *gin.Context) {
 	var docus []model.Fulltext
 	cur, err := model.GetColFulltext().
 		Find(gmw.Ctx(ctx),
-			bson.M{"word": bson.M{"$regex": query, "$options": "i"}},
+			wordFilter(query),
 			options.Find().SetLimit(30),
 		)
 	if web.AbortErr(ctx, errors.Wrap(err, "search fulltext")) {

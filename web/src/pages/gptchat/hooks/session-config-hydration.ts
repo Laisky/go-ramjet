@@ -4,8 +4,9 @@
  *
  * Pipeline order matters. Model migrations and the sync key come first; the
  * API endpoint is settled next because every credential decision is scoped
- * to it; URL overrides are applied as guarded writes; only then is the API
- * token invariant enforced, so no write path can bypass it.
+ * to it; the stored API token is repaired next, so a key it sets aside is
+ * known; URL overrides are then applied as guarded writes, and a link that
+ * would change a stored session's endpoint or key waits for the user.
  */
 import { kvGet, kvSet, StorageKeys } from '@/utils/storage'
 import { DefaultModel, ImageModelFluxDev, isImageModel } from '../models'
@@ -17,7 +18,9 @@ import {
   isSameApiEndpoint,
 } from '../utils/api-token'
 import {
+  holdLinkCredentialChange,
   isApiTokenClobberedBySyncKey,
+  type LinkCredentialChange,
   repairStoredApiToken,
   validateCredentialUpdate,
 } from '../utils/credential-policy'
@@ -75,11 +78,22 @@ function pickFallbackApiToken(
  * HydratedSessionConfigResult is the outcome of hydrateSessionConfig: the
  * usable config, the raw stored config (null when absent), and whether the
  * usable config differs from storage and should be written back.
+ * pendingLinkChange is the endpoint and key a URL asked to change on a
+ * stored session (I4); it is not applied and awaits confirmation.
  */
 export interface HydratedSessionConfigResult {
   config: SessionConfig
   savedConfig: SessionConfig | null
   changed: boolean
+  pendingLinkChange?: LinkCredentialChange
+}
+
+/**
+ * PendingLinkChange is the endpoint and key a link asked to change, held for
+ * the session it was opened in until the user confirms or dismisses it.
+ */
+export interface PendingLinkChange extends LinkCredentialChange {
+  sessionId: number
 }
 
 /**
@@ -104,7 +118,9 @@ export function mergeSessionConfigs(
  * sessionId selects the stored config; options.fallbackConfig (normally the
  * previously active session) supplies the API endpoint of a missing config
  * and a token for a tokenless session on the same endpoint; and
- * options.applyUrlOverrides applies URL query overrides as guarded writes.
+ * options.applyUrlOverrides applies URL query overrides as guarded writes;
+ * an endpoint or key change on a stored session is returned as
+ * pendingLinkChange instead of being applied.
  * It persists only a newly adopted or generated browser-wide sync key; the
  * session config itself is returned with changed set, and the caller decides
  * whether to write it back.
@@ -198,6 +214,23 @@ export async function hydrateSessionConfig(
     configChanged = true
   }
 
+  // A token that is really the sync key (browser password-manager autofill
+  // in the settings sidebar) is never sent anywhere. The session falls back
+  // to the free tier and the UI asks the user to re-enter or pick a key;
+  // another session's key is never adopted silently, because sharing an
+  // endpoint does not mean sharing an account. This runs before URL
+  // overrides, so a key the repair sets aside already counts as held when
+  // a link asks to change the session's endpoint (I4).
+  const repair = repairStoredApiToken(finalConfig, [globalSyncKey])
+  if (repair.outcome !== 'healthy') {
+    finalConfig = repair.config
+    configChanged = true
+    console.warn(
+      `[useConfig] API token awaiting reset: session=${sessionId} outcome=${repair.outcome}`,
+    )
+  }
+
+  let pendingLinkChange: LinkCredentialChange | undefined
   if (options?.applyUrlOverrides) {
     const overrideResult = applyUrlOverridesToConfig(finalConfig)
     if (overrideResult.mutated) {
@@ -219,23 +252,24 @@ export async function hydrateSessionConfig(
             accepted.api_token_reset_required
         }
       }
-      finalConfig = overridden
+      // The server sends a BYOK key, and the session's recent history, to
+      // whatever endpoint the client names, so a link must not silently
+      // change a stored session's endpoint or key (I4).
+      const held = holdLinkCredentialChange(
+        finalConfig,
+        overridden,
+        globalSyncKey,
+        { firstVisit: !savedConfig },
+      )
+      if (held.pending) {
+        pendingLinkChange = held.pending
+        console.warn(
+          `[useConfig] holding URL credential change for confirmation: session=${sessionId} endpoint=${held.pending.apiBase !== undefined} key=${held.pending.apiToken !== undefined}`,
+        )
+      }
+      finalConfig = held.config
       configChanged = true
     }
-  }
-
-  // A token that is really the sync key (browser password-manager autofill
-  // in the settings sidebar) is never sent anywhere. The session falls back
-  // to the free tier and the UI asks the user to re-enter or pick a key;
-  // another session's key is never adopted silently, because sharing an
-  // endpoint does not mean sharing an account.
-  const repair = repairStoredApiToken(finalConfig, [globalSyncKey])
-  if (repair.outcome !== 'healthy') {
-    finalConfig = repair.config
-    configChanged = true
-    console.warn(
-      `[useConfig] API token awaiting reset: session=${sessionId} outcome=${repair.outcome}`,
-    )
   }
 
   if (
@@ -258,5 +292,6 @@ export async function hydrateSessionConfig(
     config: finalConfig,
     savedConfig,
     changed: configChanged,
+    pendingLinkChange,
   }
 }

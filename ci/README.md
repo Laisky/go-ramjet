@@ -19,6 +19,16 @@ Mutation controls retain harmless edits and actual publication, target, security
 and failure-path regressions. These local tests do not model GitHub queue scheduling
 or replace final-head hosted CI and separately authorized release acceptance.
 
+## Workflow token permissions
+
+`/usr/bin/python3 -B ci/test_workflow_permissions.py` requires every workflow to
+declare top-level `permissions` and compares each job's effective `GITHUB_TOKEN`
+write scopes with a reviewed allowlist. The release workflow denies all scopes by
+default; only its two image jobs read contents for checkout. Docker Hub and SSH use
+their own secrets, and the `gha` build cache uses the Actions runtime token. A new
+workflow, a new release job, or a new write grant fails until the allowlist is
+reviewed and updated.
+
 ## Browser dependency controls
 
 `probe_cv_print.py` preserves the inherited accepted and exact source/module
@@ -80,7 +90,11 @@ The six-cell browser run is required; cache preparation alone is not acceptance.
 
 PR validation runs format, unit and regression checks once. A current-source
 browser smoke runs when Go, dependency or browser CI inputs change; it retains
-the browser identity and network controls. The historical six-cell browser
+the browser identity and network controls. The smoke runs on GitHub's merge
+checkout, which differs from the PR head whenever `master` has moved. It accepts
+that checkout only if it is a clean two-parent merge whose second parent is the
+PR head, so the tested source contains every change in the head. The manual
+browser matrix still requires the exact commit tree. The historical six-cell browser
 matrix, SPA benchmark and production-image build run through the
 `pull-request-validation` workflow's manual dispatch with an explicit base
 commit. Optional issue-94 paired-service qualification is available there.

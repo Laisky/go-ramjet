@@ -1,46 +1,53 @@
 package password_test
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/Laisky/go-ramjet/library/log"
-
 	"github.com/Laisky/zap"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/elasticsearch/password"
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
+// TestGeneratePasswdByDate verifies the password rotates with the month and
+// the secret, and stays constant within a month.
 func TestGeneratePasswdByDate(t *testing.T) {
-	now, _ := time.Parse("20060102 15", "20060101 12")
+	now, err := time.Parse("20060102 15", "20060101 12")
+	require.NoError(t, err)
 	secret := "fjfjkejflewjfjewfiwefijweifj"
-	passwd1 := password.GeneratePasswdByDate(now, secret) // origin
-	t.Logf("got pw1: %v", passwd1)
-	passwd2 := password.GeneratePasswdByDate(now, secret+"1") // secret change
-	t.Logf("got pw2: %v", passwd2)
+	passwd1 := password.GeneratePasswdByDate(now, secret)                      // origin
+	passwd2 := password.GeneratePasswdByDate(now, secret+"1")                  // secret change
 	passwd3 := password.GeneratePasswdByDate(now.Add(24*40*time.Hour), secret) // new month
-	t.Logf("got pw3: %v", passwd3)
-	fmt.Println("now", now)
-	passwd4 := password.GeneratePasswdByDate(now.Add(-24*time.Hour), secret) // new month
-	t.Logf("got pw4: %v", passwd4)
-	passwd5 := password.GeneratePasswdByDate(now.Add(40*time.Hour), secret) // same month
-	t.Logf("got pw5: %v", passwd5)
+	passwd4 := password.GeneratePasswdByDate(now.Add(-24*time.Hour), secret)   // previous month
+	passwd5 := password.GeneratePasswdByDate(now.Add(40*time.Hour), secret)    // same month
 
-	if passwd2 == passwd1 {
-		t.Error("pw2 should not equal to pw1")
-	}
-	if passwd3 == passwd1 {
-		t.Error("pw3 should not equal to pw1")
-	}
-	if passwd4 == passwd1 {
-		t.Error("pw4 should not equal to pw1")
-	}
-	if passwd5 != passwd1 {
-		t.Error("pw5 should equal to pw1")
-	}
+	require.NotEqual(t, passwd1, passwd2, "secret change must rotate the password")
+	require.NotEqual(t, passwd1, passwd3, "new month must rotate the password")
+	require.NotEqual(t, passwd1, passwd4, "previous month must differ")
+	require.Equal(t, passwd1, passwd5, "same month must keep the password")
+}
 
-	// t.Error()
+// TestGeneratePasswdByDateDerivationIsFrozen pins the exact derivation,
+// hex(SHA1(YYYYMM || secret))[:15], with vectors computed independently
+// (Python hashlib).
+//
+// CodeQL go/weak-sensitive-data-hashing #67 flags the SHA-1 call, but this is
+// not password storage: the server-side rotation secret (operator config, never
+// request input) is expanded into the Elasticsearch password itself, which is
+// pushed to the configured password APIs; nothing here stores or verifies a
+// hash. Recovering the secret from an output means guessing the secret, and
+// SHA-1's collision weakness does not apply to this keyed derivation. Swapping the algorithm would silently change the password
+// every consumer derives for the current month, so the format must not change.
+func TestGeneratePasswdByDateDerivationIsFrozen(t *testing.T) {
+	const secret = "synthetic-es-rotation-secret"
+
+	nov := time.Date(2026, time.November, 19, 6, 0, 0, 0, time.UTC)
+	require.Equal(t, "8cd77763dfa13f4", password.GeneratePasswdByDate(nov, secret))
+
+	dec := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+	require.Equal(t, "3b128d6917b80b0", password.GeneratePasswdByDate(dec, secret))
 }
 
 func init() {

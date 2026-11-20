@@ -9,6 +9,7 @@ import {
   isRetiredResearchModel,
 } from '../models'
 import { DefaultSessionConfig, type SessionConfig } from '../types'
+import { isValidApiBase } from './api-token'
 
 export const DEFAULT_SESSION_ID = 1
 
@@ -362,7 +363,8 @@ export function normalizeConfigNumericFields(
  * applyUrlOverridesToConfig applies the page URL's query parameters to config
  * and removes every consumed or protected parameter from the address bar.
  * Only paths in UrlSettableConfigPaths are set; fields in
- * UrlProtectedConfigKeys are stripped from the URL without being applied, and
+ * UrlProtectedConfigKeys, and an api_base the server would reject (see
+ * isValidApiBase), are stripped from the URL without being applied, and
  * every other parameter is left untouched. config itself is never mutated.
  * It returns the resulting config and whether any field changed.
  */
@@ -380,7 +382,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
   }
 
   const updatedConfig = deepCloneConfig(config)
-  let strippedProtected = false
+  let strippedParams = false
 
   entries.forEach(([rawKey, rawValue]) => {
     const normalizedKey = normalizeUrlParamKey(rawKey)
@@ -396,7 +398,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
       // history or bookmarks.
       console.warn(`[config] ignored protected URL parameter: ${rootKey}`)
       searchParams.delete(rawKey)
-      strippedProtected = true
+      strippedParams = true
       return
     }
     if (pathSegments.some((segment) => UrlForbiddenPathSegments.has(segment))) {
@@ -409,6 +411,14 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
       return
     }
 
+    if (targetPath === 'api_base' && !isValidApiBase(rawValue)) {
+      // The server would ignore it and realtime audio would fail on it.
+      console.warn('[config] ignored invalid URL parameter: api_base')
+      searchParams.delete(rawKey)
+      strippedParams = true
+      return
+    }
+
     const record = resolveUrlTargetRecord(updatedConfig, target)
     const currentValue = readOwnField(record, target.field)
     const coercedValue = coerceConfigValue(
@@ -418,7 +428,10 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
       target.defaultValue,
     )
     if (coercedValue === currentValue) {
+      // Consumed all the same: a credential must not stay in the address bar
+      // or history just because it matches what is stored.
       searchParams.delete(rawKey)
+      strippedParams = true
       return
     }
 
@@ -437,7 +450,7 @@ export function applyUrlOverridesToConfig(config: SessionConfig): {
     searchParams.delete(rawKey)
   })
 
-  if (mutated || strippedProtected) {
+  if (mutated || strippedParams) {
     const newSearch = searchParams.toString()
     window.history.replaceState(
       {},

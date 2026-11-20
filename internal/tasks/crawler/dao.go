@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/Laisky/go-ramjet/library/db/mongosearch"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -43,9 +44,9 @@ type SearchResult struct {
 func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err error) {
 	// search in title
 	titleRets := make([]SearchResult, 0)
-	titleRegex := regexp.QuoteMeta(text)
+	textRegex := mongosearch.LiteralSubstring(text)
 	if cursor, err := d.DB.docusCol().Find(ctx,
-		bson.M{"title": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		bson.M{"title": textRegex},
 		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &titleRets); err != nil {
@@ -55,7 +56,7 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 	// search in content
 	contentRets := make([]SearchResult, 0)
 	if cursor, err := d.DB.docusCol().Find(ctx,
-		bson.M{"text": primitive.Regex{Pattern: titleRegex, Options: "i"}},
+		bson.M{"text": textRegex},
 		options.Find().SetLimit(10)); err != nil {
 		return nil, errors.Wrap(err, "search")
 	} else if err := cursor.All(ctx, &contentRets); err != nil {
@@ -68,29 +69,47 @@ func (d *Dao) Search(ctx context.Context, text string) (rets []SearchResult, err
 
 const searchCtxSpan = 20
 
-func (d *Dao) extractSearchContext(pattern string, rets []SearchResult) []SearchResult {
-	reg, err := regexp.Compile("(?i)" + pattern)
-	if err != nil {
-		log.Logger.Warn("compile pattern", zap.Error(err))
-		return rets
-	}
+// extractSearchContext keeps one result per matching document, in input order.
+// It highlights a body match when present, otherwise a title match. Both use
+// the same literal, case-insensitive query and HTML escaping.
+// Parameters:
+//   - query: untrusted search text.
+//   - rets: candidates returned by MongoDB, with title results first.
+//
+// Returns:
+//   - []SearchResult: unique matching documents with Context set.
+func (d *Dao) extractSearchContext(query string, rets []SearchResult) []SearchResult {
+	// QuoteMeta output always compiles.
+	reg := regexp.MustCompile("(?i)" + regexp.QuoteMeta(query))
 
+	seen := make(map[primitive.ObjectID]struct{}, len(rets))
 	var filtered []SearchResult
-	for i := range rets {
-		loc := reg.FindStringIndex(rets[i].Text)
+	for _, result := range rets {
+		if _, duplicate := seen[result.ID]; duplicate {
+			continue
+		}
+
+		source := result.Text
+		loc := reg.FindStringIndex(source)
+		if loc == nil {
+			source = result.Title
+			loc = reg.FindStringIndex(source)
+		}
 		if loc == nil {
 			continue
 		}
 
 		begin := gutils.Max(loc[0]-searchCtxSpan, 0)
-		end := gutils.Min(loc[1]+searchCtxSpan, len(rets[i].Text))
-		rets[i].Context = fmt.Sprintf("%s<mark>%s</mark>%s",
-			html.EscapeString(rets[i].Text[begin:loc[0]]),
-			html.EscapeString(rets[i].Text[loc[0]:loc[1]]),
-			html.EscapeString(rets[i].Text[loc[1]:end]),
+		end := gutils.Min(loc[1]+searchCtxSpan, len(source))
+		result.Context = fmt.Sprintf("%s<mark>%s</mark>%s",
+			html.EscapeString(source[begin:loc[0]]),
+			html.EscapeString(source[loc[0]:loc[1]]),
+			html.EscapeString(source[loc[1]:end]),
 		)
-
-		filtered = append(filtered, rets[i])
+		filtered = append(filtered, result)
+		if !result.ID.IsZero() {
+			seen[result.ID] = struct{}{}
+		}
 	}
 
 	return filtered

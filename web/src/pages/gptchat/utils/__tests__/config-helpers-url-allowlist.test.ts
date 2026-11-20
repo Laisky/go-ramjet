@@ -120,6 +120,47 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       },
     )
 
+    it.each([
+      ['userinfo', 'https://evil:x@provider-a.example'],
+      ['a script URL', 'javascript:alert(1)'],
+      ['a non-http scheme', 'ftp://provider-a.example'],
+      ['a query string', 'https://provider-a.example/v1?x=1'],
+      ['a fragment', 'https://provider-a.example/v1#x'],
+      ['no URL at all', 'provider-a'],
+      // Browsers repair these into a URL, but Go's url.Parse (and so the
+      // server) refuses or reads them differently.
+      ['no slashes', 'https:evil.example'],
+      ['backslashes', 'https:\\\\evil.example\\v1'],
+      ['an empty user', 'https://@evil.example'],
+      ['an empty user and password', 'https://:@provider-a.example'],
+      [
+        'a backslash before userinfo',
+        'https://provider-a.example\\@evil.example',
+      ],
+      ['a tab in the host', 'https://ev\til.example'],
+      ['a percent-encoded host', 'https://evil%2Eexample'],
+      // Every request carries api_base in the X-Laisky-Api-Base header, and
+      // fetch refuses header values outside ISO-8859-1.
+      ['a non-ASCII host', 'https://例え.テスト/v1'],
+      ['a Latin-1 host', 'https://café.example'],
+      // A bare ? or # leaves url.search and url.hash empty, but Go keeps it
+      // and builds `…/v1?/v1/responses`.
+      ['a bare query mark', 'https://provider-a.example/v1?'],
+      ['a bare fragment mark', 'https://provider-a.example/v1#'],
+      // The browser reads these as IPv4 addresses, Go as host names.
+      ['a hex IPv4 host', 'https://0x7f.1/'],
+      ['a short IPv4 host', 'https://127.1/'],
+      ['an integer IPv4 host', 'https://2130706433/v1'],
+      ['an octal IPv4 host', 'https://0177.0.0.1:8443/v1'],
+    ])('rejects an api_base with %s', (_name, value) => {
+      const { config, mutated } = applyWithSearch(
+        `?api_base=${encodeURIComponent(value)}`,
+      )
+      expect(config.api_base).toBe(DefaultSessionConfig.api_base)
+      expect(mutated).toBe(false)
+      expect(window.location.search).toBe('')
+    })
+
     it('keeps api_base a string when a URL addresses a child of it', () => {
       const { config, mutated } = applyWithSearch('?api_base.foo=1')
       expect(config.api_base).toBe(DefaultSessionConfig.api_base)
@@ -238,6 +279,32 @@ describe('applyUrlOverridesToConfig allowlist', () => {
       expect(config.sync_key).toBe('sync-original')
       expect(config.mcp_servers).toEqual(DefaultSessionConfig.mcp_servers)
       expect(config.updated_at).toBe(DefaultSessionConfig.updated_at)
+      expect(window.location.search).toBe('?foo=bar')
+    })
+
+    it.each([
+      'https://provider-b.example/v1',
+      'https://provider-b.example:8443/openai/v1',
+      'http://[2001:db8::1]:3000',
+      'http://127.0.0.1:3000/v1',
+      'https://provider-b.example.:8443',
+      'HTTPS://Provider-B.Example/V1/',
+      'https://provider-b.example/',
+    ])('accepts the API base %s', (value) => {
+      const { config, mutated } = applyWithSearch(
+        `?api_base=${encodeURIComponent(value)}`,
+      )
+      expect(config.api_base).toBe(value)
+      expect(mutated).toBe(true)
+      expect(window.location.search).toBe('')
+    })
+
+    it('strips a credential param that equals the stored value', () => {
+      const { config, mutated } = applyWithSearch(
+        '?api_key=sk-original&foo=bar',
+      )
+      expect(mutated).toBe(false)
+      expect(config.api_token).toBe('sk-original')
       expect(window.location.search).toBe('?foo=bar')
     })
 

@@ -13,6 +13,11 @@ on:
       - 'test/**'
       - 'ci/**'
 
+# Deny every GITHUB_TOKEN scope by default. Jobs that check out the repository
+# opt in to read-only contents. Docker Hub and SSH use their own secrets, and the
+# gha build cache uses the Actions runtime token, which these scopes do not control.
+permissions: {}
+
 jobs:
   check_skip:
     runs-on: ubuntu-latest
@@ -35,6 +40,8 @@ jobs:
     needs: check_skip
     if: needs.check_skip.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     concurrency:
       group: build_latest-${{ github.ref }}
       cancel-in-progress: true
@@ -83,6 +90,8 @@ jobs:
     needs: [check_skip, build_latest]
     if: needs.check_skip.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     concurrency:
       group: build_latest_cache-${{ github.ref }}
       cancel-in-progress: true

@@ -5,10 +5,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
+// TestCheckHealth verifies every health-check acceptance rule.
 func TestCheckHealth(t *testing.T) {
 	t.Parallel()
+
+	checker := newHealthChecker("", "")
 
 	for _, tc := range []struct {
 		name    string
@@ -70,32 +75,31 @@ func TestCheckHealth(t *testing.T) {
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.body))
+				if _, err := w.Write([]byte(tc.body)); err != nil {
+					t.Errorf("write health body: %v", err)
+				}
 			}))
 			defer srv.Close()
 
-			err := checkHealth(context.Background(), srv.URL)
-			if tc.wantErr && err == nil {
-				t.Fatalf("expected error, got nil")
+			err := checker.check(context.Background(), srv.URL)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
 			}
-			if !tc.wantErr && err != nil {
-				t.Fatalf("expected no error, got %+v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
 
+// TestExplicitlyEnabled_DefaultOff verifies the task stays off when not selected.
 func TestExplicitlyEnabled_DefaultOff(t *testing.T) {
 	// With no `-t` flag bound and no TASKS env, the task must stay disabled.
 	t.Setenv("TASKS", "")
-	if explicitlyEnabled() {
-		t.Fatal("pieverse_alert must be disabled by default when not selected")
-	}
+	require.False(t, explicitlyEnabled(), "pieverse_alert must be disabled by default when not selected")
 }
 
+// TestExplicitlyEnabled_ViaEnv verifies the task can be selected via TASKS.
 func TestExplicitlyEnabled_ViaEnv(t *testing.T) {
 	t.Setenv("TASKS", "heartbeat,pieverse_alert")
-	if !explicitlyEnabled() {
-		t.Fatal("pieverse_alert should be enabled when present in TASKS env")
-	}
+	require.True(t, explicitlyEnabled(), "pieverse_alert should be enabled when present in TASKS env")
 }
