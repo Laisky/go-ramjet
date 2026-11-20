@@ -14,9 +14,22 @@ import (
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
-// freeUserQuotaHook supplies an empty quota window for handler unit tests.
+// freeUserQuotaHook supplies an empty quota window for handler unit tests and
+// tracks the net tokens reserved (reservations plus finalize adjustments).
 type freeUserQuotaHook struct {
-	reads atomic.Int32
+	reads       atomic.Int32
+	reserved    atomic.Int64
+	adjustments atomic.Int32
+	net         atomic.Int64
+}
+
+// int64Arg returns the integer command argument at index i, or 0 when absent.
+func int64Arg(args []any, i int) int64 {
+	if i >= len(args) {
+		return 0
+	}
+	v, _ := args[i].(int64)
+	return v
 }
 
 // DialHook rejects unexpected connections so the test cannot use a Redis service.
@@ -40,6 +53,9 @@ func (h *freeUserQuotaHook) ProcessHook(redis.ProcessHook) redis.ProcessHook {
 			if cmd.Name() != "hincrby" {
 				return errors.Errorf("unexpected quota command %s", cmd.Name())
 			}
+			incr := int64Arg(cmd.Args(), 3) // hincrby key field incr
+			h.reserved.Add(incr)
+			h.net.Add(incr)
 			cmd.SetVal(0)
 		case *redis.BoolCmd:
 			if cmd.Name() != "expire" {
@@ -50,6 +66,8 @@ func (h *freeUserQuotaHook) ProcessHook(redis.ProcessHook) redis.ProcessHook {
 			if cmd.Name() != "evalsha" {
 				return errors.Errorf("unexpected quota command %s", cmd.Name())
 			}
+			h.adjustments.Add(1)
+			h.net.Add(int64Arg(cmd.Args(), 5)) // evalsha sha numkeys key field delta ttl
 			cmd.SetVal(int64(0))
 		default:
 			return errors.Errorf("unexpected quota command %s", command.Name())
