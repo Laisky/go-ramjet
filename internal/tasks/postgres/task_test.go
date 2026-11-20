@@ -41,7 +41,7 @@ func TestSelectExpiredBackupKeys(t *testing.T) {
 		"backup/postgres/prod/appdb/other-20260101.gz",
 	}
 
-	expiredKeys := selectExpiredBackupKeys("backup/postgres/prod/appdb/appdb-", keys, 2)
+	expiredKeys := selectExpiredBackupKeys("backup/postgres/prod/appdb/appdb-", gzipBackupSuffix, keys, 2)
 	require.Equal(t, []string{
 		"backup/postgres/prod/appdb/appdb-20260102.gz",
 		"backup/postgres/prod/appdb/appdb-20260101.gz",
@@ -50,9 +50,10 @@ func TestSelectExpiredBackupKeys(t *testing.T) {
 
 // TestLoadCfgBackupRetention verifies configured and default retention values.
 func TestLoadCfgBackupRetention(t *testing.T) {
-	gconfig.Shared.Set("tasks.postgres.s3.keep_last", 0)
-	require.Equal(t, defaultBackupHistoryLimit, loadCfg().S3.KeepLast)
+	config := gconfig.New()
+	config.Set("tasks.postgres.s3.keep_last", 0)
+	require.Equal(t, defaultBackupHistoryLimit, loadCfg(config).S3.KeepLast)
 
-	gconfig.Shared.Set("tasks.postgres.s3.keep_last", 7)
-	require.Equal(t, 7, loadCfg().S3.KeepLast)
+	config.Set("tasks.postgres.s3.keep_last", 7)
+	require.Equal(t, 7, loadCfg(config).S3.KeepLast)
 }

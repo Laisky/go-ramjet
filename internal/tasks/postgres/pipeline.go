@@ -8,6 +8,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+
+	"filippo.io/age"
 
 	"github.com/Laisky/errors/v2"
 	"github.com/Laisky/zap"
@@ -127,7 +130,86 @@ func dumpAndGzipToWriter(ctx context.Context, db cfgDB, w io.Writer) error {
 	return nil
 }
 
-// streamBackupToS3 connects a pipe between pg_dump->gzip and S3 PutObject.
+// maxBackupPasswordFileBytes caps memory use for an accidentally misconfigured
+// secret file before attempting the age KDF.
+const maxBackupPasswordFileBytes = 4096
+
+// readBackupPassword returns the configured passphrase, reading at most one
+// small secret file. Errors avoid exposing the pathname or its contents.
+func readBackupPassword(db cfgDB) (string, error) {
+	if db.BackupEncryptionPasswordFile == "" {
+		return db.BackupEncryptionPassword, nil
+	}
+	info, err := os.Stat(db.BackupEncryptionPasswordFile)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", errors.New("backup encryption password file must be a readable regular file")
+	}
+	f, err := os.Open(db.BackupEncryptionPasswordFile)
+	if err != nil {
+		return "", errors.New("cannot open backup encryption password file")
+	}
+	info, statErr := f.Stat()
+	if statErr != nil || !info.Mode().IsRegular() {
+		if closeErr := f.Close(); closeErr != nil {
+			return "", errors.New("cannot close invalid backup encryption password file")
+		}
+		return "", errors.New("backup encryption password file must be a regular file")
+	}
+	data, readErr := io.ReadAll(io.LimitReader(f, maxBackupPasswordFileBytes+1))
+	closeErr := f.Close()
+	if readErr != nil || closeErr != nil {
+		return "", errors.New("cannot read or close backup encryption password file")
+	}
+	if len(data) > maxBackupPasswordFileBytes {
+		return "", errors.New("backup encryption password file exceeds 4096 bytes")
+	}
+	passphrase := strings.TrimSuffix(string(data), "\n")
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		passphrase = strings.TrimSuffix(passphrase, "\r")
+	}
+	if strings.TrimSpace(passphrase) == "" {
+		return "", errors.New("backup encryption password file is empty")
+	}
+	return passphrase, nil
+}
+
+// writeBackup emits a gzipped logical dump, wrapping it in standard age
+// passphrase encryption when configured. It never finalizes a failed dump or
+// retries it as plaintext.
+func writeBackup(ctx context.Context, db cfgDB, dst io.Writer) error {
+	if backupSuffix(db) == gzipBackupSuffix {
+		return errors.Wrap(dumpDatabase(ctx, db, dst), "write gzip backup")
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Wrap(err, "initiate encrypted backup")
+	}
+	password, err := readBackupPassword(db)
+	if err != nil {
+		return errors.Wrap(err, "load backup encryption password")
+	}
+	recipient, err := age.NewScryptRecipient(password)
+	if err != nil {
+		return errors.Wrap(err, "prepare age backup encryption")
+	}
+	encrypted, err := age.Encrypt(dst, recipient)
+	if err != nil {
+		return errors.Wrap(err, "start age backup encryption")
+	}
+	if err := dumpDatabase(ctx, db, encrypted); err != nil {
+		return errors.Wrap(err, "write encrypted backup")
+	}
+	return errors.Wrap(encrypted.Close(), "finish age backup encryption")
+}
+
+// backupUploadOptions returns object metadata matching the outer file format.
+func backupUploadOptions(db cfgDB) minio.PutObjectOptions {
+	if backupSuffix(db) == encryptedBackupSuffix {
+		return minio.PutObjectOptions{ContentType: "application/octet-stream"}
+	}
+	return minio.PutObjectOptions{ContentType: "application/gzip", ContentEncoding: "gzip"}
+}
+
+// streamBackupToS3 pipes a backup through optional encryption to S3 PutObject.
 //
 // Parameters:
 //   - ctx: Bounds the whole backup; when it ends the pipe is failed so neither the
@@ -163,18 +245,16 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 	errCh := make(chan error, 1)
 	go func() {
 		// CloseWithError ensures the reader sees error if any
-		err := dumpDatabase(dumpCtx, db, pw)
+		err := writeBackup(dumpCtx, db, pw)
 		_ = pw.CloseWithError(err)
 		errCh <- err
 	}()
 
 	// Size -1 enables streaming multipart upload; PartSize bounds its part buffer.
 	logger.Info("s3 put (stream)", zap.String("bucket", s.Bucket), zap.String("key", key))
-	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, pr, -1, minio.PutObjectOptions{
-		ContentType:     "application/gzip",
-		ContentEncoding: "gzip",
-		PartSize:        streamBackupPartSize,
-	}, s3.DefaultVersionsToKeep)
+	opts := backupUploadOptions(db)
+	opts.PartSize = streamBackupPartSize
+	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, pr, -1, opts, s3.DefaultVersionsToKeep)
 
 	// Nothing reads the pipe after the upload returns. Closing the read side makes
 	// any pending or future producer write fail instead of blocking forever, which
@@ -200,10 +280,10 @@ func streamBackupToS3(ctx context.Context, db cfgDB, s cfgS3, key string) error 
 	return nil
 }
 
-// backupViaTempFile writes dump->gzip to a temporary file, then uploads that file to S3.
-// fname is the local filename (no slashes). key is the S3 object key.
-func backupViaTempFile(ctx context.Context, db cfgDB, s cfgS3, fname, key, tempDir string) error {
-	s3cli, err := s3.GetCli(s.Endpoint, s.AccessKey, s.AccessSecret)
+// backupViaTempFile writes the complete archive to a private temporary file
+// before uploading it. An encrypted backup never writes plaintext to disk.
+func backupViaTempFile(ctx context.Context, db cfgDB, s cfgS3, fname, key, tempDir string) (returnErr error) {
+	s3cli, err := newBackupS3Client(s)
 	if err != nil {
 		return errors.Wrap(err, "new s3 client")
 	}
@@ -214,61 +294,33 @@ func backupViaTempFile(ctx context.Context, db cfgDB, s cfgS3, fname, key, tempD
 	if err := os.MkdirAll(tempDir, 0o755); err != nil {
 		return errors.Wrap(err, "mkdir temp dir")
 	}
-
-	finalPath := tempDir + string(os.PathSeparator) + fname
-	tmpf, err := os.CreateTemp(tempDir, fname+".*")
+	tmp, err := os.CreateTemp(tempDir, fname+".*")
 	if err != nil {
 		return errors.Wrap(err, "create temp file")
 	}
-	tmpPath := tmpf.Name()
-	_ = tmpf.Close()
-	// reopen for writing through our pipeline
-	wf, err := os.Create(tmpPath)
-	if err != nil {
-		return errors.Wrap(err, "open temp file for write")
-	}
-	logger.Info("dump to temp file", zap.String("tmp", tmpPath))
-	if err := dumpAndGzipToWriter(ctx, db, wf); err != nil {
-		_ = wf.Close()
-		_ = os.Remove(tmpPath)
-		return errors.Wrap(err, "dump to temp file")
-	}
-	if err := wf.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return errors.Wrap(err, "close temp file")
-	}
-
-	// rename to final path for easier inspection (best effort)
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		logger.Warn("rename temp file failed; continue with tmp", zap.Error(err))
-		finalPath = tmpPath
-	}
-	// ensure cleanup
 	defer func() {
-		if err := os.Remove(finalPath); err != nil {
-			logger.Warn("cleanup temp file failed", zap.String("file", finalPath), zap.Error(err))
-		} else {
-			logger.Info("cleanup temp file", zap.String("file", finalPath))
-		}
+		returnErr = errors.Wrap(errors.Join(
+			returnErr,
+			errors.Wrap(tmp.Close(), "close temp backup file"),
+			errors.Wrap(os.Remove(tmp.Name()), "remove temp backup file"),
+		), "temp file backup")
 	}()
 
-	// stat size for upload
-	finfo, err := os.Stat(finalPath)
-	if err != nil {
-		return errors.Wrap(err, "stat temp file")
+	if err := writeBackup(ctx, db, tmp); err != nil {
+		return errors.Wrap(err, "write temp backup file")
 	}
-	size := finfo.Size()
-	rf, err := os.Open(finalPath)
+	// Seek returns the size, then resets the same descriptor for upload. Keeping
+	// the original randomly named descriptor avoids reopening a shared pathname.
+	size, err := tmp.Seek(0, io.SeekEnd)
 	if err != nil {
-		return errors.Wrap(err, "open temp file for read")
+		return errors.Wrap(err, "measure temp backup file")
 	}
-	defer rf.Close()
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return errors.Wrap(err, "rewind temp backup file")
+	}
 
-	logger.Info("s3 put (file)", zap.String("bucket", s.Bucket), zap.String("key", key), zap.String("file", finalPath), zap.Int64("size", size))
-	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, rf, size, minio.PutObjectOptions{
-		ContentType:     "application/gzip",
-		ContentEncoding: "gzip",
-	}, s3.DefaultVersionsToKeep)
+	logger.Info("s3 put (file)", zap.String("bucket", s.Bucket), zap.String("key", key), zap.Int64("size", size))
+	info, putErr := s3.PutObjectCappingVersions(ctx, logger, s3cli, s.Bucket, key, tmp, size, backupUploadOptions(db), s3.DefaultVersionsToKeep)
 	if putErr != nil {
 		return errors.Wrap(putErr, "put object")
 	}

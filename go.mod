@@ -3,6 +3,7 @@ module github.com/Laisky/go-ramjet
 go 1.27.4
 
 require (
+	filippo.io/age v1.3.2
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/Laisky/errors/v2 v2.0.1
 	github.com/Laisky/gin-middlewares/v7 v7.0.3-0.20261028171254-114404b102a5
@@ -23,6 +24,7 @@ require (
 	github.com/fsouza/go-dockerclient v1.13.3
 	github.com/gabriel-vasile/mimetype v1.4.16
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/feeds v1.2.0
 	github.com/jinzhu/copier v0.4.0
@@ -55,6 +57,7 @@ require (
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/ClickHouse/ch-go v0.74.0 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0 // indirect
@@ -98,7 +101,6 @@ require (
 	github.com/go-playground/locales v0.14.2 // indirect
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/go-playground/validator/v10 v10.30.5 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.11.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect

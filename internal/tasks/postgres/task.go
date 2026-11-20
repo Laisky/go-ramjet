@@ -8,12 +8,14 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
 	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/minio/minio-go/v7"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/store"
@@ -23,10 +25,15 @@ import (
 
 var logger = log.Logger.Named("postgres-backup")
 
+// backupRunMu allows only one active backup run per process.
+var backupRunMu sync.Mutex
+
 const (
 	defaultBackupHistoryLimit     = 14
 	backupObjectDateLayout        = "20060102"
 	backupRetentionCleanupTimeout = 10 * time.Minute
+	gzipBackupSuffix              = ".gz"
+	encryptedBackupSuffix         = ".gz.age"
 )
 
 type cfgS3 struct {
@@ -50,6 +57,10 @@ type cfgDB struct {
 	// Otherwise, it's treated as the filename prefix (optionally with directories),
 	// and the final object key will be: "<dir>/<prefix>-YYYYMMDD.gz".
 	BackupFilePrefix string `mapstructure:"backup_file_prefix"`
+	// BackupEncryptionPassword is distinct from the PostgreSQL connection password.
+	BackupEncryptionPassword string `mapstructure:"backup_encryption_password"`
+	// BackupEncryptionPasswordFile optionally supplies the passphrase via a mounted secret.
+	BackupEncryptionPasswordFile string `mapstructure:"backup_encryption_password_file"`
 }
 
 type cfgBackup struct {
@@ -68,32 +79,98 @@ type cfgBackup struct {
 }
 
 // loadCfg loads the postgres backup task configuration and applies local defaults.
-func loadCfg() *cfgBackup {
+func loadCfg(config gconfig.Config) *cfgBackup {
 	cfg := &cfgBackup{
-		Enable:      gconfig.Shared.GetBool("tasks.postgres.enable"),
-		IntervalSec: gconfig.Shared.GetInt("tasks.postgres.interval"),
+		Enable:      config.GetBool("tasks.postgres.enable"),
+		IntervalSec: config.GetInt("tasks.postgres.interval"),
 		S3: cfgS3{
-			Enable:       gconfig.Shared.GetBool("tasks.postgres.s3.enable"),
-			Endpoint:     gconfig.Shared.GetString("tasks.postgres.s3.endpoint"),
-			AccessKey:    gconfig.Shared.GetString("tasks.postgres.s3.access_key"),
-			AccessSecret: gconfig.Shared.GetString("tasks.postgres.s3.access_secret"),
-			Bucket:       gconfig.Shared.GetString("tasks.postgres.s3.bucket"),
-			KeepLast:     normalizeBackupHistoryLimit(gconfig.Shared.GetInt("tasks.postgres.s3.keep_last")),
+			Enable:       config.GetBool("tasks.postgres.s3.enable"),
+			Endpoint:     config.GetString("tasks.postgres.s3.endpoint"),
+			AccessKey:    config.GetString("tasks.postgres.s3.access_key"),
+			AccessSecret: config.GetString("tasks.postgres.s3.access_secret"),
+			Bucket:       config.GetString("tasks.postgres.s3.bucket"),
+			KeepLast:     normalizeBackupHistoryLimit(config.GetInt("tasks.postgres.s3.keep_last")),
 		},
-		UseTempFile: gconfig.Shared.GetBool("tasks.postgres.use_temp_file"),
-		TempDir:     gconfig.Shared.GetString("tasks.postgres.temp_dir"),
+		UseTempFile: config.GetBool("tasks.postgres.use_temp_file"),
+		TempDir:     config.GetString("tasks.postgres.temp_dir"),
 	}
 
-	// Load multiple databases: tasks.postgres.dbs: [ {host,port,user,password,database,backup_file_prefix}, ... ]
-	var dbs []cfgDB
-	if err := gconfig.Shared.UnmarshalKey("tasks.postgres.dbs", &dbs); err != nil {
-		return cfg
-	}
-
-	if len(dbs) > 0 {
-		cfg.DBs = dbs
-	}
+	// Older Ramjet versions ignore encrypted_dbs altogether. Keep databases
+	// that must never fall back to plaintext out of the ordinary dbs list.
+	cfg.DBs = slices.Concat(
+		loadBackupDatabaseList(config, "dbs", false),
+		loadBackupDatabaseList(config, "encrypted_dbs", true),
+	)
 	return cfg
+}
+
+// loadBackupDatabaseList loads one optional database list and rejects a
+// malformed value without affecting the other list.
+func loadBackupDatabaseList(config gconfig.Config, key string, requireEncryption bool) []cfgDB {
+	switch raw := config.Get("tasks.postgres." + key).(type) {
+	case nil:
+		return nil
+	case []any:
+		return decodeBackupDatabases(raw, key, requireEncryption)
+	case []map[string]any:
+		entries := make([]any, len(raw))
+		for i, entry := range raw {
+			entries[i] = entry
+		}
+		return decodeBackupDatabases(entries, key, requireEncryption)
+	default:
+		logger.Error("postgres backup database setting must be a list", zap.String("list", key))
+		return nil
+	}
+}
+
+// decodeBackupDatabases decodes each database independently and reports invalid
+// entries by index only, never logging values or decoder errors that echo them.
+func decodeBackupDatabases(entries []any, list string, requireEncryption bool) []cfgDB {
+	dbs := make([]cfgDB, 0, len(entries))
+	for i, entry := range entries {
+		fields, ok := entry.(map[string]any)
+		if !ok {
+			logger.Error("postgres backup entry must be a mapping", zap.String("list", list), zap.Int("entry", i+1))
+			continue
+		}
+		var db cfgDB
+		if err := mapstructure.WeakDecode(fields, &db); err != nil {
+			logger.Error("invalid postgres backup entry", zap.String("list", list), zap.Int("entry", i+1))
+			continue
+		}
+		// Do not coerce an invalid value or interpret a blank password source
+		// as permission to upload plaintext. Omit both options to opt out.
+		for key, value := range fields {
+			if strings.EqualFold(key, "backup_encryption_password") || strings.EqualFold(key, "backup_encryption_password_file") {
+				if val, isString := value.(string); !isString || strings.TrimSpace(val) == "" {
+					logger.Error("postgres backup password source must be a non-empty string", zap.String("list", list), zap.Int("entry", i+1))
+					ok = false
+				}
+			}
+		}
+		if db.BackupEncryptionPassword != "" && db.BackupEncryptionPasswordFile != "" {
+			logger.Error("postgres backup entry must configure only one encryption password source", zap.String("list", list), zap.Int("entry", i+1))
+			ok = false
+		}
+		if ok && requireEncryption && backupSuffix(db) != encryptedBackupSuffix {
+			logger.Error("postgres encrypted backup entry requires an encryption password source", zap.String("list", list), zap.Int("entry", i+1))
+			ok = false
+		}
+		if ok {
+			dbs = append(dbs, db)
+		}
+	}
+	return dbs
+}
+
+// backupSuffix selects a distinct name for the encrypted format so an existing
+// plaintext object from the same day never suppresses a new encrypted backup.
+func backupSuffix(db cfgDB) string {
+	if db.BackupEncryptionPassword != "" || db.BackupEncryptionPasswordFile != "" {
+		return encryptedBackupSuffix
+	}
+	return gzipBackupSuffix
 }
 
 // normalizeBackupHistoryLimit clamps the backup history limit to a supported default.
@@ -163,17 +240,18 @@ func buildKeyPrefixAndBase(db cfgDB) (keyPrefix string, base string) {
 //   - Local filename never contains '/'.
 func buildKeyAndFilename(db cfgDB, date string) (key string, filename string) {
 	keyPrefix, base := buildKeyPrefixAndBase(db)
-	filename = fmt.Sprintf("%s-%s.gz", base, date)
-	return keyPrefix + date + ".gz", filename
+	suffix := backupSuffix(db)
+	filename = fmt.Sprintf("%s-%s%s", base, date, suffix)
+	return keyPrefix + date + suffix, filename
 }
 
 // isManagedBackupKey reports whether key belongs to the configured backup series and naming scheme.
-func isManagedBackupKey(keyPrefix, key string) bool {
-	if !strings.HasPrefix(key, keyPrefix) || !strings.HasSuffix(key, ".gz") {
+func isManagedBackupKey(keyPrefix, suffix, key string) bool {
+	if !strings.HasPrefix(key, keyPrefix) || !strings.HasSuffix(key, suffix) {
 		return false
 	}
 
-	datePart := strings.TrimSuffix(strings.TrimPrefix(key, keyPrefix), ".gz")
+	datePart := strings.TrimSuffix(strings.TrimPrefix(key, keyPrefix), suffix)
 	if len(datePart) != len(backupObjectDateLayout) {
 		return false
 	}
@@ -186,12 +264,12 @@ func isManagedBackupKey(keyPrefix, key string) bool {
 }
 
 // selectExpiredBackupKeys picks the oldest managed backup keys that exceed keepLast.
-func selectExpiredBackupKeys(keyPrefix string, keys []string, keepLast int) []string {
+func selectExpiredBackupKeys(keyPrefix, suffix string, keys []string, keepLast int) []string {
 	keepLast = normalizeBackupHistoryLimit(keepLast)
 
 	managedKeys := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if isManagedBackupKey(keyPrefix, key) {
+		if isManagedBackupKey(keyPrefix, suffix, key) {
 			managedKeys = append(managedKeys, key)
 		}
 	}
@@ -209,7 +287,7 @@ func selectExpiredBackupKeys(keyPrefix string, keys []string, keepLast int) []st
 }
 
 // cleanupExpiredBackups removes managed S3 backup objects that exceed the configured history limit.
-func cleanupExpiredBackups(ctx context.Context, s cfgS3, keyPrefix string) error {
+func cleanupExpiredBackups(ctx context.Context, s cfgS3, keyPrefix, suffix string) error {
 	s3cli, err := s3.GetCli(s.Endpoint, s.AccessKey, s.AccessSecret)
 	if err != nil {
 		return errors.Wrap(err, "new s3 client")
@@ -224,7 +302,7 @@ func cleanupExpiredBackups(ctx context.Context, s cfgS3, keyPrefix string) error
 		keys = append(keys, obj.Key)
 	}
 
-	expiredKeys := selectExpiredBackupKeys(keyPrefix, keys, s.KeepLast)
+	expiredKeys := selectExpiredBackupKeys(keyPrefix, suffix, keys, s.KeepLast)
 	if len(expiredKeys) == 0 {
 		logger.Debug("postgres backup retention within limit",
 			zap.String("bucket", s.Bucket),
@@ -259,7 +337,7 @@ func startBackupRetentionCleanup(db cfgDB, s cfgS3, uploadedKey string) {
 		ctx, cancel := context.WithTimeout(context.Background(), backupRetentionCleanupTimeout)
 		defer cancel()
 
-		if err := cleanupExpiredBackups(ctx, s, keyPrefix); err != nil {
+		if err := cleanupExpiredBackups(ctx, s, keyPrefix, backupSuffix(db)); err != nil {
 			logger.Warn("postgres backup retention cleanup failed",
 				zap.String("bucket", s.Bucket),
 				zap.String("uploaded_object", uploadedKey),
@@ -291,9 +369,15 @@ func s3ObjectExists(ctx context.Context, s cfgS3, bucket, key string) (bool, err
 	return false, err
 }
 
-// runBackup performs pg_dump -> gzip -> local file, then uploads to S3 if enabled.
+// runBackup loads current settings and backs up the configured databases to S3.
 func runBackup() {
-	cfg := loadCfg()
+	if !backupRunMu.TryLock() {
+		logger.Warn("postgres backup already running; skip overlapping tick")
+		return
+	}
+	defer backupRunMu.Unlock()
+
+	cfg := loadCfg(gconfig.Shared)
 	if !cfg.Enable {
 		logger.Warn("postgres backup disabled by config; skip")
 		return
@@ -311,7 +395,17 @@ func runBackup() {
 		return
 	}
 
-	today := time.Now().UTC().Format(backupObjectDateLayout)
+	backupDatabases(cfg, time.Now().UTC().Format(backupObjectDateLayout), backupOneDatabase)
+}
+
+// backupDatabases runs the backup pipelines independently for one UTC date.
+func backupDatabases(cfg *cfgBackup, today string, backup func(context.Context, cfgDB, *cfgBackup, string, string) error) {
+	dbs := cfg.DBs
+	prefixes := make(map[string]int, len(dbs))
+	for _, db := range dbs {
+		prefix, _ := buildKeyPrefixAndBase(db)
+		prefixes[prefix]++
+	}
 	logger.Info("postgres backup run start",
 		zap.Bool("use_temp_file", cfg.UseTempFile),
 		zap.String("temp_dir", cfg.TempDir),
@@ -321,52 +415,57 @@ func runBackup() {
 		zap.Int("dbs", len(dbs)))
 	perBackupTimeout := 30 * time.Minute
 
-	for _, db := range dbs {
-		// Per-db context with timeout
+	for i, db := range dbs {
+		prefix, _ := buildKeyPrefixAndBase(db)
+		if prefixes[prefix] > 1 {
+			logger.Error("postgres backup entries must use distinct object prefixes", zap.Int("entry", i+1), zap.String("key_prefix", prefix))
+			continue
+		}
+		key, fname := buildKeyAndFilename(db, today)
 		ctx, cancel := context.WithTimeout(context.Background(), perBackupTimeout)
-		func() {
-			defer cancel()
-
-			// Compute S3 key and local filename
-			key, fname := buildKeyAndFilename(db, today)
-
-			logger.Info("start postgres backup",
-				zap.String("file", fname),
-				zap.String("db", db.Database),
-				zap.String("pg_host", db.Host),
-				zap.Int("pg_port", db.Port),
-				zap.String("pg_user", db.User))
-
-			// Skip if today's backup for this DB already exists in S3
-			if exists, err := s3ObjectExists(ctx, cfg.S3, cfg.S3.Bucket, key); err != nil {
-				logger.Warn("cannot check existing backup; will proceed", zap.Error(err), zap.String("object", key))
-			} else if exists {
-				logger.Info("backup already exists; skip", zap.String("object", key))
-				return
-			}
-
-			start := time.Now()
-			var err error
-			if cfg.UseTempFile {
-				err = backupViaTempFile(ctx, db, cfg.S3, fname, key, cfg.TempDir)
-			} else {
-				err = streamBackupToS3(ctx, db, cfg.S3, key)
-			}
-			if err != nil {
-				logger.Error("backup failed", zap.String("object", key), zap.Error(err))
-				return
-			}
-
-			startBackupRetentionCleanup(db, cfg.S3, key)
-			logger.Info("uploaded to s3", zap.String("object", key), zap.String("cost", gutils.CostSecs(time.Since(start))))
-		}()
+		err := backup(ctx, db, cfg, key, fname)
+		cancel()
+		if err != nil {
+			logger.Error("backup failed", zap.String("object", key), zap.Error(err))
+		}
 	}
+}
+
+// backupOneDatabase uploads one database's archive unless that day's key exists.
+// Only a successfully uploaded backup starts retention cleanup for its format.
+func backupOneDatabase(ctx context.Context, db cfgDB, cfg *cfgBackup, key, fname string) error {
+	logger.Info("start postgres backup",
+		zap.String("file", fname),
+		zap.String("db", db.Database),
+		zap.String("pg_host", db.Host),
+		zap.Int("pg_port", db.Port),
+		zap.String("pg_user", db.User))
+	if exists, err := s3ObjectExists(ctx, cfg.S3, cfg.S3.Bucket, key); err != nil {
+		logger.Warn("cannot check existing backup; will proceed", zap.Error(err), zap.String("object", key))
+	} else if exists {
+		logger.Info("backup already exists; skip", zap.String("object", key))
+		return nil
+	}
+
+	start := time.Now()
+	var err error
+	if cfg.UseTempFile {
+		err = backupViaTempFile(ctx, db, cfg.S3, fname, key, cfg.TempDir)
+	} else {
+		err = streamBackupToS3(ctx, db, cfg.S3, key)
+	}
+	if err != nil {
+		return errors.Wrap(err, "upload database backup")
+	}
+	startBackupRetentionCleanup(db, cfg.S3, key)
+	logger.Info("uploaded to s3", zap.String("object", key), zap.String("cost", gutils.CostSecs(time.Since(start))))
+	return nil
 }
 
 // bindPostgresBackupTask registers the scheduled postgres backup task when enabled.
 func bindPostgresBackupTask() {
 	logger.Info("bind postgres backup task...")
-	cfg := loadCfg()
+	cfg := loadCfg(gconfig.Shared)
 	if !cfg.Enable {
 		logger.Info("postgres backup disabled by config; not binding task")
 		return
