@@ -1,56 +1,84 @@
 import { useEffect, useRef } from 'react'
-import type { SessionConfig } from '../types'
+import type { McpServerConfig, SessionConfig } from '../types'
 import { syncMCPServerTools } from '../utils/mcp'
+import type { ConfigUpdateOwner } from './session-config-ownership'
 
 /**
- * useMcpSync automatically syncs MCP server tools in the background.
+ * useMcpSync discovers tools for one rendered session activation/server list.
+ * Cleanup saves requests, while the forwarded guard prevents stale writes even
+ * before React cleans up or when a transport ignores its abort signal.
  */
 export function useMcpSync(
   config: SessionConfig,
   configLoading: boolean,
-  updateConfig: (updates: Partial<SessionConfig>) => void,
+  updateConfig: (
+    updates: Partial<SessionConfig>,
+    canApply?: () => boolean,
+  ) => void,
+  owner?: ConfigUpdateOwner | null,
 ) {
-  // unmountRef aborts in-flight syncs when the component unmounts, so no
-  // request is sent and no config is written after that. Dependency changes
-  // do not abort a sync, which keeps the behavior while mounted unchanged.
-  const unmountRef = useRef<AbortController | null>(null)
-  useEffect(() => {
-    const controller = new AbortController()
-    unmountRef.current = controller
-    return () => controller.abort()
-  }, [])
+  const attempts = useRef<{
+    owner: ConfigUpdateOwner | null | undefined
+    completed: WeakSet<McpServerConfig>
+  }>({ owner, completed: new WeakSet() })
 
   useEffect(() => {
     if (configLoading || !config.mcp_servers) return
-    const signal = unmountRef.current?.signal
+    if (attempts.current.owner !== owner) {
+      attempts.current = { owner, completed: new WeakSet() }
+    }
+    const completed = attempts.current.completed
+    const servers = config.mcp_servers
+    const controller = new AbortController()
+    let active = true
+    const canApply = () =>
+      active &&
+      !controller.signal.aborted &&
+      (owner === undefined || (owner !== null && owner.isCurrent(servers)))
 
     const syncMetrics = async () => {
       let hasUpdates = false
-      const updatedServers = [...(config.mcp_servers || [])]
-
+      const successful: McpServerConfig[] = []
+      const updatedServers = [...servers]
       for (let i = 0; i < updatedServers.length; i++) {
-        const srv = updatedServers[i]
-        // If enabled and no tools, try to sync
-        if (srv.enabled && (!srv.tools || srv.tools.length === 0)) {
-          if (signal?.aborted) return
+        const server = updatedServers[i]
+        if (
+          server.enabled &&
+          (!server.tools || server.tools.length === 0) &&
+          !completed.has(server)
+        ) {
+          if (!canApply()) return
           try {
-            const { updatedServer } = await syncMCPServerTools(srv, signal)
+            const { updatedServer } = await syncMCPServerTools(
+              server,
+              controller.signal,
+            )
+            if (!canApply()) return
+            completed.add(updatedServer)
+            successful.push(server)
             updatedServers[i] = updatedServer
             hasUpdates = true
-            console.log(`[MCP] Auto-synced tools for ${srv.name}`)
-          } catch (e) {
-            if (signal?.aborted) return
-            console.warn(`[MCP] Failed to auto-sync ${srv.name}:`, e)
+            console.log(`[MCP] Auto-synced tools for ${server.name}`)
+          } catch (error) {
+            if (!canApply()) return
+            completed.add(server)
+            console.warn(
+              `[MCP] Failed to auto-sync ${server.name}: ${String(error)}`,
+            )
           }
         }
       }
-
-      if (hasUpdates && !signal?.aborted) {
-        updateConfig({ mcp_servers: updatedServers })
+      if (hasUpdates && canApply()) {
+        // Mark originals only at whole-batch admission: discarded batches
+        // remain retryable, but an admitted write's rollback cannot loop.
+        for (const server of successful) completed.add(server)
+        updateConfig({ mcp_servers: updatedServers }, canApply)
       }
     }
-
-    syncMetrics()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configLoading])
+    void syncMetrics()
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [configLoading, config.mcp_servers, owner, updateConfig])
 }

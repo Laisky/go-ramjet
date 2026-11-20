@@ -74,6 +74,7 @@ export function GPTChatPage() {
     sessions,
     isLoading: configLoading,
     updateConfig,
+    configUpdateOwner,
     pendingLinkChange,
     confirmPendingLinkChange,
     dismissPendingLinkChange,
@@ -284,7 +285,7 @@ export function GPTChatPage() {
     }
   }, [sessionId, loadMessages, configLoading])
 
-  useMcpSync(config, configLoading, applyConfigInBackground)
+  useMcpSync(config, configLoading, applyConfigInBackground, configUpdateOwner)
 
   // Scroll to bottom when footer height changes (e.g. typing long prompt)
   // to prevent messages from being covered.

@@ -74,6 +74,7 @@ export interface ConfigUpdateResult {
  */
 export type ConfigUpdateHandler = (
   updates: Partial<SessionConfig>,
+  canApply?: () => boolean,
 ) => Promise<ConfigUpdateResult>
 
 /**

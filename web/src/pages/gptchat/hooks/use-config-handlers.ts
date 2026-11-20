@@ -89,10 +89,11 @@ export function useConfigHandlers({
   allowedModels,
 }: UseConfigHandlersOptions) {
   const applyConfigInBackground = useCallback(
-    (updates: Partial<SessionConfig>) => {
+    (updates: Partial<SessionConfig>, canApply?: () => boolean) => {
       const run = async () => {
         try {
-          await updateConfig(updates)
+          if (canApply) await updateConfig(updates, canApply)
+          else await updateConfig(updates)
         } catch (error) {
           console.error(`[GPTChat] saving settings failed: ${String(error)}`)
         }
