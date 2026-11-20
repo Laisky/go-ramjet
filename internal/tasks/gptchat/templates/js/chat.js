@@ -876,6 +876,10 @@ const UrlParamAliasMap = new Map([
   ['chat_switch.enabletalk', 'chat_switch.enable_talk'],
 ]);
 
+// UrlSettableConfigPaths is the explicit allowlist of setting paths a URL may
+// set: the targets of UrlParamAliasMap, like the React app's UrlSettableConfigPaths.
+const UrlSettableConfigPaths = new Set(UrlParamAliasMap.values());
+
 function normalizeUrlParamKey(key) {
   return key
     .trim()
@@ -934,16 +938,95 @@ function getNestedConfigValue(config, pathSegments) {
   }, config);
 }
 
+/**
+ * isUnsafeConfigPathSegment reports whether a config path segment would reach an
+ * object's prototype chain when used as a property key (prototype pollution).
+ *
+ * @param {string} segment - One dot-separated segment of a config path.
+ * @returns {boolean} True when the segment is `__proto__`, `constructor`, or `prototype`.
+ */
+function isUnsafeConfigPathSegment(segment) {
+  return segment === '__proto__' || segment === 'constructor' || segment === 'prototype';
+}
+
+/**
+ * isUrlScalarConfigValue reports whether a URL string may replace value: only
+ * scalars (or an unset value) can be, never an object or an array.
+ *
+ * @param {*} value - The setting's current value.
+ * @returns {boolean} True for strings, numbers, booleans, null, and undefined.
+ */
+function isUrlScalarConfigValue(value) {
+  return value === undefined || value === null || ['string', 'number', 'boolean'].includes(typeof value);
+}
+
+/**
+ * isUrlSettableConfigPath reports whether a URL parameter may write the setting
+ * at pathSegments. A link is untrusted input, so the path must be listed in
+ * UrlSettableConfigPaths, and its current value must be a scalar that sconfig
+ * already owns (or a chat_switch flag). Other own settings such as session_name,
+ * which the session list renders, and deeper paths, which could re-target a
+ * stored MCP server (whose api_key is then sent to the new URL), replace whole
+ * objects, or truncate arrays, are never URL-settable.
+ *
+ * @param {object} sconfig - Session config the parameter would change.
+ * @param {string[]} pathSegments - Dot-separated setting path, e.g. ['chat_switch', 'enable_mcp'].
+ * @returns {boolean} True when the path is a URL-settable setting.
+ */
+function isUrlSettableConfigPath(sconfig, pathSegments) {
+  if (!UrlSettableConfigPaths.has(pathSegments.join('.')) || pathSegments.some(isUnsafeConfigPathSegment)) {
+    return false;
+  }
+
+  // Use own properties only; `in` would also accept inherited names.
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+  const [rootKey, field] = pathSegments;
+  if (pathSegments.length === 1) {
+    return hasOwn(sconfig, rootKey) && isUrlScalarConfigValue(sconfig[rootKey]);
+  }
+  if (pathSegments.length !== 2 || rootKey !== 'chat_switch') {
+    return false;
+  }
+
+  const chatSwitch = hasOwn(sconfig, 'chat_switch') ? sconfig.chat_switch : undefined;
+  if (!chatSwitch || typeof chatSwitch !== 'object' || Array.isArray(chatSwitch)) {
+    // applyUrlConfigOverrides recreates a missing or malformed chat_switch.
+    return true;
+  }
+  return !hasOwn(chatSwitch, field) || isUrlScalarConfigValue(chatSwitch[field]);
+}
+
+/**
+ * setNestedConfigValue assigns value at the dotted path inside config, replacing
+ * missing or non-object intermediates with plain objects. It only descends into
+ * own properties and rejects unsafe segments, so a URL-supplied path can never
+ * write through to Object.prototype.
+ *
+ * @param {object} config - Session config to mutate.
+ * @param {string[]} pathSegments - Property path, e.g. ['chat_switch', 'enable_mcp'].
+ * @param {*} value - Value to assign at the path.
+ * @returns {boolean} True when assigned, false when the path was rejected.
+ */
 function setNestedConfigValue(config, pathSegments, value) {
   let cursor = config;
   for (let i = 0; i < pathSegments.length - 1; i++) {
     const segment = pathSegments[i];
-    if (cursor[segment] === undefined || cursor[segment] === null || typeof cursor[segment] !== 'object') {
+    if (isUnsafeConfigPathSegment(segment)) {
+      return false;
+    }
+    const next = Object.prototype.hasOwnProperty.call(cursor, segment) ? cursor[segment] : undefined;
+    if (next === undefined || next === null || typeof next !== 'object') {
       cursor[segment] = {};
     }
     cursor = cursor[segment];
   }
-  cursor[pathSegments[pathSegments.length - 1]] = value;
+
+  const leaf = pathSegments[pathSegments.length - 1];
+  if (isUnsafeConfigPathSegment(leaf)) {
+    return false;
+  }
+  cursor[leaf] = value;
+  return true;
 }
 
 function coerceConfigValue(field, rawValue, currentValue) {
@@ -969,6 +1052,17 @@ function coerceConfigValue(field, rawValue, currentValue) {
   return rawValue;
 }
 
+/**
+ * applyUrlConfigOverrides applies supported session settings from the page URL's
+ * query parameters to sconfig and removes the applied parameters from the URL.
+ *
+ * Keys are normalized and resolved through UrlParamAliasMap. Only the listed
+ * scalar settings in UrlSettableConfigPaths are changed (see
+ * isUrlSettableConfigPath); any other path is ignored and left in the URL.
+ *
+ * @param {object} sconfig - Session config to mutate in place.
+ * @returns {boolean} True when any applicable parameter was consumed, which also rewrites the URL.
+ */
 function applyUrlConfigOverrides(sconfig) {
   const url = new URL(window.location.href);
   const searchParams = url.searchParams;
@@ -983,13 +1077,13 @@ function applyUrlConfigOverrides(sconfig) {
     }
 
     const pathSegments = targetPath.split('.');
-    const rootKey = pathSegments[0];
-    if (rootKey !== 'chat_switch' && !(rootKey in sconfig)) {
+    if (!isUrlSettableConfigPath(sconfig, pathSegments)) {
       return;
     }
 
+    const rootKey = pathSegments[0];
     if (rootKey === 'chat_switch') {
-      if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object') {
+      if (!sconfig.chat_switch || typeof sconfig.chat_switch !== 'object' || Array.isArray(sconfig.chat_switch)) {
         sconfig.chat_switch = {};
       }
     }
@@ -1091,12 +1185,16 @@ function SingleInputModal(title, message, callback, defaultVal) {
   modal.querySelector('.modal-body input').focus();
 }
 
-// show modal to confirm,
-// callback will be called if user click yes
-//
-// params:
-//   - title: modal title
-//   - callback: async callback function
+/**
+ * ConfirmModal shows the confirmation modal and runs callback when the user confirms.
+ *
+ * The title is shown as plain text, because callers interpolate user data into
+ * it, such as a session name that was typed by the user or synced from a backup.
+ *
+ * @param {string} title - Plain-text question shown as the modal title.
+ * @param {function(): Promise<void>} callback - Async action run on confirmation.
+ * @returns {void}
+ */
 function ConfirmModal(title, callback) {
   deleteCheckCallback = async () => {
     try {
@@ -1106,7 +1204,7 @@ function ConfirmModal(title, callback) {
       HideSpinner();
     }
   };
-  document.getElementById('deleteCheckModal').querySelector('.modal-title').innerHTML = title;
+  document.getElementById('deleteCheckModal').querySelector('.modal-title').textContent = title;
   deleteCheckModal.show();
 }
 
@@ -2697,10 +2795,10 @@ function bindSessionEditBtn() {
           sconfig.session_name = newSessionName;
           await saveChatSessionConfig(sconfig, sid);
 
-          // update session name
+          // update session name; it is user-typed or synced data, so write it as text
           document.querySelector(`#sessionManager .sessions [data-session="${sid}"]`).dataset.name = newSessionName;
-          document.querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
-          chatContainer.querySelector(`.sessions [data-session="${sid}"] .col`).innerHTML = newSessionName;
+          document.querySelector(`#sessionManager .sessions [data-session="${sid}"] .col`).textContent = newSessionName;
+          chatContainer.querySelector(`.sessions [data-session="${sid}"] .col`).textContent = newSessionName;
         },
         oldSessionName
       );
@@ -2789,21 +2887,22 @@ function bindSessionDuplicateBtn() {
       await libs.KvSet(`${KvKeyPrefixSessionConfig}${newSessionID}`, newSconfig);
       await libs.KvSet(kvSessionKey(newSessionID), originalChatHistory);
 
-      // Add new session to UI
+      // Add new session to UI; the name is user-typed or synced data, so escape it
       const newSessionName = newSconfig.session_name;
+      const newSessionNameHTML = libs.escapeHtml(newSessionName);
       const sessionManagerHtml = `
-                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionNameHTML}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
-                        <div class="col">${newSessionName}</div>
+                        <div class="col">${newSessionNameHTML}</div>
                         <i class="bi bi-pencil-square"></i>
                         <i class="bi bi-files"></i>
                         <i class="bi bi-trash col-auto"></i>
                     </button>
                 </div>`;
       const chatContainerHtml = `
-                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionName}">
+                <div class="list-group session" data-session="${newSessionID}" data-name="${newSessionNameHTML}">
                     <button type="button" class="list-group-item list-group-item-action" aria-current="true">
-                        <div class="col">${newSessionName}</div>
+                        <div class="col">${newSessionNameHTML}</div>
                     </button>
                 </div>`;
 
@@ -2869,7 +2968,8 @@ async function setupSessionManager() {
 
         let active = '';
         const sconfig = await getChatSessionConfig(sessionID);
-        const sessionName = sconfig.session_name || sessionID;
+        // The name is user-typed or synced data, so escape it for the markup below.
+        const sessionName = libs.escapeHtml(sconfig.session_name || sessionID);
         if (sessionID === selectedSessionID) {
           active = 'active';
         }
@@ -4014,9 +4114,18 @@ async function detectPromptTaskType(model, prompt) {
   }
 }
 
+/**
+ * appendImg2UserInput attaches a pinned image to a human chat message, saving
+ * the message's prompt text with the image to storage and showing the image.
+ *
+ * @param {string} chatID - The chat ID of the human message.
+ * @param {string} imgDataBase64 - Base64-encoded PNG image data.
+ * @param {string} imgName - The image's display name.
+ * @returns {Promise<void>} Resolves once the chat has been saved and updated.
+ */
 async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
-  // insert image to user hisotry
-  const text = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
+  // insert image to user hisotry; storage keeps the raw prompt text
+  const text = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).textContent;
   await saveChats2Storage({
     role: RoleHuman,
     chatID,
@@ -4121,7 +4230,7 @@ async function appendImg2UserInput(chatID, imgDataBase64, imgName) {
 // }
 
 /**
- * Sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
+ * sendChat2Server sends a chat prompt to the server for the selected model and updates the current AI response element with the task information.
  *
  * @param {string} chatID - The chat ID.
  * @param {string} reqPrompt - Optional. The chat prompt to send to the server.
@@ -4168,8 +4277,8 @@ async function sendChat2Server(chatID, reqPrompt) {
       content: reqPrompt,
     });
   } else {
-    // if chatID is not empty, it's a reload request
-    reqPrompt = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).innerHTML;
+    // if chatID is not empty, it's a reload request; send the prompt text as shown
+    reqPrompt = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID} .role-human .text-start pre`).textContent;
   }
 
   // extract and pin new material in chat
@@ -5081,7 +5190,7 @@ function renderError(err) {
 }
 
 /**
- * do render and save chat after ai response finished
+ * renderAfterAiResp renders and saves a chat after the AI response has finished.
  *
  * @param {object} chatData - chat item
  *   @property {string} chatID - chat id
@@ -5095,6 +5204,8 @@ function renderError(err) {
  *   @property {string} requestid - request id
  * @param {boolean} saveStorage - save to storage or not.
  *                                if it's restore chat, there is no need to save to storage.
+ * @param {HTMLElement|null} rootElement - Optional root to search for the chat instead of chatContainer.
+ * @returns {Promise<void>} Resolves once the response is rendered (and saved when requested).
  */
 async function renderAfterAiResp(chatData, saveStorage = false, rootElement = null) {
   const root = rootElement || chatContainer;
@@ -5206,9 +5317,16 @@ async function renderAfterAiResp(chatData, saveStorage = false, rootElement = nu
     let costUsd = chatData.costUsd;
     const sconfig = await getChatSessionConfig();
 
-    // First ensure the info div exists (idempotent)
+    // First ensure the info div exists (idempotent). Build it with DOM APIs so a
+    // model name from the URL (?chatmodel=) or storage always renders as text.
     if (!aiRespEle.querySelector(':scope > div.info')) {
-      aiRespEle.insertAdjacentHTML('beforeend', `<div class="info"><i class="model">${chatData.model || ''}</i></div>`);
+      const infoEle = document.createElement('div');
+      infoEle.className = 'info';
+      const modelEle = document.createElement('i');
+      modelEle.className = 'model';
+      modelEle.textContent = chatData.model || '';
+      infoEle.appendChild(modelEle);
+      aiRespEle.appendChild(infoEle);
     }
     const infoDiv = aiRespEle.querySelector('div.info');
 
@@ -5217,7 +5335,10 @@ async function renderAfterAiResp(chatData, saveStorage = false, rootElement = nu
       // Display existing cost if we already have it
       if (costUsd) {
         if (!infoDiv.querySelector('.cost')) {
-          infoDiv.insertAdjacentHTML('beforeend', `<i class="cost">$${costUsd}</i>`);
+          const costEle = document.createElement('i');
+          costEle.className = 'cost';
+          costEle.textContent = `$${costUsd}`;
+          infoDiv.appendChild(costEle);
         }
       } else if (chatData.requestid) {
         // Otherwise fetch the cost if we have a request ID
@@ -6261,9 +6382,12 @@ async function bindTalkSwitchHandler(newSelectedValue) {
     const ssconfig = await getChatSessionConfig();
     chatContainer.querySelector('.user-input').innerHTML = `
         <div class="input-group mb-3 user-input">
-            <textarea dir="auto" class="form-control input prompt" placeholder="[${ssconfig.selected_model}] CTRL+Enter to send"></textarea>
+            <textarea dir="auto" class="form-control input prompt"></textarea>
             <button class="btn btn-outline-secondary send" type="button"><i class="bi bi-send"></i></button>
         </div>`;
+    // The model can come from a URL override (?model=), so assign the
+    // placeholder as an attribute value instead of HTML.
+    chatContainer.querySelector('.user-input .input.prompt').setAttribute('placeholder', `[${ssconfig.selected_model}] CTRL+Enter to send`);
 
     // reset chat input element
     await libs.waitElementReady('#chatContainer .user-input .input.prompt');
@@ -6612,22 +6736,29 @@ async function updateChatVisionSelectedFileStore() {
 }
 
 /**
- * reload ai response
+ * reloadAiResp re-sends a human prompt and resets its AI response to the waiting state.
  *
+ * The prompt is read from the open editor textarea when the user edited it, or
+ * from the rendered message otherwise, and is always written back as text.
+ *
+ * @param {string} chatID - The chat ID to reload.
  * @param {async function} overwriteSendChat2Server - overwrite sendChat2Server function
+ * @returns {Promise<void>} Resolves once the request has been sent.
  */
 async function reloadAiResp(chatID, overwriteSendChat2Server) {
   const chatEle = chatContainer.querySelector(`.chatManager .conservations .chats #${chatID}`);
 
   delete muRenderAfterAiRespForChatID[chatID];
 
+  // Read the prompt as plain text in both cases; it is written back with
+  // textContent below, so markup typed into the editor is never parsed as HTML.
   let newText = '';
   if (chatEle.querySelector('.role-human textarea')) {
     // read user input from click edit button
     newText = chatEle.querySelector('.role-human textarea').value;
   } else {
     // read user input from click reload button
-    newText = chatEle.querySelector('.role-human .text-start pre').innerHTML;
+    newText = chatEle.querySelector('.role-human .text-start pre').textContent;
   }
 
   const selecedModel = await OpenaiSelectedModel();
@@ -6643,7 +6774,7 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
   chatEle.innerHTML = `
         <div class="container-fluid row role-human" data-chatid="${chatID}">
             <div class="col-auto icon">🤔️</div>
-            <div class="col text-start"><pre>${newText}</pre></div>
+            <div class="col text-start"><pre></pre></div>
             <div class="col-auto d-flex control">
                 <i class="bi bi-pencil-square"></i>
                 <i class="bi bi-trash"></i>
@@ -6652,9 +6783,7 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
         <div class="container-fluid row role-ai" data-chatid="${chatID}">
             <div class="col-auto icon">${robotIcon}</div>
             <div class="col text-start ai-response"
-                data-task-status="${ChatTaskStatusWaiting}"
-                data-task-type="${chatData.taskType}"
-                data-model="${selecedModel}">
+                data-task-status="${ChatTaskStatusWaiting}">
                 <p class="card-text placeholder-glow">
                     <span class="placeholder col-7"></span>
                     <span class="placeholder col-4"></span>
@@ -6664,6 +6793,12 @@ async function reloadAiResp(chatID, overwriteSendChat2Server) {
                 </p>
             </div>
         </div>`;
+  chatEle.querySelector('.role-human .text-start pre').textContent = newText;
+  // The model can come from a URL override (?model=) and the task type from
+  // storage, so assign them as attribute values instead of HTML.
+  const aiRespEle = chatEle.querySelector('.role-ai .ai-response');
+  aiRespEle.dataset.taskType = chatData.taskType;
+  aiRespEle.dataset.model = selecedModel;
 
   // chatEle.dataset.taskStatus = ChatTaskStatusWaiting;
 
@@ -7983,21 +8118,29 @@ async function callMCPTool(server, toolName, args) {
 }
 
 /**
- * generateUUIDv4 generates a UUID v4 string.
+ * generateUUIDv4 generates a random (version 4) UUID string from a CSPRNG.
  *
- * @returns {string} UUID.
+ * The result is used as the MCP session ID, which the MCP spec says SHOULD be
+ * cryptographically secure, so it never falls back to Math.random. When
+ * crypto.randomUUID is missing (it is exposed only in secure contexts), the UUID
+ * is built from crypto.getRandomValues, which insecure contexts also provide.
+ *
+ * @returns {string} UUID in the canonical 8-4-4-4-12 lowercase hex form.
+ * @throws {Error} When the runtime offers no cryptographic random source.
  */
 function generateUUIDv4() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error('secure random number generator is unavailable');
+  }
 
-  // Fallback: not cryptographically strong, but good enough for session correlation.
-  const hex = () =>
-    Math.floor((1 + Math.random()) * 0x10000)
-      .toString(16)
-      .slice(1);
-  return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 9562 variant
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
@@ -9164,10 +9307,11 @@ async function EditFavSystemPromptHandler(evt) {
 }
 
 /**
- * append prompt shortcuts to html and kv
+ * appendPromptShortcut appends a prompt shortcut badge to the page and, optionally, to kv storage.
  *
  * @param {Object} shortcut - shortcut object
  * @param {bool} storage - whether to save to kv
+ * @returns {Promise<void>} Resolves once the badge is shown and storage is updated.
  */
 async function appendPromptShortcut(shortcut, storage = false) {
   const promptShortcutContainer = configContainer.querySelector('.prompt-shortcuts');
@@ -9184,7 +9328,9 @@ async function appendPromptShortcut(shortcut, storage = false) {
   ele.classList.add('badge', 'text-bg-info');
   ele.dataset.prompt = shortcut.description;
   ele.dataset.title = shortcut.title;
-  ele.innerHTML = `<i class="title">${shortcut.title}</i>  <i class="bi bi-pencil-square"></i><i class="bi bi-trash"></i>`;
+  // The title is user-typed or synced data: insert it as text, never as HTML.
+  ele.innerHTML = `<i class="title"></i>  <i class="bi bi-pencil-square"></i><i class="bi bi-trash"></i>`;
+  ele.querySelector('i.title').textContent = shortcut.title;
 
   // add edit click event
   ele.querySelector('i.bi-pencil-square').addEventListener('click', EditFavSystemPromptHandler);
@@ -9220,6 +9366,12 @@ async function appendPromptShortcut(shortcut, storage = false) {
   promptShortcutContainer.appendChild(ele);
 }
 
+/**
+ * setupPromptManager restores saved prompt shortcuts and binds the save-prompt,
+ * prompt-market and shortcut controls of the system prompt panel.
+ *
+ * @returns {Promise<void>} Resolves once shortcuts are restored and handlers bound.
+ */
 async function setupPromptManager() {
   // restore shortcuts from kv
   {
@@ -9247,7 +9399,9 @@ async function setupPromptManager() {
       evt.stopPropagation();
       const promptInput = configContainer.querySelector('.system-prompt .input');
 
-      saveSystemPromptModelEle.querySelector('.modal-body textarea.user-input').innerHTML = promptInput.value;
+      // Copy the prompt as the textarea's value: innerHTML would decode entities
+      // and stop updating the shown text once the value had been set.
+      saveSystemPromptModelEle.querySelector('.modal-body textarea.user-input').value = promptInput.value;
 
       saveSystemPromptModal.show();
     });

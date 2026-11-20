@@ -4,16 +4,15 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -75,7 +74,7 @@ var (
 func init() {
 	var err error
 	httpcli, err = gutils.NewHTTPClient(
-		gutils.WithHTTPClientTimeout(5 * time.Minute),
+		gutils.WithHTTPClientTimeout(gatewayTimeout),
 	)
 	if err != nil {
 		log.Logger.Panic("new http client", zap.Error(err))
@@ -85,8 +84,68 @@ func init() {
 // RegexpArweaveFileID matches arweave file id
 var RegexpArweaveFileID = regexp.MustCompile(`^[a-zA-Z0-9_-]{40,100}$`)
 
+// regexpArNSName matches one ArNS name or undername ("undername_name") used as
+// a single DNS label in front of a gateway host. It admits no URL delimiter,
+// so the caller selects a subdomain of a configured gateway and never the host.
+var regexpArNSName = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?$`)
+
+// maxGatewayRequestBodyBytes bounds the caller body buffered once and replayed
+// to every gateway. Gateway reads carry no body; this only caps misuse.
+const maxGatewayRequestBodyBytes = 1 << 20
+
+// forwardedGatewayHeaders lists the caller headers that shape the requested
+// content. Everything else, notably cookies, credentials and client metadata,
+// stays on this service instead of reaching third-party gateways.
+var forwardedGatewayHeaders = []string{
+	"Accept",
+	"Accept-Encoding",
+	"Accept-Language",
+	"Cache-Control",
+	"Content-Type",
+	"If-Match",
+	"If-Modified-Since",
+	"If-None-Match",
+	"If-Range",
+	"If-Unmodified-Since",
+	"Range",
+}
+
+// gatewayTarget returns the URL fetched from gateway. With an ArNS domain it is
+// the gateway's root on the domain's subdomain; otherwise it is fileKey on the gateway.
+// The domain must already match regexpArNSName.
+func gatewayTarget(gateway, domain, fileKey string) (string, error) {
+	if domain == "" {
+		return gateway + fileKey, nil
+	}
+	parsed, err := url.Parse(gateway)
+	if err != nil {
+		return "", errors.Wrapf(err, "parse gateway %q", gateway)
+	}
+	parsed.Host = domain + "." + parsed.Host
+	return parsed.String(), nil
+}
+
+// GatewayRequestHeader returns a new header holding only the forwardable
+// content-negotiation headers of source. Every relay of Arweave content uses
+// it, so caller cookies and credentials never reach a gateway.
+func GatewayRequestHeader(source http.Header) http.Header {
+	header := make(http.Header, len(forwardedGatewayHeaders))
+	for _, name := range forwardedGatewayHeaders {
+		if values := source.Values(name); len(values) > 0 {
+			header[name] = append([]string(nil), values...)
+		}
+	}
+	return header
+}
+
 // GatewayHandler redirects request to multiple arweave gateways,
 // and returns the first response.
+//
+// Arweave content is third-party content served on this origin, so only
+// content and caching headers are relayed and the response is marked untrusted:
+// active types are sandboxed into an opaque, script-free origin, while PDFs stay
+// viewable. Every hop away from the configured gateway hosts, including
+// redirects, passes the public egress policy.
 func GatewayHandler(ctx *gin.Context) {
 	fileKey := strings.Trim(ctx.Param("fileKey"), "/")
 	domain := ctx.Query("domain")
@@ -101,96 +160,62 @@ func GatewayHandler(ctx *gin.Context) {
 		return
 	}
 
+	if domain != "" && !regexpArNSName.MatchString(domain) {
+		web.AbortErr(ctx, errors.New("invalid domain, expect a single ArNS name such as name or undername_name"))
+		return
+	}
+
+	targets := make([]string, 0, len(ArweaveGateways))
+	for _, gw := range ArweaveGateways {
+		target, err := gatewayTarget(gw, domain, fileKey)
+		if web.AbortErr(ctx, err) {
+			return
+		}
+		targets = append(targets, target)
+	}
+
+	// Every gateway receives its own reader over one bounded copy of the body;
+	// a shared request body would be split between concurrent requests.
+	var body []byte
+	if ctx.Request.Body != nil {
+		var err error
+		body, err = io.ReadAll(io.LimitReader(ctx.Request.Body, maxGatewayRequestBodyBytes+1))
+		if web.AbortErr(ctx, errors.Wrap(err, "read request body")) {
+			return
+		}
+	}
+	if len(body) > maxGatewayRequestBodyBytes {
+		ctx.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"err": "request body too large"})
+		return
+	}
+
 	logger := gmw.GetLogger(ctx).With(
 		zap.String("method", ctx.Request.Method),
 		zap.String("fileKey", fileKey),
 	)
 
-	firstFinished := make(chan *http.Response)
 	taskCtx, taskCancel := context.WithCancel(gmw.Ctx(ctx))
 	defer taskCancel()
 
-	var pool errgroup.Group
-	for _, gw := range ArweaveGateways {
-		var url string
-		if domain != "" {
-			url = strings.Replace(gw, "https://", "https://"+domain+".", 1)
-		} else {
-			url = gw + fileKey
-		}
-
-		pool.Go(func() error {
-			logger := logger.With(zap.String("target_url", url))
-			logger.Debug("fetching file")
-
-			req, err := http.NewRequestWithContext(taskCtx,
-				ctx.Request.Method, url, ctx.Request.Body)
-			if err != nil {
-				return errors.Wrapf(err, "new request %q", url)
-			}
-
-			req.Header = ctx.Request.Header
-			resp, err := httpcli.Do(req)
-			if err != nil {
-				return errors.Wrapf(err, "do request %q", url)
-			}
-
-			// fmt.Printf(">> url: %s, status: %d, X-Ar-Ui-Hops: %s\n", url, resp.StatusCode, resp.Header.Get("X-Ar-Ui-Hops"))
-
-			if resp.StatusCode >= 200 && resp.StatusCode < 400 &&
-				(strings.Contains(url, "s3.laisky.com") || resp.Header.Get("X-Ar-Io-Hops") != "") {
-				select {
-				case firstFinished <- resp: // close body later
-				case <-taskCtx.Done():
-					_ = resp.Body.Close()
-				}
-
-				return nil
-			}
-
-			_ = resp.Body.Close()
-			return errors.Errorf("request %q, got %d", url, resp.StatusCode)
-		})
+	// Gateway goroutines may outlive this handler once the first response wins,
+	// so they must not read the recycled gin context or mutable globals.
+	fanOut := gatewayFanOut{
+		client: newGatewayClient(httpcli, ArweaveGateways, gatewayEgress),
+		method: ctx.Request.Method,
+		header: GatewayRequestHeader(ctx.Request.Header),
+		body:   body,
+		logger: logger,
 	}
-
-	taskErrCh := make(chan error)
-	go func() {
-		if err := pool.Wait(); err != nil {
-			select {
-			case taskErrCh <- errors.WithStack(err):
-			case <-taskCtx.Done():
-				return
-			}
-		}
-	}()
-
-	select {
-	case resp := <-firstFinished:
-		func() {
-			defer resp.Body.Close()
-			reqUrl := resp.Request.URL.String()
-			logger := logger.With(zap.String("upstream", reqUrl))
-			logger.Info("got response")
-
-			ctx.Header("X-Ar-Io-Url", reqUrl)
-			for k, v := range resp.Header {
-				ctx.Header(k, v[0])
-			}
-			ctx.Status(resp.StatusCode)
-
-			_, err := io.Copy(ctx.Writer, resp.Body)
-			if web.AbortErr(ctx, errors.Wrap(err, "copy response")) {
-				return
-			}
-		}()
-
+	resp, err := fanOut.first(taskCtx, targets)
+	if web.AbortErr(ctx, err) {
 		return
-	case err := <-taskErrCh:
-		if err == nil {
-			err = errors.Errorf("this is an internal error, no error occurred in upstreams, please contact the admin")
-		}
+	}
+	defer gutils.LogErr(resp.Body.Close, logger)
+	logger.Info("got response", zap.String("upstream", resp.Request.URL.String()))
 
-		web.AbortErr(ctx, errors.WithStack(err))
-		return
+	// A failure after the status is committed must abort the transfer, not
+	// append an error document to a partial body.
+	if err := RelayGatewayResponse(ctx, resp); err != nil {
+		web.AbortStreamErr(ctx, errors.Wrap(err, "relay gateway response"))
 	}
 }

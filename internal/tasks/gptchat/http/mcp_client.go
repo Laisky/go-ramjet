@@ -106,7 +106,7 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 		logger.Debug("mcp rest call attempt",
 			zap.String("endpoint", endpoint))
 
-		resp, callErr := doMCPPost(ctx, endpoint, headers, auths, bodyBytes)
+		resp, callErr := doMCPPost(ctx, mcpHTTPClient(server), endpoint, headers, auths, bodyBytes)
 		if callErr != nil {
 			logger.Debug("mcp rest call failed",
 				zap.String("endpoint", endpoint),
@@ -155,7 +155,7 @@ func callMCPTool(ctx context.Context, server *MCPServerConfig, toolName string, 
 // false the cache has been dropped and the caller must re-probe.
 func tryCachedREST(ctx context.Context, server *MCPServerConfig, endpoint string, headers http.Header, auths []string, bodyBytes []byte) (string, error, bool) {
 	logger := gmw.GetLogger(ctx)
-	resp, callErr := doMCPPost(ctx, endpoint, headers, auths, bodyBytes)
+	resp, callErr := doMCPPost(ctx, mcpHTTPClient(server), endpoint, headers, auths, bodyBytes)
 	if callErr != nil {
 		invalidateMCPTransport(server.URL)
 		logger.Debug("cached rest endpoint failed; falling back to full discovery",
@@ -239,7 +239,7 @@ func callMCPToolJSONRPCAt(ctx context.Context, server *MCPServerConfig, baseHead
 				zap.String("method", method),
 				zap.Any("params_name", params["name"]))
 
-			resp, err := doMCPPost(ctx, endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
+			resp, err := doMCPPost(ctx, mcpHTTPClient(server), endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
 			if err != nil {
 				logger.Debug("mcp json-rpc post failed",
 					zap.String("endpoint", endpoint),
@@ -369,7 +369,7 @@ func DiscoverMCPTools(ctx context.Context, server *MCPServerConfig, opts *MCPCal
 				return nil, errors.Wrap(err, "marshal tools/list payload")
 			}
 
-			resp, err := doMCPPost(ctx, endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
+			resp, err := doMCPPost(ctx, mcpHTTPClient(server), endpoint, mcpSessionHeaders(server, baseHeaders), auths, body)
 			if err != nil {
 				logger.Debug("mcp tools/list post failed",
 					zap.String("endpoint", endpoint),

@@ -1,0 +1,199 @@
+package ario
+
+import (
+	"bufio"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/Laisky/errors/v2"
+	"github.com/gin-gonic/gin"
+
+	"github.com/Laisky/go-ramjet/library/egress"
+	"github.com/Laisky/go-ramjet/library/web"
+)
+
+const (
+	// gatewayTimeout bounds one whole gateway exchange, including the wait
+	// for response headers while a gateway fetches an uncached transaction.
+	gatewayTimeout = 5 * time.Minute
+	// cacheGatewayHost is the operator's own upload cache. Its answers carry
+	// no ar.io hop header and are trusted when they come from this host.
+	cacheGatewayHost = "s3.laisky.com"
+	// sniffLen is how many leading bytes http.DetectContentType considers.
+	sniffLen = 512
+)
+
+// gatewayEgress carries every gateway hop whose host is not a configured
+// gateway host: ArNS subdomains and redirect targets. Those hosts are chosen
+// by a caller or by a third-party gateway, so each hop is admitted by the
+// shared public-destination policy and pinned. Tests replace it.
+var gatewayEgress http.RoundTripper = egress.PinnedTransport{ResponseHeaderTimeout: gatewayTimeout}
+
+// relayedGatewayHeaders lists the gateway response headers that describe the
+// relayed content or its caching. Every other header, such as Set-Cookie,
+// NEL, Report-To, Service-Worker-Allowed or Clear-Site-Data, would let a
+// third-party gateway act on this origin, which also serves GPTChat, so it is
+// dropped. Content-Encoding is relayed separately, only when unmodified.
+var relayedGatewayHeaders = []string{
+	"Accept-Ranges",
+	"Cache-Control",
+	"Content-Disposition",
+	"Content-Length",
+	"Content-Range",
+	"Content-Type",
+	"Etag",
+	"Expires",
+	"Last-Modified",
+	"Vary",
+}
+
+// notModifiedGatewayHeaders lists the relayed headers a 304 carries: the
+// validators and caching headers RFC 9110, section 15.4.5, requires so a cache
+// can refresh its stored response. A cache replaces stored headers with those
+// of a 304, so representation metadata (Content-Type, Content-Length) and the
+// content policy are left out: they would re-label or re-sandbox a cached
+// body that did not change. Content-Location is left out because it names the
+// gateway's URL space; this server sets Date itself.
+var notModifiedGatewayHeaders = []string{
+	"Cache-Control",
+	"Etag",
+	"Expires",
+	"Last-Modified",
+	"Vary",
+}
+
+// relayedGatewayHeaderPrefix marks ar.io headers, which the handler relies on
+// to recognize gateway answers and which describe the relayed transaction.
+const relayedGatewayHeaderPrefix = "X-Ar-Io-"
+
+// gatewayTransport routes each request, including every redirect hop. A hop
+// to a configured gateway host over https uses the server transport, so
+// operator-chosen gateways keep working even when they resolve privately;
+// any other hop goes through the egress transport.
+type gatewayTransport struct {
+	trusted http.RoundTripper
+	egress  http.RoundTripper
+	hosts   map[string]struct{}
+}
+
+// RoundTrip sends request through the transport matching its destination.
+func (t gatewayTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL.Scheme == "https" {
+		if _, ok := t.hosts[strings.ToLower(request.URL.Host)]; ok {
+			return t.trusted.RoundTrip(request)
+		}
+	}
+	return t.egress.RoundTrip(request)
+}
+
+// newGatewayClient returns the client for one fan-out over gateways. It keeps
+// base's timeout and redirect policy and routes every hop with gatewayTransport,
+// trusting exactly the https hosts listed in gateways.
+func newGatewayClient(base *http.Client, gateways []string, egressTransport http.RoundTripper) *http.Client {
+	hosts := make(map[string]struct{}, len(gateways))
+	for _, gateway := range gateways {
+		parsed, err := url.Parse(gateway)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			continue
+		}
+		hosts[strings.ToLower(parsed.Host)] = struct{}{}
+	}
+	trusted := base.Transport
+	if trusted == nil {
+		trusted = http.DefaultTransport
+	}
+	client := *base
+	client.Transport = gatewayTransport{trusted: trusted, egress: egressTransport, hosts: hosts}
+	return &client
+}
+
+// finalGatewayURL returns the URL of the last hop that produced response,
+// falling back to target when the response does not record its request.
+func finalGatewayURL(response *http.Response, target string) *url.URL {
+	if response.Request != nil && response.Request.URL != nil {
+		return response.Request.URL
+	}
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return &url.URL{}
+	}
+	return parsed
+}
+
+// isOperatorCache reports whether u, the final hop of a gateway exchange, is
+// the operator's upload cache or one of its ArNS subdomains.
+func isOperatorCache(u *url.URL) bool {
+	host := strings.ToLower(u.Hostname())
+	return host == cacheGatewayHost || strings.HasSuffix(host, "."+cacheGatewayHost)
+}
+
+// RelayGatewayResponse writes response to ctx: the allowlisted headers, the
+// gateway URL as X-Ar-Io-Url, the untrusted-content policy for the relayed
+// type, the status and the body. A missing Content-Type is detected from the
+// first bytes, as net/http would. A 304 carries only
+// notModifiedGatewayHeaders. Every handler that serves Arweave content on this
+// origin relays it through here.
+//
+// A returned error may come after the status is committed; callers answer it
+// with web.AbortStreamErr, which aborts a started transfer instead of
+// appending an error document.
+//
+// No header is copied until the gateway has produced its first body byte (or
+// ended an empty body): a gateway that fails earlier leaves ctx untouched, so
+// the error answered in its place carries none of the headers, such as
+// X-Ar-Io-Verified, that describe the body it never sent.
+func RelayGatewayResponse(ctx *gin.Context, response *http.Response) error {
+	if response.StatusCode == http.StatusNotModified {
+		for _, name := range notModifiedGatewayHeaders {
+			if value := response.Header.Get(name); value != "" {
+				ctx.Header(name, value)
+			}
+		}
+		ctx.Status(http.StatusNotModified)
+		return nil
+	}
+
+	body := bufio.NewReaderSize(response.Body, sniffLen)
+	contentType := response.Header.Get("Content-Type")
+	need := 1
+	if contentType == "" {
+		need = sniffLen
+	}
+	// A short read with bytes is relayed as far as it goes; the copy below then
+	// meets the error after the status is committed and aborts the transfer.
+	head, err := body.Peek(need)
+	if err != nil && !errors.Is(err, io.EOF) && len(head) == 0 {
+		return errors.Wrap(err, "read gateway content")
+	}
+
+	for _, name := range relayedGatewayHeaders {
+		if value := response.Header.Get(name); value != "" {
+			ctx.Header(name, value)
+		}
+	}
+	// net/http drops Content-Encoding after decompressing on its own; a value
+	// that is still present matches the body as relayed.
+	if value := response.Header.Get("Content-Encoding"); value != "" && !response.Uncompressed {
+		ctx.Header("Content-Encoding", value)
+	}
+	for name, values := range response.Header {
+		if strings.HasPrefix(http.CanonicalHeaderKey(name), relayedGatewayHeaderPrefix) && len(values) > 0 {
+			ctx.Header(name, values[0])
+		}
+	}
+	ctx.Header("X-Ar-Io-Url", finalGatewayURL(response, "").String())
+	if contentType == "" {
+		contentType = http.DetectContentType(head)
+		ctx.Header("Content-Type", contentType)
+	}
+	// Applied after the gateway headers so it replaces any policy they carried.
+	web.MarkUntrustedContent(ctx, contentType)
+	ctx.Status(response.StatusCode)
+	if _, err := io.Copy(ctx.Writer, body); err != nil {
+		return errors.Wrap(err, "copy gateway content")
+	}
+	return nil
+}

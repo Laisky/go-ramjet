@@ -26,6 +26,13 @@ import (
 	"github.com/Laisky/go-ramjet/library/web"
 )
 
+// DrawByDalleHandler generates images for an OpenAI-compatible image request,
+// stores them in the object store and answers with their URLs.
+//
+// The image count is bounded by normalizeImageCount. With external image billing,
+// one image is charged upfront and the remaining images are charged by
+// storeAndBillImages once they are stored. ctx is the gin context of the
+// request; failures are reported to the client through web.AbortErr.
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
@@ -49,13 +56,10 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.IsFree && req.N > 1 {
-		logger.Debug("n is limited to 1 for free user")
-		req.N = 1
-	}
-	if req.N > 8 {
-		logger.Debug("n is limited to 8")
-		req.N = 8
+	if n := normalizeImageCount(req.N, user.IsFree); n != req.N {
+		logger.Debug("image count limited",
+			zap.Int("requested", req.N), zap.Int("limited", n), zap.Bool("free_user", user.IsFree))
+		req.N = n
 	}
 
 	if err = IsModelAllowed(ctx, user,
@@ -67,6 +71,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	}
 
 	if user.EnableExternalImageBilling {
+		// Charge one image upfront as the balance probe; storeAndBillImages charges
+		// the rest once they are stored.
 		if err := checkUserExternalBilling(gmw.Ctx(ctx),
 			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
 			return
@@ -77,51 +83,18 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
 
-	var imgContents [][]byte
-	switch {
-	case strings.Contains(user.ImageUrl, "openai.azure.com"):
-		var pool errgroup.Group
-		imgContents = make([][]byte, req.N)
-		for i := range req.N {
-			i := i
-			pool.Go(func() (err error) {
-				imgContents[i], err = fetchImageFromAzureDalle(taskCtx, user, req.Prompt)
-				return err
-			})
-		}
-		if err := pool.Wait(); web.AbortErr(ctx, err) {
-			return
-		}
-	default:
-		imgContents, err = fetchImageFromOpenaiDalle(taskCtx, user, req.Model, req.Prompt, req.N, req.Size)
-		if web.AbortErr(ctx, err) {
-			return
-		}
+	imgContents, err := generateImages(taskCtx, user, req.Model, req.Prompt, req.N, req.Size)
+	if web.AbortErr(ctx, err) {
+		return
 	}
-
-	var pool errgroup.Group
-	for i, imgContent := range imgContents {
-		i, imgContent := i, imgContent
-		pool.Go(func() error {
-			return uploadImage2Minio(taskCtx,
-				fmt.Sprintf("%s-%d", drawImageByTxtObjkeyPrefix(taskID), i),
-				req.Prompt,
-				imgContent,
-				".png",
-			)
-		})
-	}
-
-	if err := pool.Wait(); err != nil {
+	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, req.N, taskID, req.Prompt, imgContents)
+	if err != nil {
 		// upload error msg
 		msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
 		objkey := drawImageByTxtObjkeyPrefix(taskID) + ".err.txt"
-		s3cli, errS3 := s3.GetCli()
-		if errS3 != nil {
+		if s3cli, errS3 := s3.GetCli(); errS3 != nil {
 			logger.Error("get s3 client", zap.Error(errS3))
-		}
-
-		if _, errS3 := s3lib.PutObjectCappingVersions(taskCtx,
+		} else if _, errS3 := s3lib.PutObjectCappingVersions(taskCtx,
 			logger,
 			s3cli,
 			config.Config.S3.Bucket,
@@ -142,15 +115,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 
 	logger.Info("succeed draw image done")
 
-	var imgUrls []string
-	var openaiData []gin.H
-	for i := range imgContents {
-		url := fmt.Sprintf("https://%s/%s/%s-%d.%s",
-			config.Config.S3.Endpoint,
-			config.Config.S3.Bucket,
-			drawImageByTxtObjkeyPrefix(taskID), i, "png",
-		)
-		imgUrls = append(imgUrls, url)
+	openaiData := make([]gin.H, 0, len(imgUrls))
+	for _, url := range imgUrls {
 		openaiData = append(openaiData, gin.H{"url": url})
 	}
 
@@ -162,6 +128,13 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	})
 }
 
+// fetchImageFromOpenaiDalle asks user's OpenAI-compatible upstream for n images of
+// model drawn from prompt, at size when it is not empty.
+//
+// It returns between 1 and n images: entries after the n-th image are never
+// decoded or downloaded, and entries without image data are skipped. It returns an
+// error when the upstream call fails, its answer exceeds the size allowance for n
+// images, an image cannot be decoded or downloaded, or no entry carries an image.
 func fetchImageFromOpenaiDalle(ctx context.Context,
 	user *config.UserConfig, model, prompt string, n int, size string) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("openai")
@@ -194,14 +167,15 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+user.OpenaiToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := io.ReadAll(httpresp.Body)
+		payload, err := readImageAPIResponse(httpresp.Body, maxImagesPerRequest)
 		if err != nil {
-			return nil, errors.Wrap(err, "read response body")
+			return nil, errors.Wrap(err, "read image response")
 		}
 
 		if httpresp.StatusCode != http.StatusOK {
@@ -222,6 +196,10 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	}
 
 	logger.Debug("succeed get image from openai", zap.Int("n", len(resp.Data)))
+	// The upstream may answer with more entries than requested, and some entries
+	// may carry no image. Stop once n images are collected, so no surplus entry is
+	// decoded or downloaded and entries without an image do not use up the count.
+	collector := newImageCollector(n)
 	for i, data := range resp.Data {
 		var imgContent []byte
 		if data.B64Json != "" {
@@ -237,21 +215,30 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 			}
 		} else if data.Url != "" {
 			logger.Debug("download from url", zap.Int("index", i), zap.String("url", data.Url))
-			// download from url
-			imgContent, err = downloadImage(ctx, data.Url)
+			// The URL comes from the upstream, so it inherits the upstream's trust.
+			imgContent, err = downloadImage(ctx, cli, data.Url)
 			if err != nil {
 				return nil, errors.Wrap(err, "download image from url")
 			}
 		}
 
-		if len(imgContent) > 0 {
-			imgs = append(imgs, imgContent)
+		if collector.add(imgContent) {
+			if i+1 < len(resp.Data) {
+				logger.Debug("ignore surplus upstream images",
+					zap.Int("requested", n), zap.Int("returned", len(resp.Data)))
+			}
+			break
 		}
 	}
 
-	return imgs, nil
+	return collector.images()
 }
 
+// fetchImageFromAzureDalle asks user's Azure OpenAI image deployment for one image
+// drawn from prompt and downloads it.
+//
+// It returns the image, or an error when the upstream call fails, its answer
+// exceeds the size allowance for one image or carries no image, or the download fails.
 func fetchImageFromAzureDalle(ctx context.Context,
 	user *config.UserConfig, prompt string) (img []byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("azure")
@@ -275,17 +262,21 @@ func fetchImageFromAzureDalle(ctx context.Context,
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Api-Key", user.ImageToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(AzureCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
+		payload, err := readImageAPIResponse(httpresp.Body, 1)
+		if err != nil {
+			return nil, errors.Wrap(err, "read image response")
+		}
 		if httpresp.StatusCode != http.StatusOK {
-			payload, _ := io.ReadAll(httpresp.Body)
 			return nil, errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
 		}
 
-		if err = json.NewDecoder(httpresp.Body).Decode(resp); err != nil {
+		if err = json.Unmarshal(payload, resp); err != nil {
 			return nil, errors.Wrap(err, "decode response")
 		}
 
@@ -294,17 +285,30 @@ func fetchImageFromAzureDalle(ctx context.Context,
 		}
 	}
 
-	// download image
-	return downloadImage(ctx, resp.Data[0].Url)
+	// download image; the URL comes from the upstream, so it inherits the upstream's trust.
+	return downloadImage(ctx, cli, resp.Data[0].Url)
 }
 
-func downloadImage(ctx context.Context, url string) ([]byte, error) {
+// maxDownloadedImageBytes bounds one downloaded image or mask. Generated and
+// uploaded images are a few megabytes; the cap stops a caller-chosen URL from
+// streaming an unbounded body into memory.
+const maxDownloadedImageBytes = 32 << 20
+
+// downloadImage fetches the image at url with cli and returns its bytes.
+//
+// Parameters:
+//   - ctx: Request-scoped context carrying the logger and cancellation.
+//   - cli: Client matching the trust of url's origin; caller-chosen URLs need tenantEgressClient.
+//   - url: Image location.
+//
+// Returns the body, at most maxDownloadedImageBytes long, or a wrapped error.
+func downloadImage(ctx context.Context, cli *http.Client, url string) ([]byte, error) {
 	logger := gmw.GetLogger(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request")
 	}
-	imgResp, err := httpcli.Do(req) //nolint: bodyclose
+	imgResp, err := cli.Do(req) //nolint: bodyclose
 	if err != nil {
 		return nil, errors.Wrap(err, "download image")
 	}
@@ -314,9 +318,24 @@ func downloadImage(ctx context.Context, url string) ([]byte, error) {
 		return nil, errors.Errorf("download image got bad status code %d", imgResp.StatusCode)
 	}
 
-	return io.ReadAll(imgResp.Body)
+	content, err := io.ReadAll(io.LimitReader(imgResp.Body, maxDownloadedImageBytes+1))
+	if err != nil {
+		return nil, errors.Wrap(err, "read image")
+	}
+	if len(content) > maxDownloadedImageBytes {
+		return nil, errors.Errorf("image exceeds %d bytes", maxDownloadedImageBytes)
+	}
+
+	return content, nil
 }
 
+// EditImageHandler edits the caller's image (and optional mask) by prompt through
+// the user's OpenAI-compatible upstream, stores the result in the object store and
+// answers with its URL.
+//
+// With external image billing one image is charged upfront, and exactly one image
+// is delivered. ctx is the gin context of the request; failures are reported to
+// the client through web.AbortErr.
 func EditImageHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 	logger := gmw.GetLogger(ctx).Named("image_edit").With(zap.String("task_id", taskID))
@@ -382,7 +401,7 @@ func EditImageHandler(ctx *gin.Context) {
 	for i, imgContent := range imgContents {
 		i, imgContent := i, imgContent
 		pool.Go(func() error {
-			return uploadImage2Minio(taskCtx,
+			return uploadGeneratedImage(taskCtx,
 				fmt.Sprintf("%s-%d", drawImageByImageObjkeyPrefix(taskID), i),
 				req.Prompt,
 				imgContent,
@@ -415,14 +434,32 @@ func EditImageHandler(ctx *gin.Context) {
 	})
 }
 
+// getDataFromUrlOrBase64 returns the image named by input, which is either an
+// http(s) URL or base64 content. The caller chose the URL, so it is always
+// fetched through tenantEgressClient.
 func getDataFromUrlOrBase64(ctx context.Context, input string) ([]byte, error) {
 	if strings.HasPrefix(input, "http") {
-		return downloadImage(ctx, input)
+		content, err := downloadImage(ctx, tenantEgressClient(), input)
+		if err != nil {
+			return nil, errors.Wrap(err, "download caller image")
+		}
+		return content, nil
 	}
 
-	return DecodeBase64(input)
+	content, err := DecodeBase64(input)
+	if err != nil {
+		return nil, errors.Wrap(err, "decode base64 image")
+	}
+	return content, nil
 }
 
+// fetchImageEditFromOpenai sends image, and mask when it is not empty, with prompt
+// to the image edit API of user's OpenAI-compatible upstream for model.
+//
+// It returns exactly one image: entries after the first image are never decoded
+// or downloaded. It returns an error when the request cannot be built, the upstream
+// call fails, its answer exceeds the size allowance for one image, an image cannot
+// be decoded or downloaded, or no entry carries an image.
 func fetchImageEditFromOpenai(ctx context.Context,
 	user *config.UserConfig, model, prompt string, image, mask []byte) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx)
@@ -483,24 +520,31 @@ func fetchImageEditFromOpenai(ctx context.Context,
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+user.OpenaiToken)
 
+	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := httpcli.Do(req); err != nil { //nolint: bodyclose
+	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
+		payload, err := readImageAPIResponse(httpresp.Body, maxImagesPerRequest)
+		if err != nil {
+			return nil, errors.Wrap(err, "read image edit response")
+		}
 		if httpresp.StatusCode != http.StatusOK {
-			payload, _ := io.ReadAll(httpresp.Body)
 			logger.Debug("openai image edit error",
 				zap.Int("status", httpresp.StatusCode),
 				zap.String("payload", string(payload)))
 			return nil, errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
 		}
 
-		if err = json.NewDecoder(httpresp.Body).Decode(resp); err != nil {
+		if err = json.Unmarshal(payload, resp); err != nil {
 			return nil, errors.Wrap(err, "decode response")
 		}
 	}
 
+	// The edit request asks for one image and is charged for one, so stop at the
+	// first image: surplus entries are never downloaded or delivered.
+	collector := newImageCollector(1)
 	for _, data := range resp.Data {
 		var imgContent []byte
 		if data.B64Json != "" {
@@ -509,16 +553,17 @@ func fetchImageEditFromOpenai(ctx context.Context,
 				return nil, errors.Wrap(err, "decode image")
 			}
 		} else if data.Url != "" {
-			imgContent, err = downloadImage(ctx, data.Url)
+			// The URL comes from the upstream, so it inherits the upstream's trust.
+			imgContent, err = downloadImage(ctx, cli, data.Url)
 			if err != nil {
 				return nil, errors.Wrap(err, "download image from url")
 			}
 		}
 
-		if len(imgContent) > 0 {
-			imgs = append(imgs, imgContent)
+		if collector.add(imgContent) {
+			break
 		}
 	}
 
-	return imgs, nil
+	return collector.images()
 }

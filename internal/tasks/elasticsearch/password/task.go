@@ -3,9 +3,11 @@ package password
 import (
 	"bytes"
 	"context"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Laisky/errors/v2"
@@ -19,6 +21,7 @@ import (
 )
 
 var (
+	rotationMu sync.Mutex
 	httpClient = http.Client{
 		Timeout: time.Second * 30,
 		Transport: &http.Transport{
@@ -28,18 +31,34 @@ var (
 	}
 )
 
-// BindPasswordTask schedules password rotation at the configured interval in seconds.
+// defaultRotationInterval allows a missed month-boundary tick to retry within a minute.
+const defaultRotationInterval = time.Minute
+
+// BindPasswordTask starts the password rotation schedule when its APIs are configured.
 func BindPasswordTask() {
-	step := gconfig.Shared.GetDuration("tasks.elasticsearch-v2.password.interval")
-	if gconfig.Shared.GetBool("debug") {
-		step = 5
+	bindPasswordTask(func(interval time.Duration, rotate func()) {
+		go store.TaskStore.TickerAfterRun(interval, rotate)
+	})
+}
+
+// bindPasswordTask hands the rotation callback and interval to schedule only when APIs are configured.
+func bindPasswordTask(schedule func(time.Duration, func())) {
+	if len(gconfig.Shared.GetStringSlice("tasks.elasticsearch-v2.password.apis")) == 0 {
+		log.Logger.Info("elasticsearch password rotation not scheduled: no APIs configured")
+		return
 	}
 
-	if step == 0 { // no config
-		step = 1
+	// The existing configuration key is expressed as a number of seconds.
+	seconds := gconfig.Shared.GetDuration("tasks.elasticsearch-v2.password.interval")
+	interval := defaultRotationInterval
+	switch {
+	case gconfig.Shared.GetBool("debug"):
+		interval = 5 * time.Second
+	case seconds > 0 && seconds <= math.MaxInt64/time.Second:
+		interval = seconds * time.Second
 	}
 
-	go store.TaskStore.TickerAfterRun(step*time.Second, runTask)
+	schedule(interval, runTask)
 }
 
 // User is the body of the Elasticsearch change-password request.
@@ -58,6 +77,13 @@ const apiPasswordMask = "*****"
 // when every API accepted the change. A dry run, or a run with no API
 // configured, changes nothing and says so instead of reporting success.
 func runTask() {
+	// The task store dispatches asynchronously; cover the entire rotation, not just dispatch.
+	if !rotationMu.TryLock() {
+		log.Logger.Debug("skip elasticsearch password rotation: already running")
+		return
+	}
+	defer rotationMu.Unlock()
+
 	log.Logger.Info("run elasticsearch.password")
 	newpasswd := GeneratePasswdByDate(
 		gutils.UTCNow(),
