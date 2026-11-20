@@ -128,3 +128,68 @@ export function isSameApiEndpoint(
 ): boolean {
   return normalizeApiBase(a) === normalizeApiBase(b)
 }
+
+/**
+ * API_BASE_SHAPE requires the raw text of an API base to start with an
+ * http(s) scheme, two slashes and a plain authority, followed by a path or
+ * the end. Browsers repair forms such as `https:host`, `https:\\host`,
+ * `https://@host` or `https://host\\@x` into a URL that Go's url.Parse
+ * (and so the server) refuses or reads differently, so the raw text is
+ * checked before parsing.
+ */
+const API_BASE_SHAPE = /^https?:\/\/[^/?#\\@%\s]+(?:\/|$)/i
+
+/**
+ * NON_PRINTABLE_ASCII matches any character outside printable ASCII, which
+ * covers whitespace and control characters too. Every request carries the
+ * API base in the X-Laisky-Api-Base header: fetch refuses header values
+ * beyond ISO-8859-1, and a Latin-1 host reaches Go as a raw byte while
+ * realtime audio connects to its punycode form.
+ */
+const NON_PRINTABLE_ASCII = /[^\x21-\x7e]/
+
+/**
+ * rawApiBaseHost returns the host of raw, an API base that matched
+ * API_BASE_SHAPE, as written: the authority without its port, lower-cased,
+ * with the brackets of an IPv6 literal kept.
+ */
+function rawApiBaseHost(raw: string): string {
+  const authority = raw.replace(/^https?:\/\//i, '').split('/')[0]
+  const host = authority.startsWith('[')
+    ? authority.slice(0, authority.indexOf(']') + 1)
+    : authority.split(':')[0]
+  return host.toLowerCase()
+}
+
+/**
+ * isValidApiBase reports whether apiBase is an API base the server accepts
+ * and realtime audio can connect to: an absolute http(s) URL in printable
+ * ASCII with a plain host and without user info, query, fragment, or
+ * backslashes. The host must already be in the form the browser would
+ * normalize it to: a bare `?` or `#` leaves url.search and url.hash empty
+ * but Go keeps it, and the browser reads hosts such as `0x7f.1` or `127.1`
+ * as IPv4 addresses where Go sees host names.
+ */
+export function isValidApiBase(apiBase?: string | null): boolean {
+  const raw = apiBase?.trim() || ''
+  if (
+    !API_BASE_SHAPE.test(raw) ||
+    /[\\?#]/.test(raw) ||
+    NON_PRINTABLE_ASCII.test(raw)
+  ) {
+    return false
+  }
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  return (
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
+    !!url.hostname &&
+    url.hostname === rawApiBaseHost(raw) &&
+    !url.username &&
+    !url.password
+  )
+}

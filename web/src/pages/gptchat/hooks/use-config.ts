@@ -29,6 +29,7 @@ import {
 import {
   hydrateSessionConfig,
   mergeSessionConfigs,
+  type PendingLinkChange,
 } from './session-config-hydration'
 import { copyStoredSession } from './session-copy'
 import {
@@ -48,6 +49,10 @@ export function useConfig() {
     { id: number; name: string; visible: boolean }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
+  // What a link asked to change on a stored session (I4); it waits for the
+  // user to confirm or dismiss it.
+  const [pendingLinkChange, setPendingLinkChange] =
+    useState<PendingLinkChange | null>(null)
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
   const hydratedRef = useRef(false)
@@ -184,6 +189,16 @@ export function useConfig() {
             getSessionConfigKey(activeSessionId),
             finalConfig,
           )
+        }
+        // The load that consumed the link's parameters raises its prompt
+        // even if its effect run was already cleaned up (StrictMode runs it
+        // twice and only the first one sees the link) while the page stays
+        // mounted. After a real unmount React ignores the update.
+        if (hydratedConfig.pendingLinkChange) {
+          setPendingLinkChange({
+            ...hydratedConfig.pendingLinkChange,
+            sessionId: activeSessionId,
+          })
         }
 
         applySessionState(activeSessionId, finalConfig)
@@ -353,6 +368,36 @@ export function useConfig() {
   )
 
   /**
+   * confirmPendingLinkChange applies the link-supplied endpoint and key the
+   * user confirmed, in one write, but only to the session the link was
+   * opened in. A key the policy refuses aborts the whole change, so the
+   * stored key never moves to the new endpoint alone. The prompt stays when
+   * the change is refused or storing fails, and the returned promise rejects.
+   */
+  const confirmPendingLinkChange = useCallback(async () => {
+    const pending = pendingLinkChange
+    if (!pending || pending.sessionId !== sessionIdRef.current) {
+      setPendingLinkChange(null)
+      return
+    }
+    const updates: Partial<SessionConfig> = {}
+    if (pending.apiBase !== undefined) updates.api_base = pending.apiBase
+    if (pending.apiToken !== undefined) updates.api_token = pending.apiToken
+    if (
+      validateCredentialUpdate(configRef.current, updates).rejections.length
+    ) {
+      throw new Error('the API key from the link was refused')
+    }
+    await updateConfig(updates)
+    setPendingLinkChange(null)
+  }, [pendingLinkChange, updateConfig])
+
+  /** dismissPendingLinkChange keeps the current settings and drops the prompt. */
+  const dismissPendingLinkChange = useCallback(() => {
+    setPendingLinkChange(null)
+  }, [])
+
+  /**
    * Reorder sessions
    */
   const reorderSessions = useCallback(
@@ -468,6 +513,11 @@ export function useConfig() {
    */
   const deleteSession = useCallback(
     async (targetSessionId: number) => {
+      // A link prompt belongs to the config it was raised for; a session
+      // recreated under the same id must not inherit it.
+      setPendingLinkChange((pending) =>
+        pending?.sessionId === targetSessionId ? null : pending,
+      )
       // A pending write must not resurrect the deleted config.
       await persistQueue.whenIdle()
       await kvDel(getSessionConfigKey(targetSessionId))
@@ -550,6 +600,7 @@ export function useConfig() {
   )
 
   const purgeAllSessions = useCallback(async () => {
+    setPendingLinkChange(null)
     await persistQueue.whenIdle()
     const keys = await kvList()
     for (const key of keys) {
@@ -671,6 +722,8 @@ export function useConfig() {
       data: Record<string, unknown>,
       mode: 'merge' | 'download' = 'merge',
     ) => {
+      // Imported configs replace the one a pending link prompt describes.
+      setPendingLinkChange(null)
       await persistQueue.whenIdle()
       const activeSessionId = sessionIdRef.current
       await importData(data, activeSessionId, mode)
@@ -685,6 +738,10 @@ export function useConfig() {
     sessions,
     isLoading,
     updateConfig,
+    pendingLinkChange:
+      pendingLinkChange?.sessionId === sessionId ? pendingLinkChange : null,
+    confirmPendingLinkChange,
+    dismissPendingLinkChange,
     switchSession,
     reorderSessions,
     createSession,

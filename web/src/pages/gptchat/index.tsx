@@ -25,6 +25,7 @@ import {
   ChatSearch,
   ConversationInsert,
   FloatingMessageHeader,
+  LinkCredentialChangeBanner,
   ModelSelector,
   SelectionTTSPlayer,
   SelectionToolbar,
@@ -73,6 +74,9 @@ export function GPTChatPage() {
     sessions,
     isLoading: configLoading,
     updateConfig,
+    pendingLinkChange,
+    confirmPendingLinkChange,
+    dismissPendingLinkChange,
     createSession,
     deleteSession,
     switchSession,
@@ -535,6 +539,15 @@ export function GPTChatPage() {
                 setConfigFocus('api-key')
                 setConfigOpen(true)
               }}
+            />
+          )}
+
+          {pendingLinkChange && !configLoading && (
+            <LinkCredentialChangeBanner
+              change={pendingLinkChange}
+              config={config}
+              onConfirm={confirmPendingLinkChange}
+              onDismiss={dismissPendingLinkChange}
             />
           )}
 
