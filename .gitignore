@@ -19,6 +19,9 @@ docs/_build/
 # PyBuilder
 target/
 
+# Python bytecode
+__pycache__/
+
 # ipython
 .ipynb_checkpoints/
 

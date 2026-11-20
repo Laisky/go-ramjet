@@ -138,6 +138,9 @@ jobs:
       - name: Run release deployment contract tests
         run: /usr/bin/python3 -B ci/test_release_deployment.py
 
+      - name: Run workflow token permission contracts
+        run: /usr/bin/python3 -B ci/test_workflow_permissions.py
+
       - name: Run CV diagnostic matrix driver contracts
         run: |
           python3 -B ci/test_probe_cv_print.py
@@ -152,6 +155,7 @@ jobs:
         env:
           CRAWLER_HTTP_PROXY: ''
           CV_PRINT_PROBE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          CV_PRINT_PROBE_BASE_REF: ${{ github.base_ref }}
         run: python3 -B ci/probe_cv_smoke.py
 
       - name: Prepare immutable browser dependency cache profiles
