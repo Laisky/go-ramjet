@@ -35,15 +35,15 @@ const dependencyFloors = [
   ['vitest', 5, '5.0.3'],
   ['minimatch', 11, '11.0.1'],
   ['glob', 14, '14.0.2'],
-  ['lodash-es', 4, '4.18.0'],
-  ['lodash', 4, '4.18.0'],
-  ['lodash-amd', 4, '4.18.0'],
-  ['lodash.template', 4, '4.18.0'],
+  ['lodash-es', 4, '4.18.1'],
+  ['lodash', 4, '4.18.1'],
+  ['lodash-amd', 4, '4.18.1'],
+  ['lodash.template', 4, '4.18.1'],
   ['lodash.omit', 4, '4.18.0'],
   ['lodash.unset', 4, '4.18.0'],
   ['undici', 6, '6.29.1'],
-  ['undici', 7, '7.30.1'],
-  ['undici', 8, '8.12.2'],
+  ['undici', 7, '7.30.2'],
+  ['undici', 8, '8.12.4'],
   ['postcss-selector-parser', 6, '6.1.5'],
   ['postcss-selector-parser', 7, '7.1.6'],
   ['browserslist', 4, '4.28.7'],
@@ -81,10 +81,10 @@ const addressedAdvisoryVersions = [
   ['dompurify', '3.4.16', '3.4.17'], // GHSA-c6gr-qvv4-5v3f and two others
   ['dompurify', '2.5.8', '3.4.17'],
   ['@humanfs/node', '0.16.7', '0.16.8'], // GHSA-p498-v437-472g
-  ['lodash-es', '4.17.23', '4.18.0'], // GHSA-r5fr-rjxr-66jc, GHSA-xxjr-mmjv-4gpg
-  ['lodash', '4.17.23', '4.18.0'],
-  ['lodash-amd', '4.17.23', '4.18.0'],
-  ['lodash.template', '4.5.0', '4.18.0'],
+  ['lodash-es', '4.18.0', '4.18.1'], // GHSA-f23m-r3pf-42rh, GHSA-r5fr-rjxr-66jc
+  ['lodash', '4.18.0', '4.18.1'],
+  ['lodash-amd', '4.18.0', '4.18.1'],
+  ['lodash.template', '4.18.0', '4.18.1'],
   ['lodash.omit', '4.4.0', '4.18.0'],
   ['lodash.unset', '4.5.2', '4.18.0'],
   ['minimatch', '7.0.0', '11.0.1'], // GHSA-g3hv-75wg-m249
@@ -94,8 +94,9 @@ const addressedAdvisoryVersions = [
   ['postcss-selector-parser', '6.1.4', '6.1.5'], // GHSA-rj75-hqrm-r3gf
   ['postcss-selector-parser', '5.0.0', '6.1.5'],
   ['postcss-selector-parser', '7.1.5', '7.1.6'],
-  ['undici', '8.12.1', '8.12.2'], // GHSA-2m5v-pch6-74hx and four others
-  ['undici', '7.30.0', '7.30.1'],
+  ['undici', '8.12.2', '8.12.4'], // GHSA-7xg3-fphp-28hg, GHSA-mqg3-3v4r-cm32
+  ['undici', '8.12.3', '8.12.4'],
+  ['undici', '7.30.1', '7.30.2'],
   ['undici', '6.29.0', '6.29.1'],
   ['undici', '5.29.0', '6.29.1'],
   ['undici', '4.0.0', '6.29.1'],

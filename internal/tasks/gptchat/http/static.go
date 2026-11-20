@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -38,24 +39,40 @@ func init() {
 	prepareStaticFiles()
 }
 
-// SetupHTTPCli setup http client
+// SetupHTTPCli builds the server client httpcli and records its outbound
+// proxy (openai.proxy, else HTTP_PROXY) for caller-selected egress, which
+// must leave through the same proxy. It returns an error when the proxy URL
+// is invalid.
 func SetupHTTPCli() (err error) {
 	httpargs := []gutils.HTTPClientOptFunc{
 		gutils.WithHTTPClientTimeout(30 * time.Minute),
 	}
 
+	var proxy string
 	if gconfig.Shared.GetString("openai.proxy") != "" {
 		log.Logger.Info("use proxy for openai")
-		httpargs = append(httpargs, gutils.WithHTTPClientProxy(iconfig.Config.Proxy))
+		proxy = iconfig.Config.Proxy
 	} else if os.Getenv("HTTP_PROXY") != "" {
 		log.Logger.Info("set proxy for openai from env")
-		httpargs = append(httpargs, gutils.WithHTTPClientProxy(os.Getenv("HTTP_PROXY")))
+		proxy = os.Getenv("HTTP_PROXY")
+	}
+
+	var proxyURL *url.URL
+	if proxy != "" {
+		if proxyURL, err = url.Parse(proxy); err != nil {
+			return errors.Wrap(err, "parse proxy")
+		}
+		if proxyURL.Scheme == "" || proxyURL.Host == "" {
+			return errors.New("proxy must be an absolute URL")
+		}
+		httpargs = append(httpargs, gutils.WithHTTPClientProxy(proxy))
 	}
 
 	httpcli, err = gutils.NewHTTPClient(httpargs...)
 	if err != nil {
 		return errors.Wrap(err, "new http client")
 	}
+	serverProxy.Store(proxyURL)
 
 	return nil
 }

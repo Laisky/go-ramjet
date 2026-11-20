@@ -292,6 +292,7 @@ func applyUserAPIBaseOverride(gctx *gin.Context, user *config.UserConfig, logger
 	}
 
 	user.APIBase = override
+	user.APIBaseUserSelected = true
 	switch {
 	case strings.Contains(override, "openai.azure.com"):
 		user.ImageUrl = override

@@ -116,3 +116,46 @@ func TestAbortStreamErrHTTP10KeepsBodyUncorrupted(t *testing.T) {
 	require.NotContains(t, string(received), "upstream dropped")
 	require.Equal(t, strings.Repeat("x", len(received)), string(received), "the body holds only relayed content")
 }
+
+// TestAbortStreamErrBeforeCommitDropsRelayedRepresentation answers a relay that
+// failed before its first body byte with a self-describing error: headers that
+// described the relayed body (type, length, coding, validators, caching) must
+// not label the error document, or a short Content-Length truncates it, a coding
+// makes it undecodable and caching headers let caches keep it.
+func TestAbortStreamErrBeforeCommitDropsRelayedRepresentation(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(gin.Recovery())
+	router.GET("/relay", func(c *gin.Context) {
+		for name, value := range map[string]string{
+			"Content-Type": "text/html", "Content-Length": "4", "Content-Encoding": "gzip",
+			"Content-Range": "bytes 0-3/10", "Content-Disposition": "attachment; filename=a.html",
+			"Content-Language": "en", "Accept-Ranges": "bytes", "Cache-Control": "public, max-age=2592000, immutable",
+			"Etag": `"abc"`, "Last-Modified": "Wed, 18 Nov 2026 00:00:00 GMT", "Expires": "Thu, 19 Nov 2026 00:00:00 GMT",
+			"Content-Security-Policy": "sandbox", "X-Content-Type-Options": "nosniff",
+		} {
+			c.Header(name, value)
+		}
+		c.Status(http.StatusOK)
+		AbortStreamErr(c, errors.New("upstream failed before the body"))
+	})
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+
+	response, err := server.Client().Get(server.URL + "/relay")
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, errors.Join(err, response.Body.Close()), "the error document must be complete")
+
+	require.Equal(t, http.StatusBadRequest, response.StatusCode)
+	require.JSONEq(t, `{"err":"upstream failed before the body"}`, string(body))
+	require.Equal(t, "application/json; charset=utf-8", response.Header.Get("Content-Type"))
+	require.Equal(t, "no-store", response.Header.Get("Cache-Control"))
+	for _, name := range []string{"Content-Encoding", "Content-Range", "Content-Disposition", "Content-Language",
+		"Accept-Ranges", "Etag", "Last-Modified", "Expires"} {
+		require.Empty(t, response.Header.Values(name), name)
+	}
+	require.Equal(t, "sandbox", response.Header.Get("Content-Security-Policy"), "protective headers stay")
+	require.Equal(t, "nosniff", response.Header.Get("X-Content-Type-Options"), "protective headers stay")
+}

@@ -467,6 +467,11 @@ type UserConfig struct {
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
+	// APIBaseUserSelected reports that APIBase and ImageUrl were chosen by the
+	// caller (X-Laisky-Api-Base) instead of server configuration. Requests to
+	// them must pass the public egress policy. It is never loaded from config
+	// nor serialized.
+	APIBaseUserSelected bool `json:"-" mapstructure:"-"`
 	// Voice is the server's voice settings, echoed to the browser so the web
 	// client does not need its own copy. It is server-owned, never user-supplied.
 	Voice VoiceConfig `json:"voice" mapstructure:"-"`

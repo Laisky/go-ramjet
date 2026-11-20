@@ -86,7 +86,7 @@ func Transcript(ctx context.Context, user *config.UserConfig, req *TranscriptReq
 	upstreamReq.Header.Set("Content-Type", multiPartWriter.FormDataContentType())
 	upstreamReq.Header.Set("Authorization", "Bearer "+user.OpenaiToken)
 
-	upstreamResp, err := httpcli.Do(upstreamReq)
+	upstreamResp, err := upstreamHTTPClient(user).Do(upstreamReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "do request")
 	}

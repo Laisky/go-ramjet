@@ -269,7 +269,7 @@ func TestCallMCPToolWithFallbackAPIKey(t *testing.T) {
 	t.Run("uses server API key when provided", func(t *testing.T) {
 		authReceived = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "server-api-key",
 			Enabled: true,
 		}
@@ -286,7 +286,7 @@ func TestCallMCPToolWithFallbackAPIKey(t *testing.T) {
 	t.Run("uses fallback API key when server key empty", func(t *testing.T) {
 		authReceived = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "", // Empty server key
 			Enabled: true,
 		}
@@ -303,7 +303,7 @@ func TestCallMCPToolWithFallbackAPIKey(t *testing.T) {
 	t.Run("no API key results in error from server", func(t *testing.T) {
 		authReceived = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "",
 			Enabled: true,
 		}
@@ -319,7 +319,7 @@ func TestCallMCPToolWithFallbackAPIKey(t *testing.T) {
 	t.Run("nil opts uses only server key", func(t *testing.T) {
 		authReceived = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "only-server-key",
 			Enabled: true,
 		}
@@ -351,7 +351,7 @@ func TestCallMCPToolIsErrorHandling(t *testing.T) {
 		defer ts.Close()
 
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "test-key",
 			Enabled: true,
 		}
@@ -375,7 +375,7 @@ func TestCallMCPToolIsErrorHandling(t *testing.T) {
 		defer ts.Close()
 
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "test-key",
 			Enabled: true,
 		}
@@ -468,7 +468,7 @@ func TestAPIKeyFallbackPrecedence(t *testing.T) {
 	t.Run("server key used when both provided", func(t *testing.T) {
 		receivedAuth = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "server-specific-key",
 			Enabled: true,
 		}
@@ -483,7 +483,7 @@ func TestAPIKeyFallbackPrecedence(t *testing.T) {
 	t.Run("fallback key used when server key whitespace", func(t *testing.T) {
 		receivedAuth = ""
 		server := &MCPServerConfig{
-			URL:     ts.URL,
+			URL:     mcpFixtureURL(t, ts),
 			APIKey:  "   ", // Whitespace
 			Enabled: true,
 		}
@@ -514,7 +514,7 @@ func TestMCPErrorResponseFormats(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		server := &MCPServerConfig{URL: ts.URL, APIKey: "key", Enabled: true}
+		server := &MCPServerConfig{URL: mcpFixtureURL(t, ts), APIKey: "key", Enabled: true}
 		_, err := callMCPTool(context.Background(), server, "tool", `{}`, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Authentication failed")
@@ -534,7 +534,7 @@ func TestMCPErrorResponseFormats(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		server := &MCPServerConfig{URL: ts.URL, APIKey: "key", Enabled: true}
+		server := &MCPServerConfig{URL: mcpFixtureURL(t, ts), APIKey: "key", Enabled: true}
 		_, err := callMCPTool(context.Background(), server, "tool", `{}`, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Invalid Request")
@@ -556,7 +556,7 @@ func TestMCPErrorResponseFormats(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		server := &MCPServerConfig{URL: ts.URL, APIKey: "key", Enabled: true}
+		server := &MCPServerConfig{URL: mcpFixtureURL(t, ts), APIKey: "key", Enabled: true}
 		_, err := callMCPTool(context.Background(), server, "tool", `{}`, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Permission denied")

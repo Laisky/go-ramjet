@@ -16,6 +16,11 @@ func TestTranscript(t *testing.T) {
 	if os.Getenv("RUN_GPT_HTTP_IT") == "" {
 		t.Skip("integration test disabled: set RUN_GPT_HTTP_IT to run")
 	}
+	// The provider token comes from the environment; never commit credentials.
+	token := os.Getenv("RAMJET_IT_ONEAPI_TOKEN")
+	if token == "" {
+		t.Skip("integration test needs RAMJET_IT_ONEAPI_TOKEN")
+	}
 	ctx := context.Background()
 
 	err := SetupHTTPCli()
@@ -43,7 +48,7 @@ func TestTranscript(t *testing.T) {
 
 	user := &config.UserConfig{
 		APIBase:     "https://oneapi.laisky.com",
-		OpenaiToken: "laisky-k24tal3x3eN6SjKhD78e85Fc4dD648F1B0781aF435455642", // no balance
+		OpenaiToken: token,
 	}
 
 	// Create a test request

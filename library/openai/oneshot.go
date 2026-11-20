@@ -23,6 +23,26 @@ const (
 
 var defaultSystemPrompt = "# Core Capabilities and Behavior\n\nI am an AI assistant focused on being helpful, direct, and accurate. I aim to:\n\n- Provide factual responses about past events\n- Think through problems systematically step-by-step\n- Use clear, varied language without repetitive phrases\n- Give concise answers to simple questions while offering to elaborate if needed\n- Format code and text using proper Markdown\n- Engage in authentic conversation by asking relevant follow-up questions\n\n# Knowledge and Limitations \n\n- My knowledge cutoff is April 2024\n- I cannot open URLs or external links\n- I acknowledge uncertainty about very obscure topics\n- I note when citations may need verification\n- I aim to be accurate but may occasionally make mistakes\n\n# Task Handling\n\nI can assist with:\n- Analysis and research\n- Mathematics and coding\n- Creative writing and teaching\n- Question answering\n- Role-play and discussions\n\nFor sensitive topics, I:\n- Provide factual, educational information\n- Acknowledge risks when relevant\n- Default to legal interpretations\n- Avoid promoting harmful activities\n- Redirect harmful requests to constructive alternatives\n\n# Formatting Standards\n\nI use consistent Markdown formatting:\n- Headers with single space after #\n- Blank lines around sections\n- Consistent emphasis markers (* or _)\n- Proper list alignment and nesting\n- Clean code block formatting\n\n# Interaction Style\n\n- I am intellectually curious\n- I show empathy for human concerns\n- I vary my language naturally\n- I engage authentically without excessive caveats\n- I aim to be helpful while avoiding potential misuse"
 
+// OneshotOption customizes one OneshotChat call.
+type OneshotOption func(*oneshotOptions)
+
+// oneshotOptions holds the settings OneshotOption values adjust.
+type oneshotOptions struct {
+	client *http.Client
+}
+
+// WithHTTPClient sends the request with client instead of a new default client.
+// Callers whose apiBase was chosen by an end user must pass a client that
+// admits the destination, such as one from egress.NewHTTPClient. A nil client
+// keeps the default.
+func WithHTTPClient(client *http.Client) OneshotOption {
+	return func(opts *oneshotOptions) {
+		if client != nil {
+			opts.client = client
+		}
+	}
+}
+
 // OneshotChat sends a single chat completion request to an OpenAI-compatible API.
 //
 // Args:
@@ -31,11 +51,17 @@ var defaultSystemPrompt = "# Core Capabilities and Behavior\n\nI am an AI assist
 //   - model: Model name. When empty, it uses a default model.
 //   - systemPrompt: System message. When empty, it uses a conservative default prompt.
 //   - userPrompt: User message content.
+//   - opts: Optional settings such as WithHTTPClient.
 //
 // Returns:
 //   - answer: assistant message content.
-func OneshotChat(ctx context.Context, apiBase, apiKey, model, systemPrompt, userPrompt string) (answer string, err error) {
+func OneshotChat(ctx context.Context, apiBase, apiKey, model, systemPrompt, userPrompt string,
+	opts ...OneshotOption) (answer string, err error) {
 	logger := gmw.GetLogger(ctx).Named("oneshot_chat")
+	var options oneshotOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
 
 	apiBase = strings.TrimRight(strings.TrimSpace(apiBase), "/")
 	if apiBase == "" {
@@ -74,9 +100,11 @@ func OneshotChat(ctx context.Context, apiBase, apiKey, model, systemPrompt, user
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	cli, err := gutils.NewHTTPClient()
-	if err != nil {
-		return "", errors.Wrap(err, "new http client")
+	cli := options.client
+	if cli == nil {
+		if cli, err = gutils.NewHTTPClient(); err != nil {
+			return "", errors.Wrap(err, "new http client")
+		}
 	}
 
 	resp, err := cli.Do(req)

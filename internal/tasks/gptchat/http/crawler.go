@@ -16,6 +16,7 @@ import (
 	gmw "github.com/Laisky/gin-middlewares/v7"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/graphql"
+	"github.com/Laisky/laisky-blog-graphql/library/crawleregress"
 	"github.com/Laisky/zap"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -23,10 +24,12 @@ import (
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/log"
-	"github.com/Laisky/go-ramjet/library/openai"
 )
 
-// fetchStaticURLContent fetch static url content
+// fetchStaticURLContent fetches url and returns its text content. The URL comes
+// from a prompt or a web search result, never from server configuration, so it
+// is always fetched through tenantEgressClient, and, like the crawler, at most
+// crawleregress.MaxResponseBytes of its body are read.
 func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err error) {
 	logger := gmw.GetLogger(ctx).With(zap.String("url", url))
 	logger.Debug("fetch static url", zap.String("url", url))
@@ -40,7 +43,7 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 			"Chrome/58.0.3029.110 Safari/537")
 	req.Header.Del("Accept-Encoding")
 
-	resp, err := httpcli.Do(req) // nolint:bodyclose
+	resp, err := tenantEgressClient().Do(req) // nolint:bodyclose
 	if err != nil {
 		return nil, errors.Wrapf(err, "do request %q", url)
 	}
@@ -50,13 +53,19 @@ func fetchStaticURLContent(ctx context.Context, url string) (content []byte, err
 		return nil, errors.Errorf("[%d]%s", resp.StatusCode, url)
 	}
 
+	body, err := io.ReadAll(io.LimitReader(resp.Body, crawleregress.MaxResponseBytes+1))
+	if err != nil {
+		return nil, errors.Wrapf(err, "read %q", url)
+	}
+	if len(body) > crawleregress.MaxResponseBytes {
+		return nil, errors.Errorf("body of %q exceeds %d bytes", url, crawleregress.MaxResponseBytes)
+	}
+
 	switch filepath.Ext(url) {
 	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".json":
-		if content, err = io.ReadAll(resp.Body); err != nil {
-			return nil, errors.Wrapf(err, "read %q", url)
-		}
+		content = body
 	default:
-		if content, err = _extractHtmlBody(resp.Body); err != nil {
+		if content, err = _extractHtmlBody(bytes.NewReader(body)); err != nil {
 			return nil, errors.Wrapf(err, "extract html body %q", url)
 		}
 	}
@@ -155,7 +164,7 @@ func webSearch(ctx context.Context, query string, user *config.UserConfig) (resu
 			// summary by LLM within a timeout context
 			summaryCtx, summaryCancel := context.WithTimeout(ctx, 10*time.Second)
 			defer summaryCancel()
-			if summaryText, err := openai.OneshotChat(summaryCtx, user.APIBase, user.OpenaiToken, "", "",
+			if summaryText, err := userOneshotChat(summaryCtx, user, "", "",
 				fmt.Sprintf(oneshotSummarySysPrompt, query, addText)); err != nil {
 				logger.Warn("summary by LLM", zap.Error(err))
 			} else {
