@@ -1,13 +1,17 @@
 package web
 
 import (
+	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
+	glog "github.com/Laisky/go-utils/v6/log"
 	"github.com/Laisky/zap"
 	"github.com/gin-gonic/gin"
 
@@ -33,15 +37,15 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		return errors.WithStack(errors.New("distDir is empty"))
 	}
 
-	indexPath := filepath.Join(distDir, "index.html")
-	// Verify index.html exists but don't cache it
-	if _, err := os.Stat(indexPath); err != nil {
-		return errors.Wrapf(err, "stat spa index %q", indexPath)
+	distFS := rootFileSystem{dir: distDir}
+	hasAssets, err := inspectSPALayout(distFS)
+	if err != nil {
+		return err
 	}
-
-	assetsDir := filepath.Join(distDir, "assets")
-	if _, statErr := os.Stat(assetsDir); statErr == nil {
-		r.StaticFS("/assets", http.Dir(assetsDir))
+	if hasAssets {
+		// Keep Gin's static HTTP behavior, but resolve assets relative to the
+		// same dist root used by the index and fallback handlers.
+		r.StaticFS("/assets", rootFileSystem{dir: distDir, prefix: "assets"})
 	}
 
 	// indexHandler serves the SPA index for request context c and returns no value.
@@ -49,7 +53,11 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		logger := gmw.GetLogger(c)
 
 		c.Header("Cache-Control", "no-store")
-		indexBytes, err := os.ReadFile(indexPath)
+		indexBytes, err := readSPAIndex(distFS)
+		if errors.Is(err, fs.ErrNotExist) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, errors.Wrap(err, "read index.html"))
 			return
@@ -71,19 +79,17 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
-		// Try to serve static file from distDir
-		// Clean path to prevent directory traversal
-		cleanPath := filepath.Clean(c.Request.URL.Path)
+		// Try to serve static file from distDir. URL paths are slash-separated,
+		// so clean them with path (not filepath); confinement to distDir is
+		// enforced by serveSPAFile, not by cleaning.
+		cleanPath := path.Clean(c.Request.URL.Path)
 		// Prevent serving root as it is handled by indexHandler
 		if cleanPath == "/" || cleanPath == "." {
 			indexHandler(c)
 			return
 		}
 
-		fpath := filepath.Join(distDir, cleanPath)
-		info, err := os.Stat(fpath)
-		if err == nil && !info.IsDir() {
-			c.File(fpath)
+		if serveSPAFile(c, logger, distFS, cleanPath) {
 			return
 		}
 
@@ -105,11 +111,8 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		}
 
 		if newPath != cleanPath {
-			fpath = filepath.Join(distDir, strings.TrimPrefix(newPath, "/"))
-			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath), zap.String("fpath", fpath))
-			info, err = os.Stat(fpath)
-			if err == nil && !info.IsDir() {
-				c.File(fpath)
+			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath))
+			if serveSPAFile(c, logger, distFS, newPath) {
 				return
 			}
 		}
@@ -125,6 +128,98 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 	})
 
 	return nil
+}
+
+// inspectSPALayout verifies the index is inside dist and reports whether an
+// assets entry exists. The final assets entry need not be followed at startup;
+// each request will resolve it within the same dist root.
+func inspectSPALayout(distFS rootFileSystem) (hasAssets bool, err error) {
+	root, err := distFS.openRoot()
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, closeRoot(root)) }()
+
+	info, err := root.Stat("index.html")
+	if err != nil {
+		return false, errors.Wrap(err, "stat spa index")
+	}
+	if !info.Mode().IsRegular() {
+		return false, errors.WithStack(errors.New("spa index is not a regular file"))
+	}
+
+	_, err = root.Lstat("assets")
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "stat spa assets")
+	}
+	return true, nil
+}
+
+// readSPAIndex reads the current index through the dist-rooted file system.
+func readSPAIndex(distFS rootFileSystem) (data []byte, err error) {
+	f, err := distFS.Open("index.html")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, errors.Wrap(f.Close(), "close spa index")) }()
+	data, err = io.ReadAll(f)
+	return data, errors.Wrap(err, "read spa index")
+}
+
+// serveSPAFile serves the regular file name from distDir, confined to distDir.
+//
+// name comes from the request URL, so it is untrusted. It must be a local,
+// slash-separated path (fs.ValidPath: no "..", ".", or empty elements once the
+// leading slash is dropped), and it is resolved through an os.Root so neither
+// ".." nor a symlink can reach outside distDir. The root is opened per request
+// so a rebuilt dist directory is picked up without a restart, like index.html.
+//
+// Parameters:
+//   - c: request context; the response is written to c.Writer when served.
+//   - logger: request-scoped logger.
+//   - distFS: SPA file system that bounds every lookup.
+//   - name: candidate file path taken from the request URL.
+//
+// Returns:
+//   - bool: true when a file was served; false when the caller should fall back.
+func serveSPAFile(c *gin.Context, logger glog.Logger, distFS rootFileSystem, name string) bool {
+	name = strings.TrimPrefix(name, "/")
+	if name == "" || !fs.ValidPath(name) {
+		logger.Debug("spa reject non-local path", zap.String("name", name))
+		return false
+	}
+
+	root, err := distFS.openRoot()
+	if err != nil {
+		// Stay below the alert level (ERROR): with dist gone, every scanner hit
+		// would otherwise page. The caller still answers 404 or index.html.
+		logger.Warn("open spa dist root", zap.String("dir", distFS.dir), zap.Error(err))
+		return false
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			logger.Warn("close spa dist root", zap.String("dir", distFS.dir), zap.Error(closeErr))
+		}
+	}()
+
+	fsys := root.FS()
+	info, err := fs.Stat(fsys, name)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			// e.g. a symlink that escapes distDir.
+			logger.Debug("spa stat rejected", zap.String("name", name), zap.Error(err))
+		}
+		return false
+	}
+	if !info.Mode().IsRegular() {
+		return false
+	}
+
+	http.ServeFileFS(c.Writer, c.Request, fsys, name)
+	return true
 }
 
 // TryRegisterDefaultSPA tries to register the SPA served from the default dist path.
