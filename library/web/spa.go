@@ -1,6 +1,7 @@
 package web
 
 import (
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -36,17 +37,15 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		return errors.WithStack(errors.New("distDir is empty"))
 	}
 
-	indexPath := filepath.Join(distDir, "index.html")
-	// Verify index.html exists but don't cache it
-	if _, err := os.Stat(indexPath); err != nil {
-		return errors.Wrapf(err, "stat spa index %q", indexPath)
+	distFS := rootFileSystem{dir: distDir}
+	hasAssets, err := inspectSPALayout(distFS)
+	if err != nil {
+		return err
 	}
-
-	assetsDir := filepath.Join(distDir, "assets")
-	if _, statErr := os.Stat(assetsDir); statErr == nil {
-		// Same gin StaticFS handler and http.FileServer headers as http.Dir,
-		// but confined to assetsDir by os.Root and without directory listing.
-		r.StaticFS("/assets", rootFileSystem{dir: assetsDir})
+	if hasAssets {
+		// Keep Gin's static HTTP behavior, but resolve assets relative to the
+		// same dist root used by the index and fallback handlers.
+		r.StaticFS("/assets", rootFileSystem{dir: distDir, prefix: "assets"})
 	}
 
 	// indexHandler serves the SPA index for request context c and returns no value.
@@ -54,7 +53,11 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 		logger := gmw.GetLogger(c)
 
 		c.Header("Cache-Control", "no-store")
-		indexBytes, err := os.ReadFile(indexPath)
+		indexBytes, err := readSPAIndex(distFS)
+		if errors.Is(err, fs.ErrNotExist) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, errors.Wrap(err, "read index.html"))
 			return
@@ -86,7 +89,7 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
-		if serveSPAFile(c, logger, distDir, cleanPath) {
+		if serveSPAFile(c, logger, distFS, cleanPath) {
 			return
 		}
 
@@ -109,7 +112,7 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 
 		if newPath != cleanPath {
 			logger.Debug("spa fallback", zap.String("path", cleanPath), zap.String("newPath", newPath))
-			if serveSPAFile(c, logger, distDir, newPath) {
+			if serveSPAFile(c, logger, distFS, newPath) {
 				return
 			}
 		}
@@ -127,6 +130,45 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 	return nil
 }
 
+// inspectSPALayout verifies the index is inside dist and reports whether an
+// assets entry exists. The final assets entry need not be followed at startup;
+// each request will resolve it within the same dist root.
+func inspectSPALayout(distFS rootFileSystem) (hasAssets bool, err error) {
+	root, err := distFS.openRoot()
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, closeRoot(root)) }()
+
+	info, err := root.Stat("index.html")
+	if err != nil {
+		return false, errors.Wrap(err, "stat spa index")
+	}
+	if !info.Mode().IsRegular() {
+		return false, errors.WithStack(errors.New("spa index is not a regular file"))
+	}
+
+	_, err = root.Lstat("assets")
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "stat spa assets")
+	}
+	return true, nil
+}
+
+// readSPAIndex reads the current index through the dist-rooted file system.
+func readSPAIndex(distFS rootFileSystem) (data []byte, err error) {
+	f, err := distFS.Open("index.html")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, errors.Wrap(f.Close(), "close spa index")) }()
+	data, err = io.ReadAll(f)
+	return data, errors.Wrap(err, "read spa index")
+}
+
 // serveSPAFile serves the regular file name from distDir, confined to distDir.
 //
 // name comes from the request URL, so it is untrusted. It must be a local,
@@ -138,28 +180,28 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 // Parameters:
 //   - c: request context; the response is written to c.Writer when served.
 //   - logger: request-scoped logger.
-//   - distDir: SPA build directory that bounds every lookup.
+//   - distFS: SPA file system that bounds every lookup.
 //   - name: candidate file path taken from the request URL.
 //
 // Returns:
 //   - bool: true when a file was served; false when the caller should fall back.
-func serveSPAFile(c *gin.Context, logger glog.Logger, distDir, name string) bool {
+func serveSPAFile(c *gin.Context, logger glog.Logger, distFS rootFileSystem, name string) bool {
 	name = strings.TrimPrefix(name, "/")
 	if name == "" || !fs.ValidPath(name) {
 		logger.Debug("spa reject non-local path", zap.String("name", name))
 		return false
 	}
 
-	root, err := os.OpenRoot(distDir)
+	root, err := distFS.openRoot()
 	if err != nil {
 		// Stay below the alert level (ERROR): with dist gone, every scanner hit
 		// would otherwise page. The caller still answers 404 or index.html.
-		logger.Warn("open spa dist root", zap.String("dir", distDir), zap.Error(err))
+		logger.Warn("open spa dist root", zap.String("dir", distFS.dir), zap.Error(err))
 		return false
 	}
 	defer func() {
 		if closeErr := root.Close(); closeErr != nil {
-			logger.Warn("close spa dist root", zap.String("dir", distDir), zap.Error(closeErr))
+			logger.Warn("close spa dist root", zap.String("dir", distFS.dir), zap.Error(closeErr))
 		}
 	}()
 
@@ -172,7 +214,7 @@ func serveSPAFile(c *gin.Context, logger glog.Logger, distDir, name string) bool
 		}
 		return false
 	}
-	if info.IsDir() {
+	if !info.Mode().IsRegular() {
 		return false
 	}
 

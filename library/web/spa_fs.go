@@ -18,7 +18,8 @@ import (
 // Every Open re-opens the root, so a rebuilt directory is picked up without a
 // restart, matching http.Dir's per-request path resolution.
 type rootFileSystem struct {
-	dir string
+	dir    string
+	prefix string // optional path inside dir; never becomes the root
 }
 
 // Open opens the regular file name inside f.dir.
@@ -31,14 +32,16 @@ type rootFileSystem struct {
 //   - error: wrapped error, matching fs.ErrNotExist for missing files,
 //     directories and every path os.Root refuses (see notFoundIfRefused).
 func (f rootFileSystem) Open(name string) (http.File, error) {
-	rel := strings.TrimPrefix(path.Clean("/"+name), "/")
+	// Rebase the cleaned HTTP path within the mounted prefix, but retain
+	// dir as the root used to resolve all of its components.
+	rel := path.Join(f.prefix, strings.TrimPrefix(path.Clean("/"+name), "/"))
 	if rel == "" {
 		rel = "."
 	}
 
-	root, err := os.OpenRoot(f.dir)
+	root, err := f.openRoot()
 	if err != nil {
-		return nil, errors.Wrapf(err, "open root %q", f.dir)
+		return nil, err
 	}
 
 	file, err := openRegularFile(root, rel)
@@ -52,7 +55,16 @@ func (f rootFileSystem) Open(name string) (http.File, error) {
 	return file, nil
 }
 
-// openRegularFile opens rel inside root and rejects directories.
+// openRoot opens the distribution directory with the shared confinement policy.
+func (f rootFileSystem) openRoot() (*os.Root, error) {
+	root, err := os.OpenRoot(f.dir)
+	if err != nil {
+		return nil, errors.Wrapf(err, "open root %q", f.dir)
+	}
+	return root, nil
+}
+
+// openRegularFile opens rel inside root and rejects non-regular files.
 //
 // Parameters:
 //   - root: confinement root.
@@ -71,8 +83,8 @@ func openRegularFile(root *os.Root, rel string) (*os.File, error) {
 	if err != nil {
 		return nil, errors.Join(errors.Wrapf(err, "stat %q", rel), errors.Wrap(file.Close(), "close file"))
 	}
-	if info.IsDir() {
-		return nil, errors.Join(errors.Wrapf(fs.ErrNotExist, "%q is a directory", rel),
+	if !info.Mode().IsRegular() {
+		return nil, errors.Join(errors.Wrapf(fs.ErrNotExist, "%q is not a regular file", rel),
 			errors.Wrap(file.Close(), "close file"))
 	}
 

@@ -236,7 +236,13 @@ openai:
 
 **Heartbeat mechanism:**
 
-The server sends `[HEARTBEAT]` SSE events every 5-10 seconds during long-running operations to prevent client-side timeouts.
+While a streaming answer is written, the server emits keep-alive frames every 10 seconds (5 seconds for Safari):
+
+- Periodic heartbeats are SSE comment frames (`: heartbeat`). Spec-compliant SSE parsers ignore comment lines, so they never surface as events or break JSON parsing.
+- Safari additionally receives one legacy frame when the stream starts: `: connection established` followed by `data: [HEARTBEAT]`. It is kept for older cached clients; clients should skip a `data:` payload that is exactly `[HEARTBEAT]`, as the web client does.
+- A heartbeat is skipped while a chunk is being written, and heartbeats stop before the terminal `data: [DONE]` frame.
+
+Heartbeats start when the final answer is written to the client, not during tool execution.
 
 ---
 

@@ -256,6 +256,13 @@ export interface StreamCallbacks {
 }
 
 /**
+ * STREAM_HEARTBEAT_SENTINEL is the legacy keep-alive data frame the server still
+ * sends once to Safari; it carries no event and must not count as a protocol
+ * failure. Periodic heartbeats are SSE comment lines, skipped as non-data lines.
+ */
+const STREAM_HEARTBEAT_SENTINEL = '[HEARTBEAT]'
+
+/**
  * Send a streaming chat completion request
  * Returns an abort controller to cancel the request
  */
@@ -323,6 +330,9 @@ export function sendStreamingChatRequest(
           if (data === '[DONE]') {
             await callbacks.onDone?.()
             return
+          }
+          if (data === STREAM_HEARTBEAT_SENTINEL) {
+            continue
           }
 
           try {

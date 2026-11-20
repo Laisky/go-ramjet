@@ -209,3 +209,49 @@ func TestRootFileSystemSymlinkLoopIsNotFound(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, w.Code, target)
 	}
 }
+
+// TestRegisterSPAUsesOneDistBoundary verifies index and mounted assets stay
+// confined and compatible internal links continue working after a rebuild.
+func TestRegisterSPAUsesOneDistBoundary(t *testing.T) {
+	base := t.TempDir()
+	dist := filepath.Join(base, "dist")
+	other := filepath.Join(base, "other")
+	require.NoError(t, os.MkdirAll(filepath.Join(dist, "static"), 0o755))
+	require.NoError(t, os.Mkdir(other, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(other, "index.html"), []byte("other index fixture"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(other, "app.js"), []byte("other script fixture"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dist, "page.html"), []byte("<html>confined index</html>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dist, "static", "app.js"), []byte("confinedScript()"), 0o644))
+
+	index := filepath.Join(dist, "index.html")
+	assets := filepath.Join(dist, "assets")
+	require.NoError(t, os.Symlink(filepath.Join("..", "other", "index.html"), index))
+	require.Error(t, RegisterSPA(gin.New(), dist), "startup does not register an out-of-root index")
+	require.NoError(t, os.Remove(index))
+	require.NoError(t, os.Symlink("page.html", index))
+	require.NoError(t, os.Symlink("static", assets))
+
+	r := gin.New()
+	require.NoError(t, RegisterSPA(r, dist))
+	require.Contains(t, serveRawPath(t, r, "/", "text/html").Body.String(), "confined index")
+	require.Equal(t, "confinedScript()", serveRawPath(t, r, "/assets/app.js", "*/*").Body.String())
+
+	// A change after startup must not re-root either handler.
+	require.NoError(t, os.Remove(index))
+	require.NoError(t, os.Symlink(filepath.Join("..", "other", "index.html"), index))
+	require.NoError(t, os.Remove(assets))
+	require.NoError(t, os.Symlink(filepath.Join("..", "other"), assets))
+	for _, target := range []string{"/", "/client/view", "/assets/app.js", "/gptchat/assets/app.js"} {
+		w := serveRawPath(t, r, target, "text/html")
+		require.Equal(t, http.StatusNotFound, w.Code, target)
+		require.NotContains(t, w.Body.String(), "other")
+	}
+
+	// The same router sees a new dist directory, not a pinned old inode.
+	require.NoError(t, os.Rename(dist, filepath.Join(base, "previous-dist")))
+	require.NoError(t, os.MkdirAll(assets, 0o755))
+	require.NoError(t, os.WriteFile(index, []byte("<html>replacement index</html>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(assets, "app.js"), []byte("replacementScript()"), 0o644))
+	require.Contains(t, serveRawPath(t, r, "/", "text/html").Body.String(), "replacement index")
+	require.Equal(t, "replacementScript()", serveRawPath(t, r, "/assets/app.js", "*/*").Body.String())
+}

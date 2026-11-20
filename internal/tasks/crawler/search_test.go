@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 
 	"github.com/Laisky/go-ramjet/library/db/mongotest"
@@ -115,5 +118,50 @@ func TestSearchHandlerRejectsQueriesMongoDBRefuses(t *testing.T) {
 			require.Equal(mt, `c\+\+`, pattern)
 			require.Equal(mt, "i", opts)
 		}
+	})
+}
+
+// TestSearchHandlerKeepsUniqueTitleAndBodyMatches verifies ordinary MongoDB
+// results are returned in title-first order without duplicating a document
+// that appears in both queries. Body matches retain their existing snippets.
+func TestSearchHandlerKeepsUniqueTitleAndBodyMatches(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	mt.Run("title only, overlap and body only", func(mt *mtest.T) {
+		titleOnly := bson.D{
+			{Key: "_id", Value: primitive.NewObjectID()},
+			{Key: "title", Value: "Go Concurrency & patterns"},
+			{Key: "text", Value: "Practical notes"},
+			{Key: "url", Value: "https://example.test/title"},
+		}
+		both := bson.D{
+			{Key: "_id", Value: primitive.NewObjectID()},
+			{Key: "title", Value: "Concurrency in Go"},
+			{Key: "text", Value: "Body concurrency example"},
+			{Key: "url", Value: "https://example.test/both"},
+		}
+		bodyOnly := bson.D{
+			{Key: "_id", Value: primitive.NewObjectID()},
+			{Key: "title", Value: "Practical notes"},
+			{Key: "text", Value: "Try concurrency today"},
+			{Key: "url", Value: "https://example.test/body"},
+		}
+		mt.AddMockResponses(
+			mtest.CreateCursorResponse(0, "bbt.docus", mtest.FirstBatch, titleOnly, both),
+			mtest.CreateCursorResponse(0, "bbt.docus", mtest.FirstBatch, both, bodyOnly),
+		)
+
+		r := gin.New()
+		r.GET("/crawler/search", searchHandler(newMockService(mt)))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/crawler/search?q=concurrency", nil))
+		require.Equal(mt, http.StatusOK, w.Code)
+
+		var got []SearchResult
+		require.NoError(mt, json.Unmarshal(w.Body.Bytes(), &got))
+		require.Equal(mt, []SearchResult{
+			{Title: "Go Concurrency & patterns", URL: "https://example.test/title", Context: "Go <mark>Concurrency</mark> &amp; patterns"},
+			{Title: "Concurrency in Go", URL: "https://example.test/both", Context: "Body <mark>concurrency</mark> example"},
+			{Title: "Practical notes", URL: "https://example.test/body", Context: "Try <mark>concurrency</mark> today"},
+		}, got)
 	})
 }
