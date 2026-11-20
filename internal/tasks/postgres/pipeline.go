@@ -137,6 +137,9 @@ const maxBackupPasswordFileBytes = 4096
 // readBackupPassword returns the configured passphrase, reading at most one
 // small secret file. Errors avoid exposing the pathname or its contents.
 func readBackupPassword(db cfgDB) (string, error) {
+	if db.BackupEncryptionPassword != "" && db.BackupEncryptionPasswordFile != "" {
+		return "", errors.New("configure only one encryption password source")
+	}
 	if db.BackupEncryptionPasswordFile == "" {
 		return db.BackupEncryptionPassword, nil
 	}

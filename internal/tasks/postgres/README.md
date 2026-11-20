@@ -48,7 +48,8 @@ tasks:
         password: "replace-db-connection-password"
         database: "mcp"
         backup_file_prefix: "backups/postgres/prod/mcp/"
-        backup_encryption_password_file: "/run/secrets/postgres-mcp-backup"
+        # Operator supplies this only in protected runtime YAML; empty disables this entry.
+        backup_encryption_password: ""
     s3:
       enable: true
       endpoint: "s3.example.com"
@@ -64,14 +65,21 @@ tasks:
 
 Each `dbs` entry has its own PostgreSQL connection settings. `password` is for
 PostgreSQL authentication only. Set exactly one of
-`backup_encryption_password_file` (preferred: a read-only mounted secret file)
-or `backup_encryption_password` (only in access-controlled configuration) to encrypt
+`backup_encryption_password` (inline in access-controlled runtime YAML; no extra
+file or mount required) or `backup_encryption_password_file` (a protected file,
+retained for compatibility and secret-manager migration) to encrypt
 that database's backup. Use distinct, strong random passphrases, not database or
 S3 credentials, and keep recovery copies outside the backup bucket. A secret file
 must be a readable regular file up to 4 KiB; Ramjet removes one trailing LF or CRLF.
 Omit both encryption fields to keep plaintext gzip. An explicitly blank,
 malformed, unreadable or ambiguous encryption setting rejects that database
 instead of uploading plaintext. Errors do not stop independent entries.
+The example intentionally checks in an empty inline value, not a usable secret.
+Use a quoted YAML string to preserve special characters and whitespace.
+Supply the real passphrase only in protected runtime settings before activation;
+never publish it in Git, chat, command arguments or configuration dumps.
+`PGPASSFILE`, when used, supplies PostgreSQL login credentials and is unrelated
+to archive encryption. MinIO uses the separate S3 access key and secret.
 Keep a single `dbs` list entry for an existing one-database deployment.
 
 Put any databases that **must never be backed up unencrypted** in
@@ -246,6 +254,26 @@ gunzip -c oneapi-20250909.gz | psql -X -v ON_ERROR_STOP=1 --single-transaction -
   - Increase available network bandwidth, or adjust the per-DB timeout in code if needed (default 30m)
 
 ---
+
+## Local restore verification
+
+`TestBackupPostgresRestore` is an opt-in integration test for a disposable
+PostgreSQL fixture only. It exercises inline/file-backed encryption in both
+upload modes, authenticates the full archive, checks gzip integrity, and restores
+two synthetic rows using actual `pg_dump` and `psql` with an in-memory S3 double.
+Ordinary package tests skip it. It does not qualify a live database or MinIO.
+
+The caller must own a fresh disposable container labeled
+`codex.task=ramjet-backup-restore-test` and `codex.owner=<unique-owner>`.
+Initialize it with `POSTGRES_USER=ramjet_fixture`,
+`POSTGRES_DB=ramjet_source`, and a disposable PostgreSQL password in its
+`POSTGRES_PASSWORD` environment. The fixture role owns the synthetic databases
+and needs `CREATEDB` to recreate the restore target. Do not
+reuse an existing service or data volume. Set `RAMJET_BACKUP_RESTORE_CONTAINER`
+and `RAMJET_BACKUP_RESTORE_OWNER` only for this test invocation; ownership labels
+are verified before SQL commands. The caller must remove its container and
+storage afterward. Run `go test ./internal/tasks/postgres -run
+'^TestBackupPostgresRestore$' -count=1`. No production credentials are needed.
 
 ## Notes and limitations
 

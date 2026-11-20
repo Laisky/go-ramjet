@@ -41,51 +41,76 @@ func decodeSyntheticSQL(t *testing.T, raw io.Reader) string {
 // envelope, each with its own password, never a raw dump or gzip object.
 func TestBackupEncryptedUploadRoundTrip(t *testing.T) {
 	for _, mode := range []string{"stream", "temp file"} {
-		t.Run(mode, func(t *testing.T) {
-			cli := &fakeUploadClient{keep: true, readLimit: -1}
-			stubStreamPipeline(t, cli, syntheticDump)
-			tmp := t.TempDir()
-			db := cfgDB{Database: "fileio"}
-			pass := "age-fixture-stream-password"
-			if mode == "stream" {
-				db.BackupEncryptionPassword = pass
-			} else {
-				pass = "different-age-fixture-file-password"
-				secretFile := filepath.Join(t.TempDir(), "fixture-secret")
-				require.NoError(t, os.WriteFile(secretFile, []byte(pass+"\r\n"), 0o600))
-				db.BackupEncryptionPasswordFile = secretFile
-			}
-			key, name := buildKeyAndFilename(db, "20261120")
-			require.Equal(t, "fileio-20261120.gz.age", key)
-			require.Equal(t, key, name)
-
-			if mode == "stream" {
-				require.NoError(t, streamBackupToS3(t.Context(), db, cfgS3{}, key))
-			} else {
-				require.NoError(t, backupViaTempFile(t.Context(), db, cfgS3{}, name, key, tmp))
-				remaining, err := os.ReadDir(tmp)
+		for _, source := range []string{"inline", "file"} {
+			t.Run(mode+"/"+source, func(t *testing.T) {
+				cli := &fakeUploadClient{keep: true, readLimit: -1}
+				stubStreamPipeline(t, cli, syntheticDump)
+				tmp := t.TempDir()
+				pass := "synthetic-archive-only-" + source
+				entry := "     backup_encryption_password: '" + pass + "'\n"
+				if source == "file" {
+					secretFile := filepath.Join(t.TempDir(), "fixture-secret")
+					require.NoError(t, os.WriteFile(secretFile, []byte(pass+"\r\n"), 0o600))
+					entry = "     backup_encryption_password_file: '" + secretFile + "'\n"
+				}
+				cfg := loadBackupTestYAML(t, "tasks:\n postgres:\n  encrypted_dbs:\n   - database: fileio\n"+entry)
+				require.Len(t, cfg.DBs, 1)
+				db := cfg.DBs[0]
+				if source == "inline" {
+					require.Empty(t, db.BackupEncryptionPasswordFile, "inline mode requires no encryption file")
+				}
+				key, name := buildKeyAndFilename(db, "20261120")
+				require.Equal(t, "fileio-20261120.gz.age", key)
+				require.Equal(t, key, name)
+				if mode == "stream" {
+					require.NoError(t, streamBackupToS3(t.Context(), db, cfgS3{}, key))
+				} else {
+					require.NoError(t, backupViaTempFile(t.Context(), db, cfgS3{}, name, key, tmp))
+					remaining, err := os.ReadDir(tmp)
+					require.NoError(t, err)
+					require.Empty(t, remaining)
+				}
+				got := cli.received.Bytes()
+				require.True(t, bytes.HasPrefix(got, []byte("age-encryption.org/v1\n")))
+				require.NotContains(t, string(got), syntheticSQL)
+				require.Empty(t, cli.opts.ContentEncoding)
+				require.Equal(t, "application/octet-stream", cli.opts.ContentType)
+				identity, err := age.NewScryptIdentity(pass)
 				require.NoError(t, err)
-				require.Empty(t, remaining)
-			}
-
-			got := cli.received.Bytes()
-			require.True(t, bytes.HasPrefix(got, []byte("age-encryption.org/v1\n")))
-			require.NotContains(t, string(got), syntheticSQL)
-			require.Empty(t, cli.opts.ContentEncoding)
-			require.Equal(t, "application/octet-stream", cli.opts.ContentType)
-
-			identity, err := age.NewScryptIdentity(pass)
-			require.NoError(t, err)
-			raw, err := age.Decrypt(bytes.NewReader(got), identity)
-			require.NoError(t, err)
-			require.Equal(t, syntheticSQL, decodeSyntheticSQL(t, raw))
-
-			if mode == "stream" {
-				wrong, err := age.NewScryptIdentity("wrong-age-fixture-password")
+				raw, err := age.Decrypt(bytes.NewReader(got), identity)
+				require.NoError(t, err)
+				require.Equal(t, syntheticSQL, decodeSyntheticSQL(t, raw))
+				wrong, err := age.NewScryptIdentity("wrong-synthetic-archive-passphrase")
 				require.NoError(t, err)
 				_, err = age.Decrypt(bytes.NewReader(got), wrong)
 				require.Error(t, err)
+			})
+		}
+	}
+}
+
+// TestAmbiguousEncryptionSourcesNeverUpload proves direct callers cannot select
+// a secret source by precedence or emit bytes when both sources are configured.
+func TestAmbiguousEncryptionSourcesNeverUpload(t *testing.T) {
+	for _, mode := range []string{"stream", "temp file"} {
+		t.Run(mode, func(t *testing.T) {
+			cli := &fakeUploadClient{keep: true, readLimit: -1}
+			stubStreamPipeline(t, cli, syntheticDump)
+			secretFile := filepath.Join(t.TempDir(), "synthetic-path-must-not-leak")
+			require.NoError(t, os.WriteFile(secretFile, []byte("synthetic-file-value-must-not-leak"), 0o600))
+			db := cfgDB{Database: "fileio", BackupEncryptionPassword: "synthetic-inline-value-must-not-leak", BackupEncryptionPasswordFile: secretFile}
+			key, name := buildKeyAndFilename(db, "20261120")
+			var err error
+			if mode == "stream" {
+				err = streamBackupToS3(t.Context(), db, cfgS3{}, key)
+			} else {
+				err = backupViaTempFile(t.Context(), db, cfgS3{}, name, key, t.TempDir())
 			}
+			require.ErrorContains(t, err, "only one encryption password source")
+			require.NotContains(t, err.Error(), db.BackupEncryptionPassword)
+			require.NotContains(t, err.Error(), "synthetic-file-value-must-not-leak")
+			require.NotContains(t, err.Error(), secretFile)
+			require.Zero(t, cli.consumed)
 		})
 	}
 }
