@@ -44,13 +44,21 @@ tasks:
         password: 'your-password'
         database: 'your-db-2'
         backup_file_prefix: 'pg-your-db-2'
+    # Use encrypted_dbs (never dbs) for an encrypted-only database. Old versions skip it.
+    # encrypted_dbs:
+    #   - host: '127.0.0.1'
+    #     port: 5432
+    #     user: 'postgres_backup'
+    #     database: 'your-encrypted-db'
+    #     backup_file_prefix: 'pg-your-encrypted-db'
+    #     backup_encryption_password_file: '/run/secrets/postgres-your-encrypted-db-backup'
     s3:
       enable: true # must be true to upload to S3; task also requires tasks.postgres.enable=true
       endpoint: 'https://minio.example.com'
       access_key: 'minio-access-key'
       access_secret: 'minio-secret-key'
       bucket: 'backups'
-      keep_last: 14 # keep the latest 14 backups for each configured backup series
+      keep_last: 14 # keep the latest 14 for each series and active file format
   cv:
     # s3 storage for CV content and pdf
     s3:
