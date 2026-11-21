@@ -31,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { setPageFavicon, setPageTitle } from '@/utils/dom'
+import { primaryModifierLabel } from '@/utils/keyboard'
 
 import {
   authStatusFromResponse,
@@ -847,11 +848,7 @@ export function CVPage() {
                     <div className="cv-modal-status">
                       <span>Draft is local to this browser.</span>
                       <span>
-                        Press{' '}
-                        {navigator.platform.toLowerCase().includes('mac')
-                          ? 'Cmd'
-                          : 'Ctrl'}
-                        +Enter to download.
+                        Press {primaryModifierLabel()}+Enter to download.
                       </span>
                     </div>
                     {tailorMessage ? (

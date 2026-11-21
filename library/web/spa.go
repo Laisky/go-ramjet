@@ -79,6 +79,13 @@ func RegisterSPA(r *gin.Engine, distDir string) error {
 			return
 		}
 
+		// The retired Elasticsearch credential URL must not fall back to the SPA.
+		if path.Clean(c.Request.URL.Path) == "/es/password" {
+			c.Header("Cache-Control", "no-store")
+			c.Status(http.StatusNotFound)
+			return
+		}
+
 		// Try to serve static file from distDir. URL paths are slash-separated,
 		// so clean them with path (not filepath); confinement to distDir is
 		// enforced by serveSPAFile, not by cleaning.

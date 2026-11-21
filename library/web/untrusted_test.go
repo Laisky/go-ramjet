@@ -55,3 +55,12 @@ func TestMarkUntrustedContentKeepsPDFViewable(t *testing.T) {
 		require.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"), contentType)
 	}
 }
+
+// TestContentPoliciesKeepTheirWireValues pins the exact header values of the
+// relayed-content policies, which share sameOriginFramingPolicy with the
+// default policy, so building them from one directive changes no response.
+func TestContentPoliciesKeepTheirWireValues(t *testing.T) {
+	require.Equal(t, "frame-ancestors 'self'", sameOriginFramingPolicy)
+	require.Equal(t, "sandbox allow-popups allow-popups-to-escape-sandbox; frame-ancestors 'self'", UntrustedContentPolicy)
+	require.Equal(t, "frame-ancestors 'self'", PassiveContentPolicy)
+}

@@ -64,10 +64,7 @@ export function TaskPage() {
       case 'heartbeat':
         return [{ label: 'Heartbeat', href: '/heartbeat' }]
       case 'elasticsearch':
-        return [
-          { label: 'Rollover details', href: '/es/rollover' },
-          { label: 'Password by date', href: '/es/password' },
-        ]
+        return [{ label: 'Rollover details', href: '/es/rollover' }]
       default:
         return []
     }

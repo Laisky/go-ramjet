@@ -149,8 +149,7 @@ describe('data-sync importAllData (incremental merge)', () => {
 
     // and history must not contain oldChatId
     const hist = (await mockStorage.kvGet(historyKey(1))) as
-      | SessionHistoryItem[]
-      | null
+      SessionHistoryItem[] | null
     expect(
       hist?.find((h: SessionHistoryItem) => h.chatID === oldChatId),
     ).toBeUndefined()

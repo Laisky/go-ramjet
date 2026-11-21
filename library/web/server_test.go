@@ -29,6 +29,9 @@ func TestNormalizeHandlerDuplicatePrefix(t *testing.T) {
 	require.Equal(t, "/gptchat/favicon.ico", gotPath)
 }
 
+// TestSecurityMiddleware pins the default response headers: MIME sniffing is off,
+// framing is limited to the same origin by both X-Frame-Options and the modern
+// CSP frame-ancestors directive, and cross-origin referrers carry only the origin.
 func TestSecurityMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -44,6 +47,22 @@ func TestSecurityMiddleware(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 	require.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	require.Equal(t, "frame-ancestors 'self'", w.Header().Get("Content-Security-Policy"))
+	require.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
+}
+
+// TestServerSendsSecurityHeaders pins that the shared Server, wrapped the way
+// RunServerContext serves it, runs securityMiddleware for every response. An
+// unregistered path is used so the test adds no route to the global engine.
+func TestServerSendsSecurityHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/__security-headers-probe", nil)
+	w := httptest.NewRecorder()
+	(&normalizeHandler{handler: Server}).ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+	require.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	require.Equal(t, "frame-ancestors 'self'", w.Header().Get("Content-Security-Policy"))
 	require.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 }
 

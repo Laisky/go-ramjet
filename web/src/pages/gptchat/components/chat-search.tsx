@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
 import { cn } from '@/utils/cn'
+import { primaryModifierLabel } from '@/utils/keyboard'
 import { kvGet } from '@/utils/storage'
 import { sanitizeChatMessageData } from '../hooks/chat-storage'
 import type { ChatMessageData, SessionHistoryItem } from '../types'
@@ -320,15 +321,20 @@ export function ChatSearch({
       ? `search-result-${results[selectedIndex]?.message.chatID}-${results[selectedIndex]?.message.role}`
       : undefined
 
+  const modifier = primaryModifierLabel()
+
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={setIsOpen}>
-      <TooltipWrapper content="Search messages (Ctrl+K / Ctrl+F)">
+      <TooltipWrapper
+        content={`Search messages (${modifier}+K / ${modifier}+F)`}
+      >
         <DialogPrimitive.Trigger asChild>
           <Button
             variant="ghost"
             size="sm"
             className="h-9 w-9 rounded-lg px-0"
             aria-label="Search messages"
+            aria-keyshortcuts="Control+K Meta+K Control+F Meta+F"
           >
             <Search className="h-4 w-4" />
           </Button>

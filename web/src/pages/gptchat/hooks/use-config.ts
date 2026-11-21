@@ -32,12 +32,19 @@ import {
   type PendingLinkChange,
 } from './session-config-hydration'
 import { copyStoredSession } from './session-copy'
+import { useSessionConfigOwnership } from './session-config-ownership'
 import {
   listStoredApiTokens,
   rebindStoredSyncKey,
   repairStoredSessionCredentials,
 } from './session-credentials'
 import { getSessionOrderFromKv, setSessionOrderToKv } from './session-order'
+
+/**
+ * alwaysActive is the default liveness check for loads whose caller cannot
+ * be unmounted before they finish.
+ */
+const alwaysActive = () => true
 
 /**
  * Hook for managing session configuration
@@ -55,7 +62,15 @@ export function useConfig() {
     useState<PendingLinkChange | null>(null)
   const configRef = useRef(config)
   const sessionIdRef = useRef(sessionId)
+  const [
+    configUpdateOwner,
+    invalidateConfigOwner,
+    activateConfigOwner,
+    configTransition,
+  ] = useSessionConfigOwnership(configRef, sessionIdRef)
   const hydratedRef = useRef(false)
+  // Instance liveness differs from an individual StrictMode effect run.
+  const mountedRef = useRef(false)
   // Every config write goes through one ordered queue: a write that retries
   // inside IndexedDB can then never land after a newer one, and readers can
   // wait for pending writes before reading storage.
@@ -78,17 +93,20 @@ export function useConfig() {
     (nextSessionId: number, nextConfig: SessionConfig) => {
       sessionIdRef.current = nextSessionId
       configRef.current = nextConfig
+      activateConfigOwner(nextSessionId)
       setSessionId(nextSessionId)
       setConfigState(nextConfig)
       hydratedRef.current = true
     },
-    [],
+    [activateConfigOwner],
   )
 
   /**
-   * Load all available sessions
+   * loadSessions reloads the session list from storage into state. isActive
+   * is checked once the list is read; when it returns false the list is
+   * dropped, so a load that outlives its component never sets state.
    */
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (isActive = alwaysActive) => {
     const keys = await kvList()
     const configKeys = keys.filter((k) =>
       k.startsWith(StorageKeys.SESSION_CONFIG_PREFIX),
@@ -141,11 +159,18 @@ export function useConfig() {
       // We defer to what loadConfig created
     }
 
-    setSessions(loadedSessions)
+    if (isActive()) {
+      setSessions(loadedSessions)
+    }
   }, [])
 
-  // Load configuration on mount
+  // Load configuration on mount. The load can outlive the component (a route
+  // change, or a test whose environment is torn down), so once the effect is
+  // cleaned up it keeps storing data but stops setting state.
   useEffect(() => {
+    mountedRef.current = true
+    let active = true
+    const isActive = () => active
     const loadConfig = async () => {
       try {
         // Run migration first
@@ -190,18 +215,19 @@ export function useConfig() {
             finalConfig,
           )
         }
-        // The load that consumed the link's parameters raises its prompt
-        // even if its effect run was already cleaned up (StrictMode runs it
-        // twice and only the first one sees the link) while the page stays
-        // mounted. After a real unmount React ignores the update.
-        if (hydratedConfig.pendingLinkChange) {
+        // Keep the first load's captured prompt across StrictMode replay,
+        // even when that individual effect run was cleaned up. A genuine
+        // unmount ends the instance's lifetime and must suppress this setter.
+        if (mountedRef.current && hydratedConfig.pendingLinkChange) {
           setPendingLinkChange({
             ...hydratedConfig.pendingLinkChange,
             sessionId: activeSessionId,
           })
         }
 
-        applySessionState(activeSessionId, finalConfig)
+        if (active) {
+          applySessionState(activeSessionId, finalConfig)
+        }
 
         // Repair inactive sessions too, so none of them is exported,
         // uploaded, or switched to with a sync key as its API token.
@@ -223,42 +249,49 @@ export function useConfig() {
         }
 
         // Load all sessions
-        await loadSessions()
+        await loadSessions(isActive)
       } catch (error) {
         console.error(`[useConfig] failed to load config: ${String(error)}`)
       } finally {
-        setIsLoading(false)
+        if (active) {
+          setIsLoading(false)
+        }
       }
     }
 
     loadConfig()
+    return () => {
+      active = false
+      mountedRef.current = false
+    }
   }, [applySessionState, loadSessions, persistQueue])
 
   /**
-   * updateConfig merges updates into the active session config and stores
-   * it. Credential fields go through validateCredentialUpdate: a field that
-   * would make an API token and the sync key equal is dropped while every
-   * other field still applies, and saving a key of the user's own completes
-   * a pending API key reset. A new sync key is checked against the API key
-   * of every stored session, and once stored it is copied into every
-   * session config. The write targets the session that was active when the
-   * update was applied, even if the user switches sessions meanwhile.
-   * It resolves with the dropped credential fields once the update is
-   * stored. It rejects when storing fails, and the in-memory config then
-   * reverts unless a newer update has been applied on top of it.
+   * updateConfig validates, merges and queues the active session's update.
+   * Credential rejections are returned; storing failures reject and roll back
+   * only when no newer update exists. An optional canApply guard rejects stale
+   * background work before hydration and again before capturing/enqueuing its
+   * target, without cancelling writes that were already admitted. Sync-key
+   * changes retain their browser-wide collision check and ordered propagation.
    */
   const updateConfig = useCallback(
-    async (updates: Partial<SessionConfig>): Promise<ConfigUpdateResult> => {
+    async (
+      updates: Partial<SessionConfig>,
+      canApply?: () => boolean,
+    ): Promise<ConfigUpdateResult> => {
+      if (canApply?.() === false) return { rejections: [] }
       if (!hydratedRef.current) {
         let hydrateSessionId = sessionIdRef.current
         if (!hydrateSessionId || hydrateSessionId === DEFAULT_SESSION_ID) {
           hydrateSessionId = await getActiveSessionId()
         }
 
+        if (canApply?.() === false) return { rejections: [] }
         const hydrated = await hydrateSessionConfig(hydrateSessionId, {
           fallbackConfig: configRef.current,
           applyUrlOverrides: false,
         })
+        if (canApply?.() === false) return { rejections: [] }
         configRef.current = hydrated.config
         sessionIdRef.current = hydrateSessionId
         setConfigState(hydrated.config)
@@ -281,6 +314,7 @@ export function useConfig() {
         otherApiTokens = await listStoredApiTokens()
       }
 
+      if (canApply?.() === false) return { rejections: [] }
       const targetSessionId = sessionIdRef.current
       const baseConfig = configRef.current
       const { accepted, rejections } = validateCredentialUpdate(
@@ -408,13 +442,10 @@ export function useConfig() {
     [loadSessions],
   )
 
-  /**
-   * loadSessionIntoState makes targetSessionId the session held in memory:
-   * pending writes land, its stored config is hydrated and repaired, and a
-   * corrected config is written back. It also refreshes the session list.
-   */
+  // loadSessionIntoState drains writes, hydrates the target, and repairs storage.
   const loadSessionIntoState = useCallback(
     async (targetSessionId: number) => {
+      invalidateConfigOwner()
       await persistQueue.whenIdle()
       sessionIdRef.current = targetSessionId
 
@@ -445,7 +476,7 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [applySessionState, loadSessions, persistQueue],
+    [applySessionState, invalidateConfigOwner, loadSessions, persistQueue],
   )
 
   /**
@@ -455,13 +486,15 @@ export function useConfig() {
     async (newSessionId: number) => {
       setIsLoading(true)
       try {
-        await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
-        await loadSessionIntoState(newSessionId)
+        await configTransition(async () => {
+          await kvSet(StorageKeys.SELECTED_SESSION, newSessionId)
+          await loadSessionIntoState(newSessionId)
+        })
       } finally {
         setIsLoading(false)
       }
     },
-    [loadSessionIntoState],
+    [configTransition, loadSessionIntoState],
   )
 
   /**
@@ -513,6 +546,7 @@ export function useConfig() {
    */
   const deleteSession = useCallback(
     async (targetSessionId: number) => {
+      if (targetSessionId === sessionIdRef.current) invalidateConfigOwner()
       // A link prompt belongs to the config it was raised for; a session
       // recreated under the same id must not inherit it.
       setPendingLinkChange((pending) =>
@@ -558,7 +592,13 @@ export function useConfig() {
 
       await loadSessions()
     },
-    [sessionId, switchSession, loadSessions, persistQueue],
+    [
+      sessionId,
+      switchSession,
+      loadSessions,
+      persistQueue,
+      invalidateConfigOwner,
+    ],
   )
 
   /**
@@ -600,6 +640,7 @@ export function useConfig() {
   )
 
   const purgeAllSessions = useCallback(async () => {
+    invalidateConfigOwner()
     setPendingLinkChange(null)
     await persistQueue.whenIdle()
     const keys = await kvList()
@@ -644,6 +685,7 @@ export function useConfig() {
     applySessionState,
     config.api_base,
     config.api_token,
+    invalidateConfigOwner,
     loadSessions,
     persistQueue,
   ])
@@ -711,25 +753,22 @@ export function useConfig() {
     return exportData()
   }, [persistQueue])
 
-  /**
-   * importAllData applies a cloud backup to local data in mode ('merge' or
-   * 'download') once pending config writes have landed, then reloads the
-   * active session from storage, so a later update builds on the imported
-   * config instead of overwriting it with the stale one held in memory.
-   */
+  // importAllData drains writes and reloads imported data before later edits.
   const importAllData = useCallback(
     async (
       data: Record<string, unknown>,
       mode: 'merge' | 'download' = 'merge',
     ) => {
       // Imported configs replace the one a pending link prompt describes.
+      // Imports can partly commit, so failure keeps old discovery fenced.
+      invalidateConfigOwner()
       setPendingLinkChange(null)
       await persistQueue.whenIdle()
       const activeSessionId = sessionIdRef.current
       await importData(data, activeSessionId, mode)
       await loadSessionIntoState(activeSessionId)
     },
-    [loadSessionIntoState, persistQueue],
+    [invalidateConfigOwner, loadSessionIntoState, persistQueue],
   )
 
   return {
@@ -737,6 +776,7 @@ export function useConfig() {
     sessionId,
     sessions,
     isLoading,
+    configUpdateOwner,
     updateConfig,
     pendingLinkChange:
       pendingLinkChange?.sessionId === sessionId ? pendingLinkChange : null,

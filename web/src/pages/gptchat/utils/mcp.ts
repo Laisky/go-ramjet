@@ -93,6 +93,7 @@ async function ensureMCPSession(
   server: MutableServer,
   endpointURL: string,
   headers: Record<string, string>,
+  signal?: AbortSignal,
 ) {
   if (server.mcp_initialized) return
 
@@ -144,6 +145,7 @@ async function ensureMCPSession(
     method: 'POST',
     headers: h,
     body: JSON.stringify(initPayload),
+    signal,
   })
 
   if (!resp.ok) {
@@ -172,13 +174,20 @@ async function ensureMCPSession(
     method: 'POST',
     headers: h,
     body: JSON.stringify(notifyPayload),
+    signal,
   })
 
   server.mcp_initialized = true
 }
 
+/**
+ * syncMCPServerTools discovers the tools of server and returns a copy of it
+ * with the tools and enabled tool names updated, plus the tool count. signal,
+ * when given, aborts every request of the discovery.
+ */
 export async function syncMCPServerTools(
   server: McpServerConfig,
+  signal?: AbortSignal,
 ): Promise<{ updatedServer: McpServerConfig; count: number }> {
   const endpointURL = server.url.endsWith('/') ? server.url : `${server.url}/`
 
@@ -200,7 +209,7 @@ export async function syncMCPServerTools(
   // For now we'll store them in a temporary object extending config.
   const sessionServer = { ...server } as MutableServer
 
-  await ensureMCPSession(sessionServer, endpointURL, headers)
+  await ensureMCPSession(sessionServer, endpointURL, headers, signal)
 
   // 2. Fetch Tools (JSON-RPC)
   const payload = {
@@ -225,6 +234,7 @@ export async function syncMCPServerTools(
     method: 'POST',
     headers: rpcHeaders,
     body: JSON.stringify(payload),
+    signal,
   })
 
   if (!resp.ok) {

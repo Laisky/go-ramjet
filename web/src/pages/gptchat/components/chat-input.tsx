@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TooltipWrapper } from '@/components/ui/tooltip-wrapper'
+import { primaryModifierLabel } from '@/utils/keyboard'
 import type { AudioPluginProps } from '../audio/plugin-types'
 import { VoiceControls } from '../audio/voice-controls'
 import { TOOLBAR_BUTTON_LAYOUT, toolbarControlClasses } from './toolbar-control'
@@ -295,7 +296,7 @@ export function ChatInput({
                   content={
                     locked
                       ? 'Unavailable while a voice call is recording to this chat'
-                      : 'Send message (Ctrl+Enter)'
+                      : `Send message (${primaryModifierLabel()}+Enter)`
                   }
                   side="left"
                 >

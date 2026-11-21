@@ -1,6 +1,14 @@
 import { renderApp } from '@/test/render'
 import { act, cleanup, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 /**
  * ensureMetaTag finds or creates a meta tag for the given name and returns it.
@@ -28,14 +36,43 @@ function setSiteMeta(siteId: string) {
   document.documentElement.dataset.theme = siteId
 }
 
-// The first GPTChatPage render compiles the whole lazy-loaded page tree,
-// which can take several seconds when the full suite runs in parallel. The
-// test timeout must exceed the wait, or a slow load times out the test
-// before waitFor can report it.
+// The first import of the lazy GPTChatPage module compiles the whole page
+// tree. That takes about 7s alone and over 10s when the full suite runs in
+// parallel, so beforeAll awaits the import itself instead of letting a test's
+// waitFor race it. The page then renders from the module cache, and the waits
+// below cover only rendering and the config load.
+const PAGE_MODULE_IMPORT_TIMEOUT_MS = 60_000
+// The test timeout must exceed both waits in waitForChatPageLoaded, or a slow
+// load times out the test before waitFor can report it.
 const LAZY_PAGE_TIMEOUT_MS = 10_000
-const LAZY_PAGE_TEST_TIMEOUT_MS = 15_000
+const LAZY_PAGE_TEST_TIMEOUT_MS = 25_000
+
+/**
+ * waitForChatPageLoaded waits until GPTChatPage has rendered and finished
+ * loading its session config. Ending a test while that load is pending lets
+ * it set state after the test file's jsdom environment is torn down, which
+ * Vitest reports as an unhandled "window is not defined" rejection.
+ */
+async function waitForChatPageLoaded() {
+  // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
+  await waitFor(() => expect(document.title).toBe('Chat'), {
+    timeout: LAZY_PAGE_TIMEOUT_MS,
+  })
+  await waitFor(
+    () =>
+      expect(
+        screen.queryByRole('status', { name: 'Loading chat session' }),
+      ).not.toBeInTheDocument(),
+    { timeout: LAZY_PAGE_TIMEOUT_MS },
+  )
+}
 
 describe('chat domain proxying', () => {
+  beforeAll(async () => {
+    // Same specifier as the React.lazy loaders in app.tsx and site-landing.tsx.
+    await import('@/pages/gptchat')
+  }, PAGE_MODULE_IMPORT_TIMEOUT_MS)
+
   beforeEach(() => {
     setSiteMeta('default')
     document.title = ''
@@ -72,10 +109,7 @@ describe('chat domain proxying', () => {
       expect(
         screen.queryByRole('heading', { name: 'go-ramjet' }),
       ).not.toBeInTheDocument()
-      // GPTChatPage is lazy-loaded, so wait for its useEffect to set the title
-      await waitFor(() => expect(document.title).toBe('Chat'), {
-        timeout: LAZY_PAGE_TIMEOUT_MS,
-      })
+      await waitForChatPageLoaded()
     },
     LAZY_PAGE_TEST_TIMEOUT_MS,
   )
@@ -89,9 +123,7 @@ describe('chat domain proxying', () => {
       expect(
         screen.queryByRole('heading', { name: 'go-ramjet' }),
       ).not.toBeInTheDocument()
-      await waitFor(() => expect(document.title).toBe('Chat'), {
-        timeout: LAZY_PAGE_TIMEOUT_MS,
-      })
+      await waitForChatPageLoaded()
     },
     LAZY_PAGE_TEST_TIMEOUT_MS,
   )
