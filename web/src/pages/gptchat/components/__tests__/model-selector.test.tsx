@@ -75,3 +75,48 @@ describe('ModelSelector retired research', () => {
     expect(screen.getAllByText('gpt-4o-mini').length).toBeGreaterThan(0)
   })
 })
+
+describe('ModelSelector current One API models', () => {
+  it('selects the current Sol ID and preserves the previous selection', async () => {
+    const user = userEvent.setup()
+    const onModelChange = vi.fn()
+    render(
+      <ModelSelector
+        label="Chat"
+        categories={['OpenAI']}
+        selectedModel="gpt-6.1-sol"
+        onModelChange={onModelChange}
+        allowedModels={['gpt-6.1-sol', 'gpt-6.2-sol']}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /chat/i })).toHaveTextContent(
+      'gpt-6.1-sol',
+    )
+    expect(onModelChange).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /chat/i }))
+    await user.click(screen.getByRole('menuitem', { name: 'gpt-6.2-sol' }))
+    expect(onModelChange).toHaveBeenCalledExactlyOnceWith('gpt-6.2-sol')
+  })
+
+  it('does not grant the successor to an account restricted to the previous ID', async () => {
+    const user = userEvent.setup()
+    const onModelChange = vi.fn()
+    render(
+      <ModelSelector
+        label="Chat"
+        categories={['Anthropic']}
+        selectedModel="claude-haiku-4-5"
+        onModelChange={onModelChange}
+        allowedModels={['claude-haiku-4-5']}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /chat/i }))
+    const successor = screen.getByRole('menuitem', { name: 'claude-haiku-5-5' })
+    expect(successor).toHaveAttribute('data-disabled')
+    await user.click(successor)
+    expect(onModelChange).not.toHaveBeenCalled()
+  })
+})
