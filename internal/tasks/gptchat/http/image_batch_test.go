@@ -261,3 +261,46 @@ func TestGenerateImagesRefusesUnboundedCount(t *testing.T) {
 	}
 	require.Zero(t, calls.Load(), "an unbounded count reached the upstream")
 }
+
+// TestDrawByDalleHandlerCurrentModelTariffs verifies the model ID and charge used by the generation endpoint.
+func TestDrawByDalleHandlerCurrentModelTariffs(t *testing.T) {
+	for _, tt := range []struct {
+		model string
+		cost  int64
+	}{
+		{"black-forest-labs/flux-2-dev", 6000},
+		{"black-forest-labs/flux-dev", 12500},
+		{"gpt-image-2.6-flare", 20000},
+		{"gpt-image-2.6-sunburst", 20000},
+		{"gpt-image-2.5-flare", 20000},
+	} {
+		t.Run(tt.model, func(t *testing.T) {
+			f := &imageBillingFixture{produced: 1}
+			gctx := f.install(t)
+			req, err := json.Marshal(map[string]any{"model": tt.model, "prompt": "draw a tree", "n": 1})
+			require.NoError(t, err)
+			gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations", bytes.NewReader(req))
+			gctx.Request.Header.Set("Content-Type", "application/json")
+			gctx.Set(ctxKeyUser, billedImageUser(false))
+			var requestModel atomic.Value
+			f.override = func(_ http.ResponseWriter, r *http.Request) bool {
+				if r.URL.Path == "/v1/images/generations" {
+					var req struct {
+						Model string `json:"model"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+						t.Errorf("decode fixture request: %v", err)
+					}
+					requestModel.Store(req.Model)
+				}
+				return false
+			}
+
+			DrawByDalleHandler(gctx)
+			require.Equal(t, http.StatusOK, gctx.Writer.Status())
+			require.Equal(t, tt.model, requestModel.Load())
+			require.Equal(t, 1, f.delivered())
+			require.Equal(t, tt.cost, f.totalCharged())
+		})
+	}
+}

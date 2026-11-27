@@ -69,6 +69,8 @@ func isImageModel(model string) bool {
 // GetImageModelPrice get price for image model
 func GetImageModelPrice(model string) db.Price {
 	switch model {
+	case "black-forest-labs/flux-2-dev":
+		return db.PriceTxt2ImageFlux2Dev
 	case "flux-dev", "black-forest-labs/flux-dev":
 		return db.PriceTxt2ImageFluxDev
 	case "flux-schnell", "black-forest-labs/flux-schnell":
