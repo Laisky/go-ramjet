@@ -17,10 +17,10 @@ func mediaInferenceBase(user *config.UserConfig) (string, error) {
 	if user.BYOK {
 		return base, nil
 	}
-	oneAPI := strings.TrimRight(config.Config.OneAPIBase, "/")
-	if oneAPI == "" {
-		oneAPI = config.DefaultOneAPIBase
+	if config.Config == nil {
+		return "", errors.New("Managed inference is not configured")
 	}
+	oneAPI := config.Config.ManagedAPIBase()
 	if base != oneAPI {
 		return "", errors.New("managed media inference requires the configured One API endpoint")
 	}

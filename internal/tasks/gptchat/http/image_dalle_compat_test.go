@@ -54,7 +54,7 @@ func TestTenantSelectedPublicUpstreamStillWorks(t *testing.T) {
 	user, err := getUserByAuthHeader(ctx)
 	require.NoError(t, err)
 	require.True(t, user.APIBaseUserSelected)
-	images, err := fetchImageFromOpenaiDalle(ctx, user, "dall-e-3", "synthetic", 1, "")
+	images, err := fetchImageFromOpenaiDalle(ctx.Request.Context(), user, "dall-e-3", "synthetic", 1, "")
 	require.NoError(t, err)
 	require.Len(t, images, 1)
 	require.Equal(t, "/v1/images/generations", provider.path.Load())
@@ -81,7 +81,8 @@ func TestOperatorConfiguredPrivateUpstreamUnchanged(t *testing.T) {
 	egressTestSetup(t, nil)
 	config.Config.OneAPIBase = operator.URL
 	config.Config.UserTokens[0].APIBase = operator.URL
-	config.Config.UserTokens[0].ImageUrl = operator.URL + "/v1/images/generations"
+	config.Config.UserTokens[0].AllowedModels = []string{"dall-e-3", "openai/gpt-oss-120b"}
+	stubInferenceLimiters(t, true)
 
 	ctx, recorder := egressRequestContext(t, "/chat/oneshot", "", map[string]any{"user_prompt": "synthetic"})
 	ctx.Request.Header.Del("Authorization")
@@ -92,10 +93,12 @@ func TestOperatorConfiguredPrivateUpstreamUnchanged(t *testing.T) {
 	require.False(t, user.APIBaseUserSelected)
 
 	OneShotChatHandler(ctx)
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "operator-answer")
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	require.Zero(t, operator.hits.Load())
+	require.NoError(t, IsModelAllowed(ctx, user, &FrontendReq{Model: "dall-e-3"}))
+	grantInferenceBudget(ctx, user, "dall-e-3", 1)
 
-	images, err := fetchImageFromOpenaiDalle(ctx, user, "dall-e-3", "synthetic", 1, "")
+	images, err := fetchImageFromOpenaiDalle(ctx.Request.Context(), user, "dall-e-3", "synthetic", 1, "")
 	require.NoError(t, err)
 	require.Equal(t, [][]byte{[]byte("private-image-bytes")}, images)
 	require.EqualValues(t, 1, asset.hits.Load())

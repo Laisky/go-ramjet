@@ -138,14 +138,15 @@ func TestGPTChatAudioTranscriptionAdmission(t *testing.T) {
 	}{
 		{"allowed free tier", "FREETIER-synthetic-browser", "whisper-1", "whisper-1", false, false, 200, 1},
 		{"not in allowlist", "FREETIER-synthetic-browser", "whisper-1", "gpt-4o-mini", false, false, 400, 0},
-		{"unsupported model", "FREETIER-synthetic-browser", "other", "*", false, false, 400, 0},
-		{"duplicate field", "FREETIER-synthetic-browser", "whisper-1", "*", true, false, 400, 0},
-		{"oversized", "FREETIER-synthetic-browser", "whisper-1", "*", false, true, 413, 0},
+		{"unsupported model", "FREETIER-synthetic-browser", "other", "whisper-1", false, false, 400, 0},
+		{"duplicate field", "FREETIER-synthetic-browser", "whisper-1", "whisper-1", true, false, 400, 0},
+		{"oversized", "FREETIER-synthetic-browser", "whisper-1", "whisper-1", false, true, 413, 0},
 		{"caller token uses proxy instead", testCallerOneAPIToken, "whisper-1", "*", false, false, 401, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			byokAuditSetup(t)
 			config.Config.RateLimitExpensiveModelsIntervalSeconds = 600
+			stubInferenceLimiters(t, true)
 			config.Config.UserTokens = []*config.UserConfig{{
 				Token: config.FreetierUserToken, OpenaiToken: testSharedOneAPIToken, APIBase: "https://" + oneAPIHost,
 				AllowedModels: []string{tc.allowed},

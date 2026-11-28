@@ -9,7 +9,6 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
-	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	"github.com/Laisky/go-utils/v6/json"
 	"github.com/Laisky/zap"
@@ -400,8 +399,25 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 			zap.Any("request", sanitizePayloadForLog(frontendReq)),
 		)
 
+		if err := IsModelAllowed(ctx, user, frontendReq); err != nil {
+			return nil, nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
+		}
+
+		if user.IsFree && frontendReq.MaxTokens == 0 {
+			frontendReq.MaxTokens = freeUserMaxTokens
+		}
+		if len(frontendReq.Messages) > 0 {
+			reservation, reserveErr := ReserveTokens(ctx, user, frontendReq)
+			if reserveErr != nil {
+				return nil, nil, nil, errors.Wrap(reserveErr, "reserve token quota")
+			}
+			_ = reservation
+		}
+
+		grantInferenceBudget(ctx, user, frontendReq.Model, freeTurnModelCalls)
+
 		// enhance user query
-		if config.Config.RamjetURL != "" &&
+		if !user.IsFree && config.Config.RamjetURL != "" &&
 			frontendReq.LaiskyExtra != nil &&
 			!frontendReq.LaiskyExtra.ChatSwitch.DisableHttpsCrawler {
 			if err := frontendReq.embeddingUrlContent(ctx, user); err != nil {
@@ -411,15 +427,9 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 
 		if frontendReq.LaiskyExtra != nil &&
 			frontendReq.LaiskyExtra.ChatSwitch.EnableGoogleSearch {
-			if user.IsFree {
-				ratelimitCost := gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
-				if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
-					return nil, nil, nil, errors.New("web search is limited for free users" +
-						"you need upgrade to a paid membership to enable this feature unlimitedly, " +
-						"more info at https://wiki.laisky.com/projects/gpt/pay/")
-				}
+			if !user.IsFree {
+				frontendReq.embeddingGoogleSearch(ctx, user)
 			}
-			frontendReq.embeddingGoogleSearch(ctx, user)
 		}
 
 		if frontendReq.LaiskyExtra != nil && frontendReq.LaiskyExtra.ChatSwitch.EnableMemory != nil {
@@ -437,18 +447,6 @@ func convert2UpstreamResponsesRequest(ctx *gin.Context) (*FrontendReq, *config.U
 
 		// never forward app-specific config to upstream.
 		frontendReq.LaiskyExtra = nil
-
-		if err := IsModelAllowed(ctx, user, frontendReq); err != nil {
-			return nil, nil, nil, errors.Wrapf(err, "check is model allowed for user %q", user.UserName)
-		}
-
-		if frontendReq != nil && len(frontendReq.Messages) > 0 {
-			reservation, reserveErr := ReserveTokens(ctx, user, frontendReq)
-			if reserveErr != nil {
-				return nil, nil, nil, errors.Wrap(reserveErr, "reserve token quota")
-			}
-			_ = reservation
-		}
 
 		if strings.HasPrefix(frontendReq.Model, "o") ||
 			strings.HasPrefix(frontendReq.Model, "gpt-oss-") ||

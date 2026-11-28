@@ -32,10 +32,27 @@ and top-up flows remain separate.
 
 ## Operator migration
 
-Set the managed model endpoint and credentials to your One API deployment.
-For managed image and voice calls, the resolved `api_base` must match
-`openai.one_api_base` (default: `https://oneapi.laisky.com`); mismatched direct
-endpoints are rejected without moving the key to another host. If an Azure
+Set the managed model endpoint to `openai.one_api_base` (default:
+`https://oneapi.laisky.com`). To enable native GPTChat free tier, configure
+exactly one `openai.user_tokens` entry whose `token` is
+`DEFAULT_PROXY_TOKEN`, with its own restricted One API `openai_token`
+and explicit `allowed_models`. Omit the entry to disable free inference.
+The free entry cannot disable its limits or use another provider base; no
+global `openai.token` or separate image credential/URL is used. Configure
+positive model rate-limit intervals (the expensive model default is 600
+seconds). Independently restrict the shared credential by model and quota
+in One API. A missing or unavailable local policy denies shared-key inference.
+
+The public `POST /gptchat/chat/oneshot` keeps its request and response
+format but now requires an explicit caller-owned model key. Anonymous
+and free-tier credentials are not accepted. Your selected provider receives
+the original key, including on requests that fail upstream. Native
+free-tier chat uses one admitted turn budget across model rounds, retries,
+subagents and auxiliary model calls. Legacy Google Search and Ramjet URL
+chunking require BYOK and are skipped in free-tier chat; neither service
+receives the shared inference key.
+
+If an Azure
 deployment is used for image generation, configure its channel and model
 mapping in One API first. The public image generation and editing endpoints,
 including the historical Flux aliases, still accept the same client requests.
@@ -48,6 +65,8 @@ an enabled WAV-capable One API model and voice using
 `openai.voice.speech_model` and `openai.voice.speech_voice`. Azure Speech SDK
 settings are no longer used. Before publishing, verify the image, transcription
 and speech models are enabled for the applicable One API tokens and channels.
+For free-tier speech, allow both the GPTChat capability `tts` and the exact
+configured speech model in GPTChat; enable the actual model in One API.
 
 Catalog visibility is not a health check or a promise that a provider still
 serves a model.

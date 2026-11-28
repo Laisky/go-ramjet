@@ -56,14 +56,17 @@ func TestSpeechDelegatesInference(t *testing.T) {
 					t.Errorf("write fixture WAV: %v", err)
 				}
 			})
+			stubInferenceLimiters(t, true)
+			config.Config.RateLimitExpensiveModelsIntervalSeconds = 600
+			config.Config.RateLimitFreeModelsIntervalSeconds = 1
 			if tc.free {
 				config.Config.UserTokens = []*config.UserConfig{{
 					Token: config.FreetierUserToken, OpenaiToken: "sk-managed-speech-fixture",
-					APIBase: config.Config.API, AllowedModels: []string{"tts"}, NoLimitExpensiveModels: true,
+					APIBase: config.Config.API, AllowedModels: []string{"tts", "fixture-speech-model"},
 				}}
 			} else {
 				gctx.Set(ctxKeyUser, &config.UserConfig{
-					BYOK: true, OpenaiToken: tc.key, APIBase: config.Config.API,
+					BYOK: true, Token: tc.key, OpenaiToken: tc.key, APIBase: config.Config.API,
 					Voice: config.VoiceConfig{SpeechModel: "fixture-speech-model", SpeechVoice: "fixture-voice"},
 				})
 			}
@@ -107,11 +110,11 @@ func TestSpeechPreservesApplicationAdmission(t *testing.T) {
 				http.Error(w, "synthetic upstream error", http.StatusTooManyRequests)
 			})
 			gctx.Set(ctxKeyUser, &config.UserConfig{
-				UserName: "fixture", BYOK: tc.byok, IsFree: !tc.byok,
-				AllowedModels: []string{"gpt-4o-mini"}, OpenaiToken: "sk-fixture", APIBase: config.Config.API,
+				UserName: "fixture", Token: "sk-fixture-inference-test", BYOK: tc.byok, IsFree: !tc.byok,
+				AllowedModels: []string{"gpt-4o-mini"}, OpenaiToken: "sk-fixture-inference-test", APIBase: config.Config.API,
 			})
 			gctx.Request = httptest.NewRequest(http.MethodGet, "/audio/tts?"+
-				(url.Values{"text": {tc.text}}).Encode(), nil)
+				(url.Values{"text": {tc.text}, "apikey": {"sk-fixture-inference-test"}}).Encode(), nil)
 			TTSHanler(gctx)
 			require.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
 			require.Equal(t, tc.wantCalls, calls.Load())

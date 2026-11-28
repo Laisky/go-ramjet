@@ -114,7 +114,7 @@ func embeddingTestSetup(t *testing.T, server *httptest.Server) (*glog.LoggerT, *
 	})
 	onceLimiter = sync.Once{}
 	onceLimiter.Do(func() {})
-	config.Config = &config.OpenAI{RamjetURL: server.URL, API: server.URL, DefaultImageUrl: server.URL + "/images"}
+	config.Config = &config.OpenAI{RamjetURL: server.URL, API: server.URL, OneAPIBase: server.URL, RateLimitExpensiveModelsIntervalSeconds: 600, RateLimitFreeModelsIntervalSeconds: 1}
 	httpcli = server.Client()
 	httpcli.Timeout = time.Second
 	globalLogger, globalEntries := embeddingTestLogger(t)
@@ -148,14 +148,14 @@ func embeddingTestContext(t *testing.T, parent context.Context, logger glog.Logg
 	ctx.Request.Header.Set("Authorization", "Bearer sk-SYNTHETIC-EMBEDDING-AUTH")
 	ctx.Set(ctxKeyUser, &config.UserConfig{
 		UserName: "embedding-test-user", Token: "sk-SYNTHETIC-EMBEDDING-AUTH", OpenaiToken: "sk-SYNTHETIC-EMBEDDING-AUTH",
-		APIBase: serverURL, AllowedModels: []string{"*"}, IsFree: free, BYOK: true,
+		APIBase: serverURL, AllowedModels: []string{"gpt-4.1"}, IsFree: free, BYOK: !free,
 	})
 	gmw.SetLogger(ctx, logger)
 	return ctx, recorder
 }
 
-// TestURLEmbeddingParentEndsBeforeQuota proves real preparation stops and classifies parent termination once.
-func TestURLEmbeddingParentEndsBeforeQuota(t *testing.T) {
+// TestURLEmbeddingRespectsParentCancellation proves real preparation stops and classifies parent termination once.
+func TestURLEmbeddingRespectsParentCancellation(t *testing.T) {
 	for _, name := range []string{"cancel", "deadline", "success_then_cancel", "already_cancelled"} {
 		t.Run(name, func(t *testing.T) {
 			deadline := name == "deadline"
@@ -202,7 +202,7 @@ func TestURLEmbeddingParentEndsBeforeQuota(t *testing.T) {
 			tokenQuotaOnce = sync.Once{}
 			tokenQuotaOnce.Do(func() {})
 			tokenQuotaMgr = &TokenQuotaManager{client: quotaClient, logger: logger, windowMinutes: 10}
-			ctx, recorder := embeddingTestContext(t, parent, logger, server.URL, true, "cancel")
+			ctx, recorder := embeddingTestContext(t, parent, logger, server.URL, false, "cancel")
 			err := sendChatWithResponsesToolLoop(ctx)
 			wantErr, wantStatus, wantMessage := context.Canceled, 499, "request canceled"
 			if deadline {

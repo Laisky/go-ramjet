@@ -62,7 +62,7 @@ func FetchURLContent(gctx *gin.Context, url string) (content []byte, err error) 
 	case strings.Contains(contentType, "text/html") ||
 		strings.Contains(contentType, "application/xhtml+xml"):
 		content, err = gptTasks.FetchDynamicURLContent(ctx, url,
-			gptTasks.WithMarkdownConversion(config.Config.Token, true))
+			gptTasks.WithMarkdownConversion(true))
 	default:
 		content, err = fetchStaticURLContent(ctx, url)
 	}

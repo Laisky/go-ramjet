@@ -145,8 +145,9 @@ func TestUserConfigCarriesServerVoiceSettings(t *testing.T) {
 	require.NoError(t, SetupConfig())
 
 	user := &UserConfig{
-		UserName:      "someone",
-		Token:         "tok",
+		UserName:    "someone",
+		Token:       "tok",
+		OpenaiToken: "fixture-key", APIBase: DefaultOneAPIBase,
 		AllowedModels: []string{"*"},
 		Voice:         VoiceConfig{Plugin: "stale", RealtimeModel: "stale-model"},
 	}
@@ -172,11 +173,11 @@ func TestUserConfigDefaultUserNameIsFrozen(t *testing.T) {
 	setConfig(t, "openai.voice.realtime_model", "")
 	require.NoError(t, SetupConfig())
 
-	derived := &UserConfig{Token: "synthetic-user-token", AllowedModels: []string{"*"}}
+	derived := &UserConfig{Token: "synthetic-user-token", OpenaiToken: "fixture-key", APIBase: DefaultOneAPIBase, AllowedModels: []string{"*"}}
 	require.NoError(t, derived.Valid())
 	require.Equal(t, "a18124dce2d892dc", derived.UserName)
 
-	explicit := &UserConfig{UserName: "alice", Token: "synthetic-user-token", AllowedModels: []string{"*"}}
+	explicit := &UserConfig{UserName: "alice", Token: "synthetic-user-token", OpenaiToken: "fixture-key", APIBase: DefaultOneAPIBase, AllowedModels: []string{"*"}}
 	require.NoError(t, explicit.Valid())
 	require.Equal(t, "alice", explicit.UserName, "an explicit user_name must win")
 }

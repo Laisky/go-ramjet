@@ -1,7 +1,6 @@
 package http
 
 import (
-	"crypto/subtle"
 	"io"
 	"net/http"
 	"strings"
@@ -114,20 +113,9 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	// golang's http client will not auto decompress response body
 	req.Header.Del("Accept-Encoding")
 
-	token := user.OpenaiToken
-	if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-		if subtle.ConstantTimeCompare([]byte(user.ImageToken), []byte(token)) != 1 {
-			return errors.New("Ramjet requires matching caller-owned image credentials")
-		}
-		token = user.ImageToken
-		model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
-		if err = IsModelAllowed(gctx, user, &FrontendReq{Model: model}); err != nil {
-			return errors.Wrapf(err, "check model %q", model)
-		}
-	}
 	// Ramjet accepts only caller-owned keys. Inference, including billing,
 	// stays on the API selected by the caller.
-	req.Header.Set("Authorization", token)
+	req.Header.Set("Authorization", user.OpenaiToken)
 
 	return nil
 }

@@ -2,21 +2,24 @@ package ratelimit
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
+	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/redis/go-redis/v9"
-)
-
-const (
-	testRedisAddr = "100.122.41.16:6379"
-	testRedisDB   = 4
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestRedis(t *testing.T) *redis.Client {
-	addr := testRedisAddr
-	db := testRedisDB
+	t.Helper()
+	addr := os.Getenv("GO_RAMJET_RATELIMIT_TEST_REDIS_ADDR")
+	if addr == "" {
+		t.Skip("set GO_RAMJET_RATELIMIT_TEST_REDIS_ADDR for the Redis integration tests")
+	}
+	const db = 0
 
 	gconfig.Shared.Set("redis.addr", addr)
 	gconfig.Shared.Set("redis.db", db)
@@ -31,10 +34,6 @@ func setupTestRedis(t *testing.T) *redis.Client {
 		t.Skipf("redis not available at %s db %d: %v", addr, db, err)
 	}
 
-	if err := cli.FlushDB(ctx).Err(); err != nil {
-		t.Fatalf("flush redis db: %v", err)
-	}
-
 	t.Cleanup(func() {
 		_ = cli.Close()
 	})
@@ -42,10 +41,16 @@ func setupTestRedis(t *testing.T) *redis.Client {
 	return cli
 }
 
+// testRedisLimiterName isolates each invocation without clearing any database.
+func testRedisLimiterName(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("go-ramjet-test:%s:%d", t.Name(), time.Now().UnixNano())
+}
+
 func TestRedisLimiterAllowsAndRefills(t *testing.T) {
 	setupTestRedis(t)
 
-	limiter, err := NewRedisLimiter(context.Background(), t.Name(), Args{Max: 5, NPerSec: 1})
+	limiter, err := NewRedisLimiter(context.Background(), testRedisLimiterName(t), Args{Max: 5, NPerSec: 1})
 	if err != nil {
 		t.Fatalf("create redis limiter: %v", err)
 	}
@@ -72,7 +77,7 @@ func TestRedisLimiterAllowsAndRefills(t *testing.T) {
 func TestRedisLimiterPersistsAcrossInstances(t *testing.T) {
 	setupTestRedis(t)
 
-	name := t.Name()
+	name := testRedisLimiterName(t)
 	limiter1, err := NewRedisLimiter(context.Background(), name, Args{Max: 3, NPerSec: 1})
 	if err != nil {
 		t.Fatalf("create first limiter: %v", err)
@@ -101,7 +106,7 @@ func TestNewLimiterBackendSelection(t *testing.T) {
 			gconfig.Shared.Set("openai.rate_limiter_backend", previous)
 		})
 
-		limiter, err := New(context.Background(), t.Name(), Args{Max: 2, NPerSec: 1})
+		limiter, err := New(context.Background(), testRedisLimiterName(t), Args{Max: 2, NPerSec: 1})
 		if err != nil {
 			t.Fatalf("create redis-backed limiter: %v", err)
 		}
@@ -117,7 +122,7 @@ func TestNewLimiterBackendSelection(t *testing.T) {
 			gconfig.Shared.Set("openai.rate_limiter_backend", previous)
 		})
 
-		limiter, err := New(context.Background(), t.Name(), Args{Max: 2, NPerSec: 1})
+		limiter, err := New(context.Background(), testRedisLimiterName(t), Args{Max: 2, NPerSec: 1})
 		if err != nil {
 			t.Fatalf("create legacy limiter: %v", err)
 		}
@@ -125,4 +130,17 @@ func TestNewLimiterBackendSelection(t *testing.T) {
 			t.Fatalf("expected memory limiter, got %T", limiter)
 		}
 	})
+}
+
+// TestStrictRedisLimiterDeniesBackendErrors exercises a closed client without
+// contacting Redis. Other service limiters retain their legacy failure policy.
+func TestStrictRedisLimiterDeniesBackendErrors(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1", MaxRetries: -1})
+	require.NoError(t, client.Close())
+	limiter := redisLimiter{
+		ctx: t.Context(), client: client, logger: log.Logger, failClosed: true,
+	}
+	require.False(t, limiter.AllowN(1))
+	limiter.failClosed = false
+	require.True(t, limiter.AllowN(1))
 }

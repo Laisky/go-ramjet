@@ -42,6 +42,7 @@ func imageTestContextWithRecorder(t *testing.T, handler http.HandlerFunc) (*gin.
 	t.Cleanup(server.Close)
 	logger, _, _ := embeddingTestSetup(t, server)
 	config.Config.OneAPIBase = server.URL
+	stubInferenceLimiters(t, true)
 
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -92,9 +93,10 @@ func TestSendChatImageGenerationBoundsOpenAIImageCount(t *testing.T) {
 			})
 			user := &config.UserConfig{
 				Token: "sk-synthetic-image", OpenaiToken: "sk-synthetic-image", UserName: "image-tester",
-				APIBase: config.Config.API, IsFree: tc.free, AllowedModels: []string{"*"},
+				APIBase: config.Config.API, IsFree: tc.free, BYOK: !tc.free, AllowedModels: []string{"dall-e-3"},
 			}
 
+			grantInferenceBudget(gctx, user, "dall-e-3", 1)
 			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), user)
 			require.Error(t, err)
 			require.Equal(t, int64(tc.want), sentN.Load())
@@ -224,9 +226,9 @@ func inferenceImageUser(free bool) *config.UserConfig {
 		key = "sk-shared-fixture"
 	}
 	return &config.UserConfig{
-		Token: key, OpenaiToken: key, ImageToken: key,
+		Token: key, OpenaiToken: key,
 		UserName: "image-tester", APIBase: config.Config.API, IsFree: free,
-		AllowedModels: []string{"*"}, NoLimitExpensiveModels: true, BYOK: !free,
+		AllowedModels: []string{"dall-e-3", "gpt-image-1", "tts", "tts-1"}, BYOK: !free,
 	}
 }
 
@@ -261,7 +263,9 @@ func TestSendChatImageGenerationDelegatesBilling(t *testing.T) {
 			f := &imageInferenceFixture{produced: tc.produced, empty: tc.empty, failUpload: tc.failUpload}
 			gctx := f.install(t)
 
-			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), inferenceImageUser(tc.free))
+			user := inferenceImageUser(tc.free)
+			grantInferenceBudget(gctx, user, "dall-e-3", 1)
+			err := sendChatImageGeneration(gctx, imageCountTestRequest(tc.requested), user)
 			if tc.delivered == 0 {
 				require.Error(t, err)
 			} else {
@@ -310,8 +314,8 @@ func TestSendChatImageGenerationSettlesFreeUserReservation(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token: "FREETIER-abcdefgh", UserName: "free-user", IsFree: true,
-		APIBase: config.Config.API, OpenaiToken: "sk-shared", ImageToken: "sk-shared",
-		AllowedModels: []string{"*"},
+		APIBase: config.Config.API, OpenaiToken: "sk-shared",
+		AllowedModels: []string{"dall-e-3"},
 	}
 	gctx.Set(ctxKeyUser, user)
 	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/api", bytes.NewReader([]byte(

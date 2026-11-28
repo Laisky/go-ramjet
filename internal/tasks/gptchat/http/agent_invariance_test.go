@@ -44,9 +44,7 @@ func TestI1_ProxyInvariance_NoAgentModeSkipsDispatcher(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
 		RamjetURL:                               "",
@@ -59,9 +57,10 @@ func TestI1_ProxyInvariance_NoAgentModeSkipsDispatcher(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -130,10 +129,8 @@ func TestI1b_AgentModeFlagRoutesToDispatcher(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		API:                                     strings.TrimRight(upstream.URL, "/"),
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+		API: strings.TrimRight(upstream.URL, "/"),
+
 		RateLimitExpensiveModelsIntervalSeconds: 600,
 		RamjetURL:                               "",
 		MemoryProject:                           "gptchat",
@@ -145,9 +142,10 @@ func TestI1b_AgentModeFlagRoutesToDispatcher(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())

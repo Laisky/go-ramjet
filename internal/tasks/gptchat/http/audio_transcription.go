@@ -33,8 +33,8 @@ func AudioTranscriptionHandler(ctx *gin.Context) {
 	case user.IsFree && user.OpenaiToken != "":
 		// The dedicated free-tier capability always uses platform One API.
 	case user.BYOK && user.APIBaseUserSelected:
-		token, ok := callerOneAPIToken(ctx.Request.Header)
-		if !ok || subtle.ConstantTimeCompare([]byte(token), []byte(user.OpenaiToken)) != 1 {
+		token, ok := modelAuthorizationToken(ctx.Request.Header)
+		if !ok || !isCallerModelToken(token) || subtle.ConstantTimeCompare([]byte(token), []byte(user.OpenaiToken)) != 1 {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
@@ -66,6 +66,11 @@ func AudioTranscriptionHandler(ctx *gin.Context) {
 	}
 
 	if err = IsModelAllowed(ctx, user, &FrontendReq{Model: gptchatTranscriptionModel}); web.AbortErr(ctx, err) {
+		return
+	}
+
+	grantInferenceBudget(ctx, user, gptchatTranscriptionModel, 1)
+	if err := consumeInferenceCall(gmw.Ctx(ctx), user, gptchatTranscriptionModel); web.AbortErr(ctx, err) {
 		return
 	}
 

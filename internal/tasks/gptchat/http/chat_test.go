@@ -221,20 +221,21 @@ func TestSendAndParseChatGETHandlesUpstreamError(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
+		OneAPIBase:                              strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 	}
 	t.Cleanup(func() { config.Config = originalConfig })
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -275,20 +276,20 @@ func TestConvert2UpstreamResponsesRequestGETReturnsPlaceholderFrontendReq(t *tes
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         "https://api.test/v1/images/generations",
+
 		API:                                     "https://api.test",
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 	}
 	t.Cleanup(func() { config.Config = originalConfig })
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       "https://api.test",
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -338,11 +339,11 @@ func TestSendChatWithResponsesToolLoopMemoryEnabledRoundTrip(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
+		OneAPIBase:                              strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 		EnableMemory:                            true,
 		MemoryProject:                           "gptchat",
@@ -352,9 +353,10 @@ func TestSendChatWithResponsesToolLoopMemoryEnabledRoundTrip(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -426,11 +428,11 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
+		OneAPIBase:                              strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 		EnableMemory:                            false,
 	}
@@ -438,9 +440,10 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledNoInjection(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -501,11 +504,11 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
+		OneAPIBase:                              strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 		EnableMemory:                            true,
 		MemoryProject:                           "gptchat",
@@ -519,9 +522,10 @@ func TestSendChatWithResponsesToolLoopMemoryDisabledForFreeUserEvenWhenRequested
 		IsFree:        true,
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
 		OpenaiToken:   "sk-shared",
-		AllowedModels: []string{"*"},
+		AllowedModels: []string{"gpt-4.1"},
 	}
 	require.NoError(t, user.Valid())
+	stubInferenceLimiters(t, true)
 
 	rawReq := `{"model":"gpt-4.1","stream":false,"max_tokens":50,"messages":[{"role":"user","content":"hello"}],"laisky_extra":{"chat_switch":{"enable_memory":true}}}`
 	recorder := httptest.NewRecorder()
@@ -566,11 +570,11 @@ func TestSendChatWithResponsesToolLoopMemoryFailureNonFatal(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
-		DefaultImageToken:                       "srv-image-token",
-		DefaultImageUrl:                         upstream.URL + "/v1/images/generations",
+
 		API:                                     strings.TrimRight(upstream.URL, "/"),
+		OneAPIBase:                              strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RamjetURL:                               "",
 		EnableMemory:                            true,
 		MemoryProject:                           "gptchat",
@@ -580,9 +584,10 @@ func TestSendChatWithResponsesToolLoopMemoryFailureNonFatal(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "tester",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())

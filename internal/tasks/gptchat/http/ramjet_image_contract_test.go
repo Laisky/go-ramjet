@@ -47,7 +47,7 @@ func TestRamjetBYOKImageCapabilityPassthrough(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			ctx, _ := gin.CreateTestContext(recorder)
 			ctx.Request = original.Request
-			ctx.Set(ctxKeyUser, &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, ImageToken: key, UserName: key[:15], APIBase: tc.base, AllowedModels: []string{"*"}})
+			ctx.Set(ctxKeyUser, &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, UserName: key[:15], APIBase: tc.base, AllowedModels: []string{"*"}})
 			calls := 0
 			httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
 				calls++

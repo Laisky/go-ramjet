@@ -104,7 +104,6 @@ func setupTestConfig(t *testing.T, agent *config.AgentLoopConfig) {
 	t.Helper()
 	original := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
 		API:                                     "https://api.test",
 		RamjetURL:                               "https://ramjet.test",
 		MemoryProject:                           "test-memory",
@@ -113,9 +112,8 @@ func setupTestConfig(t *testing.T, agent *config.AgentLoopConfig) {
 		MemoryLLMTimeoutSeconds:                 15,
 		MemoryLLMMaxOutputTokens:                512,
 		RateLimitExpensiveModelsIntervalSeconds: 600,
-		DefaultImageUrl:                         "https://api.test/v1/images/generations",
-		DefaultImageToken:                       "srv-token",
-		AgentLoop:                               agent,
+
+		AgentLoop: agent,
 	}
 	t.Cleanup(func() { config.Config = original })
 }
@@ -143,12 +141,11 @@ func newTestGinCtx(t *testing.T, body string) (*gin.Context, *httptest.ResponseR
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	user := &config.UserConfig{
-		Token:                  "laisky-test-token-12345",
-		UserName:               "tester",
-		APIBase:                "https://api.test",
-		OpenaiToken:            "sk-tester-12345",
-		ImageToken:             "sk-tester-12345",
-		ImageUrl:               "https://api.test/v1/images/generations",
+		Token:       "laisky-test-token-12345",
+		UserName:    "tester",
+		APIBase:     "https://api.test",
+		OpenaiToken: "sk-tester-12345",
+
 		AllowedModels:          []string{"*"},
 		NoLimitExpensiveModels: true,
 	}

@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/Laisky/errors/v2"
 	"github.com/gin-gonic/gin"
@@ -19,16 +18,8 @@ func resolveRamjetUser(ctx *gin.Context) (*config.UserConfig, error) {
 	if ctx == nil || ctx.Request == nil {
 		return nil, errors.New("Ramjet requires a caller-provided API key")
 	}
-	key := GetRawUserToken(ctx)
-	if ssosession.HasLaiskyIssuer(key) {
-		return nil, errors.New("An SSO session cannot be used as a model API key")
-	}
-	if session, ok := ssosession.BearerToken(ctx.Request.Header.Get(ramjetSessionHeader)); ok && subtle.ConstantTimeCompare([]byte(key), []byte(session)) == 1 {
-		return nil, errors.New("Account sessions and model API keys must be separate")
-	}
-	headerKey := strings.TrimPrefix(ctx.Request.Header.Get("Authorization"), "Bearer ")
-	if subtle.ConstantTimeCompare([]byte(headerKey), []byte(key)) != 1 || key == "" || key == config.FreetierUserToken || strings.HasPrefix(key, "FREETIER-") ||
-		strings.IndexFunc(key, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) || r > 126 }) >= 0 {
+	key, ok := modelAuthorizationToken(ctx.Request.Header)
+	if !ok || !isCallerModelToken(key) {
 		return nil, errors.New("Ramjet requires a caller-provided API key")
 	}
 	selectedBase := ctx.Request.Header.Get("X-Laisky-Api-Base")

@@ -501,8 +501,16 @@ func bodyChecker(body io.ReadCloser) (userReq *FrontendReq, err error) {
 
 // OneShotChatHandler handle one shot chat request
 func OneShotChatHandler(gctx *gin.Context) {
+	if token, ok := modelAuthorizationToken(gctx.Request.Header); !ok || !isCallerModelToken(token) {
+		gctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "A caller-provided model API key is required"})
+		return
+	}
 	user, err := getUserByAuthHeader(gctx)
 	if web.AbortErr(gctx, err) {
+		return
+	}
+	if !user.BYOK || (gctx.GetHeader("X-Laisky-Api-Base") != "" && !user.APIBaseUserSelected) {
+		gctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "A valid caller-selected provider is required"})
 		return
 	}
 

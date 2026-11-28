@@ -67,6 +67,8 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
+	grantInferenceBudget(ctx, user, req.Model, 1)
+
 	logger.Debug("start image drawing task")
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
@@ -161,6 +163,9 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 
 	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
+	if err := consumeInferenceCall(ctx, user, model); err != nil {
+		return nil, errors.Wrap(err, "admit image request")
+	}
 	if httpresp, err := mediaInferenceClient(user).Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
@@ -295,6 +300,8 @@ func EditImageHandler(ctx *gin.Context) {
 	if err = IsModelAllowed(ctx, user, &FrontendReq{Model: req.Model}); web.AbortErr(ctx, err) {
 		return
 	}
+
+	grantInferenceBudget(ctx, user, req.Model, 1)
 
 	logger.Debug("start image editing task", zap.String("model", req.Model))
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
@@ -450,6 +457,9 @@ func fetchImageEditFromOpenai(ctx context.Context,
 
 	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
+	if err := consumeInferenceCall(ctx, user, model); err != nil {
+		return nil, errors.Wrap(err, "admit image request")
+	}
 	if httpresp, err := mediaInferenceClient(user).Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {

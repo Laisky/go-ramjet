@@ -35,7 +35,7 @@ var (
 	targetHTTPClient = egress.NewHTTPClient(30*time.Second, targetNetwork)
 	// fetchArchiveContent renders one admitted target through the verified crawler.
 	fetchArchiveContent = func(ctx context.Context, target string) ([]byte, error) {
-		return gptTasks.FetchDynamicURLContent(ctx, target, gptTasks.WithMarkdownConversion("", false))
+		return gptTasks.FetchDynamicURLContent(ctx, target, gptTasks.WithMarkdownConversion(false))
 	}
 	// isArchived reports whether a url already has an archived copy; tests replace it.
 	isArchived = isUrlFinished

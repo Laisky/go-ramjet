@@ -237,17 +237,16 @@ func TestManagedMediaUsesDeclaredOneAPI(t *testing.T) {
 	f := &imageInferenceFixture{produced: 1}
 	gctx := f.install(t)
 	user := inferenceImageUser(true)
-	user.ImageUrl = alternate.URL + "/openai/deployments/previous/images/generations"
-	user.ImageToken = "obsolete-fixture-key"
+	grantInferenceBudget(gctx, user, "dall-e-3", 1)
 
-	images, err := generateImages(gctx, user, "dall-e-3", "draw a tree", 1, "")
+	images, err := generateImages(gctx.Request.Context(), user, "dall-e-3", "draw a tree", 1, "")
 	require.NoError(t, err)
 	require.Len(t, images, 1)
 	require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.authorizations())
 	require.Zero(t, alternateCalls.Load())
 
 	user.APIBase = alternate.URL
-	_, err = generateImages(gctx, user, "dall-e-3", "draw a tree", 1, "")
+	_, err = generateImages(gctx.Request.Context(), user, "dall-e-3", "draw a tree", 1, "")
 	require.ErrorContains(t, err, "requires the configured One API endpoint")
 	_, err = requestSpeech(gctx, user, "hello")
 	require.ErrorContains(t, err, "requires the configured One API endpoint")

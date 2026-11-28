@@ -218,7 +218,6 @@ func TestChatCacheKeyNeverMatchesConservationRecord(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
 		API:                                     strings.TrimRight(upstream.URL, "/"),
 		RateLimitExpensiveModelsIntervalSeconds: 600,
 	}
@@ -230,9 +229,10 @@ func TestChatCacheKeyNeverMatchesConservationRecord(t *testing.T) {
 
 	user := &config.UserConfig{
 		Token:         "laisky-abcdefghijklmno",
+		BYOK:          true,
 		UserName:      "victim",
 		APIBase:       strings.TrimRight(upstream.URL, "/"),
-		OpenaiToken:   "sk-user",
+		OpenaiToken:   "laisky-abcdefghijklmno",
 		AllowedModels: []string{"*"},
 	}
 	require.NoError(t, user.Valid())
@@ -297,7 +297,6 @@ func TestChatResponseCacheIsolatesTenants(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
 		API:                                     genuine.URL,
 		RateLimitExpensiveModelsIntervalSeconds: 600,
 	}
@@ -350,6 +349,7 @@ func TestChatResponseCacheIsolatesTenants(t *testing.T) {
 // request enables an MCP server without its own key, which is called with the
 // caller's key, so an answer may carry that caller's private MCP data.
 func TestChatResponseCacheIsolatesFreeTierCallers(t *testing.T) {
+	stubInferenceLimiters(t, true)
 	isolateResponsesChatGlobals(t)
 	useLongLivedResponseCache(t)
 	setupFreeUserTestQuota(t)
@@ -372,12 +372,13 @@ func TestChatResponseCacheIsolatesFreeTierCallers(t *testing.T) {
 
 	originalConfig := config.Config
 	config.Config = &config.OpenAI{
-		Token:                                   "srv-token",
 		API:                                     upstream.URL,
+		OneAPIBase:                              upstream.URL,
+		RateLimitFreeModelsIntervalSeconds:      1,
 		RateLimitExpensiveModelsIntervalSeconds: 600,
 		UserTokens: []*config.UserConfig{{
 			Token: config.FreetierUserToken, UserName: "public", APIBase: upstream.URL,
-			OpenaiToken: "sk-synthetic-shared", AllowedModels: []string{"*"}, NoLimitExpensiveModels: true,
+			OpenaiToken: "sk-synthetic-shared", AllowedModels: []string{"gpt-4.1"},
 		}},
 	}
 	t.Cleanup(func() { config.Config = originalConfig })

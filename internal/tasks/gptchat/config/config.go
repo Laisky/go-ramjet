@@ -3,7 +3,9 @@ package config
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
+	"net/url"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -28,26 +30,20 @@ func SetupConfig() (err error) {
 		return errors.Wrap(err, "unmarshal openai config")
 	}
 
-	if Config.Token == "" {
-		return errors.New("openai.token is empty")
-	}
-
 	// fill default
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
-	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
+	if !gconfig.Shared.IsSet("openai.rate_limit_expensive_models_interval_secs") {
+		Config.RateLimitExpensiveModelsIntervalSeconds = 600
+	}
 	Config.ToolLoopMaxRounds = gutils.OptionalVal(&Config.ToolLoopMaxRounds, 5)
-	Config.RateLimitFreeModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitFreeModelsIntervalSeconds, 1)
+	if !gconfig.Shared.IsSet("openai.rate_limit_image_models_interval_secs") {
+		Config.RateLimitFreeModelsIntervalSeconds = 1
+	}
 	Config.RateLimiterBackend = strings.ToLower(strings.TrimSpace(
 		gutils.OptionalVal(&Config.RateLimiterBackend, "redis")))
-	Config.DefaultImageToken = gutils.OptionalVal(
-		&Config.DefaultImageToken, Config.Token)
 	Config.API = trimUrl(gutils.OptionalVal(
 		&Config.API, "https://api.openai.com"))
 	Config.OneAPIBase = trimUrl(gutils.OptionalVal(&Config.OneAPIBase, DefaultOneAPIBase))
-	Config.DefaultImageUrl = trimUrl(gutils.OptionalVal(
-		&Config.DefaultImageUrl, Config.API+"/v1/images/generations"))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
 	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet-memory"))
@@ -87,8 +83,6 @@ func SetupConfig() (err error) {
 	Config.WebFetch.Firecrawl.API = trimUrl(gutils.OptionalVal(
 		&Config.WebFetch.Firecrawl.API, "https://api.firecrawl.dev/v2/scrape"))
 	Config.WebFetch.Firecrawl.APIKey = strings.TrimSpace(Config.WebFetch.Firecrawl.APIKey)
-	// Config.DefaultOpenaiToken = gutils.OptionalVal(
-	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
 		&Config.LimitUploadFileBytes, 20*1024*1024)
 
@@ -137,6 +131,10 @@ func SetupConfig() (err error) {
 
 	if webFetchEnabled(Config.WebFetch.Firecrawl.Enabled, false) && Config.WebFetch.Firecrawl.APIKey == "" {
 		return errors.New("openai.web_fetch.firecrawl.api_key is required when firecrawl is enabled")
+	}
+
+	if _, err := Config.FreeTierPolicy(); err != nil {
+		return errors.Wrap(err, "validate free-tier inference configuration")
 	}
 
 	return nil
@@ -206,19 +204,6 @@ type OpenAI struct {
 	API string `json:"api" mapstructure:"api"`
 	// OneAPIBase defines the deployment allowed to receive managed media requests.
 	OneAPIBase string `json:"-" mapstructure:"one_api_base"`
-	// Token (required) openai api request token
-	Token string `json:"-" mapstructure:"token"`
-	// DefaultOpenaiToken (optional) default openai token, default equals to token
-	//
-	// Dangerous: will escape paying wall, use it carefully
-	// DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
-	// DefaultImageToken (optional) default image token, default equals to token
-	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
-
-	// DefaultImageUrl (optional) default image url
-	//
-	// default to https://{{API}}/v1/images/generations
-	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
 	// ToolLoopMaxRounds limits how many rounds the backend will execute tools for a single user request.
 	// Default is 5.
 	ToolLoopMaxRounds int `json:"tool_loop_max_rounds" mapstructure:"tool_loop_max_rounds"`
@@ -424,17 +409,13 @@ type UserConfig struct {
 	UserName string `json:"username" mapstructure:"username"`
 	// Token (required) client's tenant token, not the openai token
 	Token string `json:"-" mapstructure:"token"`
-	// OpenaiToken (optional) openai token, default is global default token
+	// OpenaiToken is the only inference key: the original BYOK key or the
+	// explicitly configured restricted One API key on the free-tier entry.
 	OpenaiToken string `json:"-" mapstructure:"openai_token"`
-	// ImageToken (optional) token be used to generate image,
-	// default is global default image token
-	ImageToken string `json:"-" mapstructure:"image_token"`
-	// ImageUrl (optional) image url, default is global default image url
-	ImageUrl string `json:"-" mapstructure:"image_url"`
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
-	// APIBaseUserSelected reports that APIBase and ImageUrl were chosen by the
+	// APIBaseUserSelected reports that APIBase was chosen by the
 	// caller (X-Laisky-Api-Base) instead of server configuration. Requests to
 	// them must pass the public egress policy. It is never loaded from config
 	// nor serialized.
@@ -462,8 +443,11 @@ type UserConfig struct {
 
 // Valid valid and fill default values
 func (c *UserConfig) Valid() error {
-	if c.Token == "" {
-		return errors.New("token is empty")
+	if c.Token == "" || c.OpenaiToken == "" || c.APIBase == "" {
+		return errors.New("Model identity, inference key, and endpoint are required")
+	}
+	if c.BYOK && (c.IsFree || subtle.ConstantTimeCompare([]byte(c.Token), []byte(c.OpenaiToken)) != 1) {
+		return errors.New("Caller-owned inference must use the original model credential")
 	}
 
 	if c.UserName == "" {
@@ -476,13 +460,54 @@ func (c *UserConfig) Valid() error {
 	// Voice settings are global and always overwrite whatever a user entry holds,
 	// so a stale per-user value cannot pin an old plugin or model.
 	c.Voice = Config.Voice
-	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
-	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
-	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
-	c.ImageUrl = gutils.OptionalVal(&c.ImageUrl, Config.DefaultImageUrl)
 
 	// format normalize
 	c.APIBase = strings.TrimRight(c.APIBase, "/")
 
 	return nil
+}
+
+// ManagedAPIBase returns the configured One API base or its production default.
+func (c *OpenAI) ManagedAPIBase() string {
+	if c.OneAPIBase == "" {
+		return DefaultOneAPIBase
+	}
+	return trimUrl(c.OneAPIBase)
+}
+
+// FreeTierPolicy returns the unique explicit free-tier policy, or nil if
+// disabled. Only the configured One API deployment may receive its key.
+func (c *OpenAI) FreeTierPolicy() (*UserConfig, error) {
+	var policy *UserConfig
+	for _, entry := range c.UserTokens {
+		if entry == nil || entry.Token != FreetierUserToken {
+			continue
+		}
+		if policy != nil {
+			return nil, errors.New("Duplicate free-tier policies")
+		}
+		policy = entry
+	}
+	if policy == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(policy.OpenaiToken) == "" || strings.TrimSpace(policy.OpenaiToken) != policy.OpenaiToken ||
+		policy.BYOK || policy.NoLimitExpensiveModels || len(policy.AllowedModels) == 0 ||
+		c.RateLimitExpensiveModelsIntervalSeconds <= 0 || c.RateLimitFreeModelsIntervalSeconds <= 0 {
+		return nil, errors.New("Free-tier policy requires a dedicated key, explicit models, and positive rate limits without bypasses")
+	}
+	endpoint, err := url.Parse(c.ManagedAPIBase())
+	if err != nil || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" ||
+		endpoint.Fragment != "" || (endpoint.Scheme != "https" && endpoint.Scheme != "http") {
+		return nil, errors.New("Free-tier inference requires a valid openai.one_api_base")
+	}
+	for _, model := range policy.AllowedModels {
+		if model == "" || model == "*" || strings.TrimSpace(model) != model {
+			return nil, errors.New("Free-tier model allowlist must contain explicit model IDs")
+		}
+	}
+	if policy.APIBase != "" && trimUrl(policy.APIBase) != c.ManagedAPIBase() {
+		return nil, errors.New("Free-tier API base must match openai.one_api_base")
+	}
+	return policy, nil
 }

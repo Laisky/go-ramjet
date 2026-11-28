@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
 	"github.com/Laisky/go-ramjet/library/ssosession"
 )
 
@@ -34,39 +35,76 @@ func OneapiProxyHandler(ctx *gin.Context) {
 	relayModelRequest(ctx, ctx.Request, target, httpcli, token)
 }
 
-// callerOneAPIToken accepts one explicit One API-shaped token, bare or Bearer;
-// application tokens and session credentials are not One API tokens.
+// callerOneAPIToken accepts exactly one token with the One API key format.
 func callerOneAPIToken(header http.Header) (string, bool) {
+	token, ok := modelAuthorizationToken(header)
+	return token, ok && isCallerModelToken(token) && !strings.ContainsAny(token, ".:|")
+}
+
+// modelAuthorizationToken parses the established bare or Bearer contract.
+// An absent credential is distinct from one which is present but malformed.
+func modelAuthorizationToken(header http.Header) (string, bool) {
 	values := header.Values("Authorization")
-	if len(values) != 1 || len(header.Values("X-Api-Key")) != 0 || len(header.Values("Api-Key")) != 0 {
+	if len(values) > 1 || hasAlternateModelCredential(header) {
 		return "", false
+	}
+	if len(values) == 0 {
+		return "", true
 	}
 	token := values[0]
 	if scheme, value, hasSpace := strings.Cut(token, " "); hasSpace && strings.EqualFold(scheme, "Bearer") {
 		token = value
 	}
-	if len(token) < 15 || !(strings.HasPrefix(token, "sk-") || strings.HasPrefix(token, "laisky-")) {
-		return "", false
+	return token, validModelToken(header, token)
+}
+
+// hasAlternateModelCredential rejects ambiguous alternative model credentials.
+func hasAlternateModelCredential(header http.Header) bool {
+	if len(header.Values("X-Api-Key")) > 0 || len(header.Values("Api-Key")) > 0 {
+		return true
 	}
 	for _, value := range header.Values("Sec-WebSocket-Protocol") {
 		for protocol := range strings.SplitSeq(value, ",") {
 			if strings.HasPrefix(strings.TrimSpace(protocol), "openai-insecure-api-key.") {
-				return "", false
+				return true
 			}
 		}
 	}
-	if strings.IndexFunc(token, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_')
-	}) >= 0 {
-		return "", false
+	return false
+}
+
+// validModelToken permits token bytes unchanged and excludes account sessions.
+func validModelToken(header http.Header, token string) bool {
+	if len(token) == 0 || len(token) > 4096 || ssosession.HasLaiskyIssuer(token) ||
+		strings.IndexFunc(token, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+				r == '-' || r == '_' || r == '.' || r == ':' || r == '|')
+		}) >= 0 {
+		return false
 	}
 	for _, value := range header.Values(ramjetSessionHeader) {
 		session, ok := ssosession.BearerToken(value)
 		if ok && subtle.ConstantTimeCompare([]byte(token), []byte(session)) == 1 {
-			return "", false
+			return false
 		}
 	}
-	return token, true
+	return true
+}
+
+// isCallerModelToken recognizes supported caller-owned API key families.
+func isCallerModelToken(token string) bool {
+	if len(token) < 15 || !(strings.HasPrefix(token, "sk-") || strings.HasPrefix(token, "laisky-")) {
+		return false
+	}
+	if config.Config != nil {
+		for _, entry := range config.Config.UserTokens {
+			if entry != nil && entry.Token == config.FreetierUserToken &&
+				subtle.ConstantTimeCompare([]byte(token), []byte(entry.OpenaiToken)) == 1 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // relayModelRequest sends request to the selected target with client and token.

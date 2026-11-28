@@ -29,7 +29,13 @@ const (
 // synthesized by the configured OpenAI-compatible upstream.
 func TTSHanler(gctx *gin.Context) {
 	setNoStoreHeaders(gctx)
-	user, err := getUserByToken(gctx, gctx.Query("apikey"))
+	credentials := gctx.Request.URL.Query()["apikey"]
+	if len(credentials) != 1 || len(gctx.Request.Header.Values("Authorization")) != 0 ||
+		hasAlternateModelCredential(gctx.Request.Header) {
+		gctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Exactly one model API credential is required"})
+		return
+	}
+	user, err := getUserByToken(gctx, credentials[0])
 	if web.AbortErr(gctx, errors.Wrap(err, "authenticate speech request")) {
 		return
 	}
@@ -51,6 +57,7 @@ func TTSHanler(gctx *gin.Context) {
 		return
 	}
 
+	grantInferenceBudget(gctx, user, "tts", 1)
 	ctx, cancel := context.WithTimeout(gmw.Ctx(gctx), speechRequestTimeout)
 	defer cancel()
 
@@ -89,13 +96,19 @@ func requestSpeech(ctx context.Context, user *config.UserConfig, text string) (*
 	if err != nil {
 		return nil, errors.Wrap(err, "select speech upstream")
 	}
+	speechModel := gutils.OptionalVal(&user.Voice.SpeechModel, config.DefaultVoiceSpeechModel)
+	if user.IsFree {
+		if err := checkFreeModel(user, speechModel); err != nil {
+			return nil, errors.Wrap(err, "check configured speech model")
+		}
+	}
 	payload, err := json.Marshal(struct {
 		Model          string `json:"model"`
 		Input          string `json:"input"`
 		Voice          string `json:"voice"`
 		ResponseFormat string `json:"response_format"`
 	}{
-		Model:          gutils.OptionalVal(&user.Voice.SpeechModel, config.DefaultVoiceSpeechModel),
+		Model:          speechModel,
 		Input:          text,
 		Voice:          gutils.OptionalVal(&user.Voice.SpeechVoice, config.DefaultVoiceSpeechVoice),
 		ResponseFormat: "wav",
@@ -111,6 +124,9 @@ func requestSpeech(ctx context.Context, user *config.UserConfig, text string) (*
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+user.OpenaiToken)
 
+	if err := consumeInferenceCall(ctx, user, "tts"); err != nil {
+		return nil, errors.Wrap(err, "admit speech request")
+	}
 	resp, err := mediaInferenceClient(user).Do(req) //nolint:bodyclose // The caller owns the returned response.
 	if err != nil {
 		return nil, errors.Wrap(err, "request speech")

@@ -23,9 +23,9 @@ func byokAuthAuditContext(t *testing.T, key string) (*gin.Context, *observer.Obs
 	originalConfig, originalLogger := config.Config, log.Logger
 	t.Cleanup(func() { config.Config, log.Logger = originalConfig, originalLogger })
 	config.Config = &config.OpenAI{
-		Token: "SERVER_SYNTHETIC_ONLY_KEY", DefaultImageToken: "SERVER_SYNTHETIC_IMAGE_KEY",
-		API: "https://default.test", DefaultImageUrl: "https://default.test/v1/images/generations",
-		UserTokens: []*config.UserConfig{{Token: config.FreetierUserToken, UserName: "public", APIBase: "https://free.test"}},
+		API: "https://default.test", OneAPIBase: "https://free.test",
+		RateLimitExpensiveModelsIntervalSeconds: 600, RateLimitFreeModelsIntervalSeconds: 1,
+		UserTokens: []*config.UserConfig{{Token: config.FreetierUserToken, UserName: "public", APIBase: "https://free.test", OpenaiToken: "SERVER_SYNTHETIC_ONLY_KEY", AllowedModels: []string{"gpt-4o-mini"}}},
 	}
 	core, entries := observer.New(zap.DebugLevel)
 	logger, err := glog.NewWithName("byok-audit", glog.LevelDebug, zap.WrapCore(func(zapcore.Core) zapcore.Core { return core }))
@@ -47,7 +47,6 @@ func TestBYOKAuthAuditIdentityAndCredentialsPreserved(t *testing.T) {
 	user, err := getUserByAuthHeader(ctx)
 	require.NoError(t, err)
 	require.Equal(t, key, user.OpenaiToken)
-	require.Equal(t, key, user.ImageToken)
 	require.Equal(t, key[:15], user.UserName)
 	require.Equal(t, "http://100.64.0.10:3000", user.APIBase)
 	require.Equal(t, key, GetRawUserToken(ctx))

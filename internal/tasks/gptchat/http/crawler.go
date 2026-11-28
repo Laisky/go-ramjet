@@ -114,6 +114,9 @@ type searchResults struct {
 }
 
 func webSearch(ctx context.Context, query string, user *config.UserConfig) (result string, err error) {
+	if user == nil || user.IsFree {
+		return "", errors.New("Legacy Google Search requires a caller-owned credential")
+	}
 	logger := gmw.GetLogger(ctx).Named("web_search").With(zap.String("query", query))
 	ctx = gmw.SetLogger(ctx, logger)
 

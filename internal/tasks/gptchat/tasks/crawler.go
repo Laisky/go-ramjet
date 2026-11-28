@@ -636,7 +636,6 @@ func FetchDynamicURLContent(ctx context.Context, url string, opts ...FetchDynami
 }
 
 type fetchDynamicURLContentOption struct {
-	apiKey         string
 	outputMarkdown bool
 }
 
@@ -655,12 +654,8 @@ func (o *fetchDynamicURLContentOption) apply(opts ...FetchDynamicURLContentOptio
 type FetchDynamicURLContentOption func(*fetchDynamicURLContentOption) error
 
 // WithMarkdownConversion enables HTML body to Markdown conversion.
-//
-// apiKey is retained for API compatibility; queued crawls use local conversion
-// and never persist or transmit this key.
-func WithMarkdownConversion(apiKey string, outputMarkdown bool) FetchDynamicURLContentOption {
+func WithMarkdownConversion(outputMarkdown bool) FetchDynamicURLContentOption {
 	return func(opt *fetchDynamicURLContentOption) error {
-		opt.apiKey = apiKey
 		opt.outputMarkdown = outputMarkdown
 		return nil
 	}

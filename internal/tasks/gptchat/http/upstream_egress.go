@@ -113,10 +113,24 @@ func userOneshotChat(ctx context.Context, user *config.UserConfig, model, system
 	if user == nil {
 		return "", errors.New("nil user")
 	}
+	if model == "" {
+		model = openai.DefaultChatModel
+	}
+	if err := consumeInferenceCall(ctx, user, model); err != nil {
+		return "", errors.Wrap(err, "admit one-shot request")
+	}
 	var opts []openai.OneshotOption
+	if user.IsFree {
+		if CountTextTokens(systemPrompt)+CountTextTokens(userPrompt) > tokenQuotaLimit {
+			return "", errors.New("Free-tier auxiliary prompt exceeds its input limit")
+		}
+		opts = append(opts, openai.WithHTTPClient(mediaInferenceClient(user)), openai.WithMaxTokens(1024))
+	}
 	if user.APIBaseUserSelected {
-		// One-shot chat never used the operator proxy, so it stays direct.
+		// Custom one-shot inference remains direct with pinned egress.
 		opts = append(opts, openai.WithHTTPClient(pinnedTenantClient()))
+	} else if !user.IsFree {
+		opts = append(opts, openai.WithHTTPClient(httpcli))
 	}
 	answer, err := openai.OneshotChat(ctx, user.APIBase, user.OpenaiToken, model, systemPrompt, userPrompt, opts...)
 	if err != nil {
