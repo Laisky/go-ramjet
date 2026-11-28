@@ -8,9 +8,10 @@ import (
 	"time"
 
 	gconfig "github.com/Laisky/go-config/v2"
-	"github.com/Laisky/go-ramjet/library/log"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Laisky/go-ramjet/library/log"
 )
 
 func setupTestRedis(t *testing.T) *redis.Client {
