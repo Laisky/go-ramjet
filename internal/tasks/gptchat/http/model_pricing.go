@@ -107,7 +107,7 @@ func oneAPIImagePrice(ctx context.Context, model string) (db.Price, error) {
 		return 0, errors.New("One API model catalog exceeds size limit")
 	}
 	var catalog struct {
-		Success bool
+		Success bool `json:"success"`
 		Data    map[string]struct {
 			Models map[string]struct {
 				ImagePrice *float64 `json:"image_price"`
