@@ -30,9 +30,9 @@ describe('GPTChat transcription credential routing', () => {
   ])(
     'isolates the credential and preserves multipart audio',
     async (key, base, path, forwardedBase) => {
-      const response = vi.fn(async (_path: string, _init: RequestInit) =>
-        Response.json({ text: 'synthetic transcript' }),
-      )
+      const response = vi
+        .fn<(path: string, init: RequestInit) => Promise<Response>>()
+        .mockResolvedValue(Response.json({ text: 'synthetic transcript' }))
       vi.stubGlobal('fetch', response)
       vi.stubGlobal('window', { location: { pathname: '/gptchat' } })
       const file = new File(['audio fixture'], 'sample.webm')

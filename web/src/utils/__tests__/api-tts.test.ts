@@ -36,6 +36,24 @@ describe('fetchTTS', () => {
     expect(URL.createObjectURL).toHaveBeenCalled()
   })
 
+  it('keeps caller-owned speech on the explicitly selected provider', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('audio'))
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:synthetic')
+
+    await fetchTTS(
+      'Test',
+      'sk-synthetic-client-owned-key',
+      'https://provider.invalid',
+    )
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/audio/tts'),
+      {
+        method: 'GET',
+        headers: { 'X-Laisky-Api-Base': 'https://provider.invalid' },
+      },
+    )
+  })
+
   it('should include apikey and text in URL', async () => {
     const mockBlob = new Blob(['audio data'], { type: 'audio/wav' })
     const mockBlobUrl = 'blob:http://localhost/mock-audio-url'

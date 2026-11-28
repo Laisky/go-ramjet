@@ -121,6 +121,7 @@ export function WhisperAudioPlugin({
     }
   }, [
     config.api_token,
+    config.api_base,
     onActivityChange,
     onBusyChange,
     onStatusChange,
