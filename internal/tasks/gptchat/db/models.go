@@ -32,13 +32,6 @@ func (p Price) USDCents() int {
 	return p.Int() / 5000
 }
 
-const (
-	PriceUploadFile Price = 2500       // 0.005 usd
-	PriceTTS        Price = 20         // 0.00004 usd
-	PriceUSD        Price = 500000     // 1 usd
-	PriceRMB        Price = 500000 / 8 // 1 rmb
-)
-
 // BillingType billing type
 type BillingType string
 

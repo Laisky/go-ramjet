@@ -59,48 +59,6 @@ func getUserByAuthHeader(gctx *gin.Context) (user *config.UserConfig, err error)
 	return user, nil
 }
 
-// type oneapiUserResponse struct {
-// 	TokenID  int    `json:"token_id"`
-// 	UID      int    `json:"uid"`
-// 	Username string `json:"username"`
-// }
-
-// var (
-// 	cacheGetOneapiUserIDByToken sync.Map
-// )
-
-// func getOneapiUserIDByToken(ctx context.Context, token string) (uid string, err error) {
-// 	// load from cache
-// 	if v, ok := cacheGetOneapiUserIDByToken.Load(token); ok {
-// 		return v.(string), nil //nolint: forcetypeassert
-// 	}
-
-// 	url := config.Config.ExternalBillingAPI + "/api/user/get-by-token"
-// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "new request")
-// 	}
-
-// 	req.Header.Add("Authorization", token)
-// 	resp, err := httpcli.Do(req) //nolint: bodyclose
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "do request")
-// 	}
-// 	defer gutils.LogErr(resp.Body.Close, log.Logger)
-// 	if resp.StatusCode != http.StatusOK {
-// 		return "", errors.Errorf("bad status code %d", resp.StatusCode)
-// 	}
-
-// 	var respData oneapiUserResponse
-// 	if err = json.NewDecoder(resp.Body).Decode(&respData); err != nil {
-// 		return "", errors.Wrap(err, "decode response")
-// 	}
-
-// 	uid = strconv.Itoa(respData.UID)
-// 	cacheGetOneapiUserIDByToken.Store(token, uid)
-// 	return uid, nil
-// }
-
 // var OpenaiModelList = []string{
 // 	"gpt-3.5-turbo", "gpt-3.5-turbo-0301", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-0125",
 // 	"gpt-3.5-turbo-16k", "gpt-3.5-turbo-16k-0613",
@@ -179,9 +137,7 @@ SWITCH_FOR_USER:
 			UserName:    username,
 			Token:       userToken,
 			OpenaiToken: userToken,
-			// Use user's own token for image generation & billing to avoid falling back to server's default.
-			// This fixes a bug where image requests were billed to the server account because ImageToken was empty
-			// and later filled by user.Valid() with the global default.
+			// Keep the caller's key for the separate legacy Ramjet media path.
 			ImageToken: userToken,
 			BYOK:       true, // mark as bring-your-own-key for rate limiting & auditing logic
 			// ImageTokenType:         config.Config.DefaultImageTokenType,
@@ -193,73 +149,9 @@ SWITCH_FOR_USER:
 			ImageUrl: "https://oneapi.laisky.com/v1/images/generations",
 		}
 
-		if strings.Contains(user.ImageUrl, "https://oneapi.laisky.com") {
-			// billing by oneapi, no need to enable external billing
-			user.EnableExternalImageBilling = false
-			// user.NoLimitImageModels = true
-		} else {
-			// if oneapiUid, err := getOneapiUserIDByToken(ctx, userToken); err != nil {
-			// 	logger.Error("get oneapi uid", zap.Error(err))
-			// 	user.EnableExternalImageBilling = false
-			// 	user.NoLimitImageModels = false
-			// } else {
-			// 	logger.Debug("get oneapi uid", zap.String("uid", oneapiUid))
-			// 	user.EnableExternalImageBilling = true
-			// 	// user.ExternalImageBillingUID = oneapiUid
-			// 	user.NoLimitImageModels = true
-			// }
-		}
-
 		applyUserAPIBaseOverride(gctx, user, logger)
 	default: // use server's token in settings
 		return nil, errors.New("invalid token")
-		// for _, u := range config.Config.UserTokens {
-		// 	if u.Token == userToken {
-		// 		logger.Debug("paid user", zap.String("user", u.UserName))
-		// 		if err = u.Valid(); err != nil {
-		// 			return nil, errors.Wrap(err, "valid paid user")
-		// 		}
-
-		// 		user = u
-		// 		break SWITCH_FOR_USER
-		// 	}
-		// }
-
-		// // use user's own openai/azure or whatever token
-		// hashed := sha256.Sum256([]byte(userToken))
-		// username := hex.EncodeToString(hashed[:])[:16]
-		// logger.Debug("use user's own token", zap.String("user", username))
-		// user = &config.UserConfig{ // default to openai user
-		// 	UserName:               username,
-		// 	Token:                  userToken,
-		// 	OpenaiToken:            userToken,
-		// 	ImageToken:             userToken,
-		// 	ImageUrl:               "https://api.openai.com/v1/images/generations",
-		// 	AllowedModels:          OpenaiModelList, // only allow openai models
-		// 	NoLimitExpensiveModels: true,
-		// 	// NoLimitOpenaiModels:    true,
-		// 	// NoLimitImageModels:     true,
-		// 	BYOK:    true,
-		// 	APIBase: config.Config.API,
-		// }
-
-		// // only BYOK user can set api base
-		// userApiBase := strings.TrimRight(gctx.Request.Header.Get("X-Laisky-Api-Base"), "/")
-		// if userApiBase != "" {
-		// 	user.APIBase = userApiBase
-
-		// 	// set image url
-		// 	switch {
-		// 	case strings.Contains(userApiBase, "openai.azure.com"):
-		// 		user.ImageUrl = userApiBase
-		// 	case strings.Contains(userApiBase, "api.openai.com"):
-		// 		user.ImageUrl = "https://api.openai.com/v1/images/generations"
-		// 	default:
-		// 		user.ImageUrl = fmt.Sprintf("%s/v1/images/generations", userApiBase)
-		// 	}
-
-		// 	logger.Debug("use user's own api base", zap.String("api_base", user.APIBase))
-		// }
 	}
 
 	if err = user.Valid(); err != nil {

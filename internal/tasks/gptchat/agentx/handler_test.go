@@ -106,7 +106,6 @@ func setupTestConfig(t *testing.T, agent *config.AgentLoopConfig) {
 	config.Config = &config.OpenAI{
 		Token:                                   "srv-token",
 		API:                                     "https://api.test",
-		ExternalBillingAPI:                      "https://billing.test",
 		RamjetURL:                               "https://ramjet.test",
 		MemoryProject:                           "test-memory",
 		MemoryStorageMCPURL:                     "https://mcp.test",
@@ -138,7 +137,7 @@ func defaultAgentCfg() *config.AgentLoopConfig {
 
 // newTestGinCtx builds a recorder-backed gin.Context with a user
 // stashed at ctxKeyUser. The user is a BYOK laisky user so the
-// downstream flatten / convert helpers do not need an external billing
+// downstream flatten / convert helpers do not need an upstream
 // system.
 func newTestGinCtx(t *testing.T, body string) (*gin.Context, *httptest.ResponseRecorder, *config.UserConfig) {
 	t.Helper()

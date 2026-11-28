@@ -33,11 +33,6 @@ func UploadFiles(ctx *gin.Context) {
 		return
 	}
 
-	// err = checkUserExternalBilling(ctx, user, db.PriceUploadFile, "upload file")
-	// if web.AbortErr(ctx, errors.Wrap(err, "check user external billing")) {
-	// 	return
-	// }
-
 	file, err := ctx.FormFile("file")
 	if web.AbortErr(ctx, errors.Wrap(err, "get file from form")) {
 		return

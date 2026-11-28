@@ -52,10 +52,6 @@ type TranscriptionResponse struct {
 // Transcript transcribe audio to text
 func Transcript(ctx context.Context, user *config.UserConfig, req *TranscriptRequest) (respData *TranscriptionResponse, err error) {
 	logger := gmw.GetLogger(ctx)
-	// if err := checkUserExternalBilling(ctx, user, db.PriceTTS, "tts"); err != nil {
-	// 	return nil, errors.Wrap(err, "check user external billing")
-	// }
-
 	upstreamUrl := fmt.Sprintf("%s/v1/audio/transcriptions", user.APIBase)
 	var requestBody bytes.Buffer
 	multiPartWriter := multipart.NewWriter(&requestBody)

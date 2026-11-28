@@ -7,7 +7,6 @@ import (
 	"github.com/Laisky/zap"
 	"github.com/pkoukk/tiktoken-go"
 
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/library/log"
 )
 
@@ -403,22 +402,6 @@ type OpenaiCompletionStreamRespToolCall struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
 	} `json:"function"`
-}
-
-// ExternalBillingUserStatus user status
-type ExternalBillingUserStatus int
-
-const (
-	// ExternalBillingUserStatusActive active
-	ExternalBillingUserStatusActive ExternalBillingUserStatus = 1
-)
-
-// ExternalBillingUserResponse return from external billing api
-type ExternalBillingUserResponse struct {
-	Data struct {
-		Status      ExternalBillingUserStatus `json:"status"`
-		RemainQuota db.Price                  `json:"remain_quota"`
-	} `json:"data"`
 }
 
 // PromptTokens count prompt tokens

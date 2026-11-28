@@ -87,8 +87,6 @@ github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463 h1:RADSHujZRC7w3v
 github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463/go.mod h1:q33VY05PIMHPdNftvhzx43CKKK8V+9rtgSGNiiPuZaA=
 github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061 h1:E8C3fmKMRrmd2ioA1P4RqjOFOEKokAxAE7VpH4d+YAo=
 github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061/go.mod h1:wgH1p0f+NnmYyrxSDfc5nuQLj2ApQBsGiCMC5l/jxXI=
-github.com/Microsoft/cognitive-services-speech-sdk-go v1.52.0 h1:iPZjOfMZLX2WvSv3rGBEacsPnFVGRY+GjVD9wWSYTc8=
-github.com/Microsoft/cognitive-services-speech-sdk-go v1.52.0/go.mod h1:ct4bG95K1Lu/c5y60PVGI1XOjo9aAcl80DD5dvu6zsg=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=

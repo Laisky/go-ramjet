@@ -89,10 +89,10 @@ func registerGPTChatRoutes(grp *gin.RouterGroup, rateLimiter gin.HandlerFunc) {
 	apiWithRatelimiter.Any("/api", ihttp.ChatHandler)
 	apiWithRatelimiter.POST("/images/generations", ihttp.DrawByDalleHandler)
 	apiWithRatelimiter.POST("/images/edits", ihttp.EditImageHandler)
-	// apiWithRatelimiter.POST("/images/generations/lcm", ihttp.DrawByLcmHandler)
+
 	apiWithRatelimiter.POST("/images/generations/flux/:model", ihttp.DrawByDalleHandler)
 	apiWithRatelimiter.POST("/images/edit/flux/:model", ihttp.EditImageHandler)
-	// apiWithRatelimiter.POST("/images/generations/sdxl-turbo", ihttp.DrawBySdxlturboHandlerByNvidia)
+
 	apiWithRatelimiter.POST("/chat/oneshot", ihttp.OneShotChatHandler)
 	apiWithRatelimiter.POST("/files/chat", ihttp.UploadFiles)
 	grp.POST("/deepresearch", ihttp.CreateDeepResearchHandler)

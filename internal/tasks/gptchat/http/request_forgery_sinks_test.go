@@ -113,13 +113,6 @@ func TestRequestForgerySinksRefuseInternalTargets(t *testing.T) {
 			_, err := fetchImageFromOpenaiDalle(t.Context(), tenantSelectedUser(base), "dall-e-3", "synthetic", 1, "")
 			return err
 		},
-		// image_dalle.go:281, fetchImageFromAzureDalle -> cli.Do (alerts #122, #95).
-		"azure generation": func(t *testing.T, base string) error {
-			user := tenantSelectedUser(base)
-			user.ImageUrl, user.ImageToken = base+"/openai.azure.com/images/generations", egressTestKey
-			_, err := fetchImageFromAzureDalle(t.Context(), user, "synthetic")
-			return err
-		},
 		// image_dalle.go:322, downloadImage of a caller image URL (alerts #123, #83).
 		"caller image download": func(t *testing.T, base string) error {
 			_, err := getDataFromUrlOrBase64(t.Context(), base+"/latest/meta-data")

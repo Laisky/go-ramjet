@@ -53,18 +53,6 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	}
 
 	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
-	unitPrice, err := quoteGenerationImage(gmw.Ctx(ctx), user, frontendReq.Model)
-	if web.AbortErr(ctx, err) {
-		return errors.Wrap(err, "quote image price")
-	}
-	if unitPrice > 0 {
-		// Charge one image upfront; charge the rest at the same quoted rate
-		// once stored. Requests billed natively by One API skip both charges.
-		if err := checkUserExternalBilling(gmw.Ctx(ctx), user, unitPrice, "txt2image"); web.AbortErr(ctx, err) {
-			return errors.Wrap(err, "charge upfront image")
-		}
-	}
-
 	taskID := gutils.RandomStringWithLength(36)
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
@@ -73,7 +61,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	if web.AbortErr(ctx, err) {
 		return errors.Wrap(err, "generate images")
 	}
-	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, frontendReq.Model, unitPrice, frontendReq.N, taskID, prompt, imgContents)
+	imgUrls, err := storeGeneratedImages(taskCtx, frontendReq.N, taskID, prompt, imgContents)
 	if web.AbortErr(ctx, err) {
 		return errors.Wrap(err, "store images")
 	}

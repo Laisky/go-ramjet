@@ -32,11 +32,6 @@ func SetupConfig() (err error) {
 		return errors.New("openai.token is empty")
 	}
 
-	// if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
-	// 	return errors.New("external_billing_token should not be empty " +
-	// 		"if external_billing_api is set")
-	// }
-
 	// fill default
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
 	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
@@ -52,10 +47,9 @@ func SetupConfig() (err error) {
 	// 	&Config.DefaultImageTokenType, ImageTokenOpenai)
 	Config.API = trimUrl(gutils.OptionalVal(
 		&Config.API, "https://api.openai.com"))
+	Config.OneAPIBase = trimUrl(gutils.OptionalVal(&Config.OneAPIBase, DefaultOneAPIBase))
 	Config.DefaultImageUrl = trimUrl(gutils.OptionalVal(
 		&Config.DefaultImageUrl, Config.API+"/v1/images/generations"))
-	Config.ExternalBillingAPI = trimUrl(gutils.OptionalVal(
-		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
 	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet-memory"))
@@ -104,6 +98,12 @@ func SetupConfig() (err error) {
 		&Config.Voice.Plugin, VoicePluginRealtime)))
 	Config.Voice.RealtimeModel = strings.TrimSpace(gutils.OptionalVal(
 		&Config.Voice.RealtimeModel, DefaultVoiceRealtimeModel))
+	Config.Voice.SpeechModel = strings.TrimSpace(Config.Voice.SpeechModel)
+	Config.Voice.SpeechModel = gutils.OptionalVal(
+		&Config.Voice.SpeechModel, DefaultVoiceSpeechModel)
+	Config.Voice.SpeechVoice = strings.TrimSpace(Config.Voice.SpeechVoice)
+	Config.Voice.SpeechVoice = gutils.OptionalVal(
+		&Config.Voice.SpeechVoice, DefaultVoiceSpeechVoice)
 	switch Config.Voice.Plugin {
 	case VoicePluginRealtime, VoicePluginWhisper:
 	default:
@@ -113,7 +113,6 @@ func SetupConfig() (err error) {
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
-	Config.ExternalBillingAPI = strings.TrimRight(Config.ExternalBillingAPI, "/")
 	Config.RamjetURL = strings.TrimRight(Config.RamjetURL, "/")
 
 	if Config.MemoryProject == "" {
@@ -168,6 +167,9 @@ func trimUrl(url string) string {
 	return strings.TrimRight(strings.TrimSpace(url), "/")
 }
 
+// DefaultOneAPIBase is the operator-owned One API inference endpoint.
+const DefaultOneAPIBase = "https://oneapi.laisky.com"
+
 // Voice plugin identifiers supported by the web client.
 const (
 	// VoicePluginRealtime is the live speech-to-speech call implementation.
@@ -176,6 +178,10 @@ const (
 	VoicePluginWhisper = "whisper"
 	// DefaultVoiceRealtimeModel is used when no realtime model is configured.
 	DefaultVoiceRealtimeModel = "gpt-realtime-2.1-mini"
+	// DefaultVoiceSpeechModel is the default WAV-capable One API speech model.
+	DefaultVoiceSpeechModel = "tts-1"
+	// DefaultVoiceSpeechVoice is the default voice for the legacy WAV endpoint.
+	DefaultVoiceSpeechVoice = "alloy"
 )
 
 // VoiceConfig controls which audio implementation the web client uses.
@@ -186,6 +192,10 @@ type VoiceConfig struct {
 	// RealtimeModel (optional) model used for realtime voice calls.
 	// Default is gpt-realtime-2.1-mini.
 	RealtimeModel string `json:"realtime_model" mapstructure:"realtime_model"`
+	// SpeechModel (optional) is the upstream audio/speech model for WAV playback.
+	SpeechModel string `json:"-" mapstructure:"speech_model"`
+	// SpeechVoice (optional) is the voice name accepted by SpeechModel.
+	SpeechVoice string `json:"-" mapstructure:"speech_voice"`
 }
 
 // OpenAI openai config
@@ -196,6 +206,8 @@ type OpenAI struct {
 	Gateway string `json:"gateway" mapstructure:"gateway"`
 	// API (optional) openai api base url, default is https://api.openai.com
 	API string `json:"api" mapstructure:"api"`
+	// OneAPIBase defines the deployment allowed to receive managed media requests.
+	OneAPIBase string `json:"-" mapstructure:"one_api_base"`
 	// Token (required) openai api request token
 	Token string `json:"-" mapstructure:"token"`
 	// DefaultOpenaiToken (optional) default openai token, default equals to token
@@ -236,23 +248,10 @@ type OpenAI struct {
 	// The audio implementation is an operational choice, not a per-user preference,
 	// so it is configured here rather than offered in the web UI.
 	Voice VoiceConfig `json:"voice" mapstructure:"voice"`
-	// ExternalBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
-	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
-	// ExternalBillingToken (optional) default billing token
-	// ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
 	// RamjetURL (optional) ramjet url
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
-	S3           s3Config `json:"s3" mapstructure:"s3"`
-	NvidiaApikey string   `json:"-"  mapstructure:"nvidia_apikey"`
-	// ReplicateApikey is the api key for flux pro
-	//
-	// https://replicate.com/account/api-tokens
-	ReplicateApikey string `json:"-" mapstructure:"replicate_apikey"`
-	// SegmindApikey is the api key for segmind
-	//
-	// https://cloud.segmind.com/console/api-keys
-	SegmindApikey string `json:"-" mapstructure:"segmind_apikey"`
+	S3 s3Config `json:"s3" mapstructure:"s3"`
 
 	// PaymentStripeKey (optional) stripe key
 	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`
@@ -282,9 +281,6 @@ type OpenAI struct {
 	AgentLoop *AgentLoopConfig `json:"agent_loop" mapstructure:"agent_loop"`
 	// WebFetch configures markdown-oriented web fetch proxy providers.
 	WebFetch WebFetchConfig `json:"web_fetch" mapstructure:"web_fetch"`
-
-	// Azure (optional) azure config
-	Azure azureConfig `json:"azure" mapstructure:"azure"`
 }
 
 // AgentLoopConfig captures the per-server runtime knobs for the Phase 1
@@ -415,13 +411,6 @@ type FirecrawlWebFetchProxyConfig struct {
 	Priority *int `json:"priority,omitempty" mapstructure:"priority"`
 }
 
-type azureConfig struct {
-	// TTSKey (optional) tts key
-	TTSKey string `json:"tts_key" mapstructure:"tts_key"`
-	// TTSRegion (optional) tts region
-	TTSRegion string `json:"tts_region" mapstructure:"tts_region"`
-}
-
 type qaChatModel struct {
 	Name    string `json:"name"    mapstructure:"name"`
 	URL     string `json:"url"     mapstructure:"url"`
@@ -491,10 +480,6 @@ type UserConfig struct {
 
 	// LimitPromptTokenLength (optional) set limit for prompt token length, <=0 means no limit
 	LimitPromptTokenLength int `json:"limit_prompt_token_length" mapstructure:"limit_prompt_token_length"`
-	// EnableExternalImageBilling (optional) enable external image billing
-	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
-	// ExternalImageBillingUID (optional) external image billing uid
-	// ExternalImageBillingUID string `json:"external_image_billing_uid" mapstructure:"external_image_billing_uid"`
 }
 
 // Valid valid and fill default values
@@ -506,17 +491,6 @@ func (c *UserConfig) Valid() error {
 	if c.UserName == "" {
 		hashed := sha256.Sum256([]byte(c.Token))
 		c.UserName = hex.EncodeToString(hashed[:])[:16]
-	}
-
-	if c.EnableExternalImageBilling {
-		// if !strings.HasPrefix(c.OpenaiToken, "laisky-") {
-		// 	return errors.Errorf("%q's openai_token should start with `laisky-` "+
-		// 		"if enable_external_image_billing is true", c.UserName)
-
-		// if c.ExternalImageBillingUID == "" {
-		// 	return errors.Errorf("%q's external_image_billing_uid should not be empty "+
-		// 		"if enable_external_image_billing is true", c.UserName)
-		// }
 	}
 
 	// fill default

@@ -27,12 +27,11 @@ func newAuthContext(token string) *gin.Context {
 // set up a minimal global config with distinct default image token
 func setupTestConfig() {
 	config.Config = &config.OpenAI{
-		Token:              "SERVER_OPENAI_TOKEN",
-		DefaultImageToken:  "SERVER_IMAGE_TOKEN",
-		API:                "https://api.openai.com",
-		DefaultImageUrl:    "https://api.openai.com/v1/images/generations",
-		ExternalBillingAPI: "https://oneapi.laisky.com",
-		RamjetURL:          "https://app.laisky.com",
+		Token:             "SERVER_OPENAI_TOKEN",
+		DefaultImageToken: "SERVER_IMAGE_TOKEN",
+		API:               "https://api.openai.com",
+		DefaultImageUrl:   "https://api.openai.com/v1/images/generations",
+		RamjetURL:         "https://app.laisky.com",
 		UserTokens: []*config.UserConfig{
 			{
 				Token:         config.FreetierUserToken,
