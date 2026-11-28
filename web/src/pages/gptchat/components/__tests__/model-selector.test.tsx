@@ -31,6 +31,7 @@ describe('ModelSelector availability states', () => {
       .getByText(otherModel)
       .closest('[role="menuitem"]')
     expect(disallowedItem).toHaveAttribute('data-disabled')
+    expect(disallowedItem).toHaveTextContent('Unavailable')
 
     await user.click(screen.getByText(otherModel))
     expect(onModelChange).not.toHaveBeenCalled()

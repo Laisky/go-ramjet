@@ -65,7 +65,7 @@ func TestEditImageHandlerFetchesOnlyOneImage(t *testing.T) {
 	EditImageHandler(gctx)
 	require.Equal(t, http.StatusOK, gctx.Writer.Status())
 	require.Equal(t, 1, f.delivered())
-	require.Equal(t, int64(GetImageModelPrice("gpt-image-1")), f.totalCharged())
+	require.Equal(t, int64(5500), f.totalCharged())
 	require.LessOrEqual(t, downloads.Load(), int32(1), "surplus edited images were downloaded")
 }
 
@@ -139,7 +139,7 @@ func TestDrawByDalleHandlerUndeliveredImagesStayUnguessable(t *testing.T) {
 
 	DrawByDalleHandler(gctx)
 	require.Equal(t, http.StatusOK, gctx.Writer.Status())
-	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
+	require.Equal(t, int64(15500), f.totalCharged())
 	require.Equal(t, 3, f.stored(), "images are stored before the extra charge")
 
 	urls := f.deliveredURLs()
@@ -178,7 +178,7 @@ func TestImageResponseCapToleratesSurplusEntries(t *testing.T) {
 
 	require.NoError(t, sendChatImageGeneration(gctx, imageCountTestRequest(1), billedImageUser(false)))
 	require.Equal(t, 1, f.delivered())
-	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
+	require.Equal(t, int64(15500), f.totalCharged())
 }
 
 // TestImageResponseAllowanceFitsLargestImage verifies the per-image answer allowance
@@ -270,9 +270,8 @@ func TestDrawByDalleHandlerCurrentModelTariffs(t *testing.T) {
 	}{
 		{"black-forest-labs/flux-2-dev", 6000},
 		{"black-forest-labs/flux-dev", 12500},
-		{"gpt-image-2.6-flare", 20000},
-		{"gpt-image-2.6-sunburst", 20000},
-		{"gpt-image-2.5-flare", 20000},
+		{"flux-dev", 12500},
+		{"dall-e-3", 15500},
 	} {
 		t.Run(tt.model, func(t *testing.T) {
 			f := &imageBillingFixture{produced: 1}
@@ -301,6 +300,75 @@ func TestDrawByDalleHandlerCurrentModelTariffs(t *testing.T) {
 			require.Equal(t, tt.model, requestModel.Load())
 			require.Equal(t, 1, f.delivered())
 			require.Equal(t, tt.cost, f.totalCharged())
+		})
+	}
+}
+
+// TestDrawByDalleHandlerDelegatesTokenBilling verifies that the legacy external
+// billing option cannot add a local charge to a native One API inference.
+func TestDrawByDalleHandlerDelegatesTokenBilling(t *testing.T) {
+	f := &imageBillingFixture{produced: 1}
+	gctx := f.install(t)
+	relay := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/images/generations" {
+			t.Errorf("unexpected relay operation: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected operation", http.StatusBadRequest)
+			return
+		}
+		f.handler(w, r)
+	}))
+	t.Cleanup(relay.Close)
+	httpcli = relay.Client()
+	config.Config.ExternalBillingAPI = relay.URL
+	user := billedImageUser(false)
+	user.APIBase = relay.URL
+	gctx.Set(ctxKeyUser, user)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations", strings.NewReader(
+		`{"model":"gpt-image-2.6-sunburst","prompt":"draw a tree","n":1}`))
+	gctx.Request.Header.Set("Content-Type", "application/json")
+
+	DrawByDalleHandler(gctx)
+	require.Equal(t, http.StatusOK, gctx.Writer.Status())
+	require.Equal(t, 1, f.delivered())
+	require.Zero(t, f.totalCharged())
+}
+
+// TestDrawByDalleHandlerRequiresPublishedPrice ensures unknown and ambiguous
+// direct-provider prices do not charge the account or invoke the image provider.
+func TestDrawByDalleHandlerRequiresPublishedPrice(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"token price only", `{"success":true,"data":{"a":{"models":{"gpt-image-2.6-sunburst":{"output_price":30}}}}}`},
+		{"ambiguous", `{"success":true,"data":{"a":{"models":{"gpt-image-2.6-sunburst":{"image_price":0.01}}},"b":{"models":{"gpt-image-2.6-sunburst":{"image_price":0.02}}}}}`},
+		{"unavailable", `{"success":false,"data":{}}`},
+		{"malformed", `{"success":true,"data":`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &imageBillingFixture{produced: 1}
+			gctx := f.install(t)
+			var generated atomic.Int32
+			f.override = func(w http.ResponseWriter, r *http.Request) bool {
+				if r.URL.Path == "/api/models/display" {
+					f.writeBody(w, []byte(tc.body))
+					return true
+				}
+				if r.URL.Path == "/v1/images/generations" {
+					generated.Add(1)
+				}
+				return false
+			}
+			gctx.Set(ctxKeyUser, billedImageUser(false))
+			gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations", strings.NewReader(
+				`{"model":"gpt-image-2.6-sunburst","prompt":"draw a tree","n":1}`))
+			gctx.Request.Header.Set("Content-Type", "application/json")
+
+			DrawByDalleHandler(gctx)
+			require.GreaterOrEqual(t, gctx.Writer.Status(), http.StatusBadRequest)
+			require.Zero(t, generated.Load())
+			require.Zero(t, f.totalCharged())
+			require.Zero(t, f.delivered())
 		})
 	}
 }

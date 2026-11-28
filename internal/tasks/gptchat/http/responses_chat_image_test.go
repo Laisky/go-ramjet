@@ -147,6 +147,20 @@ func (f *imageBillingFixture) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
+	case "/api/models/display":
+		if r.Method != http.MethodGet || r.Header.Get("Authorization") != "" {
+			http.Error(w, "catalog must be read without user credentials", http.StatusBadRequest)
+			return
+		}
+		f.writeJSON(w, map[string]any{"success": true, "data": map[string]any{
+			"fixture": map[string]any{"models": map[string]any{
+				"dall-e-3":                     map[string]any{"image_price": 0.031},
+				"gpt-image-1":                  map[string]any{"image_price": 0.011},
+				"black-forest-labs/flux-2-dev": map[string]any{"image_price": 0.012},
+				"black-forest-labs/flux-dev":   map[string]any{"image_price": 0.025},
+				"gpt-image-2.6-flare":          map[string]any{"image_price": 0.019},
+			}},
+		}})
 	case "/api/token/consume":
 		var usage struct {
 			Cost int64 `json:"add_used_quota"`
@@ -308,7 +322,7 @@ func TestSendChatImageGenerationBillsDeliveredImages(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), f.totalCharged())
+			require.Equal(t, int64(15500)*int64(tc.billed), f.totalCharged())
 			require.Equal(t, tc.delivered, f.delivered())
 		})
 	}
@@ -333,7 +347,7 @@ func TestDrawByDalleHandlerBillsDeliveredImages(t *testing.T) {
 			} else {
 				require.Equal(t, http.StatusOK, gctx.Writer.Status())
 			}
-			require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*int64(tc.billed), f.totalCharged())
+			require.Equal(t, int64(15500)*int64(tc.billed), f.totalCharged())
 			require.Equal(t, tc.delivered, f.delivered())
 		})
 	}
@@ -403,6 +417,6 @@ func TestDrawByDalleHandlerFetchesOnlyRequestedImages(t *testing.T) {
 
 	DrawByDalleHandler(gctx)
 	require.Equal(t, requested, f.delivered())
-	require.Equal(t, int64(GetImageModelPrice("dall-e-3"))*requested, f.totalCharged())
+	require.Equal(t, int64(15500)*requested, f.totalCharged())
 	require.LessOrEqual(t, downloads.Load(), int32(requested), "surplus upstream images were downloaded")
 }

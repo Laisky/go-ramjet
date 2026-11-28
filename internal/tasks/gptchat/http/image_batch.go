@@ -38,13 +38,6 @@ func normalizeImageCount(n int, isFree bool) int {
 // tests can observe delivered images without an object store.
 var uploadGeneratedImage = uploadImage2Minio
 
-// imageBatchPrice returns the charge for n images of model. Image prices are per
-// image (db.PriceTxt2Image is one DALL-E image, and Flux bills every generated
-// image), so the charge scales with n.
-func imageBatchPrice(model string, n int) db.Price {
-	return GetImageModelPrice(model) * db.Price(n)
-}
-
 // chargeExtraImages settles a DALL-E request's charge once its images are stored.
 // One image is charged upfront, which doubles as the balance probe; this charges
 // the remaining stored images in one call.
@@ -52,19 +45,20 @@ func imageBatchPrice(model string, n int) db.Price {
 // Parameters:
 //   - ctx: Request context carrying the request logger.
 //   - user: User being billed.
-//   - model: Image model, which selects the per-image price.
+//   - model: Image model, used for billing diagnostics.
+//   - unitPrice: Per-image quote in One API quota units; zero skips external billing.
 //   - stored: Number of images stored for the client.
 //
 // It returns how many of the stored images may be delivered: all of them, or only
 // the prepaid first one when the charge for the others fails. That failure is
 // logged once at error level; like Flux, unbilled images are never exposed.
-func chargeExtraImages(ctx context.Context, user *config.UserConfig, model string, stored int) int {
+func chargeExtraImages(ctx context.Context, user *config.UserConfig, model string, unitPrice db.Price, stored int) int {
 	extra := stored - 1
-	if !user.EnableExternalImageBilling || extra <= 0 {
+	if unitPrice <= 0 || extra <= 0 {
 		return stored
 	}
 
-	if err := checkUserExternalBilling(ctx, user, imageBatchPrice(model, extra), "txt2image"); err != nil {
+	if err := checkUserExternalBilling(ctx, user, unitPrice*db.Price(extra), "txt2image"); err != nil {
 		gmw.GetLogger(ctx).Error("charge for extra generated images failed; delivering only the prepaid image",
 			zap.String("model", model), zap.Int("stored", stored), zap.Error(err))
 		return 1
@@ -101,7 +95,8 @@ func generatedImageURL(key string) string {
 //   - ctx: Request context used for billing; it carries the request logger.
 //   - taskCtx: Context bounding the uploads.
 //   - user: User being billed.
-//   - model: Image model, which selects the per-image price.
+//   - model: Image model, used for billing diagnostics.
+//   - unitPrice: Per-image quote in One API quota units; zero skips external billing.
 //   - n: Normalized number of requested images; never more are stored.
 //   - taskID: Task whose key prefix the objects share.
 //   - prompt: Prompt stored as object metadata.
@@ -111,7 +106,7 @@ func generatedImageURL(key string) string {
 // when the charge for the others fails. It returns an error when a key cannot be
 // generated or an upload fails; nothing beyond the upfront charge is billed then.
 func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
-	model string, n int, taskID, prompt string, imgs [][]byte) ([]string, error) {
+	model string, unitPrice db.Price, n int, taskID, prompt string, imgs [][]byte) ([]string, error) {
 	if len(imgs) > n {
 		imgs = imgs[:n]
 	}
@@ -135,7 +130,7 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 		return nil, errors.Wrap(err, "upload images")
 	}
 
-	keys = keys[:chargeExtraImages(ctx, user, model, len(keys))]
+	keys = keys[:chargeExtraImages(ctx, user, model, unitPrice, len(keys))]
 	urls := make([]string, len(keys))
 	for i, key := range keys {
 		urls[i] = generatedImageURL(key)

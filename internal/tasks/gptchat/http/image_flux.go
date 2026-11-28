@@ -58,23 +58,9 @@ func InpaitingByFlux(ctx *gin.Context) {
 }
 
 func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, req any) {
-	var price db.Price
 	imgExt := ".png"
 	switch model {
-	case "flux-dev":
-		price = db.PriceTxt2ImageFluxDev
-	case "flux-schnell":
-		price = db.PriceTxt2ImageSchnell
-	case "flux-pro":
-		price = db.PriceTxt2ImageFluxPro
-	case "flux-fill-pro":
-		price = db.PriceTxt2ImageFluxFillPro
-	case "flux-1.1-pro":
-		price = db.PriceTxt2ImageFluxPro11
-	case "flux-kontext-pro":
-		price = db.PriceTxt2ImageFluxKontextPro
-	case "flux-1.1-pro-ultra":
-		price = db.PriceTxt2ImageFluxProUltra11
+	case "flux-dev", "flux-schnell", "flux-pro", "flux-fill-pro", "flux-1.1-pro", "flux-kontext-pro", "flux-1.1-pro-ultra":
 	default:
 		web.AbortErr(ctx, errors.Errorf("unknown model %q", model))
 		return
@@ -96,6 +82,11 @@ func replicateFluxHandler(ctx *gin.Context, nImage int, model, prompt string, re
 	if err = IsModelAllowed(ctx, user, &FrontendReq{
 		N:     nImage,
 		Model: model}); web.AbortErr(ctx, err) {
+		return
+	}
+
+	price, err := oneAPIImagePrice(gmw.Ctx(ctx), model)
+	if web.AbortErr(ctx, err) {
 		return
 	}
 

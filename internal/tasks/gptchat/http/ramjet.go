@@ -143,7 +143,8 @@ func isOneAPIModelListRequest(req *http.Request) bool {
 	return path == "v1/models"
 }
 
-// filterOneAPIModelListPayloadByUser filters OneAPI /v1/models payload by user allowlist.
+// filterOneAPIModelListPayloadByUser preserves full One API discovery for free-tier users.
+// Access to inference is not granted by discovery; usage limits remain separate.
 //
 // Parameters:
 //   - user: Current resolved user.
@@ -155,7 +156,7 @@ func isOneAPIModelListRequest(req *http.Request) bool {
 //   - int: Number of models before filtering.
 //   - error: Non-nil when payload cannot be parsed for filtering.
 func filterOneAPIModelListPayloadByUser(user *config.UserConfig, payload []byte) ([]byte, int, int, error) {
-	if user == nil || user.BYOK || len(user.AllowedModels) == 0 || slices.Contains(user.AllowedModels, "*") {
+	if user == nil || user.IsFree || user.BYOK || len(user.AllowedModels) == 0 || slices.Contains(user.AllowedModels, "*") {
 		modelsCnt, err := countOneAPIModels(payload)
 		if err != nil {
 			return payload, 0, 0, errors.Wrap(err, "count oneapi models")
@@ -326,38 +327,20 @@ func setUserAuth(gctx *gin.Context, req *http.Request) error {
 	// golang's http client will not auto decompress response body
 	req.Header.Del("Accept-Encoding")
 
-	// set token
-	var (
-		cost       db.Price
-		costReason string
-	)
-	{
-		token := user.OpenaiToken
-
-		// generate image need special token
-		if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
-			cost = db.PriceTxt2Image
-			costReason = "txt2image"
-			if subtle.ConstantTimeCompare([]byte(user.ImageToken), []byte(token)) != 1 {
-				return errors.New("Ramjet requires matching caller-owned image credentials")
-			}
-			token = user.ImageToken
-			model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
-			if err = IsModelAllowed(gctx, user, &FrontendReq{
-				Model: model,
-			}); err != nil {
-				return errors.Wrapf(err, "check model %q", model)
-			}
+	token := user.OpenaiToken
+	if strings.HasPrefix(req.URL.Path, "/gptchat/image/") {
+		if subtle.ConstantTimeCompare([]byte(user.ImageToken), []byte(token)) != 1 {
+			return errors.New("Ramjet requires matching caller-owned image credentials")
 		}
-
-		req.Header.Set("Authorization", token)
-	}
-
-	if user.EnableExternalImageBilling {
-		if err := checkUserExternalBilling(gmw.Ctx(gctx), user, cost, costReason); err != nil {
-			return errors.Wrapf(err, "check quota for user %q", user.UserName)
+		token = user.ImageToken
+		model := "image-" + strings.TrimPrefix(req.URL.Path, "/gptchat/image/")
+		if err = IsModelAllowed(gctx, user, &FrontendReq{Model: model}); err != nil {
+			return errors.Wrapf(err, "check model %q", model)
 		}
 	}
+	// Ramjet accepts only caller-owned keys. Inference, including billing,
+	// stays on the API selected by the caller.
+	req.Header.Set("Authorization", token)
 
 	return nil
 }

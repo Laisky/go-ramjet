@@ -20,7 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	s3lib "github.com/Laisky/go-ramjet/library/s3"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -70,11 +69,14 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.EnableExternalImageBilling {
-		// Charge one image upfront as the balance probe; storeAndBillImages charges
-		// the rest once they are stored.
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
+	unitPrice, err := quoteGenerationImage(gmw.Ctx(ctx), user, req.Model)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+	if unitPrice > 0 {
+		// Charge one image upfront; charge the rest at the same quoted rate
+		// once stored. Requests billed natively by One API skip both charges.
+		if err := checkUserExternalBilling(gmw.Ctx(ctx), user, unitPrice, "txt2image"); web.AbortErr(ctx, err) {
 			return
 		}
 	}
@@ -87,7 +89,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if web.AbortErr(ctx, err) {
 		return
 	}
-	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, req.N, taskID, req.Prompt, imgContents)
+	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, unitPrice, req.N, taskID, req.Prompt, imgContents)
 	if err != nil {
 		// upload error msg
 		msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
@@ -360,14 +362,12 @@ func EditImageHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.EnableExternalImageBilling {
-		price := GetImageModelPrice(req.Model)
-		if req.Model == "flux-fill-pro" || req.Model == "black-forest-labs/flux-fill-pro" {
-			price = db.PriceTxt2ImageFluxFillPro
-		}
-
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, price, "image-edit"); web.AbortErr(ctx, err) {
+	unitPrice, err := quoteExternalImage(gmw.Ctx(ctx), user, req.Model, false)
+	if web.AbortErr(ctx, err) {
+		return
+	}
+	if unitPrice > 0 {
+		if err := checkUserExternalBilling(gmw.Ctx(ctx), user, unitPrice, "image-edit"); web.AbortErr(ctx, err) {
 			return
 		}
 	}

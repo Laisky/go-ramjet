@@ -43,11 +43,26 @@ func TestIsOneAPIModelListRequest(t *testing.T) {
 	})
 }
 
-// TestFilterOneAPIModelListPayloadByUser ensures free users only receive allowlisted models.
+// TestFilterOneAPIModelListPayloadByUser separates public model discovery from usage restrictions.
 func TestFilterOneAPIModelListPayloadByUser(t *testing.T) {
 	t.Parallel()
 
 	payload := []byte(`{"object":"list","data":[{"id":"gpt-5"},{"id":"gpt-4o-mini"},{"id":"claude-4-sonnet"}]}`)
+
+	t.Run("free user sees full upstream catalog with a narrow usage allowlist", func(t *testing.T) {
+		t.Parallel()
+
+		user := &config.UserConfig{
+			IsFree:        true,
+			AllowedModels: []string{"gpt-4o-mini"},
+		}
+		filtered, filteredCnt, upstreamCnt, err := filterOneAPIModelListPayloadByUser(user, payload)
+		require.NoError(t, err)
+		require.Equal(t, 3, upstreamCnt)
+		require.Equal(t, 3, filteredCnt)
+		require.Equal(t, payload, filtered)
+		require.Equal(t, []string{"gpt-4o-mini"}, user.AllowedModels)
+	})
 
 	t.Run("restricted user gets filtered model list", func(t *testing.T) {
 		t.Parallel()

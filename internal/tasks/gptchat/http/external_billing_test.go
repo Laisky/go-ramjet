@@ -97,9 +97,9 @@ func TestExternalBillingUsage(t *testing.T) {
 			})
 			user := &config.UserConfig{OpenaiToken: "fixture-token"}
 			if tc.legacy {
-				require.NoError(t, checkUserExternalBilling(ctx, user, db.PriceTxt2ImageFluxDev, "txt2image:flux-dev"))
+				require.NoError(t, checkUserExternalBilling(ctx, user, db.Price(12500), "txt2image:flux-dev"))
 			} else {
-				require.NoError(t, checkUserExternalBillingWithElapsed(ctx, user, db.PriceTxt2ImageFluxDev, "txt2image:flux-dev", tc.elapsed))
+				require.NoError(t, checkUserExternalBillingWithElapsed(ctx, user, db.Price(12500), "txt2image:flux-dev", tc.elapsed))
 			}
 			require.Equal(t, 1, calls)
 			require.True(t, body.closed)
@@ -195,7 +195,7 @@ func TestFluxGenerationBilling(t *testing.T) {
 					require.Equal(t, []string{"api.replicate.com", "replicate.invalid", "image.invalid", "billing.invalid"}, requests)
 					var usage externalBillingUsage
 					require.NoError(t, json.NewDecoder(req.Body).Decode(&usage))
-					require.Equal(t, db.PriceTxt2ImageFluxDev, usage.Cost)
+					require.Equal(t, db.Price(12500), usage.Cost)
 					require.Equal(t, "txt2image:flux-dev", usage.Reason)
 					require.NotNil(t, usage.ElapsedTimeMS)
 					require.GreaterOrEqual(t, *usage.ElapsedTimeMS, int64(5))
@@ -212,7 +212,7 @@ func TestFluxGenerationBilling(t *testing.T) {
 			if tc.inpaint {
 				request = &InpaintingImageByFlusReplicateRequest{}
 			}
-			img, err := generateAndBillFluxImage(ctx, &config.UserConfig{}, "flux-dev", db.PriceTxt2ImageFluxDev, request)
+			img, err := generateAndBillFluxImage(ctx, &config.UserConfig{}, "flux-dev", db.Price(12500), request)
 			switch {
 			case tc.generationFails:
 				require.ErrorContains(t, err, "generation rejected")
