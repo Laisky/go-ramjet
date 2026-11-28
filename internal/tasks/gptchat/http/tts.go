@@ -28,6 +28,7 @@ const (
 // TTSHanler serves the legacy GPTChat GET contract and returns a WAV response
 // synthesized by the configured OpenAI-compatible upstream.
 func TTSHanler(gctx *gin.Context) {
+	setNoStoreHeaders(gctx)
 	user, err := getUserByToken(gctx, gctx.Query("apikey"))
 	if web.AbortErr(gctx, errors.Wrap(err, "authenticate speech request")) {
 		return
@@ -74,7 +75,6 @@ func TTSHanler(gctx *gin.Context) {
 		gctx.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": "Speech upstream did not return bounded WAV audio"})
 		return
 	}
-	setNoStoreHeaders(gctx)
 	gctx.Data(http.StatusOK, "audio/wav", body)
 }
 

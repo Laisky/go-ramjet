@@ -194,7 +194,7 @@ func TestEditImageHandlerDelegatesInference(t *testing.T) {
 			EditImageHandler(gctx)
 
 			require.Equal(t, http.StatusOK, gctx.Writer.Status())
-			require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.auth)
+			require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.authorizations())
 			require.Equal(t, 1, f.delivered())
 			require.Equal(t, 1, f.stored())
 		})
@@ -243,7 +243,7 @@ func TestManagedMediaUsesDeclaredOneAPI(t *testing.T) {
 	images, err := generateImages(gctx, user, "dall-e-3", "draw a tree", 1, "")
 	require.NoError(t, err)
 	require.Len(t, images, 1)
-	require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.auth)
+	require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.authorizations())
 	require.Zero(t, alternateCalls.Load())
 
 	user.APIBase = alternate.URL
@@ -252,5 +252,5 @@ func TestManagedMediaUsesDeclaredOneAPI(t *testing.T) {
 	_, err = requestSpeech(gctx, user, "hello")
 	require.ErrorContains(t, err, "requires the configured One API endpoint")
 	require.Zero(t, alternateCalls.Load())
-	require.Len(t, f.auth, 1)
+	require.Len(t, f.authorizations(), 1)
 }

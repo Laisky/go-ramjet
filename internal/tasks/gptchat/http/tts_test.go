@@ -75,6 +75,7 @@ func TestSpeechDelegatesInference(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 			require.Equal(t, "audio/wav", recorder.Header().Get("Content-Type"))
+			require.Contains(t, recorder.Header().Get("Cache-Control"), "no-store")
 			require.Equal(t, fixtureWAV, recorder.Body.String())
 			require.EqualValues(t, 1, calls.Load())
 		})

@@ -163,6 +163,13 @@ func (f *imageInferenceFixture) writeBody(w http.ResponseWriter, body []byte) {
 	}
 }
 
+// authorizations returns a snapshot of the fixture upstream credentials.
+func (f *imageInferenceFixture) authorizations() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.auth)
+}
+
 // stored returns how many images were uploaded to the object store.
 func (f *imageInferenceFixture) stored() int {
 	f.mu.Lock()
@@ -261,7 +268,7 @@ func TestSendChatImageGenerationDelegatesBilling(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.Equal(t, tc.delivered, f.delivered())
-			require.Equal(t, []string{"Bearer " + inferenceImageUser(tc.free).OpenaiToken}, f.auth)
+			require.Equal(t, []string{"Bearer " + inferenceImageUser(tc.free).OpenaiToken}, f.authorizations())
 		})
 	}
 }
@@ -285,7 +292,7 @@ func TestDrawByDalleHandlerDelegatesBilling(t *testing.T) {
 				require.Equal(t, http.StatusOK, gctx.Writer.Status())
 			}
 			require.Equal(t, tc.delivered, f.delivered())
-			require.Equal(t, []string{"Bearer " + inferenceImageUser(tc.free).OpenaiToken}, f.auth)
+			require.Equal(t, []string{"Bearer " + inferenceImageUser(tc.free).OpenaiToken}, f.authorizations())
 		})
 	}
 }
