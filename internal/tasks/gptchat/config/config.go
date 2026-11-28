@@ -43,8 +43,6 @@ func SetupConfig() (err error) {
 		gutils.OptionalVal(&Config.RateLimiterBackend, "redis")))
 	Config.DefaultImageToken = gutils.OptionalVal(
 		&Config.DefaultImageToken, Config.Token)
-	// Config.DefaultImageTokenType = gutils.OptionalVal(
-	// 	&Config.DefaultImageTokenType, ImageTokenOpenai)
 	Config.API = trimUrl(gutils.OptionalVal(
 		&Config.API, "https://api.openai.com"))
 	Config.OneAPIBase = trimUrl(gutils.OptionalVal(&Config.OneAPIBase, DefaultOneAPIBase))
@@ -216,9 +214,6 @@ type OpenAI struct {
 	// DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
 	// DefaultImageToken (optional) default image token, default equals to token
 	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
-
-	// DefaultImageTokenType (optional) default image token type, default is openai
-	// DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
 
 	// DefaultImageUrl (optional) default image url
 	//
@@ -424,20 +419,6 @@ type s3Config struct {
 	AccessKey string `json:"-"         mapstructure:"access_key"`
 }
 
-// ImageTokenType image token type
-type ImageTokenType string
-
-func (t ImageTokenType) String() string {
-	return string(t)
-}
-
-const (
-	// ImageTokenAzure azure image token
-	ImageTokenAzure ImageTokenType = "azure"
-	// ImageTokenOpenai openai image token
-	ImageTokenOpenai ImageTokenType = "openai"
-)
-
 // UserConfig user config
 type UserConfig struct {
 	UserName string `json:"username" mapstructure:"username"`
@@ -450,9 +431,6 @@ type UserConfig struct {
 	ImageToken string `json:"-" mapstructure:"image_token"`
 	// ImageUrl (optional) image url, default is global default image url
 	ImageUrl string `json:"-" mapstructure:"image_url"`
-
-	// ImageTokenType (optional) token type, default is global default image token type
-	// ImageTokenType `json:"-" mapstructure:"image_token_type"`
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
@@ -501,7 +479,6 @@ func (c *UserConfig) Valid() error {
 	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
 	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
 	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
-	// c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
 	c.ImageUrl = gutils.OptionalVal(&c.ImageUrl, Config.DefaultImageUrl)
 
 	// format normalize

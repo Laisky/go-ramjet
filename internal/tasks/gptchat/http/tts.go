@@ -33,6 +33,10 @@ func TTSHanler(gctx *gin.Context) {
 	if web.AbortErr(gctx, errors.Wrap(err, "authenticate speech request")) {
 		return
 	}
+	if user.BYOK && gctx.GetHeader("X-Laisky-Api-Base") != "" && !user.APIBaseUserSelected {
+		gctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "A valid caller-selected provider is required"})
+		return
+	}
 
 	// Gin already unescapes the query value. Do not decode it a second time:
 	// a literal % or + is valid text and must reach the speech provider intact.

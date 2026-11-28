@@ -140,7 +140,6 @@ SWITCH_FOR_USER:
 			// Keep the caller's key for the separate legacy Ramjet media path.
 			ImageToken: userToken,
 			BYOK:       true, // mark as bring-your-own-key for rate limiting & auditing logic
-			// ImageTokenType:         config.Config.DefaultImageTokenType,
 			// ImageUrl:               config.Config.DefaultImageUrl,
 			AllowedModels:          []string{"*"},
 			NoLimitExpensiveModels: true,
