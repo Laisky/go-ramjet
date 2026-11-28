@@ -3,7 +3,9 @@ package config
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
+	"net/url"
 	"strings"
 
 	"github.com/Laisky/errors/v2"
@@ -28,34 +30,20 @@ func SetupConfig() (err error) {
 		return errors.Wrap(err, "unmarshal openai config")
 	}
 
-	if Config.Token == "" {
-		return errors.New("openai.token is empty")
-	}
-
-	// if Config.ExternalBillingAPI != "" && Config.ExternalBillingToken == "" {
-	// 	return errors.New("external_billing_token should not be empty " +
-	// 		"if external_billing_api is set")
-	// }
-
 	// fill default
 	Config.Gateway = gutils.OptionalVal(&Config.Gateway, "https://chat.laisky.com")
-	Config.RateLimitExpensiveModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitExpensiveModelsIntervalSeconds, 600)
+	if !gconfig.Shared.IsSet("openai.rate_limit_expensive_models_interval_secs") {
+		Config.RateLimitExpensiveModelsIntervalSeconds = 600
+	}
 	Config.ToolLoopMaxRounds = gutils.OptionalVal(&Config.ToolLoopMaxRounds, 5)
-	Config.RateLimitFreeModelsIntervalSeconds = gutils.OptionalVal(
-		&Config.RateLimitFreeModelsIntervalSeconds, 1)
+	if !gconfig.Shared.IsSet("openai.rate_limit_image_models_interval_secs") {
+		Config.RateLimitFreeModelsIntervalSeconds = 1
+	}
 	Config.RateLimiterBackend = strings.ToLower(strings.TrimSpace(
 		gutils.OptionalVal(&Config.RateLimiterBackend, "redis")))
-	Config.DefaultImageToken = gutils.OptionalVal(
-		&Config.DefaultImageToken, Config.Token)
-	// Config.DefaultImageTokenType = gutils.OptionalVal(
-	// 	&Config.DefaultImageTokenType, ImageTokenOpenai)
 	Config.API = trimUrl(gutils.OptionalVal(
 		&Config.API, "https://api.openai.com"))
-	Config.DefaultImageUrl = trimUrl(gutils.OptionalVal(
-		&Config.DefaultImageUrl, Config.API+"/v1/images/generations"))
-	Config.ExternalBillingAPI = trimUrl(gutils.OptionalVal(
-		&Config.ExternalBillingAPI, "https://oneapi.laisky.com"))
+	Config.OneAPIBase = trimUrl(gutils.OptionalVal(&Config.OneAPIBase, DefaultOneAPIBase))
 	Config.RamjetURL = trimUrl(gutils.OptionalVal(
 		&Config.RamjetURL, "https://app.laisky.com"))
 	Config.MemoryProject = strings.TrimSpace(gutils.OptionalVal(&Config.MemoryProject, "go-ramjet-memory"))
@@ -95,8 +83,6 @@ func SetupConfig() (err error) {
 	Config.WebFetch.Firecrawl.API = trimUrl(gutils.OptionalVal(
 		&Config.WebFetch.Firecrawl.API, "https://api.firecrawl.dev/v2/scrape"))
 	Config.WebFetch.Firecrawl.APIKey = strings.TrimSpace(Config.WebFetch.Firecrawl.APIKey)
-	// Config.DefaultOpenaiToken = gutils.OptionalVal(
-	// 	&Config.DefaultOpenaiToken, Config.Token)
 	Config.LimitUploadFileBytes = gutils.OptionalVal(
 		&Config.LimitUploadFileBytes, 20*1024*1024)
 
@@ -104,6 +90,12 @@ func SetupConfig() (err error) {
 		&Config.Voice.Plugin, VoicePluginRealtime)))
 	Config.Voice.RealtimeModel = strings.TrimSpace(gutils.OptionalVal(
 		&Config.Voice.RealtimeModel, DefaultVoiceRealtimeModel))
+	Config.Voice.SpeechModel = strings.TrimSpace(Config.Voice.SpeechModel)
+	Config.Voice.SpeechModel = gutils.OptionalVal(
+		&Config.Voice.SpeechModel, DefaultVoiceSpeechModel)
+	Config.Voice.SpeechVoice = strings.TrimSpace(Config.Voice.SpeechVoice)
+	Config.Voice.SpeechVoice = gutils.OptionalVal(
+		&Config.Voice.SpeechVoice, DefaultVoiceSpeechVoice)
 	switch Config.Voice.Plugin {
 	case VoicePluginRealtime, VoicePluginWhisper:
 	default:
@@ -113,7 +105,6 @@ func SetupConfig() (err error) {
 
 	// format normalize
 	Config.API = strings.TrimRight(Config.API, "/")
-	Config.ExternalBillingAPI = strings.TrimRight(Config.ExternalBillingAPI, "/")
 	Config.RamjetURL = strings.TrimRight(Config.RamjetURL, "/")
 
 	if Config.MemoryProject == "" {
@@ -142,6 +133,10 @@ func SetupConfig() (err error) {
 		return errors.New("openai.web_fetch.firecrawl.api_key is required when firecrawl is enabled")
 	}
 
+	if _, err := Config.FreeTierPolicy(); err != nil {
+		return errors.Wrap(err, "validate free-tier inference configuration")
+	}
+
 	return nil
 }
 
@@ -168,6 +163,9 @@ func trimUrl(url string) string {
 	return strings.TrimRight(strings.TrimSpace(url), "/")
 }
 
+// DefaultOneAPIBase is the operator-owned One API inference endpoint.
+const DefaultOneAPIBase = "https://oneapi.laisky.com"
+
 // Voice plugin identifiers supported by the web client.
 const (
 	// VoicePluginRealtime is the live speech-to-speech call implementation.
@@ -176,6 +174,10 @@ const (
 	VoicePluginWhisper = "whisper"
 	// DefaultVoiceRealtimeModel is used when no realtime model is configured.
 	DefaultVoiceRealtimeModel = "gpt-realtime-2.1-mini"
+	// DefaultVoiceSpeechModel is the default WAV-capable One API speech model.
+	DefaultVoiceSpeechModel = "tts-1"
+	// DefaultVoiceSpeechVoice is the default voice for the legacy WAV endpoint.
+	DefaultVoiceSpeechVoice = "alloy"
 )
 
 // VoiceConfig controls which audio implementation the web client uses.
@@ -186,6 +188,10 @@ type VoiceConfig struct {
 	// RealtimeModel (optional) model used for realtime voice calls.
 	// Default is gpt-realtime-2.1-mini.
 	RealtimeModel string `json:"realtime_model" mapstructure:"realtime_model"`
+	// SpeechModel (optional) is the upstream audio/speech model for WAV playback.
+	SpeechModel string `json:"-" mapstructure:"speech_model"`
+	// SpeechVoice (optional) is the voice name accepted by SpeechModel.
+	SpeechVoice string `json:"-" mapstructure:"speech_voice"`
 }
 
 // OpenAI openai config
@@ -196,22 +202,8 @@ type OpenAI struct {
 	Gateway string `json:"gateway" mapstructure:"gateway"`
 	// API (optional) openai api base url, default is https://api.openai.com
 	API string `json:"api" mapstructure:"api"`
-	// Token (required) openai api request token
-	Token string `json:"-" mapstructure:"token"`
-	// DefaultOpenaiToken (optional) default openai token, default equals to token
-	//
-	// Dangerous: will escape paying wall, use it carefully
-	// DefaultOpenaiToken string `json:"-" mapstructure:"default_openai_token"`
-	// DefaultImageToken (optional) default image token, default equals to token
-	DefaultImageToken string `json:"-" mapstructure:"default_image_token"`
-
-	// DefaultImageTokenType (optional) default image token type, default is openai
-	// DefaultImageTokenType ImageTokenType `json:"-" mapstructure:"default_image_token_type"`
-
-	// DefaultImageUrl (optional) default image url
-	//
-	// default to https://{{API}}/v1/images/generations
-	DefaultImageUrl string `json:"-" mapstructure:"default_image_url"`
+	// OneAPIBase defines the deployment allowed to receive managed media requests.
+	OneAPIBase string `json:"-" mapstructure:"one_api_base"`
 	// ToolLoopMaxRounds limits how many rounds the backend will execute tools for a single user request.
 	// Default is 5.
 	ToolLoopMaxRounds int `json:"tool_loop_max_rounds" mapstructure:"tool_loop_max_rounds"`
@@ -236,23 +228,10 @@ type OpenAI struct {
 	// The audio implementation is an operational choice, not a per-user preference,
 	// so it is configured here rather than offered in the web UI.
 	Voice VoiceConfig `json:"voice" mapstructure:"voice"`
-	// ExternalBillingAPI (optional) default billing api, default is https://oneapi.laisky.com
-	ExternalBillingAPI string `json:"external_billing_api" mapstructure:"external_billing_api"`
-	// ExternalBillingToken (optional) default billing token
-	// ExternalBillingToken string `json:"external_billing_token" mapstructure:"external_billing_token"`
 	// RamjetURL (optional) ramjet url
 	RamjetURL string `json:"ramjet_url" mapstructure:"ramjet_url"`
 	// S3 (optional) s3 config
-	S3           s3Config `json:"s3" mapstructure:"s3"`
-	NvidiaApikey string   `json:"-"  mapstructure:"nvidia_apikey"`
-	// ReplicateApikey is the api key for flux pro
-	//
-	// https://replicate.com/account/api-tokens
-	ReplicateApikey string `json:"-" mapstructure:"replicate_apikey"`
-	// SegmindApikey is the api key for segmind
-	//
-	// https://cloud.segmind.com/console/api-keys
-	SegmindApikey string `json:"-" mapstructure:"segmind_apikey"`
+	S3 s3Config `json:"s3" mapstructure:"s3"`
 
 	// PaymentStripeKey (optional) stripe key
 	PaymentStripeKey string `json:"payment_stripe_key" mapstructure:"payment_stripe_key"`
@@ -282,9 +261,6 @@ type OpenAI struct {
 	AgentLoop *AgentLoopConfig `json:"agent_loop" mapstructure:"agent_loop"`
 	// WebFetch configures markdown-oriented web fetch proxy providers.
 	WebFetch WebFetchConfig `json:"web_fetch" mapstructure:"web_fetch"`
-
-	// Azure (optional) azure config
-	Azure azureConfig `json:"azure" mapstructure:"azure"`
 }
 
 // AgentLoopConfig captures the per-server runtime knobs for the Phase 1
@@ -415,13 +391,6 @@ type FirecrawlWebFetchProxyConfig struct {
 	Priority *int `json:"priority,omitempty" mapstructure:"priority"`
 }
 
-type azureConfig struct {
-	// TTSKey (optional) tts key
-	TTSKey string `json:"tts_key" mapstructure:"tts_key"`
-	// TTSRegion (optional) tts region
-	TTSRegion string `json:"tts_region" mapstructure:"tts_region"`
-}
-
 type qaChatModel struct {
 	Name    string `json:"name"    mapstructure:"name"`
 	URL     string `json:"url"     mapstructure:"url"`
@@ -435,39 +404,18 @@ type s3Config struct {
 	AccessKey string `json:"-"         mapstructure:"access_key"`
 }
 
-// ImageTokenType image token type
-type ImageTokenType string
-
-func (t ImageTokenType) String() string {
-	return string(t)
-}
-
-const (
-	// ImageTokenAzure azure image token
-	ImageTokenAzure ImageTokenType = "azure"
-	// ImageTokenOpenai openai image token
-	ImageTokenOpenai ImageTokenType = "openai"
-)
-
 // UserConfig user config
 type UserConfig struct {
 	UserName string `json:"username" mapstructure:"username"`
 	// Token (required) client's tenant token, not the openai token
 	Token string `json:"-" mapstructure:"token"`
-	// OpenaiToken (optional) openai token, default is global default token
+	// OpenaiToken is the only inference key: the original BYOK key or the
+	// explicitly configured restricted One API key on the free-tier entry.
 	OpenaiToken string `json:"-" mapstructure:"openai_token"`
-	// ImageToken (optional) token be used to generate image,
-	// default is global default image token
-	ImageToken string `json:"-" mapstructure:"image_token"`
-	// ImageUrl (optional) image url, default is global default image url
-	ImageUrl string `json:"-" mapstructure:"image_url"`
-
-	// ImageTokenType (optional) token type, default is global default image token type
-	// ImageTokenType `json:"-" mapstructure:"image_token_type"`
 
 	// APIBase (optional) api base url, default is global default api base
 	APIBase string `json:"api_base" mapstructure:"api_base"`
-	// APIBaseUserSelected reports that APIBase and ImageUrl were chosen by the
+	// APIBaseUserSelected reports that APIBase was chosen by the
 	// caller (X-Laisky-Api-Base) instead of server configuration. Requests to
 	// them must pass the public egress policy. It is never loaded from config
 	// nor serialized.
@@ -491,16 +439,15 @@ type UserConfig struct {
 
 	// LimitPromptTokenLength (optional) set limit for prompt token length, <=0 means no limit
 	LimitPromptTokenLength int `json:"limit_prompt_token_length" mapstructure:"limit_prompt_token_length"`
-	// EnableExternalImageBilling (optional) enable external image billing
-	EnableExternalImageBilling bool `json:"enable_external_image_billing" mapstructure:"enable_external_image_billing"`
-	// ExternalImageBillingUID (optional) external image billing uid
-	// ExternalImageBillingUID string `json:"external_image_billing_uid" mapstructure:"external_image_billing_uid"`
 }
 
 // Valid valid and fill default values
 func (c *UserConfig) Valid() error {
-	if c.Token == "" {
-		return errors.New("token is empty")
+	if c.Token == "" || c.OpenaiToken == "" || c.APIBase == "" {
+		return errors.New("Model identity, inference key, and endpoint are required")
+	}
+	if c.BYOK && (c.IsFree || subtle.ConstantTimeCompare([]byte(c.Token), []byte(c.OpenaiToken)) != 1) {
+		return errors.New("Caller-owned inference must use the original model credential")
 	}
 
 	if c.UserName == "" {
@@ -508,30 +455,59 @@ func (c *UserConfig) Valid() error {
 		c.UserName = hex.EncodeToString(hashed[:])[:16]
 	}
 
-	if c.EnableExternalImageBilling {
-		// if !strings.HasPrefix(c.OpenaiToken, "laisky-") {
-		// 	return errors.Errorf("%q's openai_token should start with `laisky-` "+
-		// 		"if enable_external_image_billing is true", c.UserName)
-
-		// if c.ExternalImageBillingUID == "" {
-		// 	return errors.Errorf("%q's external_image_billing_uid should not be empty "+
-		// 		"if enable_external_image_billing is true", c.UserName)
-		// }
-	}
-
 	// fill default
 	//
 	// Voice settings are global and always overwrite whatever a user entry holds,
 	// so a stale per-user value cannot pin an old plugin or model.
 	c.Voice = Config.Voice
-	c.APIBase = gutils.OptionalVal(&c.APIBase, Config.API)
-	c.OpenaiToken = gutils.OptionalVal(&c.OpenaiToken, Config.Token)
-	c.ImageToken = gutils.OptionalVal(&c.ImageToken, Config.DefaultImageToken)
-	// c.ImageTokenType = gutils.OptionalVal(&c.ImageTokenType, Config.DefaultImageTokenType)
-	c.ImageUrl = gutils.OptionalVal(&c.ImageUrl, Config.DefaultImageUrl)
 
 	// format normalize
 	c.APIBase = strings.TrimRight(c.APIBase, "/")
 
 	return nil
+}
+
+// ManagedAPIBase returns the configured One API base or its production default.
+func (c *OpenAI) ManagedAPIBase() string {
+	if c.OneAPIBase == "" {
+		return DefaultOneAPIBase
+	}
+	return trimUrl(c.OneAPIBase)
+}
+
+// FreeTierPolicy returns the unique explicit free-tier policy, or nil if
+// disabled. Only the configured One API deployment may receive its key.
+func (c *OpenAI) FreeTierPolicy() (*UserConfig, error) {
+	var policy *UserConfig
+	for _, entry := range c.UserTokens {
+		if entry == nil || entry.Token != FreetierUserToken {
+			continue
+		}
+		if policy != nil {
+			return nil, errors.New("Duplicate free-tier policies")
+		}
+		policy = entry
+	}
+	if policy == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(policy.OpenaiToken) == "" || strings.TrimSpace(policy.OpenaiToken) != policy.OpenaiToken ||
+		policy.BYOK || policy.NoLimitExpensiveModels || len(policy.AllowedModels) == 0 ||
+		c.RateLimitExpensiveModelsIntervalSeconds <= 0 || c.RateLimitFreeModelsIntervalSeconds <= 0 {
+		return nil, errors.New("Free-tier policy requires a dedicated key, explicit models, and positive rate limits without bypasses")
+	}
+	endpoint, err := url.Parse(c.ManagedAPIBase())
+	if err != nil || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" ||
+		endpoint.Fragment != "" || (endpoint.Scheme != "https" && endpoint.Scheme != "http") {
+		return nil, errors.New("Free-tier inference requires a valid openai.one_api_base")
+	}
+	for _, model := range policy.AllowedModels {
+		if model == "" || model == "*" || strings.TrimSpace(model) != model {
+			return nil, errors.New("Free-tier model allowlist must contain explicit model IDs")
+		}
+	}
+	if policy.APIBase != "" && trimUrl(policy.APIBase) != c.ManagedAPIBase() {
+		return nil, errors.New("Free-tier API base must match openai.one_api_base")
+	}
+	return policy, nil
 }

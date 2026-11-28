@@ -15,7 +15,6 @@ require (
 	github.com/Laisky/protocols v0.0.0-20230803091610-205e59093a71
 	github.com/Laisky/testify v1.8.2-0.20230130092031-3f451b003463
 	github.com/Laisky/zap v1.27.1-0.20261006114731-55f41c2b5061
-	github.com/Microsoft/cognitive-services-speech-sdk-go v1.52.0
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/baidubce/bce-sdk-go v0.9.276
 	github.com/chromedp/cdproto v0.157.9

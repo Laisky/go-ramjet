@@ -95,6 +95,7 @@ export function WhisperAudioPlugin({
             type: blob.type,
           }),
           config.api_token,
+          config.api_base,
         )
           .then((text) => {
             if (!attempt.signal.aborted && mountedRef.current) onDraftText(text)
@@ -120,6 +121,7 @@ export function WhisperAudioPlugin({
     }
   }, [
     config.api_token,
+    config.api_base,
     onActivityChange,
     onBusyChange,
     onStatusChange,

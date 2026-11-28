@@ -4,16 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/Laisky/errors/v2"
-	gmw "github.com/Laisky/gin-middlewares/v7"
 	gutils "github.com/Laisky/go-utils/v6"
-	"github.com/Laisky/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 )
 
 // maxImagesPerRequest caps how many images one request may generate.
@@ -38,45 +34,9 @@ func normalizeImageCount(n int, isFree bool) int {
 // tests can observe delivered images without an object store.
 var uploadGeneratedImage = uploadImage2Minio
 
-// imageBatchPrice returns the charge for n images of model. Image prices are per
-// image (db.PriceTxt2Image is one DALL-E image, and Flux bills every generated
-// image), so the charge scales with n.
-func imageBatchPrice(model string, n int) db.Price {
-	return GetImageModelPrice(model) * db.Price(n)
-}
-
-// chargeExtraImages settles a DALL-E request's charge once its images are stored.
-// One image is charged upfront, which doubles as the balance probe; this charges
-// the remaining stored images in one call.
-//
-// Parameters:
-//   - ctx: Request context carrying the request logger.
-//   - user: User being billed.
-//   - model: Image model, which selects the per-image price.
-//   - stored: Number of images stored for the client.
-//
-// It returns how many of the stored images may be delivered: all of them, or only
-// the prepaid first one when the charge for the others fails. That failure is
-// logged once at error level; like Flux, unbilled images are never exposed.
-func chargeExtraImages(ctx context.Context, user *config.UserConfig, model string, stored int) int {
-	extra := stored - 1
-	if !user.EnableExternalImageBilling || extra <= 0 {
-		return stored
-	}
-
-	if err := checkUserExternalBilling(ctx, user, imageBatchPrice(model, extra), "txt2image"); err != nil {
-		gmw.GetLogger(ctx).Error("charge for extra generated images failed; delivering only the prepaid image",
-			zap.String("model", model), zap.Int("stored", stored), zap.Error(err))
-		return 1
-	}
-
-	return stored
-}
-
 // generatedImageKey returns a new object key, without extension, for the i-th
 // image of task taskID. Each key ends in its own cryptographically random suffix,
-// so the URL of one delivered image never reveals the key of another image of the
-// same task that was stored but not paid for.
+// so one URL does not reveal another image key from the same task.
 //
 // It returns an error when no random suffix can be generated.
 func generatedImageKey(taskID string, i int) (string, error) {
@@ -93,25 +53,9 @@ func generatedImageURL(key string) string {
 	return fmt.Sprintf("https://%s/%s/%s.png", config.Config.S3.Endpoint, config.Config.S3.Bucket, key)
 }
 
-// storeAndBillImages stores generated images and only then charges for the ones
-// beyond the prepaid first image, so a failed upload never bills images nobody
-// receives.
-//
-// Parameters:
-//   - ctx: Request context used for billing; it carries the request logger.
-//   - taskCtx: Context bounding the uploads.
-//   - user: User being billed.
-//   - model: Image model, which selects the per-image price.
-//   - n: Normalized number of requested images; never more are stored.
-//   - taskID: Task whose key prefix the objects share.
-//   - prompt: Prompt stored as object metadata.
-//   - imgs: Images the upstream produced.
-//
-// It returns the URLs to deliver: every stored image, or only the prepaid first one
-// when the charge for the others fails. It returns an error when a key cannot be
-// generated or an upload fails; nothing beyond the upfront charge is billed then.
-func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
-	model string, n int, taskID, prompt string, imgs [][]byte) ([]string, error) {
+// storeGeneratedImages uploads up to n generated images under unique task keys.
+// It returns their public URLs in input order, or an error if any upload fails.
+func storeGeneratedImages(taskCtx context.Context, n int, taskID, prompt string, imgs [][]byte) ([]string, error) {
 	if len(imgs) > n {
 		imgs = imgs[:n]
 	}
@@ -135,7 +79,6 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 		return nil, errors.Wrap(err, "upload images")
 	}
 
-	keys = keys[:chargeExtraImages(ctx, user, model, len(keys))]
 	urls := make([]string, len(keys))
 	for i, key := range keys {
 		urls[i] = generatedImageURL(key)
@@ -147,13 +90,10 @@ func storeAndBillImages(ctx, taskCtx context.Context, user *config.UserConfig,
 // generateImages asks user's image upstream for n images of model drawn from
 // prompt, at size when it is not empty.
 //
-// An Azure image deployment answers one image per call, so n calls run
-// concurrently; any other upstream gets one call asking for n images.
-//
 // Parameters:
 //   - ctx: Context bounding every upstream call.
 //   - user: User whose image upstream and credentials are used.
-//   - model: Image model; ignored by Azure deployments.
+//   - model: Image model.
 //   - prompt: Text the images are drawn from.
 //   - n: Normalized number of images (see normalizeImageCount).
 //   - size: Requested image size for OpenAI-compatible upstreams; empty keeps the
@@ -167,26 +107,7 @@ func generateImages(ctx context.Context, user *config.UserConfig,
 	if n < 1 || n > maxImagesPerRequest {
 		return nil, errors.Errorf("image count %d is outside 1..%d", n, maxImagesPerRequest)
 	}
-	if !strings.Contains(user.ImageUrl, "openai.azure.com") {
-		imgs, err := fetchImageFromOpenaiDalle(ctx, user, model, prompt, n, size)
-		if err != nil {
-			return nil, errors.Wrap(err, "fetch openai images")
-		}
-		return imgs, nil
-	}
-
-	imgs := make([][]byte, n)
-	var pool errgroup.Group
-	for i := range n {
-		pool.Go(func() (err error) {
-			imgs[i], err = fetchImageFromAzureDalle(ctx, user, prompt)
-			return err
-		})
-	}
-	if err := pool.Wait(); err != nil {
-		return nil, errors.Wrap(err, "fetch azure images")
-	}
-	return imgs, nil
+	return fetchImageFromOpenaiDalle(ctx, user, model, prompt, n, size)
 }
 
 // maxImageResponseBytesPerImage is the answer allowance for one image. The largest
@@ -202,9 +123,7 @@ var maxImageResponseBytesPerImage int64 = 96 << 20
 //
 // A call asking for a batch passes maxImagesPerRequest rather than the requested
 // count, because an answer may legitimately carry surplus entries that
-// imageCollector ignores. The Azure path sends one call per image concurrently and
-// passes 1, so every image request buffers at most maxImagesPerRequest allowances
-// of upstream answers in total.
+// imageCollector ignores.
 //
 // It returns the body, or an error when reading fails or the body exceeds the cap.
 func readImageAPIResponse(body io.Reader, images int) ([]byte, error) {

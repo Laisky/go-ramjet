@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +54,7 @@ func TestTenantSelectedPublicUpstreamStillWorks(t *testing.T) {
 	user, err := getUserByAuthHeader(ctx)
 	require.NoError(t, err)
 	require.True(t, user.APIBaseUserSelected)
-	images, err := fetchImageFromOpenaiDalle(ctx, user, "dall-e-3", "synthetic", 1, "")
+	images, err := fetchImageFromOpenaiDalle(ctx.Request.Context(), user, "dall-e-3", "synthetic", 1, "")
 	require.NoError(t, err)
 	require.Len(t, images, 1)
 	require.Equal(t, "/v1/images/generations", provider.path.Load())
@@ -80,8 +79,10 @@ func TestOperatorConfiguredPrivateUpstreamUnchanged(t *testing.T) {
 		return `{"data":[{"url":"` + asset.URL + `/generated.png"}]}`
 	})
 	egressTestSetup(t, nil)
+	config.Config.OneAPIBase = operator.URL
 	config.Config.UserTokens[0].APIBase = operator.URL
-	config.Config.UserTokens[0].ImageUrl = operator.URL + "/v1/images/generations"
+	config.Config.UserTokens[0].AllowedModels = []string{"dall-e-3", "openai/gpt-oss-120b"}
+	stubInferenceLimiters(t, true)
 
 	ctx, recorder := egressRequestContext(t, "/chat/oneshot", "", map[string]any{"user_prompt": "synthetic"})
 	ctx.Request.Header.Del("Authorization")
@@ -92,47 +93,15 @@ func TestOperatorConfiguredPrivateUpstreamUnchanged(t *testing.T) {
 	require.False(t, user.APIBaseUserSelected)
 
 	OneShotChatHandler(ctx)
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "operator-answer")
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	require.Zero(t, operator.hits.Load())
+	require.NoError(t, IsModelAllowed(ctx, user, &FrontendReq{Model: "dall-e-3"}))
+	grantInferenceBudget(ctx, user, "dall-e-3", 1)
 
-	images, err := fetchImageFromOpenaiDalle(ctx, user, "dall-e-3", "synthetic", 1, "")
+	images, err := fetchImageFromOpenaiDalle(ctx.Request.Context(), user, "dall-e-3", "synthetic", 1, "")
 	require.NoError(t, err)
 	require.Equal(t, [][]byte{[]byte("private-image-bytes")}, images)
 	require.EqualValues(t, 1, asset.hits.Load())
-}
-
-// TestDrawImageBoundsRequestedCount characterizes the bound CodeQL's
-// uncontrolled-allocation alert misses: n is clamped to [1, 8] (1 for free
-// users) before it sizes the Azure result slice and the goroutine fan-out.
-func TestDrawImageBoundsRequestedCount(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		n     int
-		free  bool
-		calls int32
-	}{
-		{name: "huge", n: 1 << 40, calls: 8},
-		{name: "negative", n: -3, calls: 1},
-		{name: "zero", n: 0, calls: 1},
-		{name: "within_bound", n: 5, calls: 5},
-		{name: "free_user", n: 5, free: true, calls: 1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			azure := newRecordedUpstream(t, func(*http.Request) string { return `{"error":"synthetic"}` })
-			egressTestSetup(t, nil)
-			body, err := json.Marshal(map[string]any{"prompt": "synthetic", "model": "dall-e-3", "n": tc.n})
-			require.NoError(t, err)
-			ctx, recorder := egressRequestContext(t, "/images/generations", "", nil)
-			ctx.Request.Body = io.NopCloser(bytes.NewReader(body))
-			ctx.Set(ctxKeyUser, &config.UserConfig{
-				UserName: "operator-azure", Token: "SYNTHETIC", IsFree: tc.free, BYOK: true,
-				ImageUrl: azure.URL + "/openai.azure.com/images/generations", ImageToken: "SYNTHETIC",
-			})
-			DrawByDalleHandler(ctx)
-			require.Equal(t, http.StatusBadRequest, recorder.Code)
-			require.Equal(t, tc.calls, azure.hits.Load())
-		})
-	}
 }
 
 // TestDownloadImageBoundsBody stops a download at maxDownloadedImageBytes

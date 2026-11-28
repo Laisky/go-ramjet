@@ -37,6 +37,7 @@ export interface ChatMessageProps {
   messageIndex?: number
   /** API token for TTS functionality */
   apiToken?: string
+  apiBase?: string
 }
 
 function ReasoningBlock({ content }: { content: string }) {
@@ -94,12 +95,13 @@ export const ChatMessage = memo(function ChatMessage({
   onSelect,
   messageIndex,
   apiToken,
+  apiBase,
 }: ChatMessageProps) {
   const [copiedCitation, setCopiedCitation] = useState<number | null>(null)
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
 
-  // TTS hook - uses server-side Azure TTS
+  // Render speech through the selected GPTChat provider.
   const {
     isLoading: ttsLoading,
     audioUrl: ttsAudioUrl,
@@ -108,6 +110,7 @@ export const ChatMessage = memo(function ChatMessage({
     stopTTS,
   } = useTTS({
     apiToken: apiToken || '',
+    apiBase,
   })
 
   // Cleanup TTS when message changes

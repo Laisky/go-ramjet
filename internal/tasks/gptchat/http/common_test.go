@@ -27,18 +27,16 @@ func newAuthContext(token string) *gin.Context {
 // set up a minimal global config with distinct default image token
 func setupTestConfig() {
 	config.Config = &config.OpenAI{
-		Token:              "SERVER_OPENAI_TOKEN",
-		DefaultImageToken:  "SERVER_IMAGE_TOKEN",
-		API:                "https://api.openai.com",
-		DefaultImageUrl:    "https://api.openai.com/v1/images/generations",
-		ExternalBillingAPI: "https://oneapi.laisky.com",
-		RamjetURL:          "https://app.laisky.com",
+		RateLimitExpensiveModelsIntervalSeconds: 600, RateLimitFreeModelsIntervalSeconds: 1,
+
+		API: "https://api.openai.com",
+
+		RamjetURL: "https://app.laisky.com",
 		UserTokens: []*config.UserConfig{
 			{
-				Token:         config.FreetierUserToken,
+				Token: config.FreetierUserToken, OpenaiToken: "SERVER_OPENAI_TOKEN",
 				UserName:      "public",
 				APIBase:       "https://oneapi.laisky.com",
-				ImageUrl:      "https://oneapi.laisky.com/v1/images/generations",
 				AllowedModels: []string{"gpt-4o-mini", "gpt-5-mini"},
 			},
 		},
@@ -103,12 +101,6 @@ func TestGetUserByAuthHeader_LaiskyTokenUsesOwnImageToken(t *testing.T) {
 	if user.OpenaiToken != userToken {
 		t.Fatalf("expected user.OpenaiToken to be %q, got %q", userToken, user.OpenaiToken)
 	}
-	if user.ImageToken != userToken {
-		t.Fatalf("expected user.ImageToken to be user's token %q, got %q", userToken, user.ImageToken)
-	}
-	if user.ImageToken == config.Config.DefaultImageToken {
-		t.Fatalf("user.ImageToken should not fall back to default image token %q", config.Config.DefaultImageToken)
-	}
 	if !user.BYOK {
 		t.Fatalf("expected BYOK to be true for laisky- token user")
 	}
@@ -125,12 +117,6 @@ func TestGetUserByAuthHeader_SKTokenUsesOwnImageToken(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if user.ImageToken != userToken {
-		t.Fatalf("expected user.ImageToken to be user's token %q, got %q", userToken, user.ImageToken)
-	}
-	if user.ImageToken == config.Config.DefaultImageToken {
-		t.Fatalf("user.ImageToken should not fall back to default image token %q", config.Config.DefaultImageToken)
-	}
 	if !user.BYOK {
 		t.Fatalf("expected BYOK to be true for sk- token user")
 	}
@@ -150,9 +136,6 @@ func TestGetUserByAuthHeader_ApiBaseOverrideValid(t *testing.T) {
 
 	if user.APIBase != "https://api.example.com" {
 		t.Fatalf("expected APIBase override to be applied, got %q", user.APIBase)
-	}
-	if user.ImageUrl != "https://api.example.com/v1/images/generations" {
-		t.Fatalf("expected ImageUrl to follow APIBase override, got %q", user.ImageUrl)
 	}
 }
 

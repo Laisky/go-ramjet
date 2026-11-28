@@ -20,7 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 	s3lib "github.com/Laisky/go-ramjet/library/s3"
 	"github.com/Laisky/go-ramjet/library/web"
@@ -29,10 +28,8 @@ import (
 // DrawByDalleHandler generates images for an OpenAI-compatible image request,
 // stores them in the object store and answers with their URLs.
 //
-// The image count is bounded by normalizeImageCount. With external image billing,
-// one image is charged upfront and the remaining images are charged by
-// storeAndBillImages once they are stored. ctx is the gin context of the
-// request; failures are reported to the client through web.AbortErr.
+// The image count is bounded by normalizeImageCount. ctx is the gin context of
+// the request; failures are reported to the client through web.AbortErr.
 func DrawByDalleHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 
@@ -70,14 +67,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.EnableExternalImageBilling {
-		// Charge one image upfront as the balance probe; storeAndBillImages charges
-		// the rest once they are stored.
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, GetImageModelPrice(req.Model), "txt2image"); web.AbortErr(ctx, err) {
-			return
-		}
-	}
+	grantInferenceBudget(ctx, user, req.Model, 1)
 
 	logger.Debug("start image drawing task")
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
@@ -87,7 +77,7 @@ func DrawByDalleHandler(ctx *gin.Context) {
 	if web.AbortErr(ctx, err) {
 		return
 	}
-	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, req.Model, req.N, taskID, req.Prompt, imgContents)
+	imgUrls, err := storeGeneratedImages(taskCtx, req.N, taskID, req.Prompt, imgContents)
 	if err != nil {
 		// upload error msg
 		msg := []byte(fmt.Sprintf("failed to draw image for %q, got %s", req.Prompt, err.Error()))
@@ -138,7 +128,11 @@ func DrawByDalleHandler(ctx *gin.Context) {
 func fetchImageFromOpenaiDalle(ctx context.Context,
 	user *config.UserConfig, model, prompt string, n int, size string) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx).Named("openai")
-	apiUrl := user.APIBase + "/v1/images/generations"
+	base, err := mediaInferenceBase(user)
+	if err != nil {
+		return nil, errors.Wrap(err, "select image generation upstream")
+	}
+	apiUrl := base + "/v1/images/generations"
 	logger.Debug("draw image by openai dalle",
 		zap.String("url", apiUrl),
 		zap.String("model", model),
@@ -169,7 +163,10 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 
 	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
+	if err := consumeInferenceCall(ctx, user, model); err != nil {
+		return nil, errors.Wrap(err, "admit image request")
+	}
+	if httpresp, err := mediaInferenceClient(user).Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)
@@ -234,61 +231,6 @@ func fetchImageFromOpenaiDalle(ctx context.Context,
 	return collector.images()
 }
 
-// fetchImageFromAzureDalle asks user's Azure OpenAI image deployment for one image
-// drawn from prompt and downloads it.
-//
-// It returns the image, or an error when the upstream call fails, its answer
-// exceeds the size allowance for one image or carries no image, or the download fails.
-func fetchImageFromAzureDalle(ctx context.Context,
-	user *config.UserConfig, prompt string) (img []byte, err error) {
-	logger := gmw.GetLogger(ctx).Named("azure")
-	logger.Debug("draw image by azure dalle")
-
-	reqBody, err := json.Marshal(OpenaiCreateImageRequest{
-		Prompt: prompt,
-		Size:   "1024x1024",
-		N:      1,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal request body")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		user.ImageUrl, bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, errors.Wrap(err, "new request")
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Api-Key", user.ImageToken)
-
-	cli := upstreamHTTPClient(user)
-	resp := new(AzureCreateImageResponse)
-	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
-		return nil, errors.Wrap(err, "do request")
-	} else {
-		defer gutils.LogErr(httpresp.Body.Close, logger)
-		payload, err := readImageAPIResponse(httpresp.Body, 1)
-		if err != nil {
-			return nil, errors.Wrap(err, "read image response")
-		}
-		if httpresp.StatusCode != http.StatusOK {
-			return nil, errors.Errorf("bad status code [%d]%s", httpresp.StatusCode, string(payload))
-		}
-
-		if err = json.Unmarshal(payload, resp); err != nil {
-			return nil, errors.Wrap(err, "decode response")
-		}
-
-		if len(resp.Data) == 0 {
-			return nil, errors.New("empty response")
-		}
-	}
-
-	// download image; the URL comes from the upstream, so it inherits the upstream's trust.
-	return downloadImage(ctx, cli, resp.Data[0].Url)
-}
-
 // maxDownloadedImageBytes bounds one downloaded image or mask. Generated and
 // uploaded images are a few megabytes; the cap stops a caller-chosen URL from
 // streaming an unbounded body into memory.
@@ -333,9 +275,8 @@ func downloadImage(ctx context.Context, cli *http.Client, url string) ([]byte, e
 // the user's OpenAI-compatible upstream, stores the result in the object store and
 // answers with its URL.
 //
-// With external image billing one image is charged upfront, and exactly one image
-// is delivered. ctx is the gin context of the request; failures are reported to
-// the client through web.AbortErr.
+// Exactly one image is delivered. ctx is the gin context of the request;
+// failures are reported to the client through web.AbortErr.
 func EditImageHandler(ctx *gin.Context) {
 	taskID := gutils.RandomStringWithLength(36)
 	logger := gmw.GetLogger(ctx).Named("image_edit").With(zap.String("task_id", taskID))
@@ -360,17 +301,7 @@ func EditImageHandler(ctx *gin.Context) {
 		return
 	}
 
-	if user.EnableExternalImageBilling {
-		price := GetImageModelPrice(req.Model)
-		if req.Model == "flux-fill-pro" || req.Model == "black-forest-labs/flux-fill-pro" {
-			price = db.PriceTxt2ImageFluxFillPro
-		}
-
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, price, "image-edit"); web.AbortErr(ctx, err) {
-			return
-		}
-	}
+	grantInferenceBudget(ctx, user, req.Model, 1)
 
 	logger.Debug("start image editing task", zap.String("model", req.Model))
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
@@ -463,7 +394,11 @@ func getDataFromUrlOrBase64(ctx context.Context, input string) ([]byte, error) {
 func fetchImageEditFromOpenai(ctx context.Context,
 	user *config.UserConfig, model, prompt string, image, mask []byte) (imgs [][]byte, err error) {
 	logger := gmw.GetLogger(ctx)
-	apiUrl := user.APIBase + "/v1/images/edits"
+	base, err := mediaInferenceBase(user)
+	if err != nil {
+		return nil, errors.Wrap(err, "select image editing upstream")
+	}
+	apiUrl := base + "/v1/images/edits"
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -522,7 +457,10 @@ func fetchImageEditFromOpenai(ctx context.Context,
 
 	cli := upstreamHTTPClient(user)
 	resp := new(OpenaiCreateImageResponse)
-	if httpresp, err := cli.Do(req); err != nil { //nolint: bodyclose
+	if err := consumeInferenceCall(ctx, user, model); err != nil {
+		return nil, errors.Wrap(err, "admit image request")
+	}
+	if httpresp, err := mediaInferenceClient(user).Do(req); err != nil { //nolint: bodyclose
 		return nil, errors.Wrap(err, "do request")
 	} else {
 		defer gutils.LogErr(httpresp.Body.Close, logger)

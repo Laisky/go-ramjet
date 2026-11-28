@@ -20,7 +20,7 @@ import (
 )
 
 // editTestRequest points gctx at the image edit endpoint with a one-pixel PNG
-// source image and a paid user with external image billing.
+// source image and a synthetic BYOK user.
 func editTestRequest(t *testing.T, gctx *gin.Context) {
 	t.Helper()
 	var src bytes.Buffer
@@ -33,16 +33,16 @@ func editTestRequest(t *testing.T, gctx *gin.Context) {
 	require.NoError(t, err)
 	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/edits", bytes.NewReader(body))
 	gctx.Request.Header.Set("Content-Type", "application/json")
-	gctx.Set(ctxKeyUser, billedImageUser(false))
+	gctx.Set(ctxKeyUser, inferenceImageUser(false))
 }
 
 // TestEditImageHandlerFetchesOnlyOneImage verifies that the image edit endpoint,
-// which charges one image, delivers one image and never downloads the surplus
+// delivers one image and never downloads the surplus
 // entries an upstream adds to its answer.
 func TestEditImageHandlerFetchesOnlyOneImage(t *testing.T) {
 	const returned = 40
 	var downloads atomic.Int32
-	f := &imageBillingFixture{}
+	f := &imageInferenceFixture{}
 	gctx := f.install(t)
 	editTestRequest(t, gctx)
 	f.override = func(w http.ResponseWriter, r *http.Request) bool {
@@ -65,14 +65,13 @@ func TestEditImageHandlerFetchesOnlyOneImage(t *testing.T) {
 	EditImageHandler(gctx)
 	require.Equal(t, http.StatusOK, gctx.Writer.Status())
 	require.Equal(t, 1, f.delivered())
-	require.Equal(t, int64(GetImageModelPrice("gpt-image-1")), f.totalCharged())
 	require.LessOrEqual(t, downloads.Load(), int32(1), "surplus edited images were downloaded")
 }
 
 // TestEditImageHandlerFailsWithoutImage verifies that an edit answer whose entries
 // carry no image data is reported as a failure instead of an empty success.
 func TestEditImageHandlerFailsWithoutImage(t *testing.T) {
-	f := &imageBillingFixture{empty: 2}
+	f := &imageInferenceFixture{empty: 2}
 	gctx := f.install(t)
 	editTestRequest(t, gctx)
 
@@ -92,7 +91,7 @@ func TestImageResponsesAreSizeBounded(t *testing.T) {
 
 	// Two 32 KiB base64 images exceed the fixed cap of maxImagesPerRequest (8)
 	// times the lowered 4 KiB allowance.
-	oversized := func(f *imageBillingFixture) func(http.ResponseWriter, *http.Request) bool {
+	oversized := func(f *imageInferenceFixture) func(http.ResponseWriter, *http.Request) bool {
 		return func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path != "/v1/images/generations" && r.URL.Path != "/v1/images/edits" {
 				return false
@@ -104,17 +103,17 @@ func TestImageResponsesAreSizeBounded(t *testing.T) {
 	}
 
 	t.Run("generation", func(t *testing.T) {
-		f := &imageBillingFixture{}
+		f := &imageInferenceFixture{}
 		gctx := f.install(t)
 		f.override = oversized(f)
 
-		err := sendChatImageGeneration(gctx, imageCountTestRequest(2), billedImageUser(false))
+		err := sendChatImageGeneration(gctx, imageCountTestRequest(2), inferenceImageUser(false))
 		require.ErrorContains(t, err, "exceeds")
 		require.Zero(t, f.delivered())
 	})
 
 	t.Run("edit", func(t *testing.T) {
-		f := &imageBillingFixture{}
+		f := &imageInferenceFixture{}
 		gctx := f.install(t)
 		editTestRequest(t, gctx)
 		f.override = oversized(f)
@@ -125,38 +124,6 @@ func TestImageResponsesAreSizeBounded(t *testing.T) {
 	})
 }
 
-// TestDrawByDalleHandlerUndeliveredImagesStayUnguessable verifies that when the
-// charge for the extra images fails after they were stored, the client gets only
-// the prepaid image, and its URL does not reveal the keys of the stored but unpaid
-// images: every image key carries its own random suffix.
-func TestDrawByDalleHandlerUndeliveredImagesStayUnguessable(t *testing.T) {
-	f := &imageBillingFixture{produced: 3, failChargeN: 2}
-	gctx := f.install(t)
-	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations",
-		bytes.NewReader([]byte(`{"model":"dall-e-3","prompt":"draw a tree","n":3}`)))
-	gctx.Request.Header.Set("Content-Type", "application/json")
-	gctx.Set(ctxKeyUser, billedImageUser(false))
-
-	DrawByDalleHandler(gctx)
-	require.Equal(t, http.StatusOK, gctx.Writer.Status())
-	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
-	require.Equal(t, 3, f.stored(), "images are stored before the extra charge")
-
-	urls := f.deliveredURLs()
-	require.Len(t, urls, 1)
-	var delivered int
-	for _, key := range f.keys {
-		if strings.Contains(urls[0], key+".png") {
-			delivered++
-			continue
-		}
-		suffix := key[strings.LastIndex(key, "-")+1:]
-		require.GreaterOrEqual(t, len(suffix), 16, "image key %q lacks a random suffix", key)
-		require.NotContains(t, urls[0], suffix, "the delivered URL reveals an unpaid image key")
-	}
-	require.Equal(t, 1, delivered, "the delivered URL must name one stored image")
-}
-
 // TestImageResponseCapToleratesSurplusEntries verifies that the answer size cap does
 // not scale with the requested count: surplus entries, which the collector ignores,
 // must not turn a valid one-image answer into a failure.
@@ -165,7 +132,7 @@ func TestImageResponseCapToleratesSurplusEntries(t *testing.T) {
 	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
 	maxImageResponseBytesPerImage = 4 << 10
 
-	f := &imageBillingFixture{}
+	f := &imageInferenceFixture{}
 	gctx := f.install(t)
 	f.override = func(w http.ResponseWriter, r *http.Request) bool {
 		if r.URL.Path != "/v1/images/generations" {
@@ -176,9 +143,8 @@ func TestImageResponseCapToleratesSurplusEntries(t *testing.T) {
 		return true
 	}
 
-	require.NoError(t, sendChatImageGeneration(gctx, imageCountTestRequest(1), billedImageUser(false)))
+	require.NoError(t, sendChatImageGeneration(gctx, imageCountTestRequest(1), inferenceImageUser(false)))
 	require.Equal(t, 1, f.delivered())
-	require.Equal(t, int64(GetImageModelPrice("dall-e-3")), f.totalCharged())
 }
 
 // TestImageResponseAllowanceFitsLargestImage verifies the per-image answer allowance
@@ -189,64 +155,12 @@ func TestImageResponseAllowanceFitsLargestImage(t *testing.T) {
 	require.Greater(t, maxImageResponseBytesPerImage, int64(largestImage)+1<<20)
 }
 
-// azureImageUser returns a paid user whose image URL selects the Azure path and
-// points at the fixture server.
-func azureImageUser() *config.UserConfig {
-	user := billedImageUser(false)
-	user.ImageUrl = config.Config.API + "/openai.azure.com/images"
-	return user
-}
-
-// TestAzureImageAnswersAreBoundedPerImage verifies that each Azure answer, which
-// carries one image URL, is held to one image's allowance. The Azure path sends one
-// request per image concurrently, so a per-answer cap sized for a whole batch would
-// let one request buffer maxImagesPerRequest times the batch cap.
-func TestAzureImageAnswersAreBoundedPerImage(t *testing.T) {
-	origLimit := maxImageResponseBytesPerImage
-	t.Cleanup(func() { maxImageResponseBytesPerImage = origLimit })
-	maxImageResponseBytesPerImage = 4 << 10
-
-	var downloads atomic.Int32
-	f := &imageBillingFixture{}
-	gctx := f.install(t)
-	serverURL := config.Config.API
-	f.override = func(w http.ResponseWriter, r *http.Request) bool {
-		switch {
-		case r.URL.Path == "/openai.azure.com/images":
-			// Twice the one-image allowance, far below the batch cap.
-			answer, err := json.Marshal(map[string]any{"data": []map[string]string{{
-				"url":            serverURL + "/generated/azure.png",
-				"revised_prompt": strings.Repeat("a", 8<<10),
-			}}})
-			if err != nil {
-				t.Errorf("encode azure answer: %v", err)
-				return true
-			}
-			// A bounded client hangs up once the cap is reached, so the write may fail.
-			if _, err := w.Write(answer); err != nil {
-				t.Logf("oversized azure answer cut off: %v", err)
-			}
-			return true
-		case strings.HasPrefix(r.URL.Path, "/generated/"):
-			downloads.Add(1)
-			f.writeBody(w, []byte("synthetic-image"))
-			return true
-		}
-		return false
-	}
-
-	err := sendChatImageGeneration(gctx, imageCountTestRequest(2), azureImageUser())
-	require.ErrorContains(t, err, "exceeds")
-	require.Zero(t, downloads.Load(), "an oversized Azure answer was accepted")
-	require.Zero(t, f.delivered())
-}
-
 // TestGenerateImagesRefusesUnboundedCount verifies generateImages enforces the image
 // count bound itself, before sizing any allocation or calling the upstream, so a
 // caller that forgot normalizeImageCount cannot fan out a request-controlled count.
 func TestGenerateImagesRefusesUnboundedCount(t *testing.T) {
 	var calls atomic.Int32
-	f := &imageBillingFixture{}
+	f := &imageInferenceFixture{}
 	f.install(t)
 	f.override = func(http.ResponseWriter, *http.Request) bool {
 		calls.Add(1)
@@ -254,10 +168,88 @@ func TestGenerateImagesRefusesUnboundedCount(t *testing.T) {
 	}
 
 	for _, n := range []int{0, -1, maxImagesPerRequest + 1, hugeImageCount} {
-		for _, user := range []*config.UserConfig{billedImageUser(false), azureImageUser()} {
+		for _, user := range []*config.UserConfig{inferenceImageUser(false), inferenceImageUser(true)} {
 			_, err := generateImages(t.Context(), user, "dall-e-3", "draw a tree", n, "")
 			require.ErrorContains(t, err, "outside", "count %d", n)
 		}
 	}
 	require.Zero(t, calls.Load(), "an unbounded count reached the upstream")
+}
+
+// TestEditImageHandlerDelegatesInference verifies that editing sends only the
+// selected upstream request with the user's credential and returns the image.
+func TestEditImageHandlerDelegatesInference(t *testing.T) {
+	for _, free := range []bool{true, false} {
+		name := "caller-owned"
+		if free {
+			name = "managed"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := &imageInferenceFixture{produced: 1}
+			gctx := f.install(t)
+			editTestRequest(t, gctx)
+			user := inferenceImageUser(free)
+			gctx.Set(ctxKeyUser, user)
+
+			EditImageHandler(gctx)
+
+			require.Equal(t, http.StatusOK, gctx.Writer.Status())
+			require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.authorizations())
+			require.Equal(t, 1, f.delivered())
+			require.Equal(t, 1, f.stored())
+		})
+	}
+}
+
+// TestDrawByDalleHandlerKeepsIndependentImageKeys verifies each stored object
+// has an independent random suffix and every successful upload is returned.
+func TestDrawByDalleHandlerKeepsIndependentImageKeys(t *testing.T) {
+	f := &imageInferenceFixture{produced: 3}
+	gctx := f.install(t)
+	gctx.Request = httptest.NewRequest(http.MethodPost, "/gptchat/images/generations",
+		strings.NewReader(`{"model":"dall-e-3","prompt":"draw a tree","n":3}`))
+	gctx.Request.Header.Set("Content-Type", "application/json")
+	gctx.Set(ctxKeyUser, inferenceImageUser(false))
+
+	DrawByDalleHandler(gctx)
+
+	require.Equal(t, http.StatusOK, gctx.Writer.Status())
+	require.Equal(t, 3, f.stored())
+	require.Equal(t, 3, f.delivered())
+	suffixes := map[string]struct{}{}
+	for _, key := range f.keys {
+		suffix := key[strings.LastIndex(key, "-")+1:]
+		require.Len(t, suffix, 20)
+		require.NotContains(t, suffixes, suffix)
+		suffixes[suffix] = struct{}{}
+	}
+}
+
+// TestManagedMediaUsesDeclaredOneAPI verifies the managed key reaches only the
+// declared relay, not the obsolete image URL or a different managed base.
+func TestManagedMediaUsesDeclaredOneAPI(t *testing.T) {
+	var alternateCalls atomic.Int32
+	alternate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		alternateCalls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(alternate.Close)
+	f := &imageInferenceFixture{produced: 1}
+	gctx := f.install(t)
+	user := inferenceImageUser(true)
+	grantInferenceBudget(gctx, user, "dall-e-3", 1)
+
+	images, err := generateImages(gctx.Request.Context(), user, "dall-e-3", "draw a tree", 1, "")
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	require.Equal(t, []string{"Bearer " + user.OpenaiToken}, f.authorizations())
+	require.Zero(t, alternateCalls.Load())
+
+	user.APIBase = alternate.URL
+	_, err = generateImages(gctx.Request.Context(), user, "dall-e-3", "draw a tree", 1, "")
+	require.ErrorContains(t, err, "requires the configured One API endpoint")
+	_, err = requestSpeech(gctx, user, "hello")
+	require.ErrorContains(t, err, "requires the configured One API endpoint")
+	require.Zero(t, alternateCalls.Load())
+	require.Len(t, f.authorizations(), 1)
 }

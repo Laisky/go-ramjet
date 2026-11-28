@@ -167,7 +167,7 @@ func TestRamjetBYOKImageCredentialConsistency(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			ctx, _ := gin.CreateTestContext(recorder)
 			ctx.Request = original.Request
-			ctx.Set(ctxKeyUser, &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, ImageToken: tc.imageToken, UserName: key[:15], APIBase: "http://100.64.0.10:3000", AllowedModels: []string{"*"}})
+			ctx.Set(ctxKeyUser, &config.UserConfig{BYOK: true, Token: key, OpenaiToken: tc.imageToken, UserName: key[:15], APIBase: "http://100.64.0.10:3000", AllowedModels: []string{"*"}})
 			calls := 0
 			httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
 				calls++

@@ -39,12 +39,22 @@ func normaliseBackend(value string) string {
 
 // New creates a limiter instance using the configured backend.
 func New(ctx context.Context, name string, args Args) (Limiter, error) {
+	return newLimiter(ctx, name, args, false)
+}
+
+// NewStrict creates a limiter which denies admissions when its backend is unavailable.
+func NewStrict(ctx context.Context, name string, args Args) (Limiter, error) {
+	return newLimiter(ctx, name, args, true)
+}
+
+// newLimiter selects the configured backend and the requested failure policy.
+func newLimiter(ctx context.Context, name string, args Args, failClosed bool) (Limiter, error) {
 	backend := normaliseBackend(gconfig.Shared.GetString("openai.rate_limiter_backend"))
 	switch backend {
 	case BackendLegacy:
 		return newMemoryLimiter(ctx, args)
 	case BackendRedis:
-		return NewRedisLimiter(ctx, name, args)
+		return newRedisLimiter(ctx, name, args, failClosed)
 	default:
 		return nil, errors.Errorf("unsupported rate limiter backend %q", backend)
 	}

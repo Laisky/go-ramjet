@@ -35,6 +35,7 @@ type Args struct {
 
 // redisLimiter is a Redis-backed token bucket rate limiter.
 type redisLimiter struct {
+	failClosed bool
 	ctx        context.Context
 	client     *redis.Client
 	logger     glog.Logger
@@ -91,6 +92,11 @@ return {allowed, tokens}
 
 // NewRedisLimiter creates a Redis-backed limiter with the provided name and arguments.
 func NewRedisLimiter(ctx context.Context, name string, args Args) (Limiter, error) {
+	return newRedisLimiter(ctx, name, args, false)
+}
+
+// newRedisLimiter builds a Redis limiter with the requested backend error policy.
+func newRedisLimiter(ctx context.Context, name string, args Args, failClosed bool) (Limiter, error) {
 	if args.Max <= 0 {
 		return nil, errors.Errorf("ratelimit %q: max must be > 0", name)
 	}
@@ -117,6 +123,7 @@ func NewRedisLimiter(ctx context.Context, name string, args Args) (Limiter, erro
 	ttlMillis := int64(math.Ceil(ttlSeconds * 1000))
 
 	l := &redisLimiter{
+		failClosed: failClosed,
 		ctx:        ctx,
 		client:     cli.Client,
 		logger:     log.Logger.Named("ratelimit").With(zap.String("name", name)),
@@ -145,7 +152,7 @@ func (l *redisLimiter) AllowN(n int) bool {
 	allowed, tokens, err := l.eval(n)
 	if err != nil {
 		l.logger.Warn("redis limiter allow", zap.Error(err))
-		return true
+		return !l.failClosed
 	}
 
 	l.lastTokens = tokens

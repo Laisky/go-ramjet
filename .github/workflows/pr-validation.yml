@@ -23,10 +23,6 @@ concurrency:
   group: pull-request-validation-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
-env:
-  SPEECHSDK_ROOT: /opt/azure/speech
-  SPEECHSDK_VERSION: 1.52.0
-
 jobs:
   backend:
     name: Backend tests and lint
@@ -56,17 +52,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git libasound2t64 libssl-dev poppler-utils dbus-daemon wget python3-yaml
-          wget -O /tmp/SpeechSDK-Linux.tar.gz \
-            "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz"
-          sudo mkdir -p "${SPEECHSDK_ROOT}"
-          sudo tar --strip-components=1 -xzf /tmp/SpeechSDK-Linux.tar.gz -C "${SPEECHSDK_ROOT}"
-          rm -f /tmp/SpeechSDK-Linux.tar.gz
-          {
-            echo "CGO_CFLAGS=-I${SPEECHSDK_ROOT}/include/c_api"
-            echo "CGO_LDFLAGS=-L${SPEECHSDK_ROOT}/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
-            echo "LD_LIBRARY_PATH=${SPEECHSDK_ROOT}/lib/x64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-          } >> "${GITHUB_ENV}"
+            build-essential ca-certificates curl git libssl-dev poppler-utils dbus-daemon wget python3-yaml
 
       - name: Verify changed Go formatting
         shell: bash

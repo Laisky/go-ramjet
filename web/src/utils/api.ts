@@ -6,6 +6,10 @@ import {
   requestWithDiagnostics,
 } from '@/telemetry/request-diagnostics'
 import type { Annotation } from '@/pages/gptchat/types'
+import {
+  describeApiTokenKind,
+  usesOneAPIRelay,
+} from '@/pages/gptchat/utils/api-token'
 
 /**
  * API client for GPTChat backend endpoints.
@@ -586,22 +590,28 @@ export async function uploadFile(
 export async function transcribeAudio(
   file: File,
   apiToken: string,
+  apiBase?: string,
 ): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('model', 'whisper-1')
 
-  const response = await fetch(
-    `${getApiBase()}/oneapi/v1/audio/transcriptions`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        'X-Laisky-User-Id': await getSHA1(apiToken),
-      },
-      body: formData,
-    },
-  )
+  const tokenKind = describeApiTokenKind(apiToken)
+  const free = tokenKind === 'freetier' || tokenKind === 'legacy-default'
+  const customProvider = !free && apiBase && !usesOneAPIRelay(apiBase)
+  const path =
+    free || customProvider
+      ? '/audio/transcriptions'
+      : '/oneapi/v1/audio/transcriptions'
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiToken}`,
+  }
+  if (customProvider) headers['X-Laisky-Api-Base'] = apiBase
+  const response = await fetch(`${getApiBase()}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
 
   if (!response.ok) {
     const text = await response.text()
@@ -678,24 +688,32 @@ export async function createPaymentIntent(
 }
 
 /**
- * Fetch TTS audio from the server (Azure TTS).
+ * Fetch WAV speech from the configured model provider via GPTChat.
  * Returns an object URL for the audio blob that can be used with an <audio> element.
  *
  * @param text - The text to convert to speech
  * @param apiToken - The API token for authentication
+ * @param apiBase - The caller-selected provider, when configured
  * @returns Promise resolving to an object URL for the audio blob
  */
 export async function fetchTTS(
   text: string,
   apiToken: string,
+  apiBase?: string,
 ): Promise<string> {
   const url = `${getApiBase()}/audio/tts?apikey=${encodeURIComponent(apiToken)}&text=${encodeURIComponent(text)}`
 
   console.debug('[fetchTTS] Requesting TTS audio.')
 
-  const response = await fetch(url, {
-    method: 'GET',
-  })
+  const request: RequestInit = { method: 'GET' }
+  if (
+    apiBase &&
+    !usesOneAPIRelay(apiBase) &&
+    describeApiTokenKind(apiToken) === 'byok'
+  ) {
+    request.headers = { 'X-Laisky-Api-Base': apiBase }
+  }
+  const response = await fetch(url, request)
 
   if (!response.ok) {
     const errorText = await response.text()

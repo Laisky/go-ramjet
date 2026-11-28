@@ -142,7 +142,7 @@ func Test_fetchDynamicURLContentOptionDefaultsToMarkdown(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, opt.outputMarkdown)
 
-	opt, err = new(fetchDynamicURLContentOption).apply(WithMarkdownConversion("", false))
+	opt, err = new(fetchDynamicURLContentOption).apply(WithMarkdownConversion(false))
 	require.NoError(t, err)
 	require.False(t, opt.outputMarkdown)
 }

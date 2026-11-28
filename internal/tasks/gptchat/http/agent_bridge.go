@@ -124,8 +124,8 @@ func ExecuteToolCallCtx(
 	}
 
 	// Rate limit MCP tools for freetier users.
-	// Only applies to users whose API key begins with "FREETIER-".
-	if strings.HasPrefix(deps.RawUserToken, "FREETIER-") {
+	// Also applies to the legacy anonymous free-tier identity.
+	if user != nil && user.IsFree {
 		if expensiveModelRateLimiter == nil {
 			onceLimiter.Do(setupRateLimiter)
 		}
@@ -133,7 +133,7 @@ func ExecuteToolCallCtx(
 		if ratelimitCost <= 0 {
 			ratelimitCost = 600
 		}
-		if !expensiveModelRateLimiter.AllowN(ratelimitCost) {
+		if expensiveModelRateLimiter == nil || !expensiveModelRateLimiter.AllowN(ratelimitCost) {
 			return "", "", errors.New("MCP tools are rate limited for freetier users; please try again later")
 		}
 	}
@@ -171,6 +171,9 @@ func CallUpstreamResponsesCtx(
 	req *OpenAIResponsesReq,
 ) (*OpenAIResponsesResp, http.Header, error) {
 	logger := deps.Logger
+	if err := limitFreeResponsesOutput(deps.User, req); err != nil {
+		return nil, nil, errors.Wrap(err, "validate Responses request")
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "marshal responses req")
@@ -189,7 +192,10 @@ func CallUpstreamResponsesCtx(
 		return nil, nil, errors.Wrap(err, "build responses http request")
 	}
 
-	resp, err := upstreamHTTPClient(deps.User).Do(upReq) //nolint:bodyclose
+	if err := consumeInferenceCall(ctx, deps.User, req.Model); err != nil {
+		return nil, nil, errors.Wrap(err, "admit Responses request")
+	}
+	resp, err := mediaInferenceClient(deps.User).Do(upReq) //nolint:bodyclose
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "do upstream request")
 	}
@@ -619,6 +625,9 @@ func StreamUpstreamResponsesEventsCtx(
 	req.Stream = true
 
 	logger := deps.Logger
+	if err := limitFreeResponsesOutput(deps.User, req); err != nil {
+		return nil, nil, errors.Wrap(err, "validate Responses request")
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "marshal responses req")
@@ -636,7 +645,10 @@ func StreamUpstreamResponsesEventsCtx(
 		return nil, nil, errors.Wrap(err, "build responses http request")
 	}
 
-	resp, err := upstreamHTTPClient(deps.User).Do(upReq) //nolint:bodyclose
+	if err := consumeInferenceCall(ctx, deps.User, req.Model); err != nil {
+		return nil, nil, errors.Wrap(err, "admit Responses request")
+	}
+	resp, err := mediaInferenceClient(deps.User).Do(upReq) //nolint:bodyclose
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "do upstream request")
 	}

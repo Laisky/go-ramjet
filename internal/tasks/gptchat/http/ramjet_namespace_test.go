@@ -23,7 +23,7 @@ func TestRamjetModelResolutionDiscardsCachedNames(t *testing.T) {
 			ctx := newAuthContext(key)
 			ctx.Request.Header.Set("X-Laisky-User-Id", "forged-victim")
 			ctx.Request.Header.Set("X-Laisky-User-Is-Free", "false")
-			original := &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, ImageToken: key, UserName: "forged-cached-victim", APIBase: "http://provider.fixture"}
+			original := &config.UserConfig{BYOK: true, Token: key, OpenaiToken: key, UserName: "forged-cached-victim", APIBase: "http://provider.fixture"}
 			ctx.Set(ctxKeyUser, original)
 			resolved, err := resolveRamjetUser(ctx)
 			require.NoError(t, err)
@@ -32,7 +32,6 @@ func TestRamjetModelResolutionDiscardsCachedNames(t *testing.T) {
 			require.NotSame(t, original, resolved)
 			require.Equal(t, key, resolved.Token)
 			require.Equal(t, key, resolved.OpenaiToken)
-			require.Equal(t, key, resolved.ImageToken)
 			require.Equal(t, original.APIBase, resolved.APIBase)
 			require.False(t, resolved.IsFree)
 		})

@@ -53,15 +53,6 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	}
 
 	frontendReq.N = normalizeImageCount(frontendReq.N, user.IsFree)
-	if user.EnableExternalImageBilling {
-		// Charge one image upfront as the balance probe; storeAndBillImages charges
-		// the rest once they are stored.
-		if err := checkUserExternalBilling(gmw.Ctx(ctx),
-			user, GetImageModelPrice(frontendReq.Model), "txt2image"); web.AbortErr(ctx, err) {
-			return errors.Wrap(err, "charge upfront image")
-		}
-	}
-
 	taskID := gutils.RandomStringWithLength(36)
 	taskCtx, cancel := context.WithTimeout(gmw.Ctx(ctx), time.Minute*5)
 	defer cancel()
@@ -70,7 +61,7 @@ func sendChatImageGeneration(ctx *gin.Context, frontendReq *FrontendReq, user *c
 	if web.AbortErr(ctx, err) {
 		return errors.Wrap(err, "generate images")
 	}
-	imgUrls, err := storeAndBillImages(gmw.Ctx(ctx), taskCtx, user, frontendReq.Model, frontendReq.N, taskID, prompt, imgContents)
+	imgUrls, err := storeGeneratedImages(taskCtx, frontendReq.N, taskID, prompt, imgContents)
 	if web.AbortErr(ctx, err) {
 		return errors.Wrap(err, "store images")
 	}

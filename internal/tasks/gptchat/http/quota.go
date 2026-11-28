@@ -92,6 +92,9 @@ return new_value
 func getTokenQuotaManager() *TokenQuotaManager {
 	tokenQuotaOnce.Do(func() {
 		client := rutils.GetCli().GetDB()
+		if client == nil || client.Client == nil {
+			return
+		}
 		tokenQuotaMgr = &TokenQuotaManager{
 			client:         client.Client,
 			logger:         log.Logger.Named("token_quota"),

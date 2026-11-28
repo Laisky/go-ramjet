@@ -17,7 +17,6 @@ import (
 	"golang.org/x/image/webp"
 
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/config"
-	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/db"
 	"github.com/Laisky/go-ramjet/internal/tasks/gptchat/s3"
 )
 
@@ -63,28 +62,6 @@ func isImageModel(model string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// GetImageModelPrice get price for image model
-func GetImageModelPrice(model string) db.Price {
-	switch model {
-	case "flux-dev", "black-forest-labs/flux-dev":
-		return db.PriceTxt2ImageFluxDev
-	case "flux-schnell", "black-forest-labs/flux-schnell":
-		return db.PriceTxt2ImageSchnell
-	case "flux-pro", "black-forest-labs/flux-pro":
-		return db.PriceTxt2ImageFluxPro
-	case "flux-fill-pro", "black-forest-labs/flux-fill-pro":
-		return db.PriceTxt2ImageFluxFillPro
-	case "flux-1.1-pro", "black-forest-labs/flux-1.1-pro":
-		return db.PriceTxt2ImageFluxPro11
-	case "flux-kontext-pro", "black-forest-labs/flux-kontext-pro":
-		return db.PriceTxt2ImageFluxKontextPro
-	case "flux-1.1-pro-ultra", "black-forest-labs/flux-1.1-pro-ultra":
-		return db.PriceTxt2ImageFluxProUltra11
-	default:
-		return db.PriceTxt2Image
 	}
 }
 

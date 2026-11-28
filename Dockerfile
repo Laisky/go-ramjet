@@ -27,26 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ make gcc gi
     build-essential ca-certificates curl \
     && update-ca-certificates
 
-# install azure sdk
-# https://learn.microsoft.com/en-us/azure/ai-services/speech-service/quickstarts/setup-platform?tabs=windows%2Cubuntu%2Cdotnetcli%2Cdotnet%2Cjre%2Cmaven%2Cbrowser%2Cmac%2Cpypi&pivots=programming-language-go
-RUN apt-get install -y libssl-dev ca-certificates libasound2 wget
-# RUN apt-get install -y libssl-dev ca-certificates libasound2t64 wget # for ubuntu 24
-ENV SPEECHSDK_ROOT=/opt/azure/speech
-ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
-ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
-ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# The native Speech SDK version MUST match the Go binding version in go.mod
-# (github.com/Microsoft/cognitive-services-speech-sdk-go). A stale native lib
-# causes cgo build errors like:
-#   could not determine what C.phrase_list_grammar_set_weight refers to
-# Use Microsoft's official, immutable, versioned drop so the two never drift.
-ARG SPEECHSDK_VERSION=1.52.0
-RUN mkdir -p $SPEECHSDK_ROOT \
-    && wget -O SpeechSDK-Linux.tar.gz \
-        "https://csspeechstorage.blob.core.windows.net/drop/${SPEECHSDK_VERSION}/SpeechSDK-Linux-${SPEECHSDK_VERSION}.tar.gz" \
-    && tar --strip 1 -xzf SpeechSDK-Linux.tar.gz -C "$SPEECHSDK_ROOT" \
-    && rm -f SpeechSDK-Linux.tar.gz
-
 ENV GO111MODULE=on
 WORKDIR /goapp
 
@@ -63,11 +43,8 @@ ENV GOARCH=amd64
 RUN go build -ldflags="-s -w" \
     && CGO_ENABLED=0 go build -o /goapp/crawler-browser-launcher ./cmd/crawler-browser-launcher
 
-# Collect runtime data without shipping SDK headers, foreign architectures, or
-# Jieba source/tests. Preserve license/notice paths from both distributions.
-RUN mkdir -p /runtime-assets/speech/lib /runtime-assets/gojieba/deps/cppjieba \
-    && cp -a "$SPEECHSDK_ROOT/lib/x64" /runtime-assets/speech/lib/ \
-    && find "$SPEECHSDK_ROOT" -maxdepth 1 -type f -exec cp -a {} /runtime-assets/speech/ \; \
+# Collect only Jieba runtime data and its license and notice files.
+RUN mkdir -p /runtime-assets/gojieba/deps/cppjieba \
     && cd /go/pkg/mod/github.com/yanyiwu/gojieba@v1.4.7 \
     && cp -a deps/cppjieba/dict /runtime-assets/gojieba/deps/cppjieba/ \
     && find . -type f \( -iname '*license*' -o -iname '*copying*' -o -iname '*notice*' \) \
@@ -124,16 +101,8 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
 
 # The runtime needs OpenSSL shared libraries, not headers or static archives.
 RUN apt-get update && apt-get install -y \
-    libssl3 ca-certificates libasound2 wget \
+    libssl3 ca-certificates wget \
     && rm -rf /var/lib/apt/lists/*
-ENV SPEECHSDK_ROOT=/opt/azure/speech
-ENV CGO_CFLAGS="-I$SPEECHSDK_ROOT/include/c_api"
-ENV CGO_LDFLAGS="-L$SPEECHSDK_ROOT/lib/x64 -lMicrosoft.CognitiveServices.Speech.core"
-ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-RUN mkdir -p $SPEECHSDK_ROOT
-# Retain every x64 extension and SDK notice; other architectures are build inputs.
-COPY --from=gobuild /runtime-assets/speech $SPEECHSDK_ROOT
-
 WORKDIR /app
 
 COPY --from=gobuild /etc/ssl/certs /etc/ssl/certs

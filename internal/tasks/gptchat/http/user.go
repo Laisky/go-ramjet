@@ -15,7 +15,6 @@ import (
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
-	gconfig "github.com/Laisky/go-config/v2"
 	gutils "github.com/Laisky/go-utils/v6"
 	gcompress "github.com/Laisky/go-utils/v6/compress"
 	gcrypto "github.com/Laisky/go-utils/v6/crypto"
@@ -74,28 +73,6 @@ func setNoStoreHeaders(ctx *gin.Context) {
 	ctx.Header("Expires", "0")
 	ctx.Header("Surrogate-Control", "no-store")
 }
-
-// func GetCurrentUserQuota(ctx *gin.Context) {
-// 	usertoken := ctx.Query("apikey")
-// 	user, err := getUserByToken(ctx, usertoken)
-// 	if web.AbortErr(ctx, err) {
-// 		return
-// 	}
-
-// 	externalBill, err := GetUserExternalBillingQuota(gmw.Ctx(ctx), user)
-// 	if err != nil {
-// 		log.Logger.Error("get user external billing quota", zap.Error(err))
-// 	}
-
-// 	// internalBill, err := GetUserInternalBill(gmw.Ctx(ctx), user, db.BillTypeTxt2Image)
-// 	// if err != nil {
-// 	// 	log.Logger.Error("get user internal billing quota", zap.Error(err))
-// 	// }
-
-// 	ctx.JSON(http.StatusOK, map[string]any{
-// 		"external": externalBill,
-// 	})
-// }
 
 func userConfigS3Key(apikey string) string {
 	hashed := sha256.Sum256([]byte(apikey))
@@ -430,42 +407,19 @@ func applyFreeUserQuotaLimits(req *FrontendReq, promptTokenLimit int) (droppedMe
 func IsModelAllowed(ctx context.Context,
 	user *config.UserConfig,
 	req *FrontendReq) error {
-	onceLimiter.Do(setupRateLimiter)
 	logger := gmw.GetLogger(ctx)
 
-	switch {
-	case user.BYOK: // bypass if user bring their own token
-		logger.Debug("bypass rate limit for BYOK user")
+	if user != nil && user.BYOK && !user.IsFree {
 		return nil
-	case user.NoLimitExpensiveModels:
-		logger.Debug("bypass rate limit for no_limit_expensive_models user")
-		return nil
-	default:
 	}
-
-	if len(user.AllowedModels) == 0 {
-		return errors.Errorf("no allowed models for current user %q", user.UserName)
+	if err := checkFreeModel(user, req.Model); err != nil {
+		return errors.Wrap(err, "check model admission")
 	}
-
-	var allowed bool
-	for _, m := range user.AllowedModels {
-		if m == "*" {
-			allowed = true
-			break
-		}
-
-		if m == req.Model {
-			allowed = true
-			break
-		}
+	if config.Config == nil || config.Config.RateLimitExpensiveModelsIntervalSeconds <= 0 ||
+		config.Config.RateLimitFreeModelsIntervalSeconds <= 0 {
+		return errors.New("Free-tier inference rate limits are not configured")
 	}
-	if !allowed {
-		return errors.Errorf("model %q is not allowed for user %q", req.Model, user.UserName)
-	}
-
-	// if !globalRatelimiter.Allow() { // check rate limit
-	// 	return errors.Errorf("too many requests, please try again later")
-	// }
+	onceLimiter.Do(setupRateLimiter)
 
 	// rate limit only support limit by second,
 	// so we consume 60 tokens once to make it limit by minute
@@ -473,32 +427,13 @@ func IsModelAllowed(ctx context.Context,
 		ratelimitCost int
 		ratelimiter   = expensiveModelRateLimiter
 	)
-	// Free models. Keep this in sync with FreeModels in web/src/pages/gptchat/models.ts;
-	// an id missing here silently falls through to the expensive rate limiter.
-	switch req.Model {
-	case "gpt-4o-mini",
-		"gpt-5.4-nano",
-		"openai/gpt-oss-20b",
-		"openai/gpt-oss-120b",
-		"deepseek-v4-flash",
-		"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-		"meta-llama/llama-prompt-guard-2-86m",
-		"qwen/qwen3.6-27b",
-		"tts",
-		"gemini-3.1-flash-lite-preview",
-		"gemini-3.5-flash-lite",
-		"gemini-3.8-flash":
+	if isLowCostFreeModel(req.Model) {
 		ratelimiter = freeModelRateLimiter
 		ratelimitCost = freeModelRateLimitCost
-	default: // expensive model
-		if user.NoLimitExpensiveModels {
-			return nil
-		}
-
-		ratelimitCost = gconfig.Shared.GetInt("openai.rate_limit_expensive_models_interval_secs")
+	} else {
+		ratelimitCost = config.Config.RateLimitExpensiveModelsIntervalSeconds
 	}
-
-	if !user.NoLimitExpensiveModels {
+	{
 		droppedMessages, finalPromptTokens, changed, err := applyFreeUserQuotaLimits(req, user.LimitPromptTokenLength)
 		if err != nil {
 			return errors.WithStack(err)
@@ -515,10 +450,12 @@ func IsModelAllowed(ctx context.Context,
 		}
 	}
 
-	// if price less than 0, means no limit
+	if ratelimiter == nil || ratelimitCost <= 0 {
+		return errors.New("Free-tier inference limiter is unavailable")
+	}
 	logger.Debug("check rate limit",
-		zap.String("model", req.Model), zap.Int("price", ratelimitCost))
-	if ratelimitCost > 0 && !ratelimiter.AllowN(ratelimitCost) { // check rate limit
+		zap.String("model", req.Model), zap.Int("rate_limit_cost", ratelimitCost))
+	if !ratelimiter.AllowN(ratelimitCost) { // check rate limit
 		return errors.Errorf("This model(%s) restricts usage for free users. "+
 			"Please hold on for %d seconds before trying again, "+
 			"alternatively, you may opt to switch to the free gpt-4o-mini, "+
@@ -527,6 +464,29 @@ func IsModelAllowed(ctx context.Context,
 	}
 
 	return nil
+}
+
+// isLowCostFreeModel selects the short interval for configured free models.
+func isLowCostFreeModel(model string) bool {
+	switch model {
+	case "gpt-4o-mini",
+		"gpt-5.4-nano",
+		"openai/gpt-oss-20b",
+		"openai/gpt-oss-120b",
+		"deepseek-v4-flash",
+		"deepseek-flash",
+		"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+		"meta-llama/llama-prompt-guard-2-86m",
+		"qwen/qwen3.6-27b",
+		"qwen/qwen3.8-27b",
+		"tts",
+		"gemini-3.1-flash-lite-preview",
+		"gemini-3.5-flash-lite",
+		"gemini-3.8-flash":
+		return true
+	default:
+		return false
+	}
 }
 
 // setupRateLimiter setup ratelimiter depends on loaded config
@@ -547,18 +507,18 @@ func setupRateLimiter() {
 	// }
 
 	burst := int(math.Ceil(float64(config.Config.RateLimitExpensiveModelsIntervalSeconds) * burstRatio))
-	if expensiveModelRateLimiter, err = rlimiter.New(context.Background(),
+	if expensiveModelRateLimiter, err = rlimiter.NewStrict(context.Background(),
 		"gptchat:expensive",
 		rlimiter.Args{Max: burst, NPerSec: 1}); err != nil {
-		log.Logger.Panic("new expensiveModelRateLimiter", zap.Error(err))
+		logger.Error("new expensiveModelRateLimiter", zap.Error(err))
 	}
 	logger.Info("set ratelimiter for expensive models", zap.Int("burst", burst))
 
 	freeBurst := int(math.Ceil(float64(freeModelRateLimitCost) * burstRatio))
-	if freeModelRateLimiter, err = rlimiter.New(context.Background(),
+	if freeModelRateLimiter, err = rlimiter.NewStrict(context.Background(),
 		"gptchat:free",
 		rlimiter.Args{Max: freeBurst, NPerSec: 1}); err != nil {
-		log.Logger.Panic("new freeModelRateLimiter", zap.Error(err))
+		logger.Error("new freeModelRateLimiter", zap.Error(err))
 	}
 	logger.Info("set ratelimiter for free models", zap.Int("burst", freeBurst))
 }

@@ -167,6 +167,15 @@ export function ModelSelector({
                   <span
                     className={cn('flex gap-1', itemDisabled && 'opacity-60')}
                   >
+                    {!modelAllowed && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px]"
+                        aria-hidden
+                      >
+                        Unavailable
+                      </Badge>
+                    )}
                     {isFreeModel(model) && (
                       <Badge variant="success" className="text-[10px]">
                         Free
