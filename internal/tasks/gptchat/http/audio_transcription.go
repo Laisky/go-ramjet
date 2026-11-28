@@ -7,7 +7,6 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"strings"
 
 	"github.com/Laisky/errors/v2"
 	gmw "github.com/Laisky/gin-middlewares/v7"
@@ -30,7 +29,6 @@ func AudioTranscriptionHandler(ctx *gin.Context) {
 	if web.AbortErr(ctx, err) {
 		return
 	}
-	base, client := "https://"+oneAPIHost, httpcli
 	switch {
 	case user.IsFree && user.OpenaiToken != "":
 		// The dedicated free-tier capability always uses platform One API.
@@ -40,9 +38,13 @@ func AudioTranscriptionHandler(ctx *gin.Context) {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		base, client = strings.TrimRight(user.APIBase, "/"), upstreamHTTPClient(user)
 	default:
 		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "A configured free-tier session or caller-owned provider is required"})
+		return
+	}
+
+	base, err := mediaInferenceBase(user)
+	if web.AbortErr(ctx, err) {
 		return
 	}
 
@@ -73,7 +75,7 @@ func AudioTranscriptionHandler(ctx *gin.Context) {
 		return
 	}
 	req.Header.Set("Content-Type", contentType)
-	relayModelRequest(ctx, req, req.URL, client, user.OpenaiToken)
+	relayModelRequest(ctx, req, req.URL, mediaInferenceClient(user), user.OpenaiToken)
 }
 
 // validTranscriptionForm accepts exactly one nonempty bounded file and one

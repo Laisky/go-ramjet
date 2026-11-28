@@ -147,7 +147,7 @@ func TestGPTChatAudioTranscriptionAdmission(t *testing.T) {
 			byokAuditSetup(t)
 			config.Config.RateLimitExpensiveModelsIntervalSeconds = 600
 			config.Config.UserTokens = []*config.UserConfig{{
-				Token: config.FreetierUserToken, OpenaiToken: testSharedOneAPIToken,
+				Token: config.FreetierUserToken, OpenaiToken: testSharedOneAPIToken, APIBase: "https://" + oneAPIHost,
 				AllowedModels: []string{tc.allowed},
 			}}
 			var buf bytes.Buffer

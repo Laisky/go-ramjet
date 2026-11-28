@@ -32,7 +32,10 @@ and top-up flows remain separate.
 
 ## Operator migration
 
-Point platform-managed model credentials and endpoints at One API. If an Azure
+Set the managed model endpoint and credentials to your One API deployment.
+For managed image and voice calls, the resolved `api_base` must match
+`openai.one_api_base` (default: `https://oneapi.laisky.com`); mismatched direct
+endpoints are rejected without moving the key to another host. If an Azure
 deployment is used for image generation, configure its channel and model
 mapping in One API first. The public image generation and editing endpoints,
 including the historical Flux aliases, still accept the same client requests.
