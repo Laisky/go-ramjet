@@ -212,7 +212,7 @@ func TestAzureImageAnswersAreBoundedPerImage(t *testing.T) {
 	serverURL := config.Config.API
 	f.override = func(w http.ResponseWriter, r *http.Request) bool {
 		switch {
-		case r.URL.Path == "/openai.azure.com/images":
+		case r.URL.Path == "/openai/deployments/dall-e-3/images/generations":
 			// Twice the one-image allowance, far below the batch cap.
 			answer, err := json.Marshal(map[string]any{"data": []map[string]string{{
 				"url":            serverURL + "/generated/azure.png",
@@ -235,7 +235,10 @@ func TestAzureImageAnswersAreBoundedPerImage(t *testing.T) {
 		return false
 	}
 
-	err := sendChatImageGeneration(gctx, imageCountTestRequest(2), azureImageUser())
+	user := azureImageUser()
+	// Select the legacy Azure route without leaving the local test server.
+	user.ImageUrl = serverURL + "/openai/deployments/dall-e-3/images/generations?fixture=openai.azure.com"
+	err := sendChatImageGeneration(gctx, imageCountTestRequest(2), user)
 	require.ErrorContains(t, err, "exceeds")
 	require.Zero(t, downloads.Load(), "an oversized Azure answer was accepted")
 	require.Zero(t, f.delivered())
