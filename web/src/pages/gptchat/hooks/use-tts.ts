@@ -12,6 +12,7 @@ import { fetchTTS } from '@/utils/api'
 export interface UseTTSOptions {
   /** API token for authentication */
   apiToken: string
+  apiBase?: string
   /** Callback when TTS starts loading */
   onLoadStart?: () => void
   /** Callback when TTS finishes loading */
@@ -68,13 +69,14 @@ export function stripMarkdownForTTS(input: string): string {
 }
 
 /**
- * useTTS provides text-to-speech functionality using server-side Azure TTS.
+ * useTTS provides text-to-speech functionality using GPTChat speech synthesis.
  *
  * @param options - Configuration options for TTS
  * @returns TTS state and control functions
  */
 export function useTTS({
   apiToken,
+  apiBase,
   onLoadStart,
   onLoadEnd,
   onError,
@@ -134,7 +136,9 @@ export function useTTS({
           '[useTTS] Requesting TTS for text length:',
           plainText.length,
         )
-        const url = await fetchTTS(plainText, apiToken)
+        const url = apiBase
+          ? await fetchTTS(plainText, apiToken, apiBase)
+          : await fetchTTS(plainText, apiToken)
         currentUrlRef.current = url
         setAudioUrl(url)
         console.debug('[useTTS] TTS audio ready:', url)
@@ -148,7 +152,7 @@ export function useTTS({
         onLoadEnd?.()
       }
     },
-    [apiToken, onLoadStart, onLoadEnd, onError, stopTTS],
+    [apiToken, apiBase, onLoadStart, onLoadEnd, onError, stopTTS],
   )
 
   // togglePlayback is a no-op in this simplified version

@@ -238,6 +238,7 @@ export function GPTChatPage() {
     audioUrl: ttsAudioUrl,
   } = useTTS({
     apiToken: config.api_token || '',
+    apiBase: config.api_base,
   })
   const {
     activeSelectionData,
@@ -509,6 +510,7 @@ export function GPTChatPage() {
               : undefined
           }
           apiToken={config.api_token}
+          apiBase={config.api_base}
           messageIndex={floatingHeaderState.index}
           onSelect={handleMessageSelect}
           isStreaming={
@@ -614,6 +616,7 @@ export function GPTChatPage() {
                       onSelect={handleMessageSelect}
                       messageIndex={idx}
                       apiToken={config.api_token}
+                      apiBase={config.api_base}
                       isStreaming={
                         chatLoading &&
                         msg.role === 'assistant' &&

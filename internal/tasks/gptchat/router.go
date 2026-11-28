@@ -98,6 +98,7 @@ func registerGPTChatRoutes(grp *gin.RouterGroup, rateLimiter gin.HandlerFunc) {
 	grp.POST("/deepresearch", ihttp.CreateDeepResearchHandler)
 	grp.GET("/deepresearch/:task_id", ihttp.GetDeepResearchStatusHandler)
 	apiWithRatelimiter.GET("/audio/tts", ihttp.TTSHanler)
+	apiWithRatelimiter.POST("/audio/transcriptions", ihttp.AudioTranscriptionHandler)
 	grp.GET("/user/me", ihttp.GetCurrentUser)
 	// grp.GET("/user/me/quota", ihttp.GetCurrentUserQuota)
 	apiWithRatelimiter.POST("/user/config", ihttp.UploadUserConfig)

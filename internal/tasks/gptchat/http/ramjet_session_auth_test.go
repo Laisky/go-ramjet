@@ -200,7 +200,7 @@ func TestOneAPIProxyDoesNotForwardAccountSession(t *testing.T) {
 	httpcli = &http.Client{Transport: byokAuditTransport(func(req *http.Request) (*http.Response, error) {
 		calls++
 		require.Equal(t, "oneapi.laisky.com", req.URL.Host)
-		require.Equal(t, key, req.Header.Get("Authorization"))
+		require.Equal(t, "Bearer "+key, req.Header.Get("Authorization"))
 		require.Empty(t, req.Header.Get(ramjetSessionHeader))
 		return byokAuditResponse(req, "{}"), nil
 	})}

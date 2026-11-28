@@ -130,6 +130,18 @@ export function isSameApiEndpoint(
 }
 
 /**
+ * usesOneAPIRelay matches the default chat routing sentinel and the explicit
+ * One API endpoint. Never forward another provider's key to this relay.
+ */
+export function usesOneAPIRelay(apiBase?: string): boolean {
+  return (
+    !apiBase ||
+    apiBase === DefaultSessionConfig.api_base ||
+    isSameApiEndpoint(apiBase, 'https://oneapi.laisky.com')
+  )
+}
+
+/**
  * API_BASE_SHAPE requires the raw text of an API base to start with an
  * http(s) scheme, two slashes and a plain authority, followed by a path or
  * the end. Browsers repair forms such as `https:host`, `https:\\host`,

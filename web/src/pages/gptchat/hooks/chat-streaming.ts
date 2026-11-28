@@ -22,6 +22,7 @@ import {
   type McpTool,
   type SessionConfig,
 } from '../types'
+import { describeApiTokenKind, usesOneAPIRelay } from '../utils/api-token'
 import { callMCPTool } from '../utils/mcp'
 
 export interface ChatStreamingOptions {
@@ -460,10 +461,14 @@ export function useChatStreaming({
           requestid: lastRequestId,
         }
 
-        if (lastRequestId) {
+        if (
+          lastRequestId &&
+          describeApiTokenKind(config.api_token) === 'byok' &&
+          usesOneAPIRelay(config.api_base)
+        ) {
           try {
             const resp = await fetch(
-              `${getApiBase()}/oneapi/api/cost/request/${lastRequestId}`,
+              `${getApiBase()}/oneapi/api/cost/request/${encodeURIComponent(lastRequestId)}`,
               {
                 headers: {
                   Authorization: `Bearer ${config.api_token}`,

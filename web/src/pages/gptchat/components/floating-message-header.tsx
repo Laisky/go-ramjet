@@ -40,6 +40,7 @@ export interface FloatingMessageHeaderProps {
   containerRef?: React.RefObject<HTMLElement>
   /** API token for TTS functionality */
   apiToken?: string
+  apiBase?: string
   /** The index of this message in the list */
   messageIndex?: number | null
   /** Called when user clicks the message to toggle selection */
@@ -64,6 +65,7 @@ export function FloatingMessageHeader({
   pairedUserMessage,
   isStreaming,
   apiToken,
+  apiBase,
   messageIndex,
   onSelect,
 }: FloatingMessageHeaderProps) {
@@ -80,6 +82,7 @@ export function FloatingMessageHeader({
     stopTTS,
   } = useTTS({
     apiToken: apiToken || '',
+    apiBase,
   })
 
   const handleHeaderClick = useCallback(
